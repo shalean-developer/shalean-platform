@@ -58,7 +58,7 @@ export async function POST(request: Request) {
 
   const bookingId = typeof body.bookingId === "string" ? body.bookingId.trim() : "";
   const rawRating = Number(body.rating);
-  const rating = Number.isFinite(rawRating) ? Math.round(rawRating) : Number.NaN;
+  const rating = Number.isInteger(rawRating) ? rawRating : Number.NaN;
   const comment = typeof body.comment === "string" ? body.comment.trim().slice(0, 2000) : "";
 
   if (!bookingId || !Number.isFinite(rating) || rating < 1 || rating > 5) {
@@ -160,7 +160,7 @@ export async function PATCH(request: Request) {
   let nextRating: number | undefined;
   if (hasRating) {
     const rawNextRating = Number(body.rating);
-    nextRating = Number.isFinite(rawNextRating) ? Math.round(rawNextRating) : Number.NaN;
+    nextRating = Number.isInteger(rawNextRating) ? rawNextRating : Number.NaN;
     if (!Number.isFinite(nextRating) || nextRating < 1 || nextRating > 5) {
       return NextResponse.json({ error: "rating must be 1–5." }, { status: 400 });
     }
