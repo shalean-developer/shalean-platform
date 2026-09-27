@@ -195,6 +195,22 @@ async function revertToPending(supabase: SupabaseClient, jobId: string): Promise
 
 }
 
+async function deferToPending(
+  supabase: SupabaseClient,
+  jobId: string,
+  delayMs = 15 * 60 * 1000,
+): Promise<void> {
+  await supabase
+    .from("booking_lifecycle_jobs")
+    .update({
+      status: "pending",
+      processed_at: null,
+      scheduled_for: new Date(Date.now() + delayMs).toISOString(),
+    })
+    .eq("id", jobId)
+    .eq("status", "processing");
+}
+
 
 
 /**
@@ -419,7 +435,7 @@ export async function processLifecycleJob(
 
       if (rev.reason === LIFECYCLE_SKIP.bookingNotCompleted) {
 
-        await revertToPending(supabase, jobId);
+        await deferToPending(supabase, jobId);
 
         void logSystemEvent({
 
@@ -465,7 +481,7 @@ export async function processLifecycleJob(
         .maybeSingle();
 
       if (reviewErr) {
-        await revertToPending(supabase, jobId);
+        await deferToPending(supabase, jobId);
         await reportOperationalIssue("warn", "processLifecycleJob/review_request", reviewErr.message, {
           jobId,
           bookingId,
