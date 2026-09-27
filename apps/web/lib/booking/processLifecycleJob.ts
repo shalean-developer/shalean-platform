@@ -414,6 +414,26 @@ export async function processLifecycleJob(
 
     if (!rev.allowed) {
 
+      if (rev.reason === LIFECYCLE_SKIP.bookingNotCompleted) {
+
+        await revertToPending(supabase, jobId);
+
+        void logSystemEvent({
+
+          level: "info",
+
+          source: "processLifecycleJob",
+
+          message: "lifecycle.review_request.deferred",
+
+          context: { jobId, bookingId, skipReason: rev.reason },
+
+        });
+
+        return "skipped";
+
+      }
+
       await markSkipped(supabase, jobId, rev.reason, jobType);
 
       void logSystemEvent({
