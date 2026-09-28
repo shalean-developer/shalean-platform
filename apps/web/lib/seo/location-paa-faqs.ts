@@ -73,10 +73,18 @@ function semanticFaqKey(question: string): string {
   return `question:${q}`;
 }
 
-/** Dedupe by semantic FAQ intent — PAA items win on overlap with dynamic/CMS FAQs. */
+/** Dedupe by semantic FAQ intent — earlier primary items win, then secondary fills unique intents. */
 export function mergeLocationFaqs(paa: FaqPair[], secondary: FaqPair[]): FaqPair[] {
-  const keys = new Set(paa.map((x) => semanticFaqKey(x.q)));
-  const out = [...paa];
+  const keys = new Set<string>();
+  const out: FaqPair[] = [];
+
+  for (const item of paa) {
+    const key = semanticFaqKey(item.q);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    out.push(item);
+  }
+
   for (const item of secondary) {
     const key = semanticFaqKey(item.q);
     if (keys.has(key)) continue;
