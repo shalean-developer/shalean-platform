@@ -1,41 +1,58 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const send = vi.fn();
+const directSend = vi.fn();
+const safeResendSend = vi.fn();
+const assertNotSeedEmail = vi.fn();
+let deployment: "production" | "staging" | "development" | "preview" | "local" = "staging";
 
 vi.mock("@/lib/email/resendFrom", () => ({
   getDefaultFromAddress: () => "Shalean Cleaning <hello@shalean.co.za>",
   getResend: () => ({
-    emails: { send },
+    emails: { send: directSend },
   }),
 }));
 
-describe("sendInternalContactFormEmail", () => {
-  const originalEnv = process.env.SHALEAN_APP_ENV;
+vi.mock("@/lib/email/safeResendSend", () => ({
+  safeResendSend,
+}));
 
+vi.mock("@/lib/seed/devSeedGuard", () => ({
+  assertNotSeedEmail,
+}));
+
+vi.mock("@/lib/env/deploymentEnvironment", () => ({
+  resolveDeploymentDisplayEnvironment: () => deployment,
+}));
+
+describe("sendInternalContactFormEmail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    send.mockResolvedValue({ data: { id: "re_test" }, error: null });
+    deployment = "staging";
+    directSend.mockResolvedValue({ data: { id: "re_test" }, error: null });
+    safeResendSend.mockResolvedValue({ data: { id: "re_safe" }, error: null });
   });
 
-  afterEach(() => {
-    if (originalEnv === undefined) delete process.env.SHALEAN_APP_ENV;
-    else process.env.SHALEAN_APP_ENV = originalEnv;
-  });
+  const input = {
+    replyTo: "visitor@example.com",
+    subject: "Website contact: Reschedule — Visitor",
+    text: "Hello",
+    html: "<p>Hello</p>",
+  };
 
-  it("always sends to the fixed Shalean inbox and marks staging mail", async () => {
-    process.env.SHALEAN_APP_ENV = "staging";
+  it("uses the narrow pricing-test direct sender with seed guard and staging marker", async () => {
     const { sendInternalContactFormEmail } = await import("@/lib/contact/sendInternalContactFormEmail");
 
-    const result = await sendInternalContactFormEmail({
-      replyTo: "visitor@example.com",
-      subject: "Website contact: Reschedule — Visitor",
-      text: "Hello",
-      html: "<p>Hello</p>",
-    });
+    const result = await sendInternalContactFormEmail(input);
 
     expect(result).toEqual({ sent: true });
-    expect(send).toHaveBeenCalledTimes(1);
-    const payload = send.mock.calls[0]?.[0];
+    expect(assertNotSeedEmail).toHaveBeenCalledWith(
+      "hello@shalean.co.za",
+      "website-contact-form",
+    );
+    expect(directSend).toHaveBeenCalledTimes(1);
+    expect(safeResendSend).not.toHaveBeenCalled();
+
+    const payload = directSend.mock.calls[0]?.[0];
     expect(payload.to).toBe("hello@shalean.co.za");
     expect(payload.replyTo).toBe("visitor@example.com");
     expect(payload.subject).toBe(
@@ -44,34 +61,52 @@ describe("sendInternalContactFormEmail", () => {
     expect(payload.tags).toEqual([{ name: "message_type", value: "website_contact_form" }]);
   });
 
-  it("does not add a test marker in production", async () => {
-    process.env.SHALEAN_APP_ENV = "production";
+  it("uses safeResendSend in production so provider failures remain recoverable", async () => {
+    deployment = "production";
     const { sendInternalContactFormEmail } = await import("@/lib/contact/sendInternalContactFormEmail");
 
-    await sendInternalContactFormEmail({
-      replyTo: "visitor@example.com",
-      subject: "Website contact: General enquiry — Visitor",
-      text: "Hello",
-      html: "<p>Hello</p>",
-    });
+    const result = await sendInternalContactFormEmail(input);
 
-    expect(send.mock.calls[0]?.[0]?.subject).toBe(
-      "Website contact: General enquiry — Visitor",
-    );
+    expect(result).toEqual({ sent: true });
+    expect(directSend).not.toHaveBeenCalled();
+    expect(safeResendSend).toHaveBeenCalledTimes(1);
+
+    const payload = safeResendSend.mock.calls[0]?.[0];
+    expect(payload.to).toBe("hello@shalean.co.za");
+    expect(payload.replyTo).toBe("visitor@example.com");
+    expect(payload.subject).toBe(input.subject);
+    expect(payload.context).toEqual({ messageType: "website_contact_form" });
   });
 
-  it("returns a failure when Resend rejects the internal email", async () => {
-    process.env.SHALEAN_APP_ENV = "staging";
-    send.mockResolvedValue({ data: null, error: { message: "provider rejected" } });
+  it("keeps local/development/preview behind the standard outbound safety wrapper", async () => {
+    deployment = "local";
+    const { sendInternalContactFormEmail } = await import("@/lib/contact/sendInternalContactFormEmail");
+
+    await sendInternalContactFormEmail(input);
+
+    expect(directSend).not.toHaveBeenCalled();
+    expect(safeResendSend).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns direct staging provider failures to the route", async () => {
+    directSend.mockResolvedValue({ data: null, error: { message: "provider rejected" } });
 
     const { sendInternalContactFormEmail } = await import("@/lib/contact/sendInternalContactFormEmail");
-    const result = await sendInternalContactFormEmail({
-      replyTo: "visitor@example.com",
-      subject: "Website contact: General enquiry — Visitor",
-      text: "Hello",
-      html: "<p>Hello</p>",
-    });
+    const result = await sendInternalContactFormEmail(input);
 
     expect(result).toEqual({ sent: false, error: "provider rejected" });
+  });
+
+  it("returns safe-wrapper failures in production", async () => {
+    deployment = "production";
+    safeResendSend.mockResolvedValue({
+      data: null,
+      error: { message: "provider unavailable", name: "provider_error" },
+    });
+
+    const { sendInternalContactFormEmail } = await import("@/lib/contact/sendInternalContactFormEmail");
+    const result = await sendInternalContactFormEmail(input);
+
+    expect(result).toEqual({ sent: false, error: "provider unavailable" });
   });
 });
