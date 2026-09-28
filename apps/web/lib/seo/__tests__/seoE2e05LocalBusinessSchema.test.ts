@@ -100,6 +100,9 @@ describe("SEO-E2E-05 LocalBusiness schema verification", () => {
     expect(servicePage).toContain("buildPrimaryLocalBusinessBase()");
     expect(airbnbArea).toContain("buildPrimaryLocalBusinessBase()");
     expect(homepage).toContain("buildPrimaryLocalBusinessBase()");
+    expect(homepage).not.toContain(
+      'const areaServed = [\n    { "@type": "Country" as const, name: "South Africa" }',
+    );
 
     expect(servicePage).not.toContain('"@type": "LocalBusiness"');
     expect(airbnbArea).not.toContain('"@type": "LocalBusiness"');
