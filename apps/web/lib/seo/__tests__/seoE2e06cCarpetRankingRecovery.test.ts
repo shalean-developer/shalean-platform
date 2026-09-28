@@ -4,12 +4,12 @@ import { describe, expect, it } from "vitest";
 import {
   buildCapeTownServiceMetadata,
   CAPE_TOWN_SERVICE_SEO,
-  locationPageServiceLinks,
   resolveCapeTownServiceSchemaFields,
 } from "@/lib/seo/capeTownSeoPages";
 import {
   getBlogAboveFoldServiceLink,
   getBlogIntentServicePair,
+  getLocationHubRelatedServiceLinks,
 } from "@/lib/seo/internalLinks";
 import { KEYWORD_PRIMARY_ROUTE } from "@/lib/seo/keyword-primary-route";
 
@@ -41,11 +41,12 @@ describe("SEO-E2E-06C Carpet Cleaning ranking recovery", () => {
   });
 
   it("uses Carpet Cleaning Services anchors on relevant internal-link surfaces", () => {
-    const serviceNav = locationPageServiceLinks().find((link) => link.href === CARPET_PATH);
-    expect(serviceNav).toEqual({
-      href: CARPET_PATH,
-      label: "Carpet cleaning services Cape Town",
-    });
+    const locationLinks = getLocationHubRelatedServiceLinks(
+      "Claremont",
+      "claremont-cleaning-services",
+    );
+    const carpetLocationLink = locationLinks.find((link) => link.href === CARPET_PATH);
+    expect(carpetLocationLink?.anchor.toLowerCase()).toContain("carpet cleaning services");
 
     const aboveFold = getBlogAboveFoldServiceLink("carpet-cleaning-guide-cape-town");
     expect(aboveFold.href).toBe(CARPET_PATH);
