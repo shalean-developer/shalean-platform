@@ -87,7 +87,6 @@ export function StructuredData({ services, locations, faqs }: StructuredDataProp
 
   const localBusiness: Record<string, unknown> = {
     ...buildPrimaryLocalBusinessBase(),
-    areaServed,
     serviceType: [...CORE_SERVICE_TYPES],
     hasOfferCatalog: { "@id": HOME_PAGE_OFFER_CATALOG_ID },
   };
