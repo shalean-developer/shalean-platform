@@ -1087,6 +1087,12 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     ogImage: "/images/marketing/professional-cleaner-vacuum-bedroom-cape-town.webp",
     h1: "Rosebank cleaning services in Cape Town for students, duplexes, and rental corridors",
     bookingLabel: "cleaning in Rosebank",
+    tier: "medium",
+    hasAirbnbFocus: false,
+    hasApartmentFocus: true,
+    rankingPricingParagraph:
+      "Rosebank cleaning prices vary with room count, shared bathrooms, service type, and lease-end extras such as ovens or fridges. Duplexes and student-adjacent rentals can need extra time for stairs and high-use kitchens, so scope is confirmed before checkout.",
+    rankingMidNearbySlugs: ["rondebosch-cleaning-services", "mowbray-cleaning-services"],
     intro: [
       "Rosebank sits where Cape Town’s university-adjacent rentals meet quieter family streets—cleaning demand swings between fast bathroom and kitchen resets in shared flats and fuller home visits for multi-bedroom houses.",
       "Shalean supports Rosebank customers with metro-consistent online booking: choose rooms, bathrooms, extras, and intensity, then confirm pricing before checkout—ideal when flatmates or landlords need a shared paper trail.",
@@ -1237,6 +1243,9 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     tier: "medium",
     hasAirbnbFocus: false,
     hasApartmentFocus: true,
+    rankingPricingParagraph:
+      "Plumstead cleaning prices are driven mainly by home size, bathrooms, service intensity, and optional extras. Family homes with pets, garden dust, or larger kitchens often need more time than compact flats, so your online quote reflects the scope you choose before payment.",
+    rankingMidNearbySlugs: ["kenilworth-cleaning-services", "wynberg-cleaning-services"],
     relatedBlogGuide: {
       href: "/locations/kenilworth-cleaning-services",
       linkAnchorText: "Kenilworth cleaning services (nearby Southern Suburbs hub)",
@@ -1741,6 +1750,12 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     ogImage: "/images/marketing/professional-cleaner-vacuum-bedroom-cape-town.webp",
     h1: "Rondebosch East cleaning services in Cape Town for family homes and practical rentals",
     bookingLabel: "cleaning in Rondebosch East",
+    tier: "medium",
+    hasAirbnbFocus: false,
+    hasApartmentFocus: true,
+    rankingPricingParagraph:
+      "Rondebosch East cleaning prices depend on bedrooms, bathrooms, service type, and any move-out extras selected. Townhouse access, shared entrances, and larger family layouts can change visit length, so the quote is built from the property details you confirm online.",
+    rankingMidNearbySlugs: ["rondebosch-cleaning-services", "mowbray-cleaning-services"],
     relatedBlogGuide: {
       href: "/locations/rondebosch-cleaning-services",
       linkAnchorText: "Rondebosch cleaning services (nearby Southern Suburbs hub)",
@@ -1825,7 +1840,12 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     ogImage: "/images/marketing/shalean-cleaner-balcony-cape-town.webp",
     h1: "Hout Bay cleaning services in Cape Town for harbour living and hillside homes",
     bookingLabel: "cleaning in Hout Bay",
+    tier: "medium",
     hasAirbnbFocus: true,
+    hasApartmentFocus: true,
+    rankingPricingParagraph:
+      "Hout Bay cleaning prices depend on bedrooms, bathrooms, service type, and selected price-affecting extras. Access notes for hillside or gated properties help operations plan the visit, but they do not change the locked quote unless you change a priced scope item.",
+    rankingMidNearbySlugs: ["camps-bay-cleaning-services", "constantia-cleaning-services"],
     relatedBlogGuide: {
       href: "/locations/camps-bay-cleaning-services",
       linkAnchorText: "Camps Bay cleaning services (nearby Atlantic Seaboard hub)",
