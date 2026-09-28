@@ -33,6 +33,24 @@ describe("SEO-E2E-02 location quality control", () => {
     expect(countIntent(merged, /same-day|how soon.*book|availability/)).toBe(1);
   });
 
+
+  it("deduplicates a high-tier prepended pricing FAQ against the PAA pricing FAQ", () => {
+    const row = location("claremont-cleaning-services");
+    const primary = [
+      {
+        q: `How much does cleaning cost in ${row.name}?`,
+        a: getCanonicalLocationPricingAnswer(row),
+      },
+      ...buildPeopleAlsoAskFaqs(row),
+    ];
+    const merged = mergeLocationFaqs(primary, buildDynamicLocationFaqs(row));
+
+    expect(countIntent(merged, /how much.*(cleaner|cleaning).*cost/)).toBe(1);
+    expect(merged.find((item) => /how much.*cost/i.test(item.q))?.a).toBe(
+      getCanonicalLocationPricingAnswer(row),
+    );
+  });
+
   it("uses one canonical pricing answer across PAA and dynamic FAQ sources", () => {
     const row = location("rondebosch-cleaning-services");
     const expected = getCanonicalLocationPricingAnswer(row);
