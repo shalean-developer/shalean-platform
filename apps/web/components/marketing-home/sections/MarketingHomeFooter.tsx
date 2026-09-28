@@ -7,12 +7,12 @@ import { trackGa4PhoneClick, trackGa4WhatsAppClick } from "@/lib/analytics/ga4Ev
 import { SHALEAN_SOCIAL_LINKS } from "@/lib/brand/shaleanSocialLinks";
 import { MARKETING_FOOTER_SERVICE_LINKS } from "@/lib/marketing/marketingServiceNavLinks";
 import {
-  CUSTOMER_SUPPORT_EMAIL,
   CUSTOMER_SUPPORT_TELEPHONE_DISPLAY,
   CUSTOMER_SUPPORT_TELEPHONE_TEL,
   CUSTOMER_SUPPORT_WHATSAPP_DISPLAY,
   customerSupportWhatsAppHref,
 } from "@/lib/site/customerSupport";
+import { PUBLIC_BUSINESS_EMAIL } from "@/lib/site/publicBusinessIdentity";
 
 const waHref = customerSupportWhatsAppHref();
 
@@ -97,10 +97,10 @@ export function MarketingHomeFooter({
             <span className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500">Call us</span>
             <span className="mt-1 block font-medium group-hover:text-[#0033A1]">{CUSTOMER_SUPPORT_TELEPHONE_DISPLAY}</span>
           </a>
-          <a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}`} className="group rounded-lg border border-[#DCE7FF] p-5 transition hover:border-[#0051FF] hover:bg-[#F5F7FB]">
+          <a href={`mailto:${PUBLIC_BUSINESS_EMAIL}`} className="group rounded-lg border border-[#DCE7FF] p-5 transition hover:border-[#0051FF] hover:bg-[#F5F7FB]">
             <Mail className="h-5 w-5 text-[#0051FF]" aria-hidden />
             <span className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500">Email</span>{" "}
-            <span className="mt-1 block font-medium group-hover:text-[#0033A1]">{CUSTOMER_SUPPORT_EMAIL}</span>
+            <span className="mt-1 block font-medium group-hover:text-[#0033A1]">{PUBLIC_BUSINESS_EMAIL}</span>
           </a>
         </div>
       </section>
@@ -171,9 +171,9 @@ export function MarketingHomeFooter({
                   </a>
                 </li>
                 <li>
-                  <a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}`} className="flex min-h-10 items-center gap-[var(--ui-space-2)] transition hover:text-white">
+                  <a href={`mailto:${PUBLIC_BUSINESS_EMAIL}`} className="flex min-h-10 items-center gap-[var(--ui-space-2)] transition hover:text-white">
                     <Mail className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-                    {CUSTOMER_SUPPORT_EMAIL}
+                    {PUBLIC_BUSINESS_EMAIL}
                   </a>
                 </li>
                 <li className="flex min-h-10 items-start gap-[var(--ui-space-2)] pt-[var(--ui-space-2)]">
