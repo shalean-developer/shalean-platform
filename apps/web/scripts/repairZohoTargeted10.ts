@@ -25,7 +25,7 @@ import {
   getZohoInvoice,
   markZohoInvoicePaid,
 } from "../lib/zoho/zohoBooksService";
-import { resolveZohoCustomerContactForBooking } from "../lib/zoho/resolveZohoCustomerContact";
+import {\n  resolveZohoCustomerContactForBooking,\n  resolveZohoCustomerContactForMonthlyInvoice,\n} from "../lib/zoho/resolveZohoCustomerContact";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
@@ -200,6 +200,41 @@ async function repairBooking(admin: SupabaseClient, bookingId: (typeof BOOKING_I
   }
 
   const label = `booking ${bookingId.slice(0, 8)}`;
+  const existingZohoId = String(row.zoho_invoice_id ?? "").trim();
+
+  if (existingZohoId) {
+    if (!apply) {
+      console.log(`[dry-run] ${label} already linked -> verify/skip on apply (${existingZohoId})`);
+      return;
+    }
+
+    const details = await verifyPaidInvoice({
+      zohoInvoiceId: existingZohoId,
+      expectedTotalCents: expectedAmount,
+      label,
+    });
+    await upsertInvoiceSyncMetadata(admin, {
+      entityType: "booking",
+      entityId: bookingId,
+      bookingId,
+      zohoInvoiceId: existingZohoId,
+      zohoInvoiceNumber: details.invoiceNumber,
+      zohoCustomerId: details.customerId,
+      invoiceStatus: details.status,
+      invoiceTotalCents: details.totalCents,
+      taxAmountCents: details.taxCents,
+      outstandingBalanceCents: details.balanceCents,
+    });
+
+    if (tx.sync_status === "synced" && tx.external_accounting_id) {
+      await markSyncSucceeded(admin, queueId, tx.external_accounting_id);
+      console.log(`[resume] ${label} already complete; verified and skipped`);
+      return;
+    }
+
+    fail(`${label}: invoice already paid+linked but payment accounting id is missing; leave for explicit reconciliation`);
+  }
+
   if (!apply) {
     console.log(
       `[dry-run] ${label} create+pay R${(expectedAmount / 100).toFixed(2)} ref=${tx.gateway_reference ?? "(none)"}`,
@@ -314,16 +349,58 @@ async function repairMonthlyInvoice(admin: SupabaseClient) {
     return;
   }
 
-  const synced = await syncMonthlyInvoiceToZohoBooks(admin, {
+  const contactRes = await resolveZohoCustomerContactForMonthlyInvoice(admin, {
     invoiceId: data.id,
     customerId: data.customer_id,
-    month: data.month,
-    dueDate: data.due_date,
-    balanceZar: EXPECTED_MONTHLY_INVOICE_AMOUNT_CENTS / 100,
-    status: data.status,
-    invoiceDate: data.invoice_date ?? undefined,
   });
+  if (!contactRes.ok) fail(`monthly invoice: contact resolution failed: ${contactRes.error}`);
+  const contact = contactRes.contact;
+
+  const existingZohoId = String(data.zoho_invoice_id ?? "").trim();
+  let synced:
+    | { ok: true; zohoInvoiceId: string; zohoInvoiceNumber?: string }
+    | { ok: false; error: string };
+
+  if (existingZohoId) {
+    synced = { ok: true, zohoInvoiceId: existingZohoId };
+  } else {
+    synced = await syncMonthlyInvoiceToZohoBooks(admin, {
+      invoiceId: data.id,
+      customerId: data.customer_id,
+      month: data.month,
+      dueDate: data.due_date,
+      balanceZar: EXPECTED_MONTHLY_INVOICE_AMOUNT_CENTS / 100,
+      status: data.status,
+      invoiceDate: data.invoice_date ?? undefined,
+    });
+  }
   if (!synced.ok) fail(`monthly invoice: create failed: ${synced.error}`);
+
+  const beforePayment = await getZohoInvoice(synced.zohoInvoiceId);
+  if (!beforePayment.ok) fail(`monthly invoice: Zoho read failed: ${beforePayment.error}`);
+
+  if (
+    String(beforePayment.status).toLowerCase() === "paid" &&
+    beforePayment.balanceCents === 0
+  ) {
+    if (tx.sync_status === "synced" && tx.external_accounting_id) {
+      await upsertInvoiceSyncMetadata(admin, {
+        entityType: "monthly_invoice",
+        entityId: data.id,
+        zohoInvoiceId: synced.zohoInvoiceId,
+        zohoInvoiceNumber: synced.zohoInvoiceNumber ?? beforePayment.invoiceNumber,
+        zohoCustomerId: beforePayment.customerId,
+        invoiceStatus: beforePayment.status,
+        invoiceTotalCents: beforePayment.totalCents,
+        taxAmountCents: beforePayment.taxCents,
+        outstandingBalanceCents: beforePayment.balanceCents,
+      });
+      await markSyncSucceeded(admin, queueId, tx.external_accounting_id);
+      console.log("[resume] monthly invoice already complete; verified and skipped");
+      return;
+    }
+    fail("monthly invoice already paid+linked but payment accounting id is missing; leave for explicit reconciliation");
+  }
 
   const paymentDate = ymdJhb(tx.paid_at);
   const paid = await markZohoInvoicePaid({
@@ -331,6 +408,8 @@ async function repairMonthlyInvoice(admin: SupabaseClient) {
     amountZar: EXPECTED_MONTHLY_INVOICE_AMOUNT_CENTS / 100,
     paymentDate,
     reference: tx.gateway_reference ?? data.paystack_reference ?? data.id,
+    customerEmail: contact.email,
+    customerName: contact.name,
   });
   if (!paid.ok) fail(`monthly invoice: mark paid failed: ${paid.error}`);
 
@@ -385,8 +464,11 @@ async function repairSalesDocument(admin: SupabaseClient) {
     return;
   }
 
-  const synced = await syncSalesDocumentToZoho(admin, SALES_DOCUMENT_ID);
-  if (!synced.ok) fail(`sales document: create failed: ${synced.error}`);
+  const existingZohoId = String(data.zoho_invoice_id ?? "").trim();
+  if (!existingZohoId) {
+    const synced = await syncSalesDocumentToZoho(admin, SALES_DOCUMENT_ID);
+    if (!synced.ok) fail(`sales document: create failed: ${synced.error}`);
+  }
 
   const { data: fresh, error: freshErr } = await admin
     .from("sales_documents")
@@ -394,6 +476,31 @@ async function repairSalesDocument(admin: SupabaseClient) {
     .eq("id", SALES_DOCUMENT_ID)
     .maybeSingle();
   if (freshErr || !fresh?.zoho_invoice_id) fail("sales document: link missing after create");
+
+  const beforePayment = await getZohoInvoice(fresh.zoho_invoice_id);
+  if (!beforePayment.ok) fail(`sales document: Zoho read failed: ${beforePayment.error}`);
+  if (
+    String(beforePayment.status).toLowerCase() === "paid" &&
+    beforePayment.balanceCents === 0
+  ) {
+    if (tx.sync_status === "synced" && tx.external_accounting_id) {
+      await upsertInvoiceSyncMetadata(admin, {
+        entityType: "sales_document",
+        entityId: SALES_DOCUMENT_ID,
+        zohoInvoiceId: fresh.zoho_invoice_id,
+        zohoInvoiceNumber: fresh.zoho_invoice_number ?? beforePayment.invoiceNumber,
+        zohoCustomerId: beforePayment.customerId,
+        invoiceStatus: beforePayment.status,
+        invoiceTotalCents: beforePayment.totalCents,
+        taxAmountCents: beforePayment.taxCents,
+        outstandingBalanceCents: beforePayment.balanceCents,
+      });
+      await markSyncSucceeded(admin, queueId, tx.external_accounting_id);
+      console.log("[resume] sales document already complete; verified and skipped");
+      return;
+    }
+    fail("sales document already paid+linked but payment accounting id is missing; leave for explicit reconciliation");
+  }
 
   const paymentDate = ymdJhb(tx.paid_at);
   const paid = await markZohoInvoicePaid({
@@ -458,13 +565,38 @@ async function main() {
   console.log(apply ? "Mode: APPLY" : "Mode: DRY-RUN");
   console.log("Allowlist: 8 bookings + 1 monthly invoice + 1 sales document");
 
-  for (const id of BOOKING_IDS) {
-    await repairBooking(admin, id);
-  }
-  await repairMonthlyInvoice(admin);
-  await repairSalesDocument(admin);
+  const failures: string[] = [];
 
-  console.log(apply ? "INV-E2E-01D targeted repair complete." : "Dry-run complete. No writes performed.");
+  for (const id of BOOKING_IDS) {
+    try {
+      await repairBooking(admin, id);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      failures.push(`booking ${id.slice(0, 8)}: ${message}`);
+      console.error(`[item-failed] booking ${id.slice(0, 8)}: ${message}`);
+    }
+  }
+
+  for (const [label, fn] of [
+    ["monthly invoice", () => repairMonthlyInvoice(admin)],
+    ["sales document", () => repairSalesDocument(admin)],
+  ] as const) {
+    try {
+      await fn();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      failures.push(`${label}: ${message}`);
+      console.error(`[item-failed] ${label}: ${message}`);
+    }
+  }
+
+  if (failures.length > 0) {
+    console.error(`INV-E2E-01D completed with ${failures.length} item failure(s):`);
+    for (const message of failures) console.error(`- ${message}`);
+    process.exitCode = 1;
+  } else {
+    console.log(apply ? "INV-E2E-01D targeted repair complete." : "Dry-run complete. No writes performed.");
+  }
 }
 
 void main().catch((err) => {
