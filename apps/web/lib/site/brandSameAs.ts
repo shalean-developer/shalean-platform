@@ -2,7 +2,7 @@ import { PUBLIC_BUSINESS_GOOGLE_PROFILE_URL } from "@/lib/site/publicBusinessIde
 
 /**
  * Official profile URLs for JSON-LD `sameAs` on LocalBusiness.
- * Only verified URLs — omit property entirely when unset (avoid generic homepage links).
+ * The verified GBP entity URL is always present; optional social profiles are included only when configured.
  */
 
 function normalizeCandidate(u: string | undefined): string | null {
@@ -18,7 +18,6 @@ export function getBrandSameAsForJsonLd(): string[] {
     normalizeCandidate(process.env.NEXT_PUBLIC_BRAND_FACEBOOK_URL),
     normalizeCandidate(process.env.NEXT_PUBLIC_BRAND_INSTAGRAM_URL),
     normalizeCandidate(process.env.NEXT_PUBLIC_BRAND_LINKEDIN_URL),
-    normalizeCandidate(process.env.NEXT_PUBLIC_GOOGLE_BUSINESS_PROFILE_URL),
   ].filter(Boolean) as string[];
   return [...new Set(candidates)];
 }
