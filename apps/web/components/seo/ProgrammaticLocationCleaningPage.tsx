@@ -57,8 +57,10 @@ import { getLocationEditorialOverride } from "@/lib/seo/location-editorial-overr
 import { buildDynamicLocationFaqs, nearbyProgrammaticLocationsPreferRegion } from "@/lib/seo/locations";
 import { buildPeopleAlsoAskFaqs, mergeLocationFaqs } from "@/lib/seo/location-paa-faqs";
 import { buildLocationLocalProofBullets } from "@/lib/seo/location-hub-local-proof";
-import { buildCostFaqAnswer } from "@/lib/seo/location-ranking-asset-copy";
-import { getLocationPricingHeroLine } from "@/lib/seo/location-pricing";
+import {
+  getCanonicalLocationPricingAnswer,
+  getLocationPricingHeroLine,
+} from "@/lib/seo/location-pricing";
 import { resolveLocationRankingSections } from "@/lib/seo/resolve-location-ranking-sections";
 import { buildLocationHubJsonLd } from "@/lib/seo/structured-data";
 import { LOCATION_PAGE_CONTENT_GROUP } from "@/lib/seo/search-console-readiness";
@@ -158,7 +160,7 @@ export function ProgrammaticLocationCleaningPage({
       ? [
           {
             q: `How much does cleaning cost in ${location.name}?`,
-            a: seo?.rankingCostFaqAnswer ?? buildCostFaqAnswer(location),
+            a: getCanonicalLocationPricingAnswer(location),
           },
           ...peopleAlsoAskSeed,
         ]
@@ -513,7 +515,8 @@ export function ProgrammaticLocationCleaningPage({
         <LocationHubTrustedResidentsSection locationName={location.name} snippets={marketingReviewSnippets ?? []} />
       ) : null}
 
-      <section className="border-b border-zinc-100 bg-zinc-50/40 py-12" aria-labelledby="hub-popular-ct-services-heading">
+      {!rankingResolved?.skipDefaultServicesStrip ? (
+        <section className="border-b border-zinc-100 bg-zinc-50/40 py-12" aria-labelledby="hub-popular-ct-services-heading">
         <div className="mx-auto max-w-4xl px-4">
           <h2 id="hub-popular-ct-services-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
             What type of cleaning service do you need?
@@ -544,6 +547,7 @@ export function ProgrammaticLocationCleaningPage({
           </ul>
         </div>
       </section>
+      ) : null}
 
       {rankingResolved?.active && seo ? (
         <LocationHubRankingAsset location={location} seo={seo} ranking={rankingResolved} ctx={seoCtx} />
@@ -652,7 +656,7 @@ export function ProgrammaticLocationCleaningPage({
 
       {!aboveFoldTrust ? <LocationTrustSignals location={location} trustStats={trustStats} /> : null}
 
-      <LocationHubAuthoritySection location={location} />
+      {rankingResolved?.tier !== "high" ? <LocationHubAuthoritySection location={location} /> : null}
 
       <section className="border-b border-zinc-100 bg-white py-14" aria-labelledby="hub-local-proof-heading">
         <div className="mx-auto max-w-4xl px-4">
@@ -697,7 +701,7 @@ export function ProgrammaticLocationCleaningPage({
         </section>
       ) : null}
 
-      <LocationHubComparisonSection location={location} />
+      {rankingResolved?.tier !== "high" ? <LocationHubComparisonSection location={location} /> : null}
 
       <LocationHubMidBanner location={location} slug={slug} tier={hubTier} analyticsCtx={seoCtx} />
 
@@ -759,7 +763,9 @@ export function ProgrammaticLocationCleaningPage({
         <LocationHubAirbnbCleaningSection locationName={location.name} hubSlug={slug} />
       ) : null}
 
-      <LocationHubQueryExpansion location={location} slug={slug} tier={hubTier} />
+      {!rankingResolved?.active ? (
+        <LocationHubQueryExpansion location={location} slug={slug} tier={hubTier} />
+      ) : null}
 
       <section className="border-b border-zinc-100 py-16">
         <div className="mx-auto max-w-4xl px-4">
@@ -831,7 +837,7 @@ export function ProgrammaticLocationCleaningPage({
         <LocationHubShareBar url={pageUrl} title={h1} />
       </div>
 
-      <LocationHubSessionDepth location={location} slug={slug} />
+      {rankingResolved?.tier !== "high" ? <LocationHubSessionDepth location={location} slug={slug} /> : null}
 
       <section className="border-b border-zinc-100 py-16">
         <div className="mx-auto max-w-4xl space-y-10 px-4">
