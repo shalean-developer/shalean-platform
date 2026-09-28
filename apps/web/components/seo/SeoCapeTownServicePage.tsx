@@ -5,7 +5,6 @@ import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { getAreaProgrammaticBlogLinksForCapeTownService } from "@/lib/blog/programmaticPosts";
 import { marketingStickyCtaMainPadding } from "@/lib/marketing/marketingMobileLayout";
-import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import type { CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
 import {
   WindowCleaningPricingTrustSection,
@@ -35,13 +34,12 @@ import { SITE_ORIGIN, absoluteCanonicalUrl } from "@/lib/site/canonical";
 
 type Props = {
   slug: CapeTownSeoServiceSlug;
-  trustStats: PublicReviewBannerStats | null;
   initialLocationSlug?: string | null;
   heroVariant?: "legacy" | "primary";
   extensionSlots?: PrimaryCapeTownServiceExtensionSlots;
 };
 
-export function SeoCapeTownServicePage({ slug, trustStats, heroVariant = "legacy", extensionSlots }: Props) {
+export function SeoCapeTownServicePage({ slug, heroVariant = "legacy", extensionSlots }: Props) {
   const data = CAPE_TOWN_SERVICE_SEO[slug];
   const bookingPath = "/book";
   const introHeading = data.introSectionHeading ?? "How this service works in Cape Town";
@@ -113,15 +111,6 @@ export function SeoCapeTownServicePage({ slug, trustStats, heroVariant = "legacy
   };
   if (sameAs.length > 0) localBusinessNode.sameAs = sameAs;
 
-  // Emit AggregateRating only when live trustStats are present — hardcoded GBP constants are unverified.
-  if (slug === "standard-cleaning-cape-town" && trustStats && trustStats.reviewCount > 0) {
-    localBusinessNode.aggregateRating = {
-      "@type": "AggregateRating",
-      ratingValue: String(Math.round(trustStats.avgRating * 10) / 10),
-      reviewCount: String(trustStats.reviewCount),
-    };
-  }
-
   const mergedStandardFaqs =
     slug === "standard-cleaning-cape-town"
       ? dedupeFaqsByQuestion(data.faqs, STANDARD_CLEANING_SNIPPET_FAQS).slice(0, 6)
@@ -152,7 +141,7 @@ export function SeoCapeTownServicePage({ slug, trustStats, heroVariant = "legacy
     })),
   };
 
-  /** aggregateRating on money page uses verified GBP aggregate or live review RPC stats when present. */
+  /** Google Business Profile ratings remain visible UI trust evidence, not self-authored LocalBusiness review markup. */
   const jsonLdGraph: Record<string, unknown>[] = [
     localBusinessNode,
     {

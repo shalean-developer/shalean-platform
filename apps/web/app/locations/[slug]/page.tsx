@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { ProgrammaticLocationCleaningPage } from "@/components/seo/ProgrammaticLocationCleaningPage";
-import { getPublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import { getLocationHubMarketingReviews } from "@/lib/seo/location-hub-marketing-reviews";
 import {
   buildLocationSeoMetadataAsync,
@@ -89,8 +88,7 @@ export default async function LocationSeoPage({ params }: Props) {
     console.log("LOCATION:", location.slug);
     console.log("SEO:", seo ? { slug: seo.slug, path: seo.path } : null);
   }
-  const [trustStats, marketingReviewSnippets, metaFields, blogCards, titleVariant, hubUiPatch] = await Promise.all([
-    getPublicReviewBannerStats(),
+  const [marketingReviewSnippets, metaFields, blogCards, titleVariant, hubUiPatch] = await Promise.all([
     getLocationHubMarketingReviews(location.name, 4),
     resolveLocationSeoMetaFieldsAsync(seo, location),
     getLocationHubBlogCards(location.name),
@@ -102,7 +100,6 @@ export default async function LocationSeoPage({ params }: Props) {
       <ProgrammaticLocationCleaningPage
         location={location}
         seo={seo}
-        trustStats={trustStats}
         metaDescription={metaFields.description}
         blogCards={blogCards}
         titleVariant={titleVariant}

@@ -4,6 +4,7 @@ import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { SEO_NOINDEX_FOLLOW } from "@/lib/site/seoRobots";
+import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 
 const PATH = "/lp/cleaning";
 const CANONICAL = absoluteCanonicalUrl(PATH);
@@ -23,7 +24,7 @@ export default function CleaningAdLandingPage() {
         <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">Shalean Cleaning</p>
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Book a trusted cleaner in 60 seconds</h1>
         <p className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">From R300</p>
-        <p className="text-sm text-zinc-600 dark:text-zinc-300">Trusted by homeowners in Cape Town • 4.8★ average rating • Secure payment</p>
+        <p className="text-sm text-zinc-600 dark:text-zinc-300">Trusted by homeowners in Cape Town • {GOOGLE_BUSINESS_REVIEWS.rating}★ on Google • Secure payment</p>
         <GrowthCtaLink
           href="/book"
           source="ads_lp_primary"

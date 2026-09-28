@@ -6,8 +6,8 @@ import { CUSTOMER_SUPPORT_WHATSAPP_URL } from "@/lib/site/customerSupport";
  */
 export const GOOGLE_BUSINESS_REVIEWS = {
   rating: 4.8,
-  count: 128,
-  verifiedAt: "2026-08-30",
+  count: 137,
+  verifiedAt: "2026-09-28",
 } as const;
 
 /** Re-verify the public Google Business Profile at least every 90 days. */

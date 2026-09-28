@@ -21,7 +21,7 @@ import {
   ABOUT_REVIEWS,
   ABOUT_WEEKLY_HOMES_CLEANED_DISPLAY,
 } from "@/lib/about/about-page-content";
-import { GOOGLE_BUSINESS_REVIEWS, googleBusinessAggregateRatingSchema } from "@/lib/seo/googleReviews";
+import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 import { FOOTER_POPULAR_LOCATION_HUBS } from "@/lib/seo/locations";
 import { CAPE_TOWN_LOCATIONS } from "@/lib/seo/capeTownLocations";
 import { marketingLandingImage } from "@/lib/marketing/marketingHomeAssets";
@@ -41,7 +41,6 @@ export function AboutPageView() {
     url: SITE_ORIGIN,
     description:
       "Vetted home cleaning teams in Cape Town with transparent pricing, flexible scheduling, and online booking.",
-    aggregateRating: googleBusinessAggregateRatingSchema(),
     areaServed: {
       "@type": "City",
       name: "Cape Town",

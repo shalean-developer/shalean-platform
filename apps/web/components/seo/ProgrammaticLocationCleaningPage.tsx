@@ -29,7 +29,6 @@ import { SeoBreadcrumbs } from "@/components/seo/SeoBreadcrumbs";
 import { LocationHubServiceTiles } from "@/components/seo/LocationHubServiceTiles";
 import { SeoHubGrowthCtaLink } from "@/components/seo/SeoHubGrowthCtaLink";
 import { publicTrustRatingBadgeLine } from "@/lib/home/publicTrustRating";
-import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import {
   locationFooterCtaMicrocopy,
   locationHeroCtaMicrocopy,
@@ -77,7 +76,6 @@ import {
 type Props = {
   location: CapeTownLocationRow;
   seo: LocationSeoBlock | null;
-  trustStats: PublicReviewBannerStats | null;
   /** Matches `<meta name="description">` and Open Graph (via `resolveLocationSeoMetaFields`). */
   metaDescription: string;
   blogCards: HubBlogCard[];
@@ -124,7 +122,6 @@ const HERO_OUTLINE_BLUE_CLASS =
 export function ProgrammaticLocationCleaningPage({
   location,
   seo,
-  trustStats,
   metaDescription,
   blogCards,
   titleVariant,
@@ -420,7 +417,7 @@ export function ProgrammaticLocationCleaningPage({
             </p>
           ) : null}
           <p className="mt-4 text-sm font-medium text-zinc-700">
-            {publicTrustRatingBadgeLine(trustStats)} · Totals lock online before dispatch.
+            {publicTrustRatingBadgeLine(null)} · Totals lock online before dispatch.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             {(swapHeroBookCtas
@@ -500,7 +497,7 @@ export function ProgrammaticLocationCleaningPage({
 
       {aboveFoldTrust ? (
         <>
-          <LocationTrustSignals location={location} trustStats={trustStats} />
+          <LocationTrustSignals location={location} />
           <LocationHubTrustedResidentsSection locationName={location.name} snippets={marketingReviewSnippets ?? []} />
         </>
       ) : null}
@@ -620,7 +617,7 @@ export function ProgrammaticLocationCleaningPage({
         </div>
       </section>
 
-      {!aboveFoldTrust ? <LocationTrustSignals location={location} trustStats={trustStats} /> : null}
+      {!aboveFoldTrust ? <LocationTrustSignals location={location} /> : null}
 
       {rankingResolved?.tier !== "high" ? <LocationHubAuthoritySection location={location} /> : null}
 

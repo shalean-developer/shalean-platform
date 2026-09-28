@@ -163,6 +163,7 @@ jobs:
           lib/seo/__tests__/siteE2E11TermsSatisfactionGuarantee.test.ts
           lib/seo/__tests__/seoE2e02LocationQuality.test.ts
           lib/seo/__tests__/seoE2e03ServiceNaming.test.ts
+          lib/seo/__tests__/seoE2e04TrustConsistency.test.ts
           lib/seo/__tests__/locationsShortSlugProxyRedirect.test.ts
           app/api/meta/data-deletion/__tests__/route.test.ts
           lib/oauth/__tests__/metaFacebookOAuth.test.ts
