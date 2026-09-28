@@ -1,7 +1,4 @@
-import {
-  outboundTestMessageMarker,
-  resolveDeploymentDisplayEnvironment,
-} from "@/lib/env/deploymentEnvironment";
+import { resolveDeploymentDisplayEnvironment } from "@/lib/env/deploymentEnvironment";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
 import { safeResendSend } from "@/lib/email/safeResendSend";
 import { CONTACT_FORM_RECIPIENT } from "@/lib/contact/contactFormContract";
