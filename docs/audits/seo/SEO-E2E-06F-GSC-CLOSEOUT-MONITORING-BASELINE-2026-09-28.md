@@ -37,37 +37,34 @@ All ten paths are expected to remain canonical/indexation-eligible and present i
 
 ## Historical GSC reference points
 
-The repository's stored location snapshot currently contains these reference metrics. They are **historical comparison points**, not fresh 2026-09-28 Search Console measurements.
+Only **observed rows explicitly hard-coded as known GSC samples** are eligible as historical performance baselines in this closeout. The catalog helper also generates synthetic rows for uncovered suburbs from pricing-band averages plus deterministic slug jitter; those estimates must **not** be used for 7/21-day performance deltas.
 
-| Location | Impressions | Clicks | CTR | Avg position |
-|---|---:|---:|---:|---:|
-| Bantry Bay | 1,021 | 45 | 4.44% | 6.8 |
-| Claremont | 890 | 41 | 4.60% | 5.2 |
-| Constantia | 941 | 46 | 4.86% | 6.9 |
-| Plumstead | 620 | 28 | 4.50% | 8.1 |
-| Rosebank | 733 | 33 | 4.46% | 7.1 |
+| Location | Impressions | Clicks | CTR | Avg position | Baseline use |
+|---|---:|---:|---:|---:|---|
+| Claremont | 890 | 41 | 4.60% | 5.2 | Historical observed sample |
+| Plumstead | 620 | 28 | 4.50% | 8.1 | Historical observed sample |
 
-Hout Bay and Rondebosch East are not present in that stored snapshot, so no historical metric should be invented for them.
+Bantry Bay, Constantia, Rosebank, Hout Bay, and Rondebosch East do not have an observed baseline in `KNOWN_GSC_ROWS`. Any values produced for those suburbs by `buildCatalogGscRows()` are **generated estimates** and are excluded from post-deploy delta calculations. Their first fresh Search Console pull becomes the true baseline.
 
 Older SEO disposition evidence recorded Carpet Cleaning as indexed and Deep Cleaning as requiring indexation/content remediation. Those records are historical only; the 06B/06C changes supersede the page content but not the need for a fresh GSC check after recrawl.
 
 ## Live public crawl evidence observed 2026-09-28
 
-The production URLs are publicly fetchable and the current web crawler returned live HTML for all ten monitoring paths.
+All ten production monitoring URLs were freshly opened on 2026-09-28 and returned current HTML snapshots. Hout Bay, Plumstead, Rosebank, and Rondebosch East were explicitly re-opened during PR review so no prior-month snapshot is being used to claim current reachability.
 
-Recent crawl observations:
+Current crawl observations:
+- Cleaning Prices — crawled 2026-09-28
 - Deep Cleaning — crawled 2026-09-28
 - Carpet Cleaning — crawled 2026-09-28
-- Cleaning Prices — crawled 2026-09-28
+- Hout Bay — crawled 2026-09-28
 - Claremont — crawled 2026-09-28
+- Plumstead — crawled 2026-09-28
+- Rosebank — crawled 2026-09-28
+- Rondebosch East — crawled 2026-09-28
 - Constantia — crawled 2026-09-28
 - Bantry Bay — crawled 2026-09-28
-- Hout Bay — crawler snapshot from the prior month
-- Plumstead — crawler snapshot from the prior month
-- Rosebank — crawler snapshot from the prior month
-- Rondebosch East — crawler snapshot from the prior month
 
-This proves public reachability/crawlability only. It does **not** replace URL Inspection coverage/indexing verdicts from GSC.
+This proves public reachability/crawlability only. It does **not** replace URL Inspection coverage/indexing verdicts from GSC. CI also seeds all ten paths into the PR-build live internal-link crawl, which requires each seed route to return HTTP 200 before merge.
 
 ## Recheck policy
 
