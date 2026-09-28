@@ -1,20 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const safeResendSend = vi.fn();
-const getDefaultFromAddress = vi.fn(() => "Shalean Cleaning <hello@shalean.co.za>");
+const sendInternalContactFormEmail = vi.fn();
 
-vi.mock("@/lib/email/safeResendSend", () => ({
-  safeResendSend,
-}));
-
-vi.mock("@/lib/email/resendFrom", () => ({
-  getDefaultFromAddress,
+vi.mock("@/lib/contact/sendInternalContactFormEmail", () => ({
+  sendInternalContactFormEmail,
 }));
 
 describe("POST /api/contact", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    safeResendSend.mockResolvedValue({ data: { id: "re_test" }, error: null });
+    sendInternalContactFormEmail.mockResolvedValue({ sent: true });
   });
 
   async function post(body: unknown) {
@@ -28,7 +23,7 @@ describe("POST /api/contact", () => {
     );
   }
 
-  it("sends only to hello@shalean.co.za and uses the visitor as Reply-To", async () => {
+  it("delegates a validated enquiry and visitor Reply-To to the internal sender", async () => {
     const response = await post({
       name: "Farai",
       email: "Farai@example.com",
@@ -40,14 +35,12 @@ describe("POST /api/contact", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ ok: true });
-    expect(safeResendSend).toHaveBeenCalledTimes(1);
+    expect(sendInternalContactFormEmail).toHaveBeenCalledTimes(1);
 
-    const payload = safeResendSend.mock.calls[0]?.[0];
-    expect(payload.to).toBe("hello@shalean.co.za");
+    const payload = sendInternalContactFormEmail.mock.calls[0]?.[0];
     expect(payload.replyTo).toBe("farai@example.com");
     expect(payload.subject).toContain("Reschedule");
     expect(payload.text).toContain("Please help me change my booking.");
-    expect(payload.context).toEqual({ messageType: "website_contact_form" });
   });
 
   it("rejects non-object JSON without throwing", async () => {
@@ -55,7 +48,7 @@ describe("POST /api/contact", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ ok: false, error: "Invalid request." });
-    expect(safeResendSend).not.toHaveBeenCalled();
+    expect(sendInternalContactFormEmail).not.toHaveBeenCalled();
   });
 
   it("rejects invalid visitor email without sending", async () => {
@@ -68,7 +61,7 @@ describe("POST /api/contact", () => {
     });
 
     expect(response.status).toBe(400);
-    expect(safeResendSend).not.toHaveBeenCalled();
+    expect(sendInternalContactFormEmail).not.toHaveBeenCalled();
   });
 
   it("silently accepts honeypot submissions without sending", async () => {
@@ -82,13 +75,13 @@ describe("POST /api/contact", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ ok: true });
-    expect(safeResendSend).not.toHaveBeenCalled();
+    expect(sendInternalContactFormEmail).not.toHaveBeenCalled();
   });
 
   it("returns a user-safe error when email delivery fails", async () => {
-    safeResendSend.mockResolvedValue({
-      data: null,
-      error: { message: "provider unavailable", name: "provider_error" },
+    sendInternalContactFormEmail.mockResolvedValue({
+      sent: false,
+      error: "provider unavailable",
     });
 
     const response = await post({

@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import {
-  CONTACT_FORM_RECIPIENT,
   contactFormTopicLabel,
   isContactFormTopic,
 } from "@/lib/contact/contactFormContract";
-import { getDefaultFromAddress } from "@/lib/email/resendFrom";
-import { safeResendSend } from "@/lib/email/safeResendSend";
+import { sendInternalContactFormEmail } from "@/lib/contact/sendInternalContactFormEmail";
 import { checkContactFormRateLimit } from "@/lib/rateLimit/contactFormRateLimit";
 
 const MAX_NAME = 120;
@@ -101,19 +99,16 @@ export async function POST(request: Request) {
     </div>
   `;
 
-  const { error } = await safeResendSend({
-    from: getDefaultFromAddress(),
-    to: CONTACT_FORM_RECIPIENT,
+  const result = await sendInternalContactFormEmail({
     replyTo: email,
     subject,
     text,
     html,
-    context: { messageType: "website_contact_form" },
   });
 
-  if (error) {
+  if (!result.sent) {
     console.error("[contact-form] send failed", {
-      error: error.message,
+      error: result.error ?? "unknown_error",
       topic,
     });
     return NextResponse.json(
