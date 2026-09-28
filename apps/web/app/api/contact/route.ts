@@ -6,6 +6,7 @@ import {
 } from "@/lib/contact/contactFormContract";
 import { getDefaultFromAddress } from "@/lib/email/resendFrom";
 import { safeResendSend } from "@/lib/email/safeResendSend";
+import { checkContactFormRateLimit } from "@/lib/rateLimit/contactFormRateLimit";
 
 const MAX_NAME = 120;
 const MAX_EMAIL = 254;
@@ -30,6 +31,17 @@ function escapeHtml(value: string): string {
 }
 
 export async function POST(request: Request) {
+  const limit = checkContactFormRateLimit(request);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { ok: false, error: "Too many messages. Please wait a few minutes and try again." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limit.retryAfterSeconds) },
+      },
+    );
+  }
+
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
