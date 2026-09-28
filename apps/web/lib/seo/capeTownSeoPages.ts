@@ -150,7 +150,7 @@ export type CapeTownServiceSeoBlock = {
 /** Default `serviceType` strings for `/services/*-cape-town` JSON-LD */
 export const CAPE_TOWN_SERVICE_SCHEMA_SERVICE_TYPE: Record<CapeTownSeoServiceSlug, string> = {
   "deep-cleaning-cape-town": "Deep Cleaning Service",
-  "standard-cleaning-cape-town": "Standard Home Cleaning Service",
+  "standard-cleaning-cape-town": "Regular Home Cleaning Service",
   "move-out-cleaning-cape-town": "Move-Out Cleaning Service",
   "office-cleaning-cape-town": "Office Cleaning Service",
   "airbnb-cleaning-cape-town": "Airbnb Cleaning Service",
@@ -379,8 +379,9 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     path: "/services/standard-cleaning-cape-town",
     title: "Regular Home Cleaning Cape Town | Book Online | Shalean",
     description:
-      "House cleaning in Cape Town for weekly or once-off visits—kitchens, bathrooms, and floors on a checklist you confirm online. Transparent quotes with Shalean.",
+      "Regular Cleaning in Cape Town for weekly or once-off home upkeep. Our standard home cleaning covers kitchens, bathrooms and floors with transparent online quotes.",
     ogImage: "/images/marketing/standard-cleaning-cape-town-kitchen.webp",
+    keywords: ["regular cleaning cape town", "standard home cleaning cape town", "house cleaning cape town"],
     h1: "Regular home cleaning services in Cape Town",
     schemaName: "Cleaning Services Cape Town | Shalean",
     bookingLabel: "regular cleaning",
