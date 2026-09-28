@@ -1,17 +1,15 @@
-import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
 import { BadgeCheck, CalendarClock, Home, Star } from "lucide-react";
 
 type Props = {
   location: CapeTownLocationRow;
-  trustStats: PublicReviewBannerStats | null;
 };
 
 /**
  * E-E-A-T strip for programmatic hubs — uses verified Google aggregate + operational facts only.
  */
-export function LocationTrustSignals({ location, trustStats: _trustStats }: Props) {
+export function LocationTrustSignals({ location }: Props) {
   const { name } = location;
   const googleAvg = GOOGLE_BUSINESS_REVIEWS.rating;
   const googleCount = GOOGLE_BUSINESS_REVIEWS.count;
