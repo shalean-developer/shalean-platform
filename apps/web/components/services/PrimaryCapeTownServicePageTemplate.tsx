@@ -1,4 +1,3 @@
-import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import { SeoCapeTownServicePage } from "@/components/seo/SeoCapeTownServicePage";
 import type { CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
 import { buildPrimaryCapeTownServiceExtensionSlots } from "./PrimaryCapeTownServiceExtensions";
@@ -22,7 +21,6 @@ export function isPrimaryCapeTownServiceSlug(slug: CapeTownSeoServiceSlug): slug
 
 type Props = {
   slug: PrimaryCapeTownServiceSlug;
-  trustStats: PublicReviewBannerStats | null;
   initialLocationSlug?: string | null;
 };
 
