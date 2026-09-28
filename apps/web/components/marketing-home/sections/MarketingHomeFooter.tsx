@@ -12,7 +12,10 @@ import {
   CUSTOMER_SUPPORT_WHATSAPP_DISPLAY,
   customerSupportWhatsAppHref,
 } from "@/lib/site/customerSupport";
-import { PUBLIC_BUSINESS_EMAIL } from "@/lib/site/publicBusinessIdentity";
+import {
+  PUBLIC_BUSINESS_ADDRESS_LABEL,
+  PUBLIC_BUSINESS_EMAIL,
+} from "@/lib/site/publicBusinessIdentity";
 
 const waHref = customerSupportWhatsAppHref();
 
@@ -178,7 +181,7 @@ export function MarketingHomeFooter({
                 </li>
                 <li className="flex min-h-10 items-start gap-[var(--ui-space-2)] pt-[var(--ui-space-2)]">
                   <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
-                  <span>Cape Town, South Africa</span>
+                  <span>{PUBLIC_BUSINESS_ADDRESS_LABEL}</span>
                 </li>
               </ul>
             </div>
