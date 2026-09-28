@@ -1,8 +1,5 @@
 import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
-import {
-  getCanonicalLocationPricingAnswer,
-  getLocationMetaPriceHint,
-} from "@/lib/seo/location-pricing";
+import { getCanonicalLocationPricingAnswer } from "@/lib/seo/location-pricing";
 
 export type FaqPair = { q: string; a: string };
 
@@ -16,7 +13,6 @@ function stemVariant(slug: string): 0 | 1 | 2 {
 /** People-Also-Ask + long-tail commercial FAQs — merged into hub FAQ schema + accordion. */
 export function buildPeopleAlsoAskFaqs(location: CapeTownLocationRow): FaqPair[] {
   const { name, city, slug } = location;
-  const hint = getLocationMetaPriceHint(location);
   const tone = stemVariant(slug);
 
   const suppliesLead =
