@@ -288,11 +288,13 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
   "deep-cleaning-cape-town": {
     slug: "deep-cleaning-cape-town",
     path: "/services/deep-cleaning-cape-town",
-    title: "Deep Cleaning Cape Town | Detail Reset Cleaning | Shalean",
+    title: "Deep Cleaning Services Cape Town | Shalean",
     description:
-      "Professional deep cleaning in Cape Town for kitchens, bathrooms, floors, and detail work. Clear pricing and online booking with Shalean.",
+      "Book deep cleaning services in Cape Town for kitchens, bathrooms, floors, grout and detail work. Clear pricing and online booking with Shalean.",
+    keywords: ["deep cleaning services cape town", "deep cleaning cape town", "deep clean cape town"],
     ogImage: "/images/marketing/deep-cleaning-cape-town-kitchen.webp",
     h1: "Deep cleaning services in Cape Town for homes that need a real reset",
+    schemaName: "Deep Cleaning Services Cape Town | Shalean",
     bookingLabel: "deep cleaning",
     introSectionHeading: "How deep cleaning works as a reset visit",
     neighbourhoodBlogGuide: {
@@ -2279,7 +2281,7 @@ export async function buildLocationSeoMetadataAsync(data: LocationSeoBlock, row:
 
 export function locationPageServiceLinks(): { href: string; label: string }[] {
   return [
-    { href: CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path, label: "Deep cleaning Cape Town" },
+    { href: CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path, label: "Deep cleaning services Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path, label: "Regular cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path, label: "Move-out cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["office-cleaning-cape-town"].path, label: "Office cleaning Cape Town" },
@@ -2306,7 +2308,7 @@ export function getHomepageInternalSeoLinks(): { href: string; label: string }[]
   if (homepageInternalSeoLinksCache) return homepageInternalSeoLinksCache;
   homepageInternalSeoLinksCache = [
     { href: "/services", label: "Cleaning services Cape Town" },
-    { href: CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path, label: "Deep cleaning Cape Town" },
+    { href: CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path, label: "Deep cleaning services Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path, label: "Regular cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path, label: "Move-out cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["office-cleaning-cape-town"].path, label: "Office cleaning Cape Town" },
