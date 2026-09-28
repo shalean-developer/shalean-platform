@@ -17,7 +17,7 @@ describe("POST /api/contact", () => {
     safeResendSend.mockResolvedValue({ data: { id: "re_test" }, error: null });
   });
 
-  async function post(body: Record<string, unknown>) {
+  async function post(body: unknown) {
     const { POST } = await import("@/app/api/contact/route");
     return POST(
       new Request("https://shalean.co.za/api/contact", {
@@ -48,6 +48,14 @@ describe("POST /api/contact", () => {
     expect(payload.subject).toContain("Reschedule");
     expect(payload.text).toContain("Please help me change my booking.");
     expect(payload.context).toEqual({ messageType: "website_contact_form" });
+  });
+
+  it("rejects non-object JSON without throwing", async () => {
+    const response = await post(null);
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ ok: false, error: "Invalid request." });
+    expect(safeResendSend).not.toHaveBeenCalled();
   });
 
   it("rejects invalid visitor email without sending", async () => {
