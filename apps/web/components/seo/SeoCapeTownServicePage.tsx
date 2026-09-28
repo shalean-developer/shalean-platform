@@ -27,9 +27,12 @@ import {
   dedupeFaqsByQuestion,
   STANDARD_CLEANING_SNIPPET_FAQS,
 } from "@/lib/seo/standardCleaningMoneyPageFaqs";
-import { capeTownAdministrativeServiceArea } from "@/lib/seo/primaryLocalBusinessJsonLd";
+import {
+  buildPrimaryLocalBusinessBase,
+  capeTownAdministrativeServiceArea,
+  PRIMARY_LOCAL_BUSINESS_ID,
+} from "@/lib/seo/primaryLocalBusinessJsonLd";
 import { isSeoRebuildGonePath } from "@/lib/seo/seoRebuildPhase1";
-import { getBrandSameAsForJsonLd } from "@/lib/site/brandSameAs";
 import { SITE_ORIGIN, absoluteCanonicalUrl } from "@/lib/site/canonical";
 
 type Props = {
@@ -93,23 +96,10 @@ export function SeoCapeTownServicePage({ slug, heroVariant = "legacy", extension
   );
 
   const pageUrl = absoluteCanonicalUrl(data.path);
-  const localBusinessId = `${SITE_ORIGIN}/#localbusiness`;
+  const localBusinessId = PRIMARY_LOCAL_BUSINESS_ID;
   const serviceNodeId = `${pageUrl}#service`;
   const { schemaName, schemaServiceType } = resolveCapeTownServiceSchemaFields(slug, data);
-  const sameAs = getBrandSameAsForJsonLd();
-
-  const localBusinessNode: Record<string, unknown> = {
-    "@type": "LocalBusiness",
-    "@id": localBusinessId,
-    name: "Shalean Cleaning Services",
-    url: SITE_ORIGIN,
-    address: {
-      "@type": "PostalAddress",
-      addressLocality: "Cape Town",
-      addressCountry: "ZA",
-    },
-  };
-  if (sameAs.length > 0) localBusinessNode.sameAs = sameAs;
+  const localBusinessNode = buildPrimaryLocalBusinessBase();
 
   const mergedStandardFaqs =
     slug === "standard-cleaning-cape-town"

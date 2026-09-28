@@ -200,7 +200,6 @@ export function ProgrammaticLocationCleaningPage({
     metaDescription,
     location,
     faqs: mergedFaqs,
-    nearbyPlaceNames: nearby,
     serviceSchemaName:
       slug === "sea-point-cleaning-services" ?
         "Cleaning Services in Sea Point Cape Town"

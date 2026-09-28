@@ -71,23 +71,21 @@ export function StructuredData({ services, locations, faqs }: StructuredDataProp
     name: location.city ? `${location.name}, ${location.city}` : location.name,
   }));
 
-  /** Always anchor Cape Town metro even if CMS location rows change. */
+  /** Always anchor Cape Town metro even if CMS location rows change; never imply nationwide coverage. */
   const areaServed = [
-    { "@type": "Country" as const, name: "South Africa" },
     CAPE_TOWN_HOME_CITY,
     ...locationPlaceRows,
   ];
 
   const locationPlaces: unknown[] = [
     CAPE_TOWN_HOME_CITY,
-    ...(locationPlaceRows.length > 0 ? locationPlaceRows : [{ "@type": "Country" as const, name: "South Africa" }]),
+    ...locationPlaceRows,
   ];
 
   const offerCatalogNode = buildHomeOfferCatalog(services);
 
   const localBusiness: Record<string, unknown> = {
     ...buildPrimaryLocalBusinessBase(),
-    areaServed,
     serviceType: [...CORE_SERVICE_TYPES],
     hasOfferCatalog: { "@id": HOME_PAGE_OFFER_CATALOG_ID },
   };

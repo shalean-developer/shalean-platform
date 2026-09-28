@@ -6,6 +6,8 @@ import {
   PUBLIC_BUSINESS_EMAIL,
   PUBLIC_BUSINESS_NAME,
   PUBLIC_BUSINESS_OPENING_HOURS,
+  PUBLIC_BUSINESS_OPENING_HOURS_SPECIFICATION,
+  PUBLIC_BUSINESS_SERVICE_AREA,
 } from "@/lib/site/publicBusinessIdentity";
 import { getBrandSameAsForJsonLd } from "@/lib/site/brandSameAs";
 
@@ -15,22 +17,10 @@ export const PRIMARY_LOCAL_BUSINESS_ID = `${SITE_ORIGIN}/#localbusiness`;
 /** Representative image for LocalBusiness (logo asset not in public/ — uses verified marketing hero). */
 export const PRIMARY_LOCAL_BUSINESS_IMAGE = `${SITE_ORIGIN}/images/marketing/homepage-hero-cleaning-team-cape-town.webp`;
 
-const CAPE_TOWN_CITY = {
-  "@type": "City",
-  name: "Cape Town",
-  containedInPlace: { "@type": "Country", name: "South Africa" },
-} as const;
-
-/** Approximate coords for registered Claremont address (39 Harvey Rd) — LocalBusiness `geo`. */
-const PRIMARY_BUSINESS_GEO = {
-  "@type": "GeoCoordinates",
-  latitude: -33.9768,
-  longitude: 18.4686,
-} as const;
-
 /**
  * Core LocalBusiness node for Shalean — used on homepage graph and standalone on money pages.
  * Name, phone, address and opening hours are aligned to the live Google Business Profile.
+ * Unverified approximate geo coordinates are intentionally omitted.
  * Public email is site-owned because GBP does not expose an email field.
  *
  * Do not attach Google Business Profile aggregate ratings here. Those ratings are displayed
@@ -48,11 +38,12 @@ export function buildPrimaryLocalBusinessBase(): Record<string, unknown> {
     /** ZAR entry band aligned with the canonical homepage marketing starting price. */
     priceRange: `$$ - From R${HOME_STARTING_PRICE_ZAR}`,
     openingHours: PUBLIC_BUSINESS_OPENING_HOURS,
+    openingHoursSpecification: [{ ...PUBLIC_BUSINESS_OPENING_HOURS_SPECIFICATION }],
     address: {
       "@type": "PostalAddress",
       ...PUBLIC_BUSINESS_ADDRESS,
     },
-    geo: { ...PRIMARY_BUSINESS_GEO },
+    areaServed: { ...PUBLIC_BUSINESS_SERVICE_AREA },
     knowsAbout: [
       "House cleaning",
       "Maid services",
@@ -74,7 +65,7 @@ export function buildPrimaryLocalBusinessBase(): Record<string, unknown> {
  */
 export function primaryLocalBusinessMoneyPageAreaServed(): unknown[] {
   return [
-    { ...CAPE_TOWN_CITY },
+    { ...PUBLIC_BUSINESS_SERVICE_AREA },
     { "@type": "Place", name: "Claremont" },
     { "@type": "Place", name: "Sea Point" },
     { "@type": "Place", name: "Constantia" },
@@ -104,5 +95,11 @@ export function buildPrimaryLocalBusinessStandaloneGraphJsonLd(): Record<string,
 
 /** Explicit local service region on Service nodes (alongside `areaServed`). */
 export function capeTownAdministrativeServiceArea(): Record<string, unknown> {
-  return { "@type": "AdministrativeArea", name: "Cape Town" };
+  return {
+    ...PUBLIC_BUSINESS_SERVICE_AREA,
+    containedInPlace: {
+      ...PUBLIC_BUSINESS_SERVICE_AREA.containedInPlace,
+      containedInPlace: { ...PUBLIC_BUSINESS_SERVICE_AREA.containedInPlace.containedInPlace },
+    },
+  };
 }

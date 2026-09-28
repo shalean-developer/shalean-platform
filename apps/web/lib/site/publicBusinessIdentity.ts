@@ -9,6 +9,11 @@
 export const PUBLIC_BUSINESS_NAME = "Shalean Cleaning Services";
 export const PUBLIC_BUSINESS_EMAIL = "hello@shalean.co.za";
 
+/** Verified Google Business Profile entity. */
+export const PUBLIC_BUSINESS_GOOGLE_PLACE_ID = "ChIJE2azv4FDzB0R6Dif-_0-vn0";
+export const PUBLIC_BUSINESS_GOOGLE_PROFILE_URL =
+  `https://www.google.com/maps/place/?q=place_id:${PUBLIC_BUSINESS_GOOGLE_PLACE_ID}`;
+
 export const PUBLIC_BUSINESS_ADDRESS = {
   streetAddress: "39 Harvey Rd",
   addressLocality: "Claremont",
@@ -33,3 +38,21 @@ export const PUBLIC_BUSINESS_OPENING_DAYS = [
   "Saturday",
   "Sunday",
 ] as const;
+
+
+export const PUBLIC_BUSINESS_SERVICE_AREA = {
+  "@type": "AdministrativeArea",
+  name: "Cape Town",
+  containedInPlace: {
+    "@type": "AdministrativeArea",
+    name: "Western Cape",
+    containedInPlace: { "@type": "Country", name: "South Africa" },
+  },
+} as const;
+
+export const PUBLIC_BUSINESS_OPENING_HOURS_SPECIFICATION = {
+  "@type": "OpeningHoursSpecification",
+  dayOfWeek: [...PUBLIC_BUSINESS_OPENING_DAYS],
+  opens: "00:00",
+  closes: "23:59",
+} as const;
