@@ -7,7 +7,8 @@ import {
 } from "@/lib/site/customerSupport";
 import {
   PUBLIC_BUSINESS_EMAIL,
-  PUBLIC_BUSINESS_OPENING_DAYS,
+  PUBLIC_BUSINESS_OPENING_HOURS_SPECIFICATION,
+  PUBLIC_BUSINESS_SERVICE_AREA,
 } from "@/lib/site/publicBusinessIdentity";
 
 const CONTACT_PATH = "/contact";
@@ -49,14 +50,9 @@ export function buildContactPageJsonLdGraph(): Record<string, unknown> {
             contactType: "customer service",
             telephone: CUSTOMER_SUPPORT_TELEPHONE_E164,
             email: PUBLIC_BUSINESS_EMAIL,
-            areaServed: { "@type": "Country", name: "South Africa" },
+            areaServed: { ...PUBLIC_BUSINESS_SERVICE_AREA },
             availableLanguage: ["English", "Afrikaans"],
-            hoursAvailable: {
-              "@type": "OpeningHoursSpecification",
-              dayOfWeek: [...PUBLIC_BUSINESS_OPENING_DAYS],
-              opens: "00:00",
-              closes: "23:59",
-            },
+            hoursAvailable: { ...PUBLIC_BUSINESS_OPENING_HOURS_SPECIFICATION },
           },
         ],
         description: `Reach Shalean on ${CUSTOMER_SUPPORT_TELEPHONE_DISPLAY} or ${PUBLIC_BUSINESS_EMAIL} for Cape Town cleaning bookings and support.`,
