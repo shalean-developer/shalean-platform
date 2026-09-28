@@ -2223,6 +2223,11 @@ function buildServicePageMetaDescription(data: CapeTownServiceSeoBlock): string 
       "Book Regular Cleaning in Cape Town. Our standard home cleaning checklist covers kitchens, bathrooms and floors with clear online quotes.",
     );
   }
+  if (data.slug === "deep-cleaning-cape-town") {
+    return clampMetaDescription(
+      "Book deep cleaning services in Cape Town for kitchens, bathrooms, floors, grout and detail work. Clear pricing and online booking with Shalean.",
+    );
+  }
   return generateMetaDescription({
     service: bookingLabelToServicePhrase(data.bookingLabel),
     location: "Cape Town",
