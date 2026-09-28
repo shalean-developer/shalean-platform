@@ -730,11 +730,13 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
   "carpet-cleaning-cape-town": {
     slug: "carpet-cleaning-cape-town",
     path: "/services/carpet-cleaning-cape-town",
-    title: "Carpet Cleaning Cape Town | Rugs & High Traffic | Shalean",
+    title: "Carpet Cleaning Cape Town | Professional Service | Shalean",
     description:
-      "Carpet cleaning in Cape Town for rugs, bedrooms, and high-traffic rooms. Refresh soft floors alone or with home cleaning—clear pricing from Shalean.",
+      "Professional carpet cleaning in Cape Town for rugs, bedrooms and high-traffic rooms. Clear scope, realistic drying guidance and online booking with Shalean.",
+    keywords: ["carpet cleaning cape town", "carpet cleaning services cape town", "professional carpet cleaning cape town"],
     ogImage: "/images/marketing/carpet-cleaning-cape-town-sofas-rugs.webp",
     h1: "Carpet cleaning services in Cape Town for fresher rugs, carpets, and high-traffic rooms",
+    schemaName: "Carpet Cleaning Cape Town | Shalean",
     bookingLabel: "carpet cleaning",
     areasSectionIntro:
       "Carpet and rug work across Claremont, Sea Point, Observatory, Constantia, and the wider metro—note room mix and fibre type when you book so extraction time is realistic.",
@@ -2176,9 +2178,12 @@ export function buildCapeTownServiceMetadata(data: CapeTownServiceSeoBlock): Met
   const url = absoluteCanonicalUrl(data.path);
   const metaDescription = buildServicePageMetaDescription(data);
   /** Price- and availability-free titles until lead prices / same-day claims have approved SoT. */
-  const title = clipSerpTitle(
-    `${serviceTitleBaseForCtr(data.bookingLabel, data.slug)} in Cape Town | Shalean`,
-  );
+  const title =
+    data.slug === "carpet-cleaning-cape-town"
+      ? clipSerpTitle("Carpet Cleaning Cape Town | Shalean")
+      : clipSerpTitle(
+          `${serviceTitleBaseForCtr(data.bookingLabel, data.slug)} in Cape Town | Shalean`,
+        );
   return {
     title,
     description: metaDescription,
@@ -2226,6 +2231,11 @@ function buildServicePageMetaDescription(data: CapeTownServiceSeoBlock): string 
   if (data.slug === "deep-cleaning-cape-town") {
     return clampMetaDescription(
       "Book deep cleaning services in Cape Town for kitchens, bathrooms, floors, grout and detail work. Clear pricing and online booking with Shalean.",
+    );
+  }
+  if (data.slug === "carpet-cleaning-cape-town") {
+    return clampMetaDescription(
+      "Professional carpet cleaning in Cape Town for rugs, bedrooms and high-traffic rooms. Clear scope, realistic drying guidance and online booking with Shalean.",
     );
   }
   return generateMetaDescription({

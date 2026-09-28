@@ -149,6 +149,59 @@ function StandardComparisonContent() {
   );
 }
 
+function CarpetAfterIncluded() {
+  const regularPath = CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path;
+  const deepPath = CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path;
+
+  return (
+    <section
+      className="border-b border-blue-100 bg-blue-50/25 py-16"
+      aria-labelledby="carpet-service-depth-heading"
+    >
+      <div className="mx-auto max-w-4xl px-4">
+        <h2
+          id="carpet-service-depth-heading"
+          className="text-2xl font-bold tracking-tight text-zinc-900"
+        >
+          Carpet cleaning in Cape Town: scope, preparation and drying
+        </h2>
+        <div className="mt-6 space-y-5 text-base leading-7 text-zinc-600">
+          <p>
+            Carpet cleaning is best suited to carpeted bedrooms, lounges, rugs and high-traffic
+            areas that hold visible dust, pet hair and everyday marks. Fibre type, ventilation,
+            room access and the condition of the carpet all affect how the visit is planned and
+            how quickly cleaned areas dry.
+          </p>
+          <p>
+            Before the team arrives, clear small items and fragile belongings from carpeted
+            areas and note any heavy furniture that cannot be moved safely. Point out old stains,
+            pet accidents, damp patches or delicate rugs in the booking notes so expectations are
+            clear before work starts.
+          </p>
+          <p>
+            Carpet cleaning can improve everyday soil and traffic marks, but permanent dye
+            transfer, bleach damage, deep odour sources and specialist restoration are not
+            guaranteed fixes. Drying also varies with fibre, airflow and Cape Town humidity, so
+            allow ventilation time rather than planning around an instant-dry promise.
+          </p>
+          <p>
+            If you also need kitchens, bathrooms and hard floors maintained, combine carpet work
+            with{" "}
+            <SafeInternalLink href={regularPath} className={linkClass}>
+              Regular Cleaning in Cape Town
+            </SafeInternalLink>
+            . If the whole home needs a heavier reset, compare{" "}
+            <SafeInternalLink href={deepPath} className={linkClass}>
+              Deep Cleaning services in Cape Town
+            </SafeInternalLink>{" "}
+            before choosing the final scope.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function MovePricingContent({
   bookingPath,
   slug,
@@ -399,6 +452,7 @@ export function buildPrimaryCapeTownServiceExtensionSlots(
     case "carpet-cleaning-cape-town":
       return {
         kind: "carpet",
+        afterIncluded: <CarpetAfterIncluded />,
         benefitsHeading: "Benefits for Cape Town customers",
         finalCta: {
           title: "Ready to book Carpet Cleaning?",

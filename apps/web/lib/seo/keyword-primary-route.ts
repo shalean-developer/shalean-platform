@@ -12,4 +12,6 @@ export const KEYWORD_PRIMARY_ROUTE: Record<string, string> = {
   "move out cleaning cape town": "/services/move-out-cleaning-cape-town",
   "cleaning prices cape town": "/blog/how-much-does-cleaning-cost-cape-town-2026",
   "airbnb cleaning cape town": "/services/airbnb-cleaning-cape-town",
+  "carpet cleaning cape town": "/services/carpet-cleaning-cape-town",
+  "carpet cleaning services cape town": "/services/carpet-cleaning-cape-town",
 };
