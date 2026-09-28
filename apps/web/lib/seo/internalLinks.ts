@@ -229,6 +229,10 @@ export function getLocationHubRelatedServiceLinks(suburbDisplayName: string, hub
       anchor: pickServiceLocationAnchor(`${key}|hubrel|moveout`, "Move-out cleaning services", s),
     },
     {
+      href: CAPE_TOWN_SERVICE_SEO["carpet-cleaning-cape-town"].path,
+      anchor: pickServiceLocationAnchor(`${key}|hubrel|carpet`, "Carpet cleaning services", s),
+    },
+    {
       href: CAPE_TOWN_PRICING_AUTHORITY_HREF,
       anchor: pickPricingBlogAnchor(`${key}|hubrel|pricing`),
     },
