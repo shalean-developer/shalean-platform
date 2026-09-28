@@ -2218,7 +2218,7 @@ function serviceSolutionVariant(bookingLabel: string): string {
 function buildServicePageMetaDescription(data: CapeTownServiceSeoBlock): string {
   if (data.slug === "standard-cleaning-cape-town") {
     return clampMetaDescription(
-      "Book Regular Cleaning in Cape Town for routine upkeep. Our standard home cleaning checklist covers kitchens, bathrooms and floors with clear online quotes.",
+      "Book Regular Cleaning in Cape Town. Our standard home cleaning checklist covers kitchens, bathrooms and floors with clear online quotes.",
     );
   }
   return generateMetaDescription({
