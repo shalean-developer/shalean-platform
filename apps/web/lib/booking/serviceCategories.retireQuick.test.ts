@@ -18,14 +18,14 @@ describe("booking service identity", () => {
     expect(BOOKING_SERVICE_IDS).not.toContain("quick");
   });
 
-  it("keeps Standard and Airbnb isolated", () => {
+  it("keeps Regular Cleaning and Airbnb isolated", () => {
     expect(inferServiceTypeFromServiceId("standard")).toBe("standard_cleaning");
     expect(inferServiceTypeFromServiceId("airbnb")).toBe("airbnb_cleaning");
     expect(inferServiceGroupFromServiceId("standard")).toBe("regular");
     expect(inferServiceGroupFromServiceId("airbnb")).toBe("regular");
-    expect(getServiceLabel("standard")).toBe("Standard Cleaning");
+    expect(getServiceLabel("standard")).toBe("Regular Cleaning");
     expect(getBookingSummaryServiceLabel("standard", inferServiceTypeFromServiceId("standard"))).toBe(
-      "Standard Cleaning",
+      "Regular Cleaning",
     );
   });
 
