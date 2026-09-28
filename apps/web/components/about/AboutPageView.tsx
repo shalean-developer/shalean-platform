@@ -27,6 +27,7 @@ import { CAPE_TOWN_LOCATIONS } from "@/lib/seo/capeTownLocations";
 import { marketingLandingImage } from "@/lib/marketing/marketingHomeAssets";
 import { linkEmphasisClassName } from "@/lib/ui/linkClassNames";
 import { SITE_ORIGIN } from "@/lib/site/canonical";
+import { PUBLIC_BUSINESS_SERVICE_AREA } from "@/lib/site/publicBusinessIdentity";
 
 const TEAM_IMG = marketingLandingImage("/images/marketing/shalean-cleaner-balcony-cape-town.webp");
 
@@ -41,11 +42,7 @@ export function AboutPageView() {
     url: SITE_ORIGIN,
     description:
       "Vetted home cleaning teams in Cape Town with transparent pricing, flexible scheduling, and online booking.",
-    areaServed: {
-      "@type": "City",
-      name: "Cape Town",
-      containedInPlace: { "@type": "Country", name: "South Africa" },
-    },
+    areaServed: { ...PUBLIC_BUSINESS_SERVICE_AREA },
   };
 
   const webPageJsonLd = {
