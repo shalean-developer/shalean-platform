@@ -23,7 +23,7 @@ describe("POST /api/contact", () => {
     );
   }
 
-  it("sends only to hello@shalean.co.za and uses the visitor as Reply-To", async () => {
+  it("delegates a validated enquiry and visitor Reply-To to the internal sender", async () => {
     const response = await post({
       name: "Farai",
       email: "Farai@example.com",
