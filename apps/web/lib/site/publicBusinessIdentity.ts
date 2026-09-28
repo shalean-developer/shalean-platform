@@ -17,6 +17,9 @@ export const PUBLIC_BUSINESS_ADDRESS = {
   addressCountry: "ZA",
 } as const;
 
+export const PUBLIC_BUSINESS_ADDRESS_LABEL =
+  "39 Harvey Rd, Claremont, Cape Town, 7708, South Africa";
+
 /** Live GBP currently lists the business as open 24 hours every day. */
 export const PUBLIC_BUSINESS_OPENING_HOURS = "Mo-Su 00:00-23:59";
 export const PUBLIC_BUSINESS_HOURS_LABEL = "Open 24 hours, 7 days a week";
