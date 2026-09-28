@@ -2,6 +2,10 @@ import type { LucideIcon } from "lucide-react";
 import { Building2, CalendarCheck, Droplets, Home, Layers, Truck } from "lucide-react";
 import type { MarketingHomeService, MarketingHomeServiceKey } from "@/lib/home/data";
 import { marketingLandingImage } from "@/lib/marketing/marketingHomeAssets";
+import {
+  REGULAR_CLEANING_PUBLIC_NAME,
+  REGULAR_CLEANING_SERVICE_PATH,
+} from "@/lib/services/publicServiceNames";
 
 /** Display order for homepage service chips and cards. */
 export const MARKETING_HOME_SERVICE_ORDER: readonly MarketingHomeServiceKey[] = [
@@ -28,10 +32,10 @@ type ServicePresentation = {
  */
 const PRESENTATION: Record<MarketingHomeServiceKey, ServicePresentation> = {
   standard: {
-    title: "Regular Cleaning",
+    title: REGULAR_CLEANING_PUBLIC_NAME,
     defaultDescription: "Routine home cleaning for kitchens, bathrooms, living areas and floors across Cape Town.",
     icon: Home,
-    href: "/services/standard-cleaning-cape-town",
+    href: REGULAR_CLEANING_SERVICE_PATH,
     image: marketingLandingImage("/images/marketing/standard-cleaning-cape-town-kitchen.webp"),
     imageAlt: "Regular home cleaning in a bright Cape Town kitchen",
   },
