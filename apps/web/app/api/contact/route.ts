@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import {
-  CONTACT_FORM_RECIPIENT,
   contactFormTopicLabel,
   isContactFormTopic,
 } from "@/lib/contact/contactFormContract";
