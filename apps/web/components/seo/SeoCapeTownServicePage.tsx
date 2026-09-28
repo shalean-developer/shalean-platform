@@ -41,7 +41,7 @@ type Props = {
   extensionSlots?: PrimaryCapeTownServiceExtensionSlots;
 };
 
-export function SeoCapeTownServicePage({ slug, trustStats, heroVariant = "legacy", extensionSlots }: Props) {
+export function SeoCapeTownServicePage({ slug, trustStats: _trustStats, heroVariant = "legacy", extensionSlots }: Props) {
   const data = CAPE_TOWN_SERVICE_SEO[slug];
   const bookingPath = "/book";
   const introHeading = data.introSectionHeading ?? "How this service works in Cape Town";
