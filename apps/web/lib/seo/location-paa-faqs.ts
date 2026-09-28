@@ -1,6 +1,5 @@
 import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
-import { directAnswerHowMuchDoesCleaningCost } from "@/lib/seo/location-featured-snippet-copy";
-import { getLocationMetaPriceHint } from "@/lib/seo/location-pricing";
+import { getCanonicalLocationPricingAnswer } from "@/lib/seo/location-pricing";
 
 export type FaqPair = { q: string; a: string };
 
@@ -14,8 +13,6 @@ function stemVariant(slug: string): 0 | 1 | 2 {
 /** People-Also-Ask + long-tail commercial FAQs — merged into hub FAQ schema + accordion. */
 export function buildPeopleAlsoAskFaqs(location: CapeTownLocationRow): FaqPair[] {
   const { name, city, slug } = location;
-  const priceLead = directAnswerHowMuchDoesCleaningCost(location).split(". ")[0] ?? "";
-  const hint = getLocationMetaPriceHint(location);
   const tone = stemVariant(slug);
 
   const suppliesLead =
@@ -35,7 +32,7 @@ export function buildPeopleAlsoAskFaqs(location: CapeTownLocationRow): FaqPair[]
   return [
     {
       q: `How much does a cleaner cost in ${name}?`,
-      a: `${priceLead}. Your locked total reflects bedrooms, bathrooms, tier, and add-ons online before payment. Planning bands: ${hint}.`,
+      a: getCanonicalLocationPricingAnswer(location),
     },
     {
       q: `Is cleaning priced per hour or per job in ${name}?`,
@@ -68,13 +65,30 @@ function normalizeKey(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-/** Dedupe by question stem — PAA items win on overlap with dynamic CMS FAQs. */
+function semanticFaqKey(question: string): string {
+  const q = normalizeKey(question);
+  if (/how much.*(cleaner|cleaning).*cost/.test(q)) return "intent:pricing";
+  if (/(cleaner|cleaners).*(bring|provide).*suppl|suppl.*(bring|provide)/.test(q)) return "intent:supplies";
+  if (/same-day|how soon.*book|availability/.test(q)) return "intent:availability";
+  return `question:${q}`;
+}
+
+/** Dedupe by semantic FAQ intent — earlier primary items win, then secondary fills unique intents. */
 export function mergeLocationFaqs(paa: FaqPair[], secondary: FaqPair[]): FaqPair[] {
-  const keys = new Set(paa.map((x) => normalizeKey(x.q)));
-  const out = [...paa];
+  const keys = new Set<string>();
+  const out: FaqPair[] = [];
+
+  for (const item of paa) {
+    const key = semanticFaqKey(item.q);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    out.push(item);
+  }
+
   for (const item of secondary) {
-    if (keys.has(normalizeKey(item.q))) continue;
-    keys.add(normalizeKey(item.q));
+    const key = semanticFaqKey(item.q);
+    if (keys.has(key)) continue;
+    keys.add(key);
     out.push(item);
   }
   return out;

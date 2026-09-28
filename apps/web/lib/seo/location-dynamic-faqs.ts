@@ -1,5 +1,5 @@
 import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
-import { getLocationPricingFaqRange } from "@/lib/seo/location-pricing";
+import { getCanonicalLocationPricingAnswer } from "@/lib/seo/location-pricing";
 
 function propertyMixPhrase(row: CapeTownLocationRow): string {
   const t = new Set(row.propertyTypes);
@@ -31,7 +31,6 @@ function urbanAccessNote(name: string): string {
 export function buildDynamicLocationFaqs(row: CapeTownLocationRow): { q: string; a: string }[] {
   const { name, city, locationType } = row;
   const mix = propertyMixPhrase(row);
-  const range = getLocationPricingFaqRange(row);
 
   const base: { q: string; a: string }[] = [
     {
@@ -44,7 +43,7 @@ export function buildDynamicLocationFaqs(row: CapeTownLocationRow): { q: string;
     },
     {
       q: `How much does house cleaning cost in ${name}?`,
-      a: `${range} ${name} skews toward ${mix}, which shifts time on kitchens, bathrooms, and floors.`,
+      a: `${getCanonicalLocationPricingAnswer(row)} ${name} skews toward ${mix}, which shifts time on kitchens, bathrooms, and floors.`,
     },
     {
       q: `Do cleaners bring supplies for ${name} bookings?`,
