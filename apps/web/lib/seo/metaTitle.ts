@@ -110,6 +110,7 @@ export function serviceTitleBaseForCtr(bookingLabel: string, slug: string): stri
   const raw = serviceTitleBaseFromBookingLabel(bookingLabel);
   if (slug === "standard-cleaning-cape-town") return REGULAR_CLEANING_PUBLIC_NAME;
   if (slug === "deep-cleaning-cape-town") return "Deep Cleaning Services";
+  if (slug === "carpet-cleaning-cape-town") return "Carpet Cleaning Cape Town";
   return raw;
 }
 
