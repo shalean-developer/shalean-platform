@@ -1,5 +1,4 @@
 import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
-import { directAnswerHowMuchDoesCleaningCost } from "@/lib/seo/location-featured-snippet-copy";
 import {
   getCanonicalLocationPricingAnswer,
   getLocationMetaPriceHint,
