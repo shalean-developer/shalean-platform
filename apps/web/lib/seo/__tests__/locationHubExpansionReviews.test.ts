@@ -32,13 +32,12 @@ describe("location hub expansion review gating", () => {
         metaDescription: `Cleaning in ${location!.name} with clear online scope.`,
         location: location!,
         faqs: [{ q: `How do I book in ${location!.name}?`, a: "Book online with rooms and extras selected." }],
-        nearbyPlaceNames: [{ name: "Nearby" }],
       });
       const blob = JSON.stringify(jsonLd);
       expect(blob).not.toMatch(/"@type":"Review"/);
       expect(blob).not.toMatch(/"@type":"Testimonial"/);
-      // AggregateRating on LocalBusiness is Google Business SoT — not illustrative suburb quotes.
-      expect(blob).toContain('"@type":"AggregateRating"');
+      // Google ratings are visible trust evidence only; do not self-author AggregateRating markup.
+      expect(blob).not.toContain('"@type":"AggregateRating"');
       expect(blob).not.toContain("illustrative");
       expect(blob).not.toContain("Homeowner ·");
     }
