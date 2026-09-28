@@ -2301,7 +2301,7 @@ export function locationPageServiceLinks(): { href: string; label: string }[] {
     { href: CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path, label: "Move-out cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["office-cleaning-cape-town"].path, label: "Office cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path, label: "Airbnb cleaning Cape Town" },
-    { href: CAPE_TOWN_SERVICE_SEO["carpet-cleaning-cape-town"].path, label: "Carpet cleaning services Cape Town" },
+    { href: CAPE_TOWN_SERVICE_SEO["carpet-cleaning-cape-town"].path, label: "Carpet cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["window-cleaning-cape-town"].path, label: "Window cleaning Cape Town" },
   ];
 }
