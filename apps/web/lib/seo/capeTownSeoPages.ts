@@ -1844,7 +1844,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     hasAirbnbFocus: true,
     hasApartmentFocus: true,
     rankingPricingParagraph:
-      "Hout Bay cleaning prices depend on bedrooms, bathrooms, service type, and access time for hillside or gated properties. Balcony grit, linen work, and deep-clean extras can extend a visit, so the booking flow keeps those choices visible before checkout.",
+      "Hout Bay cleaning prices depend on bedrooms, bathrooms, service type, and selected price-affecting extras. Access notes for hillside or gated properties help operations plan the visit, but they do not change the locked quote unless you change a priced scope item.",
     rankingMidNearbySlugs: ["camps-bay-cleaning-services", "constantia-cleaning-services"],
     relatedBlogGuide: {
       href: "/locations/camps-bay-cleaning-services",
