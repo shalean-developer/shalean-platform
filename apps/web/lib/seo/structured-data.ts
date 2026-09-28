@@ -3,7 +3,6 @@
  */
 
 import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
-import { googleBusinessAggregateRatingSchema } from "@/lib/seo/googleReviews";
 import { buildPrimaryLocalBusinessBase, capeTownAdministrativeServiceArea } from "@/lib/seo/primaryLocalBusinessJsonLd";
 import { getLocationMetaPriceHint } from "@/lib/seo/location-pricing";
 import { CUSTOMER_SUPPORT_TELEPHONE_E164 } from "@/lib/site/customerSupport";
@@ -99,7 +98,6 @@ export function buildLocationHubJsonLd(params: BuildLocationHubJsonLdParams): Re
         telephone: CUSTOMER_SUPPORT_TELEPHONE_E164,
         priceRange: getLocationMetaPriceHint(location),
         areaServed: areaServedPlaces,
-        aggregateRating: googleBusinessAggregateRatingSchema(),
       },
       {
         "@type": "Service",
