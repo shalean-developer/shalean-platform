@@ -2178,9 +2178,12 @@ export function buildCapeTownServiceMetadata(data: CapeTownServiceSeoBlock): Met
   const url = absoluteCanonicalUrl(data.path);
   const metaDescription = buildServicePageMetaDescription(data);
   /** Price- and availability-free titles until lead prices / same-day claims have approved SoT. */
-  const title = clipSerpTitle(
-    `${serviceTitleBaseForCtr(data.bookingLabel, data.slug)} in Cape Town | Shalean`,
-  );
+  const title =
+    data.slug === "carpet-cleaning-cape-town"
+      ? clipSerpTitle("Carpet Cleaning Cape Town | Shalean")
+      : clipSerpTitle(
+          `${serviceTitleBaseForCtr(data.bookingLabel, data.slug)} in Cape Town | Shalean`,
+        );
   return {
     title,
     description: metaDescription,
@@ -2228,6 +2231,11 @@ function buildServicePageMetaDescription(data: CapeTownServiceSeoBlock): string 
   if (data.slug === "deep-cleaning-cape-town") {
     return clampMetaDescription(
       "Book deep cleaning services in Cape Town for kitchens, bathrooms, floors, grout and detail work. Clear pricing and online booking with Shalean.",
+    );
+  }
+  if (data.slug === "carpet-cleaning-cape-town") {
+    return clampMetaDescription(
+      "Professional carpet cleaning in Cape Town for rugs, bedrooms and high-traffic rooms. Clear scope, realistic drying guidance and online booking with Shalean.",
     );
   }
   return generateMetaDescription({
