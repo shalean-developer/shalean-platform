@@ -150,7 +150,7 @@ export type CapeTownServiceSeoBlock = {
 /** Default `serviceType` strings for `/services/*-cape-town` JSON-LD */
 export const CAPE_TOWN_SERVICE_SCHEMA_SERVICE_TYPE: Record<CapeTownSeoServiceSlug, string> = {
   "deep-cleaning-cape-town": "Deep Cleaning Service",
-  "standard-cleaning-cape-town": "Standard Home Cleaning Service",
+  "standard-cleaning-cape-town": "Regular Home Cleaning Service",
   "move-out-cleaning-cape-town": "Move-Out Cleaning Service",
   "office-cleaning-cape-town": "Office Cleaning Service",
   "airbnb-cleaning-cape-town": "Airbnb Cleaning Service",
@@ -379,8 +379,9 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     path: "/services/standard-cleaning-cape-town",
     title: "Regular Home Cleaning Cape Town | Book Online | Shalean",
     description:
-      "House cleaning in Cape Town for weekly or once-off visits—kitchens, bathrooms, and floors on a checklist you confirm online. Transparent quotes with Shalean.",
+      "Regular Cleaning in Cape Town for weekly or once-off home upkeep. Our standard home cleaning covers kitchens, bathrooms and floors with transparent online quotes.",
     ogImage: "/images/marketing/standard-cleaning-cape-town-kitchen.webp",
+    keywords: ["regular cleaning cape town", "standard home cleaning cape town", "house cleaning cape town"],
     h1: "Regular home cleaning services in Cape Town",
     schemaName: "Cleaning Services Cape Town | Shalean",
     bookingLabel: "regular cleaning",
@@ -2115,7 +2116,7 @@ export const LOCATION_SEO_SHORT_PLACE = Object.fromEntries(
 
 const SERVICE_HUB_PHRASE: Record<CapeTownSeoServiceSlug, string> = {
   "deep-cleaning-cape-town": "Deep cleaning",
-  "standard-cleaning-cape-town": "Standard cleaning",
+  "standard-cleaning-cape-town": "Regular cleaning",
   "move-out-cleaning-cape-town": "Move-out cleaning",
   "office-cleaning-cape-town": "Office cleaning",
   "airbnb-cleaning-cape-town": "Airbnb cleaning",
@@ -2142,7 +2143,7 @@ export function serviceHubLocationLinks(serviceSlug: CapeTownSeoServiceSlug): { 
 export function locationHubServiceLinksCapeTownAnchors(): { href: string; label: string }[] {
   return [
     { href: CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path, label: "Deep cleaning in Cape Town" },
-    { href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path, label: "Standard cleaning in Cape Town" },
+    { href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path, label: "Regular cleaning in Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path, label: "Move-out cleaning in Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["office-cleaning-cape-town"].path, label: "Office cleaning in Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path, label: "Airbnb cleaning in Cape Town" },
@@ -2217,7 +2218,7 @@ function serviceSolutionVariant(bookingLabel: string): string {
 function buildServicePageMetaDescription(data: CapeTownServiceSeoBlock): string {
   if (data.slug === "standard-cleaning-cape-town") {
     return clampMetaDescription(
-      "Book home cleaning in Cape Town. Transparent online quotes, checklist-confirmed scope, and easy booking with Shalean.",
+      "Book Regular Cleaning in Cape Town. Our standard home cleaning checklist covers kitchens, bathrooms and floors with clear online quotes.",
     );
   }
   return generateMetaDescription({
@@ -2279,7 +2280,7 @@ export async function buildLocationSeoMetadataAsync(data: LocationSeoBlock, row:
 export function locationPageServiceLinks(): { href: string; label: string }[] {
   return [
     { href: CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path, label: "Deep cleaning Cape Town" },
-    { href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path, label: "Standard cleaning Cape Town" },
+    { href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path, label: "Regular cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path, label: "Move-out cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["office-cleaning-cape-town"].path, label: "Office cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path, label: "Airbnb cleaning Cape Town" },
@@ -2306,7 +2307,7 @@ export function getHomepageInternalSeoLinks(): { href: string; label: string }[]
   homepageInternalSeoLinksCache = [
     { href: "/services", label: "Cleaning services Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path, label: "Deep cleaning Cape Town" },
-    { href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path, label: "Standard cleaning Cape Town" },
+    { href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path, label: "Regular cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path, label: "Move-out cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["office-cleaning-cape-town"].path, label: "Office cleaning Cape Town" },
     { href: CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path, label: "Airbnb cleaning Cape Town" },

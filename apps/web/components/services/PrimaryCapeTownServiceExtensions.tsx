@@ -98,10 +98,10 @@ function StandardComparisonContent() {
             id="std-compare-deep-heading"
             className="text-2xl font-bold tracking-tight text-zinc-900"
           >
-            Standard vs deep cleaning in Cape Town
+            Regular vs deep cleaning in Cape Town
           </h2>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
-            <strong className="text-zinc-800">Standard cleaning</strong>{" "}
+            <strong className="text-zinc-800">Regular Cleaning</strong>{" "}
             maintains kitchens, bathrooms, floors, and dusting on a predictable
             rhythm—best when your home needs steady upkeep rather than a heavy
             reset.
@@ -139,7 +139,7 @@ function StandardComparisonContent() {
               href={CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path}
               className={linkClass}
             >
-              recurring standard cleaning in Cape Town
+              recurring Regular Cleaning in Cape Town
             </SafeInternalLink>
             .
           </p>
@@ -244,7 +244,7 @@ export function buildPrimaryCapeTownServiceExtensionSlots(
                 href={CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path}
                 className={linkClass}
               >
-                recurring standard cleaning in Cape Town
+                recurring Regular Cleaning in Cape Town
               </SafeInternalLink>
               .
             </p>

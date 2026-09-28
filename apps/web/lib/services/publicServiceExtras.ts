@@ -3,6 +3,7 @@ import type {
   ServicesCatalog,
 } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
+import { REGULAR_CLEANING_PUBLIC_NAME } from "@/lib/services/publicServiceNames";
 
 export const PUBLIC_EXTRAS_SERVICE_ORDER: readonly ServiceSlug[] = [
   "regular-cleaning",
@@ -14,7 +15,7 @@ export const PUBLIC_EXTRAS_SERVICE_ORDER: readonly ServiceSlug[] = [
 ] as const;
 
 export const PUBLIC_SERVICE_LABELS: Record<ServiceSlug, string> = {
-  "regular-cleaning": "Standard Cleaning",
+  "regular-cleaning": REGULAR_CLEANING_PUBLIC_NAME,
   "deep-cleaning": "Deep Cleaning",
   "moving-cleaning": "Move In / Out Cleaning",
   "airbnb-cleaning": "Airbnb Cleaning",

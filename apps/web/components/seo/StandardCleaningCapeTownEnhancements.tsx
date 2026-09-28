@@ -17,10 +17,10 @@ export function StandardCleaningCapeTownEnhancements({ bookingPath }: Props) {
     <section className="border-b border-blue-100 bg-white py-12" aria-labelledby="std-ct-pricing-heading">
       <div className="mx-auto max-w-4xl px-4">
         <h2 id="std-ct-pricing-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
-          Standard cleaning prices
+          Regular Cleaning prices
         </h2>
         <p className="mt-4 max-w-3xl text-base leading-relaxed text-zinc-600">
-          Your total is calculated from the current governed pricing rules for bedrooms, bathrooms, selected extras, and
+          Regular Cleaning is our standard home-cleaning option for routine upkeep. Your total is calculated from the current governed pricing rules for bedrooms, bathrooms, selected extras, and
           applicable service charges. Review the{" "}
           <Link
             href={CAPE_TOWN_PRICING_AUTHORITY_HREF}

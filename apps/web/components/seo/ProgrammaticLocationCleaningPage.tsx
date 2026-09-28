@@ -696,7 +696,7 @@ export function ProgrammaticLocationCleaningPage({
             <LocationHubServiceTiles
               ctx={seoCtx}
               tiles={[
-                { href: `${STANDARD_SERVICE}?location=${bookingLocationSlug}`, label: "Standard cleaning" },
+                { href: `${STANDARD_SERVICE}?location=${bookingLocationSlug}`, label: "Regular Cleaning" },
                 { href: `${DEEP_SERVICE}?location=${bookingLocationSlug}`, label: "Deep cleaning" },
                 { href: `${MOVE_OUT_SERVICE}?location=${bookingLocationSlug}`, label: "Move-out cleaning" },
               ]}
