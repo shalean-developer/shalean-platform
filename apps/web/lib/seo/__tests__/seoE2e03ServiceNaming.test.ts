@@ -24,6 +24,7 @@ import {
   REGULAR_CLEANING_SECONDARY_KEYWORD,
   REGULAR_CLEANING_SERVICE_PATH,
 } from "@/lib/services/publicServiceNames";
+import { PUBLIC_SERVICE_LABELS } from "@/lib/services/publicServiceExtras";
 
 function read(rel: string): string {
   return readFileSync(join(process.cwd(), rel), "utf8");
@@ -56,6 +57,7 @@ describe("SEO-E2E-03 service naming convergence", () => {
       label: REGULAR_CLEANING_PUBLIC_NAME,
       href: REGULAR_CLEANING_SERVICE_PATH,
     });
+    expect(PUBLIC_SERVICE_LABELS["regular-cleaning"]).toBe(REGULAR_CLEANING_PUBLIC_NAME);
   });
 
   it("keeps the canonical service URL stable while making Regular Cleaning primary in SEO", () => {
@@ -77,6 +79,8 @@ describe("SEO-E2E-03 service naming convergence", () => {
     expect(String(metadata.description).toLowerCase()).toContain(
       REGULAR_CLEANING_SECONDARY_KEYWORD,
     );
+    expect(String(metadata.description)).not.toContain("…");
+    expect(String(metadata.description)).not.toMatch(/\.\.\.$/);
   });
 
   it("preserves standard-cleaning search intent and technical compatibility identifiers", () => {
@@ -95,7 +99,10 @@ describe("SEO-E2E-03 service naming convergence", () => {
       "lib/marketing/marketingHomeServicePresentation.ts",
       "components/seo/LocationHubQueryExpansion.tsx",
       "components/seo/LocationHubRankingSections.tsx",
+      "components/seo/ProgrammaticLocationCleaningPage.tsx",
       "components/seo/StandardCleaningCapeTownEnhancements.tsx",
+      "components/services/PrimaryCapeTownServiceExtensions.tsx",
+      "lib/services/publicServiceExtras.ts",
     ].map(read).join("\n");
 
     expect(core).not.toContain("Standard Cleaning");
