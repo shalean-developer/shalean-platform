@@ -25,7 +25,10 @@ import {
   getZohoInvoice,
   markZohoInvoicePaid,
 } from "../lib/zoho/zohoBooksService";
-import {\n  resolveZohoCustomerContactForBooking,\n  resolveZohoCustomerContactForMonthlyInvoice,\n} from "../lib/zoho/resolveZohoCustomerContact";
+import {
+  resolveZohoCustomerContactForBooking,
+  resolveZohoCustomerContactForMonthlyInvoice,
+} from "../lib/zoho/resolveZohoCustomerContact";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
