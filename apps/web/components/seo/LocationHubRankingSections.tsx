@@ -57,7 +57,7 @@ export function LocationHubRankingSections({ location, slug, analyticsCtx }: Pro
                     guesses that change on arrival. Use Shalean’s booking flow to lock a total for your {city} address,
                     then compare that quote against{" "}
                     <Link href={standardPath} className={linkEmphasisClassName}>
-                      standard cleaning guidance
+                      regular cleaning guidance
                     </Link>{" "}
                     and{" "}
                     <Link href={deepPath} className={linkEmphasisClassName}>
@@ -126,16 +126,16 @@ export function LocationHubRankingSections({ location, slug, analyticsCtx }: Pro
             <details className="group rounded-2xl border border-zinc-200 bg-white p-4 text-sm shadow-sm open:border-emerald-200">
               <summary className="cursor-pointer list-none font-semibold text-zinc-900 outline-none marker:content-none [&::-webkit-details-marker]:hidden">
                 <span className="flex items-center justify-between gap-2">
-                  Standard vs deep cleaning
+                  Regular vs deep cleaning
                   <span className="text-zinc-400 transition group-open:rotate-180" aria-hidden>
                     ▾
                   </span>
                 </span>
               </summary>
               <p className="mt-3 leading-relaxed text-zinc-700">
-                Standard visits maintain kitchens and bathrooms between resets; deep cleans budget extra dwell on grout-adjacent zones, ovens, and detail dust-downs. Compare{" "}
+                Regular Cleaning maintains kitchens and bathrooms between resets; deep cleans budget extra dwell on grout-adjacent zones, ovens, and detail dust-downs. Compare{" "}
                 <Link href={standardPath} className={linkEmphasisClassName}>
-                  standard cleaning ({city})
+                  regular cleaning ({city})
                 </Link>{" "}
                 and{" "}
                 <Link href={deepPath} className={linkEmphasisClassName}>
@@ -200,7 +200,7 @@ export function LocationHubRankingSections({ location, slug, analyticsCtx }: Pro
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Base scope</p>
               <p className="mt-2 text-sm font-semibold text-zinc-900">Tier + rooms</p>
               <p className="mt-1 text-xs leading-snug text-zinc-600">
-                Standard, deep, Airbnb, or move-out sets the baseline hours before add-ons.
+                Regular, deep, Airbnb, or move-out sets the baseline hours before add-ons.
               </p>
             </div>
             <div className="rounded-xl border border-zinc-200 bg-white p-4 text-center shadow-sm">
@@ -253,7 +253,7 @@ export function LocationHubRankingSections({ location, slug, analyticsCtx }: Pro
             </Link>
             ,{" "}
             <Link href={standardPath} className={`font-medium ${linkEmphasisClassName}`}>
-              Standard cleaning ({city})
+              Regular cleaning ({city})
             </Link>
             ,{" "}
             <Link href={moveOutPath} className={`font-medium ${linkEmphasisClassName}`}>
@@ -285,7 +285,7 @@ export function LocationHubRankingSections({ location, slug, analyticsCtx }: Pro
                     Home type
                   </th>
                   <th scope="col" className="px-4 py-3 font-semibold text-zinc-900">
-                    Standard cleaning (typical)
+                    Regular cleaning (typical)
                   </th>
                   <th scope="col" className="px-4 py-3 font-semibold text-zinc-900">
                     Deep cleaning (typical)
@@ -317,7 +317,7 @@ export function LocationHubRankingSections({ location, slug, analyticsCtx }: Pro
               <li>
                 <span className="font-medium text-zinc-900">Service tier — </span>
                 deep cleans and move-out scopes include heavier kitchens, bathrooms, and detail zones than maintenance
-                standard visits.
+                regular visits.
               </li>
               <li>
                 <span className="font-medium text-zinc-900">Add-ons — </span>
