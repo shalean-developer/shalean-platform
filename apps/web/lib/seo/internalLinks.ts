@@ -120,7 +120,7 @@ export function getBlogIntentServicePair(kind: BlogServiceLinkKind, slugKey: str
   }
   if (kind === "deep") {
     return [
-      link("deep-cleaning-cape-town", "deep", "Deep cleaning service"),
+      link("deep-cleaning-cape-town", "deep", "Deep cleaning services"),
       link("standard-cleaning-cape-town", "standard", "Regular cleaning service"),
     ];
   }
@@ -262,7 +262,7 @@ export function getBlogAboveFoldServiceLink(slug: string): SeoInternalLink {
   if (kind === "deep") {
     return {
       href: CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path,
-      anchor: pickServiceLocationAnchor(`${key}|fold|deep`, "Deep cleaning", city),
+      anchor: pickServiceLocationAnchor(`${key}|fold|deep`, "Deep cleaning services", city),
     };
   }
   if (kind === "pricing") {

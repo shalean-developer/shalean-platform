@@ -109,6 +109,7 @@ export function serviceTitleBaseFromBookingLabel(label: string): string {
 export function serviceTitleBaseForCtr(bookingLabel: string, slug: string): string {
   const raw = serviceTitleBaseFromBookingLabel(bookingLabel);
   if (slug === "standard-cleaning-cape-town") return REGULAR_CLEANING_PUBLIC_NAME;
+  if (slug === "deep-cleaning-cape-town") return "Deep Cleaning Services";
   return raw;
 }
 
