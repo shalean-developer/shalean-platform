@@ -1,6 +1,12 @@
 import { HOME_STARTING_PRICE_ZAR } from "@/lib/seo/homePageMeta";
 import { SITE_ORIGIN } from "@/lib/site/canonical";
-import { CUSTOMER_SUPPORT_EMAIL, CUSTOMER_SUPPORT_TELEPHONE_E164 } from "@/lib/site/customerSupport";
+import { CUSTOMER_SUPPORT_TELEPHONE_E164 } from "@/lib/site/customerSupport";
+import {
+  PUBLIC_BUSINESS_ADDRESS,
+  PUBLIC_BUSINESS_EMAIL,
+  PUBLIC_BUSINESS_NAME,
+  PUBLIC_BUSINESS_OPENING_HOURS,
+} from "@/lib/site/publicBusinessIdentity";
 import { getBrandSameAsForJsonLd } from "@/lib/site/brandSameAs";
 
 /** Stable @id aligned with homepage — reuse on hub pages so Google maps one primary entity. */
@@ -33,21 +39,17 @@ export function buildPrimaryLocalBusinessBase(): Record<string, unknown> {
   const node: Record<string, unknown> = {
     "@type": "LocalBusiness",
     "@id": PRIMARY_LOCAL_BUSINESS_ID,
-    name: "Shalean Cleaning Services",
+    name: PUBLIC_BUSINESS_NAME,
     image: [PRIMARY_LOCAL_BUSINESS_IMAGE],
     url: SITE_ORIGIN,
     telephone: CUSTOMER_SUPPORT_TELEPHONE_E164,
-    email: CUSTOMER_SUPPORT_EMAIL,
+    email: PUBLIC_BUSINESS_EMAIL,
     /** ZAR entry band aligned with the canonical homepage marketing starting price. */
     priceRange: `$$ - From R${HOME_STARTING_PRICE_ZAR}`,
-    openingHours: "Mo-Su 08:00-18:00",
+    openingHours: PUBLIC_BUSINESS_OPENING_HOURS,
     address: {
       "@type": "PostalAddress",
-      streetAddress: "39 Harvey Rd",
-      addressLocality: "Claremont",
-      addressRegion: "Western Cape",
-      postalCode: "7708",
-      addressCountry: "ZA",
+      ...PUBLIC_BUSINESS_ADDRESS,
     },
     geo: { ...PRIMARY_BUSINESS_GEO },
     knowsAbout: [
