@@ -1322,6 +1322,16 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     ogImage: "/images/marketing/cape-town-house-cleaning-kitchen.webp",
     h1: "Bantry Bay cleaning services in Cape Town for Atlantic Seaboard homes and compact luxury layouts",
     bookingLabel: "cleaning in Bantry Bay",
+    tier: "medium",
+    hasAirbnbFocus: true,
+    hasApartmentFocus: true,
+    rankingPricingParagraph:
+      "Bantry Bay cleaning prices depend on bedrooms, bathrooms, service type, and selected price-affecting extras. Split-level access and tight visitor parking should be added to booking notes for operations, while the locked quote changes only when priced scope changes.",
+    rankingMidNearbySlugs: ["fresnaye-cleaning-services", "sea-point-cleaning-services"],
+    relatedBlogGuide: {
+      href: "/locations/sea-point-cleaning-services",
+      linkAnchorText: "Sea Point cleaning services (nearby Atlantic Seaboard hub)",
+    },
     intro: [
       "Bantry Bay sits where Atlantic Seaboard exposure meets compact luxury layouts—salt breeze, wind-blown dust, and high-use kitchens stack up fast between professional visits.",
       "Shalean supports Bantry Bay with the same Cape Town booking flow: address, rooms, extras, and service tier produce an instant total before you confirm.",
