@@ -515,40 +515,6 @@ export function ProgrammaticLocationCleaningPage({
         <LocationHubTrustedResidentsSection locationName={location.name} snippets={marketingReviewSnippets ?? []} />
       ) : null}
 
-      {!rankingResolved?.skipDefaultServicesStrip ? (
-        <section className="border-b border-zinc-100 bg-zinc-50/40 py-12" aria-labelledby="hub-popular-ct-services-heading">
-        <div className="mx-auto max-w-4xl px-4">
-          <h2 id="hub-popular-ct-services-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
-            What type of cleaning service do you need?
-          </h2>
-          <p className="mt-3 text-base leading-relaxed text-zinc-600">
-            Pick a guide, then confirm your {location.name} address at checkout so scope matches lifts, parking, and the
-            bathrooms you selected.
-          </p>
-          <ul className="mt-6 space-y-3 text-base leading-relaxed text-zinc-700">
-            <li>
-              <Link href={STANDARD_SERVICE} className={`font-semibold ${linkEmphasisClassName}`}>
-                Standard Cleaning
-              </Link>{" "}
-              — weekly or once-off home cleaning
-            </li>
-            <li>
-              <Link href={DEEP_SERVICE} className={`font-semibold ${linkEmphasisClassName}`}>
-                Deep Cleaning
-              </Link>{" "}
-              — for kitchens, bathrooms, and detailed cleaning
-            </li>
-            <li>
-              <Link href={MOVE_OUT_SERVICE} className={`font-semibold ${linkEmphasisClassName}`}>
-                Move Out Cleaning
-              </Link>{" "}
-              — for end-of-lease or property handovers
-            </li>
-          </ul>
-        </div>
-      </section>
-      ) : null}
-
       {rankingResolved?.active && seo ? (
         <LocationHubRankingAsset location={location} seo={seo} ranking={rankingResolved} ctx={seoCtx} />
       ) : null}
@@ -641,7 +607,7 @@ export function ProgrammaticLocationCleaningPage({
 
       <LocationHubServiceDemandSection location={location} />
 
-      <LocationHubEntityStack location={location} slug={slug} />
+      {!geoHints ? <LocationHubEntityStack location={location} slug={slug} /> : null}
 
       <section className="border-b border-zinc-100 py-16">
         <div className="mx-auto max-w-4xl px-4">
@@ -767,6 +733,7 @@ export function ProgrammaticLocationCleaningPage({
         <LocationHubQueryExpansion location={location} slug={slug} tier={hubTier} />
       ) : null}
 
+      {rankingResolved?.tier !== "high" ? (
       <section className="border-b border-zinc-100 py-16">
         <div className="mx-auto max-w-4xl px-4">
           <h2 className="text-2xl font-bold tracking-tight text-zinc-900">What customers say in {location.name}</h2>
@@ -783,6 +750,7 @@ export function ProgrammaticLocationCleaningPage({
           </ul>
         </div>
       </section>
+      ) : null}
 
       <section className="border-b border-zinc-100 bg-zinc-50/50 py-16" aria-labelledby="hub-nearby-areas-heading">
         <div className="mx-auto max-w-4xl px-4">
