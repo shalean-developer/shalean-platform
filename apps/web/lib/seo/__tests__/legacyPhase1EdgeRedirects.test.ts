@@ -66,6 +66,37 @@ describe("resolveLegacyGrowthLocal", () => {
     });
   });
 
+
+  it("recovers GSC legacy regular-cleaning aliases to canonical location hubs", () => {
+    expect(resolveLegacyGrowthLocal("/growth/local/cleaning-services/sea-point")).toEqual({
+      type: "redirect",
+      pathname: "/locations/sea-point-cleaning-services",
+    });
+    expect(resolveLegacyGrowthLocal("/growth/local/affordable-cleaning/claremont")).toEqual({
+      type: "redirect",
+      pathname: "/locations/claremont-cleaning-services",
+    });
+    expect(resolveLegacyGrowthLocal("/growth/local/weekly-cleaning/wynberg")).toEqual({
+      type: "redirect",
+      pathname: "/locations/wynberg-cleaning-services",
+    });
+  });
+
+  it("recovers combined legacy aliases and falls back to Regular Cleaning when no hub exists", () => {
+    expect(resolveLegacyGrowthLocal("/growth/local/weekly-cleaning-sea-point")).toEqual({
+      type: "redirect",
+      pathname: "/locations/sea-point-cleaning-services",
+    });
+    expect(resolveLegacyGrowthLocal("/growth/local/affordable-cleaning-not-a-real-suburb-xyz")).toEqual({
+      type: "redirect",
+      pathname: "/services/standard-cleaning-cape-town",
+    });
+    expect(resolveLegacyGrowthLocal("/growth/local/cleaning-services/not-a-real-suburb-xyz")).toEqual({
+      type: "redirect",
+      pathname: "/services/standard-cleaning-cape-town",
+    });
+  });
+
   it("returns gone for unparseable growth local tails", () => {
     expect(resolveLegacyGrowthLocal("/growth/local/nonsense-only")).toEqual({ type: "gone" });
     expect(resolveLegacyGrowthLocal("/growth/local/deep-cleaning/extra/segment")).toEqual({
@@ -83,6 +114,33 @@ describe("resolveLegacyStage19IntentPath", () => {
     expect(resolveLegacyStage19IntentPath("/same-day-cleaning/unknown-suburb-xyz")).toEqual({
       type: "redirect",
       pathname: "/services/standard-cleaning-cape-town",
+    });
+  });
+
+
+  it("preserves the high-value Cape Town cleaning-services metro alias", () => {
+    expect(resolveLegacyStage19IntentPath("/cleaning-services/cape-town")).toEqual({
+      type: "redirect",
+      pathname: "/services/standard-cleaning-cape-town",
+    });
+    expect(resolveLegacyStage19IntentPath("/cleaning-services/capetown")).toEqual({
+      type: "redirect",
+      pathname: "/services/standard-cleaning-cape-town",
+    });
+  });
+
+  it("recovers direct retired alias landings to hubs or Regular Cleaning", () => {
+    expect(resolveLegacyStage19IntentPath("/weekly-cleaning/sea-point")).toEqual({
+      type: "redirect",
+      pathname: "/locations/sea-point-cleaning-services",
+    });
+    expect(resolveLegacyStage19IntentPath("/affordable-cleaning/unknown-suburb-xyz")).toEqual({
+      type: "redirect",
+      pathname: "/services/standard-cleaning-cape-town",
+    });
+    expect(resolveLegacyStage19IntentPath("/cleaning-services/claremont")).toEqual({
+      type: "redirect",
+      pathname: "/locations/claremont-cleaning-services",
     });
   });
 

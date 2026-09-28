@@ -12,6 +12,17 @@ import {
 
 export type LegacyPhase1Resolution = { type: "redirect"; pathname: string } | { type: "gone" };
 
+const LEGACY_REGULAR_CLEANING_INTENT_ALIASES = [
+  "cleaning-services",
+  "affordable-cleaning",
+  "weekly-cleaning",
+] as const;
+
+type LegacyRegularCleaningIntentAlias =
+  (typeof LEGACY_REGULAR_CLEANING_INTENT_ALIASES)[number];
+
+type LegacyGrowthIntent = Stage19IntentSegment | LegacyRegularCleaningIntentAlias;
+
 export function normalizeLegacyCitySlug(raw: string): string {
   return raw.trim().toLowerCase().replace(/\s+/g, "-");
 }
@@ -24,7 +35,23 @@ const SERVICE_PATH_BY_INTENT: Record<Stage19IntentSegment, string> = {
   "office-cleaning": "/services/office-cleaning-cape-town",
 };
 
-const INTENTS_LONGEST_FIRST = [...STAGE19_INTENT_SEGMENTS].sort((a, b) => b.length - a.length);
+const INTENTS_LONGEST_FIRST = [
+  ...STAGE19_INTENT_SEGMENTS,
+  ...LEGACY_REGULAR_CLEANING_INTENT_ALIASES,
+].sort((a, b) => b.length - a.length) as LegacyGrowthIntent[];
+
+function normalizeLegacyGrowthIntent(intentRaw: string): Stage19IntentSegment | null {
+  const intent = intentRaw.trim().toLowerCase();
+  if (isStage19IntentSegment(intent)) return intent;
+  if (
+    LEGACY_REGULAR_CLEANING_INTENT_ALIASES.includes(
+      intent as LegacyRegularCleaningIntentAlias,
+    )
+  ) {
+    return "same-day-cleaning";
+  }
+  return null;
+}
 
 /** Cape Town hub exists in `location-hubs.json` iff this returns a non-null path. */
 export function resolveLegacySingularLocation(cityRaw: string, suburbRaw: string): LegacyPhase1Resolution {
@@ -42,7 +69,7 @@ export function resolveLegacySingularLocation(cityRaw: string, suburbRaw: string
   return { type: "gone" };
 }
 
-function parseGrowthLocalCombinedSegment(rest: string): { intent: Stage19IntentSegment; suburb: string } | null {
+function parseGrowthLocalCombinedSegment(rest: string): { intent: LegacyGrowthIntent; suburb: string } | null {
   const r = rest.trim().toLowerCase();
   if (!r) return null;
   for (const intent of INTENTS_LONGEST_FIRST) {
@@ -60,9 +87,9 @@ function parseGrowthLocalCombinedSegment(rest: string): { intent: Stage19IntentS
  * Never targets retired Stage-19 `/{intent}/{suburb}` paths (those 410'd / chain).
  */
 function resolveGrowthIntentAndSuburb(intentRaw: string, suburbRaw: string): LegacyPhase1Resolution {
-  const intent = intentRaw.trim().toLowerCase();
+  const intent = normalizeLegacyGrowthIntent(intentRaw);
   const suburb = suburbRaw.trim().toLowerCase();
-  if (!isStage19IntentSegment(intent) || !suburb) return { type: "gone" };
+  if (!intent || !suburb) return { type: "gone" };
 
   const hubPath = locationSeoPathFromLegacyAreaSlug(suburb);
   if (hubPath) return { type: "redirect", pathname: hubPath };
@@ -73,6 +100,8 @@ function resolveGrowthIntentAndSuburb(intentRaw: string, suburbRaw: string): Leg
 /**
  * `/growth/local/*` — location hub or service page (one hop), else 410.
  * Supports `/growth/local/{intent}/{suburb}` or `/growth/local/{intent}-{suburb}` (single tail).
+ * Historical aliases `cleaning-services`, `affordable-cleaning`, and `weekly-cleaning`
+ * converge onto the Regular Cleaning intent instead of remaining crawl-debt 404s.
  */
 export function resolveLegacyGrowthLocal(pathname: string): LegacyPhase1Resolution | null {
   const norm = pathname.replace(/\/+$/, "") || "/";
@@ -106,6 +135,19 @@ export function resolveLegacyStage19IntentPath(pathname: string): LegacyPhase1Re
   if (parts.length !== 2) return null;
   const intent = parts[0] ?? "";
   const suburb = parts[1] ?? "";
-  if (!isStage19IntentSegment(intent)) return null;
+  if (!normalizeLegacyGrowthIntent(intent)) return null;
+
+  // Preserve the long-standing metro alias: this is a service-intent URL, not a suburb hub.
+  if (
+    intent === "cleaning-services" &&
+    (normalizeLegacyCitySlug(suburb) === "cape-town" ||
+      normalizeLegacyCitySlug(suburb) === "capetown")
+  ) {
+    return {
+      type: "redirect",
+      pathname: "/services/standard-cleaning-cape-town",
+    };
+  }
+
   return resolveGrowthIntentAndSuburb(intent, suburb);
 }
