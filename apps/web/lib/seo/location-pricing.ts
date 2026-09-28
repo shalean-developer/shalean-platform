@@ -56,6 +56,14 @@ export function getLocationPricingFaqRange(row: PricingBandLocator): string {
   return LOCATION_PRICING_BAND_COPY[row.pricingBand].faqRange;
 }
 
+export function getCanonicalLocationPricingAnswer(
+  row: PricingBandLocator & { name: string; city?: string },
+): string {
+  const range = getLocationPricingFaqRange(row);
+  const city = row.city?.trim() || "Cape Town";
+  return `${range} Your exact ${city} total is itemised online from rooms, bathrooms, service tier, and add-ons before payment.`;
+}
+
 export function getLocationPricingHeroLine(row: PricingBandLocator): string {
   return LOCATION_PRICING_BAND_COPY[row.pricingBand].heroLine;
 }
