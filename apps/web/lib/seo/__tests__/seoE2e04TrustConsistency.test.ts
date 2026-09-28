@@ -48,13 +48,37 @@ describe("SEO-E2E-04 dynamic trust consistency", () => {
     expect(locationTrust).not.toContain("trustStats?.reviewCount");
   });
 
-  it("keeps Google third-party ratings out of self-authored LocalBusiness AggregateRating markup", () => {
+  it("keeps Google third-party ratings out of self-authored organization/business AggregateRating markup", () => {
     const servicePage = read("components/seo/SeoCapeTownServicePage.tsx");
     const primaryBusiness = read("lib/seo/primaryLocalBusinessJsonLd.ts");
+    const locationStructuredData = read("lib/seo/structured-data.ts");
+    const about = read("components/about/AboutPageView.tsx");
 
     expect(servicePage).not.toContain("localBusinessNode.aggregateRating");
     expect(servicePage).not.toContain('"@type": "AggregateRating"');
     expect(primaryBusiness).not.toContain("aggregateRating:");
+    expect(locationStructuredData).not.toContain("aggregateRating");
+    expect(locationStructuredData).not.toContain("googleBusinessAggregateRatingSchema");
+    expect(about).not.toContain("aggregateRating:");
+    expect(about).not.toContain("googleBusinessAggregateRatingSchema");
+  });
+
+
+  it("does not fetch the legacy public-review aggregate on service or location SEO routes", () => {
+    const serviceRoute = read("app/services/[service]/page.tsx");
+    const locationRoute = read("app/locations/[slug]/page.tsx");
+
+    expect(serviceRoute).not.toContain("getPublicReviewBannerStats");
+    expect(locationRoute).not.toContain("getPublicReviewBannerStats");
+    expect(serviceRoute).not.toContain("trustStats=");
+    expect(locationRoute).not.toContain("trustStats=");
+  });
+
+  it("limits GBP-derived location copy to facts represented by the global aggregate", () => {
+    const locationTrust = read("components/seo/LocationTrustSignals.tsx");
+    expect(locationTrust).toContain("Google reviewers across Cape Town");
+    expect(locationTrust).not.toContain("recurring visits");
+    expect(locationTrust).not.toContain("including recurring");
   });
 
   it("removes stale hard-coded Google counts and rating strings from core public trust surfaces", () => {
