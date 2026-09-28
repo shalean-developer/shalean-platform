@@ -20,8 +20,6 @@ export type BuildLocationHubJsonLdParams = {
   metaDescription: string;
   location: CapeTownLocationRow;
   faqs: LocationHubFaqItem[];
-  /** Nearby programmatic slugs for areaServed enrichment */
-  nearbyPlaceNames: readonly { name: string }[];
   /** ISO date — surfaced on WebPage for freshness signals */
   dateModified?: string;
   /** Service entity `name` — defaults to `h1` when omitted */
@@ -42,7 +40,6 @@ export function buildLocationHubJsonLd(params: BuildLocationHubJsonLdParams): Re
     metaDescription,
     location,
     faqs,
-    nearbyPlaceNames,
     dateModified = LOCATION_HUB_SCHEMA_DATE_MODIFIED,
     serviceSchemaName,
     serviceAreaServedSimpleName,
@@ -54,18 +51,6 @@ export function buildLocationHubJsonLd(params: BuildLocationHubJsonLdParams): Re
   const localBusinessId = `${pageUrl}#localbusiness`;
   const primaryPlaceLabel = `${location.name}, Western Cape, South Africa`;
   const cityPlace = { "@type": "City", name: location.city };
-  const areaServedPlaces = [
-    {
-      "@type": "Place",
-      name: primaryPlaceLabel,
-      containedInPlace: cityPlace,
-    },
-    ...nearbyPlaceNames.slice(0, 5).map((loc) => ({
-      "@type": "Place",
-      name: `${loc.name}, Western Cape, South Africa`,
-      containedInPlace: cityPlace,
-    })),
-  ];
   const primaryLocalBusiness = buildPrimaryLocalBusinessBase();
 
   return {
@@ -97,7 +82,6 @@ export function buildLocationHubJsonLd(params: BuildLocationHubJsonLdParams): Re
         url: siteOrigin,
         telephone: CUSTOMER_SUPPORT_TELEPHONE_E164,
         priceRange: getLocationMetaPriceHint(location),
-        areaServed: areaServedPlaces,
       },
       {
         "@type": "Service",
