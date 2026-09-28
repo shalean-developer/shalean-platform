@@ -118,6 +118,17 @@ describe("resolveLegacyStage19IntentPath", () => {
   });
 
 
+  it("preserves the high-value Cape Town cleaning-services metro alias", () => {
+    expect(resolveLegacyStage19IntentPath("/cleaning-services/cape-town")).toEqual({
+      type: "redirect",
+      pathname: "/services/standard-cleaning-cape-town",
+    });
+    expect(resolveLegacyStage19IntentPath("/cleaning-services/capetown")).toEqual({
+      type: "redirect",
+      pathname: "/services/standard-cleaning-cape-town",
+    });
+  });
+
   it("recovers direct retired alias landings to hubs or Regular Cleaning", () => {
     expect(resolveLegacyStage19IntentPath("/weekly-cleaning/sea-point")).toEqual({
       type: "redirect",
