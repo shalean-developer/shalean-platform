@@ -30,7 +30,8 @@ const PRIMARY_BUSINESS_GEO = {
 
 /**
  * Core LocalBusiness node for Shalean — used on homepage graph and standalone on money pages.
- * Telephone/email match `customerSupport` (single source of truth).
+ * Name, phone, address and opening hours are aligned to the live Google Business Profile.
+ * Public email is site-owned because GBP does not expose an email field.
  *
  * Do not attach Google Business Profile aggregate ratings here. Those ratings are displayed
  * visibly as third-party trust evidence, but are not Shalean-authored review markup.
