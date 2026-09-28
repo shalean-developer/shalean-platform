@@ -907,10 +907,6 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
       "Looking for reliable cleaning services in Claremont, Cape Town? We clean apartments near Cavendish Square, student housing around UCT, and family homes across the Southern Suburbs with consistent, high-quality results.",
       "Claremont properties often need flexible scheduling, detailed move-out cleaning, and fast turnaround between tenants. Our vetted cleaners are trained for rental standards, inspections, and everyday home care.",
     ],
-    rankingPricingParagraph:
-      "Cleaning services in Claremont typically start from around R400–R500 depending on property size and service type. Move-out and deep cleaning may cost more based on condition and inspection requirements.",
-    rankingCostFaqAnswer:
-      "Cleaning services in Claremont typically start from around R400–R500 depending on the size of the property and service type. Move-out and deep cleaning may cost more based on condition and inspection requirements.",
     rankingMidNearbySlugs: ["rondebosch-cleaning-services", "newlands-cleaning-services"],
     rankingMidNearbyLead: "Also serving nearby areas like",
     rankingMidProvidePrefix: "We provide dependable",
