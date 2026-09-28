@@ -1,0 +1,32 @@
+/**
+ * Public business identity used by customer-facing marketing surfaces and LocalBusiness schema.
+ *
+ * Source-of-truth policy:
+ * - Name, phone, physical address and opening hours mirror the live Google Business Profile.
+ * - Public email is site-owned because GBP does not expose an email field.
+ */
+
+export const PUBLIC_BUSINESS_NAME = "Shalean Cleaning Services";
+export const PUBLIC_BUSINESS_EMAIL = "hello@shalean.co.za";
+
+export const PUBLIC_BUSINESS_ADDRESS = {
+  streetAddress: "39 Harvey Rd",
+  addressLocality: "Claremont",
+  addressRegion: "Western Cape",
+  postalCode: "7708",
+  addressCountry: "ZA",
+} as const;
+
+/** Live GBP currently lists the business as open 24 hours every day. */
+export const PUBLIC_BUSINESS_OPENING_HOURS = "Mo-Su 00:00-23:59";
+export const PUBLIC_BUSINESS_HOURS_LABEL = "Open 24 hours, 7 days a week";
+
+export const PUBLIC_BUSINESS_OPENING_DAYS = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+] as const;
