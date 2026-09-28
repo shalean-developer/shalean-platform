@@ -17,16 +17,10 @@ export const PRIMARY_LOCAL_BUSINESS_ID = `${SITE_ORIGIN}/#localbusiness`;
 /** Representative image for LocalBusiness (logo asset not in public/ — uses verified marketing hero). */
 export const PRIMARY_LOCAL_BUSINESS_IMAGE = `${SITE_ORIGIN}/images/marketing/homepage-hero-cleaning-team-cape-town.webp`;
 
-/** Approximate coords for registered Claremont address (39 Harvey Rd) — LocalBusiness `geo`. */
-const PRIMARY_BUSINESS_GEO = {
-  "@type": "GeoCoordinates",
-  latitude: -33.9768,
-  longitude: 18.4686,
-} as const;
-
 /**
  * Core LocalBusiness node for Shalean — used on homepage graph and standalone on money pages.
  * Name, phone, address and opening hours are aligned to the live Google Business Profile.
+ * Unverified approximate geo coordinates are intentionally omitted.
  * Public email is site-owned because GBP does not expose an email field.
  *
  * Do not attach Google Business Profile aggregate ratings here. Those ratings are displayed
@@ -49,7 +43,6 @@ export function buildPrimaryLocalBusinessBase(): Record<string, unknown> {
       "@type": "PostalAddress",
       ...PUBLIC_BUSINESS_ADDRESS,
     },
-    geo: { ...PRIMARY_BUSINESS_GEO },
     areaServed: { ...PUBLIC_BUSINESS_SERVICE_AREA },
     knowsAbout: [
       "House cleaning",
