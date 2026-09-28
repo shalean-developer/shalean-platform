@@ -57,7 +57,7 @@ const HUB_SERVICE_SLUGS: CapeTownSeoServiceSlug[] = [
 
 const title = "Compare Cleaning Services in Cape Town | Shalean";
 const description = clampMetaDescription(
-  "Compare Regular Cleaning, Deep Cleaning, Move In/Out Cleaning, Airbnb Cleaning, Office Cleaning and Carpet Cleaning in Cape Town. Regular Cleaning is our standard home cleaning option for routine upkeep.",
+  "Compare Regular, Deep, Move In/Out, Airbnb, Office and Carpet Cleaning in Cape Town. Regular Cleaning is our standard home cleaning option for routine upkeep.",
 );
 const servicesItemListDescription = clampMetaDescription(
   "Main Shalean cleaning service guides for Cape Town customers.",
