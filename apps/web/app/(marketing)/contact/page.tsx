@@ -38,6 +38,7 @@ import {
   customerSupportWhatsAppHref,
 } from "@/lib/site/customerSupport";
 import {
+  PUBLIC_BUSINESS_ADDRESS_LABEL,
   PUBLIC_BUSINESS_EMAIL,
   PUBLIC_BUSINESS_HOURS_LABEL,
 } from "@/lib/site/publicBusinessIdentity";
@@ -133,7 +134,7 @@ const journeyCards: JourneyCard[] = [
   {
     icon: MessageCircle,
     title: "Complaints & feedback",
-    description: "Tell us what went wrong—we aim to respond the same day during office hours.",
+    description: "Tell us what went wrong—we aim to respond as quickly as possible.",
     href: buildCustomerSupportWhatsAppUrl("Hi, I'd like to share feedback about my recent Shalean clean."),
     cta: "WhatsApp us",
     external: true,
@@ -161,7 +162,7 @@ const contactMethods = [
     value: CUSTOMER_SUPPORT_TELEPHONE_DISPLAY,
     href: CUSTOMER_SUPPORT_TELEPHONE_TEL,
     external: false,
-    note: "Same-day response during office hours",
+    note: "Call Shalean directly",
   },
   {
     icon: MessageCircle,
@@ -276,7 +277,7 @@ export default function ContactPage() {
                   <strong className="font-semibold text-foreground">one business day</strong>.
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Service area: Cape Town, South Africa. For privacy enquiries:{" "}
+                  Business address: {PUBLIC_BUSINESS_ADDRESS_LABEL}. Service area: Cape Town, South Africa. For privacy enquiries:{" "}
                   <a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}`} className="text-blue-600 hover:underline">
                     {CUSTOMER_SUPPORT_EMAIL}
                   </a>
