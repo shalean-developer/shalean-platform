@@ -113,15 +113,6 @@ export function SeoCapeTownServicePage({ slug, trustStats, heroVariant = "legacy
   };
   if (sameAs.length > 0) localBusinessNode.sameAs = sameAs;
 
-  // Emit AggregateRating only when live trustStats are present — hardcoded GBP constants are unverified.
-  if (slug === "standard-cleaning-cape-town" && trustStats && trustStats.reviewCount > 0) {
-    localBusinessNode.aggregateRating = {
-      "@type": "AggregateRating",
-      ratingValue: String(Math.round(trustStats.avgRating * 10) / 10),
-      reviewCount: String(trustStats.reviewCount),
-    };
-  }
-
   const mergedStandardFaqs =
     slug === "standard-cleaning-cape-town"
       ? dedupeFaqsByQuestion(data.faqs, STANDARD_CLEANING_SNIPPET_FAQS).slice(0, 6)
@@ -152,7 +143,7 @@ export function SeoCapeTownServicePage({ slug, trustStats, heroVariant = "legacy
     })),
   };
 
-  /** aggregateRating on money page uses verified GBP aggregate or live review RPC stats when present. */
+  /** Google Business Profile ratings remain visible UI trust evidence, not self-authored LocalBusiness review markup. */
   const jsonLdGraph: Record<string, unknown>[] = [
     localBusinessNode,
     {
