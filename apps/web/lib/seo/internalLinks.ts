@@ -114,7 +114,7 @@ export function getBlogIntentServicePair(kind: BlogServiceLinkKind, slugKey: str
   }
   if (kind === "carpet") {
     return [
-      link("carpet-cleaning-cape-town", "carpet", "Carpet cleaning"),
+      link("carpet-cleaning-cape-town", "carpet", "Carpet cleaning services"),
       link("standard-cleaning-cape-town", "standard", "Regular home cleaning"),
     ];
   }
@@ -256,7 +256,7 @@ export function getBlogAboveFoldServiceLink(slug: string): SeoInternalLink {
   if (kind === "carpet") {
     return {
       href: CAPE_TOWN_SERVICE_SEO["carpet-cleaning-cape-town"].path,
-      anchor: pickServiceLocationAnchor(`${key}|fold|carpet`, "Professional carpet cleaning", city),
+      anchor: pickServiceLocationAnchor(`${key}|fold|carpet`, "Carpet cleaning services", city),
     };
   }
   if (kind === "deep") {
