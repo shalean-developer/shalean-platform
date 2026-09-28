@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildContactPageJsonLdGraph } from "@/lib/seo/contactPageJsonLd";
 import {
@@ -17,6 +19,10 @@ import {
   PUBLIC_BUSINESS_OPENING_HOURS_SPECIFICATION,
   PUBLIC_BUSINESS_SERVICE_AREA,
 } from "@/lib/site/publicBusinessIdentity";
+
+function read(rel: string): string {
+  return readFileSync(join(process.cwd(), rel), "utf8");
+}
 
 describe("SEO-E2E-05 LocalBusiness schema verification", () => {
   it("locks the GBP-backed identity fields", () => {
@@ -57,6 +63,7 @@ describe("SEO-E2E-05 LocalBusiness schema verification", () => {
     ]);
     expect(business.areaServed).toEqual(PUBLIC_BUSINESS_SERVICE_AREA);
     expect(business.sameAs).toEqual(getBrandSameAsForJsonLd());
+    expect(business).not.toHaveProperty("geo");
   });
 
   it("keeps money-page LocalBusiness service area anchored to Cape Town before suburb enrichment", () => {
@@ -84,4 +91,25 @@ describe("SEO-E2E-05 LocalBusiness schema verification", () => {
   it("uses the same centralized Cape Town service area on Service schema helpers", () => {
     expect(capeTownAdministrativeServiceArea()).toEqual(PUBLIC_BUSINESS_SERVICE_AREA);
   });
+
+  it("reuses the canonical LocalBusiness builder on public service, Airbnb and homepage schema", () => {
+    const servicePage = read("components/seo/SeoCapeTownServicePage.tsx");
+    const airbnbArea = read("components/seo/AirbnbAreaServiceLanding.tsx");
+    const homepage = read("components/home/StructuredData.tsx");
+
+    expect(servicePage).toContain("buildPrimaryLocalBusinessBase()");
+    expect(airbnbArea).toContain("buildPrimaryLocalBusinessBase()");
+    expect(homepage).toContain("buildPrimaryLocalBusinessBase()");
+
+    expect(servicePage).not.toContain('"@type": "LocalBusiness"');
+    expect(airbnbArea).not.toContain('"@type": "LocalBusiness"');
+    expect(homepage).not.toContain("areaServed,\n    serviceType");
+  });
+
+  it("keeps the broader About entity on the same Cape Town service-area contract", () => {
+    const about = read("components/about/AboutPageView.tsx");
+    expect(about).toContain("PUBLIC_BUSINESS_SERVICE_AREA");
+    expect(about).not.toContain('name: "South Africa"');
+  });
+
 });
