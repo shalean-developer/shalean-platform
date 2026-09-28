@@ -136,5 +136,18 @@ export function resolveLegacyStage19IntentPath(pathname: string): LegacyPhase1Re
   const intent = parts[0] ?? "";
   const suburb = parts[1] ?? "";
   if (!normalizeLegacyGrowthIntent(intent)) return null;
+
+  // Preserve the long-standing metro alias: this is a service-intent URL, not a suburb hub.
+  if (
+    intent === "cleaning-services" &&
+    (normalizeLegacyCitySlug(suburb) === "cape-town" ||
+      normalizeLegacyCitySlug(suburb) === "capetown")
+  ) {
+    return {
+      type: "redirect",
+      pathname: "/services/standard-cleaning-cape-town",
+    };
+  }
+
   return resolveGrowthIntentAndSuburb(intent, suburb);
 }
