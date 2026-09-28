@@ -5,7 +5,6 @@ import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { getAreaProgrammaticBlogLinksForCapeTownService } from "@/lib/blog/programmaticPosts";
 import { marketingStickyCtaMainPadding } from "@/lib/marketing/marketingMobileLayout";
-import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import type { CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
 import {
   WindowCleaningPricingTrustSection,
@@ -35,13 +34,12 @@ import { SITE_ORIGIN, absoluteCanonicalUrl } from "@/lib/site/canonical";
 
 type Props = {
   slug: CapeTownSeoServiceSlug;
-  trustStats: PublicReviewBannerStats | null;
   initialLocationSlug?: string | null;
   heroVariant?: "legacy" | "primary";
   extensionSlots?: PrimaryCapeTownServiceExtensionSlots;
 };
 
-export function SeoCapeTownServicePage({ slug, trustStats: _trustStats, heroVariant = "legacy", extensionSlots }: Props) {
+export function SeoCapeTownServicePage({ slug, heroVariant = "legacy", extensionSlots }: Props) {
   const data = CAPE_TOWN_SERVICE_SEO[slug];
   const bookingPath = "/book";
   const introHeading = data.introSectionHeading ?? "How this service works in Cape Town";
