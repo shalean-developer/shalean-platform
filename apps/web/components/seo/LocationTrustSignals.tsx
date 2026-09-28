@@ -17,7 +17,7 @@ export function LocationTrustSignals({ location, trustStats: _trustStats }: Prop
   const googleCount = GOOGLE_BUSINESS_REVIEWS.count;
 
   const householdLine =
-    `Trusted by ${googleCount}+ Google-reviewed Cape Town customers—including recurring visits in ${name}.`;
+    `Trusted by ${googleCount}+ Google reviewers across Cape Town.`;
 
   const ratingLine =
     `Rated ★${googleAvg} on Google from ${googleCount}+ reviews.`;
