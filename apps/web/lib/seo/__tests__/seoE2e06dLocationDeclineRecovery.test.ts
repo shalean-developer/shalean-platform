@@ -50,6 +50,18 @@ describe("SEO-E2E-06D location decline recovery", () => {
     }
   });
 
+  it("keeps Hout Bay pricing copy aligned with actual quote inputs", () => {
+    const copy =
+      LOCATION_SEO_PAGES["hout-bay-cleaning-services"].rankingPricingParagraph?.toLowerCase() ?? "";
+
+    expect(copy).toContain("bedrooms");
+    expect(copy).toContain("bathrooms");
+    expect(copy).toContain("price-affecting extras");
+    expect(copy).toContain("do not change the locked quote");
+    expect(copy).not.toContain("access time");
+    expect(copy).not.toContain("linen work");
+  });
+
   it("keeps canonical location ownership unchanged", () => {
     expect(LOCATION_SEO_PAGES["hout-bay-cleaning-services"].path).toBe(
       "/locations/hout-bay-cleaning-services",
