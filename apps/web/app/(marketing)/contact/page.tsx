@@ -37,6 +37,10 @@ import {
   buildCustomerSupportWhatsAppUrl,
   customerSupportWhatsAppHref,
 } from "@/lib/site/customerSupport";
+import {
+  PUBLIC_BUSINESS_EMAIL,
+  PUBLIC_BUSINESS_HOURS_LABEL,
+} from "@/lib/site/publicBusinessIdentity";
 import { buildContactPageJsonLdGraph } from "@/lib/seo/contactPageJsonLd";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
@@ -47,7 +51,7 @@ const CANONICAL = absoluteCanonicalUrl(PATH);
 const CONTACT_TITLE = clipSerpTitle("Contact Shalean | Cape Town Cleaning Support");
 
 const CONTACT_META_DESC = clampMetaDescription(
-  "Contact Shalean Cleaning Services in Cape Town—call, WhatsApp, or email for booking help, quotes, and support. Mon–Sat, 8am–6pm.",
+  "Contact Shalean Cleaning Services in Cape Town—call, WhatsApp, or email for booking help, quotes, and support. Open 24 hours, 7 days a week.",
 );
 
 export const metadata: Metadata = {
@@ -79,7 +83,7 @@ export const metadata: Metadata = {
   },
 };
 
-const BUSINESS_EMAIL = "hello@shalean.co.za";
+const BUSINESS_EMAIL = PUBLIC_BUSINESS_EMAIL;
 
 type JourneyCard = {
   icon: LucideIcon;
@@ -191,8 +195,8 @@ export default function ContactPage() {
             Contact Shalean Cleaning Services in Cape Town
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground">
-            Choose the path that matches your question—new bookings, account help, payments, or general support. Our
-            Cape Town team is here Mon–Sat, 8am–6pm.
+            Choose the path that matches your question—new bookings, account help, payments, or general support. Shalean
+            is open 24 hours, 7 days a week.
           </p>
 
           <section className="mt-10" aria-labelledby="journeys-heading">
@@ -263,11 +267,12 @@ export default function ContactPage() {
               <Clock className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" aria-hidden />
               <div>
                 <h2 id="hours-heading" className="font-semibold text-foreground">
-                  Office hours & response times
+                  Availability & response times
                 </h2>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  <strong className="font-semibold text-foreground">Mon–Sat, 8am–6pm</strong> (SAST). Phone and
-                  WhatsApp enquiries are typically answered the same day during these hours. Email replies within{" "}
+                  <strong className="font-semibold text-foreground">{PUBLIC_BUSINESS_HOURS_LABEL}</strong> (SAST).
+                  Online booking is available at any time. Phone and WhatsApp enquiries are handled as quickly as possible,
+                  and email replies are typically sent within{" "}
                   <strong className="font-semibold text-foreground">one business day</strong>.
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
