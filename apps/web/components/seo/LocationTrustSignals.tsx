@@ -11,22 +11,16 @@ type Props = {
 /**
  * E-E-A-T strip for programmatic hubs — uses verified Google aggregate + operational facts only.
  */
-export function LocationTrustSignals({ location, trustStats }: Props) {
+export function LocationTrustSignals({ location, trustStats: _trustStats }: Props) {
   const { name } = location;
   const googleAvg = GOOGLE_BUSINESS_REVIEWS.rating;
   const googleCount = GOOGLE_BUSINESS_REVIEWS.count;
-  const rpcAvg = trustStats?.avgRating != null ? trustStats.avgRating.toFixed(1) : null;
-  const rpcCount = trustStats?.reviewCount;
 
   const householdLine =
-    rpcCount != null && rpcCount >= 50
-      ? `Trusted by ${rpcCount}+ verified bookings near ${name} (city-wide Shalean data).`
-      : `Trusted by ${googleCount}+ Google-reviewed Cape Town customers—including recurring visits in ${name}.`;
+    `Trusted by ${googleCount}+ Google-reviewed Cape Town customers—including recurring visits in ${name}.`;
 
   const ratingLine =
-    rpcAvg && rpcCount != null
-      ? `Rated ★${rpcAvg}+ from ${rpcCount}+ verified booking reviews.`
-      : `Rated ★${googleAvg}+ on Google from ${googleCount}+ local reviews.`;
+    `Rated ★${googleAvg} on Google from ${googleCount}+ reviews.`;
 
   return (
     <section
