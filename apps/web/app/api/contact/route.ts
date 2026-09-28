@@ -109,8 +109,6 @@ export async function POST(request: Request) {
   if (error) {
     console.error("[contact-form] send failed", {
       error: error.message,
-      name,
-      email,
       topic,
     });
     return NextResponse.json(
