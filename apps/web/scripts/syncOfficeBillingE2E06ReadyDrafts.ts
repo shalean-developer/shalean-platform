@@ -14,6 +14,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveZohoCustomerContactForMonthlyInvoice } from "../lib/zoho/resolveZohoCustomerContact";
+import { resolveMonthlyInvoiceCustomerEmail } from "../lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail";
 import { todayJohannesburg } from "../lib/recurring/johannesburgCalendar";
 
 const PROD_REF = "paqjwfulwywtsyyvdxrq";
@@ -24,7 +25,6 @@ const TARGET_IDS = [
   "36c8f4db-ee8b-4357-b856-2c669a66afc2",
   "37e728fa-ad59-4c6b-ad04-9790ba55c96e",
   "3d2ad4ee-cba8-48ac-8177-f0ca71f4a608",
-  "41f5902c-7318-48bb-b05b-48a4233a3303",
   "49ce355a-ad9d-4c0d-8d28-29c979e1e652",
   "4effde1e-c1c1-41d0-ae8d-76f312642913",
   "61a04a66-106d-4d51-8c49-08fd948ed55b",
@@ -87,6 +87,12 @@ async function precheck(admin: SupabaseClient) {
       customerId: String(row.customer_id),
     });
     if (!contact.ok) fail(`${id} contact resolution failed: ${contact.error}`);
+
+    const outboundEmail = await resolveMonthlyInvoiceCustomerEmail(admin, {
+      invoiceId: id,
+      customerId: String(row.customer_id),
+    });
+    if (!outboundEmail) fail(`${id} customer outbound email missing`);
   }
 
   return byId;
@@ -103,12 +109,18 @@ async function main() {
   if (!process.env.ZOHO_CLIENT_ID || !process.env.ZOHO_REFRESH_TOKEN || !process.env.ZOHO_ORGANIZATION_ID) {
     fail("missing Zoho configuration");
   }
+  if (!String(process.env.PAYSTACK_SECRET_KEY ?? "").trim()) {
+    fail("PAYSTACK_SECRET_KEY missing");
+  }
+  if (!String(process.env.RESEND_API_KEY ?? "").trim()) {
+    fail("RESEND_API_KEY missing");
+  }
   if (apply && confirmArg !== CONFIRM) fail(`apply requires --confirm=${CONFIRM}`);
 
   const admin: SupabaseClient = createClient(url, key, { auth: { persistSession: false } });
   const byId = await precheck(admin);
 
-  console.log(`PRECHECK_PASS targets=${TARGET_IDS.length} drafts=${TARGET_IDS.length} positive=${TARGET_IDS.length} contacts=${TARGET_IDS.length}`);
+  console.log(`PRECHECK_PASS targets=${TARGET_IDS.length} drafts=${TARGET_IDS.length} positive=${TARGET_IDS.length} contacts=${TARGET_IDS.length} outbound_emails=${TARGET_IDS.length} paystack=SET resend=SET`);
   console.log(apply ? "MODE=APPLY" : "MODE=DRY_RUN");
 
   if (!apply) {
@@ -142,6 +154,7 @@ async function main() {
       forceEarlySend: false,
       actor: "script/office-billing-e2e-06",
       source: "script/office-billing-e2e-06",
+      resumePartialFinalize: true,
     });
 
     console.log(`${id}: ${JSON.stringify(result)}`);
