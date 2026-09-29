@@ -223,6 +223,10 @@ export default function OfficeBillingPage() {
     const nextTab = parseTabParam(searchParams.get("tab"));
     setTab((current) => (current === nextTab ? current : nextTab));
   }, [searchParams]);
+
+  useEffect(() => {
+    setPagination((current) => ({ ...current, page: 1 }));
+  }, [q, tab]);
   const syncDocument = useCallback(
     async (doc: AdminBillingDocumentRow) => {
       const key = `${doc.kind}:${doc.id}`;
