@@ -28,6 +28,7 @@ const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVIC
 const apply = process.argv.includes("--apply");
 const repairAllContacts = process.argv.includes("--repair-all-contacts");
 const includeDrafts = process.argv.includes("--include-drafts");
+const usePaymentTransaction = process.argv.includes("--use-payment-transaction");
 const idsArg = process.argv.find((a) => a.startsWith("--ids="));
 const onlyIds = new Set((idsArg?.slice("--ids=".length) ?? "").split(",").map((x) => x.trim()).filter(Boolean));
 const monthArg = process.argv.find((a) => a.startsWith("--month="));
@@ -116,6 +117,10 @@ async function main() {
     console.error("Draft/repair flags cannot be combined with --ids; refusing bounded run.");
     process.exit(1);
   }
+  if (usePaymentTransaction && onlyIds.size === 0) {
+    console.error("--use-payment-transaction requires --ids; refusing unbounded payment-history run.");
+    process.exit(1);
+  }
   if (includeDrafts) {
     console.log(`Including draft monthly invoices for month=${monthFilter ?? "any"}`);
   }
@@ -183,13 +188,45 @@ async function main() {
     const isDraft = status === "draft";
 
     if (!apply) {
-      const payNote = isDraft
+      let payNote = isDraft
         ? " (draft, unpaid)"
         : paidZar > 0
           ? ` + mark paid R${paidZar}`
           : status === "sent"
             ? " (unpaid)"
             : "";
+
+      if (!isDraft && paidZar > 0 && usePaymentTransaction) {
+        const { data: txRows, error: txErr } = await admin
+          .from("payment_transactions")
+          .select("id, gateway, gateway_reference, amount_cents, paid_at, external_accounting_id")
+          .eq("entity_type", "monthly_invoice")
+          .eq("entity_id", row.id);
+
+        if (txErr || (txRows ?? []).length !== 1) {
+          failed += 1;
+          console.error(`monthly ${row.id}: dry-run payment transaction precheck failed`);
+          continue;
+        }
+        const tx = txRows![0] as {
+          gateway: string | null;
+          amount_cents: number | null;
+          paid_at: string | null;
+          external_accounting_id: string | null;
+        };
+        if (
+          String(tx.gateway ?? "").toLowerCase() !== "paystack" ||
+          Math.round(Number(tx.amount_cents ?? 0)) !== paidCents ||
+          !tx.paid_at ||
+          String(tx.external_accounting_id ?? "").trim()
+        ) {
+          failed += 1;
+          console.error(`monthly ${row.id}: dry-run payment transaction contract failed`);
+          continue;
+        }
+        payNote += ` on ${tx.paid_at.slice(0, 10)} (link local payment transaction)`;
+      }
+
       console.log(
         `[dry-run] would invoice ${row.id.slice(0, 8)} — ${monthLabel} — R${balanceZar} — ${contact.name} <${contact.email ?? "no-email"}>${payNote}`,
       );
@@ -245,11 +282,73 @@ async function main() {
     );
 
     if (!isDraft && paidZar > 0) {
+      let paymentDate = invoiceDate;
+      let paymentReference = row.paystack_reference ?? row.id;
+      let paymentTransactionId: string | null = null;
+
+      if (usePaymentTransaction) {
+        const { data: txRows, error: txErr } = await admin
+          .from("payment_transactions")
+          .select("id, gateway, gateway_reference, amount_cents, paid_at, external_accounting_id")
+          .eq("entity_type", "monthly_invoice")
+          .eq("entity_id", row.id);
+
+        if (txErr) {
+          failed += 1;
+          console.error(`monthly ${row.id}: payment transaction lookup failed — ${txErr.message}`);
+          continue;
+        }
+        if ((txRows ?? []).length !== 1) {
+          failed += 1;
+          console.error(`monthly ${row.id}: expected exactly one payment transaction, found ${txRows?.length ?? 0}`);
+          continue;
+        }
+
+        const tx = txRows![0] as {
+          id: string;
+          gateway: string | null;
+          gateway_reference: string | null;
+          amount_cents: number | null;
+          paid_at: string | null;
+          external_accounting_id: string | null;
+        };
+
+        if (String(tx.gateway ?? "").toLowerCase() !== "paystack") {
+          failed += 1;
+          console.error(`monthly ${row.id}: payment transaction gateway is ${tx.gateway}`);
+          continue;
+        }
+        if (Math.round(Number(tx.amount_cents ?? 0)) !== paidCents) {
+          failed += 1;
+          console.error(`monthly ${row.id}: payment transaction amount mismatch`);
+          continue;
+        }
+        if (String(tx.external_accounting_id ?? "").trim()) {
+          failed += 1;
+          console.error(`monthly ${row.id}: payment transaction already linked to accounting ${tx.external_accounting_id}`);
+          continue;
+        }
+        if (!tx.paid_at) {
+          failed += 1;
+          console.error(`monthly ${row.id}: payment transaction missing paid_at`);
+          continue;
+        }
+
+        paymentDate = tx.paid_at.slice(0, 10);
+        paymentReference = tx.gateway_reference ?? paymentReference;
+        paymentTransactionId = tx.id;
+      }
+
+      if (!apply) {
+        // Dry-run reaches this point only when the invoice create branch is skipped above,
+        // so payment-history details are logged before continuing there instead.
+      }
+
       const payRes = await markZohoInvoicePaid({
         zohoInvoiceId: createRes.zohoInvoiceId,
         amountZar: paidZar,
-        paymentDate: invoiceDate,
-        reference: row.paystack_reference ?? row.id,
+        paymentDate,
+        reference: paymentReference,
         customerEmail: contact.email,
         customerName: contact.name,
       });
@@ -258,6 +357,28 @@ async function main() {
         console.error(`monthly ${row.id}: mark paid failed — ${payRes.error}`);
         continue;
       }
+
+      if (usePaymentTransaction && paymentTransactionId) {
+        const now = new Date().toISOString();
+        const { error: txUpdateError } = await admin
+          .from("payment_transactions")
+          .update({
+            external_accounting_id: payRes.paymentId,
+            sync_status: "synced",
+            last_synced_at: now,
+            sync_errors: null,
+          })
+          .eq("id", paymentTransactionId);
+
+        if (txUpdateError) {
+          failed += 1;
+          console.error(
+            `monthly ${row.id}: Zoho payment ${payRes.paymentId} created but payment transaction link failed — ${txUpdateError.message}`,
+          );
+          continue;
+        }
+      }
+
       markedPaid += 1;
     }
 
