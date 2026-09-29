@@ -360,6 +360,11 @@ export default function OfficeBillingPage() {
         </button>
       </div>
 
+      {loadError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          Billing data could not be loaded completely. {loadError}
+        </div>
+      ) : null}
       {syncError ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{syncError}</div>
       ) : null}
