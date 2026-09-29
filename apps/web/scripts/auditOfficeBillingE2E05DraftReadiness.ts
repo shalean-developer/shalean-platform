@@ -9,7 +9,7 @@
  * - READY
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import {
   compareYmd,
@@ -42,7 +42,7 @@ function planOverlapsInvoiceMonth(
 }
 
 async function assessReadinessLocally(
-  admin: ReturnType<typeof createClient>,
+  admin: SupabaseClient,
   params: { invoiceId: string; customerId: string; month: string; todayYmd: string },
 ): Promise<{ ready: boolean; reason?: string }> {
   const { data: invoiceBookings, error: invErr } = await admin
