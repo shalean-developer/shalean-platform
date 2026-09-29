@@ -12,7 +12,6 @@ import {
 } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
 import { initializePaystackForMonthlyInvoice } from "@/lib/monthlyInvoice/initializePaystackForMonthlyInvoice";
 import { sendMonthlyInvoiceEmail } from "@/lib/monthlyInvoice/sendMonthlyInvoiceEmail";
-import { settleMonthlyInvoiceChildren } from "@/lib/monthlyInvoice/settleMonthlyInvoiceChildren";
 import { syncMonthlyInvoiceToZohoBooks } from "@/lib/monthlyInvoice/syncMonthlyInvoiceToZohoBooks";
 import { markZohoInvoiceSent } from "@/lib/zoho/zohoBooksService";
 import { resolveMonthlyInvoiceCustomerEmail } from "@/lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail";
@@ -153,6 +152,7 @@ export async function finalizeAndSendMonthlyInvoice(
       .eq("monthly_invoice_id", row.id)
       .neq("status", "cancelled");
 
+    const { settleMonthlyInvoiceChildren } = await import("@/lib/monthlyInvoice/settleMonthlyInvoiceChildren");
     const childSettlement = await settleMonthlyInvoiceChildren(admin, {
       invoiceId: row.id,
       children: (lines ?? []) as {
