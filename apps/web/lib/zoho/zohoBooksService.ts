@@ -58,23 +58,33 @@ async function findContactId(options: {
   const contactName = String(options.contactName ?? "").trim();
 
   if (billingEmail) {
+    const exactEmailRes = await zohoBooksClient.get<ZohoContactListResponse>(
+      `/contacts?contact_type=customer&filter_by=Status.All&email=${encodeURIComponent(billingEmail)}`,
+    );
+    const exactEmailContacts = exactEmailRes.contacts ?? [];
+    const byEmail = exactEmailContacts.find(
+      (c) => c.email?.trim().toLowerCase() === billingEmail.toLowerCase(),
+    );
+    if (byEmail) return byEmail.contact_id;
+
+    // Keep the broader text lookup for legacy rows where contact_name was
+    // incorrectly stored as the email string.
     const res = await zohoBooksClient.get<ZohoContactListResponse>(
-      `/contacts?contact_type=customer&search_text=${encodeURIComponent(billingEmail)}`,
+      `/contacts?contact_type=customer&filter_by=Status.All&search_text=${encodeURIComponent(billingEmail)}`,
     );
     const contacts = res.contacts ?? [];
-    const byEmail = contacts.find((c) => c.email?.toLowerCase() === billingEmail.toLowerCase());
-    if (byEmail) return byEmail.contact_id;
-    // Legacy rows where contact_name was wrongly set to the email string.
     const legacy = contacts.find((c) => c.contact_name?.toLowerCase() === billingEmail.toLowerCase());
     if (legacy) return legacy.contact_id;
   }
 
   if (contactName.length >= 2) {
     const res = await zohoBooksClient.get<ZohoContactListResponse>(
-      `/contacts?contact_type=customer&search_text=${encodeURIComponent(contactName)}`,
+      `/contacts?contact_type=customer&filter_by=Status.All&contact_name=${encodeURIComponent(contactName)}`,
     );
     const contacts = res.contacts ?? [];
-    const exact = contacts.find((c) => c.contact_name?.trim().toLowerCase() === contactName.toLowerCase());
+    const exact = contacts.find(
+      (c) => c.contact_name?.trim().toLowerCase() === contactName.toLowerCase(),
+    );
     if (exact) return exact.contact_id;
   }
 
