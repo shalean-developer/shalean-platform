@@ -29,6 +29,8 @@ const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVIC
 const apply = process.argv.includes("--apply");
 const repairAllContacts = process.argv.includes("--repair-all-contacts");
 const includeDrafts = process.argv.includes("--include-drafts");
+const idsArg = process.argv.find((a) => a.startsWith("--ids="));
+const onlyIds = new Set((idsArg?.slice("--ids=".length) ?? "").split(",").map((x) => x.trim()).filter(Boolean));
 const monthArg = process.argv.find((a) => a.startsWith("--month="));
 const monthFilter = monthArg?.slice("--month=".length) ?? (includeDrafts ? todayYmdJhb().slice(0, 7) : null);
 
@@ -104,6 +106,11 @@ async function main() {
   const admin: SupabaseClient = createClient(url, key, { auth: { persistSession: false } });
 
   console.log(apply ? "Mode: APPLY (will write to Zoho + Supabase)" : "Mode: DRY-RUN (no writes)");
+  if (onlyIds.size > 0) console.log(`Bounded monthly invoice ids: ${onlyIds.size}`);
+  if (onlyIds.size > 0 && (includeDrafts || repairAllContacts)) {
+    console.error("Draft/repair flags cannot be combined with --ids; refusing bounded run.");
+    process.exit(1);
+  }
   if (includeDrafts) {
     console.log(`Including draft monthly invoices for month=${monthFilter ?? "any"}`);
   }
@@ -139,6 +146,7 @@ async function main() {
   for (const raw of data ?? []) {
     scanned += 1;
     const row = raw as Row;
+    if (onlyIds.size > 0 && !onlyIds.has(row.id)) continue;
     const status = String(row.status ?? "").toLowerCase();
     if (!isEligibleStatus(row)) {
       if (status === "draft") skippedDraft += 1;
