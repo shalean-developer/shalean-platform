@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { markSyncSucceeded } from "@/lib/accounting/accountingSyncQueue";
 import { upsertInvoiceSyncMetadata } from "@/lib/accounting/syncInvoiceMetadata";
 import { syncMonthlyInvoiceToZohoBooks } from "@/lib/monthlyInvoice/syncMonthlyInvoiceToZohoBooks";
-import { syncSalesDocumentToZoho } from "@/lib/salesDocument/syncSalesDocumentToZoho";
+import { salesDocumentLineItemsToZoho, type SalesDocumentLineItem } from "@/lib/salesDocument/types";
 import {
   createZohoInvoice,
   getZohoInvoice,
@@ -49,6 +49,11 @@ export type InvE2eRepairItemResult = {
   invoice_number?: string | null;
   error?: string;
 };
+
+export function zohoSafePaymentReference(value: string | null | undefined, fallback: string): string {
+  const raw = String(value ?? "").trim() || fallback;
+  return raw.slice(0, 50);
+}
 
 function ymdJhb(value: string | null | undefined): string {
   const d = value ? new Date(value) : new Date();
@@ -141,7 +146,7 @@ async function repairBooking(
     const { data, error } = await admin
       .from("bookings")
       .select(
-        "id, customer_id, user_id, customer_email, customer_name, customer_phone, booking_snapshot, service, date, location, suburb, total_paid_zar, amount_paid_cents, payment_completed_at, is_monthly_billing_booking, sales_document_id, payment_method, is_test, zoho_invoice_id, zoho_invoice_number",
+        "id, customer_id, customer_email, customer_name, customer_phone, booking_snapshot, service, date, location, suburb, total_paid_zar, amount_paid_cents, payment_completed_at, is_monthly_billing_booking, sales_document_id, payment_method, is_test, zoho_invoice_id, zoho_invoice_number",
       )
       .eq("id", bookingId)
       .maybeSingle();
@@ -199,7 +204,7 @@ async function repairBooking(
         zohoInvoiceId: linked,
         amountZar: expectedAmountCents / 100,
         paymentDate,
-        reference: tx.gateway_reference ?? bookingId,
+        reference: zohoSafePaymentReference(tx.gateway_reference, bookingId),
         customerEmail: contact.email,
         customerName: contact.name,
       });
@@ -245,7 +250,7 @@ async function repairBooking(
       zohoInvoiceId: created.zohoInvoiceId,
       amountZar: expectedAmountCents / 100,
       paymentDate,
-      reference: tx.gateway_reference ?? bookingId,
+      reference: zohoSafePaymentReference(tx.gateway_reference, bookingId),
       customerEmail: contact.email,
       customerName: contact.name,
     });
@@ -328,7 +333,7 @@ async function repairMonthly(admin: SupabaseClient): Promise<InvE2eRepairItemRes
       zohoInvoiceId: zohoId,
       amountZar: INV_E2E_01D_MONTHLY_AMOUNT_CENTS / 100,
       paymentDate: ymdJhb(tx.paid_at),
-      reference: tx.gateway_reference ?? data.paystack_reference ?? id,
+      reference: zohoSafePaymentReference(tx.gateway_reference ?? data.paystack_reference, id),
       customerEmail: contact.email,
       customerName: contact.name,
     });
@@ -357,7 +362,7 @@ async function repairSalesDocument(admin: SupabaseClient): Promise<InvE2eRepairI
   try {
     const { data, error } = await admin
       .from("sales_documents")
-      .select("id, document_type, status, total_cents, amount_paid_cents, customer_email, customer_name, zoho_invoice_id, zoho_invoice_number")
+      .select("id, document_type, status, total_cents, amount_paid_cents, customer_email, customer_name, customer_phone, line_items, currency, due_date, notes, created_at, zoho_invoice_id, zoho_invoice_number")
       .eq("id", id)
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -374,18 +379,43 @@ async function repairSalesDocument(admin: SupabaseClient): Promise<InvE2eRepairI
     let zohoId = String(data.zoho_invoice_id ?? "").trim();
     let invoiceNumber = String(data.zoho_invoice_number ?? "").trim() || null;
     if (!zohoId) {
-      const synced = await syncSalesDocumentToZoho(admin, id);
-      if (!synced.ok) throw new Error(`create_failed:${synced.error}`);
-      const { data: fresh } = await admin
+      const lineItems = Array.isArray(data.line_items)
+        ? salesDocumentLineItemsToZoho(data.line_items as SalesDocumentLineItem[])
+        : [];
+      if (lineItems.length === 0) throw new Error("no_line_items");
+
+      const invoiceDate = ymdJhb(data.created_at ?? tx.paid_at);
+      const storedDueDate = String(data.due_date ?? "").slice(0, 10);
+      const dueDate = /^\d{4}-\d{2}-\d{2}$/.test(storedDueDate) && storedDueDate >= invoiceDate
+        ? storedDueDate
+        : invoiceDate;
+
+      const created = await createZohoInvoice({
+        referenceId: id,
+        orderKind: "sales",
+        customerEmail: data.customer_email ?? undefined,
+        customerName: data.customer_name ?? undefined,
+        customerPhone: data.customer_phone ?? undefined,
+        lineItems,
+        invoiceDate,
+        dueDate,
+        notes: [data.notes, `INV-E2E-01H targeted historical repair for ${id}`].filter(Boolean).join("\n"),
+        currencyCode: String(data.currency ?? "ZAR"),
+      });
+      if (!created.ok) throw new Error(`create_failed:${created.error}`);
+
+      const { error: linkError } = await admin
         .from("sales_documents")
-        .select("zoho_invoice_id, zoho_invoice_number, customer_email, customer_name")
+        .update({
+          zoho_invoice_id: created.zohoInvoiceId,
+          zoho_invoice_number: created.invoiceNumber,
+        })
         .eq("id", id)
-        .maybeSingle();
-      if (!fresh?.zoho_invoice_id) throw new Error("link_missing_after_create");
-      zohoId = fresh.zoho_invoice_id;
-      invoiceNumber = fresh.zoho_invoice_number ?? null;
-      data.customer_email = fresh.customer_email;
-      data.customer_name = fresh.customer_name;
+        .is("zoho_invoice_id", null);
+      if (linkError) throw new Error(`link_failed:${linkError.message}`);
+
+      zohoId = created.zohoInvoiceId;
+      invoiceNumber = created.invoiceNumber ?? null;
     }
 
     const current = await readAndValidateInvoice(zohoId, INV_E2E_01D_SALES_DOCUMENT_AMOUNT_CENTS, false);
@@ -400,7 +430,7 @@ async function repairSalesDocument(admin: SupabaseClient): Promise<InvE2eRepairI
       zohoInvoiceId: zohoId,
       amountZar: INV_E2E_01D_SALES_DOCUMENT_AMOUNT_CENTS / 100,
       paymentDate: ymdJhb(tx.paid_at),
-      reference: tx.gateway_reference ?? id,
+      reference: zohoSafePaymentReference(tx.gateway_reference, id),
       customerEmail: data.customer_email ?? undefined,
       customerName: data.customer_name ?? undefined,
     });
