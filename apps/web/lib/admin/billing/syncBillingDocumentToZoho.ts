@@ -98,9 +98,17 @@ async function syncMonthlyInvoiceRowToZoho(
     const zohoInv = await getZohoInvoice(zohoInvoiceId);
     if (zohoInv.ok && zohoInv.balanceCents <= 0) return null;
 
-    const amountZar = zohoInv.ok
-      ? Math.min(paidCents, zohoInv.balanceCents) / 100
-      : paidCents / 100;
+    if (!zohoInv.ok) {
+      return { ok: false, error: `zoho_invoice_lookup_failed:${zohoInv.error}` };
+    }
+    if (paidCents > zohoInv.balanceCents) {
+      return {
+        ok: false,
+        error: `zoho_balance_mismatch:payment_cents=${paidCents}:balance_cents=${zohoInv.balanceCents}`,
+      };
+    }
+
+    const amountZar = paidCents / 100;
     if (amountZar <= 0) return null;
 
     const contactRes = await resolveZohoCustomerContactForMonthlyInvoice(admin, {
@@ -113,6 +121,7 @@ async function syncMonthlyInvoiceRowToZoho(
       amountZar,
       paymentDate: todayYmdJhb(),
       reference: paymentReference,
+      contactId: zohoInv.customerId ?? undefined,
       customerEmail: contact?.email,
       customerName: contact?.name,
     });
