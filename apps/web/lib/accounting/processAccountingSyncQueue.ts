@@ -223,7 +223,9 @@ export async function processAccountingSyncQueue(
   const { data: pending } = await admin
     .from("accounting_sync_records")
     .select("id, entity_type, entity_id, retry_count, sync_status, next_retry_at")
-    .in("sync_status", ["pending", "failed"])
+    .or(
+      `sync_status.eq.pending,and(sync_status.eq.failed,retry_count.lt.${settings.max_retry_attempts})`,
+    )
     .or(`next_retry_at.is.null,next_retry_at.lte.${now}`)
     .order("created_at", { ascending: true })
     .limit(limit);
