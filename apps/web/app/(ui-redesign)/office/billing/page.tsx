@@ -177,7 +177,9 @@ export default function OfficeBillingPage() {
   const initialTab = parseTabParam(searchParams.get("tab"));
   const [docs, setDocs] = useState<AdminBillingDocumentRow[]>([]);
   const [summary, setSummary] = useState<AdminBillingDocumentsSummary | null>(null);
+  const [pagination, setPagination] = useState({ page: 1, page_size: 50, total_filtered: 0, total_pages: 1 });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<FilterTab>(initialTab);  const [syncingKey, setSyncingKey] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -189,22 +191,29 @@ export default function OfficeBillingPage() {
       const params = new URLSearchParams();
       if (q.trim()) params.set("q", q.trim());
       if (tab !== "all") params.set("kind", tab);
-      const res = await adminFetch<{ documents: AdminBillingDocumentRow[]; summary: AdminBillingDocumentsSummary }>(
-        `/api/admin/billing-documents?${params.toString()}`,
-      );
+      params.set("page", String(pagination.page));
+      params.set("page_size", String(pagination.page_size));
+      const res = await adminFetch<{
+        documents: AdminBillingDocumentRow[];
+        summary: AdminBillingDocumentsSummary;
+        pagination: { page: number; page_size: number; total_filtered: number; total_pages: number };
+      }>(`/api/admin/billing-documents?${params.toString()}`);
       if (!res.ok) {
         setDocs([]);
         setSummary(null);
+        setLoadError(res.error ?? "Could not load the billing reconciliation inbox.");
         return;
       }
+      setLoadError(null);
       setDocs(res.data?.documents ?? []);
       setSummary(res.data?.summary ?? null);
+      if (res.data?.pagination) setPagination(res.data.pagination);
     } catch {
       setDocs([]);
       setSummary(null);
     }
     setLoading(false);
-  }, [q, tab]);
+  }, [q, tab, pagination.page, pagination.page_size]);
 
   useEffect(() => {
     void load();
