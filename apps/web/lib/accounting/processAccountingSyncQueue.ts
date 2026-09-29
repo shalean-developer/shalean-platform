@@ -94,10 +94,10 @@ async function processPaymentTransactionSync(
     if (inv?.customer_id) {
       const { data: profile } = await admin
         .from("user_profiles")
-        .select("billing_email, full_name, email")
+        .select("billing_email, full_name")
         .eq("id", inv.customer_id)
         .maybeSingle();
-      customerEmail = profile?.billing_email ?? profile?.email ?? undefined;
+      customerEmail = profile?.billing_email ?? undefined;
       customerName = profile?.full_name ?? undefined;
     }
   } else if (pt.entity_type === "sales_document") {
