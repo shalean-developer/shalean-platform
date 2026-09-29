@@ -9,10 +9,18 @@
  * - READY
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-import { assessMonthlyInvoiceFinalizeReadiness } from "../lib/monthlyInvoice/isMonthlyInvoiceReadyToFinalize";
-import { todayJohannesburg } from "../lib/recurring/johannesburgCalendar";
+import {
+  compareYmd,
+  isInvoiceMonthReadyToFinalize,
+  lastDayYmdOfInvoiceMonth,
+  todayJohannesburg,
+} from "../lib/recurring/johannesburgCalendar";
+import {
+  expectedOccurrenceDatesForPlanInMonth,
+  recurringPlanScheduleRowFromDb,
+} from "../lib/recurring/reconcileRecurringPlanOccurrences";
 import { resolveZohoCustomerContactForMonthlyInvoice } from "../lib/zoho/resolveZohoCustomerContact";
 
 const PROD_REF = "paqjwfulwywtsyyvdxrq";
@@ -20,6 +28,93 @@ const PROD_REF = "paqjwfulwywtsyyvdxrq";
 function fail(message: string): never {
   console.error(`AUDIT_FAIL: ${message}`);
   process.exit(1);
+}
+
+function planOverlapsInvoiceMonth(
+  plan: ReturnType<typeof recurringPlanScheduleRowFromDb>,
+  invoiceMonthYm: string,
+): boolean {
+  const monthStart = `${invoiceMonthYm}-01`;
+  const monthEnd = lastDayYmdOfInvoiceMonth(invoiceMonthYm);
+  if (compareYmd(plan.start_date, monthEnd) > 0) return false;
+  if (plan.end_date && compareYmd(plan.end_date, monthStart) < 0) return false;
+  return true;
+}
+
+async function assessReadinessLocally(
+  admin: SupabaseClient,
+  params: { invoiceId: string; customerId: string; month: string; todayYmd: string },
+): Promise<{ ready: boolean; reason?: string }> {
+  const { data: invoiceBookings, error: invErr } = await admin
+    .from("bookings")
+    .select("date, recurring_id, monthly_invoice_id, status")
+    .eq("monthly_invoice_id", params.invoiceId)
+    .neq("status", "cancelled");
+
+  if (invErr) return { ready: false, reason: invErr.message };
+
+  const bookings = (invoiceBookings ?? []) as Array<{
+    date: string;
+    recurring_id: string | null;
+    monthly_invoice_id: string | null;
+    status: string | null;
+  }>;
+
+  const inMonth = bookings.map((b) => b.date).filter((d) => d.startsWith(params.month));
+  if (inMonth.length === 0) return { ready: false, reason: "no_bookings" };
+
+  const lastVisit = inMonth.reduce((max, d) => (compareYmd(d, max) > 0 ? d : max));
+
+  const { data: planRows, error: planErr } = await admin
+    .from("recurring_bookings")
+    .select(
+      "id, customer_id, price, frequency, days_of_week, start_date, end_date, booking_snapshot_template, preferred_cleaner_id, skip_next_occurrence_date, monthly_pattern, monthly_nth, status",
+    )
+    .eq("customer_id", params.customerId)
+    .eq("status", "active");
+
+  if (planErr) return { ready: false, reason: planErr.message };
+
+  const plans = (planRows ?? [])
+    .map((raw) => recurringPlanScheduleRowFromDb(raw as Record<string, unknown>))
+    .filter((plan) => planOverlapsInvoiceMonth(plan, params.month));
+
+  if (plans.length === 0) {
+    if (!isInvoiceMonthReadyToFinalize(params.todayYmd, params.month)) {
+      return { ready: false, reason: "invoice_month_not_ended" };
+    }
+    return { ready: true };
+  }
+
+  if (compareYmd(params.todayYmd, lastVisit) < 0) {
+    return { ready: false, reason: "upcoming_visits_in_month" };
+  }
+
+  for (const plan of plans) {
+    const expected = expectedOccurrenceDatesForPlanInMonth(plan, params.month);
+    if (expected.length === 0) continue;
+
+    const { data: planBookings } = await admin
+      .from("bookings")
+      .select("date, monthly_invoice_id, status")
+      .eq("recurring_id", plan.id)
+      .neq("status", "cancelled");
+
+    const onInvoiceDates = new Set(
+      (planBookings ?? [])
+        .filter((b) => String((b as { monthly_invoice_id?: string }).monthly_invoice_id ?? "") === params.invoiceId)
+        .map((b) => String((b as { date: string }).date)),
+    );
+
+    for (const date of expected) {
+      if (plan.skip_next_occurrence_date && date === plan.skip_next_occurrence_date) continue;
+      if (!onInvoiceDates.has(date)) {
+        return { ready: false, reason: "recurring_schedule_incomplete" };
+      }
+    }
+  }
+
+  return { ready: true };
 }
 
 async function main() {
@@ -100,7 +195,7 @@ async function main() {
       reason = "non_positive_total";
       notReady += 1;
     } else {
-      const readiness = await assessMonthlyInvoiceFinalizeReadiness(admin, {
+      const readiness = await assessReadinessLocally(admin, {
         invoiceId: row.id,
         customerId: row.customer_id,
         month: row.month,
