@@ -17,10 +17,6 @@ import {
   lastDayYmdOfInvoiceMonth,
   todayJohannesburg,
 } from "../lib/recurring/johannesburgCalendar";
-import {
-  expectedOccurrenceDatesForPlanInMonth,
-  recurringPlanScheduleRowFromDb,
-} from "../lib/recurring/reconcileRecurringPlanOccurrences";
 import { resolveZohoCustomerContactForMonthlyInvoice } from "../lib/zoho/resolveZohoCustomerContact";
 
 const PROD_REF = "paqjwfulwywtsyyvdxrq";
@@ -30,15 +26,83 @@ function fail(message: string): never {
   process.exit(1);
 }
 
-function planOverlapsInvoiceMonth(
-  plan: ReturnType<typeof recurringPlanScheduleRowFromDb>,
-  invoiceMonthYm: string,
-): boolean {
+type PlanRow = {
+  id: string;
+  frequency: string | null;
+  days_of_week: number[] | null;
+  start_date: string;
+  end_date: string | null;
+  skip_next_occurrence_date: string | null;
+  monthly_pattern: string | null;
+  monthly_nth: number | null;
+};
+
+function planOverlapsInvoiceMonth(plan: PlanRow, invoiceMonthYm: string): boolean {
   const monthStart = `${invoiceMonthYm}-01`;
   const monthEnd = lastDayYmdOfInvoiceMonth(invoiceMonthYm);
   if (compareYmd(plan.start_date, monthEnd) > 0) return false;
   if (plan.end_date && compareYmd(plan.end_date, monthStart) < 0) return false;
   return true;
+}
+
+function ymdToUtcDate(ymd: string): Date {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+function utcDateToYmd(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function expectedOccurrenceDatesForPlanInMonthLocal(plan: PlanRow, invoiceMonthYm: string): string[] {
+  const monthStart = ymdToUtcDate(`${invoiceMonthYm}-01`);
+  const monthEnd = ymdToUtcDate(lastDayYmdOfInvoiceMonth(invoiceMonthYm));
+  const start = ymdToUtcDate(plan.start_date);
+  const end = plan.end_date ? ymdToUtcDate(plan.end_date) : monthEnd;
+
+  const effectiveStart = start > monthStart ? start : monthStart;
+  const effectiveEnd = end < monthEnd ? end : monthEnd;
+  if (effectiveStart > effectiveEnd) return [];
+
+  const frequency = String(plan.frequency ?? "").toLowerCase();
+  const out: string[] = [];
+
+  if (frequency === "weekly" || frequency === "biweekly") {
+    const wanted = new Set((plan.days_of_week ?? []).map(Number));
+    const stepWeeks = frequency === "biweekly" ? 2 : 1;
+
+    for (let d = new Date(effectiveStart); d <= effectiveEnd; d.setUTCDate(d.getUTCDate() + 1)) {
+      if (!wanted.has(d.getUTCDay())) continue;
+      if (stepWeeks === 2) {
+        const daysFromStart = Math.floor((d.getTime() - start.getTime()) / 86400000);
+        const weeksFromStart = Math.floor(daysFromStart / 7);
+        if (weeksFromStart % 2 !== 0) continue;
+      }
+      out.push(utcDateToYmd(d));
+    }
+    return out;
+  }
+
+  if (frequency === "monthly") {
+    const nth = Number(plan.monthly_nth ?? 1);
+    const wanted = (plan.days_of_week ?? [start.getUTCDay()]).map(Number);
+    const weekday = wanted[0] ?? start.getUTCDay();
+    let seen = 0;
+
+    for (let d = new Date(monthStart); d <= monthEnd; d.setUTCDate(d.getUTCDate() + 1)) {
+      if (d.getUTCDay() !== weekday) continue;
+      seen += 1;
+      if (seen === nth && d >= effectiveStart && d <= effectiveEnd) {
+        out.push(utcDateToYmd(d));
+        break;
+      }
+    }
+    return out;
+  }
+
+  // Conservative fallback for unsupported/legacy frequencies:
+  // use actual invoice bookings rather than inventing expected dates.
+  return [];
 }
 
 async function assessReadinessLocally(
@@ -76,7 +140,7 @@ async function assessReadinessLocally(
   if (planErr) return { ready: false, reason: planErr.message };
 
   const plans = (planRows ?? [])
-    .map((raw) => recurringPlanScheduleRowFromDb(raw as Record<string, unknown>))
+    .map((raw) => raw as unknown as PlanRow)
     .filter((plan) => planOverlapsInvoiceMonth(plan, params.month));
 
   if (plans.length === 0) {
@@ -91,7 +155,7 @@ async function assessReadinessLocally(
   }
 
   for (const plan of plans) {
-    const expected = expectedOccurrenceDatesForPlanInMonth(plan, params.month);
+    const expected = expectedOccurrenceDatesForPlanInMonthLocal(plan, params.month);
     if (expected.length === 0) continue;
 
     const { data: planBookings } = await admin
