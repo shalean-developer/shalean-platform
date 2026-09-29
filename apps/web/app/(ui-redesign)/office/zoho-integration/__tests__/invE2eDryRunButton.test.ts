@@ -21,4 +21,12 @@ describe("INV-E2E dry-run button", () => {
     expect(source).toContain("Run sync now");
     expect(source.replace(/\\s+/g, " ")).not.toContain("runRepairDryRun() runSync(");
   });
+
+  it("allows guarded resume when the full allowlist is either new or already linked", () => {
+    expect(source).toContain(
+      "dryRun.create_and_pay_count + dryRun.already_linked_review_count === 10",
+    );
+    expect(source).toContain("Ready to repair");
+    expect(source).toContain("create or resume payment for the 10 audited Zoho invoices");
+  });
 });
