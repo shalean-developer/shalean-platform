@@ -25,7 +25,6 @@ const TARGET_IDS = [
   "36c8f4db-ee8b-4357-b856-2c669a66afc2",
   "37e728fa-ad59-4c6b-ad04-9790ba55c96e",
   "3d2ad4ee-cba8-48ac-8177-f0ca71f4a608",
-  "41f5902c-7318-48bb-b05b-48a4233a3303",
   "49ce355a-ad9d-4c0d-8d28-29c979e1e652",
   "4effde1e-c1c1-41d0-ae8d-76f312642913",
   "61a04a66-106d-4d51-8c49-08fd948ed55b",
@@ -155,6 +154,7 @@ async function main() {
       forceEarlySend: false,
       actor: "script/office-billing-e2e-06",
       source: "script/office-billing-e2e-06",
+      resumePartialFinalize: true,
     });
 
     console.log(`${id}: ${JSON.stringify(result)}`);
