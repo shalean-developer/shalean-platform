@@ -14,6 +14,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveZohoCustomerContactForMonthlyInvoice } from "../lib/zoho/resolveZohoCustomerContact";
+import { resolveMonthlyInvoiceCustomerEmail } from "../lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail";
 import { todayJohannesburg } from "../lib/recurring/johannesburgCalendar";
 
 const PROD_REF = "paqjwfulwywtsyyvdxrq";
@@ -87,6 +88,12 @@ async function precheck(admin: SupabaseClient) {
       customerId: String(row.customer_id),
     });
     if (!contact.ok) fail(`${id} contact resolution failed: ${contact.error}`);
+
+    const outboundEmail = await resolveMonthlyInvoiceCustomerEmail(admin, {
+      invoiceId: id,
+      customerId: String(row.customer_id),
+    });
+    if (!outboundEmail) fail(`${id} customer outbound email missing`);
   }
 
   return byId;
@@ -103,12 +110,18 @@ async function main() {
   if (!process.env.ZOHO_CLIENT_ID || !process.env.ZOHO_REFRESH_TOKEN || !process.env.ZOHO_ORGANIZATION_ID) {
     fail("missing Zoho configuration");
   }
+  if (!String(process.env.PAYSTACK_SECRET_KEY ?? "").trim()) {
+    fail("PAYSTACK_SECRET_KEY missing");
+  }
+  if (!String(process.env.RESEND_API_KEY ?? "").trim()) {
+    fail("RESEND_API_KEY missing");
+  }
   if (apply && confirmArg !== CONFIRM) fail(`apply requires --confirm=${CONFIRM}`);
 
   const admin: SupabaseClient = createClient(url, key, { auth: { persistSession: false } });
   const byId = await precheck(admin);
 
-  console.log(`PRECHECK_PASS targets=${TARGET_IDS.length} drafts=${TARGET_IDS.length} positive=${TARGET_IDS.length} contacts=${TARGET_IDS.length}`);
+  console.log(`PRECHECK_PASS targets=${TARGET_IDS.length} drafts=${TARGET_IDS.length} positive=${TARGET_IDS.length} contacts=${TARGET_IDS.length} outbound_emails=${TARGET_IDS.length} paystack=SET resend=SET`);
   console.log(apply ? "MODE=APPLY" : "MODE=DRY_RUN");
 
   if (!apply) {
