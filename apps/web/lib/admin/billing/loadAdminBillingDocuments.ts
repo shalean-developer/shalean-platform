@@ -97,13 +97,14 @@ export async function loadAdminBillingDocuments(
   const pageSize = Math.min(100, Math.max(10, Math.trunc(opts?.pageSize ?? 50)));
 
   const ownershipColumn = await resolveBookingOwnershipColumn(admin);
-  const salesRows = (await fetchAllPages((from, to) =>
-    admin
+  const salesRows = (await fetchAllPages(async (from, to) => {
+    const res = await admin
       .from("sales_documents")
       .select(SALES_DOCUMENT_ADMIN_COLUMNS)
       .order("created_at", { ascending: false })
-      .range(from, to),
-  )) as Record<string, unknown>[];
+      .range(from, to);
+    return { data: (res.data ?? []) as unknown[], error: res.error };
+  })) as Record<string, unknown>[];
 
   const bookingSelect = [
     "id",
@@ -124,21 +125,23 @@ export async function loadAdminBillingDocuments(
   ].join(", ");
 
   const [bookingRows, monthlyRows] = await Promise.all([
-    fetchAllPages((from, to) =>
-      admin
+    fetchAllPages(async (from, to) => {
+      const res = await admin
         .from("bookings")
         .select(bookingSelect)
         .not("payment_completed_at", "is", null)
         .order("payment_completed_at", { ascending: false })
-        .range(from, to),
-    ) as PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
-    fetchAllPages((from, to) =>
-      admin
+        .range(from, to);
+      return { data: (res.data ?? []) as unknown[], error: res.error };
+    }),
+    fetchAllPages(async (from, to) => {
+      const res = await admin
         .from("monthly_invoices")
         .select("id, customer_id, month, status, total_amount_cents, zoho_invoice_id, created_at")
         .order("created_at", { ascending: false })
-        .range(from, to),
-    ) as PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+        .range(from, to);
+      return { data: (res.data ?? []) as unknown[], error: res.error };
+    }),
   ]);
 
   const typedBookingRows = bookingRows as Record<string, unknown>[];
@@ -213,7 +216,7 @@ export async function loadAdminBillingDocuments(
     });
   }
 
-  for (const raw of monthlyRows) {
+  for (const raw of typedMonthlyRows) {
     const row = raw as {
       id: string;
       customer_id?: string;
