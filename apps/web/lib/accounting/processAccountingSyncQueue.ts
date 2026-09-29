@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   markSyncFailed,
+  markSyncIgnored,
   markSyncSucceeded,
   computeNextRetryAt,
 } from "@/lib/accounting/accountingSyncQueue";
@@ -29,7 +30,10 @@ type SyncRecord = {
 async function processPaymentTransactionSync(
   admin: SupabaseClient,
   entityId: string,
-): Promise<{ ok: true; externalId?: string } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; externalId?: string; ignoredReason?: string }
+  | { ok: false; error: string }
+> {
   const { data: pt } = await admin
     .from("payment_transactions")
     .select(
@@ -50,9 +54,33 @@ async function processPaymentTransactionSync(
   if (pt.entity_type === "booking") {
     const { data: b } = await admin
       .from("bookings")
-      .select("zoho_invoice_id, customer_email, customer_name")
+      .select(
+        "zoho_invoice_id, customer_email, customer_name, is_test, is_monthly_billing_booking, sales_document_id",
+      )
       .eq("id", pt.entity_id)
       .maybeSingle();
+
+    const ignoredReason =
+      b?.is_test === true
+        ? "booking_test"
+        : b?.is_monthly_billing_booking === true
+          ? "booking_monthly_owned"
+          : b?.sales_document_id
+            ? "booking_sales_document_owned"
+            : null;
+
+    if (ignoredReason) {
+      await admin
+        .from("payment_transactions")
+        .update({
+          sync_status: "ignored",
+          sync_errors: `accounting_not_applicable:${ignoredReason}`,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", entityId);
+      return { ok: true, ignoredReason };
+    }
+
     zohoInvoiceId = b?.zoho_invoice_id ?? null;
     customerEmail = b?.customer_email ?? undefined;
     customerName = b?.customer_name ?? undefined;
@@ -116,7 +144,9 @@ async function processSyncRecord(
   record: SyncRecord,
   settings: Awaited<ReturnType<typeof loadZohoIntegrationSettings>>,
 ): Promise<void> {
-  let result: { ok: true; externalId?: string } | { ok: false; error: string };
+  let result:
+    | { ok: true; externalId?: string; ignoredReason?: string }
+    | { ok: false; error: string };
 
   switch (record.entity_type) {
     case "expense":
@@ -136,7 +166,11 @@ async function processSyncRecord(
   }
 
   if (result.ok) {
-    await markSyncSucceeded(admin, record.id, result.externalId ?? null);
+    if (result.ignoredReason) {
+      await markSyncIgnored(admin, record.id, result.ignoredReason);
+    } else {
+      await markSyncSucceeded(admin, record.id, result.externalId ?? null);
+    }
   } else {
     await markSyncFailed(
       admin,
