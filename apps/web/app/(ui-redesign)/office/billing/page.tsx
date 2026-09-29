@@ -421,6 +421,32 @@ export default function OfficeBillingPage() {
         </div>
       </div>
 
+      {!loading && !loadError && pagination.total_pages > 1 ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-slate-500">
+            Page {pagination.page} of {pagination.total_pages} · {pagination.total_filtered} matching document(s)
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={pagination.page <= 1}
+              onClick={() => setPagination((current) => ({ ...current, page: current.page - 1 }))}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={pagination.page >= pagination.total_pages}
+              onClick={() => setPagination((current) => ({ ...current, page: current.page + 1 }))}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {summary && summary.missing_zoho > 0 ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <p className="font-semibold">{summary.missing_zoho} document(s) still missing a Zoho link</p>
