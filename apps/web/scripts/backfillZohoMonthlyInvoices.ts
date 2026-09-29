@@ -21,7 +21,6 @@ import {
 } from "../lib/zoho/zohoBooksService";
 import { resolveZohoCustomerContactForMonthlyInvoice } from "../lib/zoho/resolveZohoCustomerContact";
 import { zohoDatesForMonthlyInvoice } from "../lib/monthlyInvoice/monthlyInvoiceBillingDates";
-import { lastScheduledVisitYmd } from "../lib/monthlyInvoice/isMonthlyInvoiceReadyToFinalize";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
@@ -65,6 +64,12 @@ function formatMonthLabel(ym: string): string {
 
 function invoiceDateForRow(row: Row): string {
   return zohoDatesForMonthlyInvoice(row.month).invoiceDate;
+}
+
+function lastScheduledVisitYmd(invoiceMonthYm: string, bookingDates: string[]): string | null {
+  const inMonth = bookingDates.filter((date) => date.startsWith(invoiceMonthYm));
+  if (inMonth.length === 0) return null;
+  return inMonth.reduce((latest, date) => (date > latest ? date : latest));
 }
 
 async function dueDateForRow(admin: SupabaseClient, row: Row): Promise<string> {
