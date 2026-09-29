@@ -39,6 +39,25 @@ type RepairDryRunPayload = {
   checks: RepairDryRunCheck[];
 };
 
+type RepairApplyResult = {
+  kind: "booking" | "monthly_invoice" | "sales_document";
+  id: string;
+  ok: boolean;
+  outcome: "created_paid_linked" | "resumed_paid_linked" | "already_complete" | "failed";
+  invoice_number?: string | null;
+  error?: string;
+};
+
+type RepairApplyPayload = {
+  ok: boolean;
+  attempted: number;
+  succeeded: number;
+  failed: number;
+  writes_performed: true;
+  scope: string;
+  results: RepairApplyResult[];
+};
+
 type IntegrationPayload = {
   zoho_configured: boolean;
   organization_id: string | null;
@@ -74,6 +93,8 @@ export default function ZohoIntegrationPage() {
   const [syncing, setSyncing] = useState(false);
   const [dryRunning, setDryRunning] = useState(false);
   const [dryRun, setDryRun] = useState<RepairDryRunPayload | null>(null);
+  const [applyingRepair, setApplyingRepair] = useState(false);
+  const [applyResult, setApplyResult] = useState<RepairApplyPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mappings, setMappings] = useState<CategoryMapping[]>([]);
   const [autoSync, setAutoSync] = useState(true);
@@ -162,6 +183,34 @@ export default function ZohoIntegrationPage() {
     }
   };
 
+  const applyTargetedRepair = async () => {
+    const confirmation = window.prompt(
+      "Production write action. Type APPLY_INV_E2E_01D_10 exactly to create/pay the 10 audited Zoho invoices.",
+    );
+    if (confirmation !== "APPLY_INV_E2E_01D_10") return;
+
+    setApplyingRepair(true);
+    setApplyResult(null);
+    setError(null);
+    try {
+      const res = await adminFetch<RepairApplyPayload>(
+        "/api/admin/inv-e2e-01d/zoho-repair-apply",
+        {
+          method: "POST",
+          body: JSON.stringify({ confirmation }),
+        },
+      );
+      if (!res.data) throw new Error(res.error ?? "Targeted repair failed");
+      setApplyResult(res.data);
+      await load();
+      await runRepairDryRun();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Targeted repair failed");
+    } finally {
+      setApplyingRepair(false);
+    }
+  };
+
   const retrySync = async (recordId: string) => {
     try {
       await adminFetch("/api/admin/zoho-integration/retry", {
@@ -218,16 +267,29 @@ export default function ZohoIntegrationPage() {
                 Read-only audit. No Zoho or Supabase writes were performed.
               </p>
             </div>
-            <span
-              className={cn(
-                "rounded-full px-3 py-1 text-xs font-semibold",
-                dryRun.ok && dryRun.correct_zoho_organization
-                  ? "bg-emerald-100 text-emerald-800"
-                  : "bg-amber-100 text-amber-800",
-              )}
-            >
-              {dryRun.ok && dryRun.correct_zoho_organization ? "PASS" : "REVIEW"}
-            </span>
+            <div className="flex items-center gap-2">
+              {dryRun.ok &&
+                dryRun.correct_zoho_organization &&
+                dryRun.blocked_count === 0 &&
+                dryRun.create_and_pay_count === 10 && (
+                  <OfficeZohoPrimaryButton
+                    onClick={() => void applyTargetedRepair()}
+                    disabled={applyingRepair}
+                  >
+                    {applyingRepair ? "Applying targeted repair…" : "Apply INV-E2E repair"}
+                  </OfficeZohoPrimaryButton>
+                )}
+              <span
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs font-semibold",
+                  dryRun.ok && dryRun.correct_zoho_organization
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-amber-100 text-amber-800",
+                )}
+              >
+                {dryRun.ok && dryRun.correct_zoho_organization ? "PASS" : "REVIEW"}
+              </span>
+            </div>
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -259,6 +321,39 @@ export default function ZohoIntegrationPage() {
                 {check.issues.length > 0 && (
                   <p className="mt-1 text-xs text-red-600">{check.issues.join(" · ")}</p>
                 )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {applyResult && (
+        <section
+          className={cn(
+            "rounded-xl border p-5",
+            applyResult.ok ? "border-emerald-200 bg-emerald-50/50" : "border-amber-200 bg-amber-50/50",
+          )}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">INV-E2E targeted repair result</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                {applyResult.succeeded} succeeded · {applyResult.failed} failed · {applyResult.attempted} attempted
+              </p>
+            </div>
+            <span className={applyResult.ok ? "text-emerald-700" : "text-amber-700"}>
+              {applyResult.ok ? "COMPLETE" : "REVIEW FAILURES"}
+            </span>
+          </div>
+          <div className="mt-4 space-y-2">
+            {applyResult.results.map((item) => (
+              <div key={`${item.kind}:${item.id}`} className="rounded border bg-white px-3 py-2 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium">{item.kind} · {item.id.slice(0, 8)}…</span>
+                  <span className={item.ok ? "text-emerald-700" : "text-red-700"}>{item.outcome}</span>
+                </div>
+                {item.invoice_number && <p className="mt-1 text-xs text-slate-500">{item.invoice_number}</p>}
+                {item.error && <p className="mt-1 text-xs text-red-600">{item.error}</p>}
               </div>
             ))}
           </div>
