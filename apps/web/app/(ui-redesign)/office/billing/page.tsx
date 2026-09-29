@@ -187,6 +187,7 @@ export default function OfficeBillingPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const params = new URLSearchParams();
       if (q.trim()) params.set("q", q.trim());
@@ -204,15 +205,16 @@ export default function OfficeBillingPage() {
         setLoadError(res.error ?? "Could not load the billing reconciliation inbox.");
         return;
       }
-      setLoadError(null);
       setDocs(res.data?.documents ?? []);
       setSummary(res.data?.summary ?? null);
       if (res.data?.pagination) setPagination(res.data.pagination);
     } catch {
       setDocs([]);
       setSummary(null);
+      setLoadError("Could not load the billing reconciliation inbox.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [q, tab, pagination.page, pagination.page_size]);
 
   useEffect(() => {
