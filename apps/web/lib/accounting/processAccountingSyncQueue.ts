@@ -207,6 +207,7 @@ export type ProcessAccountingSyncResult = {
 export async function processAccountingSyncQueue(
   admin: SupabaseClient,
   limit = 50,
+  invoiceStatusLimit = 5,
 ): Promise<ProcessAccountingSyncResult> {
   if (!isZohoConfigured()) {
     return { processed: 0, succeeded: 0, failed: 0, invoice_status_sync: { synced: 0, failed: 0 } };
@@ -244,7 +245,10 @@ export async function processAccountingSyncQueue(
     else failed++;
   }
 
-  const invoiceStatusSync = await syncInvoiceStatusesFromZoho(admin, 5);
+  const invoiceStatusSync =
+    invoiceStatusLimit > 0
+      ? await syncInvoiceStatusesFromZoho(admin, invoiceStatusLimit)
+      : { synced: 0, failed: 0 };
 
   await admin
     .from("zoho_integration_settings")
