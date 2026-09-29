@@ -63,11 +63,14 @@ function bookingNeedsZoho(row: Record<string, unknown>): boolean {
   return true;
 }
 
-async function fetchAllPages<T>(
-  fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+async function fetchAllPages(
+  fetchPage: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
   pageSize = 500,
-): Promise<T[]> {
-  const rows: T[] = [];
+): Promise<unknown[]> {
+  const rows: unknown[] = [];
   for (let from = 0; ; from += pageSize) {
     const to = from + pageSize - 1;
     const res = await fetchPage(from, to);
@@ -94,13 +97,13 @@ export async function loadAdminBillingDocuments(
   const pageSize = Math.min(100, Math.max(10, Math.trunc(opts?.pageSize ?? 50)));
 
   const ownershipColumn = await resolveBookingOwnershipColumn(admin);
-  const salesRows = await fetchAllPages<Record<string, unknown>>((from, to) =>
+  const salesRows = (await fetchAllPages((from, to) =>
     admin
       .from("sales_documents")
       .select(SALES_DOCUMENT_ADMIN_COLUMNS)
       .order("created_at", { ascending: false })
       .range(from, to),
-  );
+  )) as Record<string, unknown>[];
 
   const bookingSelect = [
     "id",
@@ -121,25 +124,28 @@ export async function loadAdminBillingDocuments(
   ].join(", ");
 
   const [bookingRows, monthlyRows] = await Promise.all([
-    fetchAllPages<Record<string, unknown>>((from, to) =>
+    fetchAllPages((from, to) =>
       admin
         .from("bookings")
         .select(bookingSelect)
         .not("payment_completed_at", "is", null)
         .order("payment_completed_at", { ascending: false })
         .range(from, to),
-    ),
-    fetchAllPages<Record<string, unknown>>((from, to) =>
+    ) as PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+    fetchAllPages((from, to) =>
       admin
         .from("monthly_invoices")
         .select("id, customer_id, month, status, total_amount_cents, zoho_invoice_id, created_at")
         .order("created_at", { ascending: false })
         .range(from, to),
-    ),
+    ) as PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
   ]);
 
+  const typedBookingRows = bookingRows as Record<string, unknown>[];
+  const typedMonthlyRows = monthlyRows as Record<string, unknown>[];
+
   const customerIds = new Set<string>();
-  for (const row of monthlyRows) {
+  for (const row of typedMonthlyRows) {
     const cid = String((row as { customer_id?: string }).customer_id ?? "").trim();
     if (cid) customerIds.add(cid);
   }
@@ -183,7 +189,7 @@ export async function loadAdminBillingDocuments(
     });
   }
 
-  for (const raw of bookingRows) {
+  for (const raw of typedBookingRows) {
     const row = raw as unknown as Record<string, unknown>;
     const zohoId = String(row.zoho_invoice_id ?? "").trim();
     const include = zohoId || bookingNeedsZoho(row);
