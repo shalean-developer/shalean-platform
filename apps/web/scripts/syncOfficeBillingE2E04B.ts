@@ -183,7 +183,7 @@ async function main() {
   const applyFlag = apply ? " --apply" : "";
 
   execSync(
-    `npx tsx --conditions=react-server scripts/backfillZohoMonthlyInvoices.ts --ids=${TARGET_IDS.join(",")}${applyFlag}`,
+    `npx tsx --conditions=react-server scripts/backfillZohoMonthlyInvoices.ts --use-payment-transaction --ids=${TARGET_IDS.join(",")}${applyFlag}`,
     opts,
   );
 
