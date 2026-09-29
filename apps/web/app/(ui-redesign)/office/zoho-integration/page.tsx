@@ -185,7 +185,7 @@ export default function ZohoIntegrationPage() {
 
   const applyTargetedRepair = async () => {
     const confirmation = window.prompt(
-      "Production write action. Type APPLY_INV_E2E_01D_10 exactly to create/pay the 10 audited Zoho invoices.",
+      "Production write action. Type APPLY_INV_E2E_01D_10 exactly to create or resume payment for the 10 audited Zoho invoices.",
     );
     if (confirmation !== "APPLY_INV_E2E_01D_10") return;
 
@@ -271,7 +271,7 @@ export default function ZohoIntegrationPage() {
               {dryRun.ok &&
                 dryRun.correct_zoho_organization &&
                 dryRun.blocked_count === 0 &&
-                dryRun.create_and_pay_count === 10 && (
+                dryRun.create_and_pay_count + dryRun.already_linked_review_count === 10 && (
                   <OfficeZohoPrimaryButton
                     onClick={() => void applyTargetedRepair()}
                     disabled={applyingRepair}
@@ -297,9 +297,9 @@ export default function ZohoIntegrationPage() {
             <StatusCard label="Zoho org" ok={dryRun.correct_zoho_organization} detail={dryRun.zoho_organization_id_masked ?? "Missing"} />
             <StatusCard label="Blocked" ok={dryRun.blocked_count === 0} detail={`${dryRun.blocked_count} blocked`} />
             <StatusCard
-              label="Would create + pay"
-              ok={dryRun.create_and_pay_count === 10}
-              detail={`${dryRun.create_and_pay_count} records`}
+              label="Ready to repair"
+              ok={dryRun.create_and_pay_count + dryRun.already_linked_review_count === 10}
+              detail={`${dryRun.create_and_pay_count} create · ${dryRun.already_linked_review_count} resume/review`}
             />
           </div>
 
