@@ -244,7 +244,7 @@ export async function processAccountingSyncQueue(
     else failed++;
   }
 
-  const invoiceStatusSync = await syncInvoiceStatusesFromZoho(admin, 25);
+  const invoiceStatusSync = await syncInvoiceStatusesFromZoho(admin, 5);
 
   await admin
     .from("zoho_integration_settings")
