@@ -29,7 +29,16 @@ export async function GET(request: Request) {
   const kind = KINDS.has(kindRaw as AdminBillingDocumentKind | "all" | "missing_zoho")
     ? (kindRaw as AdminBillingDocumentKind | "all" | "missing_zoho")
     : "all";
+  const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
+  const pageSize = Math.min(100, Math.max(10, Number(searchParams.get("page_size") ?? "50") || 50));
 
-  const payload = await loadAdminBillingDocuments(admin, { q, kind });
-  return NextResponse.json(payload);
+  try {
+    const payload = await loadAdminBillingDocuments(admin, { q, kind, page, pageSize });
+    return NextResponse.json(payload);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "billing_documents_load_failed" },
+      { status: 500 },
+    );
+  }
 }
