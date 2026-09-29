@@ -143,12 +143,16 @@ async function main() {
   const opts = { cwd: webDir, stdio: "inherit" as const, env: process.env };
   const applyFlag = apply ? " --apply" : "";
 
+  // Invoke tsx directly so child processes inherit this wrapper's already-validated
+  // production environment. Do not use package.json backfill scripts here: those
+  // intentionally load .env.local and can silently switch a bounded production run
+  // to a developer/staging project.
   execSync(
-    `npm run backfill:zoho-invoices -- --ids=${BOOKING_IDS.join(",")}${applyFlag}`,
+    `npx tsx --conditions=react-server scripts/backfillZohoInvoices.ts --ids=${BOOKING_IDS.join(",")}${applyFlag}`,
     opts,
   );
   execSync(
-    `npm run backfill:zoho-monthly-invoices -- --ids=${MONTHLY_IDS.join(",")}${applyFlag}`,
+    `npx tsx --conditions=react-server scripts/backfillZohoMonthlyInvoices.ts --ids=${MONTHLY_IDS.join(",")}${applyFlag}`,
     opts,
   );
 
