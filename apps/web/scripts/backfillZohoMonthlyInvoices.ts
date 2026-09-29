@@ -265,7 +265,7 @@ async function main() {
   }
 
   // Repair rows that reference a Zoho id that no longer exists in Books.
-  if (apply) {
+  if (apply && onlyIds.size === 0) {
     const { data: linked } = await admin
       .from("monthly_invoices")
       .select("id, zoho_invoice_id")
