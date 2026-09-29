@@ -37,6 +37,12 @@ export type AdminBillingDocumentsSummary = {
 export type AdminBillingDocumentsPayload = {
   documents: AdminBillingDocumentRow[];
   summary: AdminBillingDocumentsSummary;
+  pagination: {
+    page: number;
+    page_size: number;
+    total_filtered: number;
+    total_pages: number;
+  };
 };
 
 function zohoLinkedForSalesDoc(row: Record<string, unknown>): { linked: boolean; id: string | null } {
@@ -57,17 +63,44 @@ function bookingNeedsZoho(row: Record<string, unknown>): boolean {
   return true;
 }
 
+async function fetchAllPages<T>(
+  fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  pageSize = 500,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const to = from + pageSize - 1;
+    const res = await fetchPage(from, to);
+    if (res.error) throw new Error(res.error.message);
+    const page = res.data ?? [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
+}
+
 export async function loadAdminBillingDocuments(
   admin: SupabaseClient,
-  opts?: { q?: string; kind?: AdminBillingDocumentKind | "all" | "missing_zoho" },
+  opts?: {
+    q?: string;
+    kind?: AdminBillingDocumentKind | "all" | "missing_zoho";
+    page?: number;
+    pageSize?: number;
+  },
 ): Promise<AdminBillingDocumentsPayload> {
   const q = (opts?.q ?? "").trim().toLowerCase();
   const kindFilter = opts?.kind ?? "all";
+  const page = Math.max(1, Math.trunc(opts?.page ?? 1));
+  const pageSize = Math.min(100, Math.max(10, Math.trunc(opts?.pageSize ?? 50)));
 
-  const [salesRes, ownershipColumn] = await Promise.all([
-    admin.from("sales_documents").select(SALES_DOCUMENT_ADMIN_COLUMNS).order("created_at", { ascending: false }).limit(300),
-    resolveBookingOwnershipColumn(admin),
-  ]);
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
+  const salesRows = await fetchAllPages<Record<string, unknown>>((from, to) =>
+    admin
+      .from("sales_documents")
+      .select(SALES_DOCUMENT_ADMIN_COLUMNS)
+      .order("created_at", { ascending: false })
+      .range(from, to),
+  );
 
   const bookingSelect = [
     "id",
@@ -87,22 +120,26 @@ export async function loadAdminBillingDocuments(
     "created_at",
   ].join(", ");
 
-  const [bookingRes, monthlyRes] = await Promise.all([
-    admin
-      .from("bookings")
-      .select(bookingSelect)
-      .not("payment_completed_at", "is", null)
-      .order("payment_completed_at", { ascending: false })
-      .limit(300),
-    admin
-      .from("monthly_invoices")
-      .select("id, customer_id, month, status, total_amount_cents, zoho_invoice_id, created_at")
-      .order("created_at", { ascending: false })
-      .limit(200),
+  const [bookingRows, monthlyRows] = await Promise.all([
+    fetchAllPages<Record<string, unknown>>((from, to) =>
+      admin
+        .from("bookings")
+        .select(bookingSelect)
+        .not("payment_completed_at", "is", null)
+        .order("payment_completed_at", { ascending: false })
+        .range(from, to),
+    ),
+    fetchAllPages<Record<string, unknown>>((from, to) =>
+      admin
+        .from("monthly_invoices")
+        .select("id, customer_id, month, status, total_amount_cents, zoho_invoice_id, created_at")
+        .order("created_at", { ascending: false })
+        .range(from, to),
+    ),
   ]);
 
   const customerIds = new Set<string>();
-  for (const row of monthlyRes.data ?? []) {
+  for (const row of monthlyRows) {
     const cid = String((row as { customer_id?: string }).customer_id ?? "").trim();
     if (cid) customerIds.add(cid);
   }
@@ -124,7 +161,7 @@ export async function loadAdminBillingDocuments(
 
   const documents: AdminBillingDocumentRow[] = [];
 
-  for (const raw of salesRes.data ?? []) {
+  for (const raw of salesRows) {
     const row = raw as Record<string, unknown>;
     const documentType = String(row.document_type ?? "");
     const kind: AdminBillingDocumentKind = documentType === "quote" ? "quote" : "sales_invoice";
@@ -146,7 +183,7 @@ export async function loadAdminBillingDocuments(
     });
   }
 
-  for (const raw of bookingRes.data ?? []) {
+  for (const raw of bookingRows) {
     const row = raw as unknown as Record<string, unknown>;
     const zohoId = String(row.zoho_invoice_id ?? "").trim();
     const include = zohoId || bookingNeedsZoho(row);
@@ -170,7 +207,7 @@ export async function loadAdminBillingDocuments(
     });
   }
 
-  for (const raw of monthlyRes.data ?? []) {
+  for (const raw of monthlyRows) {
     const row = raw as {
       id: string;
       customer_id?: string;
@@ -232,5 +269,19 @@ export async function loadAdminBillingDocuments(
     }
   }
 
-  return { documents: filtered.slice(0, 250), summary };
+  const totalFiltered = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * pageSize;
+
+  return {
+    documents: filtered.slice(start, start + pageSize),
+    summary,
+    pagination: {
+      page: safePage,
+      page_size: pageSize,
+      total_filtered: totalFiltered,
+      total_pages: totalPages,
+    },
+  };
 }
