@@ -66,14 +66,20 @@ export async function syncExpenseToZoho(
   admin: SupabaseClient,
   expenseId: string,
 ): Promise<{ ok: true; zohoExpenseId: string } | { ok: false; error: string }> {
-  const { data: expense } = await admin
+  const { data: expense, error: expenseError } = await admin
     .from("expenses")
     .select(
-      "id, expense_date, amount_cents, description, notes, booking_id, payment_transaction_id, external_accounting_id, sync_status, vendor_id, expense_categories ( name ), expense_vendors ( name, external_accounting_id ), payment_transactions ( gateway_reference )",
+      "id, expense_date, amount_cents, description, notes, booking_id, payment_transaction_id, external_accounting_id, sync_status, vendor_id, expense_categories ( name ), expense_vendors ( name, external_accounting_id ), payment_transactions!expenses_payment_transaction_id_fkey ( gateway_reference )",
     )
     .eq("id", expenseId)
     .maybeSingle();
 
+  if (expenseError) {
+    return {
+      ok: false,
+      error: `expense_query_failed:${expenseError.code ?? "unknown"}:${expenseError.message}`.slice(0, 2000),
+    };
+  }
   if (!expense) return { ok: false, error: "expense_not_found" };
   const row = expense as unknown as ExpenseRow;
 
