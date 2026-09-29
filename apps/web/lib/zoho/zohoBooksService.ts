@@ -50,6 +50,33 @@ export async function lookupZohoCustomerContactId(options: {
  * Looks up a customer contact id in Zoho Books.
  * Never returns an unrelated first search hit when an exact match was required.
  */
+async function findContactIdExhaustive(options: {
+  email?: string | null;
+  contactName?: string | null;
+}): Promise<string | null> {
+  const billingEmail = normalizeBillingEmail(options.email);
+  const contactName = String(options.contactName ?? "").trim().toLowerCase();
+
+  let page = 1;
+  for (;;) {
+    const res = await zohoBooksClient.get<ZohoContactListResponse & {
+      page_context?: { has_more_page?: boolean };
+    }>(
+      `/contacts?contact_type=customer&filter_by=Status.All&page=${page}&per_page=200`,
+    );
+
+    for (const contact of res.contacts ?? []) {
+      const email = contact.email?.trim().toLowerCase() ?? "";
+      const name = contact.contact_name?.trim().toLowerCase() ?? "";
+      if (billingEmail && email === billingEmail.toLowerCase()) return contact.contact_id;
+      if (contactName && name === contactName) return contact.contact_id;
+    }
+
+    if (!res.page_context?.has_more_page) return null;
+    page += 1;
+  }
+}
+
 async function findContactId(options: {
   email?: string | null;
   contactName?: string | null;
@@ -128,7 +155,8 @@ export async function getOrCreateContact(params: {
       if (msg.includes("3062") || /already exists/i.test(msg)) {
         const fallbackId =
           (await findContactId({ email: billingEmail, contactName })) ??
-          (billingEmail ? await findContactId({ email: billingEmail }) : null);
+          (billingEmail ? await findContactId({ email: billingEmail }) : null) ??
+          (await findContactIdExhaustive({ email: billingEmail, contactName }));
         if (fallbackId) return { ok: true, contactId: fallbackId };
       }
       throw createErr;
