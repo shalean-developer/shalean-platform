@@ -19,6 +19,6 @@ describe("INV-E2E dry-run button", () => {
   it("does not replace or auto-trigger the real sync action", () => {
     expect(source).toContain('adminFetch("/api/admin/zoho-integration", { method: "POST" })');
     expect(source).toContain("Run sync now");
-    expect(source).not.toMatch(/runRepairDryRun\(\).*runSync\(/s);
+    expect(source.replace(/\\s+/g, " ")).not.toContain("runRepairDryRun() runSync(");
   });
 });
