@@ -15,7 +15,7 @@ import {
   loadZohoIntegrationSettings,
 } from "@/lib/accounting/zohoIntegrationSettings";
 import { syncInvoiceStatusesFromZoho } from "@/lib/accounting/syncInvoiceMetadata";
-import { markZohoInvoicePaid } from "@/lib/zoho/zohoBooksService";
+import { getZohoInvoice, markZohoInvoicePaid } from "@/lib/zoho/zohoBooksService";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 
 type SyncRecord = {
@@ -113,12 +113,37 @@ async function processPaymentTransactionSync(
 
   if (!zohoInvoiceId) return { ok: false, error: "no_zoho_invoice_for_payment" };
 
+  const zohoInvoice = await getZohoInvoice(zohoInvoiceId);
+  if (!zohoInvoice.ok) {
+    return { ok: false, error: `zoho_invoice_lookup_failed:${zohoInvoice.error}` };
+  }
+
+  if (zohoInvoice.balanceCents <= 0) {
+    await admin
+      .from("payment_transactions")
+      .update({
+        sync_status: "ignored",
+        sync_errors: "accounting_not_applicable:zoho_invoice_already_settled",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", entityId);
+    return { ok: true, ignoredReason: "zoho_invoice_already_settled" };
+  }
+
+  if (pt.amount_cents > zohoInvoice.balanceCents) {
+    return {
+      ok: false,
+      error: `zoho_balance_mismatch:payment_cents=${pt.amount_cents}:balance_cents=${zohoInvoice.balanceCents}`,
+    };
+  }
+
   const paidDate = pt.paid_at ? pt.paid_at.slice(0, 10) : new Date().toISOString().slice(0, 10);
   const res = await markZohoInvoicePaid({
     zohoInvoiceId,
     amountZar: pt.amount_cents / 100,
     paymentDate: paidDate,
     reference: pt.gateway_reference,
+    contactId: zohoInvoice.customerId ?? undefined,
     customerEmail,
     customerName,
   });
