@@ -105,6 +105,10 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/security/__tests__/p0MandatoryAal2Contract.test.ts lib/security/__tests__/p0PrivilegedMfaRolloutContract.test.ts
 
+      - name: INV-E2E-01D temporary repair endpoint safety
+        if: steps.filter.outputs.run_suite == 'true'
+        run: npm run test -- app/api/admin/inv-e2e-01d/__tests__/zohoRepairDryRunRoute.test.ts
+
       - name: Revenue path tests (booking, dispatch, cleaner API, cron locks, cost gates)
         if: steps.filter.outputs.run_suite == 'true'
         run: >-
