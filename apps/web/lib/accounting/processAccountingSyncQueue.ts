@@ -15,7 +15,7 @@ import {
   loadZohoIntegrationSettings,
 } from "@/lib/accounting/zohoIntegrationSettings";
 import { syncInvoiceStatusesFromZoho } from "@/lib/accounting/syncInvoiceMetadata";
-import { markZohoInvoicePaid } from "@/lib/zoho/zohoBooksService";
+import { getZohoInvoice, markZohoInvoicePaid } from "@/lib/zoho/zohoBooksService";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 
 type SyncRecord = {
@@ -113,12 +113,37 @@ async function processPaymentTransactionSync(
 
   if (!zohoInvoiceId) return { ok: false, error: "no_zoho_invoice_for_payment" };
 
+  const zohoInvoice = await getZohoInvoice(zohoInvoiceId);
+  if (!zohoInvoice.ok) {
+    return { ok: false, error: `zoho_invoice_lookup_failed:${zohoInvoice.error}` };
+  }
+
+  if (zohoInvoice.balanceCents <= 0) {
+    await admin
+      .from("payment_transactions")
+      .update({
+        sync_status: "ignored",
+        sync_errors: "accounting_not_applicable:zoho_invoice_already_settled",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", entityId);
+    return { ok: true, ignoredReason: "zoho_invoice_already_settled" };
+  }
+
+  if (pt.amount_cents > zohoInvoice.balanceCents) {
+    return {
+      ok: false,
+      error: `zoho_balance_mismatch:payment_cents=${pt.amount_cents}:balance_cents=${zohoInvoice.balanceCents}`,
+    };
+  }
+
   const paidDate = pt.paid_at ? pt.paid_at.slice(0, 10) : new Date().toISOString().slice(0, 10);
   const res = await markZohoInvoicePaid({
     zohoInvoiceId,
     amountZar: pt.amount_cents / 100,
     paymentDate: paidDate,
     reference: pt.gateway_reference,
+    contactId: zohoInvoice.customerId ?? undefined,
     customerEmail,
     customerName,
   });
@@ -207,6 +232,7 @@ export type ProcessAccountingSyncResult = {
 export async function processAccountingSyncQueue(
   admin: SupabaseClient,
   limit = 50,
+  invoiceStatusLimit = 5,
 ): Promise<ProcessAccountingSyncResult> {
   if (!isZohoConfigured()) {
     return { processed: 0, succeeded: 0, failed: 0, invoice_status_sync: { synced: 0, failed: 0 } };
@@ -222,7 +248,9 @@ export async function processAccountingSyncQueue(
   const { data: pending } = await admin
     .from("accounting_sync_records")
     .select("id, entity_type, entity_id, retry_count, sync_status, next_retry_at")
-    .in("sync_status", ["pending", "failed"])
+    .or(
+      `sync_status.eq.pending,and(sync_status.eq.failed,retry_count.lt.${settings.max_retry_attempts})`,
+    )
     .or(`next_retry_at.is.null,next_retry_at.lte.${now}`)
     .order("created_at", { ascending: true })
     .limit(limit);
@@ -244,7 +272,10 @@ export async function processAccountingSyncQueue(
     else failed++;
   }
 
-  const invoiceStatusSync = await syncInvoiceStatusesFromZoho(admin, 25);
+  const invoiceStatusSync =
+    invoiceStatusLimit > 0
+      ? await syncInvoiceStatusesFromZoho(admin, invoiceStatusLimit)
+      : { synced: 0, failed: 0 };
 
   await admin
     .from("zoho_integration_settings")
