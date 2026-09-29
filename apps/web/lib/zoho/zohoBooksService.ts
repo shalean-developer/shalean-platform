@@ -3,6 +3,7 @@ import "server-only";
 import { normalizeBillingEmail } from "@/lib/zoho/shaleanBillingContactEmail";
 import { zohoBooksClient } from "@/lib/zoho/zohoBooksClient";
 import { formatZohoOrderReference, type ZohoOrderKind } from "@/lib/zoho/zohoOrderReference";
+import { formatZohoReference } from "@/lib/zoho/zohoReference";
 import type {
   ZohoBankAccountsResponse,
   ZohoChartAccountsResponse,
@@ -596,7 +597,7 @@ export async function markZohoInvoicePaid(
           amount_applied: params.amountZar,
         },
       ],
-      ...(params.reference ? { reference_number: params.reference } : {}),
+      ...(params.reference ? { reference_number: formatZohoReference(params.reference) } : {}),
     });
 
     return { ok: true, paymentId: res.payment.payment_id };
@@ -677,7 +678,7 @@ export async function createZohoExpense(
       amount: params.amountZar,
       ...(params.vendorId ? { vendor_id: params.vendorId } : {}),
       ...(params.description ? { description: params.description } : {}),
-      ...(params.referenceNumber ? { reference_number: params.referenceNumber } : {}),
+      ...(params.referenceNumber ? { reference_number: formatZohoReference(params.referenceNumber) } : {}),
       currency_code: params.currencyCode ?? "ZAR",
     });
     return { ok: true, expenseId: res.expense.expense_id };
