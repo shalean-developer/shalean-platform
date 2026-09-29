@@ -56,6 +56,8 @@ function zohoLinkedForSalesDoc(row: Record<string, unknown>): { linked: boolean;
 }
 
 function bookingNeedsZoho(row: Record<string, unknown>): boolean {
+  if (row.is_test === true) return false;
+  if (String(row.status ?? "").trim().toLowerCase() === "cancelled") return false;
   if (row.is_monthly_billing_booking === true) return false;
   if (String(row.sales_document_id ?? "").trim()) return false;
   if (String(row.payment_method ?? "").toLowerCase() === "zoho") return false;
@@ -117,6 +119,8 @@ export async function loadAdminBillingDocuments(
     "amount_paid_cents",
     "payment_status",
     "payment_method",
+    "status",
+    "is_test",
     "payment_completed_at",
     "is_monthly_billing_booking",
     "sales_document_id",
