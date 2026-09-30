@@ -93,6 +93,42 @@ describe("evaluateMonthlyInvoiceFinalizeReadiness", () => {
     expect(result.reason).toBe("recurring_schedule_incomplete");
   });
 
+  it("treats a resolved recurring occurrence as complete even when it is excluded from billable invoice bookings", () => {
+    const saturdayPlan: RecurringPlanScheduleRow = {
+      ...weeklyPlan,
+      id: "plan-sat",
+      frequency: "weekly",
+      days_of_week: [6],
+      start_date: "2026-05-01",
+    };
+
+    const billableBookings = [
+      { date: "2026-09-04", recurring_id: "plan-sat", monthly_invoice_id: "inv-1" },
+      { date: "2026-09-12", recurring_id: "plan-sat", monthly_invoice_id: "inv-1" },
+      { date: "2026-09-19", recurring_id: "plan-sat", monthly_invoice_id: "inv-1" },
+      { date: "2026-09-26", recurring_id: "plan-sat", monthly_invoice_id: "inv-1" },
+    ];
+
+    const occurrenceHistory = [
+      ...billableBookings,
+      // The scheduled 5 September occurrence exists in history but contributes
+      // nothing to the bill (e.g. it was cancelled).
+      { date: "2026-09-05", recurring_id: "plan-sat", monthly_invoice_id: "inv-1" },
+    ];
+
+    const result = evaluateMonthlyInvoiceFinalizeReadiness({
+      todayYmd: "2026-09-30",
+      invoiceId: "inv-1",
+      invoiceMonthYm: "2026-09",
+      bookingsOnInvoice: billableBookings,
+      recurringPlans: [saturdayPlan],
+      allBookingsByPlanId: new Map([["plan-sat", occurrenceHistory]]),
+    });
+
+    expect(result.ready).toBe(true);
+    expect(result.paymentDueDateYmd).toBe("2026-09-30");
+  });
+
   it("holds on-demand monthly invoices until calendar month end", () => {
     const result = evaluateMonthlyInvoiceFinalizeReadiness({
       todayYmd: "2026-07-07",
