@@ -53,11 +53,12 @@ case "$LOCK_WAIT_SECONDS" in *[!0-9]*|'') fail "lock wait seconds must be numeri
 [ "$LOCK_WAIT_SECONDS" -ge 60 ] || fail "lock wait seconds must be at least 60"
 
 # Serialize every automatic deployment before touching shared staging/pointer
-# state. A newer invocation waits here while the active one either completes or
-# exits because its release was superseded.
-exec 9>"$LOCK"
-if ! /usr/bin/flock -w "$LOCK_WAIT_SECONDS" 9; then
-  fail "timed out waiting for pricing-test deployment lock"
+# state. Hold the flock in a wrapper process and close its FD before exec'ing
+# the deployment shell. This prevents Passenger/Next.js children from inheriting
+# the deployment lock and keeping it alive after this script exits.
+if [ "${PLESK_AUTO_LOCK_WRAPPED:-0}" != "1" ]; then
+  exec /usr/bin/flock -w "$LOCK_WAIT_SECONDS" --close "$LOCK" \
+    /usr/bin/env PLESK_AUTO_LOCK_WRAPPED=1 /bin/bash "$0" "$@"
 fi
 
 rm -rf "$WORK"
