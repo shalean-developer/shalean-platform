@@ -134,35 +134,9 @@ async function main() {
     return;
   }
 
-  const { finalizeAndSendMonthlyInvoice } = await import("../lib/monthlyInvoice/finalizeAndSendMonthlyInvoice");
-
-  let sent = 0;
-  let failed = 0;
-  let skipped = 0;
-
-  for (const id of TARGET_IDS) {
-    const row = byId.get(id)!;
-    const result = await finalizeAndSendMonthlyInvoice(admin, {
-      invoiceId: row.id,
-      customerId: row.customer_id,
-      month: row.month,
-      todayYmd: todayJohannesburg(),
-      forceEarlySend: false,
-      actor: "script/office-billing-e2e-06e",
-      source: "script/office-billing-e2e-06e",
-      resumePartialFinalize: true,
-    });
-
-    console.log(`${row.id}: ${JSON.stringify(result)}`);
-
-    if (result.ok && result.outcome === "sent") sent += 1;
-    else if (!result.ok && "skipped" in result && result.skipped) skipped += 1;
-    else failed += 1;
-  }
-
-  console.log(`SUMMARY sent=${sent} skipped=${skipped} failed=${failed}`);
-  console.log("OFFICE_BILLING_E2E_06E_APPLY_COMPLETE");
-  if (failed > 0 || skipped > 0) process.exitCode = 1;
+  fail(
+    "APPLY_DISABLED_NO_CUSTOMER_EMAILS: E2E-06E is read-only while customer email delivery is paused. Use a separately reviewed no-email recovery path."
+  );
 }
 
 void main().catch((error) => {
