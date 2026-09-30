@@ -222,8 +222,10 @@ export async function assessMonthlyInvoiceFinalizeReadiness(
     const { data: planBookings } = await admin
       .from("bookings")
       .select("date, recurring_id, monthly_invoice_id")
-      .eq("recurring_id", plan.id)
-      .neq("status", "cancelled");
+      .eq("recurring_id", plan.id);
+    // A cancelled scheduled occurrence still proves that the occurrence existed
+    // and was intentionally resolved. It should not make the month look
+    // perpetually incomplete or require a replacement booking.
     allBookingsByPlanId.set(plan.id, (planBookings ?? []) as BookingRow[]);
   }
 
