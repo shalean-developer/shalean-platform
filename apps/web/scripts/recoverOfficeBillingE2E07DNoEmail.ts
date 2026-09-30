@@ -10,6 +10,8 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import { buildMonthlyInvoiceSnapshot, wrapSnapshotCurrentV1 } from "../lib/monthlyInvoice/buildMonthlyInvoiceSnapshot";
+import { appendMonthlyInvoiceSnapshotEvent } from "../lib/monthlyInvoice/invoiceSnapshotEvents";
 import { initializePaystackForMonthlyInvoice } from "../lib/monthlyInvoice/initializePaystackForMonthlyInvoice";
 import { assessMonthlyInvoiceFinalizeReadiness } from "../lib/monthlyInvoice/isMonthlyInvoiceReadyToFinalize";
 import { resolveMonthlyInvoiceCustomerEmail } from "../lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail";
@@ -93,7 +95,7 @@ async function main() {
     if (String(row.zoho_invoice_id ?? "").trim()) fail(`${id} already has Zoho invoice`);
     if (row.sent_at || row.finalized_at) fail(`${id} already has sent/finalized timestamp`);
     if (row.initial_invoice_email_dispatch_claimed === true) fail(`${id} has active email claim`);
-    if (row.snapshot_at_finalize == null || row.snapshot_current == null) fail(`${id} missing partial snapshot`);
+    if (row.snapshot_at_finalize != null || row.snapshot_current != null) fail(`${id} already has finalization snapshot`);
 
     const { data: events, error: eventErr } = await admin
       .from("monthly_invoice_events")
@@ -103,7 +105,7 @@ async function main() {
 
     const finalizedCount = (events ?? []).filter((e) => e.kind === "invoice_finalized").length;
     const emailCount = (events ?? []).filter((e) => e.kind === "invoice_payment_link_email_sent").length;
-    if (finalizedCount !== 1 || emailCount !== 0) {
+    if (finalizedCount !== 0 || emailCount !== 0) {
       fail(`${id} unexpected events finalized=${finalizedCount} email=${emailCount}`);
     }
 
@@ -131,15 +133,15 @@ async function main() {
     readinessById.set(id, readiness.paymentDueDateYmd);
   }
 
-  console.log(`PRECHECK_PASS targets=${TARGET_IDS.length} drafts=${TARGET_IDS.length} ready=${TARGET_IDS.length} partial_snapshots=${TARGET_IDS.length} paystack=SET zoho=SET customer_email_delivery=DISABLED`);
+  console.log(`PRECHECK_PASS targets=${TARGET_IDS.length} drafts=${TARGET_IDS.length} ready=${TARGET_IDS.length} fresh_snapshots=${TARGET_IDS.length} paystack=SET zoho=SET customer_email_delivery=DISABLED`);
   console.log(apply ? "MODE=APPLY_NO_EMAIL" : "MODE=DRY_RUN_NO_EMAIL");
 
   if (!apply) {
     for (const id of TARGET_IDS) {
       const row = byId.get(id)!;
-      console.log(`[dry-run] would initialize Paystack + sync Zoho only ${id.slice(0,8)} — R${(Math.round(Number(row.total_amount_cents ?? 0))/100).toFixed(2)} — due ${readinessById.get(id)}`);
+      console.log(`[dry-run] would snapshot + initialize Paystack + sync Zoho only ${id.slice(0,8)} — R${(Math.round(Number(row.total_amount_cents ?? 0))/100).toFixed(2)} — due ${readinessById.get(id)}`);
     }
-    console.log("OFFICE_BILLING_E2E_06F_DRY_RUN_COMPLETE");
+    console.log("OFFICE_BILLING_E2E_07D_DRY_RUN_COMPLETE");
     return;
   }
 
@@ -195,6 +197,48 @@ async function main() {
       continue;
     }
 
+    const snapshot = await buildMonthlyInvoiceSnapshot(admin, id);
+    if (!snapshot) {
+      failed += 1;
+      console.error(`${id}: snapshot build failed`);
+      continue;
+    }
+
+    const { data: snapRows, error: snapErr } = await admin
+      .from("monthly_invoices")
+      .update({
+        snapshot_at_finalize: snapshot,
+        snapshot_current: wrapSnapshotCurrentV1(snapshot),
+        snapshot_version: 1,
+      })
+      .eq("id", id)
+      .eq("status", "draft")
+      .is("snapshot_at_finalize", null)
+      .select("id");
+
+    if (snapErr || !snapRows?.length) {
+      failed += 1;
+      console.error(`${id}: snapshot persist failed — ${snapErr?.message ?? "no row updated"}`);
+      continue;
+    }
+
+    const finalizedEvent = await appendMonthlyInvoiceSnapshotEvent(
+      admin,
+      id,
+      {
+        kind: "invoice_finalized",
+        at: new Date().toISOString(),
+        total_amount_cents: totalCents,
+        booking_count: Math.round(Number(snapshot.totals.total_bookings ?? 0)),
+      },
+      { source: "script/office-billing-e2e-07d" },
+    );
+    if (!finalizedEvent.ok) {
+      failed += 1;
+      console.error(`${id}: finalized event append failed — ${finalizedEvent.error}`);
+      continue;
+    }
+
     const email = await resolveMonthlyInvoiceCustomerEmail(admin, {
       customerId: original.customer_id,
       invoiceId: id,
@@ -239,7 +283,7 @@ async function main() {
   }
 
   console.log(`SUMMARY paystack_initialized=${paystackInitialized} zoho_synced=${zohoSynced} failed=${failed} customer_emails_sent=0`);
-  console.log("OFFICE_BILLING_E2E_06F_APPLY_COMPLETE");
+  console.log("OFFICE_BILLING_E2E_07D_APPLY_COMPLETE");
   if (failed > 0) process.exitCode = 1;
 }
 
