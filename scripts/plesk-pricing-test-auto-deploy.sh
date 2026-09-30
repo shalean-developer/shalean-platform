@@ -34,6 +34,7 @@ HEALTH_URL="${PLESK_TEST_HEALTH_URL:-https://pricing-test.shalean.co.za/api/heal
 WAIT_SECONDS="${PLESK_AUTO_WAIT_SECONDS:-1200}"
 POLL_SECONDS="${PLESK_AUTO_POLL_SECONDS:-15}"
 LOCK_WAIT_SECONDS="${PLESK_AUTO_LOCK_WAIT_SECONDS:-1500}"
+KEEP_RELEASES="${PLESK_TEST_KEEP_RELEASES:-2}"
 EXPECTED_REF="jhubpsbwmjgydkzztxeu"
 
 fail(){
@@ -48,6 +49,8 @@ done
 case "$WAIT_SECONDS" in *[!0-9]*|'') fail "wait seconds must be numeric" ;; esac
 case "$POLL_SECONDS" in *[!0-9]*|'') fail "poll seconds must be numeric" ;; esac
 case "$LOCK_WAIT_SECONDS" in *[!0-9]*|'') fail "lock wait seconds must be numeric" ;; esac
+case "$KEEP_RELEASES" in *[!0-9]*|'') fail "keep releases must be numeric" ;; esac
+[ "$KEEP_RELEASES" -ge 2 ] || fail "keep releases must be at least 2"
 [ "$WAIT_SECONDS" -ge 60 ] || fail "wait seconds must be at least 60"
 [ "$POLL_SECONDS" -ge 5 ] || fail "poll seconds must be at least 5"
 [ "$LOCK_WAIT_SECONDS" -ge 60 ] || fail "lock wait seconds must be at least 60"
@@ -219,9 +222,40 @@ PY
   return 1
 }
 
+cleanup_old_staging_releases(){
+  local active previous
+  active="$(readlink -f "$CURRENT")"
+  previous="$PREVIOUS"
+  /usr/bin/python3 - "$ROOT" "$active" "$previous" "$KEEP_RELEASES" <<'PY'
+import os, shutil, sys
+root, active, previous, keep_raw = sys.argv[1:5]
+keep = max(2, int(keep_raw))
+protected = {os.path.realpath(p) for p in (active, previous) if p}
+candidates = []
+for name in os.listdir(root):
+    if not name.startswith("plesk-pricing-test-"):
+        continue
+    path = os.path.join(root, name)
+    if os.path.isdir(path) and not os.path.islink(path):
+        candidates.append((os.path.getmtime(path), os.path.realpath(path)))
+candidates.sort(reverse=True)
+keep_paths = set(protected)
+for _, path in candidates:
+    if len(keep_paths) >= keep:
+        break
+    keep_paths.add(path)
+for _, path in candidates:
+    if path in keep_paths:
+        continue
+    shutil.rmtree(path)
+    print(f"PLESK-AUTO-03 pruned={path}")
+PY
+}
+
 # Activate the already-prepared pointer.
 restart_passenger
 if health_exact "$TARGET_SHA"; then
+  cleanup_old_staging_releases
   {
     printf 'PLESK_AUTO_03=PASS\n'
     printf 'WORKFLOW_RUN_ID=%s\n' "$RUN_ID"
