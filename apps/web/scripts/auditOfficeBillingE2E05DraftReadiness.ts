@@ -161,8 +161,7 @@ async function assessReadinessLocally(
     const { data: planBookings } = await admin
       .from("bookings")
       .select("date, monthly_invoice_id, status")
-      .eq("recurring_id", plan.id)
-      .neq("status", "cancelled");
+      .eq("recurring_id", plan.id);
 
     const onInvoiceDates = new Set(
       (planBookings ?? [])
