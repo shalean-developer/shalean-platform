@@ -28,7 +28,9 @@ describe("PLESK-AUTO-03 pricing-test deployment contract", () => {
   });
 
   it("serializes deployments and bounds GitHub requests", () => {
-    expect(autoDeploy).toContain('/usr/bin/flock -w "$LOCK_WAIT_SECONDS" 9');
+    expect(autoDeploy).toContain('/usr/bin/flock -w "$LOCK_WAIT_SECONDS" --close "$LOCK"');
+    expect(autoDeploy).toContain('PLESK_AUTO_LOCK_WRAPPED=1 /bin/bash "$0" "$@"');
+    expect(autoDeploy).not.toContain('/usr/bin/flock -w "$LOCK_WAIT_SECONDS" 9');
     expect(autoDeploy).toContain("--connect-timeout 10");
     expect(autoDeploy).toContain("--max-time 30");
     expect(autoDeploy).toContain(
