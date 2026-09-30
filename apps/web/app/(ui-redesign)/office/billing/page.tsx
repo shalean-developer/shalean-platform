@@ -95,10 +95,7 @@ function ZohoBadge({ linked }: { linked: boolean }) {
 }
 
 function canManualSync(doc: AdminBillingDocumentRow): boolean {
-  if (doc.zoho_linked) return false;
-  if (doc.amount_cents <= 0) return false;
-  if (doc.status === "requested") return false;
-  return true;
+  return doc.sync_eligible;
 }
 
 function canEditBillingDocument(doc: AdminBillingDocumentRow): boolean {
@@ -145,6 +142,9 @@ function BillingDocumentRow({
       </td>
       <td className="px-4 py-3">
         <ZohoBadge linked={doc.zoho_linked} />
+        {!doc.zoho_linked && !doc.sync_eligible && doc.sync_hold_reason ? (
+          <p className="mt-1 text-[11px] font-medium text-slate-500">{doc.sync_hold_reason}</p>
+        ) : null}
       </td>
       <td className="px-4 py-3 text-right">
         <div className="flex items-center justify-end gap-3">
