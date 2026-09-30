@@ -4,6 +4,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { SALES_DOCUMENT_ADMIN_COLUMNS } from "@/lib/salesDocument/salesDocumentColumns";
+import { assessMonthlyInvoiceFinalizeReadiness } from "@/lib/monthlyInvoice/isMonthlyInvoiceReadyToFinalize";
+import { resolveMonthlyInvoiceCustomerEmail } from "@/lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail";
+import { todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 
 export type AdminBillingDocumentKind =
   | "quote"
@@ -25,6 +28,8 @@ export type AdminBillingDocumentRow = {
   created_at: string;
   href: string;
   source?: string | null;
+  sync_eligible: boolean;
+  sync_hold_reason?: string | null;
 };
 
 export type AdminBillingDocumentsSummary = {
@@ -63,6 +68,63 @@ function bookingNeedsZoho(row: Record<string, unknown>): boolean {
   if (String(row.payment_method ?? "").toLowerCase() === "zoho") return false;
   if (String(row.zoho_invoice_id ?? "").trim()) return false;
   return true;
+}
+
+export function billingDocumentNeedsZohoSync(doc: Pick<AdminBillingDocumentRow, "zoho_linked" | "amount_cents" | "status" | "sync_eligible">): boolean {
+  return !doc.zoho_linked && doc.amount_cents > 0 && doc.status !== "requested" && doc.sync_eligible;
+}
+
+async function monthlyInvoiceSyncEligibility(
+  admin: SupabaseClient,
+  row: {
+    id: string;
+    customer_id: string;
+    month: string;
+    status: string;
+    total_amount_cents: number;
+    zoho_invoice_id?: string | null;
+  },
+): Promise<{ eligible: boolean; reason: string | null }> {
+  if (String(row.zoho_invoice_id ?? "").trim()) return { eligible: false, reason: null };
+  if (Math.max(0, Math.round(Number(row.total_amount_cents ?? 0))) <= 0) {
+    return { eligible: false, reason: "No billable amount" };
+  }
+
+  const status = String(row.status ?? "").toLowerCase();
+  if (status !== "draft") return { eligible: true, reason: null };
+
+  const { data: bookings, error: bookingsError } = await admin
+    .from("bookings")
+    .select("status")
+    .eq("monthly_invoice_id", row.id);
+  if (bookingsError) return { eligible: false, reason: "Could not verify booking readiness" };
+
+  const open = (bookings ?? []).filter((b) => {
+    const s = String((b as { status?: string | null }).status ?? "").toLowerCase();
+    return s !== "completed" && s !== "cancelled";
+  }).length;
+  if (open > 0) return { eligible: false, reason: "Open booking" };
+
+  const readiness = await assessMonthlyInvoiceFinalizeReadiness(admin, {
+    invoiceId: row.id,
+    customerId: row.customer_id,
+    month: row.month,
+    todayYmd: todayJohannesburg(),
+  });
+  if (!readiness.ready) {
+    return {
+      eligible: false,
+      reason: readiness.reason === "recurring_schedule_incomplete" ? "Schedule incomplete" : "Not ready",
+    };
+  }
+
+  const outboundEmail = await resolveMonthlyInvoiceCustomerEmail(admin, {
+    customerId: row.customer_id,
+    invoiceId: row.id,
+  });
+  if (!outboundEmail) return { eligible: false, reason: "Contact required" };
+
+  return { eligible: true, reason: null };
 }
 
 async function fetchAllPages(
@@ -193,6 +255,8 @@ export async function loadAdminBillingDocuments(
       created_at: String(row.created_at ?? ""),
       href: `/office/sales-documents/${String(row.id)}`,
       source: typeof row.source === "string" ? row.source : null,
+      sync_eligible: !zoho.linked && Math.max(0, Math.round(Number(row.total_cents ?? 0))) > 0 && String(row.status ?? "") !== "requested",
+      sync_hold_reason: null,
     });
   }
 
@@ -217,6 +281,9 @@ export async function loadAdminBillingDocuments(
       zoho_id: zohoId || null,
       created_at: String(row.payment_completed_at ?? row.created_at ?? ""),
       href: `/office/bookings/${String(row.id)}`,
+      sync_eligible: bookingNeedsZoho(row),
+      sync_hold_reason:
+        String(row.status ?? "").trim().toLowerCase() === "cancelled" ? "Cancelled" : null,
     });
   }
 
@@ -232,6 +299,14 @@ export async function loadAdminBillingDocuments(
     };
     const profile = row.customer_id ? profileNames.get(row.customer_id) : undefined;
     const zohoId = String(row.zoho_invoice_id ?? "").trim();
+    const syncEligibility = await monthlyInvoiceSyncEligibility(admin, {
+      id: row.id,
+      customer_id: String(row.customer_id ?? ""),
+      month: String(row.month ?? ""),
+      status: String(row.status ?? ""),
+      total_amount_cents: Math.max(0, Math.round(Number(row.total_amount_cents ?? 0))),
+      zoho_invoice_id: row.zoho_invoice_id,
+    });
     documents.push({
       id: row.id,
       kind: "monthly_invoice",
@@ -244,6 +319,8 @@ export async function loadAdminBillingDocuments(
       zoho_id: zohoId || null,
       created_at: String(row.created_at ?? ""),
       href: `/office/invoices/${row.id}`,
+      sync_eligible: syncEligibility.eligible,
+      sync_hold_reason: syncEligibility.reason,
     });
   }
 
@@ -254,7 +331,7 @@ export async function loadAdminBillingDocuments(
     filtered = filtered.filter((d) => d.kind === kindFilter);
   }
   if (kindFilter === "missing_zoho") {
-    filtered = filtered.filter((d) => !d.zoho_linked && d.amount_cents > 0 && d.status !== "requested");
+    filtered = filtered.filter((d) => billingDocumentNeedsZohoSync(d));
   }
   if (q) {
     filtered = filtered.filter((d) => {
@@ -266,7 +343,7 @@ export async function loadAdminBillingDocuments(
   const summary: AdminBillingDocumentsSummary = {
     total: documents.length,
     zoho_linked: documents.filter((d) => d.zoho_linked).length,
-    missing_zoho: documents.filter((d) => !d.zoho_linked && d.amount_cents > 0 && d.status !== "requested").length,
+    missing_zoho: documents.filter((d) => billingDocumentNeedsZohoSync(d)).length,
     by_kind: {
       quote: { total: 0, missing_zoho: 0 },
       sales_invoice: { total: 0, missing_zoho: 0 },
@@ -277,7 +354,7 @@ export async function loadAdminBillingDocuments(
 
   for (const d of documents) {
     summary.by_kind[d.kind].total += 1;
-    if (!d.zoho_linked && d.amount_cents > 0 && d.status !== "requested") {
+    if (billingDocumentNeedsZohoSync(d)) {
       summary.by_kind[d.kind].missing_zoho += 1;
     }
   }
