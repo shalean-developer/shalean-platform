@@ -58,7 +58,15 @@ async function main() {
     if (!String(row.zoho_invoice_id ?? "").trim()) fail(`${id} missing Zoho link`);
     if (String(row.payment_link ?? "").trim()) fail(`${id} already has active payment link`);
     if (!String(row.paystack_reference ?? "").trim()) fail(`${id} missing existing Paystack reference`);
-    if (row.initial_invoice_email_dispatch_claimed === true) fail(`${id} has active email claim`);
+    const { count: emailEventCount, error: emailEventErr } = await admin
+      .from("monthly_invoice_events")
+      .select("id", { count: "exact", head: true })
+      .eq("invoice_id", id)
+      .eq("kind", "invoice_payment_link_email_sent");
+    if (emailEventErr) fail(`${id} email-event query failed: ${emailEventErr.message}`);
+    if ((emailEventCount ?? 0) !== 1) {
+      fail(`${id} expected one historical initial-email event; found ${emailEventCount ?? 0}`);
+    }
 
     const balance = Math.max(0, Math.round(Number(row.balance_cents ?? 0)));
     if (balance <= 0) fail(`${id} has no remaining balance`);
