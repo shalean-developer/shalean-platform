@@ -85,7 +85,7 @@ async function main() {
       admin.from("monthly_invoice_events").select("id", { count: "exact", head: true }).eq("invoice_id", id),
       admin.from("invoice_adjustments").select("id", { count: "exact", head: true }).eq("applied_to_invoice_id", id),
       admin.from("admin_api_idempotency").select("id", { count: "exact", head: true }).eq("invoice_id", id),
-      admin.from("monthly_invoice_paystack_charge_dedup").select("id", { count: "exact", head: true }).eq("invoice_id", id),
+      admin.from("monthly_invoice_paystack_charge_dedup").select("charge_reference", { count: "exact", head: true }).eq("invoice_id", id),
     ]);
 
     if (bookingsErr) fail(`${id} bookings query failed: ${bookingsErr.message}`);
