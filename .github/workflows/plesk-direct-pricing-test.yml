@@ -1,0 +1,115 @@
+name: Plesk direct deploy pricing-test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - integration/shalean-release
+    paths:
+      - "apps/web/**"
+      - "packages/**"
+      - "scripts/plesk-direct-activate-pricing-test.sh"
+      - ".github/workflows/plesk-direct-pricing-test.yml"
+      - "package.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plesk-direct-pricing-test
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SHALEAN_APP_ENV: "test"
+      SHALEAN_ENFORCE_ENV_SAFETY: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_SITE_URL: "https://pricing-test.shalean.co.za"
+      NEXT_PUBLIC_APP_URL: "https://pricing-test.shalean.co.za"
+      NEXT_PUBLIC_SUPABASE_URL: "https://jhubpsbwmjgydkzztxeu.supabase.co"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ secrets.PLESK_TEST_SUPABASE_PUBLISHABLE_KEY }}"
+      NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "${{ secrets.PLESK_TEST_PAYSTACK_PUBLIC_KEY }}"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false --package-lock-only=false --ignore-scripts @tailwindcss/postcss@4.1.14
+
+      - name: Build standalone
+        working-directory: apps/web
+        env:
+          FACEBOOK_APP_ID: "build-only-placeholder"
+          FACEBOOK_APP_SECRET: "build-only-placeholder"
+        run: |
+          set -euo pipefail
+          node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build --webpack
+          RUNTIME=".next/standalone/apps/web"
+          rm -rf "$RUNTIME/public" "$RUNTIME/.next/static"
+          mkdir -p "$RUNTIME/.next"
+          cp -a public "$RUNTIME/public"
+          cp -a .next/static "$RUNTIME/.next/static"
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          rm -rf artifact-stage
+          mkdir -p artifact-stage
+          cp -a apps/web/.next/standalone artifact-stage/runtime
+          cat > artifact-stage/build-meta.json <<META
+          {"artifact_sha":"$GITHUB_SHA","target_host":"pricing-test.shalean.co.za","deployment_environment":"staging","supabase_ref":"jhubpsbwmjgydkzztxeu","server_secrets_baked_in":false}
+          META
+          tar -czf "plesk-direct-$GITHUB_SHA.tar.gz" -C artifact-stage .
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: "${{ secrets.PLESK_SSH_PRIVATE_KEY }}"
+          SSH_HOST: "${{ secrets.PLESK_SSH_HOST }}"
+          SSH_PORT: "${{ secrets.PLESK_SSH_PORT }}"
+          SSH_USER: "${{ secrets.PLESK_SSH_USER }}"
+        run: |
+          set -euo pipefail
+          test -n "$SSH_KEY" && test -n "$SSH_HOST" && test -n "$SSH_USER"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${SSH_PORT:-22}"
+          ssh-keyscan -p "$PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload release and activator
+        env:
+          SSH_HOST: "${{ secrets.PLESK_SSH_HOST }}"
+          SSH_PORT: "${{ secrets.PLESK_SSH_PORT }}"
+          SSH_USER: "${{ secrets.PLESK_SSH_USER }}"
+        run: |
+          set -euo pipefail
+          PORT="${SSH_PORT:-22}"
+          REMOTE="/var/www/vhosts/shalean.co.za/.github-deploy"
+          ssh -p "$PORT" "$SSH_USER@$SSH_HOST" "mkdir -p '$REMOTE'"
+          scp -P "$PORT" "plesk-direct-$GITHUB_SHA.tar.gz" scripts/plesk-direct-activate-pricing-test.sh "$SSH_USER@$SSH_HOST:$REMOTE/"
+
+      - name: Activate pricing-test
+        env:
+          SSH_HOST: "${{ secrets.PLESK_SSH_HOST }}"
+          SSH_PORT: "${{ secrets.PLESK_SSH_PORT }}"
+          SSH_USER: "${{ secrets.PLESK_SSH_USER }}"
+        run: |
+          set -euo pipefail
+          PORT="${SSH_PORT:-22}"
+          REMOTE="/var/www/vhosts/shalean.co.za/.github-deploy"
+          ssh -p "$PORT" "$SSH_USER@$SSH_HOST" "chmod +x '$REMOTE/plesk-direct-activate-pricing-test.sh' && /bin/bash '$REMOTE/plesk-direct-activate-pricing-test.sh' '$GITHUB_SHA' '$REMOTE/plesk-direct-$GITHUB_SHA.tar.gz'"
