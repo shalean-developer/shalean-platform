@@ -39,7 +39,7 @@ jobs:
           CHANGED="$(git diff --name-only "$BASE" "$HEAD" || true)"
           echo "Changed paths:"
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -Eq '^(apps/web/|packages/|scripts/plesk-pricing-test-.*\.sh$|\.github/workflows/(web-test|plesk-pricing-test)\.yml)'; then
+          if echo "$CHANGED" | grep -Eq '^(apps/web/|packages/|\.github/workflows/web-test\.yml)'; then
             echo "run_suite=true" >> "$GITHUB_OUTPUT"
             echo "Web/package paths changed — running vitest suite."
           else
@@ -64,15 +64,6 @@ jobs:
           echo "checkout=$GOT"
           echo "pr_head=$WANT"
           test "$GOT" = "$WANT"
-
-      - name: Plesk pricing-test automation shell syntax
-        if: steps.filter.outputs.run_suite == 'true'
-        working-directory: .
-        run: |
-          set -euo pipefail
-          bash -n scripts/plesk-pricing-test-git-prepare.sh
-          bash -n scripts/plesk-pricing-test-activate.sh
-          bash -n scripts/plesk-pricing-test-auto-deploy.sh
 
       - uses: actions/setup-node@v4
         if: steps.filter.outputs.run_suite == 'true'
@@ -145,7 +136,6 @@ jobs:
           lib/cron/__tests__/h15CronLockOverlapPrevention.test.ts
           lib/cron/__tests__/cr05RetryFailedJobsCadence.test.ts
           lib/cron/__tests__/cr10VercelBuildGate.test.ts
-          lib/deploy/__tests__/pleskPricingTestAutoDeployContract.test.ts
           lib/admin/__tests__/cr11OfficeOpsQueryCost.test.ts
           lib/admin/__tests__/ownerCommandCentreAnalyticsRollup.test.ts
           lib/admin/__tests__/m13m14AdminEligibilityConvergence.test.ts
@@ -200,15 +190,8 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run report:canonical-purity
 
-      - name: Plesk migration — defer unavailable Vercel production-host health checks
-        if: github.event_name == 'pull_request' && (github.event.pull_request.head.ref == 'fix/plesk-prod-converge-08b' || github.event.pull_request.head.ref == 'fix/plesk-prod-ci-08d' || github.event.pull_request.head.ref == 'integration/shalean-release') && steps.filter.outputs.run_suite == 'true'
-        run: |
-          echo "Deferring only live shalean.co.za SEO/Search Console health probes for the governed Plesk migration PR."
-          echo "Current production Vercel origin is intentionally unavailable during migration and returns HTTP 402."
-          echo "All code, tests, typecheck, security, build, PR-local SEO/link, and route-matrix gates remain enforced."
-
       - name: Live SEO validation (production site health)
-        if: steps.filter.outputs.run_suite == 'true' && (github.event_name != 'pull_request' || (github.event.pull_request.head.ref != 'fix/plesk-prod-converge-08b' && github.event.pull_request.head.ref != 'fix/plesk-prod-ci-08d' && github.event.pull_request.head.ref != 'integration/shalean-release'))
+        if: steps.filter.outputs.run_suite == 'true'
         continue-on-error: ${{ github.event_name == 'pull_request' }}
         env:
           AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL || 'https://shalean.co.za' }}
