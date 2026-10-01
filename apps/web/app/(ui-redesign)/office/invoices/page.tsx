@@ -28,6 +28,11 @@ import type {
   AdminInvoiceListSummary,
   AdminInvoiceMonthGroup,
 } from "@/lib/admin/invoices/loadAdminInvoiceList";
+import {
+  buildInvoiceCsv,
+  getInvoiceOperationalStatus,
+  getMonthBalanceBreakdown,
+} from "@/lib/admin/invoices/officeInvoices03Ui";
 
 type InvoicesResponse = {
   invoices: AdminInvoiceListRow[];
@@ -51,7 +56,7 @@ function statusPresentation(status: string): {
 }
 
 function InvoiceCard({ inv }: { inv: AdminInvoiceListRow }) {
-  const s = statusPresentation(inv.status);
+  const s = statusPresentation(getInvoiceOperationalStatus(inv));
   const SIcon = s.icon;
   const href = `/office/invoices/${inv.id}`;
   return (
@@ -168,7 +173,7 @@ function SummaryStatCard({
 }
 
 function InvoiceRow({ inv }: { inv: AdminInvoiceListRow }) {
-  const s = statusPresentation(inv.status);
+  const s = statusPresentation(getInvoiceOperationalStatus(inv));
   const SIcon = s.icon;
   return (
     <tr className="group hover:bg-slate-50/50 transition-colors">
@@ -240,6 +245,7 @@ export default function InvoicesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
   const [monthsPerPage, setMonthsPerPage] = useState(3);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const timer = globalThis.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -289,6 +295,34 @@ export default function InvoicesPage() {
   const draftForecastCents = summary?.draft_forecast_cents ?? 0;
   const totalOutstandingCents = summary?.total_outstanding_cents ?? 0;
 
+  async function exportInvoices() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const exportParams = new URLSearchParams();
+      if (statusFilter !== "all") exportParams.set("status", statusFilter);
+      if (debouncedSearch) exportParams.set("q", debouncedSearch);
+      const response = await fetch(`/api/admin/invoices?${exportParams.toString()}`, {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Could not export invoices.");
+      const payload = (await response.json()) as InvoicesResponse;
+      const csv = buildInvoiceCsv(payload.invoices ?? []);
+      const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `monthly-invoices-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="min-w-0 max-w-full space-y-5 overflow-x-hidden">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -308,9 +342,11 @@ export default function InvoicesPage() {
           </button>
           <button
             type="button"
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 shadow-sm"
+            onClick={() => void exportInvoices()}
+            disabled={exporting}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 shadow-sm disabled:cursor-wait disabled:opacity-60"
           >
-            <Download className="h-4 w-4" /> Export
+            <Download className="h-4 w-4" /> {exporting ? "Exporting…" : "Export"}
           </button>
         </div>
       </div>
@@ -411,16 +447,13 @@ export default function InvoicesPage() {
           ) : monthGroups.length > 0 ? (
             monthGroups.map((group) => {
               const groupTotalCents = group.invoices.reduce((sum, inv) => sum + inv.total_amount_cents, 0);
-              const groupOutstandingCents = group.invoices.reduce(
-                (sum, inv) => sum + Math.max(0, inv.balance_cents),
-                0,
-              );
+              const groupBalances = getMonthBalanceBreakdown(group.invoices);
               return (
                 <MonthGroupMobileSection
                   key={group.month}
                   group={group}
                   groupTotalCents={groupTotalCents}
-                  groupOutstandingCents={groupOutstandingCents}
+                  groupBalances={groupBalances}
                 />
               );
             })
@@ -433,7 +466,7 @@ export default function InvoicesPage() {
           <table className="w-full min-w-[720px] text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50">
-                {["Invoice", "Customer", "Bookings", "Amount", "Due", "Status", ""].map((h) => (
+                {["Invoice", "Customer", "Bookings", "Amount", "Date", "Status", ""].map((h) => (
                   <th
                     key={h}
                     className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400"
@@ -461,16 +494,13 @@ export default function InvoicesPage() {
               ) : monthGroups.length > 0 ? (
                 monthGroups.map((group) => {
                   const groupTotalCents = group.invoices.reduce((sum, inv) => sum + inv.total_amount_cents, 0);
-                  const groupOutstandingCents = group.invoices.reduce(
-                    (sum, inv) => sum + Math.max(0, inv.balance_cents),
-                    0,
-                  );
+                  const groupBalances = getMonthBalanceBreakdown(group.invoices);
                   return (
                     <MonthGroupSection
                       key={group.month}
                       group={group}
                       groupTotalCents={groupTotalCents}
-                      groupOutstandingCents={groupOutstandingCents}
+                      groupBalances={groupBalances}
                     />
                   );
                 })
@@ -539,11 +569,11 @@ export default function InvoicesPage() {
 function MonthGroupMobileSection({
   group,
   groupTotalCents,
-  groupOutstandingCents,
+  groupBalances,
 }: {
   group: AdminInvoiceMonthGroup;
   groupTotalCents: number;
-  groupOutstandingCents: number;
+  groupBalances: ReturnType<typeof getMonthBalanceBreakdown>;
 }) {
   return (
     <section className="border-b border-slate-200 last:border-b-0">
@@ -556,9 +586,14 @@ function MonthGroupMobileSection({
           <span className="font-semibold text-slate-800">
             Total {formatCurrency(groupTotalCents, group.invoices[0]?.currency_code ?? "ZAR")}
           </span>
-          {groupOutstandingCents > 0 ? (
+          {groupBalances.collectible_cents > 0 ? (
             <span className="font-semibold text-orange-600">
-              Unpaid {formatCurrency(groupOutstandingCents, group.invoices[0]?.currency_code ?? "ZAR")}
+              Collectible {formatCurrency(groupBalances.collectible_cents, group.invoices[0]?.currency_code ?? "ZAR")}
+            </span>
+          ) : null}
+          {groupBalances.draft_forecast_cents > 0 ? (
+            <span className="font-semibold text-blue-600">
+              Draft forecast {formatCurrency(groupBalances.draft_forecast_cents, group.invoices[0]?.currency_code ?? "ZAR")}
             </span>
           ) : null}
         </p>
@@ -573,11 +608,11 @@ function MonthGroupMobileSection({
 function MonthGroupSection({
   group,
   groupTotalCents,
-  groupOutstandingCents,
+  groupBalances,
 }: {
   group: AdminInvoiceMonthGroup;
   groupTotalCents: number;
-  groupOutstandingCents: number;
+  groupBalances: ReturnType<typeof getMonthBalanceBreakdown>;
 }) {
   return (
     <>
@@ -595,9 +630,14 @@ function MonthGroupSection({
               <span className="font-semibold text-slate-800">
                 Total: {formatCurrency(groupTotalCents, group.invoices[0]?.currency_code ?? "ZAR")}
               </span>
-              {groupOutstandingCents > 0 ? (
+              {groupBalances.collectible_cents > 0 ? (
                 <span className="font-semibold text-orange-600">
-                  Unpaid: {formatCurrency(groupOutstandingCents, group.invoices[0]?.currency_code ?? "ZAR")}
+                  Collectible: {formatCurrency(groupBalances.collectible_cents, group.invoices[0]?.currency_code ?? "ZAR")}
+                </span>
+              ) : null}
+              {groupBalances.draft_forecast_cents > 0 ? (
+                <span className="font-semibold text-blue-600">
+                  Draft forecast: {formatCurrency(groupBalances.draft_forecast_cents, group.invoices[0]?.currency_code ?? "ZAR")}
                 </span>
               ) : null}
             </div>
