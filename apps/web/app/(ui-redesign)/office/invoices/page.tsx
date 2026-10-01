@@ -474,19 +474,24 @@ export default function InvoicesPage() {
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="space-y-3 border-b border-slate-100 p-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search reference, customer, email, type or origin…"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-4 text-sm outline-none focus:border-blue-300"
-            />
-          </div>
+        <div className="border-b border-slate-100 p-4">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px_180px] sm:items-end">
+            <label className="block">
+              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                Search
+              </span>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Reference, customer or email…"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-4 text-sm outline-none focus:border-blue-300"
+                />
+              </div>
+            </label>
 
-          <div className="sm:hidden">
             <label className="block">
               <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                 Type
@@ -503,26 +508,7 @@ export default function InvoicesPage() {
                 ))}
               </select>
             </label>
-          </div>
-          <div className="hidden sm:-mx-1 sm:flex sm:flex-nowrap sm:gap-2 sm:overflow-x-auto sm:px-1 sm:pb-1">
-            {KIND_TABS.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setKind(tab.key)}
-                className={cn(
-                  "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold",
-                  kind === tab.key
-                    ? "bg-slate-900 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200",
-                )}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
 
-          <div className="sm:hidden">
             <label className="block">
               <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                 Status
@@ -539,23 +525,6 @@ export default function InvoicesPage() {
                 ))}
               </select>
             </label>
-          </div>
-          <div className="hidden sm:-mx-1 sm:flex sm:flex-nowrap sm:gap-2 sm:overflow-x-auto sm:px-1 sm:pb-1">
-            {STATUS_TABS.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setStatus(tab.key)}
-                className={cn(
-                  "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold",
-                  status === tab.key
-                    ? "bg-blue-600 text-white"
-                    : "bg-blue-50 text-blue-700 hover:bg-blue-100",
-                )}
-              >
-                {tab.label}
-              </button>
-            ))}
           </div>
         </div>
 
