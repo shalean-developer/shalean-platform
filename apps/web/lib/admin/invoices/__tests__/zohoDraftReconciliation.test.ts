@@ -15,32 +15,9 @@ describe("Zoho draft monthly invoice reconciliation", () => {
     expect(src).toContain('.is("zoho_invoice_id", null)');
     expect(src).toContain('norm(inv.status) === "draft"');
     expect(src).toContain("!linked.has(String(inv.invoice_id))");
-    it("never bulk-applies name+amount review candidates", () => {
-    const src = readFileSync(
-      join(root, "lib/admin/invoices/reconcileMonthlyDraftsWithZoho.ts"),
-      "utf8",
-    );
-
-    expect(src).toContain('if (row.match_method === "review_name_amount") continue');
-    expect(src).toContain('item.match_method === "review_name_amount"');
-    expect(src).toContain('"review_candidate_not_found_or_changed"');
   });
 
-  it("renders per-pair review controls in the invoice registry", () => {
-    const page = readFileSync(
-      join(root, "app/(ui-redesign)/office/invoices/page.tsx"),
-      "utf8",
-    );
-
-    expect(page).toContain("Zoho draft candidates for review");
-    expect(page).toContain("Review & link");
-    expect(page).toContain('"LINK_REVIEWED_DRAFT"');
-    expect(page).toContain("Exact amount + customer name matched.");
-  });
-});
-
-
-  it("requires exact amount and supports strong reference matching", () => {
+  it("requires exact amount and supports strong and review matching", () => {
     const src = readFileSync(
       join(root, "lib/admin/invoices/reconcileMonthlyDraftsWithZoho.ts"),
       "utf8",
@@ -88,14 +65,39 @@ describe("Zoho draft monthly invoice reconciliation", () => {
     expect(src).not.toContain("zohoBooksClient.post");
   });
 
-  it("requires explicit confirmation for apply mode", () => {
+  it("requires explicit confirmation for both bulk-exact and reviewed linking", () => {
     const route = readFileSync(
       join(root, "app/api/admin/invoices/draft-zoho-match/route.ts"),
       "utf8",
     );
 
     expect(route).toContain('"LINK_EXACT_DRAFTS"');
+    expect(route).toContain('"LINK_REVIEWED_DRAFT"');
+    expect(route).toContain("linkReviewedMonthlyDraftWithZoho");
     expect(route).toContain('reconcileMonthlyDraftsWithZoho(admin, "dry_run")');
     expect(route).toContain('reconcileMonthlyDraftsWithZoho(admin, "apply")');
+  });
+
+  it("never bulk-applies name+amount review candidates", () => {
+    const src = readFileSync(
+      join(root, "lib/admin/invoices/reconcileMonthlyDraftsWithZoho.ts"),
+      "utf8",
+    );
+
+    expect(src).toContain('if (row.match_method === "review_name_amount") continue');
+    expect(src).toContain('item.match_method === "review_name_amount"');
+    expect(src).toContain('"review_candidate_not_found_or_changed"');
+  });
+
+  it("renders per-pair review controls in the invoice registry", () => {
+    const page = readFileSync(
+      join(root, "app/(ui-redesign)/office/invoices/page.tsx"),
+      "utf8",
+    );
+
+    expect(page).toContain("Zoho draft candidates for review");
+    expect(page).toContain("Review & link");
+    expect(page).toContain('"LINK_REVIEWED_DRAFT"');
+    expect(page).toContain("Exact amount + customer name matched.");
   });
 });
