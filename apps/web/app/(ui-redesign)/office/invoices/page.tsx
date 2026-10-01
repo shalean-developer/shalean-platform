@@ -260,6 +260,16 @@ export default function InvoicesPage() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [matchingDrafts, setMatchingDrafts] = useState(false);
+  const [draftReviewRows, setDraftReviewRows] = useState<Array<{
+    invoice_id: string;
+    expected_reference: string;
+    amount_cents: number;
+    candidate_zoho_invoice_id: string | null;
+    candidate_zoho_invoice_number: string | null;
+    candidate_customer_name: string | null;
+    candidate_date: string | null;
+    match_method: string;
+  }>>([]);
 
   useEffect(() => {
     const timer = globalThis.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -335,10 +345,21 @@ export default function InvoicesPage() {
     type MatchResult = {
       total_drafts: number;
       exact_matches: number;
+      review_candidates?: number;
       ambiguous: number;
       unmatched: number;
       conflicts: number;
       linked: number;
+      rows?: Array<{
+        invoice_id: string;
+        expected_reference: string;
+        amount_cents: number;
+        candidate_zoho_invoice_id: string | null;
+        candidate_zoho_invoice_number: string | null;
+        candidate_customer_name: string | null;
+        candidate_date: string | null;
+        match_method: string;
+      }>;
     };
 
     const audit = await adminFetch<MatchResult>(
@@ -353,10 +374,15 @@ export default function InvoicesPage() {
     }
 
     const a = audit.data;
+    const reviewRows = (a.rows ?? []).filter(
+      (row) => row.match_method === "review_name_amount" && row.candidate_zoho_invoice_id,
+    );
+    setDraftReviewRows(reviewRows);
+
     if (a.exact_matches <= 0) {
       setMatchingDrafts(false);
       setActionMessage(
-        `Draft match audit: 0 exact matches, ${a.ambiguous} ambiguous, ${a.unmatched} unmatched, ${a.conflicts} conflicts.`,
+        `Draft match audit: 0 exact matches, ${reviewRows.length} review candidate${reviewRows.length === 1 ? "" : "s"}, ${a.ambiguous} ambiguous, ${a.unmatched} unmatched, ${a.conflicts} conflicts.`,
       );
       return;
     }
@@ -392,6 +418,52 @@ export default function InvoicesPage() {
 
     setActionMessage(
       `Linked ${apply.data.linked} existing Zoho draft${apply.data.linked === 1 ? "" : "s"}. ${apply.data.ambiguous} ambiguous and ${apply.data.unmatched} unmatched were left unchanged.`,
+    );
+    await refetch();
+  }
+
+  async function linkReviewedDraft(row: {
+    invoice_id: string;
+    expected_reference: string;
+    amount_cents: number;
+    candidate_zoho_invoice_id: string | null;
+    candidate_zoho_invoice_number: string | null;
+    candidate_customer_name: string | null;
+    candidate_date: string | null;
+  }) {
+    if (!row.candidate_zoho_invoice_id) return;
+    const confirmed = globalThis.confirm(
+      [
+        `Link ${row.expected_reference} (${zar(row.amount_cents)})`,
+        `to Zoho ${row.candidate_zoho_invoice_number ?? row.candidate_zoho_invoice_id}`,
+        `${row.candidate_customer_name ?? "Unknown customer"} · ${row.candidate_date ?? "No date"}?`,
+        "",
+        "This links the existing drafts only. No email will be sent and Zoho will not be changed.",
+      ].join("\n"),
+    );
+    if (!confirmed) return;
+
+    setMatchingDrafts(true);
+    setActionError(null);
+    const result = await adminFetch<{ ok?: boolean; linked?: boolean }>(
+      "/api/admin/invoices/draft-zoho-match",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          confirm: "LINK_REVIEWED_DRAFT",
+          invoice_id: row.invoice_id,
+          zoho_invoice_id: row.candidate_zoho_invoice_id,
+        }),
+      },
+    );
+    setMatchingDrafts(false);
+    if (!result.ok) {
+      setActionError(result.error ?? "Could not link reviewed Zoho draft.");
+      return;
+    }
+    setDraftReviewRows((current) => current.filter((item) => item.invoice_id !== row.invoice_id));
+    setActionMessage(
+      `Linked ${row.expected_reference} to Zoho ${row.candidate_zoho_invoice_number ?? row.candidate_zoho_invoice_id}.`,
     );
     await refetch();
   }
@@ -539,6 +611,42 @@ export default function InvoicesPage() {
       {actionMessage ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           {actionMessage}
+        </div>
+      ) : null}
+
+      {draftReviewRows.length > 0 ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <div className="mb-3">
+            <p className="font-semibold text-amber-900">Zoho draft candidates for review</p>
+            <p className="text-xs text-amber-700">
+              Exact amount + customer name matched. Review each pair before linking.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {draftReviewRows.map((row) => (
+              <div
+                key={row.invoice_id}
+                className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0 text-sm">
+                  <p className="font-semibold text-slate-900">
+                    {row.expected_reference} · {zar(row.amount_cents)}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Zoho {row.candidate_zoho_invoice_number ?? "draft"} · {row.candidate_customer_name ?? "Unknown customer"} · {row.candidate_date ?? "No date"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={matchingDrafts}
+                  onClick={() => void linkReviewedDraft(row)}
+                  className="shrink-0 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                >
+                  Review & link
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
 
