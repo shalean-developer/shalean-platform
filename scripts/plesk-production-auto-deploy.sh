@@ -21,7 +21,8 @@ NODE_BIN="${NODE_BIN:-/opt/plesk/node/24/bin/node}"
 LIVE="$ROOT/plesk-runtime"
 BACKUPS="$ROOT/plesk-production-releases"
 WORK="$ROOT/.plesk-production-auto"
-LOCK="$ROOT/.plesk-production-auto-v2.lock"
+LOCK="$ROOT/.plesk-production-auto-v3.lock"
+LOCK_WAIT_SECONDS="${PLESK_PROD_LOCK_WAIT_SECONDS:-0}"
 OUT="$ROOT/plesk-production-auto-result.txt"
 DUPLICATE_OUT="$ROOT/plesk-production-auto-duplicate-result.txt"
 HEALTH_URL="${PLESK_PROD_HEALTH_URL:-https://shalean.co.za/api/health/environment}"
@@ -38,15 +39,9 @@ for x in /usr/bin/curl /usr/bin/python3 /usr/bin/unzip /usr/bin/tar /usr/bin/sha
   [ -x "$x" ] || fail "required tool missing: $x"
 done
 
-exec 9>"$LOCK"
-if ! /usr/bin/flock -n 9; then
-  {
-    printf 'PLESK_PROD_AUTO_05=SKIPPED_LOCK_BUSY\n'
-    printf 'TIMESTAMP=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf 'ACTION=NO_LIVE_CHANGE\n'
-  } > "$DUPLICATE_OUT"
-  cat "$DUPLICATE_OUT"
-  exit 0
+if [ "${PLESK_PROD_AUTO_LOCK_WRAPPED:-0}" != "1" ]; then
+  exec /usr/bin/flock -w "$LOCK_WAIT_SECONDS" --close "$LOCK" \
+    /usr/bin/env PLESK_PROD_AUTO_LOCK_WRAPPED=1 /bin/bash "$0" "$@"
 fi
 {
   printf 'PLESK_PROD_AUTO_05=LOCK_ACQUIRED\n'
