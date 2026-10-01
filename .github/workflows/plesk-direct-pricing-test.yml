@@ -22,6 +22,9 @@ concurrency:
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: pricing-test
+      url: https://pricing-test.shalean.co.za
     timeout-minutes: 45
     env:
       SHALEAN_APP_ENV: "test"
