@@ -16,18 +16,19 @@ describe("invoice registry mobile density", () => {
     expect(src).toContain("sm:block");
   });
 
-  it("groups mobile filters into Type and Status selects", () => {
+  it("groups Search, Type and Status into one responsive filter row", () => {
     const src = readFileSync(
       join(root, "app/(ui-redesign)/office/invoices/page.tsx"),
       "utf8",
     );
 
+    expect(src).toContain("sm:grid-cols-[minmax(0,1fr)_180px_180px]");
+    expect(src).toContain(">Search<");
     expect(src).toContain(">Type<");
     expect(src).toContain(">Status<");
+    expect(src).toContain('placeholder="Reference, customer or email…"');
     expect(src).toContain("setKind(e.target.value as AdminInvoiceRegistryKindFilter)");
     expect(src).toContain("setStatus(e.target.value as AdminInvoiceRegistryStatusFilter)");
-    expect(src.match(/className="sm:hidden"/g)?.length).toBeGreaterThanOrEqual(2);
-    expect(src).toContain("hidden sm:-mx-1 sm:flex");
   });
 
   it("uses compact mobile invoice cards and actions", () => {
