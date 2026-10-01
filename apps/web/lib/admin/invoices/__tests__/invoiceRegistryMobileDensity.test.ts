@@ -26,6 +26,19 @@ describe("invoice registry mobile density", () => {
     expect(src).toContain("text-[11px] font-semibold sm:shrink-0");
   });
 
+  it("uses compact mobile invoice cards and actions", () => {
+    const src = readFileSync(
+      join(root, "app/(ui-redesign)/office/invoices/page.tsx"),
+      "utf8",
+    );
+
+    expect(src).toContain("space-y-2.5 border-b border-slate-100 px-3.5 py-3");
+    expect(src).toContain("text-[15px] font-semibold leading-tight");
+    expect(src).toContain("text-[11px] font-semibold text-slate-700");
+    expect(src).toContain("gap-1.5");
+    expect(src).toContain("py-1 text-[11px]");
+  });
+
   it("uses a compact three-column KPI grid on mobile", () => {
     const src = readFileSync(
       join(root, "app/(ui-redesign)/office/invoices/page.tsx"),
