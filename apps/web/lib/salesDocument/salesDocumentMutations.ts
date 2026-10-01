@@ -229,17 +229,24 @@ export async function convertSalesQuoteToInvoice(
 
   if (existingLookupErr) return { ok: false, error: existingLookupErr.message };
   if (existingInvoice?.id) {
-    await admin.from("sales_documents").update({ status: "accepted" }).eq("id", quoteId);
     const invoiceId = String(existingInvoice.id);
     const bookingResult = await createBookingFromSalesQuoteInvoice(admin, { quoteId, invoiceId });
     if (!bookingResult.ok) {
       await logSystemEvent({
-        level: "warn",
+        level: "error",
         source: "sales_document/convert",
-        message: "booking_create_failed",
+        message: "booking_create_failed_before_accept",
         context: { quoteId, invoiceId, error: bookingResult.error },
       });
+      return { ok: false, error: `booking_create_failed:${bookingResult.error}` };
     }
+
+    const { error: acceptErr } = await admin
+      .from("sales_documents")
+      .update({ status: "accepted" })
+      .eq("id", quoteId);
+    if (acceptErr) return { ok: false, error: acceptErr.message };
+
     return { ok: true, invoiceId };
   }
 
@@ -297,20 +304,25 @@ export async function convertSalesQuoteToInvoice(
 
   if (!created.ok) return created;
 
-  await admin.from("sales_documents").update({ status: "accepted" }).eq("id", quoteId);
-
   const bookingResult = await createBookingFromSalesQuoteInvoice(admin, {
     quoteId,
     invoiceId: created.id,
   });
   if (!bookingResult.ok) {
     await logSystemEvent({
-      level: "warn",
+      level: "error",
       source: "sales_document/convert",
-      message: "booking_create_failed",
+      message: "booking_create_failed_before_accept",
       context: { quoteId, invoiceId: created.id, error: bookingResult.error },
     });
+    return { ok: false, error: `booking_create_failed:${bookingResult.error}` };
   }
+
+  const { error: acceptErr } = await admin
+    .from("sales_documents")
+    .update({ status: "accepted" })
+    .eq("id", quoteId);
+  if (acceptErr) return { ok: false, error: acceptErr.message };
 
   return { ok: true, invoiceId: created.id };
 }
