@@ -73,6 +73,16 @@ function eventLine(ev: Record<string, unknown>): string | null {
     return `${day} – Invoice finalized (${formatZarFromCents(total)}${bcPart}) · system`;
   }
 
+  if (kind === "admin_revert_to_draft") {
+    const email = String(ev.admin_email ?? "").trim() || "admin";
+    const reason = String(ev.reason ?? "").trim();
+    const restored = Math.max(0, Math.round(Number(ev.booking_count_restored ?? 0)));
+    const restoredPart = restored > 0 ? ` · ${restored} booking${restored === 1 ? "" : "s"} restored` : "";
+    const reasonPart = reason ? ` · ${reason.slice(0, 140)}${reason.length > 140 ? "…" : ""}` : "";
+    const zohoPart = ev.zoho_reconciliation_required ? " · Zoho reconciliation required" : "";
+    return `${day} – Manual paid status reverted to draft${restoredPart}${reasonPart}${zohoPart} · ${email}`;
+  }
+
   if (kind === "invoice_reopened_to_draft") {
     const actor = String(ev.actor ?? "system").trim() || "system";
     const attached = Array.isArray(ev.attached_booking_ids) ? ev.attached_booking_ids.length : 0;
