@@ -33,6 +33,7 @@ export type DraftZohoMatchMethod =
   | "exact_reference"
   | "customer_amount_month"
   | "customer_amount"
+  | "review_name_amount"
   | "none"
   | "ambiguous"
   | "conflict";
@@ -60,6 +61,7 @@ export type DraftZohoReconciliationResult = {
   mode: "dry_run" | "apply";
   total_drafts: number;
   exact_matches: number;
+  review_candidates: number;
   ambiguous: number;
   unmatched: number;
   conflicts: number;
@@ -110,19 +112,27 @@ async function linkedZohoIds(admin: SupabaseClient): Promise<Set<string>> {
   return ids;
 }
 
-async function expectedZohoCustomerId(
+async function expectedZohoContact(
   admin: SupabaseClient,
   draft: DraftRow,
-): Promise<string | null> {
+): Promise<{ name: string; zohoCustomerId: string | null } | null> {
   const contact = await resolveZohoCustomerContactForMonthlyInvoice(admin, {
     invoiceId: draft.id,
     customerId: draft.customer_id,
   });
   if (!contact.ok) return null;
-  return lookupZohoCustomerContactId({
+  const zohoCustomerId = await lookupZohoCustomerContactId({
     email: contact.contact.email ?? null,
     contactName: contact.contact.name,
   });
+  return { name: contact.contact.name, zohoCustomerId };
+}
+
+async function expectedZohoCustomerId(
+  admin: SupabaseClient,
+  draft: DraftRow,
+): Promise<string | null> {
+  return (await expectedZohoContact(admin, draft))?.zohoCustomerId ?? null;
 }
 
 function candidateToRow(
@@ -201,64 +211,104 @@ async function buildMatches(
       continue;
     }
 
-    const zohoCustomerId = await expectedZohoCustomerId(admin, draft);
-    if (!zohoCustomerId) {
-      rows.push(candidateToRow(draft, "none", [], "customer_not_resolved_in_zoho"));
-      continue;
-    }
+    const expectedContact = await expectedZohoContact(admin, draft);
+    const zohoCustomerId = expectedContact?.zohoCustomerId ?? null;
 
-    const byCustomerAmountMonth = availableDrafts.filter((inv) => {
-      const invMonth = String(inv.date ?? "").slice(0, 7);
-      return (
-        String(inv.customer_id ?? "").trim() === zohoCustomerId &&
-        cents(inv.total) === draft.total_amount_cents &&
-        invMonth === draft.month
+    if (zohoCustomerId) {
+      const byCustomerAmountMonth = availableDrafts.filter((inv) => {
+        const invMonth = String(inv.date ?? "").slice(0, 7);
+        return (
+          String(inv.customer_id ?? "").trim() === zohoCustomerId &&
+          cents(inv.total) === draft.total_amount_cents &&
+          invMonth === draft.month
+        );
+      });
+
+      if (byCustomerAmountMonth.length === 1) {
+        rows.push(candidateToRow(draft, "customer_amount_month", byCustomerAmountMonth, null));
+        continue;
+      }
+      if (byCustomerAmountMonth.length > 1) {
+        rows.push(
+          candidateToRow(
+            draft,
+            "ambiguous",
+            byCustomerAmountMonth,
+            "multiple_customer_amount_month_matches",
+          ),
+        );
+        continue;
+      }
+
+      const byCustomerAmount = availableDrafts.filter(
+        (inv) =>
+          String(inv.customer_id ?? "").trim() === zohoCustomerId &&
+          cents(inv.total) === draft.total_amount_cents,
       );
-    });
 
-    if (byCustomerAmountMonth.length === 1) {
-      rows.push(candidateToRow(draft, "customer_amount_month", byCustomerAmountMonth, null));
-      continue;
+      if (byCustomerAmount.length === 1) {
+        rows.push(
+          candidateToRow(
+            draft,
+            "customer_amount",
+            byCustomerAmount,
+            "unique_customer_amount_match_outside_billing_month",
+          ),
+        );
+        continue;
+      }
+      if (byCustomerAmount.length > 1) {
+        rows.push(
+          candidateToRow(
+            draft,
+            "ambiguous",
+            byCustomerAmount,
+            "multiple_customer_amount_matches",
+          ),
+        );
+        continue;
+      }
     }
-    if (byCustomerAmountMonth.length > 1) {
-      rows.push(
-        candidateToRow(
-          draft,
-          "ambiguous",
-          byCustomerAmountMonth,
-          "multiple_customer_amount_month_matches",
-        ),
+
+    const expectedName = norm(expectedContact?.name);
+    if (expectedName) {
+      const byNameAmount = availableDrafts.filter(
+        (inv) =>
+          norm(inv.customer_name) === expectedName &&
+          cents(inv.total) === draft.total_amount_cents,
       );
-      continue;
+      if (byNameAmount.length === 1) {
+        rows.push(
+          candidateToRow(
+            draft,
+            "review_name_amount",
+            byNameAmount,
+            "manual_review_required_name_amount_match",
+          ),
+        );
+        continue;
+      }
+      if (byNameAmount.length > 1) {
+        rows.push(
+          candidateToRow(
+            draft,
+            "ambiguous",
+            byNameAmount,
+            "multiple_name_amount_matches",
+          ),
+        );
+        continue;
+      }
     }
 
-    const byCustomerAmount = availableDrafts.filter(
-      (inv) =>
-        String(inv.customer_id ?? "").trim() === zohoCustomerId &&
-        cents(inv.total) === draft.total_amount_cents,
+    rows.push(
+      candidateToRow(
+        draft,
+        "none",
+        [],
+        expectedContact ? "no_matching_zoho_draft" : "customer_contact_unresolved",
+      ),
     );
-
-    if (byCustomerAmount.length === 1) {
-      rows.push(
-        candidateToRow(
-          draft,
-          "customer_amount",
-          byCustomerAmount,
-          "unique_customer_amount_match_outside_billing_month",
-        ),
-      );
-    } else if (byCustomerAmount.length > 1) {
-      rows.push(
-        candidateToRow(
-          draft,
-          "ambiguous",
-          byCustomerAmount,
-          "multiple_customer_amount_matches",
-        ),
-      );
-    } else {
-      rows.push(candidateToRow(draft, "none", [], "no_matching_zoho_draft"));
-    }
   }
 
   return { drafts, rows };
@@ -278,7 +328,7 @@ async function applyOne(
   row: DraftZohoMatchRow,
 ): Promise<boolean> {
   if (
-    !["exact_reference", "customer_amount_month", "customer_amount"].includes(row.match_method) ||
+    !["exact_reference", "customer_amount_month", "customer_amount", "review_name_amount"].includes(row.match_method) ||
     !row.candidate_zoho_invoice_id
   ) {
     return false;
@@ -389,6 +439,26 @@ async function applyOne(
   return true;
 }
 
+export async function linkReviewedMonthlyDraftWithZoho(
+  admin: SupabaseClient,
+  params: { invoiceId: string; zohoInvoiceId: string },
+): Promise<{ ok: true; linked: boolean } | { ok: false; error: string }> {
+  const { rows } = await buildMatches(admin);
+  const row = rows.find(
+    (item) =>
+      item.invoice_id === params.invoiceId &&
+      item.match_method === "review_name_amount" &&
+      item.candidate_zoho_invoice_id === params.zohoInvoiceId,
+  );
+  if (!row) return { ok: false, error: "review_candidate_not_found_or_changed" };
+
+  const linked = await applyOne(admin, {
+    ...row,
+    match_method: "review_name_amount",
+  });
+  return linked ? { ok: true, linked: true } : { ok: false, error: "review_candidate_revalidation_failed" };
+}
+
 export async function reconcileMonthlyDraftsWithZoho(
   admin: SupabaseClient,
   mode: "dry_run" | "apply" = "dry_run",
@@ -398,6 +468,7 @@ export async function reconcileMonthlyDraftsWithZoho(
 
   if (mode === "apply") {
     for (const row of rows) {
+      if (row.match_method === "review_name_amount") continue;
       if (await applyOne(admin, row)) linked += 1;
     }
   }
@@ -409,6 +480,7 @@ export async function reconcileMonthlyDraftsWithZoho(
     exact_matches: rows.filter((r) =>
       ["exact_reference", "customer_amount_month", "customer_amount"].includes(r.match_method),
     ).length,
+    review_candidates: rows.filter((r) => r.match_method === "review_name_amount").length,
     ambiguous: rows.filter((r) => r.match_method === "ambiguous").length,
     unmatched: rows.filter((r) => r.match_method === "none").length,
     conflicts: rows.filter((r) => r.match_method === "conflict").length,
