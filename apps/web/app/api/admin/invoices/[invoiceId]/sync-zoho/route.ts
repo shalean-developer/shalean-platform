@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { syncBillingDocumentToZoho } from "@/lib/admin/billing/syncBillingDocumentToZoho";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
+import { assessMonthlyInvoiceZohoReconciliation } from "@/lib/monthlyInvoice/assessMonthlyInvoiceZohoReconciliation";
 import { monthlyInvoiceZohoSyncErrorMessage } from "@/lib/monthlyInvoice/resolveMonthlyInvoiceZohoTotalCents";
 import {
   syncDraftMonthlyInvoiceToZohoAfterRecompute,
@@ -35,6 +36,19 @@ export async function POST(_request: Request, ctx: { params: Promise<{ invoiceId
   const linked = String((inv as { zoho_invoice_id?: string | null }).zoho_invoice_id ?? "").trim();
 
   if (linked && status === "draft") {
+    const reconciliation = await assessMonthlyInvoiceZohoReconciliation(admin, invoiceId);
+    if (!reconciliation.ok) {
+      return NextResponse.json({ error: reconciliation.error }, { status: 422 });
+    }
+    if (reconciliation.linked && reconciliation.reconciliationRequired) {
+      return NextResponse.json(
+        {
+          error: "zoho_reconciliation_required",
+          reconciliation,
+        },
+        { status: 409 },
+      );
+    }
     await syncDraftMonthlyInvoiceToZohoAfterRecompute(admin, invoiceId);
   } else if (!linked) {
     const totalCents = Math.max(0, Math.round(Number((inv as { total_amount_cents?: number }).total_amount_cents ?? 0)));
