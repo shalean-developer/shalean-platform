@@ -143,7 +143,7 @@ derived as (
     case
       when b.status = 'draft'
         and b.last_visit is not null
-        and to_char(b.last_visit, 'YYYY-MM') = b.month
+        and left(b.last_visit::text, 7) = b.month
       then b.last_visit
       else b.due_date
     end as effective_date,
@@ -155,7 +155,7 @@ derived as (
           case
             when b.status = 'draft'
               and b.last_visit is not null
-              and to_char(b.last_visit, 'YYYY-MM') = b.month
+              and left(b.last_visit::text, 7) = b.month
             then b.last_visit
             else b.due_date
           end
@@ -285,7 +285,10 @@ page_rows as (
 ),
 page_counts as (
   select
-    count(*)::int as page_invoice_count,
+    count(*) filter (
+      where month_rank > (pm.resolved_page - 1) * pm.months_per_page
+        and month_rank <= pm.resolved_page * pm.months_per_page
+    )::int as page_invoice_count,
     count(*) filter (
       where month_rank <= (pm.resolved_page - 1) * pm.months_per_page
     )::int as invoice_offset
