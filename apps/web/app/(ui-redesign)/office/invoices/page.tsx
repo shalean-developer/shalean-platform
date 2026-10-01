@@ -101,7 +101,7 @@ function SummaryCard({
       <p className="truncate text-[9px] font-semibold uppercase tracking-wide text-slate-500 sm:text-[11px]">
         {label}
       </p>
-      <p className="mt-0.5 whitespace-nowrap text-base font-bold tabular-nums text-slate-900 sm:mt-1 sm:text-2xl">
+      <p className="mt-0.5 whitespace-nowrap text-[15px] font-bold leading-none tracking-tight tabular-nums text-slate-900 sm:mt-1 sm:text-2xl">
         {value}
       </p>
       {hint ? <p className="mt-1 hidden text-xs text-slate-500 sm:block">{hint}</p> : null}
@@ -456,7 +456,7 @@ export default function InvoicesPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-6">
         <SummaryCard label="Invoices" value={loading ? "—" : summary?.invoice_count ?? 0} />
         <SummaryCard label="Quotes" value={loading ? "—" : summary?.quote_count ?? 0} />
         <SummaryCard label="Paid" value={loading ? "—" : summary?.paid_count ?? 0} />
@@ -486,14 +486,32 @@ export default function InvoicesPage() {
             />
           </div>
 
-          <div className="flex flex-wrap gap-1.5 sm:-mx-1 sm:flex-nowrap sm:gap-2 sm:overflow-x-auto sm:px-1 sm:pb-1">
+          <div className="sm:hidden">
+            <label className="block">
+              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                Type
+              </span>
+              <select
+                value={kind}
+                onChange={(e) => setKind(e.target.value as AdminInvoiceRegistryKindFilter)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none focus:border-blue-300"
+              >
+                {KIND_TABS.map((tab) => (
+                  <option key={tab.key} value={tab.key}>
+                    {tab.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="hidden sm:-mx-1 sm:flex sm:flex-nowrap sm:gap-2 sm:overflow-x-auto sm:px-1 sm:pb-1">
             {KIND_TABS.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setKind(tab.key)}
                 className={cn(
-                  "rounded-full px-3 py-1.5 text-[11px] font-semibold sm:shrink-0 sm:px-3.5 sm:text-xs",
+                  "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold",
                   kind === tab.key
                     ? "bg-slate-900 text-white"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200",
@@ -504,7 +522,25 @@ export default function InvoicesPage() {
             ))}
           </div>
 
-          <div className="flex flex-wrap gap-1.5 sm:-mx-1 sm:flex-nowrap sm:gap-2 sm:overflow-x-auto sm:px-1 sm:pb-1">
+          <div className="sm:hidden">
+            <label className="block">
+              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                Status
+              </span>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as AdminInvoiceRegistryStatusFilter)}
+                className="w-full rounded-xl border border-slate-200 bg-blue-50 px-3 py-2.5 text-sm font-semibold text-blue-700 outline-none focus:border-blue-300"
+              >
+                {STATUS_TABS.map((tab) => (
+                  <option key={tab.key} value={tab.key}>
+                    {tab.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="hidden sm:-mx-1 sm:flex sm:flex-nowrap sm:gap-2 sm:overflow-x-auto sm:px-1 sm:pb-1">
             {STATUS_TABS.map((tab) => (
               <button
                 key={tab.key}
