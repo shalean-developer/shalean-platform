@@ -480,14 +480,14 @@ export default function InvoicesPage() {
             />
           </div>
 
-          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          <div className="flex flex-wrap gap-1.5 sm:-mx-1 sm:flex-nowrap sm:gap-2 sm:overflow-x-auto sm:px-1 sm:pb-1">
             {KIND_TABS.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setKind(tab.key)}
                 className={cn(
-                  "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold",
+                  "rounded-full px-3 py-1.5 text-[11px] font-semibold sm:shrink-0 sm:px-3.5 sm:text-xs",
                   kind === tab.key
                     ? "bg-slate-900 text-white"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200",
@@ -498,7 +498,7 @@ export default function InvoicesPage() {
             ))}
           </div>
 
-          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          <div className="flex flex-wrap gap-1.5 sm:-mx-1 sm:flex-nowrap sm:gap-2 sm:overflow-x-auto sm:px-1 sm:pb-1">
             {STATUS_TABS.map((tab) => (
               <button
                 key={tab.key}
