@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="${HOME:-/var/www/vhosts/shalean.co.za}"
-DEPLOY_DIR="$ROOT/plesk-deploy-production"
+DEPLOY_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUNDLE="$DEPLOY_DIR/production-runtime.tar.gz"
 LIVE="$ROOT/plesk-runtime"
 BACKUPS="$ROOT/plesk-production-releases"
