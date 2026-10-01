@@ -27,6 +27,9 @@ describe("Zoho draft monthly invoice reconciliation", () => {
     expect(src).toContain("cents(inv.total) === draft.total_amount_cents");
     expect(src).toContain('"exact_reference"');
     expect(src).toContain('"customer_amount_month"');
+    expect(src).toContain('"customer_amount"');
+    expect(src).toContain('"unique_customer_amount_match_outside_billing_month"');
+    expect(src).toContain('"multiple_customer_amount_matches"');
     expect(src).toContain('"ambiguous"');
     expect(src).toContain('"conflict"');
   });
@@ -41,6 +44,8 @@ describe("Zoho draft monthly invoice reconciliation", () => {
     expect(src).toContain('norm(live.status) !== "draft"');
     expect(src).toContain("Math.round(live.totalCents) !== row.amount_cents");
     expect(src).toContain("zohoIdStillUnlinked");
+    expect(src).toContain('row.match_method === "customer_amount"');
+    expect(src).toContain("String(live.customerId ?? \"\").trim() !== expectedCustomer");
   });
 
   it("records the link locally without sending customer email or changing Zoho", () => {
