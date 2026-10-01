@@ -97,10 +97,14 @@ function SummaryCard({
   hint?: string;
 }) {
   return (
-    <div className="min-w-[145px] flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm sm:rounded-2xl sm:p-4">
+      <p className="truncate text-[9px] font-semibold uppercase tracking-wide text-slate-500 sm:text-[11px]">
+        {label}
+      </p>
+      <p className="mt-0.5 whitespace-nowrap text-base font-bold tabular-nums text-slate-900 sm:mt-1 sm:text-2xl">
+        {value}
+      </p>
+      {hint ? <p className="mt-1 hidden text-xs text-slate-500 sm:block">{hint}</p> : null}
     </div>
   );
 }
@@ -410,7 +414,10 @@ export default function InvoicesPage() {
             <FileText className="h-6 w-6 text-blue-600" />
             <h1 className="text-2xl font-bold text-slate-900">Invoices</h1>
           </div>
-          <p className="mt-1 max-w-3xl text-sm text-slate-500">
+          <p className="mt-1 text-sm text-slate-500 sm:hidden">
+            All invoices and quotes in one place.
+          </p>
+          <p className="mt-1 hidden max-w-3xl text-sm text-slate-500 sm:block">
             One registry for website bookings, admin bookings, monthly billing, sales invoices and quotes.
             Each document keeps its native financial lifecycle and detail page.
           </p>
@@ -443,7 +450,7 @@ export default function InvoicesPage() {
         </div>
       ) : null}
 
-      <div className="-mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1 xl:grid xl:grid-cols-6 xl:overflow-visible">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-6">
         <SummaryCard label="Invoices" value={loading ? "—" : summary?.invoice_count ?? 0} />
         <SummaryCard label="Quotes" value={loading ? "—" : summary?.quote_count ?? 0} />
         <SummaryCard label="Paid" value={loading ? "—" : summary?.paid_count ?? 0} />
