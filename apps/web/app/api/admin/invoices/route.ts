@@ -7,7 +7,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const STATUS_FILTERS = new Set(["all", "paid", "unpaid", "overdue"]);
+const STATUS_FILTERS = new Set(["all", "draft", "sent", "paid", "unpaid", "overdue", "held", "unviewed"]);
 
 export async function GET(request: Request) {
   const auth = await requireAdminApi(request);
@@ -19,7 +19,9 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("q") ?? "";
   const rawStatus = (searchParams.get("status") ?? "all").toLowerCase();
-  const statusFilter = STATUS_FILTERS.has(rawStatus) ? (rawStatus as "all" | "paid" | "unpaid" | "overdue") : "all";
+  const statusFilter = STATUS_FILTERS.has(rawStatus)
+    ? (rawStatus as "all" | "draft" | "sent" | "paid" | "unpaid" | "overdue" | "held" | "unviewed")
+    : "all";
   const balanceGt0Only = ["1", "true", "yes"].includes((searchParams.get("balance_gt0") ?? "").toLowerCase());
   const hasDiscountLines = ["1", "true", "yes"].includes((searchParams.get("has_discounts") ?? "").toLowerCase());
   const hasMissedVisitLines = ["1", "true", "yes"].includes((searchParams.get("has_service_issues") ?? "").toLowerCase());
