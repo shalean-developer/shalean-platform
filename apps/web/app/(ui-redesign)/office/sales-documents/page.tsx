@@ -91,40 +91,7 @@ function SalesDocumentListItem({
   doc: SalesDocRow;
   onDelete: (doc: SalesDocRow) => void;
 }) {
-  async function linkRecoveryBooking(row: RecoveryRow) {
-    if (!row.booking_id || row.classification !== "linkable") return;
-    const confirmed = globalThis.confirm(
-      [
-        `Link existing booking ${row.booking_id.slice(0, 8).toUpperCase()} to invoice ${row.invoice_id.slice(0, 8).toUpperCase()}?`,
-        `${row.customer_name} · ${formatZar(row.invoice_total_cents)}`,
-        "",
-        "This only adds the sales-document link. No money, payment status, booking status, Zoho record, or email will be changed.",
-      ].join("\n"),
-    );
-    if (!confirmed) return;
 
-    setRecoveryBusy(row.invoice_id);
-    setRecoveryError(null);
-    const res = await adminFetch<{ ok?: boolean }>(
-      "/api/admin/sales-documents/historical-booking-recovery",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          confirm: "LINK_EXISTING_BOOKING",
-          invoice_id: row.invoice_id,
-          booking_id: row.booking_id,
-        }),
-      },
-    );
-    setRecoveryBusy(null);
-
-    if (!res.ok) {
-      setRecoveryError(res.error ?? "Could not link existing booking.");
-      return;
-    }
-
-    await Promise.all([loadRecovery(), load()]);
-  }
 
   return (
     <div className="border-t border-slate-100 px-4 py-4 first:border-t-0 hover:bg-slate-50/50">
@@ -327,6 +294,41 @@ export default function OfficeSalesDocumentsPage() {
     setDeleteBusy(false);
   }
 
+
+  async function linkRecoveryBooking(row: RecoveryRow) {
+    if (!row.booking_id || row.classification !== "linkable") return;
+    const confirmed = globalThis.confirm(
+      [
+        `Link existing booking ${row.booking_id.slice(0, 8).toUpperCase()} to invoice ${row.invoice_id.slice(0, 8).toUpperCase()}?`,
+        `${row.customer_name} · ${formatZar(row.invoice_total_cents)}`,
+        "",
+        "This only adds the sales-document link. No money, payment status, booking status, Zoho record, or email will be changed.",
+      ].join("\n"),
+    );
+    if (!confirmed) return;
+
+    setRecoveryBusy(row.invoice_id);
+    setRecoveryError(null);
+    const res = await adminFetch<{ ok?: boolean }>(
+      "/api/admin/sales-documents/historical-booking-recovery",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          confirm: "LINK_EXISTING_BOOKING",
+          invoice_id: row.invoice_id,
+          booking_id: row.booking_id,
+        }),
+      },
+    );
+    setRecoveryBusy(null);
+
+    if (!res.ok) {
+      setRecoveryError(res.error ?? "Could not link existing booking.");
+      return;
+    }
+
+    await Promise.all([loadRecovery(), load()]);
+  }
   return (
     <div className="space-y-5 md:space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
