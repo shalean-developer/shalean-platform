@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { reconcileMonthlyDraftsWithZoho } from "@/lib/admin/invoices/reconcileMonthlyDraftsWithZoho";
+import {
+  linkReviewedMonthlyDraftWithZoho,
+  reconcileMonthlyDraftsWithZoho,
+} from "@/lib/admin/invoices/reconcileMonthlyDraftsWithZoho";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -34,15 +37,38 @@ export async function POST(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const body = (await request.json().catch(() => ({}))) as { confirm?: string };
-  if (body.confirm !== "LINK_EXACT_DRAFTS") {
-    return NextResponse.json(
-      { error: "Confirmation LINK_EXACT_DRAFTS is required." },
-      { status: 400 },
-    );
-  }
+  const body = (await request.json().catch(() => ({}))) as {
+    confirm?: string;
+    invoice_id?: string;
+    zoho_invoice_id?: string;
+  };
 
   try {
+    if (body.confirm === "LINK_REVIEWED_DRAFT") {
+      const invoiceId = String(body.invoice_id ?? "").trim();
+      const zohoInvoiceId = String(body.zoho_invoice_id ?? "").trim();
+      if (!invoiceId || !zohoInvoiceId) {
+        return NextResponse.json({ error: "invoice_id and zoho_invoice_id are required." }, { status: 400 });
+      }
+      const result = await linkReviewedMonthlyDraftWithZoho(admin, {
+        invoiceId,
+        zohoInvoiceId,
+      });
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: 422 });
+      }
+      return NextResponse.json(result, {
+        headers: { "Cache-Control": "private, no-store" },
+      });
+    }
+
+    if (body.confirm !== "LINK_EXACT_DRAFTS") {
+      return NextResponse.json(
+        { error: "Confirmation LINK_EXACT_DRAFTS or LINK_REVIEWED_DRAFT is required." },
+        { status: 400 },
+      );
+    }
+
     const result = await reconcileMonthlyDraftsWithZoho(admin, "apply");
     return NextResponse.json(result, {
       headers: { "Cache-Control": "private, no-store" },
