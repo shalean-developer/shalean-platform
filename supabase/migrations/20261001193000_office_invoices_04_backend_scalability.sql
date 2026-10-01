@@ -82,8 +82,8 @@ base as (
     greatest(0, coalesce(mi.amount_paid_cents, 0))::bigint as amount_paid_cents,
     greatest(0, coalesce(mi.balance_cents, mi.total_amount_cents - mi.amount_paid_cents, 0))::bigint as balance_cents,
     coalesce(mi.is_closed, false) as is_closed,
-    case
-      when nullif(trim(coalesce(mi.due_date::text, '')), '') ~ '^\\d{4}-\\d{2}-\\d{2}
+    to_date(nullif(left(trim(coalesce(mi.due_date::text, '')), 10), ''), 'YYYY-MM-DD') as due_date,
+    coalesce(nullif(mi.currency_code, ''), 'ZAR') as currency_code,
     greatest(0, coalesce(mi.view_count, 0))::int as view_count,
     mi.first_viewed_at,
     nullif(trim(coalesce(mi.zoho_invoice_number, '')), '') as zoho_invoice_number,
