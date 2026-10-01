@@ -21,7 +21,7 @@ export async function upsertInvoiceSyncMetadata(
     invoiceTotalCents?: number | null;
     taxAmountCents?: number | null;
     outstandingBalanceCents?: number | null;
-    syncStatus?: "synced" | "pending" | "failed";
+    syncStatus?: "synced" | "pending" | "failed" | "ignored";
     syncErrors?: string | null;
   },
 ): Promise<void> {
@@ -83,6 +83,15 @@ export async function syncInvoiceStatusesFromZoho(
   admin: SupabaseClient,
   limit = 50,
 ): Promise<{ synced: number; failed: number }> {
+  const { data: ignoredRows } = await admin
+    .from("accounting_invoice_sync")
+    .select("entity_type, entity_id")
+    .eq("sync_status", "ignored");
+
+  const ignored = new Set(
+    (ignoredRows ?? []).map((row) => `${row.entity_type}:${row.entity_id}`),
+  );
+
   const { data: bookings } = await admin
     .from("bookings")
     .select("id, zoho_invoice_id")
@@ -94,6 +103,7 @@ export async function syncInvoiceStatusesFromZoho(
 
   for (const b of bookings ?? []) {
     if (!b.zoho_invoice_id) continue;
+    if (ignored.has(`booking:${b.id}`)) continue;
     const result = await refreshInvoiceStatusFromZoho(admin, "booking", b.id, b.zoho_invoice_id);
     if (result.ok) synced++;
     else failed++;
@@ -107,6 +117,7 @@ export async function syncInvoiceStatusesFromZoho(
 
   for (const inv of invoices ?? []) {
     if (!inv.zoho_invoice_id) continue;
+    if (ignored.has(`monthly_invoice:${inv.id}`)) continue;
     const result = await refreshInvoiceStatusFromZoho(
       admin,
       "monthly_invoice",
@@ -125,6 +136,7 @@ export async function syncInvoiceStatusesFromZoho(
 
   for (const sd of salesDocs ?? []) {
     if (!sd.zoho_invoice_id) continue;
+    if (ignored.has(`sales_document:${sd.id}`)) continue;
     const result = await refreshInvoiceStatusFromZoho(
       admin,
       "sales_document",
