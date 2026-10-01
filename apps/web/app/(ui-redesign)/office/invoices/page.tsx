@@ -97,10 +97,14 @@ function SummaryCard({
   hint?: string;
 }) {
   return (
-    <div className="min-w-[145px] flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm sm:rounded-2xl sm:p-4">
+      <p className="truncate text-[9px] font-semibold uppercase tracking-wide text-slate-500 sm:text-[11px]">
+        {label}
+      </p>
+      <p className="mt-0.5 whitespace-nowrap text-base font-bold tabular-nums text-slate-900 sm:mt-1 sm:text-2xl">
+        {value}
+      </p>
+      {hint ? <p className="mt-1 hidden text-xs text-slate-500 sm:block">{hint}</p> : null}
     </div>
   );
 }
@@ -145,13 +149,13 @@ function RegistryActions({
   onSync: (row: AdminInvoiceRegistryRow) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
+    <div className="flex flex-wrap items-center justify-end gap-1.5">
       {row.sync_eligible ? (
         <button
           type="button"
           disabled={syncing}
           onClick={() => onSync(row)}
-          className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+          className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
         >
           {syncing ? "Syncing…" : "Sync to Zoho"}
         </button>
@@ -161,14 +165,14 @@ function RegistryActions({
           href={row.pdf_href}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
         >
           PDF <ExternalLink className="h-3 w-3" />
         </a>
       ) : null}
       <Link
         href={row.href}
-        className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+        className="rounded-lg bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
       >
         View
       </Link>
@@ -186,29 +190,33 @@ function RegistryCard({
   onSync: (row: AdminInvoiceRegistryRow) => void;
 }) {
   return (
-    <article className="space-y-3 border-b border-slate-100 px-4 py-4 last:border-b-0">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="font-mono text-sm font-bold text-blue-700">{row.reference}</p>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+    <article className="space-y-2.5 border-b border-slate-100 px-3.5 py-3 last:border-b-0">
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p className="truncate font-mono text-sm font-bold text-blue-700">{row.reference}</p>
+            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
               {kindLabel(row.kind)}
             </span>
-            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
-              {originLabel(row.origin)}
-            </span>
           </div>
-          <p className="mt-1 truncate text-sm font-semibold text-slate-900">{row.customer_name}</p>
+          <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize", statusClass(row))}>
+            {statusLabel(row)}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+            {originLabel(row.origin)}
+          </span>
+        </div>
+        <div>
+          <p className="truncate text-[15px] font-semibold leading-tight text-slate-900">{row.customer_name}</p>
           {row.customer_email ? (
-            <p className="truncate text-xs text-slate-400">{row.customer_email}</p>
+            <p className="truncate text-[11px] leading-tight text-slate-400">{row.customer_email}</p>
           ) : null}
         </div>
-        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold capitalize", statusClass(row))}>
-          {statusLabel(row)}
-        </span>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-xs">
+      <div className="grid grid-cols-3 gap-2 text-[11px]">
         <div>
           <p className="text-slate-400">Total</p>
           <p className="font-semibold text-slate-800">{zar(row.amount_cents)}</p>
@@ -225,15 +233,17 @@ function RegistryCard({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-[10px] uppercase tracking-wide text-slate-400">Payment source</p>
-          <p className="text-xs font-semibold text-slate-700">{row.payment_source}</p>
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[9px] uppercase tracking-wide text-slate-400">Payment source</p>
+          <p className="truncate text-[11px] font-semibold text-slate-700">{row.payment_source}</p>
         </div>
         <ZohoState row={row} />
       </div>
 
-      <RegistryActions row={row} syncing={syncing} onSync={onSync} />
+      <div className="-mt-0.5">
+        <RegistryActions row={row} syncing={syncing} onSync={onSync} />
+      </div>
     </article>
   );
 }
@@ -410,7 +420,10 @@ export default function InvoicesPage() {
             <FileText className="h-6 w-6 text-blue-600" />
             <h1 className="text-2xl font-bold text-slate-900">Invoices</h1>
           </div>
-          <p className="mt-1 max-w-3xl text-sm text-slate-500">
+          <p className="mt-1 text-sm text-slate-500 sm:hidden">
+            All invoices and quotes in one place.
+          </p>
+          <p className="mt-1 hidden max-w-3xl text-sm text-slate-500 sm:block">
             One registry for website bookings, admin bookings, monthly billing, sales invoices and quotes.
             Each document keeps its native financial lifecycle and detail page.
           </p>
@@ -443,7 +456,7 @@ export default function InvoicesPage() {
         </div>
       ) : null}
 
-      <div className="-mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1 xl:grid xl:grid-cols-6 xl:overflow-visible">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-6">
         <SummaryCard label="Invoices" value={loading ? "—" : summary?.invoice_count ?? 0} />
         <SummaryCard label="Quotes" value={loading ? "—" : summary?.quote_count ?? 0} />
         <SummaryCard label="Paid" value={loading ? "—" : summary?.paid_count ?? 0} />
@@ -473,14 +486,14 @@ export default function InvoicesPage() {
             />
           </div>
 
-          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          <div className="flex flex-wrap gap-1.5 sm:-mx-1 sm:flex-nowrap sm:gap-2 sm:overflow-x-auto sm:px-1 sm:pb-1">
             {KIND_TABS.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setKind(tab.key)}
                 className={cn(
-                  "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold",
+                  "rounded-full px-3 py-1.5 text-[11px] font-semibold sm:shrink-0 sm:px-3.5 sm:text-xs",
                   kind === tab.key
                     ? "bg-slate-900 text-white"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200",
@@ -491,7 +504,7 @@ export default function InvoicesPage() {
             ))}
           </div>
 
-          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          <div className="flex flex-wrap gap-1.5 sm:-mx-1 sm:flex-nowrap sm:gap-2 sm:overflow-x-auto sm:px-1 sm:pb-1">
             {STATUS_TABS.map((tab) => (
               <button
                 key={tab.key}
