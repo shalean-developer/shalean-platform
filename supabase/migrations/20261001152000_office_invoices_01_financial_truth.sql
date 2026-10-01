@@ -71,7 +71,6 @@ update public.monthly_invoices
 set
   status = 'paid',
   amount_paid_cents = 0,
-  balance_cents = 0,
   is_overdue = false,
   is_closed = true,
   closure_reason = coalesce(closure_reason, 'zero_amount'),
