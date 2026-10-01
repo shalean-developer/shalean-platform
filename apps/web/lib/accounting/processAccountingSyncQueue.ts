@@ -15,6 +15,7 @@ import {
   loadZohoIntegrationSettings,
 } from "@/lib/accounting/zohoIntegrationSettings";
 import { syncInvoiceStatusesFromZoho } from "@/lib/accounting/syncInvoiceMetadata";
+import { syncMonthlyInvoiceToZohoBooks } from "@/lib/monthlyInvoice/syncMonthlyInvoiceToZohoBooks";
 import { getZohoInvoice, markZohoInvoicePaid } from "@/lib/zoho/zohoBooksService";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 
@@ -87,10 +88,33 @@ async function processPaymentTransactionSync(
   } else if (pt.entity_type === "monthly_invoice") {
     const { data: inv } = await admin
       .from("monthly_invoices")
-      .select("zoho_invoice_id, customer_id")
+      .select("id, zoho_invoice_id, customer_id, month, due_date, status, total_amount_cents")
       .eq("id", pt.entity_id)
       .maybeSingle();
+
     zohoInvoiceId = inv?.zoho_invoice_id ?? null;
+
+    if (!zohoInvoiceId && inv?.id && inv.customer_id && inv.month) {
+      const totalCents = Math.max(0, Math.round(Number(inv.total_amount_cents ?? 0)));
+      if (totalCents <= 0) {
+        return { ok: false, error: "monthly_invoice_zero_total_no_zoho" };
+      }
+
+      const sync = await syncMonthlyInvoiceToZohoBooks(admin, {
+        invoiceId: inv.id,
+        customerId: inv.customer_id,
+        month: inv.month,
+        dueDate: String(inv.due_date ?? ""),
+        balanceZar: totalCents / 100,
+        status: inv.status,
+      });
+
+      if (!sync.ok) {
+        return { ok: false, error: `zoho_invoice_create_before_payment_failed:${sync.error}` };
+      }
+      zohoInvoiceId = sync.zohoInvoiceId;
+    }
+
     if (inv?.customer_id) {
       const { data: profile } = await admin
         .from("user_profiles")
