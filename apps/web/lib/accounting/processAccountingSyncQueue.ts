@@ -14,7 +14,10 @@ import {
   isZohoConfigured,
   loadZohoIntegrationSettings,
 } from "@/lib/accounting/zohoIntegrationSettings";
-import { syncInvoiceStatusesFromZoho } from "@/lib/accounting/syncInvoiceMetadata";
+import {
+  refreshInvoiceStatusFromZoho,
+  syncInvoiceStatusesFromZoho,
+} from "@/lib/accounting/syncInvoiceMetadata";
 import { syncMonthlyInvoiceToZohoBooks } from "@/lib/monthlyInvoice/syncMonthlyInvoiceToZohoBooks";
 import { getZohoInvoice, markZohoInvoicePaid } from "@/lib/zoho/zohoBooksService";
 import { logSystemEvent } from "@/lib/logging/systemLog";
@@ -45,6 +48,17 @@ async function processPaymentTransactionSync(
 
   if (!pt) return { ok: false, error: "payment_transaction_not_found" };
   if (pt.external_accounting_id && pt.sync_status === "synced") {
+    if (pt.entity_type === "monthly_invoice" && pt.entity_id) {
+      const { data: inv } = await admin
+        .from("monthly_invoices")
+        .select("zoho_invoice_id")
+        .eq("id", pt.entity_id)
+        .maybeSingle();
+      const zohoInvoiceId = String(inv?.zoho_invoice_id ?? "").trim();
+      if (zohoInvoiceId) {
+        await refreshInvoiceStatusFromZoho(admin, "monthly_invoice", pt.entity_id, zohoInvoiceId);
+      }
+    }
     return { ok: true, externalId: pt.external_accounting_id };
   }
 
@@ -184,6 +198,10 @@ async function processPaymentTransactionSync(
       sync_errors: null,
     })
     .eq("id", entityId);
+
+  if (pt.entity_type === "monthly_invoice" && pt.entity_id && zohoInvoiceId) {
+    await refreshInvoiceStatusFromZoho(admin, "monthly_invoice", pt.entity_id, zohoInvoiceId);
+  }
 
   return { ok: true, externalId: res.paymentId };
 }
