@@ -33,6 +33,7 @@ import {
   getInvoiceOperationalStatus,
   getMonthBalanceBreakdown,
 } from "@/lib/admin/invoices/officeInvoices03Ui";
+import { monthlyInvoicePaymentSourceLabel } from "@/lib/admin/invoices/monthlyInvoicePaymentSource";
 
 type InvoicesResponse = {
   invoices: AdminInvoiceListRow[];
@@ -103,6 +104,11 @@ function InvoiceCard({ inv }: { inv: AdminInvoiceListRow }) {
         {inv.sync_hold_reason ? (
           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
             Held · {inv.sync_hold_reason}
+          </span>
+        ) : null}
+        {inv.payment_source !== "unpaid" ? (
+          <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700">
+            Paid via {monthlyInvoicePaymentSourceLabel(inv.payment_source)}
           </span>
         ) : null}
         {inv.view_count > 0 ? (
@@ -213,6 +219,11 @@ function InvoiceRow({ inv }: { inv: AdminInvoiceListRow }) {
           {inv.sync_hold_reason ? (
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
               Held · {inv.sync_hold_reason}
+            </span>
+          ) : null}
+          {inv.payment_source !== "unpaid" ? (
+            <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700">
+              {monthlyInvoicePaymentSourceLabel(inv.payment_source)}
             </span>
           ) : null}
           {inv.view_count > 0 ? (
