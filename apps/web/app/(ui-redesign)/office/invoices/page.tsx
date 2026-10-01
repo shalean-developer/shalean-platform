@@ -303,11 +303,8 @@ export default function InvoicesPage() {
           accounting needs updating.
         </p>
         <p className="mt-1">
-          For quotes, booking invoices, or bulk Zoho gaps, use{" "}
-          <Link href="/office/billing?tab=missing_zoho" className="font-medium text-blue-600 hover:underline">
-            Zoho sync
-          </Link>
-          .
+          Zoho synchronization remains available from each invoice detail page. Accounting recovery tools stay
+          available to authorized administrators when needed.
         </p>
       </div>
 
