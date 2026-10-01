@@ -12,6 +12,8 @@ on:
       - "apps/web/**"
       - "packages/**"
       - "scripts/plesk-production-auto-deploy.sh"
+      - "scripts/plesk-production-queue-deploy.sh"
+      - "scripts/plesk-production-deploy-worker.sh"
       - "package.json"
   workflow_dispatch:
 
