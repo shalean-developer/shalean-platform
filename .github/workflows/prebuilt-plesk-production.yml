@@ -1,6 +1,9 @@
 name: Build prebuilt Plesk production bundle
 
 on:
+  push:
+    branches:
+      - production
   workflow_dispatch:
 
 permissions:
