@@ -19,6 +19,7 @@ import { categoryAggregateSummaryLines, sumAdjustmentAmountsByCategory } from "@
 import { formatCurrency } from "@/lib/admin/invoices/invoiceAdminFormatters";
 import { invoiceBookingOptionsFromRows } from "@/lib/admin/invoices/invoiceBookingSelectOptions";
 import { splitHumanTimelineLines } from "@/lib/admin/invoices/invoiceTimelinePresentation";
+import { monthlyInvoicePaymentSourceLabel } from "@/lib/admin/invoices/monthlyInvoicePaymentSource";
 import { formatZohoOrderReference } from "@/lib/zoho/zohoOrderReference";
 import type { AdminInvoiceBundle } from "@/lib/admin/invoices/loadAdminInvoiceBundle";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
@@ -492,6 +493,22 @@ export function AdminInvoiceDetailsView({
       />
 
       {isClosed ? <InvoiceClosedBanner closedAtIso={lastInvoiceClosed?.at ?? null} via={lastInvoiceClosed?.via ?? null} /> : null}
+
+      <Card className="border-slate-200 bg-slate-50/70">
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Payment source
+            </p>
+            <p className="mt-1 text-base font-bold text-zinc-900 dark:text-zinc-50">
+              {monthlyInvoicePaymentSourceLabel(state.data.paymentSource)}
+            </p>
+          </div>
+          <p className="max-w-xl text-xs text-zinc-600 dark:text-zinc-400">
+            Derived from invoice events and gateway ledger evidence. This explains how the invoice was settled; it does not replace the invoice status.
+          </p>
+        </CardContent>
+      </Card>
 
       <InvoiceTimeline rows={timelineRows} featured />
 
