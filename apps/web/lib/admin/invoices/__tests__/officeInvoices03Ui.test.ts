@@ -26,6 +26,7 @@ function row(overrides: Partial<InvoiceUiRow> = {}): InvoiceUiRow {
     display_reference: "MI-INV1",
     sync_hold_reason: null,
     date_context: "last_visit",
+    payment_source: "unpaid",
     ...overrides,
   };
 }
@@ -66,5 +67,6 @@ describe("OFFICE-INVOICES-03A UI truth", () => {
     expect(csv).toContain("overdue");
     expect(csv).toContain('"Acme, ""Cape Town"""');
     expect(csv).toContain("Due,2026-09-23");
+    expect(csv).toContain("Payment source");
   });
 });
