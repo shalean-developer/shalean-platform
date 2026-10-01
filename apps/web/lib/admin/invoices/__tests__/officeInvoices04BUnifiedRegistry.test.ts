@@ -77,8 +77,8 @@ describe("OFFICE-INVOICES-04B unified invoice registry", () => {
 
     expect(page).toContain('"/api/admin/invoice-registry"');
     expect(page).toContain('"/api/admin/billing-documents/sync"');
-    expect(page).toContain("Website booking");
-    expect(page).toContain("Admin booking");
+    expect(page).toContain('if (normalized === "website") return "Website"');
+    expect(page).toContain('if (normalized === "admin") return "Admin"');
     expect(page).toContain("All invoices");
     expect(page).toContain("Quotes");
     expect(page).toContain("row.pdf_href");
