@@ -65,7 +65,7 @@ function InvoiceCard({ inv }: { inv: AdminInvoiceListRow }) {
             {(inv.customer_name ?? "").trim() || "—"}
           </p>
           <p className="mt-0.5 text-xs text-slate-500">
-            {formatInvoiceMonth(inv.month)} · {inv.id.slice(0, 8).toUpperCase()}
+            {formatInvoiceMonth(inv.month)} · {inv.display_reference}
           </p>
         </div>
         <div className="shrink-0 text-right">
@@ -89,12 +89,23 @@ function InvoiceCard({ inv }: { inv: AdminInvoiceListRow }) {
             {inv.days_overdue}d overdue
           </span>
         ) : null}
-        <span className="text-xs text-slate-500">Due {formatDueDateLabel(inv.due_date)}</span>
+        <span className="text-xs text-slate-500">
+          {inv.date_context === "last_visit" ? "Last visit" : "Due"} {formatDueDateLabel(inv.due_date)}
+        </span>
         <span className="text-xs text-slate-400">
           {inv.booking_count} booking{inv.booking_count === 1 ? "" : "s"}
         </span>
+        {inv.sync_hold_reason ? (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+            Held · {inv.sync_hold_reason}
+          </span>
+        ) : null}
         {inv.view_count > 0 ? (
           <span className="text-[10px] text-slate-400">Opened {inv.view_count}×</span>
+        ) : ["sent", "partially_paid", "overdue"].includes(inv.status.toLowerCase()) ? (
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+            Not viewed
+          </span>
         ) : null}
       </div>
       <span className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-50 py-2.5 text-sm font-semibold text-blue-600">
@@ -162,7 +173,7 @@ function InvoiceRow({ inv }: { inv: AdminInvoiceListRow }) {
   return (
     <tr className="group hover:bg-slate-50/50 transition-colors">
       <td className="px-4 py-3">
-        <span className="text-xs font-mono font-bold text-blue-600">{inv.id.slice(0, 8).toUpperCase()}</span>
+        <span className="text-xs font-mono font-bold text-blue-600">{inv.display_reference}</span>
       </td>
       <td className="px-4 py-3">
         <p className="text-sm font-semibold text-slate-800">{(inv.customer_name ?? "").trim() || "—"}</p>
@@ -179,7 +190,12 @@ function InvoiceRow({ inv }: { inv: AdminInvoiceListRow }) {
           </p>
         )}
       </td>
-      <td className="px-4 py-3 text-xs text-slate-500">{formatDueDateLabel(inv.due_date)}</td>
+      <td className="px-4 py-3 text-xs text-slate-500">
+        <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+          {inv.date_context === "last_visit" ? "Last visit" : "Due"}
+        </span>
+        {formatDueDateLabel(inv.due_date)}
+      </td>
       <td className="px-4 py-3">
         <div className="flex flex-wrap items-center gap-1.5">
           <SIcon className="h-3.5 w-3.5" />
@@ -189,6 +205,11 @@ function InvoiceRow({ inv }: { inv: AdminInvoiceListRow }) {
               {inv.days_overdue}d overdue
             </span>
           ) : null}
+          {inv.sync_hold_reason ? (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+              Held · {inv.sync_hold_reason}
+            </span>
+          ) : null}
           {inv.view_count > 0 ? (
             <p className="w-full text-[10px] text-slate-400">
               Opened {inv.view_count}×
@@ -196,6 +217,8 @@ function InvoiceRow({ inv }: { inv: AdminInvoiceListRow }) {
                 ? ` · ${new Date(inv.first_viewed_at).toLocaleDateString("en-ZA", { dateStyle: "medium" })}`
                 : ""}
             </p>
+          ) : ["sent", "partially_paid", "overdue"].includes(inv.status.toLowerCase()) ? (
+            <p className="w-full text-[10px] font-semibold text-slate-500">Not viewed</p>
           ) : null}
         </div>
       </td>
@@ -360,7 +383,7 @@ export default function InvoicesPage() {
             />
           </div>
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5">
-            {(["all", "paid", "unpaid", "overdue"] as const).map((s) => (
+            {(["all", "draft", "sent", "overdue", "paid", "held", "unviewed"] as const).map((s) => (
               <button
                 key={s}
                 type="button"

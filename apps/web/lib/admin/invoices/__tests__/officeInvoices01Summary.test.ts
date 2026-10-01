@@ -27,6 +27,10 @@ function row(overrides: Partial<AdminInvoiceListRow>): AdminInvoiceListRow {
     has_missed_visit_lines: false,
     view_count: 0,
     first_viewed_at: null,
+    zoho_invoice_number: null,
+    display_reference: "MI-TEST0001",
+    sync_hold_reason: null,
+    date_context: "last_visit",
     ...overrides,
   };
 }
