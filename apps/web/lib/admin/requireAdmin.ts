@@ -82,7 +82,12 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
     return ["cleaner.documents.view"];
   }
 
-  if (path.includes("/invoices") || path.includes("/billing-documents") || path.includes("/sales-documents")) {
+  if (
+    path.includes("/invoices") ||
+    path.includes("/invoice-registry") ||
+    path.includes("/billing-documents") ||
+    path.includes("/sales-documents")
+  ) {
     if (path.includes("/refund")) return ["refund.approve.high"];
     if (
       path.includes("/reconcile") ||
