@@ -166,7 +166,7 @@ export async function loadAdminInvoiceList(
     const [eventsRes, dedupRes, ledgerRes] = await Promise.all([
       admin
         .from("monthly_invoice_events")
-        .select("invoice_id, kind")
+        .select("invoice_id, kind, created_at")
         .in("invoice_id", allInvoiceIds)
         .in("kind", [
           "payment_received",
@@ -192,13 +192,18 @@ export async function loadAdminInvoiceList(
     if (dedupRes.error) return { ok: false, error: dedupRes.error.message };
     if (ledgerRes.error) return { ok: false, error: ledgerRes.error.message };
 
-    for (const e of (eventsRes.data ?? []) as { invoice_id?: string | null; kind?: string | null }[]) {
+    const eventsByInvoice = new Map<string, Array<{ kind: string; createdAt: string }>>();
+    for (const e of (eventsRes.data ?? []) as { invoice_id?: string | null; kind?: string | null; created_at?: string | null }[]) {
       const invoiceId = String(e.invoice_id ?? "");
       const kind = String(e.kind ?? "");
       if (!invoiceId || !kind) continue;
-      const list = eventKindsByInvoice.get(invoiceId) ?? [];
-      list.push(kind);
-      eventKindsByInvoice.set(invoiceId, list);
+      const list = eventsByInvoice.get(invoiceId) ?? [];
+      list.push({ kind, createdAt: String(e.created_at ?? "") });
+      eventsByInvoice.set(invoiceId, list);
+    }
+    for (const [invoiceId, events] of eventsByInvoice) {
+      events.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      eventKindsByInvoice.set(invoiceId, events.map((event) => event.kind));
     }
     for (const d of (dedupRes.data ?? []) as { invoice_id?: string | null }[]) {
       const invoiceId = String(d.invoice_id ?? "");
