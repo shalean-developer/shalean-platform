@@ -24,7 +24,8 @@ export function resolveMonthlyInvoicePaymentSource(
   const paid = Math.max(0, Math.round(Number(evidence.amountPaidCents ?? 0)));
   const total = Math.max(0, Math.round(Number(evidence.totalAmountCents ?? 0)));
   const closureReason = String(evidence.closureReason ?? "").toLowerCase();
-  const kinds = new Set((evidence.eventKinds ?? []).map((k) => String(k).toLowerCase()));
+  const orderedKinds = (evidence.eventKinds ?? []).map((k) => String(k).toLowerCase());
+  const kinds = new Set(orderedKinds);
 
   const zeroValue =
     closureReason === "zero_amount" ||
@@ -33,9 +34,9 @@ export function resolveMonthlyInvoicePaymentSource(
     Boolean(evidence.hasPaystackLedger) ||
     kinds.has("payment_received") ||
     kinds.has("payment_applied");
-  const manual =
-    kinds.has("admin_mark_paid") &&
-    !kinds.has("admin_revert_to_draft");
+  const lastManualIndex = orderedKinds.lastIndexOf("admin_mark_paid");
+  const lastRevertIndex = orderedKinds.lastIndexOf("admin_revert_to_draft");
+  const manual = lastManualIndex >= 0 && lastManualIndex > lastRevertIndex;
   const credit =
     Boolean(evidence.hasCleaningCreditEvidence) ||
     kinds.has("cleaning_credit_applied") ||
