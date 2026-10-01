@@ -16,6 +16,16 @@ describe("invoice registry mobile density", () => {
     expect(src).toContain("sm:block");
   });
 
+  it("wraps both filter groups on mobile instead of horizontal scrolling", () => {
+    const src = readFileSync(
+      join(root, "app/(ui-redesign)/office/invoices/page.tsx"),
+      "utf8",
+    );
+
+    expect(src.match(/flex flex-wrap gap-1\.5 sm:-mx-1 sm:flex-nowrap/g)?.length).toBe(2);
+    expect(src).toContain("text-[11px] font-semibold sm:shrink-0");
+  });
+
   it("uses a compact three-column KPI grid on mobile", () => {
     const src = readFileSync(
       join(root, "app/(ui-redesign)/office/invoices/page.tsx"),
