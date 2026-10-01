@@ -3,6 +3,10 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { daysOverdueForDisplay, isInvoiceOverdueForDisplay } from "@/lib/admin/invoices/invoiceAdminFormatters";
+import { assessMonthlyInvoiceFinalizeReadiness } from "@/lib/monthlyInvoice/isMonthlyInvoiceReadyToFinalize";
+import { resolveMonthlyInvoiceCustomerEmail } from "@/lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail";
+import { todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
+import { formatZohoOrderReference } from "@/lib/zoho/zohoOrderReference";
 
 export type AdminInvoiceListRow = {
   id: string;
@@ -28,6 +32,10 @@ export type AdminInvoiceListRow = {
   has_missed_visit_lines: boolean;
   view_count: number;
   first_viewed_at: string | null;
+  zoho_invoice_number: string | null;
+  display_reference: string;
+  sync_hold_reason: string | null;
+  date_context: "last_visit" | "due";
 };
 
 export type AdminInvoiceMonthGroup = {
@@ -116,7 +124,7 @@ function groupInvoicesByMonth(rows: AdminInvoiceListRow[]): AdminInvoiceMonthGro
 export async function loadAdminInvoiceList(
   admin: SupabaseClient,
   params: {
-    statusFilter: "all" | "paid" | "unpaid" | "overdue";
+    statusFilter: "all" | "draft" | "sent" | "paid" | "unpaid" | "overdue" | "held" | "unviewed";
     search: string;
     balanceGt0Only: boolean;
     hasDiscountLines?: boolean;
@@ -137,7 +145,7 @@ export async function loadAdminInvoiceList(
   const { data: invs, error } = await admin
     .from("monthly_invoices")
     .select(
-      "id, customer_id, month, status, total_amount_cents, amount_paid_cents, balance_cents, is_overdue, is_closed, due_date, currency_code, view_count, first_viewed_at",
+      "id, customer_id, month, status, total_amount_cents, amount_paid_cents, balance_cents, is_overdue, is_closed, due_date, currency_code, view_count, first_viewed_at, zoho_invoice_number",
     )
     .order("month", { ascending: false })
     .limit(500);
@@ -159,21 +167,23 @@ export async function loadAdminInvoiceList(
     }
   }
 
-  const bookingStatsByInvoice = new Map<string, { count: number; lastVisitYmd: string | null }>();
+  const bookingStatsByInvoice = new Map<string, { count: number; lastVisitYmd: string | null; openCount: number }>();
   const invoiceIdsForCounts = raw.map((r) => String(r.id ?? "")).filter(Boolean);
   if (invoiceIdsForCounts.length) {
     const { data: bookingRows, error: bkErr } = await admin
       .from("bookings")
-      .select("monthly_invoice_id, date")
+      .select("monthly_invoice_id, date, status")
       .in("monthly_invoice_id", invoiceIdsForCounts)
       .neq("status", "cancelled");
     if (bkErr) return { ok: false, error: bkErr.message };
-    for (const row of (bookingRows ?? []) as { monthly_invoice_id?: string | null; date?: string }[]) {
+    for (const row of (bookingRows ?? []) as { monthly_invoice_id?: string | null; date?: string; status?: string | null }[]) {
       const invoiceId = String(row.monthly_invoice_id ?? "");
       if (!invoiceId) continue;
       const visitYmd = String(row.date ?? "").slice(0, 10);
-      const cur = bookingStatsByInvoice.get(invoiceId) ?? { count: 0, lastVisitYmd: null };
+      const cur = bookingStatsByInvoice.get(invoiceId) ?? { count: 0, lastVisitYmd: null, openCount: 0 };
       cur.count += 1;
+      const bookingStatus = String(row.status ?? "").toLowerCase();
+      if (bookingStatus !== "completed" && bookingStatus !== "cancelled") cur.openCount += 1;
       if (/^\d{4}-\d{2}-\d{2}$/.test(visitYmd)) {
         if (!cur.lastVisitYmd || visitYmd > cur.lastVisitYmd) cur.lastVisitYmd = visitYmd;
       }
@@ -226,23 +236,83 @@ export async function loadAdminInvoiceList(
       has_missed_visit_lines: false,
       view_count: Math.max(0, num(r.view_count)),
       first_viewed_at: typeof r.first_viewed_at === "string" ? r.first_viewed_at : null,
+      zoho_invoice_number:
+        typeof r.zoho_invoice_number === "string" && r.zoho_invoice_number.trim()
+          ? r.zoho_invoice_number.trim()
+          : null,
+      display_reference:
+        typeof r.zoho_invoice_number === "string" && r.zoho_invoice_number.trim()
+          ? r.zoho_invoice_number.trim()
+          : formatZohoOrderReference(id, "monthly"),
+      sync_hold_reason: null,
+      date_context: statusLower === "draft" ? "last_visit" : "due",
     };
   });
+
+  // Drafts need an operational reason, not just a generic "Draft" badge.
+  // Reuse the same readiness/contact truth used by the billing sync surface.
+  for (const row of rows) {
+    if (row.status.toLowerCase() !== "draft" || row.is_closed || row.total_amount_cents <= 0) continue;
+    const stats = bookingStatsByInvoice.get(row.id);
+    if ((stats?.openCount ?? 0) > 0) {
+      row.sync_hold_reason = "Open booking";
+      continue;
+    }
+    const readiness = await assessMonthlyInvoiceFinalizeReadiness(admin, {
+      invoiceId: row.id,
+      customerId: row.customer_id,
+      month: row.month,
+      todayYmd: todayJohannesburg(),
+    });
+    if (!readiness.ready) {
+      row.sync_hold_reason =
+        readiness.reason === "recurring_schedule_incomplete"
+          ? "Schedule incomplete"
+          : readiness.reason === "invoice_month_not_ended"
+            ? "Month still open"
+            : readiness.reason === "upcoming_visits_in_month"
+              ? "Upcoming visit"
+              : "Not ready";
+      continue;
+    }
+    const outboundEmail = await resolveMonthlyInvoiceCustomerEmail(admin, {
+      customerId: row.customer_id,
+      invoiceId: row.id,
+    });
+    if (!outboundEmail) row.sync_hold_reason = "Contact required";
+  }
 
   const sf = params.statusFilter;
   if (sf === "paid") {
     rows = rows.filter((r) => r.status.toLowerCase() === "paid");
+  } else if (sf === "draft") {
+    rows = rows.filter((r) => r.status.toLowerCase() === "draft");
+  } else if (sf === "sent") {
+    rows = rows.filter((r) => ["sent", "partially_paid"].includes(r.status.toLowerCase()) && !r.is_overdue);
   } else if (sf === "unpaid") {
     rows = rows.filter((r) => ["sent", "partially_paid", "overdue"].includes(r.status.toLowerCase()));
   } else if (sf === "overdue") {
-    rows = rows.filter((r) => r.is_overdue || r.status.toLowerCase() === "overdue");
+    rows = rows.filter((r) => r.is_overdue);
+  } else if (sf === "held") {
+    rows = rows.filter((r) => r.status.toLowerCase() === "draft" && Boolean(r.sync_hold_reason));
+  } else if (sf === "unviewed") {
+    rows = rows.filter(
+      (r) => ["sent", "partially_paid", "overdue"].includes(r.status.toLowerCase()) && r.view_count === 0,
+    );
   }
 
   const q = params.search.trim().toLowerCase();
   if (q) {
     rows = rows.filter((r) => {
       const name = (r.customer_name ?? "").toLowerCase();
-      return name.includes(q) || r.customer_id.toLowerCase().includes(q) || r.id.toLowerCase().includes(q);
+      return (
+        name.includes(q) ||
+        r.customer_id.toLowerCase().includes(q) ||
+        r.id.toLowerCase().includes(q) ||
+        r.display_reference.toLowerCase().includes(q) ||
+        (r.zoho_invoice_number ?? "").toLowerCase().includes(q) ||
+        r.month.toLowerCase().includes(q)
+      );
     });
   }
 
