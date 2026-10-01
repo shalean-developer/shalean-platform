@@ -259,7 +259,7 @@ export default function InvoicesPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [matchingDrafts, setMatchingDrafts] = useState(false);
+  const [syncingZohoDrafts, setSyncingZohoDrafts] = useState(false);
 
   useEffect(() => {
     const timer = globalThis.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -326,72 +326,68 @@ export default function InvoicesPage() {
     await refetch();
   }
 
-  async function matchZohoDrafts() {
-    if (matchingDrafts) return;
-    setMatchingDrafts(true);
+  async function syncZohoDrafts() {
+    if (syncingZohoDrafts) return;
+    setSyncingZohoDrafts(true);
     setActionError(null);
     setActionMessage(null);
 
-    type MatchResult = {
-      total_drafts: number;
-      exact_matches: number;
-      ambiguous: number;
-      unmatched: number;
-      conflicts: number;
-      linked: number;
+    type SyncResult = {
+      eligible: number;
+      synced: number;
+      failed: number;
+      skipped: number;
     };
 
-    const audit = await adminFetch<MatchResult>(
-      "/api/admin/invoices/draft-zoho-match",
+    const audit = await adminFetch<SyncResult>(
+      "/api/admin/invoices/sync-missing-zoho-drafts",
       { method: "GET" },
     );
 
     if (!audit.ok || !audit.data) {
-      setMatchingDrafts(false);
-      setActionError(audit.error ?? "Could not audit Zoho drafts.");
+      setSyncingZohoDrafts(false);
+      setActionError(audit.error ?? "Could not audit missing Zoho drafts.");
       return;
     }
 
-    const a = audit.data;
-    if (a.exact_matches <= 0) {
-      setMatchingDrafts(false);
-      setActionMessage(
-        `Draft match audit: 0 exact matches, ${a.ambiguous} ambiguous, ${a.unmatched} unmatched, ${a.conflicts} conflicts.`,
-      );
+    if (audit.data.eligible <= 0) {
+      setSyncingZohoDrafts(false);
+      setActionMessage("All billable monthly drafts are already linked to Zoho.");
       return;
     }
 
     const confirmed = globalThis.confirm(
       [
-        `Found ${a.exact_matches} exact Zoho draft match${a.exact_matches === 1 ? "" : "es"}.`,
-        `${a.ambiguous} ambiguous · ${a.unmatched} unmatched · ${a.conflicts} conflicts.`,
+        `Create/link ${audit.data.eligible} missing Zoho monthly draft${audit.data.eligible === 1 ? "" : "s"}?`,
         "",
-        "Link exact matches only? No emails will be sent and Zoho invoices will not be changed.",
+        "Each Shalean invoice will remain Draft.",
+        "No customer email will be sent.",
+        "Nothing will be marked paid or finalized.",
       ].join("\n"),
     );
 
     if (!confirmed) {
-      setMatchingDrafts(false);
-      setActionMessage("Draft matching cancelled after dry run. No links were changed.");
+      setSyncingZohoDrafts(false);
+      setActionMessage("Zoho draft sync cancelled. No changes were made.");
       return;
     }
 
-    const apply = await adminFetch<MatchResult>(
-      "/api/admin/invoices/draft-zoho-match",
+    const apply = await adminFetch<SyncResult>(
+      "/api/admin/invoices/sync-missing-zoho-drafts",
       {
         method: "POST",
-        body: JSON.stringify({ confirm: "LINK_EXACT_DRAFTS" }),
+        body: JSON.stringify({ confirm: "SYNC_MISSING_ZOHO_DRAFTS" }),
       },
     );
 
-    setMatchingDrafts(false);
+    setSyncingZohoDrafts(false);
     if (!apply.ok || !apply.data) {
-      setActionError(apply.error ?? "Could not link Zoho drafts.");
+      setActionError(apply.error ?? "Could not sync missing Zoho drafts.");
       return;
     }
 
     setActionMessage(
-      `Linked ${apply.data.linked} existing Zoho draft${apply.data.linked === 1 ? "" : "s"}. ${apply.data.ambiguous} ambiguous and ${apply.data.unmatched} unmatched were left unchanged.`,
+      `Zoho draft sync complete: ${apply.data.synced} synced, ${apply.data.failed} failed, ${apply.data.skipped} skipped.`,
     );
     await refetch();
   }
@@ -503,11 +499,11 @@ export default function InvoicesPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => void matchZohoDrafts()}
-            disabled={matchingDrafts}
+            onClick={() => void syncZohoDrafts()}
+            disabled={syncingZohoDrafts}
             className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 shadow-sm hover:bg-amber-100 disabled:opacity-50"
           >
-            {matchingDrafts ? "Matching…" : "Match Zoho drafts"}
+            {syncingZohoDrafts ? "Syncing…" : "Sync Zoho drafts"}
           </button>
           <button
             type="button"
