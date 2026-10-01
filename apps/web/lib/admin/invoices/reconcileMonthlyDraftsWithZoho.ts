@@ -32,6 +32,7 @@ type DraftRow = {
 export type DraftZohoMatchMethod =
   | "exact_reference"
   | "customer_amount_month"
+  | "customer_amount"
   | "none"
   | "ambiguous"
   | "conflict";
@@ -50,6 +51,7 @@ export type DraftZohoMatchRow = {
   candidate_customer_name: string | null;
   candidate_total_cents: number | null;
   candidate_status: string | null;
+  candidate_date: string | null;
   reason: string | null;
 };
 
@@ -144,6 +146,7 @@ function candidateToRow(
     candidate_customer_name: candidate?.customer_name ?? null,
     candidate_total_cents: candidate ? cents(candidate.total) : null,
     candidate_status: candidate?.status ?? null,
+    candidate_date: candidate?.date ?? null,
     reason,
   };
 }
@@ -215,13 +218,42 @@ async function buildMatches(
 
     if (byCustomerAmountMonth.length === 1) {
       rows.push(candidateToRow(draft, "customer_amount_month", byCustomerAmountMonth, null));
-    } else if (byCustomerAmountMonth.length > 1) {
+      continue;
+    }
+    if (byCustomerAmountMonth.length > 1) {
       rows.push(
         candidateToRow(
           draft,
           "ambiguous",
           byCustomerAmountMonth,
           "multiple_customer_amount_month_matches",
+        ),
+      );
+      continue;
+    }
+
+    const byCustomerAmount = availableDrafts.filter(
+      (inv) =>
+        String(inv.customer_id ?? "").trim() === zohoCustomerId &&
+        cents(inv.total) === draft.total_amount_cents,
+    );
+
+    if (byCustomerAmount.length === 1) {
+      rows.push(
+        candidateToRow(
+          draft,
+          "customer_amount",
+          byCustomerAmount,
+          "unique_customer_amount_match_outside_billing_month",
+        ),
+      );
+    } else if (byCustomerAmount.length > 1) {
+      rows.push(
+        candidateToRow(
+          draft,
+          "ambiguous",
+          byCustomerAmount,
+          "multiple_customer_amount_matches",
         ),
       );
     } else {
@@ -246,7 +278,7 @@ async function applyOne(
   row: DraftZohoMatchRow,
 ): Promise<boolean> {
   if (
-    !["exact_reference", "customer_amount_month"].includes(row.match_method) ||
+    !["exact_reference", "customer_amount_month", "customer_amount"].includes(row.match_method) ||
     !row.candidate_zoho_invoice_id
   ) {
     return false;
@@ -273,6 +305,23 @@ async function applyOne(
   if (!live.ok) return false;
   if (norm(live.status) !== "draft") return false;
   if (Math.round(live.totalCents) !== row.amount_cents) return false;
+
+  if (row.match_method === "customer_amount" || row.match_method === "customer_amount_month") {
+    const { data: localCustomer } = await admin
+      .from("monthly_invoices")
+      .select("customer_id")
+      .eq("id", row.invoice_id)
+      .maybeSingle();
+    if (!localCustomer?.customer_id) return false;
+    const expectedCustomer = await expectedZohoCustomerId(admin, {
+      id: row.invoice_id,
+      customer_id: String(localCustomer.customer_id),
+      month: row.month,
+      total_amount_cents: row.amount_cents,
+      balance_cents: row.amount_cents,
+    });
+    if (!expectedCustomer || String(live.customerId ?? "").trim() !== expectedCustomer) return false;
+  }
 
   if (row.match_method === "exact_reference") {
     const expected = row.expected_reference.toLowerCase();
@@ -358,7 +407,7 @@ export async function reconcileMonthlyDraftsWithZoho(
     mode,
     total_drafts: rows.length,
     exact_matches: rows.filter((r) =>
-      ["exact_reference", "customer_amount_month"].includes(r.match_method),
+      ["exact_reference", "customer_amount_month", "customer_amount"].includes(r.match_method),
     ).length,
     ambiguous: rows.filter((r) => r.match_method === "ambiguous").length,
     unmatched: rows.filter((r) => r.match_method === "none").length,
