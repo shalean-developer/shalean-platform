@@ -33,7 +33,8 @@ booking_stats as (
   select
     b.monthly_invoice_id as invoice_id,
     count(*) filter (where lower(coalesce(b.status, '')) <> 'cancelled')::int as booking_count,
-    max(b.date) filter (where lower(coalesce(b.status, '')) <> 'cancelled') as last_visit,
+    max(to_date(nullif(left(trim(coalesce(b.date::text, '')), 10), ''), 'YYYY-MM-DD'))
+      filter (where lower(coalesce(b.status, '')) <> 'cancelled') as last_visit,
     count(*) filter (
       where lower(coalesce(b.status, '')) not in ('completed', 'cancelled')
     )::int as open_count,
