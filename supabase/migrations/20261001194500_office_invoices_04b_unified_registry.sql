@@ -385,13 +385,18 @@ page_meta as (
   cross join kind_counts k
   cross join runtime r
 ),
-paged as (
-  select d.*
+ranked as (
+  select
+    d.*,
+    row_number() over (order by d.sort_at desc, d.registry_id desc) as row_num
   from filtered d
+),
+paged as (
+  select r.*
+  from ranked r
   cross join page_meta pm
-  order by d.sort_at desc, d.registry_id desc
-  offset ((pm.resolved_page - 1) * pm.page_size)
-  limit (select page_size from page_meta)
+  where r.row_num > (pm.resolved_page - 1) * pm.page_size
+    and r.row_num <= pm.resolved_page * pm.page_size
 ),
 rows_json as (
   select coalesce(
