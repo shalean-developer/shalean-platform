@@ -138,8 +138,8 @@ booking_docs as (
     ('booking_invoice:' || b.id::text) as registry_id,
     coalesce(nullif(lower(trim(b.booking_source)), ''), 'website') as origin,
     coalesce(nullif(trim(b.zoho_invoice_number), ''), 'BK-' || upper(left(b.id::text, 8))) as reference,
-    coalesce(nullif(trim(b.customer_name), ''), 'Customer') as customer_name,
-    coalesce(nullif(trim(b.customer_email), ''), '') as customer_email,
+    coalesce(nullif(trim(b.customer_name), ''), nullif(trim(bup.full_name), ''), 'Customer') as customer_name,
+    coalesce(nullif(trim(b.customer_email), ''), nullif(trim(bup.billing_email), ''), '') as customer_email,
     greatest(
       0,
       coalesce(
@@ -193,16 +193,35 @@ booking_docs as (
       when b.zoho_invoice_id is not null then false
       when coalesce(b.is_test, false) then false
       when lower(coalesce(b.status, '')) = 'cancelled' then false
+      when greatest(
+        0,
+        coalesce(
+          nullif(b.amount_paid_cents, 0),
+          round(coalesce(b.total_paid_zar, 0) * 100)::bigint,
+          round(coalesce(b.total_price, 0) * 100)::bigint,
+          0
+        )
+      ) <= 0 then false
       else true
     end as sync_eligible,
     case
       when b.zoho_invoice_id is not null then null
       when coalesce(b.is_test, false) then 'Test booking'
       when lower(coalesce(b.status, '')) = 'cancelled' then 'Cancelled'
+      when greatest(
+        0,
+        coalesce(
+          nullif(b.amount_paid_cents, 0),
+          round(coalesce(b.total_paid_zar, 0) * 100)::bigint,
+          round(coalesce(b.total_price, 0) * 100)::bigint,
+          0
+        )
+      ) <= 0 then 'No billable amount'
       else null
     end as sync_hold_reason,
     left(coalesce(b.date::text, ''), 7) as period_label
   from public.bookings b
+  left join public.user_profiles bup on bup.id = b.customer_id
   left join public.accounting_invoice_sync ais
     on ais.entity_type = 'booking'
    and ais.entity_id = b.id
