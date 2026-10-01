@@ -10,6 +10,7 @@ import {
 import { syncExpenseToZoho } from "@/lib/accounting/syncExpenseToZoho";
 import { syncVendorToZoho } from "@/lib/accounting/syncVendorToZoho";
 import { syncRefundCreditNoteToZoho } from "@/lib/accounting/syncRefundCreditNoteToZoho";
+import { processZohoInvoiceCorrectionRequests } from "@/lib/accounting/processZohoInvoiceCorrectionRequests";
 import {
   isZohoConfigured,
   loadZohoIntegrationSettings,
@@ -318,6 +319,8 @@ export async function processAccountingSyncQueue(
     invoiceStatusLimit > 0
       ? await syncInvoiceStatusesFromZoho(admin, invoiceStatusLimit)
       : { synced: 0, failed: 0 };
+
+  await processZohoInvoiceCorrectionRequests(admin, 1);
 
   await admin
     .from("zoho_integration_settings")
