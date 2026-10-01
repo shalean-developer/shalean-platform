@@ -43,7 +43,9 @@ monthly_event_stats as (
         'cleaning_credit_applied',
         'cleaning_credit_settled'
       )
-    ) as payment_event_kinds
+    ) as payment_event_kinds,
+    max(e.created_at) filter (where e.kind = 'admin_mark_paid') as last_admin_mark_paid_at,
+    max(e.created_at) filter (where e.kind = 'admin_revert_to_draft') as last_admin_revert_at
   from public.monthly_invoice_events e
   group by e.invoice_id
 ),
@@ -98,11 +100,10 @@ monthly_docs as (
             and lower(coalesce(pt.gateway, '')) = 'paystack'
         )
       then 'Paystack'
-      when coalesce(me.payment_event_kinds, array[]::text[]) @> array['admin_mark_paid']::text[]
-        and not (
-          array_position(coalesce(me.payment_event_kinds, array[]::text[]), 'admin_revert_to_draft') is not null
-          and array_position(coalesce(me.payment_event_kinds, array[]::text[]), 'admin_revert_to_draft')
-            > array_position(coalesce(me.payment_event_kinds, array[]::text[]), 'admin_mark_paid')
+      when me.last_admin_mark_paid_at is not null
+        and (
+          me.last_admin_revert_at is null
+          or me.last_admin_mark_paid_at > me.last_admin_revert_at
         )
       then 'Manual / EFT'
       when lower(coalesce(mi.status, '')) = 'paid' then 'Unknown'
