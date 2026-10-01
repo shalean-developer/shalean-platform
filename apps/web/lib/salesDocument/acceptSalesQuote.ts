@@ -48,19 +48,26 @@ export async function acceptSalesQuoteAndCreateInvoice(
 ): Promise<AcceptSalesQuoteResult> {
   const existing = await findInvoiceForQuote(admin, quoteId);
   if (existing) {
-    await admin.from("sales_documents").update({ status: "accepted" }).eq("id", quoteId);
     const bookingResult = await createBookingFromSalesQuoteInvoice(admin, {
       quoteId,
       invoiceId: existing.id,
     });
     if (!bookingResult.ok) {
       await logSystemEvent({
-        level: "warn",
+        level: "error",
         source: "sales_document/accept_quote",
-        message: "booking_create_failed",
+        message: "booking_create_failed_before_accept",
         context: { quoteId, invoiceId: existing.id, error: bookingResult.error },
       });
+      return { ok: false, error: `booking_create_failed:${bookingResult.error}` };
     }
+
+    const { error: acceptErr } = await admin
+      .from("sales_documents")
+      .update({ status: "accepted" })
+      .eq("id", quoteId);
+    if (acceptErr) return { ok: false, error: acceptErr.message };
+
     return {
       ok: true,
       invoiceId: existing.id,
