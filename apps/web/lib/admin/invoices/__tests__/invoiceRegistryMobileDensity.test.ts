@@ -16,14 +16,18 @@ describe("invoice registry mobile density", () => {
     expect(src).toContain("sm:block");
   });
 
-  it("wraps both filter groups on mobile instead of horizontal scrolling", () => {
+  it("groups mobile filters into Type and Status selects", () => {
     const src = readFileSync(
       join(root, "app/(ui-redesign)/office/invoices/page.tsx"),
       "utf8",
     );
 
-    expect(src.match(/flex flex-wrap gap-1\.5 sm:-mx-1 sm:flex-nowrap/g)?.length).toBe(2);
-    expect(src).toContain("text-[11px] font-semibold sm:shrink-0");
+    expect(src).toContain(">Type<");
+    expect(src).toContain(">Status<");
+    expect(src).toContain("setKind(e.target.value as AdminInvoiceRegistryKindFilter)");
+    expect(src).toContain("setStatus(e.target.value as AdminInvoiceRegistryStatusFilter)");
+    expect(src.match(/className="sm:hidden"/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(src).toContain("hidden sm:-mx-1 sm:flex");
   });
 
   it("uses compact mobile invoice cards and actions", () => {
@@ -39,14 +43,14 @@ describe("invoice registry mobile density", () => {
     expect(src).toContain("py-1 text-[11px]");
   });
 
-  it("uses a compact three-column KPI grid on mobile", () => {
+  it("uses a compact two-column KPI grid on mobile", () => {
     const src = readFileSync(
       join(root, "app/(ui-redesign)/office/invoices/page.tsx"),
       "utf8",
     );
 
-    expect(src).toContain("grid grid-cols-3 gap-2");
-    expect(src).toContain("text-base font-bold");
+    expect(src).toContain("grid grid-cols-2 gap-2");
+    expect(src).toContain("text-[15px] font-bold leading-none tracking-tight");
     expect(src).toContain("hidden text-xs text-slate-500 sm:block");
     expect(src).not.toContain('min-w-[145px]');
   });
