@@ -257,7 +257,9 @@ export default function InvoicesPage() {
   const [pageSize, setPageSize] = useState(50);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [matchingDrafts, setMatchingDrafts] = useState(false);
 
   useEffect(() => {
     const timer = globalThis.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -321,6 +323,76 @@ export default function InvoicesPage() {
       setActionError(result.error ?? "Zoho sync failed.");
       return;
     }
+    await refetch();
+  }
+
+  async function matchZohoDrafts() {
+    if (matchingDrafts) return;
+    setMatchingDrafts(true);
+    setActionError(null);
+    setActionMessage(null);
+
+    type MatchResult = {
+      total_drafts: number;
+      exact_matches: number;
+      ambiguous: number;
+      unmatched: number;
+      conflicts: number;
+      linked: number;
+    };
+
+    const audit = await adminFetch<MatchResult>(
+      "/api/admin/invoices/draft-zoho-match",
+      { method: "GET" },
+    );
+
+    if (!audit.ok || !audit.data) {
+      setMatchingDrafts(false);
+      setActionError(audit.error ?? "Could not audit Zoho drafts.");
+      return;
+    }
+
+    const a = audit.data;
+    if (a.exact_matches <= 0) {
+      setMatchingDrafts(false);
+      setActionMessage(
+        `Draft match audit: 0 exact matches, ${a.ambiguous} ambiguous, ${a.unmatched} unmatched, ${a.conflicts} conflicts.`,
+      );
+      return;
+    }
+
+    const confirmed = globalThis.confirm(
+      [
+        `Found ${a.exact_matches} exact Zoho draft match${a.exact_matches === 1 ? "" : "es"}.`,
+        `${a.ambiguous} ambiguous · ${a.unmatched} unmatched · ${a.conflicts} conflicts.`,
+        "",
+        "Link exact matches only? No emails will be sent and Zoho invoices will not be changed.",
+      ].join("\n"),
+    );
+
+    if (!confirmed) {
+      setMatchingDrafts(false);
+      setActionMessage("Draft matching cancelled after dry run. No links were changed.");
+      return;
+    }
+
+    const apply = await adminFetch<MatchResult>(
+      "/api/admin/invoices/draft-zoho-match",
+      {
+        method: "POST",
+        body: JSON.stringify({ confirm: "LINK_EXACT_DRAFTS" }),
+      },
+    );
+
+    setMatchingDrafts(false);
+    if (!apply.ok || !apply.data) {
+      setActionError(apply.error ?? "Could not link Zoho drafts.");
+      return;
+    }
+
+    setActionMessage(
+      `Linked ${apply.data.linked} existing Zoho draft${apply.data.linked === 1 ? "" : "s"}. ${apply.data.ambiguous} ambiguous and ${apply.data.unmatched} unmatched were left unchanged.`,
+    );
     await refetch();
   }
 
@@ -428,7 +500,15 @@ export default function InvoicesPage() {
             Each document keeps its native financial lifecycle and detail page.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void matchZohoDrafts()}
+            disabled={matchingDrafts}
+            className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 shadow-sm hover:bg-amber-100 disabled:opacity-50"
+          >
+            {matchingDrafts ? "Matching…" : "Match Zoho drafts"}
+          </button>
           <button
             type="button"
             onClick={() => void refetch()}
@@ -453,6 +533,12 @@ export default function InvoicesPage() {
         <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <span>{actionError ?? error}</span>
+        </div>
+      ) : null}
+
+      {actionMessage ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {actionMessage}
         </div>
       ) : null}
 
