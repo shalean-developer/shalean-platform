@@ -1,261 +1,252 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Search,
-  Download,
-  RefreshCw,
   AlertCircle,
   CheckCircle2,
-  Clock,
-  AlertTriangle,
   ChevronLeft,
   ChevronRight,
-  HelpCircle,
+  Download,
+  ExternalLink,
+  FileText,
+  RefreshCw,
+  Search,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useAdminData } from "@/hooks/useAdminData";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import {
-  formatCurrency,
-  formatDueDateLabel,
-  formatInvoiceMonth,
-} from "@/lib/admin/invoices/invoiceAdminFormatters";
+
+import { adminFetch, getAdminToken, useAdminData } from "@/hooks/useAdminData";
 import type {
-  AdminInvoiceListRow,
-  AdminInvoiceListPagination,
-  AdminInvoiceListSummary,
-  AdminInvoiceMonthGroup,
-} from "@/lib/admin/invoices/loadAdminInvoiceList";
-import {
-  buildInvoiceCsv,
-  getInvoiceOperationalStatus,
-  getMonthBalanceBreakdown,
-} from "@/lib/admin/invoices/officeInvoices03Ui";
-import { monthlyInvoicePaymentSourceLabel } from "@/lib/admin/invoices/monthlyInvoicePaymentSource";
+  AdminInvoiceRegistryKindFilter,
+  AdminInvoiceRegistryPayload,
+  AdminInvoiceRegistryRow,
+  AdminInvoiceRegistryStatusFilter,
+} from "@/lib/admin/invoices/loadAdminInvoiceRegistry";
+import { cn } from "@/lib/utils";
 
-type InvoicesResponse = {
-  invoices: AdminInvoiceListRow[];
-  monthGroups?: AdminInvoiceMonthGroup[];
-  pagination?: AdminInvoiceListPagination;
-  summary?: AdminInvoiceListSummary;
-};
+const KIND_TABS: Array<{ key: AdminInvoiceRegistryKindFilter; label: string }> = [
+  { key: "all", label: "All documents" },
+  { key: "invoices", label: "All invoices" },
+  { key: "monthly_invoice", label: "Monthly" },
+  { key: "booking_invoice", label: "Bookings" },
+  { key: "sales_invoice", label: "Sales invoices" },
+  { key: "quote", label: "Quotes" },
+];
 
-function statusPresentation(status: string): {
-  label: string;
-  cls: string;
-  icon: React.ComponentType<{ className?: string }>;
-} {
-  const s = status.toLowerCase();
-  if (s === "paid") return { label: "Paid", cls: "bg-emerald-100 text-emerald-700", icon: CheckCircle2 };
-  if (s === "overdue") return { label: "Overdue", cls: "bg-red-100 text-red-700", icon: AlertTriangle };
-  if (s === "partially_paid") return { label: "Partial", cls: "bg-amber-100 text-amber-800", icon: Clock };
-  if (s === "sent") return { label: "Sent", cls: "bg-blue-100 text-blue-700", icon: Clock };
-  if (s === "draft") return { label: "Draft", cls: "bg-slate-100 text-slate-600", icon: Clock };
-  return { label: status.replace(/_/g, " "), cls: "bg-orange-100 text-orange-700", icon: Clock };
+const STATUS_TABS: Array<{ key: AdminInvoiceRegistryStatusFilter; label: string }> = [
+  { key: "all", label: "All" },
+  { key: "paid", label: "Paid" },
+  { key: "unpaid", label: "Unpaid" },
+  { key: "draft", label: "Draft" },
+  { key: "sent", label: "Sent" },
+  { key: "overdue", label: "Overdue" },
+  { key: "missing_zoho", label: "Missing Zoho" },
+];
+
+function zar(cents: number): string {
+  return new Intl.NumberFormat("en-ZA", {
+    style: "currency",
+    currency: "ZAR",
+    maximumFractionDigits: 2,
+  }).format(Math.max(0, cents) / 100);
 }
 
-function InvoiceCard({ inv }: { inv: AdminInvoiceListRow }) {
-  const s = statusPresentation(getInvoiceOperationalStatus(inv));
-  const SIcon = s.icon;
-  const href = `/office/invoices/${inv.id}`;
-  return (
-    <Link
-      href={href}
-      className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 transition-colors last:border-b-0 active:bg-slate-50"
-    >
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-semibold text-slate-900">
-            {(inv.customer_name ?? "").trim() || "—"}
-          </p>
-          <p className="mt-0.5 text-xs text-slate-500">
-            {formatInvoiceMonth(inv.month)} · {inv.display_reference}
-          </p>
-        </div>
-        <div className="shrink-0 text-right">
-          <p className="text-sm font-bold tabular-nums text-slate-900">
-            {formatCurrency(inv.total_amount_cents, inv.currency_code)}
-          </p>
-          {inv.balance_cents > 0 ? (
-            <p className="text-xs font-medium tabular-nums text-orange-600">
-              Due {formatCurrency(inv.balance_cents, inv.currency_code)}
-            </p>
-          ) : null}
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold capitalize", s.cls)}>
-          <SIcon className="h-3 w-3" />
-          {s.label}
-        </span>
-        {inv.days_overdue > 0 && inv.status.toLowerCase() !== "paid" && inv.balance_cents > 0 ? (
-          <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
-            {inv.days_overdue}d overdue
-          </span>
-        ) : null}
-        <span className="text-xs text-slate-500">
-          {inv.date_context === "last_visit" ? "Last visit" : "Due"} {formatDueDateLabel(inv.due_date)}
-        </span>
-        <span className="text-xs text-slate-400">
-          {inv.booking_count} booking{inv.booking_count === 1 ? "" : "s"}
-        </span>
-        {inv.sync_hold_reason ? (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-            Held · {inv.sync_hold_reason}
-          </span>
-        ) : null}
-        {inv.payment_source !== "unpaid" ? (
-          <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700">
-            Paid via {monthlyInvoicePaymentSourceLabel(inv.payment_source)}
-          </span>
-        ) : null}
-        {inv.view_count > 0 ? (
-          <span className="text-[10px] text-slate-400">Opened {inv.view_count}×</span>
-        ) : ["sent", "partially_paid", "overdue"].includes(inv.status.toLowerCase()) ? (
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
-            Not viewed
-          </span>
-        ) : null}
-      </div>
-      <span className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-50 py-2.5 text-sm font-semibold text-blue-600">
-        View invoice
-        <ChevronRight className="h-4 w-4" aria-hidden />
-      </span>
-    </Link>
-  );
+function kindLabel(kind: AdminInvoiceRegistryRow["kind"]): string {
+  switch (kind) {
+    case "monthly_invoice":
+      return "Monthly invoice";
+    case "booking_invoice":
+      return "Booking invoice";
+    case "sales_invoice":
+      return "Sales invoice";
+    case "quote":
+      return "Quote";
+  }
 }
 
-const COLLECTIBLE_TOOLTIP =
-  "Balances already issued to customers (sent, partially paid, or overdue). Drafts are excluded.";
-const DRAFT_FORECAST_TOOLTIP =
-  "Open draft balances not yet issued to customers. This is forecast billing, not collectible debt.";
-const OUTSTANDING_TOOLTIP =
-  "All open invoice balances: collectible balances plus draft forecast.";
+function originLabel(origin: string): string {
+  const normalized = origin.toLowerCase();
+  if (normalized === "website") return "Website";
+  if (normalized === "admin") return "Admin";
+  if (normalized === "whatsapp") return "WhatsApp";
+  if (normalized === "monthly") return "Monthly billing";
+  return origin.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+}
 
-function SummaryStatCard({
+function statusClass(row: AdminInvoiceRegistryRow): string {
+  if (row.is_overdue) return "bg-red-100 text-red-700";
+  const s = row.status.toLowerCase();
+  if (s === "paid") return "bg-emerald-100 text-emerald-700";
+  if (s === "draft" || s === "requested") return "bg-slate-100 text-slate-600";
+  if (s === "sent" || s === "accepted") return "bg-blue-100 text-blue-700";
+  if (s === "refunded" || s === "void") return "bg-violet-100 text-violet-700";
+  return "bg-amber-100 text-amber-800";
+}
+
+function statusLabel(row: AdminInvoiceRegistryRow): string {
+  if (row.is_overdue) return "Overdue";
+  return row.status.replace(/_/g, " ");
+}
+
+function SummaryCard({
   label,
   value,
-  color,
-  tooltip,
-  wide = false,
+  hint,
 }: {
   label: string;
   value: string | number;
-  color: string;
-  tooltip?: string;
-  wide?: boolean;
+  hint?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "shrink-0 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm md:shrink md:p-4",
-        wide ? "min-w-[9.5rem]" : "min-w-[7.25rem]",
-      )}
-    >
-      <div className="flex items-center gap-1">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">{label}</p>
-        {tooltip ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex rounded-full text-slate-400 transition hover:text-slate-600"
-                aria-label={`About ${label}`}
-              >
-                <HelpCircle className="h-3 w-3" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" align="start" className="max-w-[16rem] text-left text-xs leading-relaxed">
-              {tooltip}
-            </TooltipContent>
-          </Tooltip>
-        ) : null}
-      </div>
-      <p className={cn("mt-1 text-lg font-bold tabular-nums sm:text-2xl", color)}>{value}</p>
+    <div className="min-w-[145px] flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{value}</p>
+      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
     </div>
   );
 }
 
-function InvoiceRow({ inv }: { inv: AdminInvoiceListRow }) {
-  const s = statusPresentation(getInvoiceOperationalStatus(inv));
-  const SIcon = s.icon;
-  return (
-    <tr className="group hover:bg-slate-50/50 transition-colors">
-      <td className="px-4 py-3">
-        <span className="text-xs font-mono font-bold text-blue-600">{inv.display_reference}</span>
-      </td>
-      <td className="px-4 py-3">
-        <p className="text-sm font-semibold text-slate-800">{(inv.customer_name ?? "").trim() || "—"}</p>
-        <p className="text-xs text-slate-400">{inv.customer_id.slice(0, 8)}…</p>
-      </td>
-      <td className="px-4 py-3 text-sm tabular-nums text-slate-600">{inv.booking_count}</td>
-      <td className="px-4 py-3">
-        <span className="text-sm font-bold text-slate-800">
-          {formatCurrency(inv.total_amount_cents, inv.currency_code)}
+function ZohoState({ row }: { row: AdminInvoiceRegistryRow }) {
+  if (row.zoho_linked) {
+    return (
+      <div>
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+          <CheckCircle2 className="h-3 w-3" />
+          {row.zoho_number || "In Zoho"}
         </span>
-        {inv.balance_cents > 0 && (
-          <p className="text-xs text-orange-600">
-            Balance: {formatCurrency(inv.balance_cents, inv.currency_code)}
+        {row.zoho_status ? (
+          <p className="mt-1 text-[10px] capitalize text-slate-400">
+            {row.zoho_status.replace(/_/g, " ")}
+            {row.zoho_balance_cents != null ? ` · ${zar(row.zoho_balance_cents)} balance` : ""}
           </p>
-        )}
-      </td>
-      <td className="px-4 py-3 text-xs text-slate-500">
-        <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-          {inv.date_context === "last_visit" ? "Last visit" : "Due"}
-        </span>
-        {formatDueDateLabel(inv.due_date)}
-      </td>
-      <td className="px-4 py-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <SIcon className="h-3.5 w-3.5" />
-          <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold capitalize", s.cls)}>{s.label}</span>
-          {inv.days_overdue > 0 && inv.status.toLowerCase() !== "paid" && inv.balance_cents > 0 ? (
-            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
-              {inv.days_overdue}d overdue
+        ) : null}
+      </div>
+    );
+  }
+  return (
+    <div>
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+        <AlertCircle className="h-3 w-3" />
+        Missing
+      </span>
+      {row.sync_hold_reason ? (
+        <p className="mt-1 text-[10px] text-slate-500">{row.sync_hold_reason}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function RegistryActions({
+  row,
+  syncing,
+  onSync,
+}: {
+  row: AdminInvoiceRegistryRow;
+  syncing: boolean;
+  onSync: (row: AdminInvoiceRegistryRow) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      {row.sync_eligible ? (
+        <button
+          type="button"
+          disabled={syncing}
+          onClick={() => onSync(row)}
+          className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+        >
+          {syncing ? "Syncing…" : "Sync to Zoho"}
+        </button>
+      ) : null}
+      {row.pdf_href ? (
+        <a
+          href={row.pdf_href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+        >
+          PDF <ExternalLink className="h-3 w-3" />
+        </a>
+      ) : null}
+      <Link
+        href={row.href}
+        className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+      >
+        View
+      </Link>
+    </div>
+  );
+}
+
+function RegistryCard({
+  row,
+  syncing,
+  onSync,
+}: {
+  row: AdminInvoiceRegistryRow;
+  syncing: boolean;
+  onSync: (row: AdminInvoiceRegistryRow) => void;
+}) {
+  return (
+    <article className="space-y-3 border-b border-slate-100 px-4 py-4 last:border-b-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-mono text-sm font-bold text-blue-700">{row.reference}</p>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+              {kindLabel(row.kind)}
             </span>
-          ) : null}
-          {inv.sync_hold_reason ? (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-              Held · {inv.sync_hold_reason}
+            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+              {originLabel(row.origin)}
             </span>
-          ) : null}
-          {inv.payment_source !== "unpaid" ? (
-            <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700">
-              {monthlyInvoicePaymentSourceLabel(inv.payment_source)}
-            </span>
-          ) : null}
-          {inv.view_count > 0 ? (
-            <p className="w-full text-[10px] text-slate-400">
-              Opened {inv.view_count}×
-              {inv.first_viewed_at
-                ? ` · ${new Date(inv.first_viewed_at).toLocaleDateString("en-ZA", { dateStyle: "medium" })}`
-                : ""}
-            </p>
-          ) : ["sent", "partially_paid", "overdue"].includes(inv.status.toLowerCase()) ? (
-            <p className="w-full text-[10px] font-semibold text-slate-500">Not viewed</p>
+          </div>
+          <p className="mt-1 truncate text-sm font-semibold text-slate-900">{row.customer_name}</p>
+          {row.customer_email ? (
+            <p className="truncate text-xs text-slate-400">{row.customer_email}</p>
           ) : null}
         </div>
-      </td>
-      <td className="px-4 py-3">
-        <Link
-          href={`/office/invoices/${inv.id}`}
-          className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-100 transition-colors"
-        >
-          View
-        </Link>
-      </td>
-    </tr>
+        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold capitalize", statusClass(row))}>
+          {statusLabel(row)}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        <div>
+          <p className="text-slate-400">Total</p>
+          <p className="font-semibold text-slate-800">{zar(row.amount_cents)}</p>
+        </div>
+        <div>
+          <p className="text-slate-400">Paid</p>
+          <p className="font-semibold text-emerald-700">{zar(row.amount_paid_cents)}</p>
+        </div>
+        <div>
+          <p className="text-slate-400">Balance</p>
+          <p className={cn("font-semibold", row.balance_cents > 0 ? "text-orange-700" : "text-slate-700")}>
+            {zar(row.balance_cents)}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-slate-400">Payment source</p>
+          <p className="text-xs font-semibold text-slate-700">{row.payment_source}</p>
+        </div>
+        <ZohoState row={row} />
+      </div>
+
+      <RegistryActions row={row} syncing={syncing} onSync={onSync} />
+    </article>
   );
 }
 
 export default function InvoicesPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [kind, setKind] = useState<AdminInvoiceRegistryKindFilter>("all");
+  const [status, setStatus] = useState<AdminInvoiceRegistryStatusFilter>("all");
   const [page, setPage] = useState(1);
-  const [monthsPerPage, setMonthsPerPage] = useState(3);
+  const [pageSize, setPageSize] = useState(50);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -266,69 +257,146 @@ export default function InvoicesPage() {
   useEffect(() => {
     const timer = globalThis.setTimeout(() => setPage(1), 0);
     return () => globalThis.clearTimeout(timer);
-  }, [debouncedSearch, statusFilter, monthsPerPage]);
+  }, [debouncedSearch, kind, status, pageSize]);
 
-  const params: Record<string, string> = {
-    page: String(page),
-    monthsPerPage: String(monthsPerPage),
-  };
-  if (statusFilter !== "all") params.status = statusFilter;
-  if (debouncedSearch) params.q = debouncedSearch;
+  const params = useMemo(() => {
+    const next: Record<string, string> = {
+      kind,
+      status,
+      page: String(page),
+      page_size: String(pageSize),
+    };
+    if (debouncedSearch) next.q = debouncedSearch;
+    return next;
+  }, [debouncedSearch, kind, page, pageSize, status]);
 
-  const { data, loading, error, refetch } = useAdminData<InvoicesResponse>("/api/admin/invoices", { params });
+  const { data, loading, error, refetch } = useAdminData<AdminInvoiceRegistryPayload>(
+    "/api/admin/invoice-registry",
+    { params },
+  );
 
-  const monthGroups = data?.monthGroups ?? [];
-  const invoices = data?.invoices ?? [];
+  const rows = data?.rows ?? [];
   const summary = data?.summary;
   const pagination = data?.pagination ?? {
-    page,
-    pageSize: monthsPerPage,
-    total: invoices.length,
-    totalMonths: monthGroups.length,
-    totalPages: 1,
-    from: invoices.length > 0 ? 1 : 0,
-    to: invoices.length,
-    hasNextPage: false,
-    hasPreviousPage: false,
+    page: 1,
+    page_size: pageSize,
+    total_filtered: 0,
+    total_pages: 1,
+    from: 0,
+    to: 0,
+    has_next_page: false,
+    has_previous_page: false,
   };
 
   useEffect(() => {
-    if (data?.pagination && page > data.pagination.totalPages) {
-      const timer = globalThis.setTimeout(() => setPage(Math.max(1, data.pagination!.totalPages)), 0);
+    if (data?.pagination && page > data.pagination.total_pages) {
+      const timer = globalThis.setTimeout(() => setPage(data.pagination.page), 0);
       return () => globalThis.clearTimeout(timer);
     }
   }, [data?.pagination, page]);
 
-  const totalInvoices = summary?.total_invoices ?? pagination.total;
-  const paidCount = summary?.paid_count ?? 0;
-  const overdueCount = summary?.overdue_count ?? 0;
-  const collectibleOutstandingCents = summary?.collectible_outstanding_cents ?? 0;
-  const draftForecastCents = summary?.draft_forecast_cents ?? 0;
-  const totalOutstandingCents = summary?.total_outstanding_cents ?? 0;
+  async function syncToZoho(row: AdminInvoiceRegistryRow) {
+    if (syncingId) return;
+    setActionError(null);
+    setSyncingId(row.registry_id);
+    const result = await adminFetch<{ ok?: boolean; zoho_id?: string }>(
+      "/api/admin/billing-documents/sync",
+      {
+        method: "POST",
+        body: JSON.stringify({ kind: row.kind, id: row.entity_id }),
+      },
+    );
+    setSyncingId(null);
+    if (!result.ok) {
+      setActionError(result.error ?? "Zoho sync failed.");
+      return;
+    }
+    await refetch();
+  }
 
-  async function exportInvoices() {
+  async function exportRegistry() {
     if (exporting) return;
     setExporting(true);
+    setActionError(null);
     try {
-      const exportParams = new URLSearchParams();
-      if (statusFilter !== "all") exportParams.set("status", statusFilter);
-      if (debouncedSearch) exportParams.set("q", debouncedSearch);
-      const response = await fetch(`/api/admin/invoices?${exportParams.toString()}`, {
-        credentials: "same-origin",
-        cache: "no-store",
+      const token = await getAdminToken();
+      if (!token) throw new Error("Not authenticated");
+
+      const allRows: AdminInvoiceRegistryRow[] = [];
+      let exportPage = 1;
+      for (;;) {
+        const searchParams = new URLSearchParams({
+          kind,
+          status,
+          page: String(exportPage),
+          page_size: "100",
+        });
+        if (debouncedSearch) searchParams.set("q", debouncedSearch);
+
+        const response = await fetch(`/api/admin/invoice-registry?${searchParams.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error("Could not export invoice registry.");
+        const payload = (await response.json()) as AdminInvoiceRegistryPayload;
+        allRows.push(...payload.rows);
+        if (!payload.pagination.has_next_page) break;
+        exportPage += 1;
+      }
+
+      const header = [
+        "Reference",
+        "Type",
+        "Origin",
+        "Customer",
+        "Email",
+        "Total",
+        "Paid",
+        "Balance",
+        "Status",
+        "Payment source",
+        "Zoho number",
+        "Zoho status",
+      ];
+      const escape = (value: unknown) => {
+        const str = String(value ?? "");
+        return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+      };
+      const lines = [
+        header.join(","),
+        ...allRows.map((row) =>
+          [
+            row.reference,
+            kindLabel(row.kind),
+            originLabel(row.origin),
+            row.customer_name,
+            row.customer_email,
+            (row.amount_cents / 100).toFixed(2),
+            (row.amount_paid_cents / 100).toFixed(2),
+            (row.balance_cents / 100).toFixed(2),
+            statusLabel(row),
+            row.payment_source,
+            row.zoho_number ?? "",
+            row.zoho_status ?? "",
+          ]
+            .map(escape)
+            .join(","),
+        ),
+      ];
+
+      const blob = new Blob(["\uFEFF", lines.join("\n")], {
+        type: "text/csv;charset=utf-8",
       });
-      if (!response.ok) throw new Error("Could not export invoices.");
-      const payload = (await response.json()) as InvoicesResponse;
-      const csv = buildInvoiceCsv(payload.invoices ?? []);
-      const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `monthly-invoices-${new Date().toISOString().slice(0, 10)}.csv`;
+      anchor.download = `invoice-registry-${new Date().toISOString().slice(0, 10)}.csv`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Export failed.");
     } finally {
       setExporting(false);
     }
@@ -338,109 +406,105 @@ export default function InvoicesPage() {
     <div className="min-w-0 max-w-full space-y-5 overflow-x-hidden">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Monthly invoices</h1>
-          <p className="mt-0.5 text-sm text-slate-500">
-            Send invoices, track balances, and follow up on overdue recurring customers.
+          <div className="flex items-center gap-2">
+            <FileText className="h-6 w-6 text-blue-600" />
+            <h1 className="text-2xl font-bold text-slate-900">Invoices</h1>
+          </div>
+          <p className="mt-1 max-w-3xl text-sm text-slate-500">
+            One registry for website bookings, admin bookings, monthly billing, sales invoices and quotes.
+            Each document keeps its native financial lifecycle and detail page.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => void refetch()}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 shadow-sm"
+            className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 shadow-sm hover:bg-slate-50"
+            aria-label="Refresh invoices"
           >
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
           </button>
           <button
             type="button"
-            onClick={() => void exportInvoices()}
             disabled={exporting}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 shadow-sm disabled:cursor-wait disabled:opacity-60"
+            onClick={() => void exportRegistry()}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-50"
           >
-            <Download className="h-4 w-4" /> {exporting ? "Exporting…" : "Export"}
+            <Download className="h-4 w-4" />
+            {exporting ? "Exporting…" : "Export"}
           </button>
         </div>
       </div>
 
-      {error && (
-        <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
-          <AlertCircle className="h-5 w-5 shrink-0 text-red-600" />
-          <p className="text-sm text-red-700">{error}</p>
-          <button type="button" onClick={() => void refetch()} className="ml-auto text-xs font-semibold text-red-600 hover:underline">
-            Retry
-          </button>
+      {error || actionError ? (
+        <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <AlertCircle className="h-5 w-5 shrink-0" />
+          <span>{actionError ?? error}</span>
         </div>
-      )}
+      ) : null}
 
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-        <p>
-          <span className="font-semibold text-slate-900">Billing operations.</span> Work through invoices by month —
-          send, mark paid, adjust, and collect. Each invoice detail page has <strong>Sync to Zoho</strong> when
-          accounting needs updating.
-        </p>
-        <p className="mt-1">
-          Zoho synchronization remains available from each invoice detail page. Accounting recovery tools stay
-          available to authorized administrators when needed.
-        </p>
+      <div className="-mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1 xl:grid xl:grid-cols-6 xl:overflow-visible">
+        <SummaryCard label="Invoices" value={loading ? "—" : summary?.invoice_count ?? 0} />
+        <SummaryCard label="Quotes" value={loading ? "—" : summary?.quote_count ?? 0} />
+        <SummaryCard label="Paid" value={loading ? "—" : summary?.paid_count ?? 0} />
+        <SummaryCard label="Overdue" value={loading ? "—" : summary?.overdue_count ?? 0} />
+        <SummaryCard
+          label="Outstanding"
+          value={loading ? "—" : zar(summary?.outstanding_cents ?? 0)}
+          hint="Invoices only"
+        />
+        <SummaryCard
+          label="Missing Zoho"
+          value={loading ? "—" : summary?.missing_zoho_count ?? 0}
+          hint="Sync-eligible documents"
+        />
       </div>
 
-      <TooltipProvider delayDuration={200}>
-        <div className="-mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1 md:mx-0 md:grid md:grid-cols-2 md:gap-3 md:overflow-visible xl:grid-cols-6">
-          <SummaryStatCard label="Invoices" value={loading ? "—" : totalInvoices} color="text-slate-800" />
-          <SummaryStatCard label="Paid" value={loading ? "—" : paidCount} color="text-emerald-600" />
-          <SummaryStatCard
-            label="Overdue"
-            value={loading ? "—" : overdueCount}
-            color={overdueCount > 0 ? "text-red-600" : "text-slate-400"}
-          />
-          <SummaryStatCard
-            label="Collectible"
-            value={loading ? "—" : collectibleOutstandingCents <= 0 ? "R 0" : formatCurrency(collectibleOutstandingCents, "ZAR")}
-            color="text-orange-600"
-            tooltip={COLLECTIBLE_TOOLTIP}
-            wide
-          />
-          <SummaryStatCard
-            label="Draft forecast"
-            value={loading ? "—" : draftForecastCents <= 0 ? "R 0" : formatCurrency(draftForecastCents, "ZAR")}
-            color="text-blue-600"
-            tooltip={DRAFT_FORECAST_TOOLTIP}
-            wide
-          />
-          <SummaryStatCard
-            label="Outstanding"
-            value={loading ? "—" : totalOutstandingCents <= 0 ? "R 0" : formatCurrency(totalOutstandingCents, "ZAR")}
-            color="text-slate-800"
-            tooltip={OUTSTANDING_TOOLTIP}
-            wide
-          />
-        </div>
-      </TooltipProvider>
-
-      <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
-        <div className="space-y-3 border-b border-slate-100 px-4 py-3">
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="space-y-3 border-b border-slate-100 p-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
-              type="text"
-              placeholder="Search invoices…"
+              type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-4 text-sm placeholder:text-slate-400 focus:border-blue-300 focus:outline-none"
+              placeholder="Search reference, customer, email, type or origin…"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-4 text-sm outline-none focus:border-blue-300"
             />
           </div>
-          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5">
-            {(["all", "draft", "sent", "overdue", "paid", "held", "unviewed"] as const).map((s) => (
+
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+            {KIND_TABS.map((tab) => (
               <button
-                key={s}
+                key={tab.key}
                 type="button"
-                onClick={() => setStatusFilter(s)}
+                onClick={() => setKind(tab.key)}
                 className={cn(
-                  "shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold capitalize transition-colors",
-                  statusFilter === s ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                  "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold",
+                  kind === tab.key
+                    ? "bg-slate-900 text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200",
                 )}
               >
-                {s === "all" ? "All" : s}
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+            {STATUS_TABS.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setStatus(tab.key)}
+                className={cn(
+                  "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold",
+                  status === tab.key
+                    ? "bg-blue-600 text-white"
+                    : "bg-blue-50 text-blue-700 hover:bg-blue-100",
+                )}
+              >
+                {tab.label}
               </button>
             ))}
           </div>
@@ -448,75 +512,108 @@ export default function InvoicesPage() {
 
         <div className="md:hidden">
           {loading ? (
-            <div className="space-y-3 px-4 py-6">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-20 animate-pulse rounded-xl bg-slate-100" />
+            <div className="space-y-3 p-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-36 animate-pulse rounded-xl bg-slate-100" />
               ))}
             </div>
-          ) : invoices.length === 0 ? (
-            <p className="px-4 py-12 text-center text-sm text-slate-400">No invoices found.</p>
-          ) : monthGroups.length > 0 ? (
-            monthGroups.map((group) => {
-              const groupTotalCents = group.invoices.reduce((sum, inv) => sum + inv.total_amount_cents, 0);
-              const groupBalances = getMonthBalanceBreakdown(group.invoices);
-              return (
-                <MonthGroupMobileSection
-                  key={group.month}
-                  group={group}
-                  groupTotalCents={groupTotalCents}
-                  groupBalances={groupBalances}
-                />
-              );
-            })
+          ) : rows.length === 0 ? (
+            <p className="px-4 py-12 text-center text-sm text-slate-400">No documents found.</p>
           ) : (
-            invoices.map((inv) => <InvoiceCard key={inv.id} inv={inv} />)
+            rows.map((row) => (
+              <RegistryCard
+                key={row.registry_id}
+                row={row}
+                syncing={syncingId === row.registry_id}
+                onSync={(target) => void syncToZoho(target)}
+              />
+            ))
           )}
         </div>
 
         <div className="hidden overflow-x-auto md:block">
-          <table className="w-full min-w-[720px] text-sm">
+          <table className="w-full min-w-[1120px] text-sm">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/50">
-                {["Invoice", "Customer", "Bookings", "Amount", "Date", "Status", ""].map((h) => (
+              <tr className="border-b border-slate-100 bg-slate-50/70">
+                {[
+                  "Reference",
+                  "Type / Origin",
+                  "Customer",
+                  "Total",
+                  "Paid",
+                  "Balance",
+                  "Payment",
+                  "Status",
+                  "Zoho",
+                  "",
+                ].map((heading) => (
                   <th
-                    key={h}
+                    key={heading}
                     className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400"
                   >
-                    {h}
+                    {heading}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
-                Array.from({ length: 6 }).map((_, i) => (
+                Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i}>
-                    <td colSpan={7} className="px-4 py-3">
-                      <div className="h-5 animate-pulse rounded-lg bg-slate-100" />
+                    <td colSpan={10} className="px-4 py-3">
+                      <div className="h-6 animate-pulse rounded-lg bg-slate-100" />
                     </td>
                   </tr>
                 ))
-              ) : invoices.length === 0 ? (
+              ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-sm text-slate-400">
-                    No invoices found.
+                  <td colSpan={10} className="px-4 py-12 text-center text-sm text-slate-400">
+                    No documents found.
                   </td>
                 </tr>
-              ) : monthGroups.length > 0 ? (
-                monthGroups.map((group) => {
-                  const groupTotalCents = group.invoices.reduce((sum, inv) => sum + inv.total_amount_cents, 0);
-                  const groupBalances = getMonthBalanceBreakdown(group.invoices);
-                  return (
-                    <MonthGroupSection
-                      key={group.month}
-                      group={group}
-                      groupTotalCents={groupTotalCents}
-                      groupBalances={groupBalances}
-                    />
-                  );
-                })
               ) : (
-                invoices.map((inv) => <InvoiceRow key={inv.id} inv={inv} />)
+                rows.map((row) => (
+                  <tr key={row.registry_id} className="hover:bg-slate-50/60">
+                    <td className="px-4 py-3 font-mono text-xs font-bold text-blue-700">
+                      {row.reference}
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-semibold text-slate-700">{kindLabel(row.kind)}</p>
+                      <p className="text-xs text-slate-400">{originLabel(row.origin)}</p>
+                    </td>
+                    <td className="max-w-[220px] px-4 py-3">
+                      <p className="truncate font-medium text-slate-800">{row.customer_name}</p>
+                      <p className="truncate text-xs text-slate-400">{row.customer_email || "—"}</p>
+                    </td>
+                    <td className="px-4 py-3 tabular-nums font-semibold text-slate-800">
+                      {zar(row.amount_cents)}
+                    </td>
+                    <td className="px-4 py-3 tabular-nums text-emerald-700">
+                      {zar(row.amount_paid_cents)}
+                    </td>
+                    <td className={cn("px-4 py-3 tabular-nums", row.balance_cents > 0 ? "font-semibold text-orange-700" : "text-slate-500")}>
+                      {zar(row.balance_cents)}
+                    </td>
+                    <td className="px-4 py-3 text-xs font-medium text-slate-600">
+                      {row.payment_source}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold capitalize", statusClass(row))}>
+                        {statusLabel(row)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <ZohoState row={row} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <RegistryActions
+                        row={row}
+                        syncing={syncingId === row.registry_id}
+                        onSync={(target) => void syncToZoho(target)}
+                      />
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -526,138 +623,49 @@ export default function InvoicesPage() {
           <p className="text-xs text-slate-400">
             {loading
               ? "Loading…"
-              : pagination.total === 0
-                ? "No invoices"
-                : `Showing ${pagination.from}–${pagination.to} of ${pagination.total} invoices across ${pagination.totalMonths} month${pagination.totalMonths === 1 ? "" : "s"}`}
+              : pagination.total_filtered === 0
+                ? "No documents"
+                : `Showing ${pagination.from}–${pagination.to} of ${pagination.total_filtered} documents`}
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="flex w-full items-center justify-between gap-2 text-xs text-slate-500 sm:w-auto sm:justify-start">
-              Months per page
+            <label className="flex items-center gap-2 text-xs text-slate-500">
+              Rows
               <select
-                value={monthsPerPage}
-                onChange={(e) => setMonthsPerPage(Number(e.target.value))}
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
                 className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700"
               >
-                {[1, 2, 3, 6, 12].map((size) => (
+                {[25, 50, 100].map((size) => (
                   <option key={size} value={size}>
                     {size}
                   </option>
                 ))}
               </select>
             </label>
-            <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end">
-              <span className="text-xs font-medium text-slate-500">
-                Page {pagination.page} of {pagination.totalPages}
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={loading || !pagination.hasPreviousPage}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                  Prev
-                </button>
-                <button
-                  type="button"
-                  disabled={loading || !pagination.hasNextPage}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Next
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
+            <span className="text-xs font-medium text-slate-500">
+              Page {pagination.page} of {pagination.total_pages}
+            </span>
+            <button
+              type="button"
+              disabled={loading || !pagination.has_previous_page}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 disabled:opacity-40"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Prev
+            </button>
+            <button
+              type="button"
+              disabled={loading || !pagination.has_next_page}
+              onClick={() => setPage((p) => p + 1)}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 disabled:opacity-40"
+            >
+              Next
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
       </div>
     </div>
-  );
-}
-
-function MonthGroupMobileSection({
-  group,
-  groupTotalCents,
-  groupBalances,
-}: {
-  group: AdminInvoiceMonthGroup;
-  groupTotalCents: number;
-  groupBalances: ReturnType<typeof getMonthBalanceBreakdown>;
-}) {
-  return (
-    <section className="border-b border-slate-200 last:border-b-0">
-      <div className="bg-slate-50 px-4 py-3">
-        <p className="text-sm font-bold text-slate-800">{formatInvoiceMonth(group.month)}</p>
-        <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">
-          <span>
-            {group.invoices.length} invoice{group.invoices.length === 1 ? "" : "s"}
-          </span>
-          <span className="font-semibold text-slate-800">
-            Total {formatCurrency(groupTotalCents, group.invoices[0]?.currency_code ?? "ZAR")}
-          </span>
-          {groupBalances.collectible_cents > 0 ? (
-            <span className="font-semibold text-orange-600">
-              Collectible {formatCurrency(groupBalances.collectible_cents, group.invoices[0]?.currency_code ?? "ZAR")}
-            </span>
-          ) : null}
-          {groupBalances.draft_forecast_cents > 0 ? (
-            <span className="font-semibold text-blue-600">
-              Draft forecast {formatCurrency(groupBalances.draft_forecast_cents, group.invoices[0]?.currency_code ?? "ZAR")}
-            </span>
-          ) : null}
-        </p>
-      </div>
-      {group.invoices.map((inv) => (
-        <InvoiceCard key={inv.id} inv={inv} />
-      ))}
-    </section>
-  );
-}
-
-function MonthGroupSection({
-  group,
-  groupTotalCents,
-  groupBalances,
-}: {
-  group: AdminInvoiceMonthGroup;
-  groupTotalCents: number;
-  groupBalances: ReturnType<typeof getMonthBalanceBreakdown>;
-}) {
-  return (
-    <>
-      <tr className="bg-slate-100/70">
-        <td colSpan={7} className="px-4 py-2.5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <p className="text-sm font-bold text-slate-800">{formatInvoiceMonth(group.month)}</p>
-              <p className="text-[11px] font-medium text-slate-500">{group.month}</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-              <span>
-                {group.invoices.length} invoice{group.invoices.length === 1 ? "" : "s"}
-              </span>
-              <span className="font-semibold text-slate-800">
-                Total: {formatCurrency(groupTotalCents, group.invoices[0]?.currency_code ?? "ZAR")}
-              </span>
-              {groupBalances.collectible_cents > 0 ? (
-                <span className="font-semibold text-orange-600">
-                  Collectible: {formatCurrency(groupBalances.collectible_cents, group.invoices[0]?.currency_code ?? "ZAR")}
-                </span>
-              ) : null}
-              {groupBalances.draft_forecast_cents > 0 ? (
-                <span className="font-semibold text-blue-600">
-                  Draft forecast: {formatCurrency(groupBalances.draft_forecast_cents, group.invoices[0]?.currency_code ?? "ZAR")}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        </td>
-      </tr>
-      {group.invoices.map((inv) => (
-        <InvoiceRow key={inv.id} inv={inv} />
-      ))}
-    </>
   );
 }
