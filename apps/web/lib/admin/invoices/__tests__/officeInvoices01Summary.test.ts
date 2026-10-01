@@ -31,6 +31,7 @@ function row(overrides: Partial<AdminInvoiceListRow>): AdminInvoiceListRow {
     display_reference: "MI-TEST0001",
     sync_hold_reason: null,
     date_context: "last_visit",
+    payment_source: "unpaid",
     ...overrides,
   };
 }
