@@ -211,6 +211,20 @@ export function AdminInvoiceDetailsView({
     return n;
   }, [state]);
 
+  const canRevertManualPaid = useMemo(() => {
+    if (state.status !== "ready") return false;
+    const inv = state.data.invoice;
+    if (String(inv.status ?? "").toLowerCase() !== "paid" || !Boolean(inv.is_closed)) return false;
+    let hasManualMarkPaid = false;
+    let hasGatewayPayment = false;
+    for (const event of state.data.events ?? []) {
+      const kind = String((event.payload as Record<string, unknown>)?.kind ?? "").toLowerCase();
+      if (kind === "admin_mark_paid") hasManualMarkPaid = true;
+      if (kind === "payment_received" || kind === "payment_applied") hasGatewayPayment = true;
+    }
+    return hasManualMarkPaid && !hasGatewayPayment;
+  }, [state]);
+
   if (state.status === "loading") {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -343,6 +357,7 @@ export function AdminInvoiceDetailsView({
         amountPaidCents={paidCents}
         balanceCents={balanceCents}
         bookingCountToSettle={bookingCountToSettle}
+        canRevertManualPaid={canRevertManualPaid}
         dueDate={dueDate}
         invoiceDate={invoiceDate}
         billingMonth={month}
