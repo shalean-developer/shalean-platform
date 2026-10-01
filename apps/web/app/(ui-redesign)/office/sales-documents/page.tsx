@@ -35,6 +35,22 @@ type CrmReporting = { overdue_follow_ups: number; average_response_hours: number
 type FilterTab = "all" | "requests" | "quote" | "invoice";
 type StageFilter = "all" | SalesDocRow["pipeline_stage"];
 
+type RecoveryRow = {
+  quote_id: string;
+  invoice_id: string;
+  customer_name: string;
+  invoice_status: string;
+  invoice_total_cents: number;
+  booking_id: string | null;
+  booking_service: string | null;
+  booking_date: string | null;
+  booking_status: string | null;
+  booking_payment_status: string | null;
+  booking_amount_cents: number | null;
+  classification: "linkable" | "payment_state_conflict" | "amount_mismatch" | "multiple_candidates" | "no_candidate";
+  reason: string;
+};
+
 function formatZar(cents: number) {
   return `R ${(cents / 100).toLocaleString("en-ZA")}`;
 }
@@ -75,6 +91,8 @@ function SalesDocumentListItem({
   doc: SalesDocRow;
   onDelete: (doc: SalesDocRow) => void;
 }) {
+
+
   return (
     <div className="border-t border-slate-100 px-4 py-4 first:border-t-0 hover:bg-slate-50/50">
       <div className="flex items-start justify-between gap-3">
@@ -194,6 +212,9 @@ export default function OfficeSalesDocumentsPage() {
   const [deleteTarget, setDeleteTarget] = useState<SalesDocRow | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [recoveryRows, setRecoveryRows] = useState<RecoveryRow[]>([]);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [recoveryBusy, setRecoveryBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -214,9 +235,26 @@ export default function OfficeSalesDocumentsPage() {
     setLoading(false);
   }, [q]);
 
+  const loadRecovery = useCallback(async () => {
+    const res = await adminFetch<{ rows: RecoveryRow[] }>(
+      "/api/admin/sales-documents/historical-booking-recovery",
+    );
+    if (!res.ok) {
+      setRecoveryRows([]);
+      setRecoveryError(res.error ?? "Could not load historical booking recovery.");
+      return;
+    }
+    setRecoveryError(null);
+    setRecoveryRows(res.data?.rows ?? []);
+  }, []);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void loadRecovery();
+  }, [loadRecovery]);
 
   const filtered = useMemo(() => {
     const byType = tab === "all"
@@ -256,6 +294,41 @@ export default function OfficeSalesDocumentsPage() {
     setDeleteBusy(false);
   }
 
+
+  async function linkRecoveryBooking(row: RecoveryRow) {
+    if (!row.booking_id || row.classification !== "linkable") return;
+    const confirmed = globalThis.confirm(
+      [
+        `Link existing booking ${row.booking_id.slice(0, 8).toUpperCase()} to invoice ${row.invoice_id.slice(0, 8).toUpperCase()}?`,
+        `${row.customer_name} · ${formatZar(row.invoice_total_cents)}`,
+        "",
+        "This only adds the sales-document link. No money, payment status, booking status, Zoho record, or email will be changed.",
+      ].join("\n"),
+    );
+    if (!confirmed) return;
+
+    setRecoveryBusy(row.invoice_id);
+    setRecoveryError(null);
+    const res = await adminFetch<{ ok?: boolean }>(
+      "/api/admin/sales-documents/historical-booking-recovery",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          confirm: "LINK_EXISTING_BOOKING",
+          invoice_id: row.invoice_id,
+          booking_id: row.booking_id,
+        }),
+      },
+    );
+    setRecoveryBusy(null);
+
+    if (!res.ok) {
+      setRecoveryError(res.error ?? "Could not link existing booking.");
+      return;
+    }
+
+    await Promise.all([loadRecovery(), load()]);
+  }
   return (
     <div className="space-y-5 md:space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
@@ -272,6 +345,63 @@ export default function OfficeSalesDocumentsPage() {
           <Plus className="h-4 w-4" /> New document
         </Link>
       </div>
+
+      {recoveryError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {recoveryError}
+        </div>
+      ) : null}
+
+      {recoveryRows.length > 0 ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+          <div className="mb-3">
+            <h2 className="font-semibold text-amber-950">Historical quote booking recovery</h2>
+            <p className="text-sm text-amber-800">
+              Legacy accepted quotes with an invoice but no sales-document booking link. Only exact, payment-consistent matches can be linked here.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {recoveryRows.map((row) => (
+              <div key={row.invoice_id} className="rounded-xl border border-amber-200 bg-white p-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900">
+                      {row.customer_name} · {formatZar(row.invoice_total_cents)}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Invoice {row.invoice_id.slice(0, 8).toUpperCase()} · {row.invoice_status}
+                      {row.booking_id
+                        ? ` · Booking ${row.booking_id.slice(0, 8).toUpperCase()} · ${row.booking_service ?? "Unknown service"} · ${row.booking_date ?? "No date"} · ${row.booking_amount_cents == null ? "No amount" : formatZar(row.booking_amount_cents)}`
+                        : " · No booking candidate"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">{row.reason}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      "rounded-full px-2.5 py-1 text-xs font-semibold",
+                      row.classification === "linkable"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-amber-100 text-amber-800",
+                    )}>
+                      {row.classification === "linkable" ? "Safe to link" : row.classification.replace(/_/g, " ")}
+                    </span>
+                    {row.classification === "linkable" && row.booking_id ? (
+                      <button
+                        type="button"
+                        disabled={recoveryBusy === row.invoice_id}
+                        onClick={() => void linkRecoveryBooking(row)}
+                        className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {recoveryBusy === row.invoice_id ? "Linking…" : "Link existing booking"}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {([
