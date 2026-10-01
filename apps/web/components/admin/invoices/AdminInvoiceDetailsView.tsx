@@ -218,7 +218,7 @@ export function AdminInvoiceDetailsView({
     let hasManualMarkPaid = false;
     let hasGatewayPayment = false;
     for (const event of state.data.events ?? []) {
-      const kind = String((event.payload as Record<string, unknown>)?.kind ?? event.kind ?? "").toLowerCase();
+      const kind = String((event.payload as Record<string, unknown>)?.kind ?? "").toLowerCase();
       if (kind === "admin_mark_paid") hasManualMarkPaid = true;
       if (kind === "payment_received" || kind === "payment_applied") hasGatewayPayment = true;
     }
