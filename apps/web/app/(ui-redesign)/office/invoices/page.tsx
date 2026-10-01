@@ -105,8 +105,12 @@ function InvoiceCard({ inv }: { inv: AdminInvoiceListRow }) {
   );
 }
 
+const COLLECTIBLE_TOOLTIP =
+  "Balances already issued to customers (sent, partially paid, or overdue). Drafts are excluded.";
+const DRAFT_FORECAST_TOOLTIP =
+  "Open draft balances not yet issued to customers. This is forecast billing, not collectible debt.";
 const OUTSTANDING_TOOLTIP =
-  "Sum of unpaid balances on all invoices in the list (every month). For current recurring billing, compare with the month draft total on Recurring.";
+  "All open invoice balances: collectible balances plus draft forecast.";
 
 function SummaryStatCard({
   label,
@@ -258,6 +262,8 @@ export default function InvoicesPage() {
   const totalInvoices = summary?.total_invoices ?? pagination.total;
   const paidCount = summary?.paid_count ?? 0;
   const overdueCount = summary?.overdue_count ?? 0;
+  const collectibleOutstandingCents = summary?.collectible_outstanding_cents ?? 0;
+  const draftForecastCents = summary?.draft_forecast_cents ?? 0;
   const totalOutstandingCents = summary?.total_outstanding_cents ?? 0;
 
   return (
@@ -309,7 +315,7 @@ export default function InvoicesPage() {
       </div>
 
       <TooltipProvider delayDuration={200}>
-        <div className="-mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1 md:mx-0 md:grid md:grid-cols-2 md:gap-3 md:overflow-visible lg:grid-cols-4">
+        <div className="-mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1 md:mx-0 md:grid md:grid-cols-2 md:gap-3 md:overflow-visible xl:grid-cols-6">
           <SummaryStatCard label="Invoices" value={loading ? "—" : totalInvoices} color="text-slate-800" />
           <SummaryStatCard label="Paid" value={loading ? "—" : paidCount} color="text-emerald-600" />
           <SummaryStatCard
@@ -318,9 +324,23 @@ export default function InvoicesPage() {
             color={overdueCount > 0 ? "text-red-600" : "text-slate-400"}
           />
           <SummaryStatCard
-            label="Unpaid"
-            value={loading ? "—" : totalOutstandingCents <= 0 ? "R 0" : formatCurrency(totalOutstandingCents, "ZAR")}
+            label="Collectible"
+            value={loading ? "—" : collectibleOutstandingCents <= 0 ? "R 0" : formatCurrency(collectibleOutstandingCents, "ZAR")}
             color="text-orange-600"
+            tooltip={COLLECTIBLE_TOOLTIP}
+            wide
+          />
+          <SummaryStatCard
+            label="Draft forecast"
+            value={loading ? "—" : draftForecastCents <= 0 ? "R 0" : formatCurrency(draftForecastCents, "ZAR")}
+            color="text-blue-600"
+            tooltip={DRAFT_FORECAST_TOOLTIP}
+            wide
+          />
+          <SummaryStatCard
+            label="Outstanding"
+            value={loading ? "—" : totalOutstandingCents <= 0 ? "R 0" : formatCurrency(totalOutstandingCents, "ZAR")}
+            color="text-slate-800"
             tooltip={OUTSTANDING_TOOLTIP}
             wide
           />

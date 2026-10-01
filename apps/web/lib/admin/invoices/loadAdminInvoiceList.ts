@@ -39,6 +39,8 @@ export type AdminInvoiceListSummary = {
   total_invoices: number;
   paid_count: number;
   overdue_count: number;
+  collectible_outstanding_cents: number;
+  draft_forecast_cents: number;
   total_outstanding_cents: number;
 };
 
@@ -65,24 +67,35 @@ function isSettledInvoice(status: string, balanceCents: number): boolean {
   return st === "paid" || st === "refunded" || balanceCents <= 0;
 }
 
-function buildInvoiceSummary(rows: AdminInvoiceListRow[]): AdminInvoiceListSummary {
+export function buildInvoiceSummary(rows: AdminInvoiceListRow[]): AdminInvoiceListSummary {
   let paid_count = 0;
   let overdue_count = 0;
+  let collectible_outstanding_cents = 0;
+  let draft_forecast_cents = 0;
   let total_outstanding_cents = 0;
+
   for (const inv of rows) {
-    if (inv.status.toLowerCase() === "paid") paid_count += 1;
-    if (
-      !isSettledInvoice(inv.status, inv.balance_cents) &&
-      (inv.is_overdue || inv.status.toLowerCase() === "overdue")
-    ) {
-      overdue_count += 1;
+    const status = inv.status.toLowerCase();
+    const balance = Math.max(0, inv.balance_cents);
+
+    if (status === "paid") paid_count += 1;
+    if (!isSettledInvoice(status, balance) && inv.is_overdue) overdue_count += 1;
+
+    if (!inv.is_closed && status === "draft") {
+      draft_forecast_cents += balance;
+    } else if (!inv.is_closed && ["sent", "partially_paid", "overdue"].includes(status)) {
+      collectible_outstanding_cents += balance;
     }
-    total_outstanding_cents += Math.max(0, inv.balance_cents);
+
+    if (!inv.is_closed) total_outstanding_cents += balance;
   }
+
   return {
     total_invoices: rows.length,
     paid_count,
     overdue_count,
+    collectible_outstanding_cents,
+    draft_forecast_cents,
     total_outstanding_cents,
   };
 }
@@ -198,9 +211,9 @@ export async function loadAdminInvoiceList(
       total_amount_cents: total,
       amount_paid_cents: paid,
       balance_cents,
-      is_overdue: isSettledInvoice(statusLower, balance_cents)
-        ? false
-        : Boolean(r.is_overdue) || displayOverdue,
+      // Display truth is derived from the same 5-day grace policy as the overdue RPC.
+      // Do not let a stale persisted flag make the list/KPI disagree with the policy.
+      is_overdue: isSettledInvoice(statusLower, balance_cents) ? false : displayOverdue,
       is_closed: Boolean(r.is_closed),
       due_date: due,
       customer_name: prof?.full_name ?? null,
