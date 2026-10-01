@@ -1,3 +1,5 @@
+import { monthlyInvoicePaymentSourceLabel, type MonthlyInvoicePaymentSource } from "@/lib/admin/invoices/monthlyInvoicePaymentSource";
+
 export type InvoiceUiRow = {
   id: string;
   month: string;
@@ -16,6 +18,7 @@ export type InvoiceUiRow = {
   display_reference: string;
   sync_hold_reason: string | null;
   date_context: "last_visit" | "due";
+  payment_source: MonthlyInvoicePaymentSource;
 };
 
 export function getInvoiceOperationalStatus(
@@ -65,6 +68,7 @@ export function buildInvoiceCsv(invoices: InvoiceUiRow[]): string {
     "Customer ID",
     "Billing month",
     "Status",
+    "Payment source",
     "Total",
     "Paid",
     "Balance",
@@ -84,6 +88,7 @@ export function buildInvoiceCsv(invoices: InvoiceUiRow[]): string {
       invoice.customer_id,
       invoice.month,
       operationalStatus,
+      monthlyInvoicePaymentSourceLabel(invoice.payment_source),
       (invoice.total_amount_cents / 100).toFixed(2),
       (invoice.amount_paid_cents / 100).toFixed(2),
       (invoice.balance_cents / 100).toFixed(2),

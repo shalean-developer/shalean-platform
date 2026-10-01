@@ -3,6 +3,10 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { daysOverdueForDisplay, isInvoiceOverdueForDisplay } from "@/lib/admin/invoices/invoiceAdminFormatters";
+import {
+  resolveMonthlyInvoicePaymentSource,
+  type MonthlyInvoicePaymentSource,
+} from "@/lib/admin/invoices/monthlyInvoicePaymentSource";
 import { assessMonthlyInvoiceFinalizeReadiness } from "@/lib/monthlyInvoice/isMonthlyInvoiceReadyToFinalize";
 import { resolveMonthlyInvoiceCustomerEmail } from "@/lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail";
 import { todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
@@ -36,6 +40,7 @@ export type AdminInvoiceListRow = {
   display_reference: string;
   sync_hold_reason: string | null;
   date_context: "last_visit" | "due";
+  payment_source: MonthlyInvoicePaymentSource;
 };
 
 export type AdminInvoiceMonthGroup = {
@@ -145,7 +150,7 @@ export async function loadAdminInvoiceList(
   const { data: invs, error } = await admin
     .from("monthly_invoices")
     .select(
-      "id, customer_id, month, status, total_amount_cents, amount_paid_cents, balance_cents, is_overdue, is_closed, due_date, currency_code, view_count, first_viewed_at, zoho_invoice_number",
+      "id, customer_id, month, status, total_amount_cents, amount_paid_cents, balance_cents, is_overdue, is_closed, due_date, currency_code, view_count, first_viewed_at, zoho_invoice_number, closure_reason",
     )
     .order("month", { ascending: false })
     .limit(500);
@@ -153,6 +158,63 @@ export async function loadAdminInvoiceList(
   if (error) return { ok: false, error: error.message };
 
   const raw = (invs ?? []) as Record<string, unknown>[];
+  const allInvoiceIds = raw.map((r) => String(r.id ?? "")).filter(Boolean);
+  const eventKindsByInvoice = new Map<string, string[]>();
+  const paystackEvidence = new Set<string>();
+
+  if (allInvoiceIds.length) {
+    const [eventsRes, dedupRes, ledgerRes] = await Promise.all([
+      admin
+        .from("monthly_invoice_events")
+        .select("invoice_id, kind, created_at")
+        .in("invoice_id", allInvoiceIds)
+        .in("kind", [
+          "payment_received",
+          "payment_applied",
+          "admin_mark_paid",
+          "admin_revert_to_draft",
+          "cleaning_credit_applied",
+          "cleaning_credit_settled",
+        ]),
+      admin
+        .from("monthly_invoice_paystack_charge_dedup")
+        .select("invoice_id")
+        .in("invoice_id", allInvoiceIds),
+      admin
+        .from("payment_transactions")
+        .select("entity_id")
+        .eq("entity_type", "monthly_invoice")
+        .eq("gateway", "paystack")
+        .in("entity_id", allInvoiceIds),
+    ]);
+
+    if (eventsRes.error) return { ok: false, error: eventsRes.error.message };
+    if (dedupRes.error) return { ok: false, error: dedupRes.error.message };
+    if (ledgerRes.error) return { ok: false, error: ledgerRes.error.message };
+
+    const eventsByInvoice = new Map<string, Array<{ kind: string; createdAt: string }>>();
+    for (const e of (eventsRes.data ?? []) as { invoice_id?: string | null; kind?: string | null; created_at?: string | null }[]) {
+      const invoiceId = String(e.invoice_id ?? "");
+      const kind = String(e.kind ?? "");
+      if (!invoiceId || !kind) continue;
+      const list = eventsByInvoice.get(invoiceId) ?? [];
+      list.push({ kind, createdAt: String(e.created_at ?? "") });
+      eventsByInvoice.set(invoiceId, list);
+    }
+    for (const [invoiceId, events] of eventsByInvoice) {
+      events.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      eventKindsByInvoice.set(invoiceId, events.map((event) => event.kind));
+    }
+    for (const d of (dedupRes.data ?? []) as { invoice_id?: string | null }[]) {
+      const invoiceId = String(d.invoice_id ?? "");
+      if (invoiceId) paystackEvidence.add(invoiceId);
+    }
+    for (const t of (ledgerRes.data ?? []) as { entity_id?: string | null }[]) {
+      const invoiceId = String(t.entity_id ?? "");
+      if (invoiceId) paystackEvidence.add(invoiceId);
+    }
+  }
+
   const customerIds = [...new Set(raw.map((r) => String(r.customer_id ?? "")).filter(Boolean))];
 
   const profiles = new Map<string, { full_name: string | null; account_billing_risk: string | null }>();
@@ -246,6 +308,14 @@ export async function loadAdminInvoiceList(
           : formatZohoOrderReference(id, "monthly"),
       sync_hold_reason: null,
       date_context: statusLower === "draft" ? "last_visit" : "due",
+      payment_source: resolveMonthlyInvoicePaymentSource({
+        status: statusLower,
+        totalAmountCents: total,
+        amountPaidCents: paid,
+        closureReason: typeof r.closure_reason === "string" ? r.closure_reason : null,
+        eventKinds: eventKindsByInvoice.get(id) ?? [],
+        hasPaystackLedger: paystackEvidence.has(id),
+      }),
     };
   });
 
