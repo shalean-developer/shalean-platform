@@ -221,6 +221,11 @@ const nextConfig: NextConfig = {
       },
       /** Cleaner workspace cutover — always redirect legacy UI paths to `/jobs`. */
       {
+        source: "/office/sales-documents",
+        destination: "/office/leads-sales",
+        permanent: false,
+      },
+      {
         source: "/cleaner",
         destination: "/jobs",
         permanent: false,
