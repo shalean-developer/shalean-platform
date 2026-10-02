@@ -204,6 +204,7 @@ export function QuoteRequestCatalogPicker({
           </div>
 
           {selectedServiceSlugs[0] !== QUOTE_UNSURE_SERVICE_SLUG ? (
+            <>
           {availableExtras.length > 0 ? (
             <details className="rounded-xl border border-slate-200 bg-slate-50/70">
               <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">
