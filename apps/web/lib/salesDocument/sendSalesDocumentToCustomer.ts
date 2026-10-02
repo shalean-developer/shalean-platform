@@ -51,6 +51,9 @@ export async function sendSalesDocumentToCustomer(
   if (row.status === "requested") {
     return { ok: false, error: "prepare_quote_before_send" };
   }
+  if (row.document_type === "quote" && row.status === "accepted") {
+    return { ok: false, error: "accepted_quote_is_immutable" };
+  }
   if (row.total_cents <= 0) {
     return { ok: false, error: "total_required_before_send" };
   }
