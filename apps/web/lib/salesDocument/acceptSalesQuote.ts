@@ -60,6 +60,7 @@ export async function acceptSalesQuoteAndCreateInvoice(
         message: "booking_create_failed",
         context: { quoteId, invoiceId: existing.id, error: bookingResult.error },
       });
+      return { ok: false, error: `booking_create_failed:${bookingResult.error}` };
     }
     return {
       ok: true,
