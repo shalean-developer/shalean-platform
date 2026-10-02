@@ -86,12 +86,23 @@ export async function createCustomerQuoteRequest(
   const phone = input.customer_phone.trim();
 
   if (name.length < 2) return { ok: false, error: "name_required" };
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: "invalid_email" };
+  if (name.length > 120) return { ok: false, error: "input_too_long" };
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, error: "invalid_email" };
+  }
   if (phone.length < 9) return { ok: false, error: "phone_required" };
+  if (phone.length > 32) return { ok: false, error: "input_too_long" };
   if (!input.suburb.trim()) return { ok: false, error: "suburb_required" };
+  if (input.suburb.trim().length > 120) return { ok: false, error: "input_too_long" };
+  if ((input.message?.trim().length ?? 0) > 2_000) return { ok: false, error: "input_too_long" };
   if (!input.selected_items.length) return { ok: false, error: "selection_required" };
+  if (input.selected_items.length > 20) return { ok: false, error: "invalid_selection" };
 
-  const fingerprint = input.request_fingerprint?.trim() || null;
+  const fingerprintRaw = input.request_fingerprint?.trim() || null;
+  if (fingerprintRaw && !/^[0-9a-f]{64}$/i.test(fingerprintRaw)) {
+    return { ok: false, error: "invalid_request_fingerprint" };
+  }
+  const fingerprint = fingerprintRaw;
   if (fingerprint) {
     const { data: existing, error: existingErr } = await admin
       .from("sales_documents")
@@ -106,9 +117,9 @@ export async function createCustomerQuoteRequest(
 
   const selected_items = input.selected_items.map((item) => ({
     kind: item.kind,
-    slug: item.slug.trim(),
-    name: item.name.trim(),
-    quantity: Math.max(1, Math.round(item.quantity)),
+    slug: item.slug.trim().slice(0, 120),
+    name: item.name.trim().slice(0, 160),
+    quantity: Math.max(1, Math.min(20, Math.round(item.quantity))),
   }));
 
   const requestDetails: SalesDocumentQuoteRequestDetails = {
