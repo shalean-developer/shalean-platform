@@ -71,7 +71,7 @@ export function QuoteRequestForm() {
           ...getAcquisitionPayloadFields(),
         }),
       });
-      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      const json = (await res.json().catch(() => ({}))) as { error?: string; retryAfterSeconds?: number };
       if (!res.ok) {
         setError(
           json.error === "invalid_email"
@@ -84,7 +84,11 @@ export function QuoteRequestForm() {
                   ? "Please select at least one service."
                   : json.error === "invalid_selection"
                     ? "That service selection is no longer available. Reload the services and try again."
-                  : "We could not submit your request. Please try again or call us.",
+                    : json.error === "input_too_long"
+                      ? "One of the fields is too long. Please shorten it and try again."
+                      : json.error === "rate_limited"
+                        ? "Too many quote requests were submitted. Please wait a few minutes and try again."
+                        : "We could not submit your request. Please try again or call us.",
         );
         return;
       }
@@ -148,6 +152,7 @@ export function QuoteRequestForm() {
             required
             className={fieldClass}
             value={form.customer_name}
+            maxLength={120}
             onChange={(e) => setForm((p) => ({ ...p, customer_name: e.target.value }))}
             suppressHydrationWarning
           />
@@ -162,6 +167,7 @@ export function QuoteRequestForm() {
             required
             className={fieldClass}
             value={form.customer_email}
+            maxLength={254}
             onChange={(e) => setForm((p) => ({ ...p, customer_email: e.target.value }))}
             suppressHydrationWarning
           />
@@ -176,6 +182,7 @@ export function QuoteRequestForm() {
             required
             className={fieldClass}
             value={form.customer_phone}
+            maxLength={32}
             onChange={(e) => setForm((p) => ({ ...p, customer_phone: e.target.value }))}
             suppressHydrationWarning
           />
@@ -208,6 +215,7 @@ export function QuoteRequestForm() {
             placeholder="e.g. Sea Point, Claremont, Durbanville"
             className={fieldClass}
             value={form.suburb}
+            maxLength={120}
             onChange={(e) => setForm((p) => ({ ...p, suburb: e.target.value }))}
             suppressHydrationWarning
           />
@@ -235,6 +243,7 @@ export function QuoteRequestForm() {
             className={fieldClass}
             placeholder="Pets, parking, access instructions, special requests…"
             value={form.message}
+            maxLength={2000}
             onChange={(e) => setForm((p) => ({ ...p, message: e.target.value }))}
             suppressHydrationWarning
           />
