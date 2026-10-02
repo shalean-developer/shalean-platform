@@ -6,7 +6,6 @@ import { useQuotePricingCatalog } from "@/components/quote/useQuotePricingCatalo
 import {
   extrasForSelectedServices,
   QUOTE_CUSTOM_SERVICE_SLUGS,
-  QUOTE_UNSURE_SERVICE_NAME,
   QUOTE_UNSURE_SERVICE_SLUG,
 } from "@/lib/quote/quoteSelection";
 import type { QuoteCatalogSelection } from "@/lib/quote/types";
@@ -101,10 +100,7 @@ export function QuoteRequestCatalogPicker({
   );
 
   const quoteServices = useMemo(
-    () => [
-      ...services.filter((service) => QUOTE_CUSTOM_SERVICE_SLUGS.has(service.slug)),
-      { id: QUOTE_UNSURE_SERVICE_SLUG, slug: QUOTE_UNSURE_SERVICE_SLUG, name: QUOTE_UNSURE_SERVICE_NAME },
-    ],
+    () => services.filter((service) => QUOTE_CUSTOM_SERVICE_SLUGS.has(service.slug)),
     [services],
   );
 
@@ -158,7 +154,6 @@ export function QuoteRequestCatalogPicker({
         <div className="grid gap-2 sm:grid-cols-3">
           {quoteServices.map((service) => {
             const isSelected = selectedKeys.has(`service:${service.slug}`);
-            const isUnsure = service.slug === QUOTE_UNSURE_SERVICE_SLUG;
 
             return (
               <button
@@ -167,25 +162,20 @@ export function QuoteRequestCatalogPicker({
                 onClick={() => selectService(service)}
                 aria-pressed={isSelected}
                 className={cn(
-                  "rounded-xl border px-4 py-3 text-left transition",
-                  isUnsure && "sm:col-span-3",
+                  "rounded-xl border px-3 py-3 text-left transition",
                   isSelected
                     ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500/10"
                     : "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40",
                 )}
               >
                 <span className="flex items-center justify-between gap-3">
-                  <span className="font-semibold text-slate-900">
-                    {isUnsure ? "Not sure — help me choose" : service.name}
-                  </span>
+                  <span className="font-semibold text-slate-900">{service.name}</span>
                   <span className={cn("shrink-0 text-xs font-semibold", isSelected ? "text-blue-700" : "text-blue-600")}>
                     {isSelected ? "Selected" : "Choose"}
                   </span>
                 </span>
                 <span className="mt-1 block text-xs leading-relaxed text-slate-500">
-                  {isUnsure
-                    ? "Tell us about the job and our team will recommend the right service."
-                    : SERVICE_HELP[service.slug] ?? "Request a personalised cleaning quote."}
+                  {SERVICE_HELP[service.slug] ?? "Request a personalised cleaning quote."}
                 </span>
               </button>
             );
