@@ -70,7 +70,7 @@ export async function ensureCustomerAccount(
     await ensureUserProfileForAuthUser(admin, uidByPhone);
     await upsertCustomerProfileContact(admin, {
       userId: uidByPhone,
-      contact: { fullName, billingEmail: emailNorm || null, phone: phoneNorm ?? phoneRaw || null },
+      contact: { fullName, billingEmail: emailNorm || null, phone: phoneNorm ?? (phoneRaw || null) },
     });
     return { ok: true, userId: uidByPhone, loginEmail: genEmail ?? emailNorm, reused: true, match: "phone" };
   }
@@ -79,7 +79,7 @@ export async function ensureCustomerAccount(
     await ensureUserProfileForAuthUser(admin, uidByEmail);
     await upsertCustomerProfileContact(admin, {
       userId: uidByEmail,
-      contact: { fullName, billingEmail: emailNorm, phone: phoneNorm ?? phoneRaw || null },
+      contact: { fullName, billingEmail: emailNorm, phone: phoneNorm ?? (phoneRaw || null) },
     });
     return { ok: true, userId: uidByEmail, loginEmail: emailNorm, reused: true, match: "email" };
   }
@@ -94,7 +94,7 @@ export async function ensureCustomerAccount(
     email_confirm: true,
     user_metadata: {
       full_name: fullName,
-      phone: phoneNorm ?? phoneRaw || null,
+      phone: phoneNorm ?? (phoneRaw || null),
       source: metadataSource,
     },
   });
@@ -117,7 +117,7 @@ export async function ensureCustomerAccount(
     contact: {
       fullName,
       billingEmail: emailNorm || null,
-      phone: phoneNorm ?? phoneRaw || null,
+      phone: phoneNorm ?? (phoneRaw || null),
     },
     role: "customer",
   });
