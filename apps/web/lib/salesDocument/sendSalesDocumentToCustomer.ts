@@ -6,6 +6,7 @@ import { trustDocPageUrl } from "@/lib/pay/trustPayPageUrl";
 import { initializePaystackForSalesDocument } from "@/lib/salesDocument/initializePaystackForSalesDocument";
 import { sendSalesDocumentEmail } from "@/lib/salesDocument/sendSalesDocumentEmail";
 import { syncSalesDocumentToZoho } from "@/lib/salesDocument/syncSalesDocumentToZoho";
+import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { trustSalesDocPayPageUrl } from "@/lib/pay/trustPayPageUrl";
 
 function formatDueDate(isoDate: string | null): string {
@@ -30,6 +31,7 @@ export async function sendSalesDocumentToCustomer(
     id: string;
     document_type: "quote" | "invoice";
     status: string;
+    customer_id: string | null;
     customer_email: string;
     customer_name: string;
     total_cents: number;
@@ -60,11 +62,11 @@ export async function sendSalesDocumentToCustomer(
     paymentUrlForZoho = trustSalesDocPayPageUrl(row.id, pay.reference, pay.authorizationUrl);
   }
 
-  const zoho = await syncSalesDocumentToZoho(admin, row.id, {
+  const zohoPrepared = await syncSalesDocumentToZoho(admin, row.id, {
     paymentUrl: paymentUrlForZoho,
-    markSent: true,
+    markSent: false,
   });
-  if (!zoho.ok) return { ok: false, error: `zoho:${zoho.error}` };
+  if (!zohoPrepared.ok) return { ok: false, error: `zoho_prepare:${zohoPrepared.error}` };
 
   const mail = await sendSalesDocumentEmail({
     to: row.customer_email,
@@ -73,6 +75,8 @@ export async function sendSalesDocumentToCustomer(
     totalZar: row.total_cents / 100,
     viewUrl,
     dueDateLabel: formatDueDate(row.due_date),
+    customerId: row.customer_id,
+    documentId: row.id,
   });
 
   if (!mail.sent) return { ok: false, error: mail.error ?? "email_failed" };
@@ -85,6 +89,37 @@ export async function sendSalesDocumentToCustomer(
     .eq("id", row.id);
 
   if (statusErr) return { ok: false, error: statusErr.message };
+
+  const zohoSent = await syncSalesDocumentToZoho(admin, row.id, {
+    paymentUrl: paymentUrlForZoho,
+    markSent: true,
+  });
+  if (!zohoSent.ok) {
+    await reportOperationalIssue(
+      "warn",
+      "sales_document/send",
+      "zoho_sent_reconciliation_failed_after_customer_delivery",
+      {
+        document_id: row.id,
+        document_type: row.document_type,
+        error: zohoSent.error,
+        email_id: mail.emailId ?? null,
+      },
+    );
+    await logSystemEvent({
+      level: "warn",
+      source: "sales_document/send",
+      message: "zoho_sent_reconciliation_failed_after_customer_delivery",
+      context: {
+        document_id: row.id,
+        document_type: row.document_type,
+        error: zohoSent.error,
+        email_id: mail.emailId ?? null,
+        customer_email_delivered: true,
+        shalean_status_sent: true,
+      },
+    });
+  }
 
   return { ok: true, viewUrl };
 }
