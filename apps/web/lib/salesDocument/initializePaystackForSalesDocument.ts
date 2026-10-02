@@ -4,7 +4,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
-import { salesDocumentPaystackReference } from "@/lib/salesDocument/salesDocumentPaystackReference";
+import {
+  salesDocumentPaystackRecoveryReference,
+  salesDocumentPaystackReference,
+} from "@/lib/salesDocument/salesDocumentPaystackReference";
 
 export type InitializeSalesDocumentPaystackResult =
   | { ok: true; authorizationUrl: string; reference: string; reused?: boolean }
@@ -17,6 +20,7 @@ type DocRow = {
   document_type: string;
   status: string | null;
   total_cents: number | null;
+  amount_paid_cents: number | null;
   balance_cents: number | null;
   paystack_reference: string | null;
   payment_link: string | null;
@@ -43,7 +47,7 @@ export async function initializePaystackForSalesDocument(
   const { data: inv, error } = await admin
     .from("sales_documents")
     .select(
-      "id, document_type, status, total_cents, balance_cents, paystack_reference, payment_link, payment_link_expires_at",
+      "id, document_type, status, total_cents, amount_paid_cents, balance_cents, paystack_reference, payment_link, payment_link_expires_at",
     )
     .eq("id", params.documentId)
     .maybeSingle();
@@ -64,27 +68,36 @@ export async function initializePaystackForSalesDocument(
   const balance = Math.max(0, Math.round(Number(row.balance_cents ?? 0)));
   if (balance <= 0) return { ok: false, error: "nothing_due" };
 
-  const reference = salesDocumentPaystackReference(row.id);
+  const canonicalReference = salesDocumentPaystackReference(row.id);
   const existingRef = String(row.paystack_reference ?? "").trim();
   const existingLink = String(row.payment_link ?? "").trim();
   const expiresAt = typeof row.payment_link_expires_at === "string" ? row.payment_link_expires_at : null;
   const linkExpired = Boolean(expiresAt && new Date(expiresAt).getTime() < Date.now());
 
-  if (!existingRef || existingRef !== reference) {
-    const { error: refErr } = await admin
-      .from("sales_documents")
-      .update({ paystack_reference: reference })
-      .eq("id", row.id);
-    if (refErr) return { ok: false, error: refErr.message };
-  }
-
-  if (existingLink && !linkExpired) {
+  if (existingLink && !linkExpired && existingRef) {
     return {
       ok: true,
       authorizationUrl: existingLink,
-      reference: existingRef === reference ? existingRef : reference,
+      reference: existingRef,
       reused: true,
     };
+  }
+
+  const prevPaid = Math.max(0, Math.round(Number(row.amount_paid_cents ?? 0)));
+  const reference = existingRef
+    ? salesDocumentPaystackRecoveryReference(row.id, balance)
+    : canonicalReference;
+
+  if (!existingRef || existingRef !== reference) {
+    const { error: refErr } = await admin
+      .from("sales_documents")
+      .update({
+        paystack_reference: reference,
+        payment_link: null,
+        payment_link_expires_at: null,
+      })
+      .eq("id", row.id);
+    if (refErr) return { ok: false, error: refErr.message };
   }
 
   const appUrl = getPublicAppUrlBase();
@@ -106,6 +119,7 @@ export async function initializePaystackForSalesDocument(
         shalean_sales_document_id: row.id,
         customer_email: email,
         amount_due_cents: String(balance),
+        amount_paid_before_cents: String(prevPaid),
       },
     }),
   });
