@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Loader2, Minus, Plus, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { useQuotePricingCatalog } from "@/components/quote/useQuotePricingCatalog";
 import {
   extrasForSelectedServices,
@@ -12,88 +12,26 @@ import {
 import type { QuoteCatalogSelection } from "@/lib/quote/types";
 import { cn } from "@/lib/utils";
 
-const stepperBtnClass =
-  "flex h-9 min-h-9 w-9 min-w-9 shrink-0 items-center justify-center rounded-lg text-blue-600 transition hover:bg-blue-50 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-35";
-
 function selectionKey(item: QuoteCatalogSelection): string {
   return `${item.kind}:${item.slug}`;
 }
 
-function serviceRoomNote(bedrooms: number, bathrooms: number): string {
-  return bedrooms > 0 || bathrooms > 0 ? ` (${bedrooms} bed, ${bathrooms} bath)` : "";
-}
-
-function syncServiceRoomNotes(
-  items: QuoteCatalogSelection[],
-  bedrooms: number,
-  bathrooms: number,
-  services: { slug: string; name: string }[],
-): QuoteCatalogSelection[] {
-  const note = serviceRoomNote(bedrooms, bathrooms);
-  return items.map((item) => {
-    if (item.kind !== "service") return item;
-    const service = services.find((s) => s.slug === item.slug);
-    if (!service) return item;
-    return { ...item, name: `${service.name}${note}` };
-  });
-}
-
-function RoomField({
-  label,
-  value,
-  min,
-  max,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  onChange: (n: number) => void;
-}) {
-  return (
-    <div>
-      <label className="mb-1 block text-xs font-medium text-slate-600">{label}</label>
-      <div className="flex h-11 items-center justify-between rounded-xl border border-slate-200 bg-white px-1">
-        <button
-          type="button"
-          className={stepperBtnClass}
-          disabled={value <= min}
-          onClick={() => onChange(Math.max(min, value - 1))}
-          aria-label={`Decrease ${label.toLowerCase()}`}
-        >
-          <Minus className="h-4 w-4" aria-hidden />
-        </button>
-        <span className="min-w-[2ch] text-center text-sm font-semibold tabular-nums text-slate-900">{value}</span>
-        <button
-          type="button"
-          className={stepperBtnClass}
-          disabled={value >= max}
-          onClick={() => onChange(Math.min(max, value + 1))}
-          aria-label={`Increase ${label.toLowerCase()}`}
-        >
-          <Plus className="h-4 w-4" aria-hidden />
-        </button>
-      </div>
-    </div>
-  );
-}
+const SERVICE_HELP: Record<string, string> = {
+  standard: "Regular home cleaning for ongoing or once-off needs.",
+  deep: "A more detailed top-to-bottom clean.",
+  move: "Move-in or move-out cleaning.",
+  office: "Offices, commercial spaces and workplace cleaning.",
+  carpet: "Carpets, rugs and related fabric cleaning.",
+  airbnb: "Guest-ready Airbnb and short-stay turnover cleaning.",
+};
 
 export function QuoteRequestCatalogPicker({
   selected,
   onChange,
-  bedrooms,
-  bathrooms,
-  onBedroomsChange,
-  onBathroomsChange,
   className,
 }: {
   selected: QuoteCatalogSelection[];
   onChange: (items: QuoteCatalogSelection[]) => void;
-  bedrooms: number;
-  bathrooms: number;
-  onBedroomsChange: (n: number) => void;
-  onBathroomsChange: (n: number) => void;
   className?: string;
 }) {
   const { services, extras, loading, error } = useQuotePricingCatalog();
@@ -109,7 +47,7 @@ export function QuoteRequestCatalogPicker({
     [selectedServiceSlugs, services, extras],
   );
 
-  const customQuoteServices = useMemo(
+  const quoteServices = useMemo(
     () => [
       ...services.filter((service) => QUOTE_CUSTOM_SERVICE_SLUGS.has(service.slug)),
       { id: QUOTE_UNSURE_SERVICE_SLUG, slug: QUOTE_UNSURE_SERVICE_SLUG, name: QUOTE_UNSURE_SERVICE_NAME },
@@ -126,27 +64,15 @@ export function QuoteRequestCatalogPicker({
   function selectService(service: { id: string; slug: string; name: string }) {
     if (selectedKeys.has(`service:${service.slug}`)) return;
 
-    const keptExtras = selected.filter((item) => item.kind === "extra");
     const next: QuoteCatalogSelection[] = [
       {
         kind: "service",
         slug: service.slug,
-        name: `${service.name}${serviceRoomNote(bedrooms, bathrooms)}`,
+        name: service.name,
         quantity: 1,
       },
-      ...keptExtras,
     ];
     onChange(pruneInvalidExtras(next));
-  }
-
-  function handleBedroomsChange(next: number) {
-    onBedroomsChange(next);
-    onChange(syncServiceRoomNotes(selected, next, bathrooms, customQuoteServices));
-  }
-
-  function handleBathroomsChange(next: number) {
-    onBathroomsChange(next);
-    onChange(syncServiceRoomNotes(selected, bedrooms, next, customQuoteServices));
   }
 
   function addExtra(extra: { slug: string; name: string }) {
@@ -163,23 +89,24 @@ export function QuoteRequestCatalogPicker({
     <section className={cn("space-y-3", className)}>
       <div>
         <h2 className="text-base font-semibold text-slate-900">What do you need?</h2>
-        <p className="mt-0.5 text-sm text-slate-500">Choose the option that best matches your request.</p>
+        <p className="mt-0.5 text-sm text-slate-500">Choose one service. You can add extras after selecting it.</p>
       </div>
 
       {loading ? (
         <div className="flex min-h-20 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-500">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          Loading options…
+          Loading services…
         </div>
       ) : null}
 
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
       {!loading && !error ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {customQuoteServices.map((service) => {
+        <div className="grid gap-2 sm:grid-cols-2">
+          {quoteServices.map((service) => {
             const isSelected = selectedKeys.has(`service:${service.slug}`);
             const isUnsure = service.slug === QUOTE_UNSURE_SERVICE_SLUG;
+
             return (
               <button
                 key={service.id}
@@ -187,7 +114,7 @@ export function QuoteRequestCatalogPicker({
                 onClick={() => selectService(service)}
                 aria-pressed={isSelected}
                 className={cn(
-                  "rounded-xl border p-4 text-left transition",
+                  "rounded-xl border px-4 py-3 text-left transition",
                   isSelected
                     ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500/10"
                     : "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40",
@@ -197,14 +124,14 @@ export function QuoteRequestCatalogPicker({
                   <span className="font-semibold text-slate-900">
                     {isUnsure ? "Not sure — help me choose" : service.name}
                   </span>
-                  <span className={cn("text-xs font-semibold", isSelected ? "text-blue-700" : "text-blue-600")}>
+                  <span className={cn("shrink-0 text-xs font-semibold", isSelected ? "text-blue-700" : "text-blue-600")}>
                     {isSelected ? "Selected" : "Choose"}
                   </span>
                 </span>
                 <span className="mt-1 block text-xs leading-relaxed text-slate-500">
                   {isUnsure
                     ? "Tell us about the job and our team will recommend the right service."
-                    : "For offices, commercial spaces and custom workplace cleaning."}
+                    : SERVICE_HELP[service.slug] ?? "Request a personalised cleaning quote."}
                 </span>
               </button>
             );
@@ -212,12 +139,12 @@ export function QuoteRequestCatalogPicker({
         </div>
       ) : null}
 
-      {selectedServiceSlugs.length > 0 ? (
-        <div className="space-y-3">
+      {selectedServiceSlugs.length > 0 && selectedServiceSlugs[0] !== QUOTE_UNSURE_SERVICE_SLUG ? (
+        <div className="space-y-2">
           {availableExtras.length > 0 ? (
             <details className="rounded-xl border border-slate-200 bg-slate-50/70">
               <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">
-                Optional add-ons
+                Add extras
                 <span className="ml-2 text-xs font-normal text-slate-500">
                   ({selected.filter((item) => item.kind === "extra").length} selected)
                 </span>
@@ -229,6 +156,7 @@ export function QuoteRequestCatalogPicker({
                     const selectedItem = selected.find(
                       (item) => item.kind === "extra" && item.slug === extra.slug,
                     );
+
                     return (
                       <button
                         key={extra.id}
@@ -242,29 +170,18 @@ export function QuoteRequestCatalogPicker({
                         )}
                       >
                         <span className="font-medium">{extra.name}</span>
-                        <span className="text-xs font-semibold">{added ? "Added" : "+ Add"}</span>
+                        <span className="shrink-0 text-xs font-semibold">{added ? "Added" : "+ Add"}</span>
                       </button>
                     );
                   })}
                 </div>
               </div>
             </details>
-          ) : null}
+          ) : (
+            <p className="text-xs text-slate-500">No optional extras are currently available for this service.</p>
+          )}
 
-          <details className="rounded-xl border border-slate-200 bg-slate-50/70">
-            <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">
-              Property size
-              <span className="ml-2 text-xs font-normal text-slate-500">
-                {bedrooms} bed · {bathrooms} bath
-              </span>
-            </summary>
-            <div className="grid grid-cols-2 gap-3 border-t border-slate-200 p-3">
-              <RoomField label="Bedrooms" value={bedrooms} min={1} max={20} onChange={handleBedroomsChange} />
-              <RoomField label="Bathrooms" value={bathrooms} min={1} max={20} onChange={handleBathroomsChange} />
-            </div>
-          </details>
-
-          {selected.filter((item) => item.kind === "extra").length > 0 ? (
+          {selected.some((item) => item.kind === "extra") ? (
             <div className="flex flex-wrap gap-2">
               {selected.filter((item) => item.kind === "extra").map((item) => (
                 <button
