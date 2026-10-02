@@ -28,19 +28,31 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
 
   const row = data as Record<string, unknown>;
   let linked_invoice_id: string | null = null;
+  let acceptance_snapshot: Record<string, unknown> | null = null;
   if (String(row.document_type ?? "") === "quote") {
-    const { data: linkedInvoice } = await admin
-      .from("sales_documents")
-      .select("id")
-      .eq("converted_from_id", id)
-      .eq("document_type", "invoice")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const [{ data: linkedInvoice }, { data: snapshot, error: snapshotErr }] = await Promise.all([
+      admin
+        .from("sales_documents")
+        .select("id")
+        .eq("converted_from_id", id)
+        .eq("document_type", "invoice")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      admin
+        .from("sales_quote_acceptance_snapshots")
+        .select(
+          "id, invoice_id, snapshot_schema_version, source_quote_updated_at, quote_status_before, customer_name, customer_email, customer_phone, line_items, subtotal_cents, total_cents, currency, due_date, notes, source, request_details, accepted_at",
+        )
+        .eq("quote_id", id)
+        .maybeSingle(),
+    ]);
+    if (snapshotErr) return NextResponse.json({ error: snapshotErr.message }, { status: 500 });
     linked_invoice_id = linkedInvoice?.id ? String(linkedInvoice.id) : null;
+    acceptance_snapshot = snapshot ? (snapshot as Record<string, unknown>) : null;
   }
 
-  return NextResponse.json({ document: { ...row, linked_invoice_id } });
+  return NextResponse.json({ document: { ...row, linked_invoice_id, acceptance_snapshot } });
 }
 
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
