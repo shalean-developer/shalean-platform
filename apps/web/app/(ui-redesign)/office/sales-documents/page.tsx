@@ -35,6 +35,8 @@ type CrmReporting = { overdue_follow_ups: number; average_response_hours: number
 type FilterTab = "all" | "requests" | "quote" | "invoice";
 type StageFilter = "all" | SalesDocRow["pipeline_stage"];
 
+const PAGE_SIZE = 25;
+
 type FollowUpKind =
   | "stale_request"
   | "sent_unviewed"
@@ -266,6 +268,7 @@ export default function OfficeSalesDocumentsPage() {
   const [followUpCounts, setFollowUpCounts] = useState<FollowUpQueueCounts | null>(null);
   const [followUpError, setFollowUpError] = useState<string | null>(null);
   const [showAllFollowUps, setShowAllFollowUps] = useState(false);
+  const [page, setPage] = useState(1);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -353,7 +356,15 @@ export default function OfficeSalesDocumentsPage() {
   }, [docs, stage, tab]);
 
   const requestCount = docs.filter((d) => d.status === "requested").length;
-  const visibleFollowUps = showAllFollowUps ? followUpRows : followUpRows.slice(0, 10);
+  const visibleFollowUps = showAllFollowUps ? followUpRows : followUpRows.slice(0, 5);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const paginated = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [q, stage, tab]);
 
   function followUpKindLabel(kind: FollowUpKind) {
     if (kind === "stale_request") return "Stale request";
@@ -495,15 +506,15 @@ export default function OfficeSalesDocumentsPage() {
       ) : null}
 
       {followUpRows.length > 0 ? (
-        <section className="rounded-2xl border border-violet-200 bg-violet-50 p-4 shadow-sm">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <details className="group rounded-2xl border border-violet-200 bg-violet-50 shadow-sm">
+          <summary className="flex cursor-pointer list-none flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="font-semibold text-violet-950">Sales follow-up queue</h2>
               <p className="text-sm text-violet-800">
-                Operational tasks only — Shalean does not automatically email, WhatsApp or SMS these customers.
+                {followUpCounts?.total ?? followUpRows.length} tasks need attention. Open only when you are working the queue.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="rounded-full bg-white px-2.5 py-1 font-semibold text-slate-700">
                 Total {followUpCounts?.total ?? followUpRows.length}
               </span>
@@ -519,10 +530,14 @@ export default function OfficeSalesDocumentsPage() {
               <span className="rounded-full bg-white px-2.5 py-1 font-semibold text-red-700">
                 Overdue {followUpCounts?.overdue_follow_up ?? 0}
               </span>
+              <span className="ml-1 rounded-lg border border-violet-200 bg-white px-3 py-1.5 font-semibold text-violet-700 group-open:hidden">Open queue</span>
+              <span className="ml-1 hidden rounded-lg border border-violet-200 bg-white px-3 py-1.5 font-semibold text-violet-700 group-open:inline-flex">Hide queue</span>
             </div>
-          </div>
+          </summary>
 
-          <div className="mt-3 space-y-2">
+          <div className="border-t border-violet-200 px-4 pb-4">
+            <p className="pt-3 text-xs text-violet-700">Operational tasks only — no automatic email, WhatsApp or SMS is sent from this queue.</p>
+            <div className="mt-3 space-y-2">
             {visibleFollowUps.map((row) => (
               <div key={row.document_id} className="rounded-xl border border-violet-200 bg-white p-3">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -559,18 +574,18 @@ export default function OfficeSalesDocumentsPage() {
                 </div>
               </div>
             ))}
+            </div>
+            {followUpRows.length > 5 ? (
+              <button
+                type="button"
+                onClick={() => setShowAllFollowUps((value) => !value)}
+                className="mt-3 text-sm font-semibold text-violet-700 hover:underline"
+              >
+                {showAllFollowUps ? "Show fewer" : `Show all ${followUpRows.length} follow-ups`}
+              </button>
+            ) : null}
           </div>
-
-          {followUpRows.length > 10 ? (
-            <button
-              type="button"
-              onClick={() => setShowAllFollowUps((value) => !value)}
-              className="mt-3 text-sm font-semibold text-violet-700 hover:underline"
-            >
-              {showAllFollowUps ? "Show fewer" : `Show all ${followUpRows.length} follow-ups`}
-            </button>
-          ) : null}
-        </section>
+        </details>
       ) : null}
 
       {customerRecoveryError ? (
@@ -580,24 +595,33 @@ export default function OfficeSalesDocumentsPage() {
       ) : null}
 
       {customerRecoveryRows.length > 0 ? (
-        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <details className="group rounded-2xl border border-blue-200 bg-blue-50 shadow-sm">
+          <summary className="flex cursor-pointer list-none flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="font-semibold text-blue-950">Customer link recovery</h2>
               <p className="text-sm text-blue-800">
                 Quotes without a canonical customer account. Exact email matches are reused; valid-email leads can safely create/recover the missing customer account.
               </p>
             </div>
-            <button
-              type="button"
-              disabled={customerRecoveryBusy || customerRecoveryRows.every((row) => row.classification === "blocked")}
-              onClick={() => void repairCustomerLinks()}
-              className="shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {customerRecoveryBusy ? "Repairing…" : "Repair customer links"}
-            </button>
-          </div>
-          <div className="mt-3 space-y-2">
+            <span className="shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 group-open:hidden">
+              Review {customerRecoveryRows.length}
+            </span>
+            <span className="hidden shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 group-open:inline-flex">
+              Hide recovery
+            </span>
+          </summary>
+          <div className="border-t border-blue-200 p-4">
+            <div className="mb-3 flex justify-end">
+              <button
+                type="button"
+                disabled={customerRecoveryBusy || customerRecoveryRows.every((row) => row.classification === "blocked")}
+                onClick={() => void repairCustomerLinks()}
+                className="shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {customerRecoveryBusy ? "Repairing…" : "Repair customer links"}
+              </button>
+            </div>
+            <div className="space-y-2">
             {customerRecoveryRows.map((row) => (
               <div key={row.document_id} className="rounded-xl border border-blue-200 bg-white p-3">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -628,8 +652,9 @@ export default function OfficeSalesDocumentsPage() {
                 </div>
               </div>
             ))}
+            </div>
           </div>
-        </div>
+        </details>
       ) : null}
 
       {recoveryError ? (
@@ -639,14 +664,20 @@ export default function OfficeSalesDocumentsPage() {
       ) : null}
 
       {recoveryRows.length > 0 ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-          <div className="mb-3">
-            <h2 className="font-semibold text-amber-950">Historical quote booking recovery</h2>
-            <p className="text-sm text-amber-800">
+        <details className="group rounded-2xl border border-amber-200 bg-amber-50 shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4">
+            <div>
+              <h2 className="font-semibold text-amber-950">Historical quote booking recovery</h2>
+              <p className="text-sm text-amber-800">{recoveryRows.length} governed legacy exception{recoveryRows.length === 1 ? "" : "s"} — open only for manual recovery work.</p>
+            </div>
+            <span className="shrink-0 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-amber-800 group-open:hidden">Review</span>
+            <span className="hidden shrink-0 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-amber-800 group-open:inline-flex">Hide</span>
+          </summary>
+          <div className="border-t border-amber-200 p-4">
+            <p className="mb-3 text-sm text-amber-800">
               Legacy accepted quotes with an invoice but no sales-document booking link. Only exact, payment-consistent matches can be linked here.
             </p>
-          </div>
-          <div className="space-y-2">
+            <div className="space-y-2">
             {recoveryRows.map((row) => (
               <div key={row.invoice_id} className="rounded-xl border border-amber-200 bg-white p-3">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -685,8 +716,9 @@ export default function OfficeSalesDocumentsPage() {
                 </div>
               </div>
             ))}
+            </div>
           </div>
-        </div>
+        </details>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -765,6 +797,9 @@ export default function OfficeSalesDocumentsPage() {
         >
           <RefreshCw className="h-4 w-4" /> Refresh
         </button>
+        <p className="text-xs text-slate-500 sm:ml-auto">
+          {filtered.length === 0 ? "0 documents" : `Showing ${pageStart + 1}–${Math.min(pageStart + PAGE_SIZE, filtered.length)} of ${filtered.length}`}
+        </p>
       </div>
 
       {deleteError ? (
@@ -779,7 +814,7 @@ export default function OfficeSalesDocumentsPage() {
         ) : filtered.length === 0 ? (
           <div className="px-4 py-8 text-center text-slate-400">No documents yet.</div>
         ) : (
-          filtered.map((d) => (
+          paginated.map((d) => (
             <SalesDocumentListItem key={d.id} doc={d} onDelete={(doc) => setDeleteTarget(doc)} />
           ))
         )}
@@ -814,7 +849,7 @@ export default function OfficeSalesDocumentsPage() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((d) => (
+                paginated.map((d) => (
                   <SalesDocumentTableRow key={d.id} doc={d} onDelete={(doc) => setDeleteTarget(doc)} />
                 ))
               )}
@@ -822,6 +857,28 @@ export default function OfficeSalesDocumentsPage() {
           </table>
         </div>
       </div>
+
+      {totalPages > 1 ? (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+          <button
+            type="button"
+            disabled={currentPage <= 1}
+            onClick={() => setPage((value) => Math.max(1, value - 1))}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Previous
+          </button>
+          <p className="text-sm text-slate-500">Page {currentPage} of {totalPages}</p>
+          <button
+            type="button"
+            disabled={currentPage >= totalPages}
+            onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
+      ) : null}
 
       <SalesDocumentDeleteDialog
         doc={deleteTarget}
