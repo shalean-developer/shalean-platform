@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Loader2, X } from "lucide-react";
+import { Loader2, Minus, Plus, X } from "lucide-react";
 import { useQuotePricingCatalog } from "@/components/quote/useQuotePricingCatalog";
 import {
   extrasForSelectedServices,
@@ -25,13 +25,66 @@ const SERVICE_HELP: Record<string, string> = {
   airbnb: "Guest-ready Airbnb and short-stay turnover cleaning.",
 };
 
+function RoomField({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-slate-600">{label}</label>
+      <div className="flex h-11 items-center justify-between rounded-xl border border-slate-200 bg-white px-1">
+        <button
+          type="button"
+          onClick={() => onChange(Math.max(min, value - 1))}
+          disabled={value <= min}
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50 disabled:pointer-events-none disabled:opacity-35"
+          aria-label={`Decrease ${label.toLowerCase()}`}
+        >
+          <Minus className="h-4 w-4" aria-hidden />
+        </button>
+        <span className="text-sm font-semibold tabular-nums text-slate-900">{value}</span>
+        <button
+          type="button"
+          onClick={() => onChange(Math.min(max, value + 1))}
+          disabled={value >= max}
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50 disabled:pointer-events-none disabled:opacity-35"
+          aria-label={`Increase ${label.toLowerCase()}`}
+        >
+          <Plus className="h-4 w-4" aria-hidden />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function QuoteRequestCatalogPicker({
   selected,
   onChange,
+  bedrooms,
+  bathrooms,
+  extraRooms,
+  onBedroomsChange,
+  onBathroomsChange,
+  onExtraRoomsChange,
   className,
 }: {
   selected: QuoteCatalogSelection[];
   onChange: (items: QuoteCatalogSelection[]) => void;
+  bedrooms: number;
+  bathrooms: number;
+  extraRooms: number;
+  onBedroomsChange: (value: number) => void;
+  onBathroomsChange: (value: number) => void;
+  onExtraRoomsChange: (value: number) => void;
   className?: string;
 }) {
   const { services, extras, loading, error } = useQuotePricingCatalog();
@@ -139,8 +192,18 @@ export function QuoteRequestCatalogPicker({
         </div>
       ) : null}
 
-      {selectedServiceSlugs.length > 0 && selectedServiceSlugs[0] !== QUOTE_UNSURE_SERVICE_SLUG ? (
-        <div className="space-y-2">
+      {selectedServiceSlugs.length > 0 ? (
+        <div className="space-y-3">
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-700">Property size</p>
+            <div className="grid grid-cols-3 gap-2">
+              <RoomField label="Bedrooms" value={bedrooms} min={0} max={20} onChange={onBedroomsChange} />
+              <RoomField label="Bathrooms" value={bathrooms} min={1} max={20} onChange={onBathroomsChange} />
+              <RoomField label="Extra rooms" value={extraRooms} min={0} max={20} onChange={onExtraRoomsChange} />
+            </div>
+          </div>
+
+          {selectedServiceSlugs[0] !== QUOTE_UNSURE_SERVICE_SLUG ? (
           {availableExtras.length > 0 ? (
             <details className="rounded-xl border border-slate-200 bg-slate-50/70">
               <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">
@@ -196,6 +259,8 @@ export function QuoteRequestCatalogPicker({
                 </button>
               ))}
             </div>
+          ) : null}
+          </>
           ) : null}
         </div>
       ) : null}
