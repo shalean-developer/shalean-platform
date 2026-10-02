@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Loader2, Minus, Plus, X } from "lucide-react";
+import { ChevronDown, Loader2, Minus, Plus, X } from "lucide-react";
 import { useQuotePricingCatalog } from "@/components/quote/useQuotePricingCatalog";
 import {
   extrasForSelectedServices,
@@ -151,35 +151,33 @@ export function QuoteRequestCatalogPicker({
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
       {!loading && !error ? (
-        <div className="grid gap-2 sm:grid-cols-3">
-          {quoteServices.map((service) => {
-            const isSelected = selectedKeys.has(`service:${service.slug}`);
-
-            return (
-              <button
-                key={service.id}
-                type="button"
-                onClick={() => selectService(service)}
-                aria-pressed={isSelected}
-                className={cn(
-                  "rounded-xl border px-3 py-3 text-left transition",
-                  isSelected
-                    ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500/10"
-                    : "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40",
-                )}
-              >
-                <span className="flex items-center justify-between gap-3">
-                  <span className="font-semibold text-slate-900">{service.name}</span>
-                  <span className={cn("shrink-0 text-xs font-semibold", isSelected ? "text-blue-700" : "text-blue-600")}>
-                    {isSelected ? "Selected" : "Choose"}
-                  </span>
-                </span>
-                <span className="mt-1 block text-xs leading-relaxed text-slate-500">
-                  {SERVICE_HELP[service.slug] ?? "Request a personalised cleaning quote."}
-                </span>
-              </button>
-            );
-          })}
+        <div>
+          <label htmlFor="quote-service" className="sr-only">Cleaning service</label>
+          <div className="relative">
+            <select
+              id="quote-service"
+              value={selectedServiceSlugs[0] ?? ""}
+              onChange={(event) => {
+                const service = quoteServices.find((item) => item.slug === event.target.value);
+                if (service) selectService(service);
+              }}
+              className="min-h-12 w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-11 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+            >
+              <option value="" disabled>Choose a cleaning service</option>
+              {quoteServices.map((service) => (
+                <option key={service.id} value={service.slug}>{service.name}</option>
+              ))}
+            </select>
+            <ChevronDown
+              className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+              aria-hidden
+            />
+          </div>
+          {selectedServiceSlugs[0] ? (
+            <p className="mt-2 text-xs leading-relaxed text-slate-500">
+              {SERVICE_HELP[selectedServiceSlugs[0]] ?? "Request a personalised cleaning quote."}
+            </p>
+          ) : null}
         </div>
       ) : null}
 
