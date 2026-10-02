@@ -311,8 +311,8 @@ export default function OfficeSalesDocumentDetailPage() {
     setBusy(false);
   }
 
-  async function expireQuote() {
-    if (doc.document_type !== "quote" || !["draft", "sent"].includes(doc.status)) return;
+  async function expireQuote(currentDoc: DocDetail) {
+    if (currentDoc.document_type !== "quote" || !["draft", "sent"].includes(currentDoc.status)) return;
     const confirmed = globalThis.confirm(
       [
         "Expire this quote?",
@@ -741,7 +741,7 @@ export default function OfficeSalesDocumentDetailPage() {
           <button
             type="button"
             disabled={busy}
-            onClick={() => void expireQuote()}
+            onClick={() => void expireQuote(doc)}
             className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
           >
             Expire quote
