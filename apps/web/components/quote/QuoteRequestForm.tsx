@@ -41,6 +41,7 @@ export function QuoteRequestForm() {
   const [selected, setSelected] = useState<QuoteCatalogSelection[]>([]);
   const [bedrooms, setBedrooms] = useState(2);
   const [bathrooms, setBathrooms] = useState(1);
+  const [extraRooms, setExtraRooms] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
@@ -66,6 +67,7 @@ export function QuoteRequestForm() {
           ...form,
           bedrooms,
           bathrooms,
+          extra_rooms: extraRooms,
           preferred_date: form.preferred_date || null,
           selected_items: selected,
           ...getAcquisitionPayloadFields(),
@@ -99,8 +101,6 @@ export function QuoteRequestForm() {
       setBedrooms(2);
       setBathrooms(1);
       setExtraRooms(0);
-      setBedrooms(2);
-      setBathrooms(1);
     } catch {
       setError("Network error — please try again.");
     } finally {
