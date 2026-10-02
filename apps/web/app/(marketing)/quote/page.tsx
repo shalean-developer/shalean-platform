@@ -54,7 +54,7 @@ export default function QuoteRequestPage() {
       />
       <QuotePageHeader />
       <main className="flex-1 py-8 sm:py-12">
-        <PublicPageContainer size="content" className="max-w-3xl">
+        <PublicPageContainer size="content" className="max-w-[560px]">
           <div className="mb-6 text-center sm:mb-8">
             <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
               Request a cleaning quote
