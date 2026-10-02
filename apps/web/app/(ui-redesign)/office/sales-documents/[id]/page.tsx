@@ -55,6 +55,8 @@ type DocDetail = {
   request_details: SalesDocumentQuoteRequestDetails | null;
   public_token: string;
   paystack_reference: string | null;
+  payment_link: string | null;
+  payment_link_expires_at: string | null;
   refund_reference: string | null;
   refunded_at: string | null;
   converted_from_id: string | null;
@@ -272,6 +274,43 @@ export default function OfficeSalesDocumentDetailPage() {
     setBusy(false);
   }
 
+  async function recoverPaymentLink() {
+    if (doc.document_type !== "invoice" || doc.balance_cents <= 0) return;
+    const confirmed = globalThis.confirm(
+      [
+        `Recover a Paystack payment link for the remaining balance of ${formatZar(doc.balance_cents)}?`,
+        "",
+        "This creates a fresh checkout session for the current balance only.",
+        "It does not mark the invoice paid and does not send a customer email.",
+      ].join("\n"),
+    );
+    if (!confirmed) return;
+
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await adminFetch<{
+        authorizationUrl?: string;
+        reference?: string;
+        balanceCents?: number;
+      }>(`/api/admin/sales-documents/${id}/recover-payment-link`, {
+        method: "POST",
+        body: JSON.stringify({ confirm: "RECOVER_PAYMENT_LINK" }),
+      });
+      if (!res.ok) throw new Error(res.error ?? "Could not recover payment link.");
+
+      setMessageKind("success");
+      setMessage(
+        `Payment link recovered for ${formatZar(res.data?.balanceCents ?? doc.balance_cents)}.`,
+      );
+      await load();
+    } catch (err) {
+      setMessageKind("error");
+      setMessage(err instanceof Error ? err.message : "Could not recover payment link.");
+    }
+    setBusy(false);
+  }
+
   async function runAction(path: string, successLabel: string) {
     setBusy(true);
     setMessage(null);
@@ -335,6 +374,16 @@ export default function OfficeSalesDocumentDetailPage() {
     amount_paid_cents: doc.amount_paid_cents ?? 0,
   });
   const docTypeLabel = doc.document_type === "invoice" ? "Invoice" : "Quote";
+  const paymentLinkExpired = Boolean(
+    doc.payment_link_expires_at &&
+      new Date(doc.payment_link_expires_at).getTime() <= Date.now(),
+  );
+  const needsPaymentLinkRecovery =
+    doc.document_type === "invoice" &&
+    ["sent", "accepted"].includes(doc.status) &&
+    doc.balance_cents > 0 &&
+    (!doc.payment_link || paymentLinkExpired);
+
   const canDelete = salesDocumentIsDeletable({
     document_type: doc.document_type === "invoice" ? "invoice" : "quote",
     status: doc.status,
@@ -656,6 +705,16 @@ export default function OfficeSalesDocumentDetailPage() {
             className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
           >
             Convert to invoice
+          </button>
+        ) : null}
+        {needsPaymentLinkRecovery ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void recoverPaymentLink()}
+            className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+          >
+            Recover payment link
           </button>
         ) : null}
         {doc.document_type === "invoice" && doc.status !== "paid" && doc.status !== "refunded" ? (
