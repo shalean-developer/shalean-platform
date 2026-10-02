@@ -18,6 +18,26 @@ import type { SalesDocumentQuoteRequestDetails } from "@/lib/salesDocument/types
 import { salesDocumentIsDeletable, salesDocumentIsEditableWithoutPayment } from "@/lib/salesDocument/types";
 import { formatZohoOrderReference } from "@/lib/zoho/zohoOrderReference";
 
+type AcceptanceSnapshot = {
+  id: string;
+  invoice_id: string;
+  snapshot_schema_version: number;
+  source_quote_updated_at: string;
+  quote_status_before: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string | null;
+  line_items: Array<{ description: string; quantity: number; unit_price_cents: number }>;
+  subtotal_cents: number;
+  total_cents: number;
+  currency: string;
+  due_date: string | null;
+  notes: string | null;
+  source: string | null;
+  request_details: SalesDocumentQuoteRequestDetails | null;
+  accepted_at: string;
+};
+
 type DocDetail = {
   id: string;
   document_type: string;
@@ -47,6 +67,7 @@ type DocDetail = {
   zoho_estimate_number?: string | null;
   zoho_invoice_id?: string | null;
   zoho_invoice_number?: string | null;
+  acceptance_snapshot?: AcceptanceSnapshot | null;
 };
 
 type CrmOpportunity = {
@@ -306,6 +327,7 @@ export default function OfficeSalesDocumentDetailPage() {
     doc.status !== "refunded" &&
     doc.status !== "void" &&
     doc.status !== "requested" &&
+    !(doc.document_type === "quote" && doc.status === "accepted") &&
     doc.total_cents > 0;
   const canEditLines = salesDocumentIsEditableWithoutPayment({
     document_type: doc.document_type === "invoice" ? "invoice" : "quote",
@@ -466,6 +488,62 @@ export default function OfficeSalesDocumentDetailPage() {
         </div>
       ) : null}
 
+      {doc.document_type === "quote" && doc.status === "accepted" ? (
+        doc.acceptance_snapshot ? (
+          <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold text-emerald-950">Accepted quote snapshot</h2>
+                <p className="mt-1 text-xs text-emerald-800">
+                  Immutable customer acceptance recorded {formatDateTime(doc.acceptance_snapshot.accepted_at)}.
+                </p>
+              </div>
+              <p className="text-lg font-bold tabular-nums text-emerald-950">
+                {formatZar(doc.acceptance_snapshot.total_cents)}
+              </p>
+            </div>
+            <div className="mt-4 space-y-2 rounded-xl border border-emerald-200 bg-white p-4">
+              {doc.acceptance_snapshot.line_items.map((line, index) => (
+                <div key={`${line.description}-${index}`} className="flex items-start justify-between gap-4 text-sm">
+                  <span className="text-slate-700">
+                    {line.description}{line.quantity !== 1 ? ` × ${line.quantity}` : ""}
+                  </span>
+                  <span className="shrink-0 tabular-nums font-medium text-slate-900">
+                    {formatZar(line.quantity * line.unit_price_cents)}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <dl className="mt-4 grid gap-2 text-xs sm:grid-cols-2">
+              <div>
+                <dt className="text-emerald-700">Accepted by</dt>
+                <dd className="font-medium text-emerald-950">
+                  {doc.acceptance_snapshot.customer_name} · {doc.acceptance_snapshot.customer_email}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-emerald-700">Resulting invoice</dt>
+                <dd>
+                  <Link
+                    href={`/office/sales-documents/${doc.acceptance_snapshot.invoice_id}`}
+                    className="font-medium text-blue-600 hover:underline"
+                  >
+                    {doc.acceptance_snapshot.invoice_id.slice(0, 8).toUpperCase()}
+                  </Link>
+                </dd>
+              </div>
+            </dl>
+          </section>
+        ) : (
+          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+            <h2 className="font-semibold">Legacy accepted quote</h2>
+            <p className="mt-1">
+              This quote was accepted before immutable acceptance snapshots were introduced. Current quote data must not be treated as a verified historical acceptance record.
+            </p>
+          </section>
+        )
+      ) : null}
+
       {rd ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
           <h2 className="text-xs font-semibold uppercase text-amber-800">Customer request details</h2>
@@ -570,7 +648,7 @@ export default function OfficeSalesDocumentDetailPage() {
         {doc.status === "requested" ? (
           <p className="text-sm text-amber-700">Save pricing first, then send the quote.</p>
         ) : null}
-        {doc.document_type === "quote" && doc.status !== "requested" ? (
+        {doc.document_type === "quote" && (doc.status === "draft" || doc.status === "sent") ? (
           <button
             type="button"
             disabled={busy}
