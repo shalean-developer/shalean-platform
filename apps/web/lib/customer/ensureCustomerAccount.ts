@@ -44,20 +44,19 @@ export async function ensureCustomerAccount(
   const emailRaw = input.email?.trim() ?? "";
 
   if (fullName.length < 2) return { ok: false, error: "name_required" };
-  if (phoneRaw.length < 5) return { ok: false, error: "phone_required" };
-
-  const phoneNorm = normalizeSouthAfricaPhone(phoneRaw);
-  if (!phoneNorm) return { ok: false, error: "invalid_phone" };
-
-  const genEmail = customerGeneratedLoginEmailFromAnyPhone(phoneNorm);
-  if (!genEmail) return { ok: false, error: "phone_login_unavailable" };
+  if (phoneRaw.length < 5 && !emailRaw) return { ok: false, error: "phone_required" };
 
   const emailNorm = emailRaw ? normalizeEmail(emailRaw) : "";
   if (emailRaw && !EMAIL_RE.test(emailNorm)) {
     return { ok: false, error: "invalid_email" };
   }
 
-  const uidByPhone = await findAuthUserIdByEmail(admin, genEmail);
+  const phoneNorm = phoneRaw ? normalizeSouthAfricaPhone(phoneRaw) : null;
+  const genEmail = phoneNorm ? customerGeneratedLoginEmailFromAnyPhone(phoneNorm) : null;
+  if (!emailNorm && !phoneNorm) return { ok: false, error: "invalid_phone" };
+  if (!emailNorm && !genEmail) return { ok: false, error: "phone_login_unavailable" };
+
+  const uidByPhone = genEmail ? await findAuthUserIdByEmail(admin, genEmail) : null;
   const uidByEmail = emailNorm ? await findAuthUserIdByEmail(admin, emailNorm) : null;
 
   if (uidByPhone && uidByEmail && uidByPhone !== uidByEmail) {
@@ -71,21 +70,21 @@ export async function ensureCustomerAccount(
     await ensureUserProfileForAuthUser(admin, uidByPhone);
     await upsertCustomerProfileContact(admin, {
       userId: uidByPhone,
-      contact: { fullName, billingEmail: emailNorm || null, phone: phoneNorm },
+      contact: { fullName, billingEmail: emailNorm || null, phone: phoneNorm ?? (phoneRaw || null) },
     });
-    return { ok: true, userId: uidByPhone, loginEmail: genEmail, reused: true, match: "phone" };
+    return { ok: true, userId: uidByPhone, loginEmail: genEmail ?? emailNorm, reused: true, match: "phone" };
   }
 
   if (uidByEmail) {
     await ensureUserProfileForAuthUser(admin, uidByEmail);
     await upsertCustomerProfileContact(admin, {
       userId: uidByEmail,
-      contact: { fullName, billingEmail: emailNorm, phone: phoneNorm },
+      contact: { fullName, billingEmail: emailNorm, phone: phoneNorm ?? (phoneRaw || null) },
     });
     return { ok: true, userId: uidByEmail, loginEmail: emailNorm, reused: true, match: "email" };
   }
 
-  const loginEmail = emailNorm || genEmail;
+  const loginEmail = emailNorm || genEmail!;
   const tempPassword = `${crypto.randomBytes(18).toString("base64url")}Aa1!`;
   const metadataSource = input.source?.trim() || "ensure_customer_account";
 
@@ -95,7 +94,7 @@ export async function ensureCustomerAccount(
     email_confirm: true,
     user_metadata: {
       full_name: fullName,
-      phone: phoneNorm,
+      phone: phoneNorm ?? (phoneRaw || null),
       source: metadataSource,
     },
   });
@@ -118,7 +117,7 @@ export async function ensureCustomerAccount(
     contact: {
       fullName,
       billingEmail: emailNorm || null,
-      phone: phoneNorm,
+      phone: phoneNorm ?? (phoneRaw || null),
     },
     role: "customer",
   });
