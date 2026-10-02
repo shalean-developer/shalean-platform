@@ -657,6 +657,12 @@ export default function OfficeSalesDocumentDetailPage() {
                 <dd className="font-medium text-slate-900">{rd.bathrooms}</dd>
               </div>
             ) : null}
+            {rd.extra_rooms != null ? (
+              <div>
+                <dt className="text-slate-500">Extra rooms</dt>
+                <dd className="font-medium text-slate-900">{rd.extra_rooms}</dd>
+              </div>
+            ) : null}
             <div>
               <dt className="text-slate-500">Area</dt>
               <dd className="font-medium text-slate-900">{rd.suburb}</dd>
