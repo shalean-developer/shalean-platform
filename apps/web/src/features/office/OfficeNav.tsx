@@ -157,6 +157,7 @@ export const OFFICE_NAV_MODULES: NavModule[] = [
     label: "Growth",
     icon: Megaphone,
     children: [
+      { label: "Leads & sales", href: "/office/leads-sales", icon: Target },
       { label: "Marketing ROI", href: "/office/marketing", icon: Megaphone },
       { label: "Campaigns", href: "/office/marketing/campaigns", icon: Gift },
       { label: "Social Posts", href: "/office/marketing/social", icon: Share2 },
