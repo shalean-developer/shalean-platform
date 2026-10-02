@@ -239,6 +239,7 @@ export async function convertSalesQuoteToInvoice(
         message: "booking_create_failed",
         context: { quoteId, invoiceId, error: bookingResult.error },
       });
+      return { ok: false, error: `booking_create_failed:${bookingResult.error}` };
     }
     return { ok: true, invoiceId };
   }
@@ -310,6 +311,7 @@ export async function convertSalesQuoteToInvoice(
       message: "booking_create_failed",
       context: { quoteId, invoiceId: created.id, error: bookingResult.error },
     });
+    return { ok: false, error: `booking_create_failed:${bookingResult.error}` };
   }
 
   return { ok: true, invoiceId: created.id };
