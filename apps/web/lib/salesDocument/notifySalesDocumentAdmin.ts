@@ -75,6 +75,7 @@ export async function notifyAdminCustomerQuoteRequest(
       property_type: string;
       bedrooms: number | null;
       bathrooms: number | null;
+      extra_rooms?: number | null;
       suburb: string;
       preferred_date: string | null;
       message: string | null;
@@ -97,6 +98,7 @@ export async function notifyAdminCustomerQuoteRequest(
     d.property_type && `Property: ${escapeHtml(d.property_type)}`,
     d.bedrooms != null ? `Bedrooms: ${d.bedrooms}` : null,
     d.bathrooms != null ? `Bathrooms: ${d.bathrooms}` : null,
+    d.extra_rooms != null ? `Extra rooms: ${d.extra_rooms}` : null,
     d.suburb && `Area: ${escapeHtml(d.suburb)}`,
     d.preferred_date && `Preferred date: ${escapeHtml(d.preferred_date)}`,
     d.message && `Notes: ${escapeHtml(d.message)}`,
