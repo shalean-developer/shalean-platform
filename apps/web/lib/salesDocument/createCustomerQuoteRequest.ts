@@ -153,6 +153,7 @@ export async function createCustomerQuoteRequest(
       request_details: requestDetails,
       created_by: null,
       crm_stage: "lead",
+      crm_next_follow_up_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
       lead_source: leadSource(input.attribution),
       utm_source: attributionText(input.attribution?.utm_source),
       utm_medium: attributionText(input.attribution?.utm_medium),
