@@ -7,6 +7,10 @@ import { initializePaystackForSalesDocument } from "@/lib/salesDocument/initiali
 import { sendSalesDocumentEmail } from "@/lib/salesDocument/sendSalesDocumentEmail";
 import { syncSalesDocumentToZoho } from "@/lib/salesDocument/syncSalesDocumentToZoho";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import {
+  releaseNotificationIdempotencyClaim,
+  tryClaimNotificationIdempotency,
+} from "@/lib/notifications/notificationIdempotencyClaim";
 import { trustSalesDocPayPageUrl } from "@/lib/pay/trustPayPageUrl";
 
 function formatDueDate(isoDate: string | null): string {
@@ -38,6 +42,7 @@ export async function sendSalesDocumentToCustomer(
     due_date: string | null;
     public_token: string;
     balance_cents: number;
+    sent_at: string | null;
   };
 
   if (row.status === "void" || row.status === "paid" || row.status === "refunded") {
@@ -68,18 +73,46 @@ export async function sendSalesDocumentToCustomer(
   });
   if (!zohoPrepared.ok) return { ok: false, error: `zoho_prepare:${zohoPrepared.error}` };
 
-  const mail = await sendSalesDocumentEmail({
-    to: row.customer_email,
-    documentType: row.document_type,
-    customerName: row.customer_name,
-    totalZar: row.total_cents / 100,
-    viewUrl,
-    dueDateLabel: formatDueDate(row.due_date),
-    customerId: row.customer_id,
-    documentId: row.id,
-  });
+  const deliveryClaim = {
+    reference: `sales_document_delivery:v1:${row.id}:${row.sent_at ?? "initial"}`,
+    eventType: row.document_type === "quote" ? "sales_quote_sent" : "sales_invoice_sent",
+    channel: "email" as const,
+  };
+  const shouldSendEmail = await tryClaimNotificationIdempotency(admin, deliveryClaim);
 
-  if (!mail.sent) return { ok: false, error: mail.error ?? "email_failed" };
+  let mail: { sent: boolean; error?: string; emailId?: string | null } = {
+    sent: true,
+    emailId: null,
+  };
+
+  if (shouldSendEmail) {
+    mail = await sendSalesDocumentEmail({
+      to: row.customer_email,
+      documentType: row.document_type,
+      customerName: row.customer_name,
+      totalZar: row.total_cents / 100,
+      viewUrl,
+      dueDateLabel: formatDueDate(row.due_date),
+      customerId: row.customer_id,
+      documentId: row.id,
+    });
+
+    if (!mail.sent) {
+      await releaseNotificationIdempotencyClaim(admin, deliveryClaim);
+      return { ok: false, error: mail.error ?? "email_failed" };
+    }
+  } else {
+    await logSystemEvent({
+      level: "info",
+      source: "sales_document/send",
+      message: "sales_document_email_idempotent_replay",
+      context: {
+        document_id: row.id,
+        document_type: row.document_type,
+        sent_at_before: row.sent_at,
+      },
+    });
+  }
 
   const nowIso = new Date().toISOString();
   const nextStatus = row.document_type === "quote" ? "sent" : "sent";
