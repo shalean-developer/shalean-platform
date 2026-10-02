@@ -1139,7 +1139,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   const { data: row, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, payment_status, payment_completed_at, paid_at, monthly_invoice_id, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, amount_paid_cents, cleaner_id, date, time",
+      "id, status, payment_status, payment_completed_at, paid_at, monthly_invoice_id, sales_document_id, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, amount_paid_cents, cleaner_id, date, time",
     )
     .eq("id", id)
     .maybeSingle();
@@ -1153,6 +1153,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     payment_completed_at?: string | null;
     paid_at?: string | null;
     monthly_invoice_id?: string | null;
+    sales_document_id?: string | null;
     payout_id?: string | null;
     payout_status?: string | null;
     payout_frozen_cents?: number | string | null;
