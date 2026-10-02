@@ -98,6 +98,9 @@ export function QuoteRequestForm() {
       setSelected([]);
       setBedrooms(2);
       setBathrooms(1);
+      setExtraRooms(0);
+      setBedrooms(2);
+      setBathrooms(1);
     } catch {
       setError("Network error — please try again.");
     } finally {
@@ -136,6 +139,12 @@ export function QuoteRequestForm() {
       <QuoteRequestCatalogPicker
         selected={selected}
         onChange={setSelected}
+        bedrooms={bedrooms}
+        bathrooms={bathrooms}
+        extraRooms={extraRooms}
+        onBedroomsChange={setBedrooms}
+        onBathroomsChange={setBathrooms}
+        onExtraRoomsChange={setExtraRooms}
       />
 
       <section className="space-y-3 border-t border-slate-100 pt-5">
