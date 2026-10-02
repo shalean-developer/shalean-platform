@@ -16,7 +16,7 @@ export function buildCustomerQuoteRequestFingerprint(input: {
   propertyType: string;
   bedrooms: number | null;
   bathrooms: number | null;
-  extraRooms: number | null;
+  extraRooms?: number | null;
   suburb: string;
   preferredDate: string | null;
   message: string | null;
@@ -41,7 +41,7 @@ export function buildCustomerQuoteRequestFingerprint(input: {
     propertyType: norm(input.propertyType),
     bedrooms: input.bedrooms,
     bathrooms: input.bathrooms,
-    extraRooms: input.extraRooms,
+    extraRooms: input.extraRooms ?? null,
     suburb: norm(input.suburb),
     preferredDate: input.preferredDate ?? null,
     message: norm(input.message),
