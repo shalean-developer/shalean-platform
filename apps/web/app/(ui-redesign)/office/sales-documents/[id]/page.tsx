@@ -311,6 +311,36 @@ export default function OfficeSalesDocumentDetailPage() {
     setBusy(false);
   }
 
+  async function expireQuote(currentDoc: DocDetail) {
+    if (currentDoc.document_type !== "quote" || !["draft", "sent"].includes(currentDoc.status)) return;
+    const confirmed = globalThis.confirm(
+      [
+        "Expire this quote?",
+        "",
+        "The quote will be marked Expired and the CRM opportunity will move to Lost.",
+        "No customer email will be sent.",
+      ].join("\n"),
+    );
+    if (!confirmed) return;
+
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await adminFetch(`/api/admin/sales-documents/${id}/expire`, {
+        method: "POST",
+        body: JSON.stringify({ confirm: "EXPIRE_QUOTE" }),
+      });
+      if (!res.ok) throw new Error(res.error ?? "Could not expire quote.");
+      setMessageKind("success");
+      setMessage("Quote expired and opportunity marked lost.");
+      await load();
+    } catch (err) {
+      setMessageKind("error");
+      setMessage(err instanceof Error ? err.message : "Could not expire quote.");
+    }
+    setBusy(false);
+  }
+
   async function runAction(path: string, successLabel: string) {
     setBusy(true);
     setMessage(null);
@@ -705,6 +735,16 @@ export default function OfficeSalesDocumentDetailPage() {
             className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
           >
             Convert to invoice
+          </button>
+        ) : null}
+        {doc.document_type === "quote" && (doc.status === "draft" || doc.status === "sent") ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void expireQuote(doc)}
+            className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+          >
+            Expire quote
           </button>
         ) : null}
         {needsPaymentLinkRecovery ? (

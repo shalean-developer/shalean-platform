@@ -35,6 +35,37 @@ type CrmReporting = { overdue_follow_ups: number; average_response_hours: number
 type FilterTab = "all" | "requests" | "quote" | "invoice";
 type StageFilter = "all" | SalesDocRow["pipeline_stage"];
 
+type FollowUpKind =
+  | "stale_request"
+  | "sent_unviewed"
+  | "viewed_no_response"
+  | "overdue_follow_up";
+
+type FollowUpQueueRow = {
+  document_id: string;
+  customer_name: string;
+  customer_email: string;
+  status: string;
+  crm_stage: string | null;
+  kind: FollowUpKind;
+  reason: string;
+  created_at: string;
+  sent_at: string | null;
+  first_viewed_at: string | null;
+  view_count: number;
+  next_follow_up_at: string | null;
+  age_days: number;
+  overdue: boolean;
+};
+
+type FollowUpQueueCounts = {
+  total: number;
+  stale_request: number;
+  sent_unviewed: number;
+  viewed_no_response: number;
+  overdue_follow_up: number;
+};
+
 type CustomerLinkRecoveryRow = {
   document_id: string;
   customer_name: string;
@@ -231,6 +262,10 @@ export default function OfficeSalesDocumentsPage() {
   const [customerRecoveryRows, setCustomerRecoveryRows] = useState<CustomerLinkRecoveryRow[]>([]);
   const [customerRecoveryError, setCustomerRecoveryError] = useState<string | null>(null);
   const [customerRecoveryBusy, setCustomerRecoveryBusy] = useState(false);
+  const [followUpRows, setFollowUpRows] = useState<FollowUpQueueRow[]>([]);
+  const [followUpCounts, setFollowUpCounts] = useState<FollowUpQueueCounts | null>(null);
+  const [followUpError, setFollowUpError] = useState<string | null>(null);
+  const [showAllFollowUps, setShowAllFollowUps] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -277,6 +312,21 @@ export default function OfficeSalesDocumentsPage() {
     setCustomerRecoveryRows(res.data?.rows ?? []);
   }, []);
 
+  const loadFollowUpQueue = useCallback(async () => {
+    const res = await adminFetch<{ rows: FollowUpQueueRow[]; counts: FollowUpQueueCounts }>(
+      "/api/admin/sales-documents/follow-up-queue",
+    );
+    if (!res.ok) {
+      setFollowUpRows([]);
+      setFollowUpCounts(null);
+      setFollowUpError(res.error ?? "Could not load sales follow-up queue.");
+      return;
+    }
+    setFollowUpError(null);
+    setFollowUpRows(res.data?.rows ?? []);
+    setFollowUpCounts(res.data?.counts ?? null);
+  }, []);
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -289,6 +339,10 @@ export default function OfficeSalesDocumentsPage() {
     void loadCustomerRecovery();
   }, [loadCustomerRecovery]);
 
+  useEffect(() => {
+    void loadFollowUpQueue();
+  }, [loadFollowUpQueue]);
+
   const filtered = useMemo(() => {
     const byType = tab === "all"
       ? docs
@@ -299,6 +353,21 @@ export default function OfficeSalesDocumentsPage() {
   }, [docs, stage, tab]);
 
   const requestCount = docs.filter((d) => d.status === "requested").length;
+  const visibleFollowUps = showAllFollowUps ? followUpRows : followUpRows.slice(0, 10);
+
+  function followUpKindLabel(kind: FollowUpKind) {
+    if (kind === "stale_request") return "Stale request";
+    if (kind === "sent_unviewed") return "Not opened";
+    if (kind === "viewed_no_response") return "Opened, no response";
+    return "Follow-up overdue";
+  }
+
+  function followUpKindClass(kind: FollowUpKind) {
+    if (kind === "overdue_follow_up") return "bg-red-100 text-red-700";
+    if (kind === "stale_request") return "bg-amber-100 text-amber-800";
+    if (kind === "viewed_no_response") return "bg-violet-100 text-violet-700";
+    return "bg-blue-100 text-blue-700";
+  }
 
   async function confirmDelete() {
     if (!deleteTarget) return;
@@ -418,6 +487,91 @@ export default function OfficeSalesDocumentsPage() {
           <Plus className="h-4 w-4" /> New document
         </Link>
       </div>
+
+      {followUpError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {followUpError}
+        </div>
+      ) : null}
+
+      {followUpRows.length > 0 ? (
+        <section className="rounded-2xl border border-violet-200 bg-violet-50 p-4 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="font-semibold text-violet-950">Sales follow-up queue</h2>
+              <p className="text-sm text-violet-800">
+                Operational tasks only — Shalean does not automatically email, WhatsApp or SMS these customers.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full bg-white px-2.5 py-1 font-semibold text-slate-700">
+                Total {followUpCounts?.total ?? followUpRows.length}
+              </span>
+              <span className="rounded-full bg-white px-2.5 py-1 font-semibold text-amber-700">
+                Requests {followUpCounts?.stale_request ?? 0}
+              </span>
+              <span className="rounded-full bg-white px-2.5 py-1 font-semibold text-blue-700">
+                Unopened {followUpCounts?.sent_unviewed ?? 0}
+              </span>
+              <span className="rounded-full bg-white px-2.5 py-1 font-semibold text-violet-700">
+                Opened {followUpCounts?.viewed_no_response ?? 0}
+              </span>
+              <span className="rounded-full bg-white px-2.5 py-1 font-semibold text-red-700">
+                Overdue {followUpCounts?.overdue_follow_up ?? 0}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {visibleFollowUps.map((row) => (
+              <div key={row.document_id} className="rounded-xl border border-violet-200 bg-white p-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold text-slate-900">{row.customer_name}</p>
+                      <span className={cn(
+                        "rounded-full px-2.5 py-1 text-xs font-semibold",
+                        followUpKindClass(row.kind),
+                      )}>
+                        {followUpKindLabel(row.kind)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {row.customer_email} · Quote {row.document_id.slice(0, 8).toUpperCase()}
+                      {row.view_count > 0 ? ` · Opened ${row.view_count}×` : ""}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">{row.reason}</p>
+                    {row.next_follow_up_at ? (
+                      <p className="mt-1 text-xs font-medium text-slate-500">
+                        Follow-up: {new Date(row.next_follow_up_at).toLocaleString("en-ZA", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </p>
+                    ) : null}
+                  </div>
+                  <Link
+                    href={`/office/sales-documents/${row.document_id}`}
+                    className="shrink-0 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-100"
+                  >
+                    Open &amp; follow up
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {followUpRows.length > 10 ? (
+            <button
+              type="button"
+              onClick={() => setShowAllFollowUps((value) => !value)}
+              className="mt-3 text-sm font-semibold text-violet-700 hover:underline"
+            >
+              {showAllFollowUps ? "Show fewer" : `Show all ${followUpRows.length} follow-ups`}
+            </button>
+          ) : null}
+        </section>
+      ) : null}
 
       {customerRecoveryError ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">

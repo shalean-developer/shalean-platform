@@ -14,6 +14,7 @@ import { ensureSalesDocumentCustomer } from "@/lib/salesDocument/ensureSalesDocu
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { syncSalesDocumentToZoho } from "@/lib/salesDocument/syncSalesDocumentToZoho";
 import { recordSalesQuoteAcceptanceSnapshot } from "@/lib/salesDocument/recordSalesQuoteAcceptanceSnapshot";
+import { markQuoteOpportunityWon } from "@/lib/salesDocument/salesOpportunityLifecycle";
 
 export type CreateSalesDocumentInput = {
   document_type: SalesDocumentType;
@@ -252,6 +253,7 @@ export async function convertSalesQuoteToInvoice(
       .neq("status", "accepted");
     if (acceptErr) return { ok: false, error: acceptErr.message };
 
+    await markQuoteOpportunityWon(admin, quoteId, "quote_accepted");
     return { ok: true, invoiceId };
   }
 
@@ -336,5 +338,6 @@ export async function convertSalesQuoteToInvoice(
     .neq("status", "accepted");
   if (acceptErr) return { ok: false, error: acceptErr.message };
 
+  await markQuoteOpportunityWon(admin, quoteId, "quote_accepted");
   return { ok: true, invoiceId: created.id };
 }

@@ -12,6 +12,7 @@ import {
   tryClaimNotificationIdempotency,
 } from "@/lib/notifications/notificationIdempotencyClaim";
 import { trustSalesDocPayPageUrl } from "@/lib/pay/trustPayPageUrl";
+import { markQuoteOpportunityFollowUp } from "@/lib/salesDocument/salesOpportunityLifecycle";
 
 function formatDueDate(isoDate: string | null): string {
   if (!isoDate) return "";
@@ -125,6 +126,10 @@ export async function sendSalesDocumentToCustomer(
     .eq("id", row.id);
 
   if (statusErr) return { ok: false, error: statusErr.message };
+
+  if (row.document_type === "quote") {
+    await markQuoteOpportunityFollowUp(admin, row.id, "quote_sent");
+  }
 
   const zohoSent = await syncSalesDocumentToZoho(admin, row.id, {
     paymentUrl: paymentUrlForZoho,
