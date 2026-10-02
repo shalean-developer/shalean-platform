@@ -35,6 +35,19 @@ type CrmReporting = { overdue_follow_ups: number; average_response_hours: number
 type FilterTab = "all" | "requests" | "quote" | "invoice";
 type StageFilter = "all" | SalesDocRow["pipeline_stage"];
 
+type CustomerLinkRecoveryRow = {
+  document_id: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string | null;
+  status: string;
+  source: string | null;
+  created_at: string;
+  classification: "exact_existing_email" | "recoverable_by_email" | "blocked";
+  existing_customer_id: string | null;
+  reason: string;
+};
+
 type RecoveryRow = {
   quote_id: string;
   invoice_id: string;
@@ -215,6 +228,9 @@ export default function OfficeSalesDocumentsPage() {
   const [recoveryRows, setRecoveryRows] = useState<RecoveryRow[]>([]);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [recoveryBusy, setRecoveryBusy] = useState<string | null>(null);
+  const [customerRecoveryRows, setCustomerRecoveryRows] = useState<CustomerLinkRecoveryRow[]>([]);
+  const [customerRecoveryError, setCustomerRecoveryError] = useState<string | null>(null);
+  const [customerRecoveryBusy, setCustomerRecoveryBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -248,6 +264,19 @@ export default function OfficeSalesDocumentsPage() {
     setRecoveryRows(res.data?.rows ?? []);
   }, []);
 
+  const loadCustomerRecovery = useCallback(async () => {
+    const res = await adminFetch<{ rows: CustomerLinkRecoveryRow[] }>(
+      "/api/admin/sales-documents/customer-link-recovery",
+    );
+    if (!res.ok) {
+      setCustomerRecoveryRows([]);
+      setCustomerRecoveryError(res.error ?? "Could not load customer link recovery.");
+      return;
+    }
+    setCustomerRecoveryError(null);
+    setCustomerRecoveryRows(res.data?.rows ?? []);
+  }, []);
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -255,6 +284,10 @@ export default function OfficeSalesDocumentsPage() {
   useEffect(() => {
     void loadRecovery();
   }, [loadRecovery]);
+
+  useEffect(() => {
+    void loadCustomerRecovery();
+  }, [loadCustomerRecovery]);
 
   const filtered = useMemo(() => {
     const byType = tab === "all"
@@ -294,6 +327,46 @@ export default function OfficeSalesDocumentsPage() {
     setDeleteBusy(false);
   }
 
+
+  async function repairCustomerLinks() {
+    const eligible = customerRecoveryRows.filter((row) => row.classification !== "blocked");
+    if (eligible.length === 0) return;
+
+    const confirmed = globalThis.confirm(
+      [
+        `Repair customer links for ${eligible.length} quote${eligible.length === 1 ? "" : "s"}?`,
+        "",
+        "Exact existing email matches will be reused.",
+        "Other valid-email rows may create the missing customer account.",
+        "No customer email will be sent and quote pricing/status will not change.",
+      ].join("\n"),
+    );
+    if (!confirmed) return;
+
+    setCustomerRecoveryBusy(true);
+    setCustomerRecoveryError(null);
+    const res = await adminFetch<{
+      attempted: number;
+      linked: number;
+      failed: number;
+    }>("/api/admin/sales-documents/customer-link-recovery", {
+      method: "POST",
+      body: JSON.stringify({ confirm: "REPAIR_QUOTE_CUSTOMER_LINKS" }),
+    });
+    setCustomerRecoveryBusy(false);
+
+    if (!res.ok) {
+      setCustomerRecoveryError(res.error ?? "Could not repair customer links.");
+      return;
+    }
+
+    setCustomerRecoveryError(
+      res.data?.failed
+        ? `Customer link recovery completed with ${res.data.failed} failure${res.data.failed === 1 ? "" : "s"}.`
+        : null,
+    );
+    await Promise.all([loadCustomerRecovery(), load()]);
+  }
 
   async function linkRecoveryBooking(row: RecoveryRow) {
     if (!row.booking_id || row.classification !== "linkable") return;
@@ -345,6 +418,65 @@ export default function OfficeSalesDocumentsPage() {
           <Plus className="h-4 w-4" /> New document
         </Link>
       </div>
+
+      {customerRecoveryError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {customerRecoveryError}
+        </div>
+      ) : null}
+
+      {customerRecoveryRows.length > 0 ? (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="font-semibold text-blue-950">Customer link recovery</h2>
+              <p className="text-sm text-blue-800">
+                Quotes without a canonical customer account. Exact email matches are reused; valid-email leads can safely create/recover the missing customer account.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={customerRecoveryBusy || customerRecoveryRows.every((row) => row.classification === "blocked")}
+              onClick={() => void repairCustomerLinks()}
+              className="shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {customerRecoveryBusy ? "Repairing…" : "Repair customer links"}
+            </button>
+          </div>
+          <div className="mt-3 space-y-2">
+            {customerRecoveryRows.map((row) => (
+              <div key={row.document_id} className="rounded-xl border border-blue-200 bg-white p-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900">
+                      {row.customer_name} · {row.customer_email}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Quote {row.document_id.slice(0, 8).toUpperCase()} · {row.status}
+                      {row.customer_phone ? ` · ${row.customer_phone}` : ""}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">{row.reason}</p>
+                  </div>
+                  <span className={cn(
+                    "rounded-full px-2.5 py-1 text-xs font-semibold",
+                    row.classification === "exact_existing_email"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : row.classification === "recoverable_by_email"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-amber-100 text-amber-800",
+                  )}>
+                    {row.classification === "exact_existing_email"
+                      ? "Existing customer"
+                      : row.classification === "recoverable_by_email"
+                        ? "Recoverable"
+                        : "Blocked"}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {recoveryError ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
