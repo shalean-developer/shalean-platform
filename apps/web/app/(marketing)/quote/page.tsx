@@ -54,22 +54,24 @@ export default function QuoteRequestPage() {
       />
       <QuotePageHeader />
       <main className="flex-1 py-8 sm:py-12">
-        <PublicPageContainer size="content" className="max-w-[560px]">
-          <div className="mb-6 text-center sm:mb-8">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Request a cleaning quote
-            </h1>
-            <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-muted-foreground">
-              Tell us what you need and we&apos;ll send you a personalised quote.
-            </p>
-            <p className="mt-3 text-sm text-muted-foreground">
-              Need standard home cleaning?{" "}
-              <Link href="/book" className="font-semibold text-primary hover:underline">
-                Get an instant price →
-              </Link>
-            </p>
+        <PublicPageContainer size="content">
+          <div className="mx-auto w-full max-w-[560px]">
+            <div className="mb-6 text-center sm:mb-8">
+              <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                Request a cleaning quote
+              </h1>
+              <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-muted-foreground">
+                Tell us what you need and we&apos;ll send you a personalised quote.
+              </p>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Need standard home cleaning?{" "}
+                <Link href="/book" className="font-semibold text-primary hover:underline">
+                  Get an instant price →
+                </Link>
+              </p>
+            </div>
+            <QuoteRequestForm />
           </div>
-          <QuoteRequestForm />
         </PublicPageContainer>
       </main>
       <QuotePageFooter />
