@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { ensureCustomerAccount } from "@/lib/customer/ensureCustomerAccount";
+import { ensureSalesDocumentCustomer } from "@/lib/salesDocument/ensureSalesDocumentCustomer";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { notifyAdminCustomerQuoteRequest } from "@/lib/salesDocument/notifySalesDocumentAdmin";
 import type {
@@ -180,32 +180,12 @@ export async function createCustomerQuoteRequest(
 
   const id = String((data as { id: string }).id);
 
-  const customerResult = await ensureCustomerAccount(admin, {
-    fullName: name,
-    phone,
-    email,
-    source: "customer_quote_request",
-  });
-
-  if (customerResult.ok) {
-    const { error: linkErr } = await admin
-      .from("sales_documents")
-      .update({ customer_id: customerResult.userId })
-      .eq("id", id);
-
-    if (linkErr) {
-      await logSystemEvent({
-        level: "warn",
-        source: "sales_document/quote_request",
-        message: "customer_link_failed",
-        context: { documentId: id, customerId: customerResult.userId, error: linkErr.message },
-      });
-    }
-  } else {
+  const customerResult = await ensureSalesDocumentCustomer(admin, id);
+  if (!customerResult.ok) {
     await logSystemEvent({
       level: "warn",
       source: "sales_document/quote_request",
-      message: "customer_create_failed",
+      message: "customer_link_recovery_required",
       context: { documentId: id, error: customerResult.error },
     });
   }
