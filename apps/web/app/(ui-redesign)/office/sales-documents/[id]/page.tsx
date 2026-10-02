@@ -274,11 +274,11 @@ export default function OfficeSalesDocumentDetailPage() {
     setBusy(false);
   }
 
-  async function recoverPaymentLink() {
-    if (doc.document_type !== "invoice" || doc.balance_cents <= 0) return;
+  async function recoverPaymentLink(currentDoc: DocDetail) {
+    if (currentDoc.document_type !== "invoice" || currentDoc.balance_cents <= 0) return;
     const confirmed = globalThis.confirm(
       [
-        `Recover a Paystack payment link for the remaining balance of ${formatZar(doc.balance_cents)}?`,
+        `Recover a Paystack payment link for the remaining balance of ${formatZar(currentDoc.balance_cents)}?`,
         "",
         "This creates a fresh checkout session for the current balance only.",
         "It does not mark the invoice paid and does not send a customer email.",
@@ -301,7 +301,7 @@ export default function OfficeSalesDocumentDetailPage() {
 
       setMessageKind("success");
       setMessage(
-        `Payment link recovered for ${formatZar(res.data?.balanceCents ?? doc.balance_cents)}.`,
+        `Payment link recovered for ${formatZar(res.data?.balanceCents ?? currentDoc.balance_cents)}.`,
       );
       await load();
     } catch (err) {
@@ -711,7 +711,7 @@ export default function OfficeSalesDocumentDetailPage() {
           <button
             type="button"
             disabled={busy}
-            onClick={() => void recoverPaymentLink()}
+            onClick={() => void recoverPaymentLink(doc)}
             className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
           >
             Recover payment link
