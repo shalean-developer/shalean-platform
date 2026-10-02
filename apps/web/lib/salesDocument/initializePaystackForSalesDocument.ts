@@ -65,7 +65,13 @@ export async function initializePaystackForSalesDocument(
     return { ok: false, error: "document_not_payable" };
   }
 
+  const total = Math.max(0, Math.round(Number(row.total_cents ?? 0)));
+  const prevPaid = Math.max(0, Math.round(Number(row.amount_paid_cents ?? 0)));
   const balance = Math.max(0, Math.round(Number(row.balance_cents ?? 0)));
+  const expectedBalance = Math.max(0, total - prevPaid);
+  if (balance !== expectedBalance) {
+    return { ok: false, error: `balance_state_mismatch:${balance}:${expectedBalance}` };
+  }
   if (balance <= 0) return { ok: false, error: "nothing_due" };
 
   const canonicalReference = salesDocumentPaystackReference(row.id);
@@ -83,7 +89,6 @@ export async function initializePaystackForSalesDocument(
     };
   }
 
-  const prevPaid = Math.max(0, Math.round(Number(row.amount_paid_cents ?? 0)));
   const reference = existingRef
     ? salesDocumentPaystackRecoveryReference(row.id, balance)
     : canonicalReference;
