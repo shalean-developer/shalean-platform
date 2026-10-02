@@ -1,6 +1,7 @@
 import "server-only";
 
-import { getDefaultFromAddress, getResend, describeResendApiKeyMisconfig } from "@/lib/email/resendFrom";
+import { getDefaultFromAddress } from "@/lib/email/resendFrom";
+import { safeResendSend } from "@/lib/email/safeResendSend";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { customerNameFromEmail } from "@/lib/templates/bookingEmailTemplateData";
 
@@ -20,13 +21,9 @@ export async function sendSalesDocumentEmail(params: {
   totalZar: number;
   viewUrl: string;
   dueDateLabel?: string;
-}): Promise<{ sent: boolean; error?: string }> {
-  const resend = getResend();
-  if (!resend) {
-    const configError = describeResendApiKeyMisconfig();
-    await reportOperationalIssue("warn", "sales_document/email", configError, { to: params.to });
-    return { sent: false, error: configError };
-  }
+  customerId?: string | null;
+  documentId?: string | null;
+}): Promise<{ sent: boolean; error?: string; emailId?: string | null }> {
 
   const amount = `R ${Math.round(params.totalZar).toLocaleString("en-ZA")}`;
   const isQuote = params.documentType === "quote";
@@ -52,19 +49,27 @@ export async function sendSalesDocumentEmail(params: {
     <p>Thank you for choosing Shalean.</p>
   `;
 
-  const { error } = await resend.emails.send({
+  const result = await safeResendSend({
     from: getDefaultFromAddress(),
     to: params.to,
     subject,
     html,
+    context: {
+      customerId: params.customerId ?? null,
+      messageType: params.documentType === "quote" ? "sales_quote" : "sales_invoice",
+    },
+    tags: params.documentId
+      ? [{ name: "sales_document_id", value: params.documentId.slice(0, 256) }]
+      : [],
   });
 
-  if (error) {
-    const msg = /api key is invalid/i.test(error.message)
-      ? "Email failed: Resend API key on production is invalid. In Vercel → shalean-platform → Environment Variables, set RESEND_API_KEY to your current re_… key from resend.com/api-keys, then redeploy."
-      : error.message;
-    await reportOperationalIssue("warn", "sales_document/email", error.message, { to: params.to });
-    return { sent: false, error: msg };
+  if (result.error) {
+    await reportOperationalIssue("warn", "sales_document/email", result.error.message, {
+      to: params.to,
+      document_id: params.documentId ?? null,
+      error_name: result.error.name ?? null,
+    });
+    return { sent: false, error: result.error.message };
   }
 
   await logSystemEvent({
@@ -74,5 +79,5 @@ export async function sendSalesDocumentEmail(params: {
     context: { to: params.to, type: params.documentType },
   });
 
-  return { sent: true };
+  return { sent: true, emailId: result.data?.id ?? null };
 }

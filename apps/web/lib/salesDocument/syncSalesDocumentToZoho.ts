@@ -18,6 +18,18 @@ import {
   type SalesDocumentRow,
 } from "@/lib/salesDocument/types";
 
+function isBenignZohoAlreadySentError(error: string): boolean {
+  const msg = error.toLowerCase();
+  return (
+    msg.includes("already sent") ||
+    msg.includes("already been sent") ||
+    msg.includes("already paid") ||
+    msg.includes("already been paid") ||
+    msg.includes("status is sent") ||
+    msg.includes("status is paid")
+  );
+}
+
 function ymdOrToday(ymd: string | null | undefined): string {
   const s = String(ymd ?? "").slice(0, 10);
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
@@ -130,8 +142,10 @@ export async function syncSalesDocumentToZoho(
     }
 
     if (opts?.markSent && estimateId) {
-      // Non-fatal: Zoho rejects marking already-sent/invoiced estimates.
-      await markZohoEstimateSent(estimateId);
+      const marked = await markZohoEstimateSent(estimateId);
+      if (!marked.ok && !isBenignZohoAlreadySentError(marked.error)) {
+        return { ok: false, error: `mark_estimate_sent_failed:${marked.error}` };
+      }
     }
     return { ok: true };
   }
@@ -179,8 +193,10 @@ export async function syncSalesDocumentToZoho(
   }
 
   if (opts?.markSent && invoiceId) {
-    // Non-fatal: Zoho rejects marking already-sent/paid invoices.
-    await markZohoInvoiceSent(invoiceId);
+    const marked = await markZohoInvoiceSent(invoiceId);
+    if (!marked.ok && !isBenignZohoAlreadySentError(marked.error)) {
+      return { ok: false, error: `mark_invoice_sent_failed:${marked.error}` };
+    }
   }
 
   return { ok: true };
