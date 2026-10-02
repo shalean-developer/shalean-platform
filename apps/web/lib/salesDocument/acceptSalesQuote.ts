@@ -9,6 +9,7 @@ import { notifyAdminSalesQuoteAccepted } from "@/lib/salesDocument/notifySalesDo
 import { sendSalesDocumentToCustomer } from "@/lib/salesDocument/sendSalesDocumentToCustomer";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { recordSalesQuoteAcceptanceSnapshot } from "@/lib/salesDocument/recordSalesQuoteAcceptanceSnapshot";
+import { markQuoteOpportunityWon } from "@/lib/salesDocument/salesOpportunityLifecycle";
 
 export async function findInvoiceForQuote(
   admin: SupabaseClient,
@@ -75,6 +76,8 @@ export async function acceptSalesQuoteAndCreateInvoice(
       .eq("id", quoteId)
       .neq("status", "accepted");
     if (acceptErr) return { ok: false, error: acceptErr.message };
+
+    await markQuoteOpportunityWon(admin, quoteId, "quote_accepted");
 
     return {
       ok: true,
