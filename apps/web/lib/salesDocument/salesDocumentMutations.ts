@@ -13,6 +13,7 @@ import { createBookingFromSalesQuoteInvoice } from "@/lib/salesDocument/createBo
 import { ensureSalesDocumentCustomer } from "@/lib/salesDocument/ensureSalesDocumentCustomer";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { syncSalesDocumentToZoho } from "@/lib/salesDocument/syncSalesDocumentToZoho";
+import { recordSalesQuoteAcceptanceSnapshot } from "@/lib/salesDocument/recordSalesQuoteAcceptanceSnapshot";
 
 export type CreateSalesDocumentInput = {
   document_type: SalesDocumentType;
@@ -241,10 +242,14 @@ export async function convertSalesQuoteToInvoice(
       return { ok: false, error: `booking_create_failed:${bookingResult.error}` };
     }
 
+    const snapshot = await recordSalesQuoteAcceptanceSnapshot(admin, { quoteId, invoiceId });
+    if (!snapshot.ok) return snapshot;
+
     const { error: acceptErr } = await admin
       .from("sales_documents")
       .update({ status: "accepted" })
-      .eq("id", quoteId);
+      .eq("id", quoteId)
+      .neq("status", "accepted");
     if (acceptErr) return { ok: false, error: acceptErr.message };
 
     return { ok: true, invoiceId };
@@ -318,10 +323,17 @@ export async function convertSalesQuoteToInvoice(
     return { ok: false, error: `booking_create_failed:${bookingResult.error}` };
   }
 
+  const snapshot = await recordSalesQuoteAcceptanceSnapshot(admin, {
+    quoteId,
+    invoiceId: created.id,
+  });
+  if (!snapshot.ok) return snapshot;
+
   const { error: acceptErr } = await admin
     .from("sales_documents")
     .update({ status: "accepted" })
-    .eq("id", quoteId);
+    .eq("id", quoteId)
+    .neq("status", "accepted");
   if (acceptErr) return { ok: false, error: acceptErr.message };
 
   return { ok: true, invoiceId: created.id };
