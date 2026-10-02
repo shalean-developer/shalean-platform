@@ -90,6 +90,7 @@ type BookingRow = {
   payment_completed_at?: string | null;
   paid_at?: string | null;
   monthly_invoice_id?: string | null;
+  sales_document_id?: string | null;
   payout_id?: string | null;
   payout_status?: string | null;
   payout_frozen_cents?: number | null;
