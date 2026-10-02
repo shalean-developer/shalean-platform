@@ -136,10 +136,6 @@ export function QuoteRequestForm() {
       <QuoteRequestCatalogPicker
         selected={selected}
         onChange={setSelected}
-        bedrooms={bedrooms}
-        bathrooms={bathrooms}
-        onBedroomsChange={setBedrooms}
-        onBathroomsChange={setBathrooms}
       />
 
       <section className="space-y-3 border-t border-slate-100 pt-5">
