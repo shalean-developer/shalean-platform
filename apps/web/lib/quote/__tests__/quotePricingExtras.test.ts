@@ -31,6 +31,14 @@ function allowedForPricingSlug(pricingSlug: keyof typeof QUOTE_PRICING_TO_BOOKIN
   return DB_EXTRAS.filter((extra) => allowlist.has(extra.slug)).map((extra) => extra.slug);
 }
 
+describe("quote service convergence", () => {
+  it("exposes the same six pricing service families as booking", () => {
+    expect([...QUOTE_CUSTOM_SERVICE_SLUGS].sort()).toEqual(
+      ["standard", "deep", "move", "office", "carpet", "airbnb"].sort(),
+    );
+  });
+});
+
 describe("extraTypesForPricingServiceSlug", () => {
   it("maps standard to light and all add-on types", () => {
     expect(extraTypesForPricingServiceSlug("standard")).toEqual(["light", "all"]);
