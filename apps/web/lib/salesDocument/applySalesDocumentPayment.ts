@@ -36,6 +36,12 @@ export async function applySalesDocumentPayment(
   if (!row) return { ok: true, skipped: true, reason: "not_found" };
   if (row.document_type !== "invoice") return { ok: false, error: "not_an_invoice" };
 
+  const st = String(row.status ?? "").toLowerCase();
+  if (st === "paid") return { ok: true, skipped: true, reason: "already_paid" };
+  if (!["sent", "accepted"].includes(st)) {
+    return { ok: false, error: `document_not_payable_status:${st || "unknown"}` };
+  }
+
   const total = Math.max(0, Math.round(Number(row.total_cents ?? 0)));
   const prevPaid = Math.max(0, Math.round(Number(row.amount_paid_cents ?? 0)));
   const storedBalance = Math.max(0, Math.round(Number(row.balance_cents ?? 0)));
@@ -66,12 +72,6 @@ export async function applySalesDocumentPayment(
       context: { documentId: row.id, reference: ref, paidInCents: paidIn, expectedCents: computedBalance },
     });
     return { ok: false, error: `amount_mismatch:${paidIn}:${computedBalance}` };
-  }
-
-  const st = String(row.status ?? "").toLowerCase();
-  if (st === "paid") return { ok: true, skipped: true, reason: "already_paid" };
-  if (!["sent", "accepted"].includes(st)) {
-    return { ok: false, error: `document_not_payable_status:${st || "unknown"}` };
   }
 
   if (!salesDocumentPaystackReferencesMatch(row.id, row.paystack_reference, ref)) {
