@@ -23,6 +23,7 @@ export type CustomerQuoteRequestInput = {
   property_type: string;
   bedrooms: number | null;
   bathrooms: number | null;
+  extra_rooms?: number | null;
   suburb: string;
   preferred_date: string | null;
   message: string | null;
@@ -59,6 +60,7 @@ function buildRequestSummary(input: CustomerQuoteRequestInput): string {
     `Property: ${property}`,
     input.bedrooms != null ? `Bedrooms: ${input.bedrooms}` : null,
     input.bathrooms != null ? `Bathrooms: ${input.bathrooms}` : null,
+    input.extra_rooms != null ? `Extra rooms: ${input.extra_rooms}` : null,
     `Area: ${input.suburb}`,
     input.selected_items.length
       ? `Requested: ${input.selected_items.map((i) => i.name).join("; ")}`
@@ -126,6 +128,7 @@ export async function createCustomerQuoteRequest(
     property_type: input.property_type,
     bedrooms: input.bedrooms,
     bathrooms: input.bathrooms,
+    extra_rooms: input.extra_rooms ?? null,
     suburb: input.suburb.trim(),
     preferred_date: input.preferred_date,
     message: input.message?.trim() || null,

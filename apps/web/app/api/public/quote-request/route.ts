@@ -86,6 +86,7 @@ export async function POST(request: Request) {
 
   const bedrooms = parseOptionalInt(body.bedrooms);
   const bathrooms = parseOptionalInt(body.bathrooms);
+  const extra_rooms = parseOptionalInt(body.extra_rooms);
 
   const customerName = boundedString(body.customer_name, MAX_NAME);
   const customerEmail = boundedString(body.customer_email, MAX_EMAIL);
@@ -143,6 +144,7 @@ export async function POST(request: Request) {
     propertyType,
     bedrooms,
     bathrooms,
+    extraRooms: extra_rooms,
     suburb,
     preferredDate: preferred_date,
     message: message || null,
@@ -156,6 +158,7 @@ export async function POST(request: Request) {
     property_type: propertyType,
     bedrooms,
     bathrooms,
+    extra_rooms,
     suburb,
     preferred_date,
     message: message || null,

@@ -53,23 +53,21 @@ export default function QuoteRequestPage() {
         payload={{ page_type: "quote_request", content_group: "marketing_quote" }}
       />
       <QuotePageHeader />
-      <main className="flex-1 py-[var(--ui-space-10)] sm:py-[var(--ui-space-16)]">
-        <PublicPageContainer size="content" className="max-w-4xl">
-          <div className="mb-[var(--ui-space-8)] text-center">
-            <p className="text-sm font-semibold uppercase tracking-wide text-primary">Personalised quote</p>
-            <h1 className="mt-[var(--ui-space-2)] text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+      <main className="flex-1 py-8 sm:py-12">
+        <PublicPageContainer size="content" className="max-w-3xl">
+          <div className="mb-6 text-center sm:mb-8">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
               Request a cleaning quote
             </h1>
-            <p className="mx-auto mt-[var(--ui-space-3)] max-w-xl text-base leading-relaxed text-muted-foreground">
-              Use this form for unusual properties, offices, recurring schedules or jobs that need a custom scope. We&apos;ll review your requirements and email a personalised quote.
+            <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-muted-foreground">
+              Tell us what you need and we&apos;ll send you a personalised quote.
             </p>
-            <div className="mx-auto mt-[var(--ui-space-5)] max-w-xl rounded-[var(--ui-radius-xl)] border border-primary/20 bg-primary/5 px-[var(--ui-space-4)] py-[var(--ui-space-3)] text-sm text-foreground">
-              Need a standard price immediately?{" "}
-              <Link href="/book" className="font-bold text-primary hover:underline">
-                See your instant online price instead
+            <p className="mt-3 text-sm text-muted-foreground">
+              Need standard home cleaning?{" "}
+              <Link href="/book" className="font-semibold text-primary hover:underline">
+                Get an instant price →
               </Link>
-              .
-            </div>
+            </p>
           </div>
           <QuoteRequestForm />
         </PublicPageContainer>
