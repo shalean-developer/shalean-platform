@@ -23,7 +23,7 @@ export type CustomerQuoteRequestInput = {
   property_type: string;
   bedrooms: number | null;
   bathrooms: number | null;
-  extra_rooms: number | null;
+  extra_rooms?: number | null;
   suburb: string;
   preferred_date: string | null;
   message: string | null;
@@ -128,7 +128,7 @@ export async function createCustomerQuoteRequest(
     property_type: input.property_type,
     bedrooms: input.bedrooms,
     bathrooms: input.bathrooms,
-    extra_rooms: input.extra_rooms,
+    extra_rooms: input.extra_rooms ?? null,
     suburb: input.suburb.trim(),
     preferred_date: input.preferred_date,
     message: input.message?.trim() || null,
