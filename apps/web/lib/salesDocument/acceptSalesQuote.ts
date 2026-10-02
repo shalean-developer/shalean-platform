@@ -8,6 +8,7 @@ import { createBookingFromSalesQuoteInvoice } from "@/lib/salesDocument/createBo
 import { notifyAdminSalesQuoteAccepted } from "@/lib/salesDocument/notifySalesDocumentAdmin";
 import { sendSalesDocumentToCustomer } from "@/lib/salesDocument/sendSalesDocumentToCustomer";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { recordSalesQuoteAcceptanceSnapshot } from "@/lib/salesDocument/recordSalesQuoteAcceptanceSnapshot";
 
 export async function findInvoiceForQuote(
   admin: SupabaseClient,
@@ -62,10 +63,17 @@ export async function acceptSalesQuoteAndCreateInvoice(
       return { ok: false, error: `booking_create_failed:${bookingResult.error}` };
     }
 
+    const snapshot = await recordSalesQuoteAcceptanceSnapshot(admin, {
+      quoteId,
+      invoiceId: existing.id,
+    });
+    if (!snapshot.ok) return snapshot;
+
     const { error: acceptErr } = await admin
       .from("sales_documents")
       .update({ status: "accepted" })
-      .eq("id", quoteId);
+      .eq("id", quoteId)
+      .neq("status", "accepted");
     if (acceptErr) return { ok: false, error: acceptErr.message };
 
     return {
