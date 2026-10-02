@@ -114,6 +114,47 @@ async function paymentAccountingApplicability(
   return { applicable: true };
 }
 
+async function ensurePaymentAccountingQueue(
+  admin: SupabaseClient,
+  paymentTransactionId: string,
+): Promise<void> {
+  await enqueueAccountingSync(admin, {
+    entityType: "payment_transaction",
+    entityId: paymentTransactionId,
+  });
+
+  const { data: existing, error: readErr } = await admin
+    .from("accounting_sync_records")
+    .select("id, sync_status")
+    .eq("entity_type", "payment_transaction")
+    .eq("entity_id", paymentTransactionId)
+    .maybeSingle();
+
+  if (!readErr && existing?.id) return;
+
+  const now = new Date().toISOString();
+  const { error: insertErr } = await admin.from("accounting_sync_records").insert({
+    entity_type: "payment_transaction",
+    entity_id: paymentTransactionId,
+    sync_status: "pending",
+    created_at: now,
+    updated_at: now,
+  });
+
+  if (insertErr && (insertErr as { code?: string }).code !== "23505") {
+    await logSystemEvent({
+      level: "error",
+      source: "payments/recordGatewayPayment",
+      message: "payment_accounting_queue_enrollment_failed",
+      context: {
+        payment_transaction_id: paymentTransactionId,
+        read_error: readErr?.message ?? null,
+        insert_error: insertErr.message,
+      },
+    });
+  }
+}
+
 /**
  * Idempotent: one payment_transaction per (gateway, gateway_reference).
  * Auto-creates an approved Paystack Fees expense linked to booking/payment.
@@ -257,10 +298,7 @@ export async function recordGatewayPayment(
     params.entityId,
   );
   if (accountingApplicability.applicable) {
-    void enqueueAccountingSync(admin, {
-      entityType: "payment_transaction",
-      entityId: paymentTransactionId,
-    });
+    await ensurePaymentAccountingQueue(admin, paymentTransactionId);
   } else {
     await admin
       .from("payment_transactions")
