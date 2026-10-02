@@ -25,6 +25,7 @@ function mockAdmin(invoices: Array<Record<string, unknown>>, existingBookingId: 
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     not: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     range: vi.fn().mockResolvedValue({ data: invoices, error: null }),
   };
@@ -68,6 +69,27 @@ describe("backfillSalesDocumentQuoteBookings", () => {
 
     expect(result).toMatchObject({ scanned: 1, created: 1, failed: 0 });
     expect(createBookingFromSalesQuoteInvoice).not.toHaveBeenCalled();
+  });
+
+  it("passes an exact invoice filter for bounded repair", async () => {
+    const admin = mockAdmin([
+      {
+        id: INVOICE_ID,
+        converted_from_id: QUOTE_ID,
+        status: "sent",
+        total_cents: 150000,
+      },
+    ]);
+
+    await backfillSalesDocumentQuoteBookings(admin as never, {
+      apply: false,
+      invoiceIds: [INVOICE_ID],
+    });
+
+    const salesChain = vi.mocked(admin.from).mock.results.find(
+      (entry) => (entry.value as { in?: unknown }).in != null,
+    )?.value as { in: ReturnType<typeof vi.fn> } | undefined;
+    expect(salesChain?.in).toHaveBeenCalledWith("id", [INVOICE_ID]);
   });
 
   it("apply creates booking for invoice without linked row", async () => {
