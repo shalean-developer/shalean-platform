@@ -27,6 +27,7 @@ export type CustomerQuoteRequestInput = {
   preferred_date: string | null;
   message: string | null;
   selected_items: SalesDocumentQuoteRequestSelectedItem[];
+  request_fingerprint?: string | null;
   attribution?: {
     utm_source: string | null;
     utm_medium: string | null;
@@ -79,7 +80,7 @@ function lineItemsFromSelection(items: SalesDocumentQuoteRequestSelectedItem[]) 
 export async function createCustomerQuoteRequest(
   admin: SupabaseClient,
   input: CustomerQuoteRequestInput,
-): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; id: string; reused?: boolean } | { ok: false; error: string }> {
   const name = input.customer_name.trim();
   const email = input.customer_email.trim().toLowerCase();
   const phone = input.customer_phone.trim();
@@ -89,6 +90,19 @@ export async function createCustomerQuoteRequest(
   if (phone.length < 9) return { ok: false, error: "phone_required" };
   if (!input.suburb.trim()) return { ok: false, error: "suburb_required" };
   if (!input.selected_items.length) return { ok: false, error: "selection_required" };
+
+  const fingerprint = input.request_fingerprint?.trim() || null;
+  if (fingerprint) {
+    const { data: existing, error: existingErr } = await admin
+      .from("sales_documents")
+      .select("id")
+      .eq("quote_request_fingerprint", fingerprint)
+      .eq("document_type", "quote")
+      .eq("source", "customer_request")
+      .maybeSingle();
+    if (existingErr) return { ok: false, error: existingErr.message };
+    if (existing?.id) return { ok: true, id: String(existing.id), reused: true };
+  }
 
   const selected_items = input.selected_items.map((item) => ({
     kind: item.kind,
@@ -134,11 +148,24 @@ export async function createCustomerQuoteRequest(
       utm_campaign: attributionText(input.attribution?.utm_campaign),
       utm_term: attributionText(input.attribution?.utm_term),
       utm_content: attributionText(input.attribution?.utm_content),
+      quote_request_fingerprint: fingerprint,
     })
     .select("id")
     .single();
 
-  if (error || !data) return { ok: false, error: error?.message ?? "insert_failed" };
+  if (error || !data) {
+    if (error?.code === "23505" && fingerprint) {
+      const { data: raced } = await admin
+        .from("sales_documents")
+        .select("id")
+        .eq("quote_request_fingerprint", fingerprint)
+        .eq("document_type", "quote")
+        .eq("source", "customer_request")
+        .maybeSingle();
+      if (raced?.id) return { ok: true, id: String(raced.id), reused: true };
+    }
+    return { ok: false, error: error?.message ?? "insert_failed" };
+  }
 
   const id = String((data as { id: string }).id);
 
