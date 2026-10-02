@@ -23,6 +23,7 @@ export type SalesDocumentQuoteRequestDetails = {
   property_type: string;
   bedrooms: number | null;
   bathrooms: number | null;
+  extra_rooms?: number | null;
   suburb: string;
   preferred_date: string | null;
   message: string | null;
