@@ -574,8 +574,6 @@ export default function OfficeSalesDocumentsPage() {
                 </div>
               </div>
             ))}
-          </div>
-
             </div>
             {followUpRows.length > 5 ? (
               <button
