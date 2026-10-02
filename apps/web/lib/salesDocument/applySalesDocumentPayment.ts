@@ -117,7 +117,13 @@ export async function applySalesDocumentPayment(
       updated_at: nowIso,
     })
     .eq("id", row.id);
-  if (updErr) return { ok: false, error: updErr.message };
+  if (updErr) {
+    await admin
+      .from("sales_document_paystack_charge_dedup")
+      .delete()
+      .eq("charge_reference", ref);
+    return { ok: false, error: updErr.message };
+  }
 
   const zohoId = String(row.zoho_invoice_id ?? "").trim();
   if (zohoId && process.env.ZOHO_CLIENT_ID && process.env.ZOHO_REFRESH_TOKEN) {
