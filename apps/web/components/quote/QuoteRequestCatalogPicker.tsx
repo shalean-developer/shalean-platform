@@ -155,7 +155,7 @@ export function QuoteRequestCatalogPicker({
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
       {!loading && !error ? (
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2 sm:grid-cols-3">
           {quoteServices.map((service) => {
             const isSelected = selectedKeys.has(`service:${service.slug}`);
             const isUnsure = service.slug === QUOTE_UNSURE_SERVICE_SLUG;
@@ -168,6 +168,7 @@ export function QuoteRequestCatalogPicker({
                 aria-pressed={isSelected}
                 className={cn(
                   "rounded-xl border px-4 py-3 text-left transition",
+                  isUnsure && "sm:col-span-3",
                   isSelected
                     ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500/10"
                     : "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40",
