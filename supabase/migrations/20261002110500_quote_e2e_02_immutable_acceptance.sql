@@ -55,3 +55,52 @@ for each row execute function public.prevent_sales_quote_acceptance_snapshot_mut
 
 comment on table public.sales_quote_acceptance_snapshots is
   'QUOTE-E2E-02: immutable record of the exact quote terms accepted by a customer before quote status transitions to accepted.';
+
+
+create or replace function public.enforce_sales_quote_acceptance_integrity()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.document_type = 'quote'
+     and old.status is distinct from 'accepted'
+     and new.status = 'accepted'
+     and not exists (
+       select 1
+       from public.sales_quote_acceptance_snapshots s
+       where s.quote_id = new.id
+     ) then
+    raise exception 'accepted quote requires immutable acceptance snapshot';
+  end if;
+
+  if old.document_type = 'quote' and old.status = 'accepted' then
+    if new.customer_id is distinct from old.customer_id
+       or new.customer_name is distinct from old.customer_name
+       or new.customer_email is distinct from old.customer_email
+       or new.customer_phone is distinct from old.customer_phone
+       or new.line_items is distinct from old.line_items
+       or new.subtotal_cents is distinct from old.subtotal_cents
+       or new.total_cents is distinct from old.total_cents
+       or new.currency is distinct from old.currency
+       or new.due_date is distinct from old.due_date
+       or new.notes is distinct from old.notes
+       or new.source is distinct from old.source
+       or new.request_details is distinct from old.request_details then
+      raise exception 'accepted quote terms are immutable';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_sales_documents_quote_acceptance_integrity
+  on public.sales_documents;
+
+create trigger trg_sales_documents_quote_acceptance_integrity
+before update on public.sales_documents
+for each row execute function public.enforce_sales_quote_acceptance_integrity();
+
+comment on function public.enforce_sales_quote_acceptance_integrity() is
+  'QUOTE-E2E-02: requires an immutable snapshot before acceptance and freezes accepted quote terms.';
