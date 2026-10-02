@@ -6,10 +6,22 @@ export function salesDocumentPaystackReference(documentId: string): string {
   return `${SALES_DOC_PAYSTACK_REF_PREFIX}${documentId.trim()}`;
 }
 
+export function salesDocumentPaystackRecoveryReference(
+  documentId: string,
+  balanceCents: number,
+  nowMs: number = Date.now(),
+): string {
+  const id = documentId.trim();
+  const balance = Math.max(0, Math.round(balanceCents));
+  return `${SALES_DOC_PAYSTACK_REF_PREFIX}${id}_bal_${balance}_${Math.max(0, Math.trunc(nowMs)).toString(36)}`;
+}
+
 export function parseSalesDocumentIdFromPaystackReference(reference: string): string | null {
   const trimmed = reference.trim();
   if (!trimmed.toLowerCase().startsWith(SALES_DOC_PAYSTACK_REF_PREFIX)) return null;
-  const id = trimmed.slice(SALES_DOC_PAYSTACK_REF_PREFIX.length);
+  const tail = trimmed.slice(SALES_DOC_PAYSTACK_REF_PREFIX.length);
+  const match = tail.match(/^([0-9a-f-]{36})(?:_|$)/i);
+  const id = match?.[1] ?? "";
   return /^[0-9a-f-]{36}$/i.test(id) ? id : null;
 }
 
