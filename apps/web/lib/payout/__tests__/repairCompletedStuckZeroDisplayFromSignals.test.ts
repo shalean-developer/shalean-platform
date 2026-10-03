@@ -11,10 +11,14 @@ function adminFor(rows: Record<string, unknown>[]) {
   const query = {
     select: vi.fn(),
     eq: vi.fn(),
+    order: vi.fn(),
+    gt: vi.fn(),
     limit: vi.fn(async () => ({ data: rows, error: null })),
   };
   query.select.mockReturnValue(query);
   query.eq.mockReturnValue(query);
+  query.order.mockReturnValue(query);
+  query.gt.mockReturnValue(query);
   return { from: vi.fn(() => query) };
 }
 
