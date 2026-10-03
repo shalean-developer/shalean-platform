@@ -112,30 +112,42 @@ export class PayoutGenerationBlockedError extends Error {
 export async function countCompletedBlockingMissingLegacyPayout(
   admin: SupabaseClient,
 ): Promise<{ count: number; bookingIds: string[] }> {
-  const { data, error } = await admin
-    .from("bookings")
-    .select("id, display_earnings_cents, cleaner_earnings_total_cents, cleaner_id, payout_owner_cleaner_id, metadata")
-    .eq("status", "completed")
-    .eq("is_test", false)
-    .is("cleaner_payout_cents", null)
-    .limit(50);
+  const pageSize = 100;
+  let offset = 0;
+  let count = 0;
+  const bookingIds: string[] = [];
 
-  if (error) throw new Error(error.message);
+  for (;;) {
+    const { data, error } = await admin
+      .from("bookings")
+      .select("id, display_earnings_cents, cleaner_earnings_total_cents, cleaner_id, payout_owner_cleaner_id, metadata")
+      .eq("status", "completed")
+      .eq("is_test", false)
+      .is("cleaner_payout_cents", null)
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
 
-  const blocking = (data ?? []).filter((row) => {
-    if (bookingHasActivePayoutAttributionRemoval(row as unknown as Record<string, unknown>)) return false;
-    const display = Math.floor(
-      Number(
-        (row as { display_earnings_cents?: number | null }).display_earnings_cents ??
-          (row as { cleaner_earnings_total_cents?: number | null }).cleaner_earnings_total_cents ??
-          0,
-      ),
-    );
-    return Number.isFinite(display) && display > 0;
-  });
+    if (error) throw new Error(error.message);
+    const rows = data ?? [];
 
-  return {
-    count: blocking.length,
-    bookingIds: blocking.map((row) => String((row as { id?: string }).id ?? "")).filter(Boolean),
-  };
+    for (const row of rows) {
+      if (bookingHasActivePayoutAttributionRemoval(row as unknown as Record<string, unknown>)) continue;
+      const display = Math.floor(
+        Number(
+          (row as { display_earnings_cents?: number | null }).display_earnings_cents ??
+            (row as { cleaner_earnings_total_cents?: number | null }).cleaner_earnings_total_cents ??
+            0,
+        ),
+      );
+      if (!Number.isFinite(display) || display <= 0) continue;
+      count += 1;
+      const id = String((row as { id?: string }).id ?? "").trim();
+      if (id && bookingIds.length < 50) bookingIds.push(id);
+    }
+
+    if (rows.length < pageSize) break;
+    offset += rows.length;
+  }
+
+  return { count, bookingIds };
 }
