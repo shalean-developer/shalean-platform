@@ -548,12 +548,6 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const cleanerWasChanged = "cleaner_id" in updates && newCleaner !== oldCleaner;
   if (cleanerWasChanged) {
     Object.assign(updates, BOOKING_PAYOUT_COLUMNS_CLEAR);
-    if (newCleaner && beforeRow && readPayoutAttributionRemovalMarker(beforeRow.metadata)) {
-      updates.metadata = deactivatePayoutAttributionRemovalMarker(beforeRow.metadata, {
-        cleared_at: new Date().toISOString(),
-        cleared_by_admin_id: adminAuth.userId,
-      });
-    }
     await logSystemEvent({
       level: "info",
       source: "admin_booking_reassignment",
@@ -888,6 +882,47 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       },
       { status: 422 },
     );
+  }
+
+  if (
+    cleanerWasChanged &&
+    newCleaner &&
+    !assignmentRevertedForEarnings &&
+    beforeRow &&
+    readPayoutAttributionRemovalMarker(beforeRow.metadata)
+  ) {
+    const clearedMetadata = deactivatePayoutAttributionRemovalMarker(beforeRow.metadata, {
+      cleared_at: new Date().toISOString(),
+      cleared_by_admin_id: adminAuth.userId,
+    });
+    const { error: markerClearErr } = await admin
+      .from("bookings")
+      .update({ metadata: clearedMetadata })
+      .eq("id", id)
+      .eq("cleaner_id", newCleaner);
+
+    if (markerClearErr) {
+      const rev = before
+        ? await revertAdminBookingAssignmentToBeforeRow(admin, id, before as never)
+        : { ok: false as const, error: "Missing pre-assignment snapshot." };
+      void reportOperationalIssue(
+        rev.ok ? "error" : "critical",
+        "admin_bookings_patch",
+        rev.ok
+          ? `payout attribution marker clear failed; assignment reverted: ${markerClearErr.message}`
+          : `payout attribution marker clear failed and assignment revert failed: ${markerClearErr.message}; ${rev.error}`,
+        { bookingId: id, newCleanerId: newCleaner },
+      );
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Could not finalize cleaner reassignment safely.",
+          code: "payout_attribution_marker_clear_failed",
+          assignment_reverted: rev.ok,
+        },
+        { status: 500 },
+      );
+    }
   }
 
   const needsAssignedNotify =
