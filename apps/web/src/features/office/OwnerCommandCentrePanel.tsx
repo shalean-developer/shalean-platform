@@ -91,6 +91,12 @@ export function OwnerCommandCentrePanel({ permissions }: Props) {
   const quickActions = ownerQuickActionsForPermissions(permissions).filter((action) =>
     ["create-booking", "assign-teams", "payout-approvals"].includes(action.id),
   );
+  const revenueThisMonth = data.businessHealth.revenueMonthZar;
+  const previousMonthComparison = data.businessHealth.previousMonthComparisonPct;
+  const revenueComparisonDetail =
+    revenueThisMonth == null || revenueThisMonth <= 0 || previousMonthComparison == null
+      ? "No comparable prior revenue"
+      : `${formatOwnerPct(previousMonthComparison)} vs previous month-to-date`;
 
   return (
     <section className="space-y-4" aria-label="Owner live command centre">
@@ -104,7 +110,7 @@ export function OwnerCommandCentrePanel({ permissions }: Props) {
 
       <div className="grid gap-3 md:grid-cols-3">
         <PrimaryMetric label="Cash position" value={formatOwnerZarFromCents(data.cashFlow.netCashPositionCents)} detail="Available cash and bank position" />
-        <PrimaryMetric label="Revenue this month" value={formatOwnerZar(data.businessHealth.revenueMonthZar)} detail={`${formatOwnerPct(data.businessHealth.previousMonthComparisonPct)} vs previous month-to-date`} />
+        <PrimaryMetric label="Revenue this month" value={formatOwnerZar(data.businessHealth.revenueMonthZar)} detail={revenueComparisonDetail} />
         <PrimaryMetric label="Net operating position" value={formatOwnerZarFromCents(data.businessHealth.netOperatingPositionCents)} detail={`Gross margin ${formatOwnerZarFromCents(data.businessHealth.grossMarginCents)}`} />
       </div>
 
@@ -115,7 +121,7 @@ export function OwnerCommandCentrePanel({ permissions }: Props) {
         <SecondaryMetric label="Outstanding payments" value={formatOwnerZarFromCents(data.cashFlow.outstandingCustomerPaymentsCents)} />
         <SecondaryMetric label="Cleaner liabilities" value={formatOwnerZarFromCents(data.cashFlow.cleanerLiabilitiesCents)} />
         <SecondaryMetric label="Payout approvals" value={formatOwnerZarFromCents(data.payoutApprovals.pendingApprovalAmountCents)} />
-        <SecondaryMetric label="Operational exceptions" value={formatOwnerCount(data.todaySnapshot.lateOrExceptionCount)} />
+        <SecondaryMetric label="Today's operational exceptions" value={formatOwnerCount(data.todaySnapshot.lateOrExceptionCount)} />
         <SecondaryMetric label="Permission changes" value={formatOwnerCount(data.security.recentPermissionChanges)} />
       </div>
 
