@@ -24,36 +24,12 @@ const QUOTE_OG_DESC = clampMetaDescription(
 );
 
 const SERVICE_LINKS = [
-  {
-    href: "/services/standard-cleaning-cape-town",
-    label: "Regular cleaning",
-    copy: "Maintenance and once-off home cleaning.",
-  },
-  {
-    href: "/services/deep-cleaning-cape-town",
-    label: "Deep cleaning",
-    copy: "Detailed resets for kitchens, bathrooms and living spaces.",
-  },
-  {
-    href: "/services/move-out-cleaning-cape-town",
-    label: "Move-in / out cleaning",
-    copy: "Cleaning for handovers, new homes and end-of-lease moves.",
-  },
-  {
-    href: "/services/office-cleaning-cape-town",
-    label: "Office cleaning",
-    copy: "Custom cleaning for offices and commercial spaces.",
-  },
-  {
-    href: "/services/airbnb-cleaning-cape-town",
-    label: "Airbnb cleaning",
-    copy: "Guest-ready turnover cleaning for short-stay properties.",
-  },
-  {
-    href: "/services/carpet-cleaning-cape-town",
-    label: "Carpet cleaning",
-    copy: "Carpet, rug and related fabric-cleaning requests.",
-  },
+  { href: "/services/standard-cleaning-cape-town", label: "Regular cleaning" },
+  { href: "/services/deep-cleaning-cape-town", label: "Deep cleaning" },
+  { href: "/services/move-out-cleaning-cape-town", label: "Move-in / out cleaning" },
+  { href: "/services/office-cleaning-cape-town", label: "Office cleaning" },
+  { href: "/services/airbnb-cleaning-cape-town", label: "Airbnb cleaning" },
+  { href: "/services/carpet-cleaning-cape-town", label: "Carpet cleaning" },
 ] as const;
 
 const QUOTE_FAQS = [
@@ -66,16 +42,6 @@ const QUOTE_FAQS = [
     question: "What cleaning services can I request a quote for?",
     answer:
       "You can request a quote for regular, deep, move-in or move-out, office, Airbnb and carpet cleaning in Cape Town.",
-  },
-  {
-    question: "What affects the price of my cleaning quote?",
-    answer:
-      "The service type, property size, bedrooms, bathrooms, extra rooms, selected add-ons, access requirements, property condition, location and preferred date can all affect the final scope.",
-  },
-  {
-    question: "Can I request a quote for my Cape Town suburb?",
-    answer:
-      "Yes. Submit your suburb or area with the request. Service availability still depends on the location, schedule and the scope of work.",
   },
   {
     question: "Can I get an instant price instead of requesting a quote?",
@@ -138,8 +104,7 @@ export default function QuoteRequestPage() {
                 Get a cleaning quote in Cape Town
               </h1>
               <p className="mx-auto mt-3 text-base leading-relaxed text-muted-foreground">
-                Request a free, no-obligation quote for regular, deep, move-in/out, office, Airbnb or
-                carpet cleaning. Tell us what you need and we&apos;ll prepare a personalised quote.
+                Tell us what you need and we&apos;ll prepare a personalised cleaning quote. No payment required.
               </p>
               <p className="mt-3 text-sm text-muted-foreground">
                 Prefer live pricing and availability?{" "}
@@ -152,53 +117,39 @@ export default function QuoteRequestPage() {
             <QuoteRequestForm />
           </div>
 
-          <div className="mx-auto mt-12 w-full max-w-3xl space-y-10 sm:mt-16">
+          <div className="mx-auto mt-8 w-full max-w-3xl space-y-7 sm:mt-10">
             <section aria-labelledby="quote-services-heading">
-              <h2 id="quote-services-heading" className="text-2xl font-bold tracking-tight text-slate-900">
-                Cleaning quotes for homes and businesses in Cape Town
+              <h2 id="quote-services-heading" className="text-xl font-bold tracking-tight text-slate-900">
+                Cleaning quotes for Cape Town
               </h2>
-              <p className="mt-3 text-sm leading-6 text-slate-600">
-                Use the quote form when you want Shalean to review your scope before pricing. We provide
-                personalised cleaning quotes across our six core services. If you already know exactly what
-                you need and want live availability, you can also{" "}
-                <Link href="/book" className="font-semibold text-blue-700 hover:underline">
-                  book a cleaner online
-                </Link>
-                .
-              </p>
-
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                {SERVICE_LINKS.map((service) => (
-                  <Link
-                    key={service.href}
-                    href={service.href}
-                    className="rounded-xl border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:bg-blue-50/40"
-                  >
-                    <span className="font-semibold text-slate-900">{service.label}</span>
-                    <span className="mt-1 block text-sm leading-5 text-slate-600">{service.copy}</span>
-                  </Link>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                <span className="font-medium text-slate-700">Quotes available for:</span>{" "}
+                {SERVICE_LINKS.map((service, index) => (
+                  <span key={service.href}>
+                    <Link href={service.href} className="font-semibold text-blue-700 hover:underline">
+                      {service.label}
+                    </Link>
+                    {index < SERVICE_LINKS.length - 1 ? " · " : ""}
+                  </span>
                 ))}
-              </div>
+              </p>
             </section>
 
             <section aria-labelledby="quote-factors-heading">
-              <h2 id="quote-factors-heading" className="text-2xl font-bold tracking-tight text-slate-900">
-                What affects your cleaning quote?
+              <h2 id="quote-factors-heading" className="text-xl font-bold tracking-tight text-slate-900">
+                What affects your quote?
               </h2>
-              <p className="mt-3 text-sm leading-6 text-slate-600">
-                Accurate details help us scope the work correctly. Your service, bedrooms, bathrooms, extra
-                rooms, optional add-ons, suburb, access requirements, property condition and preferred date
-                can all affect the final quote. For general price guidance before you submit, see our{" "}
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Service type, property size, rooms, extras, location and preferred date can affect your personalised price.{" "}
                 <Link href="/cleaning-prices-cape-town" className="font-semibold text-blue-700 hover:underline">
-                  cleaning prices in Cape Town
+                  View cleaning prices →
                 </Link>
-                .
               </p>
             </section>
 
             <section id="faq" aria-labelledby="quote-faq-heading">
-              <h2 id="quote-faq-heading" className="text-2xl font-bold tracking-tight text-slate-900">
-                Cleaning quote FAQs
+              <h2 id="quote-faq-heading" className="text-xl font-bold tracking-tight text-slate-900">
+                Common cleaning quote questions
               </h2>
               <div className="mt-4 space-y-2">
                 {QUOTE_FAQS.map((item) => (
