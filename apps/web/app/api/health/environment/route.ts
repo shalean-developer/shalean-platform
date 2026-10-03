@@ -40,6 +40,7 @@ export function GET(): Response {
     vercelEnv: process.env.VERCEL_ENV ?? null,
     gitBranch: process.env.VERCEL_GIT_COMMIT_REF ?? null,
     shaleanAppEnv: process.env.SHALEAN_APP_ENV ?? null,
+    releaseSha: process.env.SHALEAN_RELEASE_SHA?.trim() || null,
     supabase: {
       configuredRef: actualRef,
       expectedRef,

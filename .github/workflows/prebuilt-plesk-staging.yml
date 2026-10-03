@@ -1,0 +1,124 @@
+name: Build prebuilt Plesk staging bundle
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prebuilt-plesk-staging
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SHALEAN_APP_ENV: "staging"
+      SHALEAN_ENFORCE_ENV_SAFETY: "true"
+      SHALEAN_EXPECTED_SUPABASE_REF: "jhubpsbwmjgydkzztxeu"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_SITE_URL: "https://pricing-test.shalean.co.za"
+      NEXT_PUBLIC_APP_URL: "https://pricing-test.shalean.co.za"
+      NEXT_PUBLIC_SUPABASE_URL: "https://jhubpsbwmjgydkzztxeu.supabase.co"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ vars.PLESK_TEST_SUPABASE_PUBLISHABLE_KEY }}"
+      NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "${{ vars.PLESK_TEST_PAYSTACK_PUBLIC_KEY }}"
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard staging source branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "main"
+
+      - name: Validate staging public build variables
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$SHALEAN_APP_ENV" = "staging"
+          test "$NEXT_PUBLIC_SUPABASE_URL" = "https://jhubpsbwmjgydkzztxeu.supabase.co"
+          test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -n "$NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY"
+          case "$NEXT_PUBLIC_SUPABASE_ANON_KEY" in sb_publishable_*|eyJ*) ;; *) echo "::error::Invalid staging Supabase publishable key"; exit 1 ;; esac
+          case "$NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY" in pk_test_*) ;; *) echo "::error::Staging Paystack key must start pk_test_"; exit 1 ;; esac
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false --package-lock-only=false --ignore-scripts @tailwindcss/postcss@4.1.14
+
+      - name: Build standalone staging runtime
+        working-directory: apps/web
+        env:
+          FACEBOOK_APP_ID: "build-only-placeholder"
+          FACEBOOK_APP_SECRET: "build-only-placeholder"
+        run: |
+          set -euo pipefail
+          node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build --webpack
+          test -f .next/standalone/apps/web/server.js
+
+      - name: Create staging deployment bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/plesk-pricing-test-stage"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          cp -a apps/web/.next/standalone/apps/web/. "$STAGE/"
+          rm -rf "$STAGE/public" "$STAGE/.next/static"
+          mkdir -p "$STAGE/.next"
+          cp -a apps/web/public "$STAGE/public"
+          cp -a apps/web/.next/static "$STAGE/.next/static"
+          cat > "$STAGE/build-meta.json" <<META
+          {
+            "artifact_sha": "$GITHUB_SHA",
+            "artifact_branch": "$GITHUB_REF_NAME",
+            "target_host": "pricing-test.shalean.co.za",
+            "deployment_environment": "staging",
+            "supabase_ref": "jhubpsbwmjgydkzztxeu",
+            "server_secrets_baked_in": false
+          }
+          META
+          mv "$STAGE/server.js" "$STAGE/server.next.js"
+          cat > "$STAGE/server.js" <<'NODE'
+          'use strict';
+          process.env.SHALEAN_RELEASE_SHA = process.env.SHALEAN_RELEASE_SHA || require('./build-meta.json').artifact_sha;
+          require('./server.next.js');
+          NODE
+          tar -czf "$RUNNER_TEMP/pricing-test-runtime.tar.gz" -C "$STAGE" .
+          cp scripts/plesk-activate-prebuilt-pricing-test.sh "$RUNNER_TEMP/activate.sh"
+          sha256sum "$RUNNER_TEMP/pricing-test-runtime.tar.gz"
+
+      - name: Publish deploy/staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --orphan deploy-staging-publish
+          git rm -rf --ignore-unmatch .
+          git clean -fdx
+          cp "$RUNNER_TEMP/pricing-test-runtime.tar.gz" pricing-test-runtime.tar.gz
+          cp "$RUNNER_TEMP/activate.sh" activate.sh
+          printf '%s\n' "$GITHUB_SHA" > release-sha.txt
+          git add pricing-test-runtime.tar.gz activate.sh release-sha.txt
+          git commit -m "deploy: staging $GITHUB_SHA"
+          git push --force origin HEAD:refs/heads/deploy/staging
