@@ -22,10 +22,8 @@ import {
 } from "@/lib/cleaner/applyPreviewEarningsToCleanerJobRows";
 import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
 import {
-  isStuckNullEarningsBooking,
   maybeLogStuckNullEarnings,
 } from "@/lib/cleaner/cleanerPayoutInvariantLogging";
-import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
 import { augmentCleanerJobsWithViewerRosterContext } from "@/lib/cleaner/pairedRosterMemberLifecycle";
 
 export const runtime = "nodejs";
