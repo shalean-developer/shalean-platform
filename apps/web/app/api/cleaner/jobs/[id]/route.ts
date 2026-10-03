@@ -51,6 +51,7 @@ import {
 import { metrics } from "@/lib/metrics/counters";
 import { fetchServiceQaForCleanerJob } from "@/lib/booking/bookingServiceQaServer";
 import { previewDisplayEarningsCentsForCleanerJob } from "@/lib/payout/persistCleanerPayout";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 import type { BookingCustomerOwnershipColumn } from "@/lib/booking/bookingCustomerIdentity";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 
@@ -131,7 +132,7 @@ function buildBookingDetailSelect(ownershipColumn: BookingCustomerOwnershipColum
   return [
     "id, service, service_slug, rooms, bathrooms, date, time, location, suburb, status, dispatch_status, pricing_version_id, customer_name, customer_phone, customer_email",
     ownershipColumn,
-    "extras, selected_extras, service_details, pricing_summary, duration_minutes, access_instructions, gate_code, parking_instructions, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, earnings_summary, total_paid_zar, total_price, amount_paid_cents, base_amount_cents, service_fee_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by",
+    "extras, selected_extras, service_details, pricing_summary, duration_minutes, access_instructions, gate_code, parking_instructions, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, earnings_summary, total_paid_zar, total_price, amount_paid_cents, base_amount_cents, service_fee_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by, metadata",
   ].join(", ");
 }
 
@@ -208,18 +209,20 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
    * surfaces as `displayEarningsCents = null` so the UI shows "Job earning unavailable"
    * (truly invalid pricing/payment data) instead of `R 0`.
    */
+  const attributionRemoved = bookingHasActivePayoutAttributionRemoval(record);
   const persistedDisplayEarningsCents = resolveCleanerEarningsCents({
     cleaner_earnings_total_cents: record.cleaner_earnings_total_cents,
     payout_frozen_cents: record.payout_frozen_cents,
     display_earnings_cents: record.display_earnings_cents,
   });
   const persistedIsPositive =
+    !attributionRemoved &&
     typeof persistedDisplayEarningsCents === "number" &&
     Number.isFinite(persistedDisplayEarningsCents) &&
     persistedDisplayEarningsCents > 0;
   let displayEarningsCents: number | null = persistedIsPositive ? persistedDisplayEarningsCents : null;
   let displayEarningsIsEstimate = false;
-  if (!persistedIsPositive) {
+  if (!persistedIsPositive && !attributionRemoved) {
     const previewCents = await previewDisplayEarningsCentsForCleanerJob(admin, {
       bookingId,
       cleanerId: session.cleanerId,
@@ -267,6 +270,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     amount_paid_cents: _omitAmountPaid,
     base_amount_cents: _omitBaseAmount,
     service_fee_cents: _omitServiceFee,
+    metadata: _omitMetadata,
     customer_id: _omitCustomerId,
     user_id: _omitUserId,
     customer_email: _omitCustomerEmail,
@@ -385,8 +389,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const earningsSummary = parseBookingEarningsSummary(record.earnings_summary);
   const cleanerFacing = resolveCleanerFacingEarnings(earningsSummary, session.cleanerId);
-  const jobEarningCents = cleanerFacing?.job_earning_cents ?? displayEarningsCents;
-  const bonusCents = cleanerFacing?.bonus_cents ?? 0;
+  const jobEarningCents = attributionRemoved ? null : (cleanerFacing?.job_earning_cents ?? displayEarningsCents);
+  const bonusCents = attributionRemoved ? 0 : (cleanerFacing?.bonus_cents ?? 0);
 
   const jobPayload = {
     ...safe,
