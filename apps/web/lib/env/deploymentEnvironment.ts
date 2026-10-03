@@ -15,8 +15,8 @@ export type ShaleanDeploymentEnv =
 /** Canonical Supabase project refs for governed remote environments (never secrets). */
 export const SHALEAN_SUPABASE_REFS = {
   production: "tchayecuvzssixyxlvfu",
-  /** Retired/paused staging project retained only for explicit recovery or diagnostics. */
-  staging: "gbgnemlpyykyhpqqbgru",
+  /** Active governed staging project used by pricing-test.shalean.co.za. */
+  staging: "jhubpsbwmjgydkzztxeu",
 } as const;
 
 export type EnvLike = Record<string, string | undefined>;
