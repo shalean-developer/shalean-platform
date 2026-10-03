@@ -32,24 +32,6 @@ const SERVICE_LINKS = [
   { href: "/services/carpet-cleaning-cape-town", label: "Carpet cleaning" },
 ] as const;
 
-const QUOTE_FAQS = [
-  {
-    question: "Is the cleaning quote free?",
-    answer:
-      "Yes. There is no payment required to request a personalised cleaning quote from Shalean.",
-  },
-  {
-    question: "What cleaning services can I request a quote for?",
-    answer:
-      "You can request a quote for regular, deep, move-in or move-out, office, Airbnb and carpet cleaning in Cape Town.",
-  },
-  {
-    question: "Can I get an instant price instead of requesting a quote?",
-    answer:
-      "Yes. If you prefer live online pricing and availability, use Shalean's online booking flow instead of the personalised quote form.",
-  },
-] as const;
-
 export const metadata: Metadata = {
   title: QUOTE_TITLE,
   description: QUOTE_META_DESC,
@@ -71,25 +53,10 @@ const JSON_LD = buildMarketingWebPageJsonLd({
   includeLocalBusinessNode: true,
 });
 
-const FAQ_JSON_LD = {
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  "@id": `${CANONICAL}#faq`,
-  mainEntity: QUOTE_FAQS.map((item) => ({
-    "@type": "Question",
-    name: item.question,
-    acceptedAnswer: {
-      "@type": "Answer",
-      text: item.answer,
-    },
-  })),
-};
-
 export default function QuoteRequestPage() {
   return (
     <div className="flex min-h-dvh flex-col bg-muted/30 text-foreground">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_JSON_LD) }} />
       <GrowthTracking
         event={ANALYTICS_EVENTS.PAGE_VIEW}
         payload={{ page_type: "quote_request", content_group: "marketing_quote" }}
@@ -117,53 +84,18 @@ export default function QuoteRequestPage() {
             <QuoteRequestForm />
           </div>
 
-          <div className="mx-auto mt-8 w-full max-w-3xl space-y-7 sm:mt-10">
-            <section aria-labelledby="quote-services-heading">
-              <h2 id="quote-services-heading" className="text-xl font-bold tracking-tight text-slate-900">
-                Cleaning quotes for Cape Town
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                <span className="font-medium text-slate-700">Quotes available for:</span>{" "}
-                {SERVICE_LINKS.map((service, index) => (
-                  <span key={service.href}>
-                    <Link href={service.href} className="font-semibold text-blue-700 hover:underline">
-                      {service.label}
-                    </Link>
-                    {index < SERVICE_LINKS.length - 1 ? " · " : ""}
-                  </span>
-                ))}
-              </p>
-            </section>
-
-            <section aria-labelledby="quote-factors-heading">
-              <h2 id="quote-factors-heading" className="text-xl font-bold tracking-tight text-slate-900">
-                What affects your quote?
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Service type, property size, rooms, extras, location and preferred date can affect your personalised price.{" "}
-                <Link href="/cleaning-prices-cape-town" className="font-semibold text-blue-700 hover:underline">
-                  View cleaning prices →
-                </Link>
-              </p>
-            </section>
-
-            <section id="faq" aria-labelledby="quote-faq-heading">
-              <h2 id="quote-faq-heading" className="text-xl font-bold tracking-tight text-slate-900">
-                Common cleaning quote questions
-              </h2>
-              <div className="mt-4 space-y-2">
-                {QUOTE_FAQS.map((item) => (
-                  <details key={item.question} className="rounded-xl border border-slate-200 bg-white">
-                    <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-900">
-                      {item.question}
-                    </summary>
-                    <p className="border-t border-slate-100 px-4 py-3 text-sm leading-6 text-slate-600">
-                      {item.answer}
-                    </p>
-                  </details>
-                ))}
-              </div>
-            </section>
+          <div className="mx-auto mt-6 w-full max-w-[560px] text-center sm:mt-8">
+            <p className="text-sm leading-6 text-slate-600">
+              <span className="font-medium text-slate-700">Our cleaning services:</span>{" "}
+              {SERVICE_LINKS.map((service, index) => (
+                <span key={service.href}>
+                  <Link href={service.href} className="font-semibold text-blue-700 hover:underline">
+                    {service.label}
+                  </Link>
+                  {index < SERVICE_LINKS.length - 1 ? " · " : ""}
+                </span>
+              ))}
+            </p>
           </div>
         </PublicPageContainer>
       </main>
