@@ -20,8 +20,8 @@ describe("pricing-test PR preview safety contract", () => {
     expect(workflow).not.toContain("PROD_PAYSTACK");
   });
 
-  it("publishes only the pricing-test deployment branch", () => {
-    expect(workflow).toContain("refs/heads/deploy/pricing-test");
+  it("publishes only the staging deployment branch", () => {
+    expect(workflow).toContain("refs/heads/deploy/staging");
     expect(workflow).not.toContain("refs/heads/deploy/production");
     expect(workflow).toContain("github.event.pull_request.head.sha");
   });
