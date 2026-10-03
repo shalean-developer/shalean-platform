@@ -216,8 +216,10 @@ export async function removeCleanerFromVisitPayout(
     if (rpcErr) {
       return { ok: false, error: rpcErr.message, code: "roster_replace_failed" };
     }
-    const snapshotSynced = await syncTeamMemberCountSnapshot(admin, bookingId, otherRosterMembers.length);
-    if (!snapshotSynced.ok) return snapshotSynced;
+    if (row.is_team_job === true) {
+      const snapshotSynced = await syncTeamMemberCountSnapshot(admin, bookingId, otherRosterMembers.length);
+      if (!snapshotSynced.ok) return snapshotSynced;
+    }
 
     const leadId =
       otherRosterMembers.find((m) => String(m.role).toLowerCase() === "lead")?.cleaner_id ??
