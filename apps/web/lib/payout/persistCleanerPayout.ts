@@ -641,7 +641,7 @@ export async function previewDisplayEarningsCentsForCleanerJobDiagnostic(
     team_id?: string | null;
   };
 
-  if (bookingHasActivePayoutAttributionRemoval(row as Record<string, unknown>)) {
+  if (bookingHasActivePayoutAttributionRemoval(row as unknown as Record<string, unknown>)) {
     return {
       ok: false,
       amountCents: null,
