@@ -6,7 +6,6 @@ import {
   cleanerPendingPaymentBannerForRow,
   fetchCleanerVisibleBookingsMerged,
   recurringPendingPaymentVisibilityReason,
-  sortBookingsByDateThenTime,
 } from "@/lib/cleaner/cleanerBookingAccess";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -34,6 +33,7 @@ import {
 } from "@/lib/cleaner/applyPreviewEarningsToCleanerJobRows";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { augmentCleanerJobsWithViewerRosterContext } from "@/lib/cleaner/pairedRosterMemberLifecycle";
+import { prioritizeCleanerJobsForList } from "@/lib/cleaner/prioritizeCleanerJobsForList";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -94,7 +94,7 @@ export async function GET(request: Request) {
         .not("status", "eq", "payment_expired")
         .order("date", { ascending: true })
         .order("time", { ascending: true })
-        .limit(100)
+        .limit(300)
     : await (async () => {
         const { data: merged, error: mergeErr } = await fetchCleanerVisibleBookingsMerged(admin, viewerCleanerId, {
           select: bookingSelect,
@@ -103,12 +103,15 @@ export async function GET(request: Request) {
             q.not("status", "eq", "failed").not("status", "eq", "payment_expired").order("date", { ascending: true }).order("time", { ascending: true }),
         });
         return {
-          data: sortBookingsByDateThenTime((merged ?? []) as Record<string, unknown>[]).slice(0, 100),
+          data: (merged ?? []) as Record<string, unknown>[],
           error: mergeErr,
         };
       })();
 
-  const jobs = (jobsRaw ?? []).filter(cleanerJobsListRowPostFilter);
+  const jobs = prioritizeCleanerJobsForList(
+    (jobsRaw ?? []).filter(cleanerJobsListRowPostFilter) as Record<string, unknown>[],
+    100,
+  );
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
