@@ -36,6 +36,18 @@ describe("prioritizeCleanerJobsForList", () => {
     expect(prioritizeCleanerJobsForList(rows, 100)).toHaveLength(105);
   });
 
+  it("treats completed_at as authoritative history even when status drift is nonterminal", () => {
+    const result = prioritizeCleanerJobsForList(
+      [
+        { id: "real-open", status: "assigned", date: "2026-10-04", time: "08:00", completed_at: null },
+        { id: "drifted", status: "assigned", date: "2026-10-03", time: "08:00", completed_at: "2026-10-03T12:00:00Z" },
+      ],
+      1,
+    );
+
+    expect(result.map((row) => row.id)).toEqual(["real-open"]);
+  });
+
   it("keeps newest history first after open rows", () => {
     const result = prioritizeCleanerJobsForList(
       [
