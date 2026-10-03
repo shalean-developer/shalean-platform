@@ -26,16 +26,14 @@ describe("QUOTE-SEO-01 lead-intent page", () => {
     }
   });
 
-  it("keeps compact SEO content below the conversion form and exposes matching FAQ schema", () => {
+  it("keeps the page conversion-first with only compact service links below the form", () => {
     expect(quotePage.indexOf("<QuoteRequestForm />")).toBeLessThan(
-      quotePage.indexOf('aria-labelledby="quote-services-heading"'),
+      quotePage.indexOf("Our cleaning services:"),
     );
-    expect(quotePage).toContain('"@type": "FAQPage"');
-    expect(quotePage).toContain("Cleaning quotes for Cape Town");
-    expect(quotePage).toContain("Common cleaning quote questions");
-    expect(quotePage).toContain("View cleaning prices →");
-    expect(quotePage).toContain("/cleaning-prices-cape-town");
-    expect(quotePage).not.toContain("Maintenance and once-off home cleaning.");
-    expect((quotePage.match(/question:/g) ?? []).length).toBe(3);
+    expect(quotePage).toContain("Our cleaning services:");
+    expect(quotePage).not.toContain('"@type": "FAQPage"');
+    expect(quotePage).not.toContain("What affects your quote?");
+    expect(quotePage).not.toContain("Common cleaning quote questions");
+    expect(quotePage).not.toContain("/cleaning-prices-cape-town");
   });
 });
