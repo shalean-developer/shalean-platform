@@ -548,7 +548,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const cleanerWasChanged = "cleaner_id" in updates && newCleaner !== oldCleaner;
   if (cleanerWasChanged) {
     Object.assign(updates, BOOKING_PAYOUT_COLUMNS_CLEAR);
-    if (beforeRow && readPayoutAttributionRemovalMarker(beforeRow.metadata)) {
+    if (newCleaner && beforeRow && readPayoutAttributionRemovalMarker(beforeRow.metadata)) {
       updates.metadata = deactivatePayoutAttributionRemovalMarker(beforeRow.metadata, {
         cleared_at: new Date().toISOString(),
         cleared_by_admin_id: adminAuth.userId,
