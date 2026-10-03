@@ -11,6 +11,8 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
 export type BackfillSalesDocumentQuoteBookingsOptions = {
   apply?: boolean;
   batchSize?: number;
+  /** Optional exact invoice ids for bounded repair. Empty/omitted scans all converted invoices. */
+  invoiceIds?: string[];
 };
 
 export type BackfillSalesDocumentQuoteBookingsResult = {
@@ -60,6 +62,7 @@ export async function backfillSalesDocumentQuoteBookings(
 ): Promise<BackfillSalesDocumentQuoteBookingsResult> {
   const apply = opts.apply !== false;
   const batchSize = Math.min(500, Math.max(1, opts.batchSize ?? 100));
+  const invoiceIds = [...new Set((opts.invoiceIds ?? []).map((id) => String(id).trim()).filter(Boolean))];
 
   const result: BackfillSalesDocumentQuoteBookingsResult = {
     scanned: 0,
@@ -74,11 +77,17 @@ export async function backfillSalesDocumentQuoteBookings(
   let offset = 0;
 
   for (;;) {
-    const { data, error } = await admin
+    let query = admin
       .from("sales_documents")
       .select("id, converted_from_id, status, total_cents, created_at")
       .eq("document_type", "invoice")
-      .not("converted_from_id", "is", null)
+      .not("converted_from_id", "is", null);
+
+    if (invoiceIds.length > 0) {
+      query = query.in("id", invoiceIds);
+    }
+
+    const { data, error } = await query
       .order("created_at", { ascending: true })
       .range(offset, offset + batchSize - 1);
 
