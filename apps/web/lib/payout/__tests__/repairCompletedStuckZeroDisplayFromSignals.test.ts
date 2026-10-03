@@ -39,9 +39,38 @@ describe("repairCompletedStuckZeroDisplayFromSignals", () => {
         payout_attribution_removal_v1: {
           active: true,
           cleaner_id: cleanerId,
+          header_cleaner_id_at_removal: cleanerId,
           removed_at: "2026-10-03T18:00:00.000Z",
           removed_by_admin_id: "admin-1",
           reason: "wrong cleaner",
+        },
+      },
+    }]);
+
+    const result = await repairCompletedStuckZeroDisplayFromSignals(admin as never, 50);
+
+    expect(result).toEqual({ ok: true, scanned: 1, matched_signals: 0, fixed: 0, skipped: 1, failed: 0 });
+    expect(persistCommand).not.toHaveBeenCalled();
+  });
+
+  it("skips repair when removed attribution came from summary but the original header cleaner is unchanged", async () => {
+    const admin = adminFor([{
+      id: "booking-mismatch",
+      status: "completed",
+      cleaner_id: "header-cleaner",
+      payout_owner_cleaner_id: "header-cleaner",
+      is_team_job: false,
+      display_earnings_cents: 0,
+      total_paid_cents: 50000,
+      payment_status: "success",
+      metadata: {
+        payout_attribution_removal_v1: {
+          active: true,
+          cleaner_id: "summary-cleaner",
+          header_cleaner_id_at_removal: "header-cleaner",
+          removed_at: "2026-10-03T18:00:00.000Z",
+          removed_by_admin_id: "admin-1",
+          reason: "wrong payout attribution",
         },
       },
     }]);
@@ -66,6 +95,7 @@ describe("repairCompletedStuckZeroDisplayFromSignals", () => {
         payout_attribution_removal_v1: {
           active: true,
           cleaner_id: "cleaner-old",
+          header_cleaner_id_at_removal: "cleaner-old",
           removed_at: "2026-10-03T18:00:00.000Z",
           removed_by_admin_id: "admin-1",
           reason: null,
