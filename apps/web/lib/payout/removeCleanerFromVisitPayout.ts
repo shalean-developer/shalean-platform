@@ -11,6 +11,7 @@ import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { resetBookingCleanerLineEarnings } from "@/lib/payout/resetBookingCleanerLineEarnings";
 import { syncPayoutBatchFromBookings } from "@/lib/payout/syncPayoutBatchFromBookings";
 import { assertBookingVisitPayoutEditable } from "@/lib/payout/visitPayoutEditGuards";
+import { withPayoutAttributionRemovalMarker } from "@/lib/payout/bookingPayoutAttributionRemoval";
 
 type BookingRow = {
   id: string;
@@ -27,6 +28,7 @@ type BookingRow = {
   cleaner_earnings_total_cents: number | null;
   payout_frozen_cents: number | null;
   earnings_summary?: unknown;
+  metadata?: unknown;
 };
 
 function bookingForAllocations(row: BookingRow) {
@@ -91,6 +93,19 @@ async function assertVisitPayoutEditable(
   return assertBookingVisitPayoutEditable(admin, row);
 }
 
+async function syncTeamMemberCountSnapshot(
+  admin: SupabaseClient,
+  bookingId: string,
+  remainingRosterCount: number,
+): Promise<{ ok: true } | { ok: false; error: string; code: string }> {
+  const { error } = await admin
+    .from("bookings")
+    .update({ team_member_count_snapshot: Math.max(0, Math.floor(remainingRosterCount)) })
+    .eq("id", bookingId);
+  if (error) return { ok: false, error: error.message, code: "team_snapshot_sync_failed" };
+  return { ok: true };
+}
+
 async function deleteTeamMemberPayoutRow(
   admin: SupabaseClient,
   bookingId: string,
@@ -121,7 +136,7 @@ function clearEarningsPatch(): Record<string, unknown> {
 
 /**
  * Removes a cleaner's payout attribution for a completed visit (wrong assignment).
- * Solo jobs: clears assignment + earnings so the visit can be reassigned.
+ * Solo jobs: clears payout attribution while preserving completed-job assignment identity until a replacement is assigned.
  * Paired roster jobs: removes the cleaner from `booking_cleaners` and recomputes earnings.
  */
 export async function removeCleanerFromVisitPayout(
@@ -145,7 +160,7 @@ export async function removeCleanerFromVisitPayout(
   const { data: booking, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, cleaner_id, payout_owner_cleaner_id, selected_cleaner_id, payout_id, payout_status, payout_paid_at, is_team_job, display_earnings_cents, cleaner_payout_cents, cleaner_earnings_total_cents, payout_frozen_cents, earnings_summary",
+      "id, status, cleaner_id, payout_owner_cleaner_id, selected_cleaner_id, payout_id, payout_status, payout_paid_at, is_team_job, display_earnings_cents, cleaner_payout_cents, cleaner_earnings_total_cents, payout_frozen_cents, earnings_summary, metadata",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -201,6 +216,8 @@ export async function removeCleanerFromVisitPayout(
     if (rpcErr) {
       return { ok: false, error: rpcErr.message, code: "roster_replace_failed" };
     }
+    const snapshotSynced = await syncTeamMemberCountSnapshot(admin, bookingId, otherRosterMembers.length);
+    if (!snapshotSynced.ok) return snapshotSynced;
 
     const leadId =
       otherRosterMembers.find((m) => String(m.role).toLowerCase() === "lead")?.cleaner_id ??
@@ -263,6 +280,10 @@ export async function removeCleanerFromVisitPayout(
         .eq("booking_id", bookingId)
         .eq("cleaner_id", cleanerId);
       if (delErr) return { ok: false, error: delErr.message, code: "roster_delete_failed" };
+      if (row.is_team_job === true) {
+        const snapshotSynced = await syncTeamMemberCountSnapshot(admin, bookingId, otherRosterMembers.length);
+        if (!snapshotSynced.ok) return snapshotSynced;
+      }
     }
 
     const assignmentPatch: Record<string, unknown> = {};
@@ -327,6 +348,8 @@ export async function removeCleanerFromVisitPayout(
         .eq("booking_id", bookingId)
         .eq("cleaner_id", cleanerId);
       if (delErr) return { ok: false, error: delErr.message, code: "roster_delete_failed" };
+      const snapshotSynced = await syncTeamMemberCountSnapshot(admin, bookingId, otherRosterMembers.length);
+      if (!snapshotSynced.ok) return snapshotSynced;
     }
 
     const teamPatch: Record<string, unknown> = {
@@ -382,11 +405,18 @@ export async function removeCleanerFromVisitPayout(
   const assignmentPatch: Record<string, unknown> = {
     ...clearEarningsPatch(),
     payout_id: null,
+    metadata: withPayoutAttributionRemovalMarker(row.metadata, {
+      active: true,
+      cleaner_id: cleanerId,
+      removed_at: new Date().toISOString(),
+      removed_by_admin_id: params.adminUserId,
+      reason: params.reason?.trim() || null,
+    }),
   };
-  if (String(row.cleaner_id ?? "") === cleanerId) assignmentPatch.cleaner_id = null;
-  if (String(row.payout_owner_cleaner_id ?? "") === cleanerId) assignmentPatch.payout_owner_cleaner_id = null;
-  if (String(row.selected_cleaner_id ?? "") === cleanerId) assignmentPatch.selected_cleaner_id = null;
-
+  // Completed solo visits must retain their historical worker identity. Clearing cleaner_id here
+  // creates an impossible completed-without-assignee state if the admin never finishes reassignment.
+  // The zeroed earnings sentinel removes payroll attribution; the later reassignment flow can replace
+  // cleaner_id/payout_owner_cleaner_id atomically when the correct cleaner is known.
   const { data: updated, error: upErr } = await admin.from("bookings").update(assignmentPatch).eq("id", bookingId).select("id");
   if (upErr) return { ok: false, error: upErr.message, code: "booking_update_failed" };
   if (!updated?.length) return { ok: false, error: "Booking could not be updated.", code: "booking_update_failed" };
