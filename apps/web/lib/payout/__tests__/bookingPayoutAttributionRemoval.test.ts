@@ -9,6 +9,7 @@ describe("bookingPayoutAttributionRemoval", () => {
   const marker = {
     active: true as const,
     cleaner_id: "cleaner-old",
+    header_cleaner_id_at_removal: "cleaner-old",
     removed_at: "2026-10-03T18:00:00.000Z",
     removed_by_admin_id: "admin-1",
     reason: "wrong cleaner",
@@ -20,10 +21,22 @@ describe("bookingPayoutAttributionRemoval", () => {
     expect(readPayoutAttributionRemovalMarker(metadata)).toEqual(marker);
   });
 
-  it("is active only while the retained primary identity matches the removed cleaner", () => {
+  it("stays active while the booking header is unchanged and deactivates on a new assignment", () => {
     const metadata = withPayoutAttributionRemovalMarker(null, marker);
     expect(bookingHasActivePayoutAttributionRemoval({ metadata, cleaner_id: "cleaner-old" })).toBe(true);
-    expect(bookingHasActivePayoutAttributionRemoval({ metadata, cleaner_id: "cleaner-new" })).toBe(false);
     expect(bookingHasActivePayoutAttributionRemoval({ metadata, cleaner_id: null, payout_owner_cleaner_id: "cleaner-old" })).toBe(true);
+    expect(bookingHasActivePayoutAttributionRemoval({ metadata, cleaner_id: null, payout_owner_cleaner_id: null })).toBe(true);
+    expect(bookingHasActivePayoutAttributionRemoval({ metadata, cleaner_id: "cleaner-new" })).toBe(false);
+  });
+
+  it("stays active when the removed earnings cleaner differed from the pre-existing header cleaner", () => {
+    const mismatchMarker = {
+      ...marker,
+      cleaner_id: "summary-cleaner",
+      header_cleaner_id_at_removal: "header-cleaner",
+    };
+    const metadata = withPayoutAttributionRemovalMarker(null, mismatchMarker);
+    expect(bookingHasActivePayoutAttributionRemoval({ metadata, cleaner_id: "header-cleaner" })).toBe(true);
+    expect(bookingHasActivePayoutAttributionRemoval({ metadata, cleaner_id: "new-cleaner" })).toBe(false);
   });
 });
