@@ -3,6 +3,8 @@ export const PAYOUT_ATTRIBUTION_REMOVAL_METADATA_KEY = "payout_attribution_remov
 export type PayoutAttributionRemovalMarker = {
   active: true;
   cleaner_id: string;
+  /** Booking header identity that existed when payout attribution was removed. */
+  header_cleaner_id_at_removal: string | null;
   removed_at: string;
   removed_by_admin_id: string;
   reason: string | null;
@@ -25,6 +27,10 @@ export function readPayoutAttributionRemovalMarker(metadata: unknown): PayoutAtt
   return {
     active: true,
     cleaner_id: cleanerId,
+    header_cleaner_id_at_removal:
+      typeof raw.header_cleaner_id_at_removal === "string" && raw.header_cleaner_id_at_removal.trim()
+        ? raw.header_cleaner_id_at_removal.trim()
+        : null,
     removed_at: removedAt,
     removed_by_admin_id: removedBy,
     reason: typeof raw.reason === "string" && raw.reason.trim() ? raw.reason.trim() : null,
@@ -39,7 +45,12 @@ export function bookingHasActivePayoutAttributionRemoval(
   const primary =
     String(row.cleaner_id ?? "").trim() ||
     String(row.payout_owner_cleaner_id ?? "").trim();
-  return primary !== "" && primary === marker.cleaner_id;
+  // The removal stays authoritative while the booking header is unchanged from
+  // removal time (including a temporarily empty header). A genuinely new header
+  // assignment supersedes the marker and allows normal payout repair again.
+  if (!primary) return true;
+  const headerAtRemoval = marker.header_cleaner_id_at_removal || marker.cleaner_id;
+  return primary === headerAtRemoval;
 }
 
 export function withPayoutAttributionRemovalMarker(
