@@ -100,6 +100,12 @@ describe("P0-04E privileged Office email verification flow contract", () => {
     expect(verifyRoute).toContain("officeVerificationCookieOptions(secure)");
   });
 
+  it("hard-navigates after successful verification so middleware sees the fresh cookie", () => {
+    expect(mfaForm).toContain("window.location.replace(redirect)");
+    expect(mfaForm).not.toContain("router.replace(redirect)");
+    expect(mfaForm).not.toContain("router.refresh()");
+  });
+
   it("shows the simple email-code flow with no QR or authenticator setup", () => {
     expect(mfaForm).toContain("Email me a security code");
     expect(mfaForm).toContain("Enter the 6-digit security code from your email.");
