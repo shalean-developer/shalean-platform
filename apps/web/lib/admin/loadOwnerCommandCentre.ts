@@ -34,7 +34,7 @@ function monthRangesMtd(today: string) {
   };
 }
 function growthPercent(current: number, previous: number): number | null {
-  if (previous === 0) return current > 0 ? 100 : null;
+  if (previous === 0) return null;
   return Math.round(((current - previous) / previous) * 10000) / 100;
 }
 function isMissingPriorCustomerRpcError(error: { code?: string | null; message?: string | null } | null): boolean {
