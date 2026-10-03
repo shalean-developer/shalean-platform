@@ -107,6 +107,7 @@ jobs:
           app/api/cleaner/__tests__/cleanerReadRoutesNoRepair.test.ts
           lib/cleaner/__tests__/applyPreviewEarningsToCleanerJobRows.test.ts
           lib/payout/__tests__/bookingPayoutAttributionRemoval.test.ts
+          lib/payout/__tests__/bookingPayoutPersistEligibility.test.ts
           lib/payout/__tests__/adjustBookingPayoutEarnings.test.ts
           lib/admin/payouts/__tests__/officeCleanerEditableVisits.test.ts
           lib/cron/__tests__/h15CronLockOverlapPrevention.test.ts
