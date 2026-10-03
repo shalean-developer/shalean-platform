@@ -704,6 +704,8 @@ export const DEFAULT_PRODUCTION_HEALTH_CRON_JOBS: ExpectedCronJob[] = [
   { jobName: "payout-integrity-daily", maxAgeMinutes: 26 * 60, severity: "high" },
 ];
 
+const COMPLETED_AT_HEALTH_ROLLOUT_DATE_YMD = "2026-10-03";
+
 export async function runProductionHealthScan(
   admin: SupabaseClient,
   options?: {
@@ -739,9 +741,13 @@ export async function runProductionHealthScan(
         name: "completed_booking_timestamp",
         query: admin
           .from("bookings")
-          .select("id, status, completed_at")
+          .select("id, status, completed_at, date")
           .eq("status", "completed")
           .is("completed_at", null)
+          // Scope this alert to the post-rollout service cohort so an unrelated
+          // edit to a known historical exception cannot turn generic updated_at
+          // churn into a fresh completion-lifecycle incident.
+          .gte("date", COMPLETED_AT_HEALTH_ROLLOUT_DATE_YMD)
           .gte("updated_at", since24h)
           .order("updated_at", { ascending: false })
           .limit(scanLimit),
