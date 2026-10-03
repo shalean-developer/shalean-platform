@@ -127,6 +127,6 @@ describe("weekly legacy payout preflight removal-marker contract", () => {
     );
     expect(source).toContain("cleaner_id, payout_owner_cleaner_id, metadata");
     expect(source).toContain("bookingHasActivePayoutAttributionRemoval(row)");
-    expect(source).toContain("bookingHasActivePayoutAttributionRemoval(row as Record<string, unknown>)");
+    expect(source).toContain("bookingHasActivePayoutAttributionRemoval(row as unknown as Record<string, unknown>)");
   });
 });
