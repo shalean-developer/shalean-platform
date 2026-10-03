@@ -408,6 +408,10 @@ export async function removeCleanerFromVisitPayout(
     metadata: withPayoutAttributionRemovalMarker(row.metadata, {
       active: true,
       cleaner_id: cleanerId,
+      header_cleaner_id_at_removal:
+        String(row.cleaner_id ?? "").trim() ||
+        String(row.payout_owner_cleaner_id ?? "").trim() ||
+        null,
       removed_at: new Date().toISOString(),
       removed_by_admin_id: params.adminUserId,
       reason: params.reason?.trim() || null,
