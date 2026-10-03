@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   bookingHasActivePayoutAttributionRemoval,
+  deactivatePayoutAttributionRemovalMarker,
   readPayoutAttributionRemovalMarker,
   withPayoutAttributionRemovalMarker,
 } from "@/lib/payout/bookingPayoutAttributionRemoval";
@@ -27,6 +28,24 @@ describe("bookingPayoutAttributionRemoval", () => {
     expect(bookingHasActivePayoutAttributionRemoval({ metadata, cleaner_id: null, payout_owner_cleaner_id: "cleaner-old" })).toBe(true);
     expect(bookingHasActivePayoutAttributionRemoval({ metadata, cleaner_id: null, payout_owner_cleaner_id: null })).toBe(true);
     expect(bookingHasActivePayoutAttributionRemoval({ metadata, cleaner_id: "cleaner-new" })).toBe(false);
+  });
+
+  it("deactivates the marker while preserving its removal audit fields", () => {
+    const metadata = withPayoutAttributionRemovalMarker({ source: "website" }, marker);
+    const cleared = deactivatePayoutAttributionRemovalMarker(metadata, {
+      cleared_at: "2026-10-03T19:10:00.000Z",
+      cleared_by_admin_id: "admin-2",
+    });
+    expect(cleared.source).toBe("website");
+    expect(readPayoutAttributionRemovalMarker(cleared)).toBeNull();
+    expect(cleared.payout_attribution_removal_v1).toMatchObject({
+      active: false,
+      cleaner_id: "cleaner-old",
+      header_cleaner_id_at_removal: "cleaner-old",
+      removed_by_admin_id: "admin-1",
+      cleared_at: "2026-10-03T19:10:00.000Z",
+      cleared_by_admin_id: "admin-2",
+    });
   });
 
   it("stays active when the removed earnings cleaner differed from the pre-existing header cleaner", () => {
