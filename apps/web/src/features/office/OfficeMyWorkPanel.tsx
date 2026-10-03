@@ -60,9 +60,10 @@ function WorkMeta({ summary, bookingRef }: { summary: string; bookingRef?: strin
 }
 
 function displayWorkItemTitle(title: string): { title: string; bookingRef: string | null } {
-  const allocation = title.match(/^(Overdue|Upcoming) booking ([A-Z0-9]+) needs allocation$/i);
+  const allocation = title.match(/^(Overdue|Upcoming|Today's) booking ([A-Z0-9]+) needs allocation$/i);
   if (!allocation) return { title, bookingRef: null };
-  const state = allocation[1]?.toLowerCase() === "overdue" ? "Overdue" : "Upcoming";
+  const rawState = allocation[1]?.toLowerCase();
+  const state = rawState === "overdue" ? "Overdue" : rawState === "today's" ? "Today's" : "Upcoming";
   return { title: `${state} booking needs allocation`, bookingRef: allocation[2] ?? null };
 }
 
