@@ -558,6 +558,12 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   if (cleanerAttributionRefresh) {
     Object.assign(updates, BOOKING_PAYOUT_COLUMNS_CLEAR);
+    if (restoreExistingHeaderAttribution && beforeRow && removalMarkerBefore) {
+      updates.metadata = deactivatePayoutAttributionRemovalMarker(beforeRow.metadata, {
+        cleared_at: new Date().toISOString(),
+        cleared_by_admin_id: adminAuth.userId,
+      });
+    }
     await logSystemEvent({
       level: "info",
       source: "admin_booking_reassignment",
@@ -714,11 +720,23 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (cleanerAttributionRefresh) {
     const rst = await resetBookingCleanerLineEarnings(admin, id);
     if (!rst.ok) {
-      void reportOperationalIssue("error", "admin_bookings_patch", `resetBookingCleanerLineEarnings: ${rst.error}`, {
-        bookingId: id,
-      });
+      const rev = before
+        ? await revertAdminBookingAssignmentToBeforeRow(admin, id, before as never)
+        : { ok: false as const, error: "Missing pre-assignment snapshot." };
+      void reportOperationalIssue(
+        rev.ok ? "error" : "critical",
+        "admin_bookings_patch",
+        rev.ok
+          ? `resetBookingCleanerLineEarnings failed; assignment restored: ${rst.error}`
+          : `resetBookingCleanerLineEarnings failed and restore failed: ${rst.error}; ${rev.error}`,
+        { bookingId: id },
+      );
       return NextResponse.json(
-        { error: "Could not reset earnings for reassignment.", code: "earnings_reset_failed" },
+        {
+          error: "Could not reset earnings for reassignment.",
+          code: "earnings_reset_failed",
+          assignment_reverted: rev.ok,
+        },
         { status: 500 },
       );
     }
@@ -799,7 +817,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
               forceDisplayRecompute: true,
             });
             const displayAfter = await fetchBookingDisplayEarningsCents(admin, id);
-            if (hasPersistedDisplayEarningsBasis(displayAfter)) {
+            const hasValidDisplayAfter = restoreExistingHeaderAttribution
+              ? isCompletableDisplayEarningsCents(displayAfter)
+              : hasPersistedDisplayEarningsBasis(displayAfter);
+            if (hasValidDisplayAfter) {
               earningsRecompute = { ok: true };
             } else if (payout.ok === false) {
               earningsRecompute = {
@@ -855,7 +876,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     bookingRequiresPersistedEarningsBeforeCleanerNotify(before as never) &&
     earningsRecompute &&
     earningsRecompute.ok === false &&
-    (!earningsRecompute.code || !earningsRevertDenyCodes.has(earningsRecompute.code))
+    (restoreExistingHeaderAttribution ||
+      !earningsRecompute.code ||
+      !earningsRevertDenyCodes.has(earningsRecompute.code))
   ) {
     const rev = await revertAdminBookingAssignmentToBeforeRow(admin, id, before as never);
     assignmentRevertedForEarnings = true;
@@ -897,6 +920,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   if (
     cleanerAttributionRefresh &&
+    !restoreExistingHeaderAttribution &&
     newCleaner &&
     !assignmentRevertedForEarnings &&
     beforeRow &&
