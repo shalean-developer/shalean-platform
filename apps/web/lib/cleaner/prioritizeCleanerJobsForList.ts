@@ -43,6 +43,7 @@ function openRank(row: JobRow): number {
 }
 
 function isHistorical(row: JobRow): boolean {
+  if (String(row.completed_at ?? "").trim()) return true;
   const status = statusOf(row);
   return status === "completed" || status === "cancelled" || status === "failed" || status === "payment_expired";
 }
