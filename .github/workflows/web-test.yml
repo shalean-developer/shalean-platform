@@ -140,6 +140,7 @@ jobs:
           lib/admin/__tests__/ownerCommandCentreAnalyticsRollup.test.ts
           lib/admin/__tests__/m13m14AdminEligibilityConvergence.test.ts
           lib/admin/__tests__/adminBookingDeleteSafety.test.ts
+          lib/security/__tests__/pricingTestPrPreviewContract.test.ts
           lib/salesDocument/__tests__/backfillSalesDocumentQuoteBookings.test.ts
 
       - name: Focused marketing / Meta compliance unit tests
