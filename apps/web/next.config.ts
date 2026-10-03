@@ -67,6 +67,7 @@ function portalCutoverRedirects() {
 }
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   // Keep Next's file tracing and bundler rooted at the same monorepo directory. Vercel
   // traces from the repository root, and warns when Turbopack uses apps/web instead.
   outputFileTracingRoot: workspaceRoot,
