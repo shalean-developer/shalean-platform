@@ -55,45 +55,66 @@ export async function backfillLegacyWeeklyPayoutColumnsFromEarnings(
   admin: SupabaseClient,
   limit = 1000,
 ): Promise<BackfillLegacyWeeklyPayoutColumnsResult> {
-  const { data, error } = await admin
-    .from("bookings")
-    .select("id, display_earnings_cents, payout_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_bonus_cents, cleaner_id, payout_owner_cleaner_id, metadata")
-    .eq("status", "completed")
-    .eq("is_test", false)
-    .is("cleaner_payout_cents", null)
-    .limit(limit);
-
-  if (error) throw new Error(error.message);
-
+  const pageSize = Math.min(200, Math.max(25, limit));
+  let cursor: string | null = null;
+  let scanned = 0;
+  let actionableScanned = 0;
   let fixed = 0;
   let skipped = 0;
-  for (const raw of data ?? []) {
-    const row = raw as LegacyBackfillRow;
-    if (bookingHasActivePayoutAttributionRemoval(row)) {
-      skipped += 1;
-      continue;
-    }
-    const derived = deriveLegacyWeeklyPayoutColumns(row);
-    if (!derived) {
-      skipped += 1;
-      continue;
-    }
-    const { error: upErr } = await admin
+
+  while (actionableScanned < limit) {
+    let query = admin
       .from("bookings")
-      .update({
-        cleaner_payout_cents: derived.cleaner_payout_cents,
-        cleaner_bonus_cents: derived.cleaner_bonus_cents,
-      })
-      .eq("id", row.id)
-      .is("cleaner_payout_cents", null);
-    if (upErr) {
-      skipped += 1;
-      continue;
+      .select("id, display_earnings_cents, payout_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_bonus_cents, cleaner_id, payout_owner_cleaner_id, metadata")
+      .eq("status", "completed")
+      .eq("is_test", false)
+      .is("cleaner_payout_cents", null)
+      .order("id", { ascending: true });
+    if (cursor) query = query.gt("id", cursor);
+
+    const { data, error } = await query.limit(pageSize);
+    if (error) throw new Error(error.message);
+
+    const rows = data ?? [];
+    if (rows.length === 0) break;
+
+    for (const raw of rows) {
+      const row = raw as LegacyBackfillRow;
+      if (row.id) cursor = row.id;
+      scanned += 1;
+
+      if (bookingHasActivePayoutAttributionRemoval(row)) {
+        skipped += 1;
+        continue;
+      }
+
+      actionableScanned += 1;
+      const derived = deriveLegacyWeeklyPayoutColumns(row);
+      if (!derived) {
+        skipped += 1;
+        if (actionableScanned >= limit) break;
+        continue;
+      }
+      const { error: upErr } = await admin
+        .from("bookings")
+        .update({
+          cleaner_payout_cents: derived.cleaner_payout_cents,
+          cleaner_bonus_cents: derived.cleaner_bonus_cents,
+        })
+        .eq("id", row.id)
+        .is("cleaner_payout_cents", null);
+      if (upErr) {
+        skipped += 1;
+      } else {
+        fixed += 1;
+      }
+      if (actionableScanned >= limit) break;
     }
-    fixed += 1;
+
+    if (rows.length < pageSize) break;
   }
 
-  return { scanned: (data ?? []).length, fixed, skipped };
+  return { scanned, fixed, skipped };
 }
 
 export class PayoutGenerationBlockedError extends Error {
