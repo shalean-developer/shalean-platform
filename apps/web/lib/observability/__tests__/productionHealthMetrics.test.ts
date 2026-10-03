@@ -17,6 +17,7 @@ vi.mock("@/lib/logging/systemLog", () => ({
 
 import {
   buildProductionHealthSummary,
+  detectCompletedMissingCompletionTimestamp,
   detectPaymentFinalizationDrift,
   detectStaleCronRuns,
   fetchExpectedCronSuccessRows,
@@ -48,6 +49,7 @@ describe("productionHealthMetrics", () => {
           display_earnings_cents: 5000,
         },
       ],
+      completionRows: [{ id: "completion-1", status: "completed", completed_at: null }],
       earningsRows: [{ id: "booking-1", status: "completed", display_earnings_cents: null }],
       payoutRows: [{ id: "payout-1", payout_status: "eligible", payout_frozen_cents: null }],
       dispatchRows: [
@@ -74,12 +76,13 @@ describe("productionHealthMetrics", () => {
       "booking_completed_missing_earnings_basis",
       "monthly_invoice_paid_child_unsettled",
       "payment_verified_not_finalized",
+      "booking_completed_missing_completed_at",
       "dispatch_stale_unassigned",
       "payout_eligibility_drift",
       "duration_fallback_usage",
       "workload_force_override_usage",
     ]);
-    expect(summary.totals).toMatchObject({ critical: 3, high: 2, medium: 2 });
+    expect(summary.totals).toMatchObject({ critical: 3, high: 3, medium: 2 });
     expect(summary.findings.find((f) => f.code === "payment_verified_not_finalized")?.sampleIds).toEqual(["failed-1"]);
   });
 
@@ -104,6 +107,7 @@ describe("productionHealthMetrics", () => {
           payout_status: "pending",
         },
       ],
+      completionRows: [{ id: "completion-ok", status: "completed", completed_at: "2026-05-14T09:30:00.000Z" }],
       earningsRows: [{ id: "booking-ok", status: "completed", display_earnings_cents: 5000 }],
       payoutRows: [{ id: "payout-ok", payout_status: "eligible", payout_frozen_cents: 5000 }],
       dispatchRows: [
@@ -247,6 +251,25 @@ describe("productionHealthMetrics", () => {
     });
   });
 
+  it("detects recently completed bookings without completed_at evidence", () => {
+    expect(
+      detectCompletedMissingCompletionTimestamp([
+        { id: "missing", status: "completed", completed_at: null },
+        { id: "ok", status: "completed", completed_at: "2026-10-03T10:00:00Z" },
+        { id: "open", status: "assigned", completed_at: null },
+      ]),
+    ).toEqual([
+      {
+        code: "booking_completed_missing_completed_at",
+        severity: "high",
+        count: 1,
+        message: "Recently completed bookings are missing completed_at lifecycle evidence.",
+        sampleIds: ["missing"],
+        diagnostics: { scan_window_hours: 24 },
+      },
+    ]);
+  });
+
   it("detects open payment finalization jobs and ignores unrelated failed jobs", () => {
     expect(
       detectPaymentFinalizationDrift([
@@ -312,6 +335,7 @@ describe("productionHealthMetrics", () => {
       { data: [], error: null },
       { data: [], error: null },
       { data: [], error: null },
+      { data: [], error: null },
     ];
     const admin = {
       from: vi.fn(() => {
@@ -322,6 +346,7 @@ describe("productionHealthMetrics", () => {
           limit: vi.fn(() => Promise.resolve(queryResults.shift() ?? { data: [], error: null })),
           not: vi.fn(() => builder),
           eq: vi.fn(() => builder),
+          is: vi.fn(() => builder),
           or: vi.fn(() => builder),
           gte: vi.fn(() => builder),
         };
