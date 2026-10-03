@@ -3,6 +3,7 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_paid_payment_status"
   | "admin_booking_delete_completed_status"
   | "admin_booking_delete_monthly_invoice_child"
+  | "admin_booking_delete_sales_document_child"
   | "admin_booking_delete_payout_linked"
   | "admin_booking_delete_payout_status_locked"
   | "admin_booking_delete_payout_frozen"
@@ -16,6 +17,7 @@ export type AdminBookingDeleteSafetyRow = {
   payment_completed_at?: string | null;
   paid_at?: string | null;
   monthly_invoice_id?: string | null;
+  sales_document_id?: string | null;
   payout_id?: string | null;
   payout_status?: string | null;
   payout_frozen_cents?: number | string | null;
@@ -81,6 +83,13 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_monthly_invoice_child",
       message: "Monthly invoice-backed bookings cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.sales_document_id)) {
+    blocks.push({
+      code: "admin_booking_delete_sales_document_child",
+      message: "Sales-document invoice-backed bookings cannot be hard-deleted. Cancel or expire the booking so the invoice linkage remains auditable.",
     });
   }
 
