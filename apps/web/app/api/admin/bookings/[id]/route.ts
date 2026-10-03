@@ -567,6 +567,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   }
 
   if (cleanerWasChanged && newCleaner) {
+    if (beforeRow?.is_team_job !== true) {
+      updates.payout_owner_cleaner_id = newCleaner;
+    }
     const bs = beforeStatus.toLowerCase();
     if (bs === "pending" || bs === "pending_assignment" || bs === "assigned") {
       (updates as Record<string, unknown>).cleaner_response_status = CLEANER_RESPONSE.PENDING;
