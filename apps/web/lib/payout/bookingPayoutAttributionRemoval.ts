@@ -63,3 +63,22 @@ export function withPayoutAttributionRemovalMarker(
     [PAYOUT_ATTRIBUTION_REMOVAL_METADATA_KEY]: marker,
   };
 }
+
+
+export function deactivatePayoutAttributionRemovalMarker(
+  metadata: unknown,
+  params: { cleared_at: string; cleared_by_admin_id: string },
+): Record<string, unknown> {
+  const root = asRecord(metadata) ?? {};
+  const raw = asRecord(root[PAYOUT_ATTRIBUTION_REMOVAL_METADATA_KEY]);
+  if (!raw) return { ...root };
+  return {
+    ...root,
+    [PAYOUT_ATTRIBUTION_REMOVAL_METADATA_KEY]: {
+      ...raw,
+      active: false,
+      cleared_at: params.cleared_at,
+      cleared_by_admin_id: params.cleared_by_admin_id,
+    },
+  };
+}
