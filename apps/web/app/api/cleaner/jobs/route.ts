@@ -32,6 +32,7 @@ import {
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { augmentCleanerJobsWithViewerRosterContext } from "@/lib/cleaner/pairedRosterMemberLifecycle";
 import { prioritizeCleanerJobsForList } from "@/lib/cleaner/prioritizeCleanerJobsForList";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -81,7 +82,7 @@ export async function GET(request: Request) {
   }
 
   const bookingSelect =
-    "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_count, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by";
+    "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_count, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by, metadata";
 
   const { data: jobsRaw, error } = directAssignments
     ? await admin
@@ -117,11 +118,14 @@ export async function GET(request: Request) {
 
   const mappedJobs = (jobs ?? []).map((raw) => {
     const row = raw as Record<string, unknown>;
-    const displayEarningsCents = resolveCleanerEarningsCents({
-      cleaner_earnings_total_cents: row.cleaner_earnings_total_cents,
-      payout_frozen_cents: row.payout_frozen_cents,
-      display_earnings_cents: row.display_earnings_cents,
-    });
+    const payoutAttributionRemoved = bookingHasActivePayoutAttributionRemoval(row);
+    const displayEarningsCents = payoutAttributionRemoved
+      ? null
+      : resolveCleanerEarningsCents({
+          cleaner_earnings_total_cents: row.cleaner_earnings_total_cents,
+          payout_frozen_cents: row.payout_frozen_cents,
+          display_earnings_cents: row.display_earnings_cents,
+        });
     const snapRaw = row.team_member_count_snapshot;
     const teamSnap =
       typeof snapRaw === "number" && Number.isFinite(snapRaw) && snapRaw > 0 ? Math.floor(snapRaw) : null;
@@ -142,6 +146,7 @@ export async function GET(request: Request) {
       total_price: _omitTotalPrice,
       price_breakdown: _omitPriceBreakdown,
       amount_paid_cents: _omitAmountPaid,
+      metadata: _omitMetadata,
       ...safe
     } = row;
     const cardPayHint =
