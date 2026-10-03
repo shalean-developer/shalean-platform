@@ -64,6 +64,7 @@ export async function revertAdminBookingAssignmentToBeforeRow(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const patch: Record<string, unknown> = {
     cleaner_id: (before.cleaner_id as string | null | undefined) ?? null,
+    payout_owner_cleaner_id: (before.payout_owner_cleaner_id as string | null | undefined) ?? null,
     status: before.status ?? "pending",
     dispatch_status: before.dispatch_status ?? null,
     cleaner_response_status: before.cleaner_response_status ?? null,
