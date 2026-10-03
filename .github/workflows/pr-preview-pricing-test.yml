@@ -153,6 +153,69 @@ jobs:
           git commit -m "preview: pricing-test PR ${{ steps.preview.outputs.pr }} $SHA"
           git push --force origin HEAD:refs/heads/deploy/pricing-test
 
+      - name: Configure Plesk SSH
+        env:
+          SSH_HOST: ${{ secrets.PLESK_SSH_HOST }}
+          SSH_PORT: ${{ secrets.PLESK_SSH_PORT }}
+          SSH_PRIVATE_KEY: ${{ secrets.PLESK_SSH_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSH_HOST"
+          test -n "$SSH_PORT"
+          test -n "$SSH_PRIVATE_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Pull and deploy preview on Plesk
+        env:
+          SSH_HOST: ${{ secrets.PLESK_SSH_HOST }}
+          SSH_PORT: ${{ secrets.PLESK_SSH_PORT }}
+          SSH_USER: ${{ secrets.PLESK_SSH_USER }}
+          PREVIEW_SHA: ${{ steps.preview.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSH_USER"
+          ssh -i ~/.ssh/id_ed25519 -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "plesk ext git --fetch -domain pricing-test.shalean.co.za -name shalean-platform-pricing-test.git && \
+             plesk ext git --deploy -domain pricing-test.shalean.co.za -name shalean-platform-pricing-test.git"
+
+          for i in $(seq 1 40); do
+            BODY="$(curl -fsS https://pricing-test.shalean.co.za/api/health/environment || true)"
+            if [ -n "$BODY" ] && PREVIEW_SHA="$PREVIEW_SHA" BODY="$BODY" node - <<'NODE'
+          const body = process.env.BODY || "";
+          const sha = process.env.PREVIEW_SHA || "";
+          try {
+            const d = JSON.parse(body);
+            const ok =
+              d.status === "ok" &&
+              d.deployment === "staging" &&
+              d.releaseSha === sha &&
+              d.supabase?.configuredRef === "jhubpsbwmjgydkzztxeu" &&
+              d.paystack?.secretMode === "test" &&
+              d.paystack?.publicMode === "test" &&
+              Array.isArray(d.issues) &&
+              d.issues.length === 0;
+            process.exit(ok ? 0 : 1);
+          } catch {
+            process.exit(1);
+          }
+          NODE
+            then
+              echo "PLESK_PRICING_TEST_AUTO_DEPLOY=PASS"
+              echo "RELEASE_SHA=$PREVIEW_SHA"
+              exit 0
+            fi
+            sleep 3
+          done
+
+          echo "::error::pricing-test did not report exact preview SHA after Plesk deployment"
+          exit 1
+
       - name: Add preview link to PR
         if: github.event_name == 'pull_request'
         env:
