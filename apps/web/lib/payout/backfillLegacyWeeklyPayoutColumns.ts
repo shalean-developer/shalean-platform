@@ -123,7 +123,7 @@ export async function countCompletedBlockingMissingLegacyPayout(
   if (error) throw new Error(error.message);
 
   const blocking = (data ?? []).filter((row) => {
-    if (bookingHasActivePayoutAttributionRemoval(row as Record<string, unknown>)) return false;
+    if (bookingHasActivePayoutAttributionRemoval(row as unknown as Record<string, unknown>)) return false;
     const display = Math.floor(
       Number(
         (row as { display_earnings_cents?: number | null }).display_earnings_cents ??
