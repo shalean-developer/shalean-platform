@@ -28,6 +28,7 @@ type BookingVisitRow = {
   cleaner_bonus_cents: number | null;
   is_team_job: boolean | null;
   earnings_summary?: unknown;
+  metadata?: unknown;
 };
 
 export type OfficeCleanerEditableVisitRow = {
@@ -106,7 +107,7 @@ export async function loadOfficeCleanerEditableVisits(
   const { data: bookingRows, error: bErr } = await admin
     .from("bookings")
     .select(
-      "id, date, customer_name, service, cleaner_id, payout_owner_cleaner_id, payout_status, payout_id, payout_paid_at, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_bonus_cents, is_team_job, earnings_summary",
+      "id, date, customer_name, service, cleaner_id, payout_owner_cleaner_id, payout_status, payout_id, payout_paid_at, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_bonus_cents, is_team_job, earnings_summary, metadata",
     )
     .eq("status", "completed")
     .eq("is_test", false)

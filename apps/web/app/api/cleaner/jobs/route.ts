@@ -12,11 +12,9 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
 import {
-  isStuckNullEarningsBooking,
   logEligibleOrPaidWithoutFrozen,
   maybeLogStuckNullEarnings,
 } from "@/lib/cleaner/cleanerPayoutInvariantLogging";
-import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
 import type { CleanerBookingLineItemWire, CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { cleanerBookingScopeLines } from "@/lib/cleaner/cleanerBookingScopeSummary";
 import { fetchBookingLineItemsByBookingIds } from "@/lib/cleaner/fetchBookingLineItemsByBookingIds";
@@ -56,16 +54,16 @@ export async function GET(request: Request) {
   /**
    * NOTE: `lite=1` is legacy for older clients that inlined jobs on a heavy home screen.
    * Prefer `GET /api/cleaner/dashboard` for the mobile dashboard slice (capped jobs + today earnings).
-   * When set: full booking visibility without line items, roster names, issue flags, or recompute side-effects.
+   * When set: full booking visibility without line items, roster names, issue flags, or invariant diagnostics.
    *
-   * `view=card` — jobs list / timeline: skips line-item join, issue flags, team roster fetch, and stuck-earnings
-   * side-effects; attaches `scope_lines` from persisted booking + snapshot (lighter mobile payload).
+   * `view=card` — jobs list / timeline: skips line-item join, issue flags, and team roster fetch;
+   * attaches `scope_lines` from persisted booking + snapshot (lighter mobile payload).
    */
   const lite = url.searchParams.get("lite") === "1" || url.searchParams.get("lite") === "true";
   const cardView = url.searchParams.get("view") === "card";
   const slimWire = lite || cardView;
-  /** Legacy `lite=1` only — card view still runs stuck-earnings recompute so rows can populate `display_earnings_cents`. */
-  const skipStuckEarningsSideEffects = lite;
+  /** Legacy `lite=1` avoids per-row invariant telemetry on the lightweight compatibility response. */
+  const skipInvariantDiagnostics = lite;
   const directAssignments = !slimWire && url.searchParams.get("assignments") === "direct";
 
   if (process.env.TRACE_BOOKING_ASSIGN === "1") {
@@ -322,21 +320,13 @@ export async function GET(request: Request) {
     };
   });
 
-  if (!skipStuckEarningsSideEffects) {
+  if (!skipInvariantDiagnostics) {
     for (const j of jobsWithRoster) {
       const rec = j as Record<string, unknown>;
       const id = String(rec.id ?? "").trim();
       if (!id) continue;
       logEligibleOrPaidWithoutFrozen(id, rec);
       maybeLogStuckNullEarnings(id, rec);
-      if (isStuckNullEarningsBooking(rec)) {
-        scheduleStuckEarningsRecomputeDebounced({
-          admin,
-          bookingId: id,
-          cleanerId: viewerCleanerId,
-          recomputeSource: "jobs_list",
-        });
-      }
     }
   }
 

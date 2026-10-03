@@ -7,6 +7,7 @@ import {
   type BookingPersistIdsRow,
 } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistBookingEarningsSnapshotCommand } from "@/lib/payout/persistBookingEarningsSnapshotCommand";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 
 type StuckZeroScanRow = BookingPaidSignalRow & BookingPersistIdsRow;
 
@@ -39,6 +40,10 @@ export async function repairCompletedStuckZeroDisplayFromSignals(
   let failed = 0;
 
   for (const row of rows) {
+    if (bookingHasActivePayoutAttributionRemoval(row)) {
+      skipped += 1;
+      continue;
+    }
     if (!bookingSignalsPaidForZeroDisplayRecompute(row)) {
       skipped += 1;
       continue;

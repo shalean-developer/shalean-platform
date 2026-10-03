@@ -18,6 +18,7 @@ export type ProductionHealthCode =
   | "payment_verified_not_finalized"
   | "monthly_invoice_paid_child_unsettled"
   | "booking_completed_missing_earnings_basis"
+  | "booking_completed_missing_completed_at"
   | "payout_eligibility_drift"
   | "recurring_snapshot_drift"
   | "duration_fallback_usage"
@@ -75,6 +76,12 @@ export type MonthlyInvoiceChildSettlementRow = {
   cleaner_payout_cents?: number | null;
   is_team_job?: boolean | null;
   team_id?: string | null;
+};
+
+export type BookingCompletionHealthRow = {
+  id?: string | null;
+  status?: string | null;
+  completed_at?: string | null;
 };
 
 export type BookingEarningsHealthRow = {
@@ -138,6 +145,7 @@ export type ProductionHealthInput = {
   now?: Date;
   paymentSignals?: readonly PaymentFinalizationSignalRow[];
   monthlyChildren?: readonly MonthlyInvoiceChildSettlementRow[];
+  completionRows?: readonly BookingCompletionHealthRow[];
   earningsRows?: readonly BookingEarningsHealthRow[];
   payoutRows?: readonly PayoutEligibilityHealthRow[];
   recurringRows?: readonly RecurringMonthlyDriftBookingRow[];
@@ -311,6 +319,22 @@ export function detectMonthlyInvoiceChildSettlementDrift(
     "critical",
     "Paid monthly invoice has non-cancelled child bookings that are not fully settled.",
     ids,
+  );
+  return findings;
+}
+
+export function detectCompletedMissingCompletionTimestamp(rows: readonly BookingCompletionHealthRow[]): ProductionHealthFinding[] {
+  const ids = rows
+    .filter((row) => norm(row.status) === "completed" && !hasText(row.completed_at))
+    .map((row, i) => idOf(row, `completed-timestamp-${i}`));
+  const findings: ProductionHealthFinding[] = [];
+  addFinding(
+    findings,
+    "booking_completed_missing_completed_at",
+    "high",
+    "Recently completed bookings are missing completed_at lifecycle evidence.",
+    ids,
+    { scan_window_hours: 24 },
   );
   return findings;
 }
@@ -599,6 +623,7 @@ export function buildProductionHealthSummary(input: ProductionHealthInput): Prod
   const findings = [
     ...detectPaymentFinalizationDrift((input.paymentSignals ?? []).slice(0, scanLimit)),
     ...detectMonthlyInvoiceChildSettlementDrift((input.monthlyChildren ?? []).slice(0, scanLimit)),
+    ...detectCompletedMissingCompletionTimestamp((input.completionRows ?? []).slice(0, scanLimit)),
     ...detectCompletedMissingEarningsBasis((input.earningsRows ?? []).slice(0, scanLimit)),
     ...detectPayoutEligibilityDrift((input.payoutRows ?? []).slice(0, scanLimit)),
     ...aggregateRecurringSnapshotDrift(recurringDrift),
@@ -711,6 +736,17 @@ export async function runProductionHealthScan(
           .limit(scanLimit),
       },
       {
+        name: "completed_booking_timestamp",
+        query: admin
+          .from("bookings")
+          .select("id, status, completed_at")
+          .eq("status", "completed")
+          .is("completed_at", null)
+          .gte("updated_at", since24h)
+          .order("updated_at", { ascending: false })
+          .limit(scanLimit),
+      },
+      {
         name: "completed_booking_earnings",
         query: admin
           .from("bookings")
@@ -792,14 +828,15 @@ export async function runProductionHealthScan(
 
     const failedJobs = rowsAt<PaymentFinalizationSignalRow>(0);
     const monthlyChildren = rowsAt<MonthlyInvoiceChildSettlementRow & { monthly_invoices?: { status?: string | null } | null }>(1);
-    const earningsRows = rowsAt<BookingEarningsHealthRow>(2);
-    const payoutRows = rowsAt<PayoutEligibilityHealthRow>(3);
-    const recurringRows = rowsAt<RecurringMonthlyDriftBookingRow>(4);
-    const invoices = rowsAt<RecurringMonthlyDriftInvoiceRow>(5);
-    const dispatchRows = rowsAt<DispatchHealthRow>(6);
+    const completionRows = rowsAt<BookingCompletionHealthRow>(2);
+    const earningsRows = rowsAt<BookingEarningsHealthRow>(3);
+    const payoutRows = rowsAt<PayoutEligibilityHealthRow>(4);
+    const recurringRows = rowsAt<RecurringMonthlyDriftBookingRow>(5);
+    const invoices = rowsAt<RecurringMonthlyDriftInvoiceRow>(6);
+    const dispatchRows = rowsAt<DispatchHealthRow>(7);
     const cronRows = cronFetch.rows;
-    const durationLogs = rowsAt<SystemLogHealthRow>(7);
-    const workloadLogs = rowsAt<SystemLogHealthRow>(8);
+    const durationLogs = rowsAt<SystemLogHealthRow>(8);
+    const workloadLogs = rowsAt<SystemLogHealthRow>(9);
 
     const invoiceMap = new Map<string, RecurringMonthlyDriftInvoiceRow>();
     for (const row of invoices) {
@@ -815,6 +852,7 @@ export async function runProductionHealthScan(
       scanLimit,
       paymentSignals: failedJobs,
       monthlyChildren: monthlyChildRows,
+      completionRows,
       earningsRows,
       payoutRows,
       recurringRows,
