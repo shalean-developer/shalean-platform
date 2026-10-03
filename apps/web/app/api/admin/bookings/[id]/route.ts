@@ -546,7 +546,17 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       ? updates.cleaner_id.trim()
       : null;
   const cleanerWasChanged = "cleaner_id" in updates && newCleaner !== oldCleaner;
-  if (cleanerWasChanged) {
+  const removalMarkerBefore = beforeRow
+    ? readPayoutAttributionRemovalMarker(beforeRow.metadata)
+    : null;
+  const restoreExistingHeaderAttribution =
+    "cleaner_id" in updates &&
+    Boolean(newCleaner) &&
+    newCleaner === oldCleaner &&
+    removalMarkerBefore != null;
+  const cleanerAttributionRefresh = cleanerWasChanged || restoreExistingHeaderAttribution;
+
+  if (cleanerAttributionRefresh) {
     Object.assign(updates, BOOKING_PAYOUT_COLUMNS_CLEAR);
     await logSystemEvent({
       level: "info",
@@ -560,10 +570,11 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     });
   }
 
+  if (cleanerAttributionRefresh && newCleaner && beforeRow?.is_team_job !== true) {
+    updates.payout_owner_cleaner_id = newCleaner;
+  }
+
   if (cleanerWasChanged && newCleaner) {
-    if (beforeRow?.is_team_job !== true) {
-      updates.payout_owner_cleaner_id = newCleaner;
-    }
     const bs = beforeStatus.toLowerCase();
     if (bs === "pending" || bs === "pending_assignment" || bs === "assigned") {
       (updates as Record<string, unknown>).cleaner_response_status = CLEANER_RESPONSE.PENDING;
@@ -612,7 +623,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     completionDispatchNormalized = dispatchStatusNormalized;
   }
 
-  if (cleanerWasChanged && newCleaner && before && !bookingPaymentRecomputeBlockedByRefund(before as BookingPaidSignalRow)) {
+  if (cleanerAttributionRefresh && newCleaner && before && !bookingPaymentRecomputeBlockedByRefund(before as BookingPaidSignalRow)) {
     if (bookingRequiresPersistedEarningsBeforeCleanerNotify(before as never)) {
       const li = await ensureBookingLineItemsForEarningsIfMissing(admin, id, {
         isTeamJob: (before as { is_team_job?: boolean | null }).is_team_job,
@@ -700,7 +711,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     }
   }
 
-  if (cleanerWasChanged) {
+  if (cleanerAttributionRefresh) {
     const rst = await resetBookingCleanerLineEarnings(admin, id);
     if (!rst.ok) {
       void reportOperationalIssue("error", "admin_bookings_patch", `resetBookingCleanerLineEarnings: ${rst.error}`, {
@@ -719,7 +730,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     message?: string;
   } | null = null;
 
-  if (cleanerWasChanged && newCleaner) {
+  if (cleanerAttributionRefresh && newCleaner) {
     const { data: earnRefetch, error: earnRefetchErr } = await admin
       .from("bookings")
       .select(
@@ -838,7 +849,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   const earningsRevertDenyCodes = new Set(["refetch_failed", "refund_or_reversal_blocked", "terminal_booking_status"]);
   if (
-    cleanerWasChanged &&
+    cleanerAttributionRefresh &&
     newCleaner &&
     before &&
     bookingRequiresPersistedEarningsBeforeCleanerNotify(before as never) &&
@@ -885,11 +896,11 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   }
 
   if (
-    cleanerWasChanged &&
+    cleanerAttributionRefresh &&
     newCleaner &&
     !assignmentRevertedForEarnings &&
     beforeRow &&
-    readPayoutAttributionRemovalMarker(beforeRow.metadata)
+    removalMarkerBefore
   ) {
     const clearedMetadata = deactivatePayoutAttributionRemovalMarker(beforeRow.metadata, {
       cleared_at: new Date().toISOString(),
