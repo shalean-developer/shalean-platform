@@ -14,6 +14,10 @@ import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleS
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
 import {
+  deactivatePayoutAttributionRemovalMarker,
+  readPayoutAttributionRemovalMarker,
+} from "@/lib/payout/bookingPayoutAttributionRemoval";
+import {
   adminBookingBeforeAssignmentPatchSelectList,
   bookingRequiresPersistedEarningsBeforeCleanerNotify,
   revertAdminBookingAssignmentToBeforeRow,
@@ -524,6 +528,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     date?: string | null;
     time?: string | null;
     selected_cleaner_id?: string | null;
+    metadata?: unknown;
   } | null;
   const beforeStatus = String(beforeRow?.status ?? "pending").trim() || "pending";
   const beforeCompletedAt =
@@ -543,6 +548,12 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const cleanerWasChanged = "cleaner_id" in updates && newCleaner !== oldCleaner;
   if (cleanerWasChanged) {
     Object.assign(updates, BOOKING_PAYOUT_COLUMNS_CLEAR);
+    if (beforeRow && readPayoutAttributionRemovalMarker(beforeRow.metadata)) {
+      updates.metadata = deactivatePayoutAttributionRemovalMarker(beforeRow.metadata, {
+        cleared_at: new Date().toISOString(),
+        cleared_by_admin_id: adminAuth.userId,
+      });
+    }
     await logSystemEvent({
       level: "info",
       source: "admin_booking_reassignment",
