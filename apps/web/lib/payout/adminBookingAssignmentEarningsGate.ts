@@ -84,6 +84,7 @@ export async function revertAdminBookingAssignmentToBeforeRow(
     company_revenue_cents: before.company_revenue_cents ?? null,
     payout_percentage: before.payout_percentage ?? null,
     payout_type: before.payout_type ?? null,
+    metadata: before.metadata ?? null,
   };
   const { error } = await admin.from("bookings").update(patch).eq("id", bookingId);
   if (error) return { ok: false, error: error.message };
