@@ -16,4 +16,13 @@ describe("cleaner read routes do not schedule earnings repair", () => {
       expect(source).toContain("maybeLogStuckNullEarnings");
     });
   }
+
+  it("keeps the shared earnings preview helper read-only", () => {
+    const source = readFileSync(
+      join(process.cwd(), "lib/cleaner/applyPreviewEarningsToCleanerJobRows.ts"),
+      "utf8",
+    );
+    expect(source).not.toContain("persistCleanerPayoutIfUnset");
+    expect(source).toContain("previewDisplayEarningsCentsForCleanerJob");
+  });
 });
