@@ -62,6 +62,7 @@ describe("applyPreviewEarningsToCleanerJobRows", () => {
     expect(out[0]?.earnings_cents).toBe(50000);
     expect(out[0]?.earnings_estimated).toBe(true);
     expect(out[0]?.earnings_basis_pending).toBe(false);
+    expect(persistMock).not.toHaveBeenCalled();
   });
 
   it("preview returning 0 (truly invalid) emits earnings_basis_pending=true; never wires R0", async () => {
