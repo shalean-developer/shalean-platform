@@ -1,3 +1,4 @@
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type LegacyBackfillRow = {
@@ -7,6 +8,9 @@ type LegacyBackfillRow = {
   cleaner_earnings_total_cents?: number | null;
   cleaner_payout_cents?: number | null;
   cleaner_bonus_cents?: number | null;
+  cleaner_id?: string | null;
+  payout_owner_cleaner_id?: string | null;
+  metadata?: unknown;
 };
 
 /** Derive weekly-batch legacy columns from persisted hybrid earnings when only display/total is set. */
@@ -53,7 +57,7 @@ export async function backfillLegacyWeeklyPayoutColumnsFromEarnings(
 ): Promise<BackfillLegacyWeeklyPayoutColumnsResult> {
   const { data, error } = await admin
     .from("bookings")
-    .select("id, display_earnings_cents, payout_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_bonus_cents")
+    .select("id, display_earnings_cents, payout_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_bonus_cents, cleaner_id, payout_owner_cleaner_id, metadata")
     .eq("status", "completed")
     .eq("is_test", false)
     .is("cleaner_payout_cents", null)
@@ -65,6 +69,10 @@ export async function backfillLegacyWeeklyPayoutColumnsFromEarnings(
   let skipped = 0;
   for (const raw of data ?? []) {
     const row = raw as LegacyBackfillRow;
+    if (bookingHasActivePayoutAttributionRemoval(row)) {
+      skipped += 1;
+      continue;
+    }
     const derived = deriveLegacyWeeklyPayoutColumns(row);
     if (!derived) {
       skipped += 1;
@@ -106,7 +114,7 @@ export async function countCompletedBlockingMissingLegacyPayout(
 ): Promise<{ count: number; bookingIds: string[] }> {
   const { data, error } = await admin
     .from("bookings")
-    .select("id, display_earnings_cents, cleaner_earnings_total_cents")
+    .select("id, display_earnings_cents, cleaner_earnings_total_cents, cleaner_id, payout_owner_cleaner_id, metadata")
     .eq("status", "completed")
     .eq("is_test", false)
     .is("cleaner_payout_cents", null)
@@ -115,6 +123,7 @@ export async function countCompletedBlockingMissingLegacyPayout(
   if (error) throw new Error(error.message);
 
   const blocking = (data ?? []).filter((row) => {
+    if (bookingHasActivePayoutAttributionRemoval(row as Record<string, unknown>)) return false;
     const display = Math.floor(
       Number(
         (row as { display_earnings_cents?: number | null }).display_earnings_cents ??
