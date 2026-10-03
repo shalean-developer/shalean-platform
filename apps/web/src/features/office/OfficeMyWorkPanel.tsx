@@ -36,10 +36,20 @@ function priorityClass(priority: OfficeWorkItem["priority"]): string {
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
-function WorkMeta({ summary }: { summary: string }) {
+function WorkMeta({ summary, bookingRef }: { summary: string; bookingRef?: string | null }) {
+  const parts = summary
+    .split(" • ")
+    .filter((part) => part.trim().toLowerCase() !== "customer not recorded");
+
   return (
     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs leading-5 text-slate-500">
-      {summary.split(" • ").map((part, index) => (
+      {bookingRef ? (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-slate-300" aria-hidden="true" />
+          Booking {bookingRef}
+        </span>
+      ) : null}
+      {parts.map((part, index) => (
         <span key={`${part}-${index}`} className="inline-flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-slate-300" aria-hidden="true" />
           {part}
@@ -47,6 +57,14 @@ function WorkMeta({ summary }: { summary: string }) {
       ))}
     </div>
   );
+}
+
+function displayWorkItemTitle(title: string): { title: string; bookingRef: string | null } {
+  const allocation = title.match(/^(Overdue|Upcoming|Today's) booking ([A-Z0-9]+) needs allocation$/i);
+  if (!allocation) return { title, bookingRef: null };
+  const rawState = allocation[1]?.toLowerCase();
+  const state = rawState === "overdue" ? "Overdue" : rawState === "today's" ? "Today's" : "Upcoming";
+  return { title: `${state} booking needs allocation`, bookingRef: allocation[2] ?? null };
 }
 
 function CategorySummary({ payload }: { payload: MyWorkResponse }) {
@@ -57,9 +75,9 @@ function CategorySummary({ payload }: { payload: MyWorkResponse }) {
   if (!entries.length) return null;
 
   return (
-    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="flex flex-wrap gap-2">
       {entries.map((entry) => (
-        <div key={entry.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-3 text-sm">
+        <div key={entry.id} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50/70 px-3 py-1.5 text-xs">
           <span className="font-medium text-slate-600">{entry.label}</span>
           <span className="font-bold tabular-nums text-slate-950">{entry.count}</span>
         </div>
@@ -116,7 +134,8 @@ export function OfficeMyWorkPanel({ compact = false }: { compact?: boolean }) {
   const totalPages = payload.totalPages ?? 1;
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const end = total === 0 ? 0 : Math.min(total, start + items.length - 1);
-  const visibleItems = compact && !expanded ? items.slice(0, 5) : items;
+  const compactLimit = 6;
+  const visibleItems = compact && !expanded ? items.slice(0, compactLimit) : items;
 
   return (
     <section aria-labelledby="my-work-heading" className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-[0_4px_22px_rgba(15,23,42,0.045)] sm:p-6">
@@ -177,12 +196,14 @@ export function OfficeMyWorkPanel({ compact = false }: { compact?: boolean }) {
 
       {visibleItems.length > 0 ? (
         <div className="mt-5 grid gap-3 lg:grid-cols-2">
-          {visibleItems.map((item) => (
+          {visibleItems.map((item) => {
+            const display = displayWorkItemTitle(item.title);
+            return (
             <article key={item.id} className="group rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_1px_4px_rgba(15,23,42,0.025)] transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_8px_24px_rgba(15,23,42,0.07)]">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h3 className="text-sm font-semibold leading-5 text-slate-950">{item.title}</h3>
-                  <WorkMeta summary={item.summary} />
+                  <h3 className="text-sm font-semibold leading-5 text-slate-950">{display.title}</h3>
+                  <WorkMeta summary={item.summary} bookingRef={display.bookingRef} />
                 </div>
                 <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase ${priorityClass(item.priority)}`}>{item.priority}</span>
               </div>
@@ -191,11 +212,11 @@ export function OfficeMyWorkPanel({ compact = false }: { compact?: boolean }) {
                 <Link href={item.href} className="text-slate-600 transition hover:text-slate-950">View details</Link>
               </div>
             </article>
-          ))}
+          )})}
         </div>
       ) : null}
 
-      {compact && !loading && !error && totalAll > 5 ? (
+      {compact && !loading && !error && totalAll > compactLimit ? (
         <div className="mt-5 flex justify-end border-t border-slate-100 pt-4">
           <button
             type="button"
