@@ -126,14 +126,6 @@ export async function GET(request: Request) {
     const id = String(j.id ?? "").trim();
     if (!id) continue;
     maybeLogStuckNullEarnings(id, j);
-    if (isStuckNullEarningsBooking(j)) {
-      scheduleStuckEarningsRecomputeDebounced({
-        admin,
-        bookingId: id,
-        cleanerId,
-        recomputeSource: "jobs_list",
-      });
-    }
   }
 
   const { today_cents, today_breakdown } = todayCentsAndBreakdownFromBookings(
