@@ -22,10 +22,8 @@ import {
 } from "@/lib/cleaner/applyPreviewEarningsToCleanerJobRows";
 import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
 import {
-  isStuckNullEarningsBooking,
   maybeLogStuckNullEarnings,
 } from "@/lib/cleaner/cleanerPayoutInvariantLogging";
-import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
 import { augmentCleanerJobsWithViewerRosterContext } from "@/lib/cleaner/pairedRosterMemberLifecycle";
 
 export const runtime = "nodejs";
@@ -128,14 +126,6 @@ export async function GET(request: Request) {
     const id = String(j.id ?? "").trim();
     if (!id) continue;
     maybeLogStuckNullEarnings(id, j);
-    if (isStuckNullEarningsBooking(j)) {
-      scheduleStuckEarningsRecomputeDebounced({
-        admin,
-        bookingId: id,
-        cleanerId,
-        recomputeSource: "jobs_list",
-      });
-    }
   }
 
   const { today_cents, today_breakdown } = todayCentsAndBreakdownFromBookings(

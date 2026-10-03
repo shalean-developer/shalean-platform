@@ -29,11 +29,9 @@ import {
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
 import {
-  isStuckNullEarningsBooking,
   logEligibleOrPaidWithoutFrozen,
   maybeLogStuckNullEarnings,
 } from "@/lib/cleaner/cleanerPayoutInvariantLogging";
-import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
 import { fetchBookingLineItemsByBookingIds } from "@/lib/cleaner/fetchBookingLineItemsByBookingIds";
 import { augmentCleanerBookingWire } from "@/lib/cleaner/cleanerJobWireAugment";
 import { augmentCleanerJobsWithViewerRosterContext } from "@/lib/cleaner/pairedRosterMemberLifecycle";
@@ -356,14 +354,6 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   logEligibleOrPaidWithoutFrozen(bookingId, record);
   maybeLogStuckNullEarnings(bookingId, record);
-  if (isStuckNullEarningsBooking(record)) {
-    scheduleStuckEarningsRecomputeDebounced({
-      admin,
-      bookingId,
-      cleanerId: session.cleanerId,
-      recomputeSource: "job_detail",
-    });
-  }
 
   const lineMap = await fetchBookingLineItemsByBookingIds(admin, [bookingId]);
   const lineItems = lineMap.get(bookingId) ?? null;
