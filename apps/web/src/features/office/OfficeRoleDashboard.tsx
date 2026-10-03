@@ -30,15 +30,12 @@ type Workspace = { label: string; description: string; href: string; metric: str
 type Experience = { title: string; subtitle: string; workspaces: Workspace[]; reports: Workspace[] };
 
 const EXPERIENCES: Record<OfficeRoleKey, Experience> = {
-  owner: { title: "Owner command centre", subtitle: "Company-wide control, financial visibility, risk oversight and administration.", workspaces: [
-    { label: "Business health", description: "Revenue, margin and operating position.", href: "/office/business-health", metric: "Executive KPI" },
-    { label: "Cash flow", description: "Cash movement and liquidity view.", href: "/office/cash-flow", metric: "Finance KPI" },
-    { label: "Payout approvals", description: "Maker-checker approval queue.", href: "/office/payouts/approvals", metric: "Control queue" },
-    { label: "Security", description: "Roles, permissions and audit controls.", href: "/office/security", metric: "Risk control" },
-  ], reports: [
-    { label: "Booking profitability", description: "Revenue and cost by booking.", href: "/office/booking-profitability", metric: "Profit report" },
-    { label: "Operations health", description: "Service reliability and operational exceptions.", href: "/office/ops-health", metric: "Operations report" },
-  ] },
+  owner: { title: "Owner Dashboard", subtitle: "Company-wide financial, operational and risk overview.", workspaces: [
+    { label: "Profitability", description: "Revenue, cleaner cost and margin by booking.", href: "/office/booking-profitability", metric: "Business performance" },
+    { label: "Cash flow", description: "Cash movement, liquidity and receivables.", href: "/office/cash-flow", metric: "Financial control" },
+    { label: "Operations", description: "Service reliability and operational exceptions.", href: "/office/ops-health", metric: "Service health" },
+    { label: "Security & controls", description: "Roles, permissions and audit controls.", href: "/office/security", metric: "Risk control" },
+  ], reports: [] },
   manager: { title: "General Manager workspace", subtitle: "Cross-functional performance, exceptions, approvals and service delivery.", workspaces: [
     { label: "Operations", description: "Daily service delivery and exception management.", href: "/office/operations", metric: "Daily KPI" },
     { label: "Schedule", description: "Bookings, allocation and team coverage.", href: "/office/schedule", metric: "Coverage KPI" },
@@ -154,20 +151,27 @@ export function OfficeRoleDashboard({ permissions, profile }: OfficeRoleDashboar
   const roleNames = profile.roles.map((assignment) => assignment.name).join(", ") || role;
 
   return <main className="space-y-7" data-office-role={role}>
-    <header className="rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white via-white to-slate-50 p-6 shadow-[0_4px_22px_rgba(15,23,42,0.045)] sm:p-8">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Role-based Office experience</p>
-      <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">{experience.title}</h1>
-      <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{experience.subtitle}</p>
-      <div className="mt-5 flex flex-wrap gap-2 text-xs text-slate-600">
-        <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm">Role: {roleNames}</span>
-        <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm">Permissions: {permissions.size}</span>
-        <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm">Branches: {profile.branchIds.length || "Global"}</span>
-        <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm">Teams: {profile.teamIds.length || "None"}</span>
+    <header className={role === "owner"
+      ? "rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-[0_2px_12px_rgba(15,23,42,0.035)] sm:px-6"
+      : "rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white via-white to-slate-50 p-6 shadow-[0_4px_22px_rgba(15,23,42,0.045)] sm:p-8"
+    }>
+      <div className={role === "owner" ? "flex flex-wrap items-center justify-between gap-3" : ""}>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">{role === "owner" ? "Owner workspace" : "Role-based Office experience"}</p>
+          <h1 className={role === "owner" ? "mt-1 text-xl font-bold tracking-tight text-slate-950" : "mt-2 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl"}>{experience.title}</h1>
+          <p className={role === "owner" ? "mt-1 text-sm text-slate-500" : "mt-2 max-w-3xl text-sm leading-6 text-slate-600"}>{experience.subtitle}</p>
+        </div>
+        <div className={role === "owner" ? "flex flex-wrap gap-2 text-xs text-slate-500" : "mt-5 flex flex-wrap gap-2 text-xs text-slate-600"}>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Role: {roleNames}</span>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Permissions: {permissions.size}</span>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Branches: {profile.branchIds.length || "Global"}</span>
+          {role !== "owner" ? <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">Teams: {profile.teamIds.length || "None"}</span> : null}
+        </div>
       </div>
       {role === "supervisor" && profile.teamIds.length === 0 ? <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Supervisor access has no assigned team scope. Team data must remain unavailable until the Owner assigns a team.</p> : null}
     </header>
     {role === "owner" ? <OwnerCommandCentrePanel permissions={permissions} /> : null}
-    {workspaces.length ? <section><h2 className="mb-4 text-lg font-semibold tracking-tight text-slate-950">Your priority workspace</h2><Grid items={workspaces} /></section> : <section className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">No Office modules are assigned to this account.</section>}
+    {workspaces.length ? <section><h2 className="mb-4 text-lg font-semibold tracking-tight text-slate-950">{role === "owner" ? "Business overview" : "Your priority workspace"}</h2><Grid items={workspaces} /></section> : <section className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">No Office modules are assigned to this account.</section>}
     {reports.length ? <section><h2 className="mb-4 text-lg font-semibold tracking-tight text-slate-950">Role reports and KPIs</h2><Grid items={reports} reports /></section> : null}
   </main>;
 }
