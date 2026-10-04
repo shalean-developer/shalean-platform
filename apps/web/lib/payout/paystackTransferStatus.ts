@@ -67,6 +67,7 @@ async function maybeMarkPayoutPaid(supabase: SupabaseClient, payoutId: string) {
       status: "paid",
       paid_at: new Date().toISOString(),
       payment_status: "success",
+      payment_method: "paystack",
     })
     .eq("id", payoutId)
     .eq("status", "approved")
