@@ -417,15 +417,66 @@ export async function submitPaystackTransferViaOutbox(
 
   const safetyGate = await validateCleanerPayoutBeforeProviderPost(admin, params, amount);
   if (!safetyGate.ok) {
+    const now = new Date().toISOString();
+    const permanentValidationFailure = safetyGate.status >= 400 && safetyGate.status < 500;
+
+    if (permanentValidationFailure) {
+      await admin
+        .from("payout_transfer_outbox")
+        .update({
+          status: "failed",
+          last_error: safetyGate.error.slice(0, 2000),
+          updated_at: now,
+        })
+        .eq("id", outbox.id);
+
+      if (outbox.transfer_row_id) {
+        await admin
+          .from(auditTable(params.rail))
+          .update({
+            status: "failed",
+            error: safetyGate.error.slice(0, 2000),
+          })
+          .eq("id", outbox.transfer_row_id)
+          .neq("status", "success");
+      }
+
+      if (params.rail === "cleaner_payout") {
+        await admin
+          .from("cleaner_payouts")
+          .update({ payment_status: "failed" })
+          .eq("id", params.subjectId)
+          .eq("status", "approved")
+          .eq("payment_status", "processing");
+      }
+
+      void logPayoutAuditEvent(admin, {
+        eventType: "payout_transfer_failed",
+        actorUserId: params.initiatedBy,
+        payoutId: params.rail === "cleaner_payout" ? params.subjectId : null,
+        disbursementId: params.rail === "cleaner_earnings" ? params.subjectId : null,
+        amountCents: amount,
+        reference: params.reference,
+        context: {
+          reason: "permanent_pre_provider_validation_failure",
+          error: safetyGate.error,
+          outboxId: outbox.id,
+        },
+      });
+    }
+
     void logSystemEvent({
       level: "warn",
       source: "PAYSTACK_OUTBOX_SAFETY_GATE",
-      message: "Blocked Paystack transfer before provider POST",
+      message: permanentValidationFailure
+        ? "Permanently blocked Paystack transfer before provider POST"
+        : "Temporarily blocked Paystack transfer before provider POST",
       context: {
         rail: params.rail,
         subjectId: params.subjectId,
         reference: params.reference,
         error: safetyGate.error,
+        permanent: permanentValidationFailure,
       },
     });
     return safetyGate;
