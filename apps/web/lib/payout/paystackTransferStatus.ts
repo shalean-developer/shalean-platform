@@ -107,21 +107,23 @@ async function applyPayoutTransferSuccess(
   data: PaystackTransferData,
   payload?: PaystackStatusPayload,
 ) {
-  if (transfer.status === "success") return { ignored: "already successful" };
+  if (transfer.status !== "success") {
+    const { error: updateError } = await supabase
+      .from("payout_transfers")
+      .update({
+        status: "success",
+        error: null,
+        webhook_payload: payload ?? null,
+        webhook_processed_at: new Date().toISOString(),
+      })
+      .eq("id", transfer.id)
+      .neq("status", "success");
 
-  const { error: updateError } = await supabase
-    .from("payout_transfers")
-    .update({
-      status: "success",
-      error: null,
-      webhook_payload: payload ?? null,
-      webhook_processed_at: new Date().toISOString(),
-    })
-    .eq("id", transfer.id)
-    .neq("status", "success");
+    if (updateError) throw new Error(updateError.message);
+  }
 
-  if (updateError) throw new Error(updateError.message);
-
+  // A successful audit row may still have incomplete downstream reconciliation
+  // from an earlier crash. Always replay the remaining idempotent convergence.
   await maybeMarkPayoutPaid(supabase, transfer.payout_id);
   await maybeMarkPayoutRunPaid(supabase, transfer.payout_id);
 
@@ -168,23 +170,25 @@ async function applyEarningsDisbursementTransferSuccess(
   data: PaystackTransferData,
   payload?: PaystackStatusPayload,
 ) {
-  if (transfer.status === "success") return { ignored: "already successful" };
-
   const now = new Date().toISOString();
 
-  const { error: updateError } = await supabase
-    .from("earnings_disbursement_transfers")
-    .update({
-      status: "success",
-      error: null,
-      webhook_payload: payload ?? null,
-      webhook_processed_at: now,
-    })
-    .eq("id", transfer.id)
-    .neq("status", "success");
+  if (transfer.status !== "success") {
+    const { error: updateError } = await supabase
+      .from("earnings_disbursement_transfers")
+      .update({
+        status: "success",
+        error: null,
+        webhook_payload: payload ?? null,
+        webhook_processed_at: now,
+      })
+      .eq("id", transfer.id)
+      .neq("status", "success");
 
-  if (updateError) throw new Error(updateError.message);
+    if (updateError) throw new Error(updateError.message);
+  }
 
+  // Re-run downstream idempotent convergence even when the transfer audit
+  // was already marked successful by a previous partial attempt.
   const { error: disbErr } = await supabase
     .from("cleaner_earnings_disbursements")
     .update({
