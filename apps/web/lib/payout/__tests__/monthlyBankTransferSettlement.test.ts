@@ -109,6 +109,10 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(sql).toContain("linked_refund_or_ineligible_booking_blocks_payout");
     expect(sql).toContain("p_allow_existing_processing");
     expect(sql).toContain("payout_cleaner_mismatch");
+    expect(sql).toContain("payout_has_no_earning_items");
+    expect(sql).toContain("payout_amount_not_positive");
+    expect(sql).toContain("payout_total_mismatch");
+    expect(sql).toContain("'partial', 'full', 'reversed', 'chargeback'");
     expect(sql).toContain("b.is_test is true");
     expect(sql).toContain("payment_status, '')) = 'processing'");
     expect(sql).toContain("public.payout_transfers");
@@ -120,6 +124,15 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(pay).toContain("const resumeBatch = await loadAndValidatePayoutBatch");
     expect(pay).toContain("Payout contains earning items for a different cleaner.");
     expect(pay).toContain("Payout total does not match linked booking totals.");
+  });
+
+  it("gates cron/outbox cleaner payout sends before every provider POST", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+    expect(executor).toContain("validateCleanerPayoutBeforeProviderPost");
+    expect(executor).toContain('admin.rpc("claim_cleaner_payout_paystack_processing"');
+    expect(executor).toContain("loadCleanerPayoutBatchItems");
+    expect(executor).toContain("Blocked Paystack transfer before provider POST");
+    expect(executor).toContain("const safetyGate = await validateCleanerPayoutBeforeProviderPost");
   });
 
   it("keeps Paystack optional while stamping Paystack settlement truth", () => {
