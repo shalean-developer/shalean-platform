@@ -19,6 +19,7 @@ import {
   bookingRequiresPersistedEarningsBeforeCleanerNotify,
 } from "@/lib/payout/adminBookingAssignmentEarningsGate";
 import { bookingPaymentRecomputeBlockedByRefund, type BookingPaidSignalRow } from "@/lib/payout/bookingEarningsIntegrity";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 
 export type PayoutPersistEligibility =
   | { allowed: true; mode: "completed" | "pre_completion_assignment_basis" }
@@ -56,6 +57,10 @@ export function isActiveOnSiteBookingStatus(st: string): boolean {
 export function evaluatePersistCleanerPayoutEligibility(row: Record<string, unknown>): PayoutPersistEligibility {
   const st = normStatus(row);
   const paidRow = row as BookingPaidSignalRow;
+
+  if (bookingHasActivePayoutAttributionRemoval(row)) {
+    return { allowed: false, skipReason: "payout_eligibility_attribution_removed" };
+  }
 
   if (st === "cancelled" || st === "failed" || st === "payment_expired") {
     return { allowed: false, skipReason: "payout_eligibility_terminal_booking" };
