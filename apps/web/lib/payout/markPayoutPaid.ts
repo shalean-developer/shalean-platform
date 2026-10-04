@@ -56,6 +56,37 @@ export async function markCleanerPayoutPaid(
   if (testErr) return { ok: false, error: testErr.message };
   if ((testBookings?.length ?? 0) > 0) return { ok: false, error: "Cannot mark test payout as paid." };
 
+  if (method === "bank_transfer") {
+    const { error: settleErr } = await admin.rpc("settle_cleaner_payout_bank_transfer", {
+      p_payout_id: payoutId,
+      p_paid_by: actor,
+      p_reference: reference,
+      p_paid_at: paidAt,
+    });
+    if (settleErr) return { ok: false, error: settleErr.message };
+
+    void logSystemEvent({
+      level: "info",
+      source: "PAYOUT_BANK_TRANSFER_PAID",
+      message: "Cleaner payout recorded as paid by bank transfer",
+      context: { payoutId, actorUserId: actor, paymentMethod: method, paymentReference: reference, paidAt },
+    });
+    void logPayoutAuditEvent(admin, {
+      eventType: "payout_bank_transfer_paid",
+      actorUserId: actor,
+      payoutId,
+      reference,
+      newValues: {
+        status: "paid",
+        payment_status: "success",
+        payment_method: method,
+        payment_reference: reference,
+        paid_at: paidAt,
+      },
+    });
+    return { ok: true };
+  }
+
   const { data: updated, error } = await admin
     .from("cleaner_payouts")
     .update({
@@ -77,12 +108,12 @@ export async function markCleanerPayoutPaid(
 
   void logSystemEvent({
     level: "info",
-    source: method === "bank_transfer" ? "PAYOUT_BANK_TRANSFER_PAID" : "PAYOUT_MARKED_PAID",
-    message: method === "bank_transfer" ? "Cleaner payout recorded as paid by bank transfer" : "Cleaner payout batch marked paid",
+    source: "PAYOUT_MARKED_PAID",
+    message: "Cleaner payout batch marked paid",
     context: { payoutId, actorUserId: actor, paymentMethod: method, paymentReference: reference || null, paidAt },
   });
   void logPayoutAuditEvent(admin, {
-    eventType: method === "bank_transfer" ? "payout_bank_transfer_paid" : "payout_manual_mark_paid",
+    eventType: "payout_manual_mark_paid",
     actorUserId: actor,
     payoutId,
     reference: reference || null,
