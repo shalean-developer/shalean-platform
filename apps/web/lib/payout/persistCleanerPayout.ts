@@ -54,6 +54,7 @@ import {
   bookingFinancialDiagnostics,
 } from "@/lib/payout/bookingPayoutCapCents";
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const EARNINGS_MODEL_VERSION_FALLBACK = "v1_2026_earnings";
@@ -602,6 +603,7 @@ export const PREVIEW_EARNINGS_MISS = {
   COMPUTE_FAILED: "earnings_compute_failed",
   TEAM_MISSING_TEAM_ID: "team_missing_team_id",
   TEAM_MEMBER_NOT_ALLOCATED: "team_member_not_allocated",
+  ATTRIBUTION_REMOVED: "payout_attribution_removed",
 } as const;
 
 export type PreviewEarningsMissReason =
@@ -638,6 +640,15 @@ export async function previewDisplayEarningsCentsForCleanerJobDiagnostic(
     payout_owner_cleaner_id?: string | null;
     team_id?: string | null;
   };
+
+  if (bookingHasActivePayoutAttributionRemoval(row as unknown as Record<string, unknown>)) {
+    return {
+      ok: false,
+      amountCents: null,
+      source: null,
+      missingReason: PREVIEW_EARNINGS_MISS.ATTRIBUTION_REMOVED,
+    };
+  }
 
   /**
    * Pre-acceptance solo dispatch offers have `cleaner_id = NULL` and
@@ -779,17 +790,10 @@ async function persistCleanerPayoutIfUnsetCore(
 
   const persistEligibility = evaluatePersistCleanerPayoutEligibility(row as unknown as Record<string, unknown>);
   if (!persistEligibility.allowed) {
-    const context = { bookingId, cleanerId: expectedCleanerId };
-    if (persistEligibility.skipReason === "payout_eligibility_team_missing_team_id") {
-      void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", persistEligibility.skipReason, context);
-    } else {
-      void logSystemEvent({
-        level: "info",
-        source: "persistCleanerPayoutIfUnset",
-        message: persistEligibility.skipReason,
-        context,
-      });
-    }
+    void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", persistEligibility.skipReason, {
+      bookingId,
+      cleanerId: expectedCleanerId,
+    });
     return { ok: true, skipped: true, skipReason: persistEligibility.skipReason };
   }
 
@@ -1222,7 +1226,6 @@ async function persistCleanerPayoutIfUnsetCore(
     total_paid_cents: r.total_paid_cents,
     amount_paid_cents: r.amount_paid_cents,
     total_paid_zar: r.total_paid_zar,
-    base_amount_cents: r.base_amount_cents,
   };
   const finDiag = bookingFinancialDiagnostics(capRow);
   const capOk = assertHybridPayoutWithinFinancialCap({
@@ -1405,17 +1408,20 @@ async function verifyDisplayEarningsRowAfterWrite(
 }
 
 /**
- * Eligibility skips are policy outcomes, not failed writes.
- * A terminal/unpaid/not-yet-assigned booking is intentionally ineligible and may
- * legitimately have no persisted display earnings. Do not convert that policy
- * decision into an operational error or retry storm.
+ * Eligibility skips (e.g. terminal booking) may legitimately leave display unset.
+ * Only bypass {@link finalizePersistResult} when display is already persisted —
+ * otherwise callers like cleaner complete would see `ok: true` then fail verify.
  */
 async function shouldBypassFinalizeForEligibilitySkip(
-  _admin: SupabaseClient,
-  _bookingId: string,
+  admin: SupabaseClient,
+  bookingId: string,
   core: PersistCleanerPayoutIfUnsetResult,
 ): Promise<boolean> {
-  return Boolean(core.ok && core.skipped && isPayoutEligibilitySkipReason(core.skipReason));
+  if (!core.ok || !core.skipped || !isPayoutEligibilitySkipReason(core.skipReason)) {
+    return false;
+  }
+  const cents = await fetchBookingDisplayEarningsCents(admin, bookingId);
+  return hasPersistedDisplayEarningsBasis(cents);
 }
 
 async function finalizePersistResult(
