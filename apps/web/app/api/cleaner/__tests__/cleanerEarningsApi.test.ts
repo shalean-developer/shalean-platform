@@ -191,6 +191,46 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
     mockState.cleanerId = "cleaner-1";
   });
 
+  it("earnings feed excludes a completed visit whose payout attribution was explicitly removed", async () => {
+    mockState.admin = new MockSupabaseClient({
+      cleaners: [{ id: "cleaner-1", full_name: "Cleaner One" }],
+      bookings: [
+        {
+          id: "removed-earning",
+          cleaner_id: "cleaner-1",
+          payout_owner_cleaner_id: "cleaner-1",
+          service: "Standard Cleaning",
+          status: "completed",
+          date: "2026-10-01",
+          completed_at: "2026-10-01T20:00:00Z",
+          display_earnings_cents: 0,
+          cleaner_earnings_total_cents: 0,
+          cleaner_payout_cents: null,
+          payout_status: "pending",
+          is_team_job: false,
+          metadata: {
+            payout_attribution_removal_v1: {
+              active: true,
+              cleaner_id: "cleaner-1",
+              header_cleaner_id_at_removal: "cleaner-1",
+              removed_at: "2026-10-02T07:22:44Z",
+              removed_by_admin_id: "admin-1",
+              reason: null,
+            },
+          },
+        },
+      ],
+    });
+
+    const { GET } = await import("@/app/api/cleaner/earnings/route");
+    const res = await GET(new Request("http://localhost/api/cleaner/earnings"));
+    const json = (await res.json()) as { rows: Array<Record<string, unknown>>; summary?: Record<string, unknown> };
+
+    expect(res.status).toBe(200);
+    expect(json.rows).toEqual([]);
+    expect(json.summary?.pending_cents ?? 0).toBe(0);
+  });
+
   it("jobs response exposes displayEarningsCents and hides internal payout fields", { timeout: 60_000 }, async () => {
     mockState.admin = new MockSupabaseClient({
       cleaners: [{ id: "cleaner-1" }],
