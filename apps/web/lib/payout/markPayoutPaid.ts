@@ -2,10 +2,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
 
+export type CleanerPayoutPaymentMethod = "bank_transfer" | "manual_legacy";
+
 export async function markCleanerPayoutPaid(
   admin: SupabaseClient,
   payoutId: string,
-  params: { actorUserId: string },
+  params: {
+    actorUserId: string;
+    paymentMethod?: CleanerPayoutPaymentMethod;
+    paymentReference?: string | null;
+    paidAt?: string | null;
+  },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data: payout, error: payoutErr } = await admin
     .from("cleaner_payouts")
@@ -27,6 +34,19 @@ export async function markCleanerPayoutPaid(
   if (adjustedBy && actor === adjustedBy) return { ok: false, error: "Maker–checker: the admin who adjusted this payout cannot also mark it paid." };
   if (actor === approvedBy) return { ok: false, error: "Maker–checker: the admin who approved this payout cannot also mark it paid." };
 
+  const method = params.paymentMethod ?? "manual_legacy";
+  const reference = String(params.paymentReference ?? "").trim();
+  if (method === "bank_transfer" && reference.length < 3) {
+    return { ok: false, error: "Bank transfer reference is required before marking the payout paid." };
+  }
+
+  let paidAt = new Date().toISOString();
+  if (params.paidAt) {
+    const parsed = new Date(params.paidAt);
+    if (!Number.isFinite(parsed.getTime())) return { ok: false, error: "Invalid payment date." };
+    paidAt = parsed.toISOString();
+  }
+
   const { data: testBookings, error: testErr } = await admin
     .from("bookings")
     .select("id")
@@ -38,7 +58,14 @@ export async function markCleanerPayoutPaid(
 
   const { data: updated, error } = await admin
     .from("cleaner_payouts")
-    .update({ status: "paid", paid_at: new Date().toISOString(), payment_status: "success" })
+    .update({
+      status: "paid",
+      paid_at: paidAt,
+      payment_status: "success",
+      payment_method: method,
+      payment_reference: reference || null,
+      paid_by: actor,
+    })
     .eq("id", payoutId)
     .eq("status", "approved")
     .select("id");
@@ -48,7 +75,24 @@ export async function markCleanerPayoutPaid(
   const { error: bookingSyncErr } = await admin.rpc("mark_bookings_paid_for_cleaner_payout", { p_payout_id: payoutId });
   if (bookingSyncErr) return { ok: false, error: bookingSyncErr.message };
 
-  void logSystemEvent({ level: "info", source: "PAYOUT_MARKED_PAID", message: "Cleaner payout batch marked paid", context: { payoutId, actorUserId: actor } });
-  void logPayoutAuditEvent(admin, { eventType: "payout_manual_mark_paid", actorUserId: actor, payoutId, newValues: { status: "paid", payment_status: "success" } });
+  void logSystemEvent({
+    level: "info",
+    source: method === "bank_transfer" ? "PAYOUT_BANK_TRANSFER_PAID" : "PAYOUT_MARKED_PAID",
+    message: method === "bank_transfer" ? "Cleaner payout recorded as paid by bank transfer" : "Cleaner payout batch marked paid",
+    context: { payoutId, actorUserId: actor, paymentMethod: method, paymentReference: reference || null, paidAt },
+  });
+  void logPayoutAuditEvent(admin, {
+    eventType: method === "bank_transfer" ? "payout_bank_transfer_paid" : "payout_manual_mark_paid",
+    actorUserId: actor,
+    payoutId,
+    reference: reference || null,
+    newValues: {
+      status: "paid",
+      payment_status: "success",
+      payment_method: method,
+      payment_reference: reference || null,
+      paid_at: paidAt,
+    },
+  });
   return { ok: true };
 }
