@@ -151,7 +151,7 @@ jobs:
           printf '%s\n' "${{ steps.preview.outputs.pr }}" > preview-pr.txt
           git add pricing-test-runtime.tar.gz activate.sh release-sha.txt preview-pr.txt
           git commit -m "preview: pricing-test PR ${{ steps.preview.outputs.pr }} $SHA"
-          git push --force origin HEAD:refs/heads/deploy/staging
+          git push --force origin HEAD:refs/heads/deploy/pr-preview
 
       - name: Add preview link to PR
         if: github.event_name == 'pull_request'
@@ -162,4 +162,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr comment "$PR_NUMBER" --body "Preview bundle published for \`$SHA\`. Once Plesk pricing-test is connected to \`deploy/staging\`, review: https://pricing-test.shalean.co.za"
+          gh pr comment "$PR_NUMBER" --body "Preview bundle published for \`$SHA\`. Preview artifact is isolated on \`deploy/pr-preview\`; canonical pricing-test staging remains owned by \`deploy/staging\`. Review the artifact metadata before any manual activation: https://pricing-test.shalean.co.za"
