@@ -18,6 +18,7 @@ describe("MASTER-00B-03 admin audit trigger search_path", () => {
       "utf8",
     )
       .toLowerCase()
+      .replace(/--[^\r\n]*/g, " ")
       .replace(/\s+/g, " ")
       .trim();
 
