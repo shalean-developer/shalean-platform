@@ -303,82 +303,6 @@ export async function submitPaystackTransferViaOutbox(
 
   let outbox = await loadOutboxByReference(admin, params.reference);
 
-  // A sending row is an exclusive pre-provider lease. Other workers do not POST.
-  // If the lease becomes stale, reconcile the immutable reference first; only a
-  // definite provider 404 may release the lease back to pending for retry.
-  if (outbox?.status === "sending") {
-    const leaseStartedAt = Date.parse(String(outbox.updated_at ?? ""));
-    const leaseAgeMs = Number.isFinite(leaseStartedAt) ? Date.now() - leaseStartedAt : 0;
-    const staleSendingLease = leaseAgeMs >= 15 * 60 * 1000;
-
-    if (!staleSendingLease) {
-      return {
-        ok: false,
-        error: "Payout outbox is currently leased by another sender.",
-        needsReconcile: true,
-      };
-    }
-
-    const verified = await paystackGetTransferByReference(params.reference);
-    if (verified.ok && verified.transferCode) {
-      await admin
-        .from("payout_transfer_outbox")
-        .update({
-          status: verified.status === "success" || verified.status === "successful" ? "succeeded" : "submitted",
-          transfer_code: verified.transferCode,
-          last_error: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", outbox.id)
-        .eq("status", "sending")
-        .eq("attempts", outbox.attempts);
-
-      return {
-        ok: true,
-        transferCode: verified.transferCode,
-        reference: params.reference,
-        skippedExisting: true,
-        outboxId: outbox.id,
-        needsReconcile: verified.status !== "success" && verified.status !== "successful",
-      };
-    }
-
-    if (!verified.ok && verified.httpStatus === 404) {
-      const { data: released, error: releaseErr } = await admin
-        .from("payout_transfer_outbox")
-        .update({
-          status: "pending",
-          last_error: "Stale sending lease released after provider reference returned 404.",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", outbox.id)
-        .eq("status", "sending")
-        .eq("attempts", outbox.attempts)
-        .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at")
-        .maybeSingle();
-
-      if (releaseErr) {
-        return { ok: false, error: releaseErr.message, needsReconcile: true };
-      }
-      if (!released) {
-        return {
-          ok: false,
-          error: "Payout outbox lease changed during stale-lease recovery.",
-          needsReconcile: true,
-        };
-      }
-      outbox = released as OutboxRow;
-    } else {
-      return {
-        ok: false,
-        error: verified.ok
-          ? "Stale sending lease could not be reconciled to a provider transfer."
-          : verified.error,
-        needsReconcile: true,
-      };
-    }
-  }
-
   // Already submitted — resume / verify, never create a second Paystack transfer.
   if (outbox && (outbox.status === "submitted" || outbox.status === "needs_reconcile" || outbox.status === "succeeded")) {
     if (outbox.status === "succeeded" || outbox.transfer_code) {
@@ -447,7 +371,7 @@ export async function submitPaystackTransferViaOutbox(
       !verified.ok &&
       (verified.httpStatus === 404 || /not found|does not exist/i.test(verified.error));
 
-    if (verifyNotFound && Number.isFinite(leaseAgeMs) && leaseAgeMs >= 2 * 60 * 1000) {
+    if (verifyNotFound && Number.isFinite(leaseAgeMs) && leaseAgeMs >= 15 * 60 * 1000) {
       await releaseOutboxSendLease(admin, outbox.id, outbox.attempts);
       return submitPaystackTransferViaOutbox(admin, params);
     }
@@ -584,6 +508,7 @@ export async function submitPaystackTransferViaOutbox(
       const { error: terminalErr } = await admin.rpc("fail_cleaner_payout_outbox_validation", {
         p_outbox_id: outbox.id,
         p_error: safetyGate.error,
+        p_expected_status: "sending",
         p_expected_attempts: outbox.attempts,
       });
 
