@@ -235,11 +235,16 @@ comment on function public.settle_cleaner_payout_bank_transfer(uuid, uuid, text,
 
 
 -- Refund claims/retries and payout settlement share the same booking row lock.
--- Whichever operation obtains the lock second must re-check the opposing state
--- before any provider-side money movement can begin.
+-- The claim is a compare-and-transition operation against the freshly locked
+-- workflow, so stale/concurrent callers cannot both reach the payment provider.
+drop function if exists public.claim_booking_refund_workflow(uuid, jsonb);
+
 create or replace function public.claim_booking_refund_workflow(
   p_booking_id uuid,
-  p_booking_snapshot jsonb
+  p_expected_booking_snapshot jsonb,
+  p_booking_snapshot jsonb,
+  p_refund_id text,
+  p_expected_provider_state text default null
 )
 returns boolean
 language plpgsql
@@ -248,12 +253,18 @@ set search_path = public
 as $$
 declare
   v_booking public.bookings%rowtype;
+  v_current_snapshot jsonb;
+  v_current_state text;
+  v_next_state text;
 begin
   if p_booking_id is null then
     raise exception 'booking_id_required';
   end if;
-  if p_booking_snapshot is null then
+  if p_booking_snapshot is null or p_expected_booking_snapshot is null then
     raise exception 'booking_snapshot_required';
+  end if;
+  if length(trim(coalesce(p_refund_id, ''))) = 0 then
+    raise exception 'refund_id_required';
   end if;
 
   select *
@@ -299,6 +310,84 @@ begin
     raise exception 'booking_payout_already_paid';
   end if;
 
+  v_current_snapshot := coalesce(v_booking.booking_snapshot, '{}'::jsonb);
+
+  -- Compare-and-swap: a payout/refund/other workflow mutation that committed
+  -- after the caller read the booking makes this claim stale.
+  if v_current_snapshot is distinct from coalesce(p_expected_booking_snapshot, '{}'::jsonb) then
+    raise exception 'stale_refund_claim';
+  end if;
+
+  select lower(coalesce(r.value->>'provider_state', ''))
+  into v_current_state
+  from jsonb_array_elements(
+    case
+      when jsonb_typeof(v_current_snapshot->'refund_workflow'->'records') = 'array'
+        then v_current_snapshot->'refund_workflow'->'records'
+      else '[]'::jsonb
+    end
+  ) as r(value)
+  where r.value->>'id' = p_refund_id
+  limit 1;
+
+  select lower(coalesce(r.value->>'provider_state', ''))
+  into v_next_state
+  from jsonb_array_elements(
+    case
+      when jsonb_typeof(p_booking_snapshot->'refund_workflow'->'records') = 'array'
+        then p_booking_snapshot->'refund_workflow'->'records'
+      else '[]'::jsonb
+    end
+  ) as r(value)
+  where r.value->>'id' = p_refund_id
+  limit 1;
+
+  if v_next_state is distinct from 'submitted_to_provider' then
+    raise exception 'invalid_refund_claim_transition';
+  end if;
+
+  if p_expected_provider_state is null then
+    if v_current_state is not null then
+      raise exception 'stale_refund_claim';
+    end if;
+
+    if exists (
+      select 1
+      from jsonb_array_elements(
+        case
+          when jsonb_typeof(v_current_snapshot->'refund_workflow'->'records') = 'array'
+            then v_current_snapshot->'refund_workflow'->'records'
+          else '[]'::jsonb
+        end
+      ) as r(value)
+      where lower(coalesce(r.value->>'provider_state', '')) in ('pending', 'submitted_to_provider')
+    ) then
+      raise exception 'refund_claim_already_in_flight';
+    end if;
+  else
+    if lower(coalesce(v_current_state, '')) <> lower(trim(p_expected_provider_state)) then
+      raise exception 'stale_refund_claim';
+    end if;
+    if lower(trim(p_expected_provider_state)) <> 'failed' then
+      raise exception 'invalid_refund_claim_transition';
+    end if;
+
+    if exists (
+      select 1
+      from jsonb_array_elements(
+        case
+          when jsonb_typeof(v_current_snapshot->'refund_workflow'->'records') = 'array'
+            then v_current_snapshot->'refund_workflow'->'records'
+          else '[]'::jsonb
+        end
+      ) as r(value)
+      where r.value->>'id' <> p_refund_id
+        and lower(coalesce(r.value->>'provider_state', '')) in ('pending', 'submitted_to_provider')
+    ) then
+      raise exception 'refund_claim_already_in_flight';
+    end if;
+  end if;
+
   update public.bookings
   set booking_snapshot = p_booking_snapshot
   where id = p_booking_id;
@@ -307,10 +396,10 @@ begin
 end;
 $$;
 
-revoke all on function public.claim_booking_refund_workflow(uuid, jsonb) from public;
-revoke all on function public.claim_booking_refund_workflow(uuid, jsonb) from anon;
-revoke all on function public.claim_booking_refund_workflow(uuid, jsonb) from authenticated;
-grant execute on function public.claim_booking_refund_workflow(uuid, jsonb) to service_role;
+revoke all on function public.claim_booking_refund_workflow(uuid, jsonb, jsonb, text, text) from public;
+revoke all on function public.claim_booking_refund_workflow(uuid, jsonb, jsonb, text, text) from anon;
+revoke all on function public.claim_booking_refund_workflow(uuid, jsonb, jsonb, text, text) from authenticated;
+grant execute on function public.claim_booking_refund_workflow(uuid, jsonb, jsonb, text, text) to service_role;
 
-comment on function public.claim_booking_refund_workflow(uuid, jsonb) is
-  'Service-role-only atomic refund claim/retry gate. Locks the booking row shared with payout settlement, rejects already-paid cleaner earnings across direct/roster/team rails, then stores the claimed refund workflow before any provider call.';
+comment on function public.claim_booking_refund_workflow(uuid, jsonb, jsonb, text, text) is
+  'Service-role-only atomic refund claim/retry gate. Locks the booking row shared with payout settlement, rejects paid payouts and stale snapshots, validates new/failed to submitted transitions, rejects another in-flight refund, then stores the claim before any provider call.';
