@@ -697,8 +697,10 @@ begin
     raise exception 'outbox_rail_not_cleaner_payout';
   end if;
 
-  if lower(coalesce(v_outbox.status, '')) = 'succeeded' then
-    raise exception 'outbox_already_succeeded';
+  if lower(coalesce(v_outbox.status, '')) <> 'pending'
+     or v_outbox.transfer_code is not null
+     or coalesce(v_outbox.attempts, 0) <> 0 then
+    raise exception 'outbox_not_safe_for_terminal_failure';
   end if;
 
   update public.payout_transfer_outbox
@@ -707,7 +709,13 @@ begin
     last_error = v_error,
     updated_at = now()
   where id = p_outbox_id
-    and status <> 'succeeded';
+    and status = 'pending'
+    and transfer_code is null
+    and coalesce(attempts, 0) = 0;
+
+  if not found then
+    raise exception 'outbox_terminal_state_changed';
+  end if;
 
   if v_outbox.transfer_row_id is not null then
     update public.payout_transfers
