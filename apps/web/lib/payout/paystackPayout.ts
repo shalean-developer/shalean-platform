@@ -140,6 +140,7 @@ export async function payCleanerPayoutWithPaystack(
         status: "paid",
         paid_at: now,
         payment_status: "success",
+        payment_method: "paystack",
         payment_reference: existing.transfer_code ?? payout.payment_reference ?? null,
       })
       .eq("id", payout.id)
@@ -173,6 +174,7 @@ export async function payCleanerPayoutWithPaystack(
       .from("cleaner_payouts")
       .update({
         payment_status: "processing",
+        payment_method: "paystack",
         payment_reference: resumed.transferCode ?? payout.payment_reference ?? null,
       })
       .eq("id", payout.id)
@@ -182,7 +184,7 @@ export async function payCleanerPayoutWithPaystack(
 
   const { data: claimed, error: claimErr } = await admin
     .from("cleaner_payouts")
-    .update({ payment_status: "processing" })
+    .update({ payment_status: "processing", payment_method: "paystack" })
     .eq("id", payout.id)
     .eq("status", "approved")
     .in("payment_status", ["pending", "failed", "partial_failed"])
@@ -261,6 +263,7 @@ export async function payCleanerPayoutWithPaystack(
     .update({
       status: "approved",
       payment_status: "processing",
+      payment_method: "paystack",
       payment_reference: transfer.transferCode ?? reference,
     })
     .eq("id", payout.id)
