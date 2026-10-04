@@ -113,12 +113,13 @@ export function NextJobCard({
   const progressText = inProgress ? formatElapsed(bookingRow.started_at, nowMs) ?? "In progress" : null;
   const countdownText = inProgress ? progressText : msUntil != null ? formatCountdown(msUntil) : null;
   const countdownClass = inProgress ? "font-semibold text-sky-700" : urgencyClass(msUntil);
+  const cardHeading = inProgress ? "Current job" : "Next job";
   const scopeParts = [serviceLabel, durationLabel, roomsLabel].filter(Boolean);
 
   return (
     <section className={cn("rounded-2xl border border-slate-200 bg-white p-4 shadow-sm", className)}>
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Next job</p>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">{cardHeading}</p>
         <span className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold", statusChipClass(statusVariant))}>
           {statusLabel}
         </span>
