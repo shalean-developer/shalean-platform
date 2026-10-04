@@ -190,6 +190,51 @@ export async function payCleanerPayoutWithPaystack(
   if (!payoutData) return { ok: false, error: "Payout not found.", status: 404 };
 
   const payout = payoutData as PayoutRow;
+
+  const { data: existingSuccess, error: existingErr } = await admin
+    .from("payout_transfers")
+    .select("id, transfer_code, reference")
+    .eq("payout_id", payout.id)
+    .eq("status", "success")
+    .maybeSingle();
+  if (existingErr) return { ok: false, error: existingErr.message };
+  if (existingSuccess) {
+    const existing = existingSuccess as { transfer_code: string | null; reference?: string | null };
+    const transferCode = existing.transfer_code?.trim() ?? null;
+    const reference = existing.reference?.trim() || immutableCleanerPayoutReference(payout.id);
+
+    if (!transferCode) {
+      return {
+        ok: false,
+        error: "Successful payout transfer is missing transfer_code.",
+        status: 500,
+        needsReconcile: true,
+      };
+    }
+
+    try {
+      await applyTransferSuccess(admin, {
+        transfer_code: transferCode,
+        reference,
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Successful payout reconciliation failed.",
+        status: 500,
+        needsReconcile: true,
+      };
+    }
+
+    return {
+      ok: true,
+      transferCode,
+      reference,
+      skippedExisting: true,
+    };
+  }
+
+
   if (payout.status !== "approved") {
     return { ok: false, error: "Only approved payout batches can be paid.", status: 400 };
   }
@@ -243,66 +288,6 @@ export async function payCleanerPayoutWithPaystack(
     amountCents: cents(payout.total_amount_cents),
     reference: immutableCleanerPayoutReference(payout.id),
   });
-
-  const { data: existingSuccess, error: existingErr } = await admin
-    .from("payout_transfers")
-    .select("id, transfer_code, reference")
-    .eq("payout_id", payout.id)
-    .eq("status", "success")
-    .maybeSingle();
-  if (existingErr) return { ok: false, error: existingErr.message };
-  if (existingSuccess) {
-    const existing = existingSuccess as { transfer_code: string | null; reference?: string | null };
-    const transferCode = existing.transfer_code?.trim() ?? null;
-    const reference = existing.reference?.trim() || immutableCleanerPayoutReference(payout.id);
-
-    if (!transferCode) {
-      return {
-        ok: false,
-        error: "Successful payout transfer is missing transfer_code.",
-        status: 500,
-        needsReconcile: true,
-      };
-    }
-
-    try {
-      await applyTransferSuccess(admin, {
-        transfer_code: transferCode,
-        reference,
-      });
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "Successful payout reconciliation failed.",
-        status: 500,
-        needsReconcile: true,
-      };
-    }
-
-    const { error: referenceErr } = await admin
-      .from("cleaner_payouts")
-      .update({
-        payment_method: "paystack",
-        payment_reference: transferCode,
-      })
-      .eq("id", payout.id);
-
-    if (referenceErr) {
-      return {
-        ok: false,
-        error: referenceErr.message,
-        status: 500,
-        needsReconcile: true,
-      };
-    }
-
-    return {
-      ok: true,
-      transferCode,
-      reference,
-      skippedExisting: true,
-    };
-  }
 
   const paymentStatus = String(payout.payment_status ?? "")
     .trim()
