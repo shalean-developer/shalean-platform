@@ -45,6 +45,8 @@ type PayoutDetailResponse = {
   bookings: BookingLine[];
   paymentReadiness: {
     ready: boolean;
+    bankReady?: boolean;
+    paystackReady?: boolean;
     missingBankDetails: number;
     reason: string | null;
     checkedAt: string | null;
@@ -354,7 +356,7 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
   const p = detail.payout;
   const statusKey = (p.status ?? "pending").toLowerCase();
   const status = STATUS_MAP[statusKey] ?? { label: p.status ?? "—", cls: "bg-slate-100 text-slate-600" };
-  const payBlocked = !detail.paymentReadiness.ready;
+  const payBlocked = detail.paymentReadiness.paystackReady !== true;
   const testCount = detail.bookings.filter((b) => b.is_test === true).length;
   const canEdit = statusKey === "pending" || statusKey === "frozen";
   const calculatedCents = p.calculated_amount_cents ?? p.total_amount_cents;
@@ -597,11 +599,20 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
         </div>
       ) : null}
 
-      {!detail.paymentReadiness.ready && statusKey === "approved" ? (
+      {detail.paymentReadiness.bankReady === false && statusKey === "approved" ? (
         <div className="mx-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:mx-6">
-          <p className="font-semibold">Paystack recipient not configured</p>
+          <p className="font-semibold">Bank details missing</p>
           <p className="mt-1 text-xs">
-            {detail.paymentReadiness.reason ?? "Add bank details on the cleaner profile."} Bank-transfer settlement can still be recorded after Shalean pays the cleaner externally.
+            Add the cleaner&apos;s bank account details before recording an external bank transfer.
+          </p>
+        </div>
+      ) : null}
+
+      {detail.paymentReadiness.bankReady !== false && detail.paymentReadiness.paystackReady !== true && statusKey === "approved" ? (
+        <div className="mx-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950 sm:mx-6">
+          <p className="font-semibold">Paystack is optional</p>
+          <p className="mt-1 text-xs">
+            Bank transfer is ready. Paystack payout remains unavailable until a Paystack recipient is configured.
           </p>
         </div>
       ) : null}
