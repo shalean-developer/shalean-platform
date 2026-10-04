@@ -234,6 +234,15 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(pay).not.toContain('await admin.rpc("mark_bookings_paid_for_cleaner_payout", { p_payout_id: payout.id });');
   });
 
+  it("keeps successful payout convergence retryable after payout becomes paid", () => {
+    const status = read("lib/payout/paystackTransferStatus.ts");
+    const pay = read("lib/payout/paystackPayout.ts");
+    expect(status).toContain('payment_reference: transferCode');
+    expect(status).toContain('if (referenceErr) throw new Error(referenceErr.message)');
+    expect(status).toContain('if (error) throw new Error(error.message)');
+    expect(pay.indexOf("existingSuccess")).toBeLessThan(pay.indexOf('payout.status !== "approved"'));
+  });
+
   it("keeps Paystack optional while stamping Paystack settlement truth", () => {
     const pay = read("lib/payout/paystackPayout.ts");
     const webhook = read("lib/payout/paystackTransferStatus.ts");
