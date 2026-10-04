@@ -78,6 +78,41 @@ begin
     raise exception 'bank_details_missing';
   end if;
 
+  if (v_paid_at at time zone 'Africa/Johannesburg')::date >
+     (now() at time zone 'Africa/Johannesburg')::date then
+    raise exception 'future_paid_at_not_allowed';
+  end if;
+
+  -- Revalidate every earning line transactionally at settlement time. Approval
+  -- can precede a later cancellation/refund, so bank settlement must not pay a
+  -- liability the Paystack rail would reject.
+  if exists (
+    select 1
+    from public.bookings b
+    where (
+      b.payout_id = p_payout_id
+      or exists (
+        select 1
+        from public.booking_roster_member_payouts rp
+        where rp.cleaner_payout_id = p_payout_id
+          and rp.booking_id = b.id
+      )
+      or exists (
+        select 1
+        from public.team_job_member_payouts tj
+        where tj.cleaner_payout_id = p_payout_id
+          and tj.booking_id = b.id
+      )
+    )
+      and (
+        lower(coalesce(b.status, '')) <> 'completed'
+        or b.refunded_at is not null
+        or lower(coalesce(b.refund_status, '')) in ('refunded', 'partial_refund', 'reversed')
+      )
+  ) then
+    raise exception 'linked_earning_no_longer_payable';
+  end if;
+
   update public.cleaner_payouts
   set
     status = 'paid',
