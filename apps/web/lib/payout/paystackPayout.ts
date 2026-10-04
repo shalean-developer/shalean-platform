@@ -158,6 +158,22 @@ export async function payCleanerPayoutWithPaystack(
     .trim()
     .toLowerCase();
   if (paymentStatus === "processing") {
+    const { error: resumeGuardErr } = await admin.rpc("claim_cleaner_payout_paystack_processing", {
+      p_payout_id: payout.id,
+      p_allow_existing_processing: true,
+    });
+    if (resumeGuardErr) {
+      const message = String(resumeGuardErr.message ?? "");
+      if (message.includes("linked_refund_or_ineligible_booking_blocks_payout")) {
+        return {
+          ok: false,
+          error: "Payout resume is blocked because a linked booking is refunded, in refund processing, test, or no longer completed.",
+          status: 409,
+        };
+      }
+      return { ok: false, error: message || "Could not revalidate processing payout.", status: 409 };
+    }
+
     const ensuredResume = await ensurePaystackRecipient(admin, payout.cleaner_id);
     if (!ensuredResume.ok) return { ok: false, error: ensuredResume.error, status: 400 };
     const resumed = await submitPaystackTransferViaOutbox(admin, {
@@ -184,11 +200,16 @@ export async function payCleanerPayoutWithPaystack(
 
   const { error: claimErr } = await admin.rpc("claim_cleaner_payout_paystack_processing", {
     p_payout_id: payout.id,
+    p_allow_existing_processing: false,
   });
   if (claimErr) {
     const message = String(claimErr.message ?? "");
-    if (message.includes("linked_refund_blocks_payout")) {
-      return { ok: false, error: "Payout is blocked because a linked booking has an active or completed refund.", status: 409 };
+    if (message.includes("linked_refund_or_ineligible_booking_blocks_payout")) {
+      return {
+        ok: false,
+        error: "Payout is blocked because a linked booking is refunded, in refund processing, test, or no longer completed.",
+        status: 409,
+      };
     }
     if (message.includes("payout_payment_already_in_progress")) {
       return { ok: false, error: "Payout payment is already in progress.", status: 409 };
