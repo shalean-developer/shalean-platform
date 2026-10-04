@@ -11,7 +11,7 @@ const migrationFiles = readdirSync(migrationsDir)
 const functionName =
   String.raw`(?:"?public"?\s*\.\s*)?"?blog_is_admin"?\s*\(\s*\)`;
 const securityOperation = new RegExp(
-  String.raw`(?:create\s+or\s+replace\s+function\s+${functionName}|alter\s+function\s+${functionName}\s+(?:set\s+search_path\s*(?:=|to)\s*[^;]+|reset\s+search_path))`,
+  String.raw`(?:create\s+or\s+replace\s+function\s+${functionName}|alter\s+function\s+${functionName}\s+(?:set\s+search_path\s*(?:=|to)\s*[^;]+|reset\s+(?:search_path|all)))`,
   "g",
 );
 
@@ -31,11 +31,13 @@ describe("MASTER-00B-02 blog helper search_path", () => {
     );
   });
 
-  it("recognizes both PostgreSQL SET forms and quoted identifiers", () => {
+  it("recognizes PostgreSQL SET and RESET forms plus quoted identifiers", () => {
     const examples = [
       "alter function public.blog_is_admin() set search_path = public",
       "alter function public.blog_is_admin() set search_path to public",
       'alter function "public"."blog_is_admin"() set search_path to public',
+      "alter function public.blog_is_admin() reset search_path",
+      "alter function public.blog_is_admin() reset all",
     ];
 
     for (const sql of examples) {
