@@ -682,15 +682,16 @@ comment on function public.claim_cleaner_payout_paystack_processing(uuid, boolea
 
 
 
--- Converge a permanently blocked cleaner-payout outbox atomically. The caller
--- must prove it still owns/observes the exact outbox state via status+attempts.
+-- Converge a permanently blocked cleaner-payout outbox atomically. If any
+-- update fails, the transaction rolls back. Status + attempts are a CAS token:
+-- a sender that changed pending -> sending wins over a stale terminal request,
+-- while the owning sender can terminally converge its exact sending attempt.
 drop function if exists public.fail_cleaner_payout_outbox_validation(uuid, text);
-drop function if exists public.fail_cleaner_payout_outbox_validation(uuid, text, text, integer);
+drop function if exists public.fail_cleaner_payout_outbox_validation(uuid, text, integer);
 
 create or replace function public.fail_cleaner_payout_outbox_validation(
   p_outbox_id uuid,
   p_error text,
-  p_expected_status text,
   p_expected_attempts integer
 )
 returns boolean
@@ -701,16 +702,12 @@ as $$
 declare
   v_outbox public.payout_transfer_outbox%rowtype;
   v_error text := left(trim(coalesce(p_error, 'validation_failed')), 2000);
-  v_expected_status text := lower(trim(coalesce(p_expected_status, '')));
 begin
   if p_outbox_id is null then
     raise exception 'outbox_id_required';
   end if;
-  if v_expected_status not in ('pending', 'sending') then
-    raise exception 'invalid_expected_outbox_status';
-  end if;
   if p_expected_attempts is null or p_expected_attempts < 0 then
-    raise exception 'invalid_expected_outbox_attempts';
+    raise exception 'expected_attempts_required';
   end if;
 
   select *
@@ -727,7 +724,7 @@ begin
     raise exception 'outbox_rail_not_cleaner_payout';
   end if;
 
-  if lower(coalesce(v_outbox.status, '')) <> v_expected_status
+  if lower(coalesce(v_outbox.status, '')) not in ('pending', 'sending')
      or v_outbox.transfer_code is not null
      or coalesce(v_outbox.attempts, 0) <> p_expected_attempts then
     raise exception 'outbox_not_safe_for_terminal_failure';
@@ -739,7 +736,7 @@ begin
     last_error = v_error,
     updated_at = now()
   where id = p_outbox_id
-    and lower(status) = v_expected_status
+    and status in ('pending', 'sending')
     and transfer_code is null
     and coalesce(attempts, 0) = p_expected_attempts;
 
@@ -774,11 +771,12 @@ begin
 end;
 $$;
 
-revoke all on function public.fail_cleaner_payout_outbox_validation(uuid, text, text, integer) from public;
-revoke all on function public.fail_cleaner_payout_outbox_validation(uuid, text, text, integer) from anon;
-revoke all on function public.fail_cleaner_payout_outbox_validation(uuid, text, text, integer) from authenticated;
-grant execute on function public.fail_cleaner_payout_outbox_validation(uuid, text, text, integer) to service_role;
+revoke all on function public.fail_cleaner_payout_outbox_validation(uuid, text, integer) from public;
+revoke all on function public.fail_cleaner_payout_outbox_validation(uuid, text, integer) from anon;
+revoke all on function public.fail_cleaner_payout_outbox_validation(uuid, text, integer) from authenticated;
+grant execute on function public.fail_cleaner_payout_outbox_validation(uuid, text, integer) to service_role;
 
-comment on function public.fail_cleaner_payout_outbox_validation(uuid, text, text, integer) is
-  'Service-role-only atomic terminal transition. Requires the locked outbox to match the caller-observed pending/sending state and attempts count, preventing a terminal failure from racing a provider submission.';
+comment on function public.fail_cleaner_payout_outbox_validation(uuid, text, integer) is
+  'Service-role-only atomic terminal transition for deterministic cleaner-payout pre-provider validation failures. Uses outbox status + attempts CAS so an active sender and terminal failure cannot both win.';
+
 
