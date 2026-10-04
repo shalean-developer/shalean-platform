@@ -55,6 +55,7 @@ function wireDashboardJob(raw: Record<string, unknown>): CleanerBookingRow {
     cleaner_earnings_total_cents: raw.cleaner_earnings_total_cents as number | null | undefined,
     payout_frozen_cents: raw.payout_frozen_cents as number | null | undefined,
     display_earnings_cents: raw.display_earnings_cents as number | null | undefined,
+    earnings_summary: raw.earnings_summary,
     is_team_job: raw.is_team_job === true,
     team_id: (raw.team_id as string | null | undefined) ?? null,
     cleaner_id: (raw.cleaner_id as string | null | undefined) ?? undefined,
@@ -122,7 +123,11 @@ export async function GET(request: Request) {
     maxPreviews: DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP,
   });
   const jobs = previewedJobs.map((job) => {
-    const { metadata: _internalMetadata, ...safeJob } = job;
+    const {
+      metadata: _internalMetadata,
+      earnings_summary: _internalEarningsSummary,
+      ...safeJob
+    } = job;
     return safeJob;
   }) as unknown as typeof prioritized;
 
