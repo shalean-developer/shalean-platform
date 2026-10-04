@@ -224,6 +224,16 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("Existing successful transfer reconciliation failed.");
   });
 
+  it("routes existing successful payout retries through full convergence", () => {
+    const pay = read("lib/payout/paystackPayout.ts");
+    expect(pay).toContain('import { applyTransferSuccess } from "@/lib/payout/paystackTransferStatus"');
+    expect(pay).toContain("await applyTransferSuccess(admin");
+    expect(pay).toContain("Successful payout transfer is missing transfer_code.");
+    expect(pay).toContain("Successful payout reconciliation failed.");
+    expect(pay).toContain('payment_reference: transferCode');
+    expect(pay).not.toContain('await admin.rpc("mark_bookings_paid_for_cleaner_payout", { p_payout_id: payout.id });');
+  });
+
   it("keeps Paystack optional while stamping Paystack settlement truth", () => {
     const pay = read("lib/payout/paystackPayout.ts");
     const webhook = read("lib/payout/paystackTransferStatus.ts");
