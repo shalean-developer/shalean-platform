@@ -131,6 +131,17 @@ begin
         lower(coalesce(b.status, '')) <> 'completed'
         or b.refunded_at is not null
         or lower(coalesce(b.refund_status, '')) in ('refunded', 'partial_refund', 'reversed')
+        or exists (
+          select 1
+          from jsonb_array_elements(
+            case
+              when jsonb_typeof(b.booking_snapshot->'refund_workflow'->'records') = 'array'
+                then b.booking_snapshot->'refund_workflow'->'records'
+              else '[]'::jsonb
+            end
+          ) as refund_record
+          where lower(coalesce(refund_record->>'provider_state', '')) in ('pending', 'submitted_to_provider')
+        )
       )
   ) then
     raise exception 'linked_earning_no_longer_payable';
