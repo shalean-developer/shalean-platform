@@ -67,9 +67,10 @@ const HTTP_JOBS = [
   ["extend-cleaner-availability", "30 2 * * *", "/api/cron/extend-cleaner-availability"],
   ["charge-monthly-invoices", "55 21 * * *", "/api/cron/charge-monthly-invoices"],
   ["seo-optimization", "20 6 * * 1", "/api/cron/seo-optimization"],
+  // Monthly cleaner payout closeout order: generate previous month → freeze → create review run.
   ["generate-payouts", "0 6 * * 1", "/api/cron/generate-payouts"],
-  ["create-payout-run", "0 7 * * 1", "/api/cron/create-payout-run"],
-  ["freeze-payouts", "0 8 * * 1", "/api/cron/freeze-payouts"],
+  ["freeze-payouts", "0 7 * * 1", "/api/cron/freeze-payouts"],
+  ["create-payout-run", "0 8 * * 1", "/api/cron/create-payout-run"],
   ["prune-system-logs", "0 4 * * *", "/api/cron/prune-system-logs"],
 ];
 
