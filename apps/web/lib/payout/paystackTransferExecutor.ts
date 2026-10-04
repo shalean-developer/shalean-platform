@@ -481,6 +481,15 @@ export async function submitPaystackTransferViaOutbox(
         permanent: permanentValidationFailure,
       },
     });
+    if (!permanentValidationFailure && params.rail === "cleaner_payout") {
+      return {
+        ok: false,
+        error: safetyGate.error,
+        status: safetyGate.status,
+        needsReconcile: true,
+      };
+    }
+
     return safetyGate;
   }
 
