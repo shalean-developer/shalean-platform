@@ -56,6 +56,7 @@ describe("MASTER-00A release source truth", () => {
     "scripts/env/patch-vercel-nonprod-supabase.mjs",
     "scripts/env/seed-nonprod.mjs",
     "scripts/env/seed-uat-booking-fixtures.mjs",
+    "scripts/env/payout-ops-001-staging-verify.mjs",
   ])("keeps staging mutator %s on the canonical staging project", (relativePath) => {
     const source = readRepositoryFile(relativePath);
     expect(source).toContain(STAGING_REF);
