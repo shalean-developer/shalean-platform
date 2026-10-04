@@ -182,15 +182,19 @@ export async function payCleanerPayoutWithPaystack(
     return resumed;
   }
 
-  const { data: claimed, error: claimErr } = await admin
-    .from("cleaner_payouts")
-    .update({ payment_status: "processing", payment_method: "paystack" })
-    .eq("id", payout.id)
-    .eq("status", "approved")
-    .in("payment_status", ["pending", "failed", "partial_failed"])
-    .select("id");
-  if (claimErr) return { ok: false, error: claimErr.message };
-  if (!claimed?.length) return { ok: false, error: "Payout payment is already in progress.", status: 409 };
+  const { error: claimErr } = await admin.rpc("claim_cleaner_payout_paystack_processing", {
+    p_payout_id: payout.id,
+  });
+  if (claimErr) {
+    const message = String(claimErr.message ?? "");
+    if (message.includes("linked_refund_blocks_payout")) {
+      return { ok: false, error: "Payout is blocked because a linked booking has an active or completed refund.", status: 409 };
+    }
+    if (message.includes("payout_payment_already_in_progress")) {
+      return { ok: false, error: "Payout payment is already in progress.", status: 409 };
+    }
+    return { ok: false, error: message || "Could not claim payout for Paystack.", status: 400 };
+  }
 
   const loadedItems = await loadCleanerPayoutBatchItems(admin, payout.id);
   if (loadedItems.error) {
