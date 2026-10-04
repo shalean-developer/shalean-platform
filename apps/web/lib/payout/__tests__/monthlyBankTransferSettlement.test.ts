@@ -152,6 +152,14 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(sql).toContain("payout_not_converged");
   });
 
+  it("keeps transient resume validation retryable and fails deterministic resume rejection", () => {
+    const pay = read("lib/payout/paystackPayout.ts");
+    expect(pay).toContain("if (resumeBatch.status >= 500)");
+    expect(pay).toContain("needsReconcile: true");
+    expect(pay).toContain("if (resumed.needsReconcile) return resumed");
+    expect(pay).toContain("await failPayoutExecution(admin, payout.id)");
+  });
+
   it("keeps Paystack optional while stamping Paystack settlement truth", () => {
     const pay = read("lib/payout/paystackPayout.ts");
     const webhook = read("lib/payout/paystackTransferStatus.ts");
