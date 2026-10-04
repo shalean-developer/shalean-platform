@@ -149,7 +149,10 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     const sql = read("../../supabase/migrations/20261004113000_atomic_bank_transfer_settlement.sql");
     expect(sql).toContain("fail_cleaner_payout_outbox_validation");
     expect(sql).toContain("outbox_not_safe_for_terminal_failure");
-    expect(sql).toContain("coalesce(v_outbox.attempts, 0) <> 0");
+    expect(sql).toContain("p_expected_status");
+    expect(sql).toContain("p_expected_attempts");
+    expect(sql).toContain("'sending'");
+    expect(sql).toContain("coalesce(v_outbox.attempts, 0) <> p_expected_attempts");
     expect(sql).toContain("transfer_audit_not_converged");
     expect(sql).toContain("payout_not_converged");
   });
@@ -177,13 +180,18 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(recipient).toContain("retryable: false");
   });
 
-  it("uses an optimistic attempts claim so terminal convergence cannot race a sender", () => {
+  it("uses an exclusive sending lease so terminal convergence cannot race a sender", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
     const pay = read("lib/payout/paystackPayout.ts");
+    const sql = read("../../supabase/migrations/20261004113000_atomic_bank_transfer_settlement.sql");
     expect(executor).toContain("const expectedAttempts = outbox.attempts ?? 0");
+    expect(executor).toContain('status: "sending"');
     expect(executor).toContain('.eq("status", "pending")');
     expect(executor).toContain('.eq("attempts", expectedAttempts)');
-    expect(executor).toContain("never POST from this worker unless it owns the claim");
+    expect(executor).toContain("Exclusive sender lease");
+    expect(executor).toContain('p_expected_status: "sending"');
+    expect(executor).toContain("15 * 60 * 1000");
+    expect(sql).toContain("'pending', 'sending', 'submitted'");
     expect(pay).toContain('outboxStatus === "failed"');
     expect(pay).toContain('outboxStatus === "pending"');
   });
