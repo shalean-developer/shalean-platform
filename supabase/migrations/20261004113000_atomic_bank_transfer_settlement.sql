@@ -67,6 +67,17 @@ begin
     raise exception 'paystack_transfer_exists';
   end if;
 
+  if not exists (
+    select 1
+    from public.cleaner_payment_details cpd
+    where cpd.cleaner_id = v_payout.cleaner_id
+      and length(trim(coalesce(cpd.account_number, ''))) >= 6
+      and length(trim(coalesce(cpd.bank_code, ''))) >= 2
+      and length(trim(coalesce(cpd.account_name, ''))) >= 2
+  ) then
+    raise exception 'bank_details_missing';
+  end if;
+
   update public.cleaner_payouts
   set
     status = 'paid',
