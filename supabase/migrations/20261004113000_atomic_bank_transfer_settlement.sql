@@ -86,6 +86,29 @@ begin
   -- Revalidate every earning line transactionally at settlement time. Approval
   -- can precede a later cancellation/refund, so bank settlement must not pay a
   -- liability the Paystack rail would reject.
+  --
+  -- Lock the linked booking rows first. Refund/cancellation writers must acquire
+  -- the same row locks before committing their booking mutation, preventing a
+  -- refund from racing between this eligibility check and the paid update.
+  perform b.id
+  from public.bookings b
+  where (
+    b.payout_id = p_payout_id
+    or exists (
+      select 1
+      from public.booking_roster_member_payouts rp
+      where rp.cleaner_payout_id = p_payout_id
+        and rp.booking_id = b.id
+    )
+    or exists (
+      select 1
+      from public.team_job_member_payouts tj
+      where tj.cleaner_payout_id = p_payout_id
+        and tj.booking_id = b.id
+    )
+  )
+  for update of b;
+
   if exists (
     select 1
     from public.bookings b
