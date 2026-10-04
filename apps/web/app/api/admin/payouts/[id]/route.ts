@@ -18,7 +18,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const { data: payout, error: payoutErr } = await admin
     .from("cleaner_payouts")
-    .select("id, cleaner_id, total_amount_cents, calculated_amount_cents, adjustment_note, amount_adjusted_at, status, payment_status, payment_reference, period_start, period_end, created_at, approved_at, approved_by, paid_at")
+    .select("id, cleaner_id, total_amount_cents, calculated_amount_cents, adjustment_note, amount_adjusted_at, status, payment_status, payment_method, payment_reference, paid_by, period_start, period_end, created_at, approved_at, approved_by, paid_at")
     .eq("id", id)
     .maybeSingle();
 
