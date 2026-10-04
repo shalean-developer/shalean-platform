@@ -22,6 +22,8 @@ declare
   v_booking_run_id uuid;
   v_remaining integer;
   v_locked_run uuid;
+  v_item_count integer;
+  v_item_total bigint;
 begin
   if p_payout_id is null then
     raise exception 'payout_id_required';
@@ -102,6 +104,67 @@ begin
     raise exception 'payout_cleaner_mismatch';
   end if;
 
+  with raw_items as (
+    select
+      b.id as booking_id,
+      0 as source_rank,
+      case
+        when lower(coalesce(b.payout_status, '')) in ('eligible', 'paid')
+             and coalesce(b.payout_frozen_cents, 0) > 0
+          then coalesce(b.payout_frozen_cents, 0)::bigint
+        else (coalesce(b.cleaner_payout_cents, 0) + coalesce(b.cleaner_bonus_cents, 0))::bigint
+      end as amount_cents
+    from public.bookings b
+    where b.payout_id = p_payout_id
+
+    union all
+
+    select
+      rp.booking_id,
+      1 as source_rank,
+      (coalesce(rp.payout_cents, 0) + coalesce(rp.bonus_cents, 0))::bigint
+    from public.booking_roster_member_payouts rp
+    where rp.cleaner_payout_id = p_payout_id
+
+    union all
+
+    select
+      tj.booking_id,
+      2 as source_rank,
+      coalesce(tj.payout_cents, 0)::bigint
+    from public.team_job_member_payouts tj
+    where tj.cleaner_payout_id = p_payout_id
+  ),
+  ranked_items as (
+    select
+      booking_id,
+      amount_cents,
+      row_number() over (partition by booking_id order by source_rank desc) as rn
+    from raw_items
+  )
+  select count(*)::integer, coalesce(sum(amount_cents), 0)::bigint
+  into v_item_count, v_item_total
+  from ranked_items
+  where rn = 1;
+
+  if coalesce(v_item_count, 0) = 0 then
+    raise exception 'payout_has_no_earning_items';
+  end if;
+
+  if coalesce(v_payout.total_amount_cents, 0) <= 0 then
+    raise exception 'payout_amount_not_positive';
+  end if;
+
+  if v_payout.amount_adjusted_at is null
+     and v_item_total <> coalesce(v_payout.total_amount_cents, 0)::bigint then
+    raise exception 'payout_total_mismatch';
+  end if;
+
+  if v_payout.amount_adjusted_at is not null
+     and length(trim(coalesce(v_payout.adjustment_note, ''))) < 3 then
+    raise exception 'payout_adjustment_reason_required';
+  end if;
+
   -- Revalidate every earning line transactionally at settlement time. Approval
   -- can precede a later cancellation/refund, so bank settlement must not pay a
   -- liability the Paystack rail would reject.
@@ -150,7 +213,7 @@ begin
         lower(coalesce(b.status, '')) <> 'completed'
         or b.is_test is true
         or b.refunded_at is not null
-        or lower(coalesce(b.refund_status, '')) in ('refunded', 'partial_refund', 'reversed')
+        or lower(coalesce(b.refund_status, '')) in ('refunded', 'partial_refund', 'partial', 'full', 'reversed', 'chargeback')
         or exists (
           select 1
           from jsonb_array_elements(
