@@ -10,7 +10,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-const STAGING_REF = "gbgnemlpyykyhpqqbgru";
+const STAGING_REF = "jhubpsbwmjgydkzztxeu";
 const PROPOSER = "11111111-1111-4111-8111-111111111199";
 const CHECKER = "22222222-2222-4222-8222-222222222299";
 
