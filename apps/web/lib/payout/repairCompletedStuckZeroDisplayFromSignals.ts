@@ -7,6 +7,7 @@ import {
   type BookingPersistIdsRow,
 } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistBookingEarningsSnapshotCommand } from "@/lib/payout/persistBookingEarningsSnapshotCommand";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 
 type StuckZeroScanRow = BookingPaidSignalRow & BookingPersistIdsRow;
 
@@ -22,47 +23,72 @@ export async function repairCompletedStuckZeroDisplayFromSignals(
   admin: SupabaseClient,
   limit = 150,
 ): Promise<RepairStuckZeroDisplayFromSignalsResult> {
-  const { data, error } = await admin
-    .from("bookings")
-    .select(bookingsPersistSelectListForPersist())
-    .eq("status", "completed")
-    .eq("display_earnings_cents", 0)
-    .eq("is_test", false)
-    .limit(limit);
-
-  if (error) return { ok: false, error: error.message };
-
-  const rows = (data ?? []) as StuckZeroScanRow[];
+  const pageSize = Math.min(150, Math.max(25, limit));
+  let cursor: string | null = null;
+  let scanned = 0;
+  let actionableScanned = 0;
   let matched_signals = 0;
   let fixed = 0;
   let skipped = 0;
   let failed = 0;
 
-  for (const row of rows) {
-    if (!bookingSignalsPaidForZeroDisplayRecompute(row)) {
-      skipped += 1;
-      continue;
+  while (actionableScanned < limit) {
+    let query = admin
+      .from("bookings")
+      .select(bookingsPersistSelectListForPersist())
+      .eq("status", "completed")
+      .eq("display_earnings_cents", 0)
+      .eq("is_test", false)
+      .order("id", { ascending: true });
+    if (cursor) query = query.gt("id", cursor);
+
+    const { data, error } = await query.limit(pageSize);
+    if (error) return { ok: false, error: error.message };
+
+    const rows = (data ?? []) as StuckZeroScanRow[];
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
+      const rid = typeof row.id === "string" ? row.id : "";
+      if (rid) cursor = rid;
+      scanned += 1;
+
+      if (bookingHasActivePayoutAttributionRemoval(row)) {
+        skipped += 1;
+        continue;
+      }
+
+      actionableScanned += 1;
+      if (!bookingSignalsPaidForZeroDisplayRecompute(row)) {
+        skipped += 1;
+        if (actionableScanned >= limit) break;
+        continue;
+      }
+      matched_signals += 1;
+      if (!rid) {
+        skipped += 1;
+        if (actionableScanned >= limit) break;
+        continue;
+      }
+      const persistCleanerId = resolvePersistCleanerIdForBooking(row);
+      if (!persistCleanerId) {
+        skipped += 1;
+        if (actionableScanned >= limit) break;
+        continue;
+      }
+      try {
+        const result = await persistBookingEarningsSnapshotCommand({ admin, bookingId: rid, cleanerId: persistCleanerId });
+        if (!result.ok) failed += 1;
+        else if (result.skipped) skipped += 1;
+        else fixed += 1;
+      } catch {
+        failed += 1;
+      }
+      if (actionableScanned >= limit) break;
     }
-    matched_signals += 1;
-    const rid = typeof row.id === "string" ? row.id : "";
-    if (!rid) {
-      skipped += 1;
-      continue;
-    }
-    const persistCleanerId = resolvePersistCleanerIdForBooking(row);
-    if (!persistCleanerId) {
-      skipped += 1;
-      continue;
-    }
-    try {
-      const result = await persistBookingEarningsSnapshotCommand({ admin, bookingId: rid, cleanerId: persistCleanerId });
-      if (!result.ok) failed += 1;
-      else if (result.skipped) skipped += 1;
-      else fixed += 1;
-    } catch {
-      failed += 1;
-    }
+
+    if (rows.length < pageSize) break;
   }
 
-  return { ok: true, scanned: rows.length, matched_signals, fixed, skipped, failed };
+  return { ok: true, scanned, matched_signals, fixed, skipped, failed };
 }
