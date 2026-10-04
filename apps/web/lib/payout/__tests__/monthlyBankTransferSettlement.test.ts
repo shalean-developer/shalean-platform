@@ -138,10 +138,15 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
   it("terminally fails permanently invalid cleaner-payout outboxes", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
     expect(executor).toContain("permanent_pre_provider_validation_failure");
-    expect(executor).toContain('status: "failed"');
-    expect(executor).toContain('update({ payment_status: "failed" })');
+    expect(executor).toContain('admin.rpc("fail_cleaner_payout_outbox_validation"');
     expect(executor).toContain("permanentValidationFailure");
+    expect(executor).toContain("permanentBusinessRule ? 409 : 500");
+    expect(executor).toContain("leaving it retryable");
     expect(executor).toContain("Temporarily blocked Paystack transfer before provider POST");
+    const sql = read("../../supabase/migrations/20261004113000_atomic_bank_transfer_settlement.sql");
+    expect(sql).toContain("fail_cleaner_payout_outbox_validation");
+    expect(sql).toContain("transfer_audit_not_converged");
+    expect(sql).toContain("payout_not_converged");
   });
 
   it("keeps Paystack optional while stamping Paystack settlement truth", () => {
