@@ -304,6 +304,13 @@ begin
          and (
            lower(coalesce(rp.status, '')) = 'paid'
            or lower(coalesce(cp.status, '')) = 'paid'
+           or lower(coalesce(cp.payment_status, '')) = 'processing'
+           or exists (
+             select 1
+             from public.payout_transfers pt
+             where pt.payout_id = cp.id
+               and lower(coalesce(pt.status, '')) <> 'failed'
+           )
          )
      )
      or exists (
@@ -314,6 +321,13 @@ begin
          and (
            lower(coalesce(tj.status, '')) = 'paid'
            or lower(coalesce(cp.status, '')) = 'paid'
+           or lower(coalesce(cp.payment_status, '')) = 'processing'
+           or exists (
+             select 1
+             from public.payout_transfers pt
+             where pt.payout_id = cp.id
+               and lower(coalesce(pt.status, '')) <> 'failed'
+           )
          )
      ) then
     raise exception 'booking_payout_already_paid';
