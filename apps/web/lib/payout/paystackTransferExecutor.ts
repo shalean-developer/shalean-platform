@@ -450,6 +450,7 @@ export async function submitPaystackTransferViaOutbox(
           ok: false,
           error: terminalErr.message || "Could not converge blocked payout outbox.",
           status: 500,
+          needsReconcile: true,
         };
       }
 
