@@ -129,7 +129,15 @@ async function convergeDeterministicResumeFailure(
     };
   }
 
-  if (outbox?.id) {
+  if (outbox?.id && outboxStatus === "failed") {
+    const failed = await failPayoutExecution(admin, payoutId);
+    if (!failed.ok) {
+      return { ok: false, error: failed.error, needsReconcile: true };
+    }
+    return { ok: true };
+  }
+
+  if (outbox?.id && outboxStatus === "pending") {
     const { error: convergeErr } = await admin.rpc("fail_cleaner_payout_outbox_validation", {
       p_outbox_id: outbox.id,
       p_error: error,
@@ -138,6 +146,14 @@ async function convergeDeterministicResumeFailure(
       return { ok: false, error: convergeErr.message, needsReconcile: true };
     }
     return { ok: true };
+  }
+
+  if (outbox?.id) {
+    return {
+      ok: false,
+      error: "Outbox state changed before terminal convergence; reconciliation required.",
+      needsReconcile: true,
+    };
   }
 
   const failed = await failPayoutExecution(admin, payoutId);
