@@ -43,6 +43,43 @@ function cents(value: unknown): number {
   return Math.max(0, Math.round(Number(value)));
 }
 
+async function loadAndValidatePayoutBatch(
+  admin: SupabaseClient,
+  payout: PayoutRow,
+  manuallyAdjusted: boolean,
+): Promise<
+  | { ok: true; items: Awaited<ReturnType<typeof loadCleanerPayoutBatchItems>>["items"]; payoutAmount: number }
+  | { ok: false; error: string; status: number }
+> {
+  const loadedItems = await loadCleanerPayoutBatchItems(admin, payout.id);
+  if (loadedItems.error) return { ok: false, error: loadedItems.error, status: 500 };
+
+  const batchItems = loadedItems.items;
+  if (batchItems.length === 0) {
+    return { ok: false, error: "Payout has no linked earning items.", status: 400 };
+  }
+  if (batchItems.some((row) => row.is_test)) {
+    return { ok: false, error: "Cannot pay a payout batch containing test bookings.", status: 400 };
+  }
+  if (batchItems.some((row) => row.cleaner_id !== payout.cleaner_id)) {
+    return { ok: false, error: "Payout contains earning items for a different cleaner.", status: 400 };
+  }
+  if (batchItems.some((row) => row.refunded_at)) {
+    return { ok: false, error: "Payout contains refunded bookings.", status: 400 };
+  }
+  if (batchItems.some((row) => String(row.booking_status ?? "").toLowerCase() !== "completed")) {
+    return { ok: false, error: "Payout contains non-completed bookings.", status: 400 };
+  }
+
+  const bookingTotal = loadedItems.totalCents;
+  const payoutAmount = cents(payout.total_amount_cents);
+  if (payoutAmount <= 0 || (!manuallyAdjusted && bookingTotal !== payoutAmount)) {
+    return { ok: false, error: "Payout total does not match linked booking totals.", status: 400 };
+  }
+
+  return { ok: true, items: batchItems, payoutAmount };
+}
+
 async function failPayoutExecution(
   admin: SupabaseClient,
   payoutId: string,
@@ -174,13 +211,22 @@ export async function payCleanerPayoutWithPaystack(
       return { ok: false, error: message || "Could not revalidate processing payout.", status: 409 };
     }
 
+    const resumeBatch = await loadAndValidatePayoutBatch(admin, payout, manuallyAdjusted);
+    if (!resumeBatch.ok) {
+      await failPayoutExecution(admin, payout.id);
+      return resumeBatch;
+    }
+
     const ensuredResume = await ensurePaystackRecipient(admin, payout.cleaner_id);
-    if (!ensuredResume.ok) return { ok: false, error: ensuredResume.error, status: 400 };
+    if (!ensuredResume.ok) {
+      await failPayoutExecution(admin, payout.id);
+      return { ok: false, error: ensuredResume.error, status: 400 };
+    }
     const resumed = await submitPaystackTransferViaOutbox(admin, {
       rail: "cleaner_payout",
       subjectId: payout.id,
       cleanerId: payout.cleaner_id,
-      amountCents: cents(payout.total_amount_cents),
+      amountCents: resumeBatch.payoutAmount,
       recipientCode: ensuredResume.recipientCode,
       reference: immutableCleanerPayoutReference(payout.id),
       initiatedBy: params.paidBy,
@@ -217,40 +263,13 @@ export async function payCleanerPayoutWithPaystack(
     return { ok: false, error: message || "Could not claim payout for Paystack.", status: 400 };
   }
 
-  const loadedItems = await loadCleanerPayoutBatchItems(admin, payout.id);
-  if (loadedItems.error) {
+  const validatedBatch = await loadAndValidatePayoutBatch(admin, payout, manuallyAdjusted);
+  if (!validatedBatch.ok) {
     await failPayoutExecution(admin, payout.id);
-    return { ok: false, error: loadedItems.error };
+    return validatedBatch;
   }
-
-  const batchItems = loadedItems.items;
-  if (batchItems.length === 0) {
-    await failPayoutExecution(admin, payout.id);
-    return { ok: false, error: "Payout has no linked earning items.", status: 400 };
-  }
-  if (batchItems.some((row) => row.is_test)) {
-    await failPayoutExecution(admin, payout.id);
-    return { ok: false, error: "Cannot pay a payout batch containing test bookings.", status: 400 };
-  }
-  if (batchItems.some((row) => row.cleaner_id !== payout.cleaner_id)) {
-    await failPayoutExecution(admin, payout.id);
-    return { ok: false, error: "Payout contains earning items for a different cleaner.", status: 400 };
-  }
-  if (batchItems.some((row) => row.refunded_at)) {
-    await failPayoutExecution(admin, payout.id);
-    return { ok: false, error: "Payout contains refunded bookings.", status: 400 };
-  }
-  if (batchItems.some((row) => String(row.booking_status ?? "").toLowerCase() !== "completed")) {
-    await failPayoutExecution(admin, payout.id);
-    return { ok: false, error: "Payout contains non-completed bookings.", status: 400 };
-  }
-
-  const bookingTotal = loadedItems.totalCents;
-  const payoutAmount = cents(payout.total_amount_cents);
-  if (payoutAmount <= 0 || (!manuallyAdjusted && bookingTotal !== payoutAmount)) {
-    await failPayoutExecution(admin, payout.id);
-    return { ok: false, error: "Payout total does not match linked booking totals.", status: 400 };
-  }
+  const batchItems = validatedBatch.items;
+  const payoutAmount = validatedBatch.payoutAmount;
 
   const ensured = await ensurePaystackRecipient(admin, payout.cleaner_id);
   if (!ensured.ok) {
