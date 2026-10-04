@@ -24,6 +24,9 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(sql).toContain("public.cleaner_payment_details");
     expect(sql).toContain("linked_earning_no_longer_payable");
     expect(sql).toContain("refunded_at is not null");
+    expect(sql).toContain("refund_workflow");
+    expect(sql).toContain("jsonb_array_elements");
+    expect(sql).toContain("'pending', 'submitted_to_provider'");
     expect(sql).toContain("future_paid_at_not_allowed");
     expect(sql).toContain("perform b.id");
     expect(sql).toContain("for update of b");
@@ -57,6 +60,9 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     const src = read("app/api/cleaner/payment-details/route.ts");
     expect(src).toContain("Bank-transfer operation must remain available");
     expect(src).toContain("recipient_code: recipientCode");
+    expect(src).toContain("bankDetailsUnchanged");
+    expect(src).toContain("existing?.recipient_code?.trim() || null");
+    expect(src).toContain("If the bank account changed, never carry a recipient tied to the old account forward.");
     expect(src).toContain("paystackWarning");
   });
 
