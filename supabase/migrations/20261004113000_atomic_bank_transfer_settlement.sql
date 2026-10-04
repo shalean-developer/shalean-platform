@@ -83,6 +83,25 @@ begin
     raise exception 'future_paid_at_not_allowed';
   end if;
 
+  if exists (
+    select 1
+    from public.bookings b
+    where b.payout_id = p_payout_id
+      and b.cleaner_id is distinct from v_payout.cleaner_id
+  ) or exists (
+    select 1
+    from public.booking_roster_member_payouts rp
+    where rp.cleaner_payout_id = p_payout_id
+      and rp.cleaner_id is distinct from v_payout.cleaner_id
+  ) or exists (
+    select 1
+    from public.team_job_member_payouts tj
+    where tj.cleaner_payout_id = p_payout_id
+      and tj.cleaner_id is distinct from v_payout.cleaner_id
+  ) then
+    raise exception 'payout_cleaner_mismatch';
+  end if;
+
   -- Revalidate every earning line transactionally at settlement time. Approval
   -- can precede a later cancellation/refund, so bank settlement must not pay a
   -- liability the Paystack rail would reject.
@@ -474,6 +493,25 @@ begin
     end if;
   elsif v_payment_status not in ('pending', 'failed', 'partial_failed') then
     raise exception 'payout_payment_already_in_progress';
+  end if;
+
+  if exists (
+    select 1
+    from public.bookings b
+    where b.payout_id = p_payout_id
+      and b.cleaner_id is distinct from v_payout.cleaner_id
+  ) or exists (
+    select 1
+    from public.booking_roster_member_payouts rp
+    where rp.cleaner_payout_id = p_payout_id
+      and rp.cleaner_id is distinct from v_payout.cleaner_id
+  ) or exists (
+    select 1
+    from public.team_job_member_payouts tj
+    where tj.cleaner_payout_id = p_payout_id
+      and tj.cleaner_id is distinct from v_payout.cleaner_id
+  ) then
+    raise exception 'payout_cleaner_mismatch';
   end if;
 
   perform b.id
