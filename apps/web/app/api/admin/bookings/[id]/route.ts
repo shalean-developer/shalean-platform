@@ -881,7 +881,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         ? await rollbackAssignmentAndEarningsSideEffects({
             admin,
             bookingId: id,
-            before: before as Record<string, unknown>,
+            before: before as unknown as Record<string, unknown>,
             sideEffectsSnapshot: assignmentEarningsSideEffectsBefore,
           })
         : {
@@ -1052,7 +1052,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     const rollback = await rollbackAssignmentAndEarningsSideEffects({
       admin,
       bookingId: id,
-      before: before as Record<string, unknown>,
+      before: before as unknown as Record<string, unknown>,
       sideEffectsSnapshot: assignmentEarningsSideEffectsBefore,
     });
     assignmentRevertedForEarnings = rollback.assignmentReverted;
@@ -1120,7 +1120,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         ? await rollbackAssignmentAndEarningsSideEffects({
             admin,
             bookingId: id,
-            before: before as Record<string, unknown>,
+            before: before as unknown as Record<string, unknown>,
             sideEffectsSnapshot: assignmentEarningsSideEffectsBefore,
           })
         : {
