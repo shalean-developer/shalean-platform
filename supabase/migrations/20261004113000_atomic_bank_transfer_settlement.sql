@@ -232,3 +232,85 @@ grant execute on function public.settle_cleaner_payout_bank_transfer(uuid, uuid,
 
 comment on function public.settle_cleaner_payout_bank_transfer(uuid, uuid, text, timestamptz) is
   'Service-role-only atomic bank settlement: blocks active Paystack rail, stamps payout + linked bookings/member lines with the selected paid timestamp and reconciliation id, and serializes/finishes the parent payout run.';
+
+
+-- Refund claims/retries and payout settlement share the same booking row lock.
+-- Whichever operation obtains the lock second must re-check the opposing state
+-- before any provider-side money movement can begin.
+create or replace function public.claim_booking_refund_workflow(
+  p_booking_id uuid,
+  p_booking_snapshot jsonb
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_booking public.bookings%rowtype;
+begin
+  if p_booking_id is null then
+    raise exception 'booking_id_required';
+  end if;
+  if p_booking_snapshot is null then
+    raise exception 'booking_snapshot_required';
+  end if;
+
+  select *
+  into v_booking
+  from public.bookings
+  where id = p_booking_id
+  for update;
+
+  if not found then
+    raise exception 'booking_not_found';
+  end if;
+
+  if lower(coalesce(v_booking.payout_status, '')) = 'paid'
+     or (
+       v_booking.payout_id is not null
+       and exists (
+         select 1
+         from public.cleaner_payouts cp
+         where cp.id = v_booking.payout_id
+           and lower(coalesce(cp.status, '')) = 'paid'
+       )
+     )
+     or exists (
+       select 1
+       from public.booking_roster_member_payouts rp
+       left join public.cleaner_payouts cp on cp.id = rp.cleaner_payout_id
+       where rp.booking_id = p_booking_id
+         and (
+           lower(coalesce(rp.status, '')) = 'paid'
+           or lower(coalesce(cp.status, '')) = 'paid'
+         )
+     )
+     or exists (
+       select 1
+       from public.team_job_member_payouts tj
+       left join public.cleaner_payouts cp on cp.id = tj.cleaner_payout_id
+       where tj.booking_id = p_booking_id
+         and (
+           lower(coalesce(tj.status, '')) = 'paid'
+           or lower(coalesce(cp.status, '')) = 'paid'
+         )
+     ) then
+    raise exception 'booking_payout_already_paid';
+  end if;
+
+  update public.bookings
+  set booking_snapshot = p_booking_snapshot
+  where id = p_booking_id;
+
+  return true;
+end;
+$$;
+
+revoke all on function public.claim_booking_refund_workflow(uuid, jsonb) from public;
+revoke all on function public.claim_booking_refund_workflow(uuid, jsonb) from anon;
+revoke all on function public.claim_booking_refund_workflow(uuid, jsonb) from authenticated;
+grant execute on function public.claim_booking_refund_workflow(uuid, jsonb) to service_role;
+
+comment on function public.claim_booking_refund_workflow(uuid, jsonb) is
+  'Service-role-only atomic refund claim/retry gate. Locks the booking row shared with payout settlement, rejects already-paid cleaner earnings across direct/roster/team rails, then stores the claimed refund workflow before any provider call.';
