@@ -479,7 +479,14 @@ export async function submitPaystackTransferViaOutbox(
     .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at")
     .maybeSingle();
 
-  if (claimErr) return { ok: false, error: claimErr.message };
+  if (claimErr) {
+    return {
+      ok: false,
+      error: claimErr.message,
+      status: 500,
+      needsReconcile: true,
+    };
+  }
   if (!claimed) {
     const again = await loadOutboxByReference(admin, params.reference);
     if (again?.status === "submitted" || again?.status === "succeeded" || again?.transfer_code) {
