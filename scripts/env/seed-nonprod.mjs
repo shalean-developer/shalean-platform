@@ -24,7 +24,7 @@ const require = createRequire(resolve(root, "apps/web/package.json"));
 const { createClient } = require("@supabase/supabase-js");
 
 const REFS = {
-  staging: "gbgnemlpyykyhpqqbgru",
+  staging: "jhubpsbwmjgydkzztxeu",
 };
 
 const USERS = {
@@ -251,7 +251,7 @@ function applyCatalogSql(env) {
       { cwd: root, stdio: "inherit", shell: true },
     );
   } finally {
-    execFileSync("npx", ["supabase", "link", "--project-ref", prev || "tchayecuvzssixyxlvfu", "--yes"], {
+    execFileSync("npx", ["supabase", "link", "--project-ref", prev || "paqjwfulwywtsyyvdxrq", "--yes"], {
       cwd: root,
       stdio: "inherit",
       shell: true,
@@ -266,7 +266,7 @@ async function resetFixtures(admin, env) {
 
 async function main() {
   const { env, reset } = parseArgs(process.argv.slice(2));
-  if (REFS[env] === "tchayecuvzssixyxlvfu") {
+  if (REFS[env] === "paqjwfulwywtsyyvdxrq") {
     throw new Error("Refusing to seed production");
   }
   const { url, service } = loadKeys(env);
