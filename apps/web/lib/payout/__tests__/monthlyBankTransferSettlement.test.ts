@@ -141,6 +141,7 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain('admin.rpc("fail_cleaner_payout_outbox_validation"');
     expect(executor).toContain("permanentValidationFailure");
     expect(executor).toContain("permanentBusinessRule ? 409 : 500");
+    expect(executor).toContain("needsReconcile: true");
     expect(executor).toContain("leaving it retryable");
     expect(executor).toContain("Temporarily blocked Paystack transfer before provider POST");
     const sql = read("../../supabase/migrations/20261004113000_atomic_bank_transfer_settlement.sql");
