@@ -1,6 +1,7 @@
 -- PAYOUT-E2E-002B: atomic bank-transfer settlement and dual-rail guard.
 -- Bank transfer is recorded only when no Paystack transfer is active/successful.
--- Payout row, linked earning rails, and parent run are converged in one transaction.
+-- Payout row, linked earning rails, booking reconciliation ids/timestamps,
+-- and parent run completion are converged in one transaction.
 
 create or replace function public.settle_cleaner_payout_bank_transfer(
   p_payout_id uuid,
@@ -17,8 +18,10 @@ declare
   v_payout public.cleaner_payouts%rowtype;
   v_reference text := trim(coalesce(p_reference, ''));
   v_paid_at timestamptz := coalesce(p_paid_at, now());
-  v_run_id uuid;
+  v_parent_run_id uuid;
+  v_booking_run_id uuid;
   v_remaining integer;
+  v_locked_run uuid;
 begin
   if p_payout_id is null then
     raise exception 'payout_id_required';
@@ -44,7 +47,6 @@ begin
   if v_payout.status = 'paid'
      and v_payout.payment_method = 'bank_transfer'
      and coalesce(v_payout.payment_reference, '') = v_reference then
-    perform public.mark_bookings_paid_for_cleaner_payout(p_payout_id);
     return true;
   end if;
 
@@ -80,27 +82,62 @@ begin
     raise exception 'payout_state_changed';
   end if;
 
-  perform public.mark_bookings_paid_for_cleaner_payout(p_payout_id);
+  -- bookings.payout_run_id is a required reconciliation UUID for paid bookings.
+  -- It is intentionally not an FK to cleaner_payout_runs, but the parent run id
+  -- is a stable shared reconciliation id when one exists.
+  v_parent_run_id := v_payout.payout_run_id;
+  v_booking_run_id := coalesce(v_parent_run_id, gen_random_uuid());
 
-  v_run_id := v_payout.payout_run_id;
-  if v_run_id is not null then
-    update public.cleaner_payout_runs
-    set status = 'processing'
-    where id = v_run_id
-      and status = 'approved';
+  update public.bookings b
+  set
+    payout_status = 'paid',
+    payout_paid_at = v_paid_at,
+    payout_run_id = coalesce(b.payout_run_id, v_booking_run_id)
+  where b.payout_id = p_payout_id
+    and (
+      lower(coalesce(b.payout_status, '')) is distinct from 'paid'
+      or b.payout_paid_at is null
+      or b.payout_run_id is null
+    );
 
-    select count(*)
-    into v_remaining
-    from public.cleaner_payouts
-    where payout_run_id = v_run_id
-      and status <> 'paid';
+  update public.booking_roster_member_payouts rp
+  set status = 'paid'
+  where rp.cleaner_payout_id = p_payout_id
+    and rp.status is distinct from 'paid';
 
-    if v_remaining = 0 then
+  update public.team_job_member_payouts tj
+  set status = 'paid'
+  where tj.cleaner_payout_id = p_payout_id
+    and tj.status is distinct from 'paid';
+
+  if v_parent_run_id is not null then
+    -- Serialize settlements in the same parent run so the final-child count
+    -- cannot race and leave a fully paid run stuck in processing.
+    select id
+    into v_locked_run
+    from public.cleaner_payout_runs
+    where id = v_parent_run_id
+    for update;
+
+    if found then
       update public.cleaner_payout_runs
-      set status = 'paid',
-          paid_at = coalesce(paid_at, v_paid_at)
-      where id = v_run_id
-        and status in ('approved', 'processing');
+      set status = 'processing'
+      where id = v_parent_run_id
+        and status = 'approved';
+
+      select count(*)
+      into v_remaining
+      from public.cleaner_payouts
+      where payout_run_id = v_parent_run_id
+        and status <> 'paid';
+
+      if v_remaining = 0 then
+        update public.cleaner_payout_runs
+        set status = 'paid',
+            paid_at = coalesce(paid_at, v_paid_at)
+        where id = v_parent_run_id
+          and status in ('approved', 'processing');
+      end if;
     end if;
   end if;
 
@@ -114,4 +151,4 @@ revoke all on function public.settle_cleaner_payout_bank_transfer(uuid, uuid, te
 grant execute on function public.settle_cleaner_payout_bank_transfer(uuid, uuid, text, timestamptz) to service_role;
 
 comment on function public.settle_cleaner_payout_bank_transfer(uuid, uuid, text, timestamptz) is
-  'Service-role-only atomic bank settlement: blocks active Paystack rail, marks payout + linked earning lines paid, and advances/closes the parent payout run.';
+  'Service-role-only atomic bank settlement: blocks active Paystack rail, stamps payout + linked bookings/member lines with the selected paid timestamp and reconciliation id, and serializes/finishes the parent payout run.';
