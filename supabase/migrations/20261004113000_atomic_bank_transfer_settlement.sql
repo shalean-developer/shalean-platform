@@ -284,7 +284,16 @@ begin
          select 1
          from public.cleaner_payouts cp
          where cp.id = v_booking.payout_id
-           and lower(coalesce(cp.status, '')) = 'paid'
+           and (
+             lower(coalesce(cp.status, '')) = 'paid'
+             or lower(coalesce(cp.payment_status, '')) = 'processing'
+             or exists (
+               select 1
+               from public.payout_transfers pt
+               where pt.payout_id = cp.id
+                 and lower(coalesce(pt.status, '')) <> 'failed'
+             )
+           )
        )
      )
      or exists (
@@ -403,3 +412,120 @@ grant execute on function public.claim_booking_refund_workflow(uuid, jsonb, json
 
 comment on function public.claim_booking_refund_workflow(uuid, jsonb, jsonb, text, text) is
   'Service-role-only atomic refund claim/retry gate. Locks the booking row shared with payout settlement, rejects paid payouts and stale snapshots, validates new/failed to submitted transitions, rejects another in-flight refund, then stores the claim before any provider call.';
+
+
+-- Paystack payout claim shares the same payout -> booking lock order as bank
+-- settlement, and refuses any linked booking with an active/refunded workflow.
+create or replace function public.claim_cleaner_payout_paystack_processing(
+  p_payout_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_payout public.cleaner_payouts%rowtype;
+begin
+  if p_payout_id is null then
+    raise exception 'payout_id_required';
+  end if;
+
+  select *
+  into v_payout
+  from public.cleaner_payouts
+  where id = p_payout_id
+  for update;
+
+  if not found then
+    raise exception 'payout_not_found';
+  end if;
+
+  if v_payout.status <> 'approved' then
+    raise exception 'payout_not_approved';
+  end if;
+
+  if lower(coalesce(v_payout.payment_status, '')) not in ('pending', 'failed', 'partial_failed') then
+    raise exception 'payout_payment_already_in_progress';
+  end if;
+
+  perform b.id
+  from public.bookings b
+  where (
+    b.payout_id = p_payout_id
+    or exists (
+      select 1
+      from public.booking_roster_member_payouts rp
+      where rp.cleaner_payout_id = p_payout_id
+        and rp.booking_id = b.id
+    )
+    or exists (
+      select 1
+      from public.team_job_member_payouts tj
+      where tj.cleaner_payout_id = p_payout_id
+        and tj.booking_id = b.id
+    )
+  )
+  for update of b;
+
+  if exists (
+    select 1
+    from public.bookings b
+    where (
+      b.payout_id = p_payout_id
+      or exists (
+        select 1
+        from public.booking_roster_member_payouts rp
+        where rp.cleaner_payout_id = p_payout_id
+          and rp.booking_id = b.id
+      )
+      or exists (
+        select 1
+        from public.team_job_member_payouts tj
+        where tj.cleaner_payout_id = p_payout_id
+          and tj.booking_id = b.id
+      )
+    )
+      and (
+        lower(coalesce(b.status, '')) <> 'completed'
+        or b.refunded_at is not null
+        or lower(coalesce(b.refund_status, '')) in ('refunded', 'partial_refund', 'partial', 'full', 'reversed', 'chargeback')
+        or exists (
+          select 1
+          from jsonb_array_elements(
+            case
+              when jsonb_typeof(b.booking_snapshot->'refund_workflow'->'records') = 'array'
+                then b.booking_snapshot->'refund_workflow'->'records'
+              else '[]'::jsonb
+            end
+          ) as refund_record
+          where lower(coalesce(refund_record->>'provider_state', '')) in ('pending', 'submitted_to_provider')
+        )
+      )
+  ) then
+    raise exception 'linked_refund_blocks_payout';
+  end if;
+
+  update public.cleaner_payouts
+  set
+    payment_status = 'processing',
+    payment_method = 'paystack'
+  where id = p_payout_id
+    and status = 'approved'
+    and lower(coalesce(payment_status, '')) in ('pending', 'failed', 'partial_failed');
+
+  if not found then
+    raise exception 'payout_payment_already_in_progress';
+  end if;
+
+  return true;
+end;
+$$;
+
+revoke all on function public.claim_cleaner_payout_paystack_processing(uuid) from public;
+revoke all on function public.claim_cleaner_payout_paystack_processing(uuid) from anon;
+revoke all on function public.claim_cleaner_payout_paystack_processing(uuid) from authenticated;
+grant execute on function public.claim_cleaner_payout_paystack_processing(uuid) to service_role;
+
+comment on function public.claim_cleaner_payout_paystack_processing(uuid) is
+  'Service-role-only Paystack payout claim. Locks payout then linked bookings, rejects active/final refunds, and atomically transitions the approved payout into processing before any transfer submission.';
