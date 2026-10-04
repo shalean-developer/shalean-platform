@@ -108,6 +108,7 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(sql).toContain("claim_cleaner_payout_paystack_processing");
     expect(sql).toContain("linked_refund_or_ineligible_booking_blocks_payout");
     expect(sql).toContain("p_allow_existing_processing");
+    expect(sql).toContain("payout_cleaner_mismatch");
     expect(sql).toContain("b.is_test is true");
     expect(sql).toContain("payment_status, '')) = 'processing'");
     expect(sql).toContain("public.payout_transfers");
@@ -115,6 +116,10 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(pay).toContain("p_allow_existing_processing: true");
     expect(pay).toContain("p_allow_existing_processing: false");
     expect(pay).toContain("Payout resume is blocked because a linked booking is refunded");
+    expect(pay).toContain("loadAndValidatePayoutBatch");
+    expect(pay).toContain("const resumeBatch = await loadAndValidatePayoutBatch");
+    expect(pay).toContain("Payout contains earning items for a different cleaner.");
+    expect(pay).toContain("Payout total does not match linked booking totals.");
   });
 
   it("keeps Paystack optional while stamping Paystack settlement truth", () => {
