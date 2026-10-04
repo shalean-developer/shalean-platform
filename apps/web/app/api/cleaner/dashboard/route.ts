@@ -22,10 +22,8 @@ import {
 } from "@/lib/cleaner/applyPreviewEarningsToCleanerJobRows";
 import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
 import {
-  isStuckNullEarningsBooking,
   maybeLogStuckNullEarnings,
 } from "@/lib/cleaner/cleanerPayoutInvariantLogging";
-import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
 import { augmentCleanerJobsWithViewerRosterContext } from "@/lib/cleaner/pairedRosterMemberLifecycle";
 
 export const runtime = "nodejs";
@@ -57,7 +55,6 @@ function wireDashboardJob(raw: Record<string, unknown>): CleanerBookingRow {
     cleaner_earnings_total_cents: raw.cleaner_earnings_total_cents as number | null | undefined,
     payout_frozen_cents: raw.payout_frozen_cents as number | null | undefined,
     display_earnings_cents: raw.display_earnings_cents as number | null | undefined,
-    earnings_summary: raw.earnings_summary,
     is_team_job: raw.is_team_job === true,
     team_id: (raw.team_id as string | null | undefined) ?? null,
     cleaner_id: (raw.cleaner_id as string | null | undefined) ?? undefined,
@@ -129,14 +126,6 @@ export async function GET(request: Request) {
     const id = String(j.id ?? "").trim();
     if (!id) continue;
     maybeLogStuckNullEarnings(id, j);
-    if (isStuckNullEarningsBooking(j)) {
-      scheduleStuckEarningsRecomputeDebounced({
-        admin,
-        bookingId: id,
-        cleanerId,
-        recomputeSource: "jobs_list",
-      });
-    }
   }
 
   const { today_cents, today_breakdown } = todayCentsAndBreakdownFromBookings(
