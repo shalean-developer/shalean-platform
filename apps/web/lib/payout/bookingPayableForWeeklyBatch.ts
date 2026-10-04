@@ -1,5 +1,6 @@
 import { bookingPaymentRecomputeBlockedByRefund, type BookingPaidSignalRow } from "@/lib/payout/bookingEarningsIntegrity";
 import { bookingUsesAccrualPayoutCap, type BookingRowForPayoutCap } from "@/lib/payout/bookingPayoutCapCents";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 
 /**
  * Columns required by {@link bookingPayableForWeeklyBatch} when loading bookings for weekly batching.
@@ -7,7 +8,7 @@ import { bookingUsesAccrualPayoutCap, type BookingRowForPayoutCap } from "@/lib/
  * Phase 15A **P10** / **P11** / **P11b** mirror the same predicate for measurement-only probes).
  */
 export const BOOKING_SELECT_FIELDS_FOR_WEEKLY_BATCH_ELIGIBILITY =
-  "id, status, cleaner_id, cleaner_payout_cents, cleaner_bonus_cents, is_test, completed_at, date, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, payout_status, payout_frozen_cents, refunded_at, refund_status";
+  "id, status, cleaner_id, cleaner_payout_cents, cleaner_bonus_cents, is_test, completed_at, date, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, payout_status, payout_frozen_cents, refunded_at, refund_status, metadata";
 
 export type BookingRowForWeeklyBatchEligibility = BookingRowForPayoutCap &
   BookingPaidSignalRow & {
@@ -22,6 +23,7 @@ export type BookingRowForWeeklyBatchEligibility = BookingRowForPayoutCap &
     is_test?: boolean | null;
     completed_at?: string | null;
     date?: string | null;
+    metadata?: unknown;
   };
 
 export type BookingPayableForWeeklyBatchResult = { payable: true } | { payable: false; reason: string };
@@ -55,6 +57,10 @@ export function bookingPayableForWeeklyBatch(
   row: BookingRowForWeeklyBatchEligibility,
   invoiceStatusById: Map<string, string>,
 ): BookingPayableForWeeklyBatchResult {
+  if (bookingHasActivePayoutAttributionRemoval(row)) {
+    return { payable: false, reason: "payout_attribution_removed" };
+  }
+
   if (normLower(row.status) !== "completed") {
     return { payable: false, reason: "not_completed" };
   }

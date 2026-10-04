@@ -12,11 +12,9 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
 import {
-  isStuckNullEarningsBooking,
   logEligibleOrPaidWithoutFrozen,
   maybeLogStuckNullEarnings,
 } from "@/lib/cleaner/cleanerPayoutInvariantLogging";
-import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
 import type { CleanerBookingLineItemWire, CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { cleanerBookingScopeLines } from "@/lib/cleaner/cleanerBookingScopeSummary";
 import { fetchBookingLineItemsByBookingIds } from "@/lib/cleaner/fetchBookingLineItemsByBookingIds";
@@ -34,6 +32,7 @@ import {
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { augmentCleanerJobsWithViewerRosterContext } from "@/lib/cleaner/pairedRosterMemberLifecycle";
 import { prioritizeCleanerJobsForList } from "@/lib/cleaner/prioritizeCleanerJobsForList";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,16 +55,16 @@ export async function GET(request: Request) {
   /**
    * NOTE: `lite=1` is legacy for older clients that inlined jobs on a heavy home screen.
    * Prefer `GET /api/cleaner/dashboard` for the mobile dashboard slice (capped jobs + today earnings).
-   * When set: full booking visibility without line items, roster names, issue flags, or recompute side-effects.
+   * When set: full booking visibility without line items, roster names, issue flags, or invariant diagnostics.
    *
-   * `view=card` — jobs list / timeline: skips line-item join, issue flags, team roster fetch, and stuck-earnings
-   * side-effects; attaches `scope_lines` from persisted booking + snapshot (lighter mobile payload).
+   * `view=card` — jobs list / timeline: skips line-item join, issue flags, and team roster fetch;
+   * attaches `scope_lines` from persisted booking + snapshot (lighter mobile payload).
    */
   const lite = url.searchParams.get("lite") === "1" || url.searchParams.get("lite") === "true";
   const cardView = url.searchParams.get("view") === "card";
   const slimWire = lite || cardView;
-  /** Legacy `lite=1` only — card view still runs stuck-earnings recompute so rows can populate `display_earnings_cents`. */
-  const skipStuckEarningsSideEffects = lite;
+  /** Legacy `lite=1` avoids per-row invariant telemetry on the lightweight compatibility response. */
+  const skipInvariantDiagnostics = lite;
   const directAssignments = !slimWire && url.searchParams.get("assignments") === "direct";
 
   if (process.env.TRACE_BOOKING_ASSIGN === "1") {
@@ -83,7 +82,7 @@ export async function GET(request: Request) {
   }
 
   const bookingSelect =
-    "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_count, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by";
+    "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_count, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by, metadata";
 
   const { data: jobsRaw, error } = directAssignments
     ? await admin
@@ -119,11 +118,14 @@ export async function GET(request: Request) {
 
   const mappedJobs = (jobs ?? []).map((raw) => {
     const row = raw as Record<string, unknown>;
-    const displayEarningsCents = resolveCleanerEarningsCents({
-      cleaner_earnings_total_cents: row.cleaner_earnings_total_cents,
-      payout_frozen_cents: row.payout_frozen_cents,
-      display_earnings_cents: row.display_earnings_cents,
-    });
+    const payoutAttributionRemoved = bookingHasActivePayoutAttributionRemoval(row);
+    const displayEarningsCents = payoutAttributionRemoved
+      ? null
+      : resolveCleanerEarningsCents({
+          cleaner_earnings_total_cents: row.cleaner_earnings_total_cents,
+          payout_frozen_cents: row.payout_frozen_cents,
+          display_earnings_cents: row.display_earnings_cents,
+        });
     const snapRaw = row.team_member_count_snapshot;
     const teamSnap =
       typeof snapRaw === "number" && Number.isFinite(snapRaw) && snapRaw > 0 ? Math.floor(snapRaw) : null;
@@ -144,6 +146,7 @@ export async function GET(request: Request) {
       total_price: _omitTotalPrice,
       price_breakdown: _omitPriceBreakdown,
       amount_paid_cents: _omitAmountPaid,
+      metadata: _omitMetadata,
       ...safe
     } = row;
     const cardPayHint =
@@ -322,21 +325,13 @@ export async function GET(request: Request) {
     };
   });
 
-  if (!skipStuckEarningsSideEffects) {
+  if (!skipInvariantDiagnostics) {
     for (const j of jobsWithRoster) {
       const rec = j as Record<string, unknown>;
       const id = String(rec.id ?? "").trim();
       if (!id) continue;
       logEligibleOrPaidWithoutFrozen(id, rec);
       maybeLogStuckNullEarnings(id, rec);
-      if (isStuckNullEarningsBooking(rec)) {
-        scheduleStuckEarningsRecomputeDebounced({
-          admin,
-          bookingId: id,
-          cleanerId: viewerCleanerId,
-          recomputeSource: "jobs_list",
-        });
-      }
     }
   }
 

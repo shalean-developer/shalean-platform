@@ -54,6 +54,7 @@ import {
   bookingFinancialDiagnostics,
 } from "@/lib/payout/bookingPayoutCapCents";
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const EARNINGS_MODEL_VERSION_FALLBACK = "v1_2026_earnings";
@@ -602,6 +603,7 @@ export const PREVIEW_EARNINGS_MISS = {
   COMPUTE_FAILED: "earnings_compute_failed",
   TEAM_MISSING_TEAM_ID: "team_missing_team_id",
   TEAM_MEMBER_NOT_ALLOCATED: "team_member_not_allocated",
+  ATTRIBUTION_REMOVED: "payout_attribution_removed",
 } as const;
 
 export type PreviewEarningsMissReason =
@@ -638,6 +640,15 @@ export async function previewDisplayEarningsCentsForCleanerJobDiagnostic(
     payout_owner_cleaner_id?: string | null;
     team_id?: string | null;
   };
+
+  if (bookingHasActivePayoutAttributionRemoval(row as unknown as Record<string, unknown>)) {
+    return {
+      ok: false,
+      amountCents: null,
+      source: null,
+      missingReason: PREVIEW_EARNINGS_MISS.ATTRIBUTION_REMOVED,
+    };
+  }
 
   /**
    * Pre-acceptance solo dispatch offers have `cleaner_id = NULL` and

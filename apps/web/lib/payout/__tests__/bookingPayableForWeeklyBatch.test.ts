@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { bookingPayableForWeeklyBatch, type BookingRowForWeeklyBatchEligibility } from "@/lib/payout/bookingPayableForWeeklyBatch";
 
@@ -40,6 +42,28 @@ describe("bookingPayableForWeeklyBatch", () => {
     expect(bookingPayableForWeeklyBatch({ ...basePrepaid, payment_status: "pending_monthly" }, new Map()).payable).toBe(
       false,
     );
+  });
+
+  it("rejects an active payout attribution removal even when stale payout cents remain positive", () => {
+    const removed = {
+      ...basePrepaid,
+      cleaner_id: "cleaner-old",
+      cleaner_payout_cents: 5000,
+      metadata: {
+        payout_attribution_removal_v1: {
+          active: true,
+          cleaner_id: "cleaner-old",
+          header_cleaner_id_at_removal: "cleaner-old",
+          removed_at: "2026-10-02T07:22:44Z",
+          removed_by_admin_id: "admin-1",
+          reason: null,
+        },
+      },
+    };
+    expect(bookingPayableForWeeklyBatch(removed, new Map())).toEqual({
+      payable: false,
+      reason: "payout_attribution_removed",
+    });
   });
 
   it("rejects zero or missing cleaner payout cents", () => {
@@ -91,5 +115,18 @@ describe("bookingPayableForWeeklyBatch", () => {
 
   it("rejects non-completed status", () => {
     expect(bookingPayableForWeeklyBatch({ ...basePrepaid, status: "assigned" }, new Map()).payable).toBe(false);
+  });
+});
+
+
+describe("weekly legacy payout preflight removal-marker contract", () => {
+  it("loads metadata and skips active removal markers in backfill and blocking count", () => {
+    const source = readFileSync(
+      join(process.cwd(), "lib/payout/backfillLegacyWeeklyPayoutColumns.ts"),
+      "utf8",
+    );
+    expect(source).toContain("cleaner_id, payout_owner_cleaner_id, metadata");
+    expect(source).toContain("bookingHasActivePayoutAttributionRemoval(row)");
+    expect(source).toContain("bookingHasActivePayoutAttributionRemoval(row as unknown as Record<string, unknown>)");
   });
 });

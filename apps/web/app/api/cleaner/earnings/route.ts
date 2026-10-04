@@ -31,6 +31,7 @@ import {
 } from "@/lib/cleaner/earningsLedgerShadowTotals";
 import type { CleanerPayoutSummaryRow } from "@/lib/cleaner/cleanerPayoutSummaryTypes";
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -60,6 +61,7 @@ type BookingEarningsRow = {
   total_paid_zar?: unknown;
   amount_paid_cents?: unknown;
   earnings_summary?: unknown;
+  metadata?: unknown;
 };
 
 type PaymentDetailsRow = {
@@ -189,7 +191,7 @@ export async function GET(request: Request) {
     await Promise.all([
       fetchCleanerVisibleBookingsMerged(admin, session.cleanerId, {
         select:
-          "id, status, service, date, completed_at, cleaner_id, payout_owner_cleaner_id, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job, payout_paid_at, payout_run_id, total_paid_zar, amount_paid_cents, earnings_summary, admin_recurring_unpaid_completion_override_at",
+          "id, status, service, date, completed_at, cleaner_id, payout_owner_cleaner_id, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job, payout_paid_at, payout_run_id, total_paid_zar, amount_paid_cents, earnings_summary, admin_recurring_unpaid_completion_override_at, metadata",
         perBranchLimit: 300,
         applyEachBranch: (q) =>
           q
@@ -209,8 +211,10 @@ export async function GET(request: Request) {
   const explicitRosterBookingIds = new Set(
     await fetchBookingIdsWhereCleanerOnRoster(admin, cleanerId, 10_000),
   );
-  const attributedBookings = ((bookingsMerged ?? []) as Record<string, unknown>[]).filter((row) =>
-    isExplicitCleanerBookingAttribution(row, cleanerId, explicitRosterBookingIds),
+  const attributedBookings = ((bookingsMerged ?? []) as Record<string, unknown>[]).filter(
+    (row) =>
+      isExplicitCleanerBookingAttribution(row, cleanerId, explicitRosterBookingIds) &&
+      !bookingHasActivePayoutAttributionRemoval(row),
   );
   const bookings = sortBookingsByCompletedAtThenId(attributedBookings).slice(0, 300);
   if (paymentDetailsError) {

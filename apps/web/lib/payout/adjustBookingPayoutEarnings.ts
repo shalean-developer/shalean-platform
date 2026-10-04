@@ -12,6 +12,10 @@ import { parseBookingEarningsSummary, patchEarningsSummaryForCleaner } from "@/l
 import { requireVisitEarningsAdjustAudit } from "@/lib/payout/requireVisitEarningsAdjustAudit";
 import { syncOpenPayoutBatchesForVisitEdit } from "@/lib/payout/syncPayoutBatchFromBookings";
 import { assertBookingVisitPayoutEditable } from "@/lib/payout/visitPayoutEditGuards";
+import {
+  deactivatePayoutAttributionRemovalMarker,
+  readPayoutAttributionRemovalMarker,
+} from "@/lib/payout/bookingPayoutAttributionRemoval";
 
 type BookingRow = BookingRowForPayoutCap & {
   id: string;
@@ -29,6 +33,7 @@ type BookingRow = BookingRowForPayoutCap & {
   cleaner_id: string | null;
   payout_owner_cleaner_id?: string | null;
   earnings_summary?: unknown;
+  metadata?: unknown;
 };
 
 /**
@@ -56,7 +61,7 @@ export async function adjustBookingPayoutEarnings(
   const { data: booking, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, date, status, cleaner_id, payout_owner_cleaner_id, payout_id, payout_status, payout_paid_at, is_team_job, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id, total_paid_cents, amount_paid_cents, total_paid_zar, cleaner_payout_cents, cleaner_bonus_cents, display_earnings_cents, cleaner_earnings_total_cents, payout_frozen_cents, earnings_summary",
+      "id, date, status, cleaner_id, payout_owner_cleaner_id, payout_id, payout_status, payout_paid_at, is_team_job, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id, total_paid_cents, amount_paid_cents, total_paid_zar, cleaner_payout_cents, cleaner_bonus_cents, display_earnings_cents, cleaner_earnings_total_cents, payout_frozen_cents, earnings_summary, metadata",
     )
     .eq("id", params.bookingId)
     .maybeSingle();
@@ -109,6 +114,12 @@ export async function adjustBookingPayoutEarnings(
     cleaner_earnings_total_cents: displayCents,
     company_revenue_cents: companyRevenueCents,
   };
+  if (readPayoutAttributionRemovalMarker(row.metadata)) {
+    patch.metadata = deactivatePayoutAttributionRemovalMarker(row.metadata, {
+      cleared_at: new Date().toISOString(),
+      cleared_by_admin_id: params.adminUserId,
+    });
+  }
 
   const summary = parseBookingEarningsSummary(row.earnings_summary);
   const summaryCleanerId =
