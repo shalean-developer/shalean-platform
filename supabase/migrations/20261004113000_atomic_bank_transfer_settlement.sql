@@ -661,3 +661,85 @@ grant execute on function public.claim_cleaner_payout_paystack_processing(uuid, 
 comment on function public.claim_cleaner_payout_paystack_processing(uuid, boolean) is
   'Service-role-only Paystack payout claim/resume gate. Locks payout then linked bookings, rejects test/non-completed/refunded/in-flight-refund bookings, and atomically claims or revalidates processing before any transfer submission.';
 
+
+
+-- Converge a permanently blocked cleaner-payout outbox atomically. If any
+-- update fails, the transaction rolls back and the pending outbox remains
+-- retryable for a later reconciliation attempt.
+create or replace function public.fail_cleaner_payout_outbox_validation(
+  p_outbox_id uuid,
+  p_error text
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_outbox public.payout_transfer_outbox%rowtype;
+  v_error text := left(trim(coalesce(p_error, 'validation_failed')), 2000);
+begin
+  if p_outbox_id is null then
+    raise exception 'outbox_id_required';
+  end if;
+
+  select *
+  into v_outbox
+  from public.payout_transfer_outbox
+  where id = p_outbox_id
+  for update;
+
+  if not found then
+    raise exception 'outbox_not_found';
+  end if;
+
+  if v_outbox.rail <> 'cleaner_payout' then
+    raise exception 'outbox_rail_not_cleaner_payout';
+  end if;
+
+  if lower(coalesce(v_outbox.status, '')) = 'succeeded' then
+    raise exception 'outbox_already_succeeded';
+  end if;
+
+  update public.payout_transfer_outbox
+  set
+    status = 'failed',
+    last_error = v_error,
+    updated_at = now()
+  where id = p_outbox_id
+    and status <> 'succeeded';
+
+  if v_outbox.transfer_row_id is not null then
+    update public.payout_transfers
+    set
+      status = 'failed',
+      error = v_error
+    where id = v_outbox.transfer_row_id
+      and status <> 'success';
+
+    if not found then
+      raise exception 'transfer_audit_not_converged';
+    end if;
+  end if;
+
+  update public.cleaner_payouts
+  set payment_status = 'failed'
+  where id = v_outbox.subject_id
+    and status = 'approved'
+    and lower(coalesce(payment_status, '')) = 'processing';
+
+  if not found then
+    raise exception 'payout_not_converged';
+  end if;
+
+  return true;
+end;
+$$;
+
+revoke all on function public.fail_cleaner_payout_outbox_validation(uuid, text) from public;
+revoke all on function public.fail_cleaner_payout_outbox_validation(uuid, text) from anon;
+revoke all on function public.fail_cleaner_payout_outbox_validation(uuid, text) from authenticated;
+grant execute on function public.fail_cleaner_payout_outbox_validation(uuid, text) to service_role;
+
+comment on function public.fail_cleaner_payout_outbox_validation(uuid, text) is
+  'Service-role-only atomic terminal transition for deterministic cleaner-payout pre-provider validation failures: outbox, transfer audit and payout state converge together or roll back together.';
