@@ -18,7 +18,9 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     const sql = read("../../supabase/migrations/20261004113000_atomic_bank_transfer_settlement.sql");
     expect(sql).toContain("paystack_transfer_in_flight");
     expect(sql).toContain("public.payout_transfers");
-    expect(sql).toContain("perform public.mark_bookings_paid_for_cleaner_payout");
+    expect(sql).toContain("payout_run_id = coalesce(b.payout_run_id, v_booking_run_id)");
+    expect(sql).toContain("payout_paid_at = v_paid_at");
+    expect(sql).toContain("for update");
     expect(sql).toContain("public.cleaner_payout_runs");
     expect(sql).toContain("status = 'paid'");
   });
