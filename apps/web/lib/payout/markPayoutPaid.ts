@@ -37,6 +37,21 @@ export async function markCleanerPayoutPaid(
   if (params.paidAt) {
     const parsed = new Date(params.paidAt);
     if (!Number.isFinite(parsed.getTime())) return { ok: false, error: "Invalid payment date." };
+    const jhbToday = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Johannesburg",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+    const paidYmd = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Johannesburg",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(parsed);
+    if (paidYmd > jhbToday) {
+      return { ok: false, error: "Payment date cannot be in the future." };
+    }
     paidAt = parsed.toISOString();
   }
 
