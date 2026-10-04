@@ -102,7 +102,7 @@ async function convergeDeterministicResumeFailure(
   const reference = immutableCleanerPayoutReference(payoutId);
   const { data: outboxData, error: outboxErr } = await admin
     .from("payout_transfer_outbox")
-    .select("id, status, transfer_code")
+    .select("id, status, transfer_code, attempts")
     .eq("reference", reference)
     .maybeSingle();
 
@@ -110,7 +110,12 @@ async function convergeDeterministicResumeFailure(
     return { ok: false, error: outboxErr.message, needsReconcile: true };
   }
 
-  const outbox = outboxData as { id?: string; status?: string | null; transfer_code?: string | null } | null;
+  const outbox = outboxData as {
+    id?: string;
+    status?: string | null;
+    transfer_code?: string | null;
+    attempts?: number | null;
+  } | null;
   const outboxStatus = String(outbox?.status ?? "").toLowerCase();
 
   // Submitted / uncertain provider state may already represent money movement.
@@ -141,6 +146,8 @@ async function convergeDeterministicResumeFailure(
     const { error: convergeErr } = await admin.rpc("fail_cleaner_payout_outbox_validation", {
       p_outbox_id: outbox.id,
       p_error: error,
+      p_expected_status: "pending",
+      p_expected_attempts: Math.max(0, Math.round(Number(outbox.attempts ?? 0))),
     });
     if (convergeErr) {
       return { ok: false, error: convergeErr.message, needsReconcile: true };
