@@ -135,6 +135,15 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("const safetyGate = await validateCleanerPayoutBeforeProviderPost");
   });
 
+  it("terminally fails permanently invalid cleaner-payout outboxes", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+    expect(executor).toContain("permanent_pre_provider_validation_failure");
+    expect(executor).toContain('status: "failed"');
+    expect(executor).toContain('update({ payment_status: "failed" })');
+    expect(executor).toContain("permanentValidationFailure");
+    expect(executor).toContain("Temporarily blocked Paystack transfer before provider POST");
+  });
+
   it("keeps Paystack optional while stamping Paystack settlement truth", () => {
     const pay = read("lib/payout/paystackPayout.ts");
     const webhook = read("lib/payout/paystackTransferStatus.ts");
