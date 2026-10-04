@@ -53,6 +53,7 @@ describe("MARKETING-READY-01 trust and claims cleanup", () => {
       read("../../supabase/seeds/booking_v2_catalog_config.json"),
       read("../../supabase/seed/reference/pricing.sql"),
       read("../../scripts/seed-dev.mjs"),
+      read("src/features/booking-v2/config/serviceConfig.ts"),
     ].join("\n");
 
     expect(catalogSources).not.toMatch(/full deposit return/i);
