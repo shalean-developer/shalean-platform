@@ -396,23 +396,26 @@ export async function submitPaystackTransferViaOutbox(
   }
 
   // Claim outbox for send
+  const expectedAttempts = outbox.attempts ?? 0;
   const { data: claimed, error: claimErr } = await admin
     .from("payout_transfer_outbox")
     .update({
       status: "pending",
-      attempts: (outbox.attempts ?? 0) + 1,
+      attempts: expectedAttempts + 1,
       updated_at: new Date().toISOString(),
     })
     .eq("id", outbox.id)
-    .in("status", ["pending", "failed"])
+    .eq("status", "pending")
+    .eq("attempts", expectedAttempts)
     .select("id, status, transfer_code, transfer_row_id, reference, attempts")
     .maybeSingle();
 
   if (claimErr) return { ok: false, error: claimErr.message };
-  if (!claimed && outbox.status !== "pending") {
-    // Concurrent worker — reload
+  if (!claimed) {
+    // Concurrent sender or terminal convergence won the optimistic claim.
+    // Reload and never POST from this worker unless it owns the claim.
     const again = await loadOutboxByReference(admin, params.reference);
-    if (again?.status === "submitted" || again?.transfer_code) {
+    if (again?.status === "submitted" || again?.status === "succeeded" || again?.transfer_code) {
       return {
         ok: true,
         transferCode: again.transfer_code,
@@ -421,6 +424,18 @@ export async function submitPaystackTransferViaOutbox(
         outboxId: again.id,
       };
     }
+    if (again?.status === "needs_reconcile" || again?.status === "pending") {
+      return {
+        ok: false,
+        error: "Payout outbox send is already claimed by another worker.",
+        needsReconcile: true,
+      };
+    }
+    return {
+      ok: false,
+      error: "Payout outbox is no longer eligible for submission.",
+      status: 409,
+    };
   }
 
   const safetyGate = await validateCleanerPayoutBeforeProviderPost(admin, params, amount);
