@@ -146,7 +146,6 @@ export async function GET(request: Request) {
       total_price: _omitTotalPrice,
       price_breakdown: _omitPriceBreakdown,
       amount_paid_cents: _omitAmountPaid,
-      metadata: _omitMetadata,
       ...safe
     } = row;
     const cardPayHint =
@@ -348,13 +347,20 @@ export async function GET(request: Request) {
     viewerCleanerId,
   );
 
+  const stripInternalMetadata = (rows: Record<string, unknown>[]) =>
+    rows.map((row) => {
+      const { metadata: _internalMetadata, ...safeRow } = row;
+      return safeRow;
+    });
+
+
   if (cardView) {
     const out = await applyPreviewEarningsToCleanerJobRows(admin, {
       cleanerId: viewerCleanerId,
       rows: jobsWithPairedContext,
       maxPreviews: DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP,
     });
-    return NextResponse.json({ jobs: out });
+    return NextResponse.json({ jobs: stripInternalMetadata(out) });
   }
 
   if (!lite) {
@@ -363,8 +369,8 @@ export async function GET(request: Request) {
       rows: jobsWithPairedContext,
       maxPreviews: DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP,
     });
-    return NextResponse.json({ jobs: out });
+    return NextResponse.json({ jobs: stripInternalMetadata(out) });
   }
 
-  return NextResponse.json({ jobs: jobsWithPairedContext });
+  return NextResponse.json({ jobs: stripInternalMetadata(jobsWithPairedContext) });
 }
