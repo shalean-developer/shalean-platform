@@ -78,6 +78,7 @@ describe("submitPaystackTransferViaOutbox", () => {
                       transfer_row_id: TRANSFER_ROW,
                       reference: REF,
                       attempts: 0,
+                      updated_at: new Date().toISOString(),
                     },
                     error: null,
                   };
@@ -97,32 +98,34 @@ describe("submitPaystackTransferViaOutbox", () => {
                       transfer_row_id: TRANSFER_ROW,
                       reference: REF,
                       attempts: 0,
+                      updated_at: new Date().toISOString(),
                     },
                     error: null,
                   }),
                 }),
               };
             },
-            update: () => ({
-              eq: () => ({
-                in: () => ({
-                  select: () => ({
-                    maybeSingle: async () => ({
-                      data: {
-                        id: OUTBOX_ID,
-                        status: "pending",
-                        transfer_code: null,
-                        transfer_row_id: TRANSFER_ROW,
-                        reference: REF,
-                        attempts: 1,
-                      },
-                      error: null,
-                    }),
-                  }),
-                }),
+            update: (patch: { status?: string }) => {
+              const query = {
+                eq: () => query,
+                in: () => query,
                 neq: async () => ({ error: null }),
-              }),
-            }),
+                select: () => query,
+                maybeSingle: async () => ({
+                  data: {
+                    id: OUTBOX_ID,
+                    status: patch.status === "sending" ? "sending" : patch.status ?? "sending",
+                    transfer_code: null,
+                    transfer_row_id: TRANSFER_ROW,
+                    reference: REF,
+                    attempts: 1,
+                    updated_at: new Date().toISOString(),
+                  },
+                  error: null,
+                }),
+              };
+              return query;
+            },
           };
         }
         if (table === "payout_audit_events") {
@@ -201,6 +204,7 @@ describe("submitPaystackTransferViaOutbox", () => {
                     transfer_row_id: TRANSFER_ROW,
                     reference: REF,
                     attempts: 0,
+                    updated_at: new Date().toISOString(),
                   },
                   error: null,
                 }),
@@ -208,26 +212,25 @@ describe("submitPaystackTransferViaOutbox", () => {
             }),
             update: (patch: { status?: string }) => {
               if (patch.status) statuses.push(patch.status);
-              return {
-                eq: () => ({
-                  in: () => ({
-                    select: () => ({
-                      maybeSingle: async () => ({
-                        data: {
-                          id: OUTBOX_ID,
-                          status: "pending",
-                          transfer_code: null,
-                          transfer_row_id: TRANSFER_ROW,
-                          reference: REF,
-                          attempts: 1,
-                        },
-                        error: null,
-                      }),
-                    }),
-                  }),
-                  neq: async () => ({ error: null }),
+              const query = {
+                eq: () => query,
+                in: () => query,
+                neq: async () => ({ error: null }),
+                select: () => query,
+                maybeSingle: async () => ({
+                  data: {
+                    id: OUTBOX_ID,
+                    status: patch.status === "sending" ? "sending" : patch.status ?? "sending",
+                    transfer_code: null,
+                    transfer_row_id: TRANSFER_ROW,
+                    reference: REF,
+                    attempts: 1,
+                    updated_at: new Date().toISOString(),
+                  },
+                  error: null,
                 }),
               };
+              return query;
             },
           };
         }
