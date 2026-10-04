@@ -26,9 +26,9 @@ const require = createRequire(resolve(root, "apps/web/package.json"));
 const { createClient } = require("@supabase/supabase-js");
 
 const REFS = {
-  staging: "gbgnemlpyykyhpqqbgru",
+  staging: "jhubpsbwmjgydkzztxeu",
 };
-const PRODUCTION_REF = "tchayecuvzssixyxlvfu";
+const PRODUCTION_REF = "paqjwfulwywtsyyvdxrq";
 const MARKER = "FARAI-UAT-BOOK";
 
 /** Fixed UUIDs — idempotent across re-runs. */
