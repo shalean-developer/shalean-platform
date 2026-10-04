@@ -8,13 +8,16 @@ const migrationFiles = readdirSync(migrationsDir)
   .filter((name) => name.endsWith(".sql"))
   .sort();
 
+const functionName =
+  String.raw`(?:"?public"?\s*\.\s*)?"?blog_is_admin"?\s*\(\s*\)`;
+const securityOperation = new RegExp(
+  String.raw`(?:create\s+or\s+replace\s+function\s+${functionName}|alter\s+function\s+${functionName}\s+(?:set\s+search_path\s*(?:=|to)\s*[^;]+|reset\s+search_path))`,
+  "g",
+);
+
 const operations = migrationFiles.flatMap((name) => {
   const sql = readFileSync(resolve(migrationsDir, name), "utf8").toLowerCase();
-  const matches = [
-    ...sql.matchAll(
-      /(create\s+or\s+replace\s+function\s+public\.blog_is_admin\s*\(\s*\)|alter\s+function\s+public\.blog_is_admin\s*\(\s*\)\s+(?:set\s+search_path\s*=\s*[^;]+|reset\s+search_path))/g,
-    ),
-  ];
+  const matches = [...sql.matchAll(securityOperation)];
   return matches.map((match) => ({ name, operation: match[0] }));
 });
 
@@ -23,7 +26,21 @@ describe("MASTER-00B-02 blog helper search_path", () => {
     expect(operations.length).toBeGreaterThan(0);
     const latest = operations.at(-1);
     expect(latest?.operation).toContain("alter function public.blog_is_admin()");
-    expect(latest?.operation).toContain("set search_path = pg_catalog");
+    expect(latest?.operation).toMatch(
+      /set\s+search_path\s*(?:=|to)\s*pg_catalog/,
+    );
+  });
+
+  it("recognizes both PostgreSQL SET forms and quoted identifiers", () => {
+    const examples = [
+      "alter function public.blog_is_admin() set search_path = public",
+      "alter function public.blog_is_admin() set search_path to public",
+      'alter function "public"."blog_is_admin"() set search_path to public',
+    ];
+
+    for (const sql of examples) {
+      expect([...sql.matchAll(securityOperation)]).toHaveLength(1);
+    }
   });
 
   it("keeps the hardening migration body-only-safe", () => {
