@@ -383,6 +383,11 @@ describe("Princess PR D refundBookingPayment integration (mocked provider)", () 
 
     const rpc = async (fn: string, args: Record<string, unknown>) => {
       if (fn === "claim_booking_refund_workflow") {
+        const expected = args.p_expected_booking_snapshot ?? {};
+        const current = row.booking_snapshot ?? {};
+        if (JSON.stringify(current) !== JSON.stringify(expected)) {
+          return { data: null, error: { message: "stale_refund_claim" } };
+        }
         const patch = { booking_snapshot: args.p_booking_snapshot };
         updates.push(patch);
         row = { ...row, ...patch };
