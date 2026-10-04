@@ -213,6 +213,14 @@ export async function payCleanerPayoutWithPaystack(
 
     const resumeBatch = await loadAndValidatePayoutBatch(admin, payout, manuallyAdjusted);
     if (!resumeBatch.ok) {
+      if (resumeBatch.status >= 500) {
+        return {
+          ok: false,
+          error: resumeBatch.error,
+          status: resumeBatch.status,
+          needsReconcile: true,
+        };
+      }
       await failPayoutExecution(admin, payout.id);
       return resumeBatch;
     }
@@ -231,7 +239,11 @@ export async function payCleanerPayoutWithPaystack(
       reference: immutableCleanerPayoutReference(payout.id),
       initiatedBy: params.paidBy,
     });
-    if (!resumed.ok) return resumed;
+    if (!resumed.ok) {
+      if (resumed.needsReconcile) return resumed;
+      await failPayoutExecution(admin, payout.id);
+      return resumed;
+    }
     await admin
       .from("cleaner_payouts")
       .update({
