@@ -52,4 +52,20 @@ describe("MASTER-00A release source truth", () => {
     expect(existsSync(path.join(repositoryRoot, relativePath))).toBe(true);
   });
 
+  it.each([
+    "scripts/env/patch-vercel-nonprod-supabase.mjs",
+    "scripts/env/seed-nonprod.mjs",
+    "scripts/env/seed-uat-booking-fixtures.mjs",
+  ])("keeps staging mutator %s on the canonical staging project", (relativePath) => {
+    const source = readRepositoryFile(relativePath);
+    expect(source).toContain(STAGING_REF);
+    expect(source).not.toContain(RETIRED_STAGING_REF);
+  });
+
+  it("isolates PR preview artifacts from canonical deploy/staging", () => {
+    const workflow = readRepositoryFile(".github/workflows/pr-preview-pricing-test.yml");
+    expect(workflow).toContain("refs/heads/deploy/pr-preview");
+    expect(workflow).not.toContain("git push --force origin HEAD:refs/heads/deploy/staging");
+  });
+
 });
