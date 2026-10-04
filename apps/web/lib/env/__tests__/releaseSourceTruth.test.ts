@@ -42,4 +42,14 @@ describe("MASTER-00A release source truth", () => {
   ])("does not restore obsolete release workflow %s", (relativePath) => {
     expect(existsSync(path.join(repositoryRoot, relativePath))).toBe(false);
   });
+  it.each([
+    "supabase/migrations/20260922103000_pricing_08a_cleaning_credit_reservations.sql",
+    "supabase/migrations/20261001152000_office_invoices_01_financial_truth.sql",
+    "supabase/migrations/20261001194500_office_invoices_04b_unified_registry.sql",
+    "supabase/migrations/20261002110500_quote_e2e_02_immutable_acceptance.sql",
+    "supabase/migrations/20261004113000_atomic_bank_transfer_settlement.sql",
+  ])("retains authoritative production migration %s", (relativePath) => {
+    expect(existsSync(path.join(repositoryRoot, relativePath))).toBe(true);
+  });
+
 });
