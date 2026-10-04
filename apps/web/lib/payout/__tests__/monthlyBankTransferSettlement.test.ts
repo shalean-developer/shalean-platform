@@ -25,7 +25,8 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(sql).toContain("linked_earning_no_longer_payable");
     expect(sql).toContain("refunded_at is not null");
     expect(sql).toContain("future_paid_at_not_allowed");
-    expect(sql).toContain("for update");
+    expect(sql).toContain("perform b.id");
+    expect(sql).toContain("for update of b");
     expect(sql).toContain("public.cleaner_payout_runs");
     expect(sql).toContain("status = 'paid'");
   });
