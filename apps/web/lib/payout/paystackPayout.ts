@@ -88,6 +88,56 @@ async function failPayoutExecution(
   await admin.from("cleaner_payouts").update({ payment_status: status }).eq("id", payoutId).eq("status", "approved");
 }
 
+async function convergeDeterministicResumeFailure(
+  admin: SupabaseClient,
+  payoutId: string,
+  error: string,
+): Promise<{ ok: true } | { ok: false; error: string; needsReconcile: true }> {
+  const reference = immutableCleanerPayoutReference(payoutId);
+  const { data: outboxData, error: outboxErr } = await admin
+    .from("payout_transfer_outbox")
+    .select("id, status, transfer_code")
+    .eq("reference", reference)
+    .maybeSingle();
+
+  if (outboxErr) {
+    return { ok: false, error: outboxErr.message, needsReconcile: true };
+  }
+
+  const outbox = outboxData as { id?: string; status?: string | null; transfer_code?: string | null } | null;
+  const outboxStatus = String(outbox?.status ?? "").toLowerCase();
+
+  // Submitted / uncertain provider state may already represent money movement.
+  // Never terminally fail it from application validation.
+  if (
+    outbox &&
+    (outboxStatus === "submitted" ||
+      outboxStatus === "needs_reconcile" ||
+      outboxStatus === "succeeded" ||
+      Boolean(outbox.transfer_code))
+  ) {
+    return {
+      ok: false,
+      error: "Existing Paystack transfer requires reconciliation before payout state can change.",
+      needsReconcile: true,
+    };
+  }
+
+  if (outbox?.id) {
+    const { error: convergeErr } = await admin.rpc("fail_cleaner_payout_outbox_validation", {
+      p_outbox_id: outbox.id,
+      p_error: error,
+    });
+    if (convergeErr) {
+      return { ok: false, error: convergeErr.message, needsReconcile: true };
+    }
+    return { ok: true };
+  }
+
+  await failPayoutExecution(admin, payoutId);
+  return { ok: true };
+}
+
 /**
  * Pay an approved weekly/monthly `cleaner_payouts` batch via the shared outbox transfer executor.
  * Money is only sent through {@link submitPaystackTransferViaOutbox}.
@@ -201,14 +251,35 @@ export async function payCleanerPayoutWithPaystack(
     });
     if (resumeGuardErr) {
       const message = String(resumeGuardErr.message ?? "");
-      if (message.includes("linked_refund_or_ineligible_booking_blocks_payout")) {
-        return {
-          ok: false,
-          error: "Payout resume is blocked because a linked booking is refunded, in refund processing, test, or no longer completed.",
-          status: 409,
-        };
+      const deterministicResumeBlock =
+        message.includes("linked_refund_or_ineligible_booking_blocks_payout") ||
+        message.includes("payout_cleaner_mismatch");
+
+      if (deterministicResumeBlock) {
+        const humanError = message.includes("payout_cleaner_mismatch")
+          ? "Payout resume is blocked because a linked earning belongs to a different cleaner."
+          : "Payout resume is blocked because a linked booking is refunded, in refund processing, test, or no longer completed.";
+        const converged = await convergeDeterministicResumeFailure(admin, payout.id, humanError);
+        if (!converged.ok) {
+          return { ok: false, error: converged.error, status: 500, needsReconcile: true };
+        }
+        return { ok: false, error: humanError, status: 409 };
       }
-      return { ok: false, error: message || "Could not revalidate processing payout.", status: 409 };
+
+      if (
+        message.includes("payout_not_found") ||
+        message.includes("payout_not_approved") ||
+        message.includes("payout_not_processing")
+      ) {
+        return { ok: false, error: message || "Payout state changed before resume.", status: 409 };
+      }
+
+      return {
+        ok: false,
+        error: message || "Could not revalidate processing payout.",
+        status: 500,
+        needsReconcile: true,
+      };
     }
 
     const resumeBatch = await loadAndValidatePayoutBatch(admin, payout, manuallyAdjusted);
@@ -221,14 +292,28 @@ export async function payCleanerPayoutWithPaystack(
           needsReconcile: true,
         };
       }
-      await failPayoutExecution(admin, payout.id);
+      const converged = await convergeDeterministicResumeFailure(admin, payout.id, resumeBatch.error);
+      if (!converged.ok) {
+        return { ok: false, error: converged.error, status: 500, needsReconcile: true };
+      }
       return resumeBatch;
     }
 
     const ensuredResume = await ensurePaystackRecipient(admin, payout.cleaner_id);
     if (!ensuredResume.ok) {
-      await failPayoutExecution(admin, payout.id);
-      return { ok: false, error: ensuredResume.error, status: 400 };
+      if (ensuredResume.retryable) {
+        return {
+          ok: false,
+          error: ensuredResume.error,
+          status: ensuredResume.status ?? 500,
+          needsReconcile: true,
+        };
+      }
+      const converged = await convergeDeterministicResumeFailure(admin, payout.id, ensuredResume.error);
+      if (!converged.ok) {
+        return { ok: false, error: converged.error, status: 500, needsReconcile: true };
+      }
+      return { ok: false, error: ensuredResume.error, status: ensuredResume.status ?? 400 };
     }
     const resumed = await submitPaystackTransferViaOutbox(admin, {
       rail: "cleaner_payout",
