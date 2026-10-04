@@ -20,6 +20,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  CUSTOMER_SUPPORT_TELEPHONE_DISPLAY,
+  CUSTOMER_SUPPORT_TELEPHONE_TEL,
+  CUSTOMER_SUPPORT_WHATSAPP_DISPLAY,
+  customerSupportWhatsAppHref,
+} from "@/lib/site/customerSupport";
+import { PUBLIC_BUSINESS_EMAIL, PUBLIC_BUSINESS_HOURS_LABEL } from "@/lib/site/publicBusinessIdentity";
 import { cn } from "@/lib/utils";
 
 type FaqCategory = {
@@ -99,7 +106,7 @@ const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "What do your cleaners bring?",
-        a: "Our cleaners bring all necessary cleaning equipment and eco-friendly products. If you have preferred products, just let us know.",
+        a: "It depends on the service. Deep Cleaning and Move In / Out Cleaning include Shalean-provided cleaning supplies. For Regular home cleaning and Airbnb Cleaning, customers provide the usual products and equipment unless a separate supplies option or charge is selected or agreed. Office and specialist services follow the booking scope.",
       },
     ],
   },
@@ -267,27 +274,27 @@ export default function AccountHelpPage() {
         <h2 id="contact-us-heading" className="mb-4 text-base font-semibold text-foreground">Contact us</h2>
         <div className="grid gap-4 sm:grid-cols-3">
           <ContactOption
-            href="https://wa.me/27825915525"
+            href={customerSupportWhatsAppHref()}
             title="WhatsApp"
-            value="082 591 5525"
+            value={CUSTOMER_SUPPORT_WHATSAPP_DISPLAY}
             detail="Fastest response"
             icon={MessageCircle}
             iconTone="bg-success/10 text-success"
             external
           />
           <ContactOption
-            href="mailto:hello@shalean.co.za"
+            href={`mailto:${PUBLIC_BUSINESS_EMAIL}`}
             title="Email"
-            value="hello@shalean.co.za"
+            value={PUBLIC_BUSINESS_EMAIL}
             detail="Reply within 24 hours"
             icon={Mail}
             iconTone="bg-primary/10 text-primary"
           />
           <ContactOption
-            href="tel:+27825915525"
+            href={CUSTOMER_SUPPORT_TELEPHONE_TEL}
             title="Call us"
-            value="082 591 5525"
-            detail="Mon–Sat 8am–6pm"
+            value={CUSTOMER_SUPPORT_TELEPHONE_DISPLAY}
+            detail={PUBLIC_BUSINESS_HOURS_LABEL}
             icon={Phone}
             iconTone="bg-accent text-accent-foreground"
           />
