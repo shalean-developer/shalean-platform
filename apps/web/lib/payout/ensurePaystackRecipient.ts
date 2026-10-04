@@ -87,7 +87,7 @@ export async function ensurePaystackRecipient(
     return {
       ok: false,
       error: json.message ?? "Paystack transferrecipient failed.",
-      retryable: res.status >= 500,
+      retryable: res.status >= 500 || res.status === 429 || res.status === 408,
       status: res.status,
     };
   }
