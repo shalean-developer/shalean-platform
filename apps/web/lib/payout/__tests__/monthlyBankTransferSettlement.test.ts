@@ -45,6 +45,15 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(src).not.toContain('select("recipient_code")');
   });
 
+  it("treats saved bank details as cleaner payout-ready even without a Paystack recipient", () => {
+    const profile = read("app/api/cleaner/profile-summary/route.ts");
+    const earnings = read("app/api/cleaner/earnings/route.ts");
+    expect(profile).toContain('String(pr?.account_number ?? "").trim()');
+    expect(profile).toContain('String(pr?.bank_code ?? "").trim()');
+    expect(earnings).toContain("paystackReady");
+    expect(earnings).toContain('account_number, bank_code, account_name, recipient_code');
+  });
+
   it("keeps Paystack optional while stamping Paystack settlement truth", () => {
     const pay = read("lib/payout/paystackPayout.ts");
     const webhook = read("lib/payout/paystackTransferStatus.ts");
