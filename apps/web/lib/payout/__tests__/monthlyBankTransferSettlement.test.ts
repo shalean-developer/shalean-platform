@@ -20,9 +20,18 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(sql).toContain("public.payout_transfers");
     expect(sql).toContain("payout_run_id = coalesce(b.payout_run_id, v_booking_run_id)");
     expect(sql).toContain("payout_paid_at = v_paid_at");
+    expect(sql).toContain("bank_details_missing");
+    expect(sql).toContain("public.cleaner_payment_details");
     expect(sql).toContain("for update");
     expect(sql).toContain("public.cleaner_payout_runs");
     expect(sql).toContain("status = 'paid'");
+  });
+
+  it("supports system-prepared monthly batches and idempotent matching bank retries", () => {
+    const src = read("lib/payout/markPayoutPaid.ts");
+    expect(src).toContain('preparedBy || "system"');
+    expect(src).toContain("isMatchingBankReplay");
+    expect(src).toContain('"settle_cleaner_payout_bank_transfer"');
   });
 
   it("has a dedicated bank-transfer API that requires a reference", () => {
