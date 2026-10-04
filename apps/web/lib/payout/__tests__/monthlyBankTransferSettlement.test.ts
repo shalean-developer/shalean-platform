@@ -204,6 +204,17 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("needsReconcile: true");
   });
 
+  it("converges recovered sending leases before retiring the outbox", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+    expect(executor).toContain('import { applyTransferSuccess } from "@/lib/payout/paystackTransferStatus"');
+    expect(executor).toContain("Recovered Paystack transfer could not update audit row");
+    expect(executor).toContain("await applyTransferSuccess(admin");
+    expect(executor).toContain("Recovered outbox lease changed before submission convergence.");
+    expect(executor).toContain("const released = await releaseOutboxSendLease");
+    expect(executor).toContain("if (!released.ok)");
+    expect(executor).toContain("Outbox lease changed before release.");
+  });
+
   it("keeps Paystack optional while stamping Paystack settlement truth", () => {
     const pay = read("lib/payout/paystackPayout.ts");
     const webhook = read("lib/payout/paystackTransferStatus.ts");
