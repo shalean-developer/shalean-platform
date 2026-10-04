@@ -168,6 +168,9 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(pay).toContain('admin.rpc("fail_cleaner_payout_outbox_validation"');
     expect(pay).toContain("deterministicResumeBlock");
     expect(pay).toContain("ensuredResume.retryable");
+    expect(pay).toContain("if (!failed.ok)");
+    expect(recipient).toContain("res.status === 429");
+    expect(recipient).toContain("res.status === 408");
     expect(recipient).toContain("retryable: true");
     expect(recipient).toContain("retryable: false");
   });
