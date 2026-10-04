@@ -18,6 +18,7 @@ vi.mock("@/lib/logging/systemLog", () => ({
 import {
   buildProductionHealthSummary,
   detectCompletedMissingCompletionTimestamp,
+  detectCompletedMissingEarningsBasis,
   detectPaymentFinalizationDrift,
   detectStaleCronRuns,
   fetchExpectedCronSuccessRows,
@@ -249,6 +250,33 @@ describe("productionHealthMetrics", () => {
     expect(summary.findings[0]?.diagnostics).toMatchObject({
       by_code: { recurring_child_missing_duration_minutes: 1 },
     });
+  });
+
+  it("does not flag an intentional active payout-attribution removal as missing earnings", () => {
+    expect(
+      detectCompletedMissingEarningsBasis([
+        {
+          id: "removed",
+          status: "completed",
+          cleaner_id: "cleaner-1",
+          payout_owner_cleaner_id: "cleaner-1",
+          display_earnings_cents: 0,
+          cleaner_earnings_total_cents: 0,
+          cleaner_payout_cents: null,
+          payout_frozen_cents: null,
+          metadata: {
+            payout_attribution_removal_v1: {
+              active: true,
+              cleaner_id: "cleaner-1",
+              header_cleaner_id_at_removal: "cleaner-1",
+              removed_at: "2026-10-02T07:22:44Z",
+              removed_by_admin_id: "admin-1",
+              reason: null,
+            },
+          },
+        },
+      ]),
+    ).toEqual([]);
   });
 
   it("detects recently completed bookings without completed_at evidence", () => {
