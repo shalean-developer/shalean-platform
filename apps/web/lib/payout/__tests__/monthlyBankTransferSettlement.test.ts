@@ -11,7 +11,7 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     const src = read("lib/payout/markPayoutPaid.ts");
     expect(src).toContain('"bank_transfer"');
     expect(src).toContain('"settle_cleaner_payout_bank_transfer"');
-    expect(src).toContain("p_payment_method");
+    expect(src).toContain("p_reference: reference");
   });
 
   it("blocks bank settlement while Paystack is active and closes linked earning rails/run atomically", () => {
