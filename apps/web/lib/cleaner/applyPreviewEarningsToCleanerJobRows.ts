@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveCleanerDashboardEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { previewDisplayEarningsCentsForCleanerJob } from "@/lib/payout/persistCleanerPayout";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 
 /** Default cap for sequential `previewDisplayEarningsCentsForCleanerJob` calls per HTTP request. */
 export const DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP = 50;
@@ -80,6 +81,20 @@ export async function applyPreviewEarningsToCleanerJobRows(
 
   for (const j of params.rows) {
     const id = String(j.id ?? "").trim();
+    if (bookingHasActivePayoutAttributionRemoval(j)) {
+      out.push({
+        ...j,
+        displayEarningsCents: null,
+        earnings_cents: null,
+        display_earnings_cents: null,
+        displayEarningsIsEstimate: false,
+        earnings_estimated: false,
+        earnings_is_estimate: false,
+        earnings_basis_pending: false,
+        payout_attribution_removed: true,
+      });
+      continue;
+    }
     const viewerPayoutCents = id ? viewerTeamPayoutByBooking.get(id) : undefined;
     const resolved = resolvedEarningsCentsFromWireRow(
       viewerPayoutCents == null ? j : { ...j, viewer_payout_cents: viewerPayoutCents },
