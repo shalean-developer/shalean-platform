@@ -95,6 +95,27 @@ async function persistWorkflow(
   return { ok: true };
 }
 
+async function persistRefundClaimWorkflow(
+  admin: SupabaseClient,
+  bookingId: string,
+  snapshot: unknown,
+  workflow: BookingRefundWorkflow,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const nextSnapshot = mergeRefundWorkflowIntoSnapshot(snapshot, workflow);
+  const { error } = await admin.rpc("claim_booking_refund_workflow", {
+    p_booking_id: bookingId,
+    p_booking_snapshot: nextSnapshot,
+  });
+  if (error) {
+    const message = String(error.message ?? "");
+    if (message.includes("booking_payout_already_paid")) {
+      return { ok: false, error: "booking_payout_already_paid" };
+    }
+    return { ok: false, error: message || "refund_claim_failed" };
+  }
+  return { ok: true };
+}
+
 /**
  * Admin booking refund (Princess PR D).
  * - Cumulative partials via booking_snapshot.refund_workflow
@@ -377,7 +398,7 @@ async function retryFailedRefund(
     provider_outcome: null,
   };
   workflow = upsertRefundRecord(workflow, record);
-  const claimed = await persistWorkflow(admin, row.id, row.booking_snapshot, workflow, {});
+  const claimed = await persistRefundClaimWorkflow(admin, row.id, row.booking_snapshot, workflow);
   if (!claimed.ok) return { ok: false, error: claimed.error };
 
   return finalizeProviderSubmission(admin, row, workflow, record, params, amountDecision.kind);
@@ -431,7 +452,7 @@ async function submitAndFinalizeRefund(
   };
 
   workflow = upsertRefundRecord(workflow, record);
-  const claimed = await persistWorkflow(admin, row.id, row.booking_snapshot, workflow, {});
+  const claimed = await persistRefundClaimWorkflow(admin, row.id, row.booking_snapshot, workflow);
   if (!claimed.ok) return { ok: false, error: claimed.error };
 
   return finalizeProviderSubmission(admin, row, workflow, record, params, amountDecision.kind);
