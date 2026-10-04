@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getPaystackBaseUrl } from "@/lib/payout/paystackOrigin";
 import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
+import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
 
 /**
  * Single Paystack money-send entry point for cleaner payouts.
@@ -63,6 +64,77 @@ function auditTable(rail: PayoutTransferRail): "payout_transfers" | "earnings_di
 
 function subjectColumn(rail: PayoutTransferRail): "payout_id" | "disbursement_id" {
   return rail === "cleaner_payout" ? "payout_id" : "disbursement_id";
+}
+
+async function validateCleanerPayoutBeforeProviderPost(
+  admin: SupabaseClient,
+  params: SubmitPaystackTransferParams,
+  amount: number,
+): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+  if (params.rail !== "cleaner_payout") return { ok: true };
+
+  const { data: payoutData, error: payoutErr } = await admin
+    .from("cleaner_payouts")
+    .select("id, cleaner_id, total_amount_cents, status, payment_status, amount_adjusted_at")
+    .eq("id", params.subjectId)
+    .maybeSingle();
+  if (payoutErr) return { ok: false, error: payoutErr.message, status: 500 };
+  if (!payoutData) return { ok: false, error: "Payout not found.", status: 404 };
+
+  const payout = payoutData as {
+    cleaner_id?: string | null;
+    total_amount_cents?: number | null;
+    status?: string | null;
+    payment_status?: string | null;
+    amount_adjusted_at?: string | null;
+  };
+  if (String(payout.status ?? "").toLowerCase() !== "approved") {
+    return { ok: false, error: "Payout is no longer approved.", status: 409 };
+  }
+  if (String(payout.payment_status ?? "").toLowerCase() !== "processing") {
+    return { ok: false, error: "Payout is no longer in processing state.", status: 409 };
+  }
+  if (String(payout.cleaner_id ?? "").trim() !== params.cleanerId.trim()) {
+    return { ok: false, error: "Payout cleaner does not match outbox cleaner.", status: 409 };
+  }
+  if (Math.max(0, Math.round(Number(payout.total_amount_cents) || 0)) !== amount) {
+    return { ok: false, error: "Payout amount does not match outbox amount.", status: 409 };
+  }
+
+  const { error: guardErr } = await admin.rpc("claim_cleaner_payout_paystack_processing", {
+    p_payout_id: params.subjectId,
+    p_allow_existing_processing: true,
+  });
+  if (guardErr) {
+    return {
+      ok: false,
+      error: String(guardErr.message ?? "Payout failed locked linked-booking validation."),
+      status: 409,
+    };
+  }
+
+  const loaded = await loadCleanerPayoutBatchItems(admin, params.subjectId);
+  if (loaded.error) return { ok: false, error: loaded.error, status: 500 };
+  if (loaded.items.length === 0) {
+    return { ok: false, error: "Payout has no linked earning items.", status: 409 };
+  }
+  if (loaded.items.some((item) => item.is_test)) {
+    return { ok: false, error: "Payout contains a test booking.", status: 409 };
+  }
+  if (loaded.items.some((item) => item.cleaner_id !== params.cleanerId)) {
+    return { ok: false, error: "Payout contains earning items for a different cleaner.", status: 409 };
+  }
+  if (loaded.items.some((item) => item.refunded_at)) {
+    return { ok: false, error: "Payout contains refunded bookings.", status: 409 };
+  }
+  if (loaded.items.some((item) => String(item.booking_status ?? "").toLowerCase() !== "completed")) {
+    return { ok: false, error: "Payout contains non-completed bookings.", status: 409 };
+  }
+  if (!payout.amount_adjusted_at && loaded.totalCents !== amount) {
+    return { ok: false, error: "Payout total does not match linked booking totals.", status: 409 };
+  }
+
+  return { ok: true };
 }
 
 /** Stable weekly-batch reference — never append timestamps. */
@@ -341,6 +413,22 @@ export async function submitPaystackTransferViaOutbox(
         outboxId: again.id,
       };
     }
+  }
+
+  const safetyGate = await validateCleanerPayoutBeforeProviderPost(admin, params, amount);
+  if (!safetyGate.ok) {
+    void logSystemEvent({
+      level: "warn",
+      source: "PAYSTACK_OUTBOX_SAFETY_GATE",
+      message: "Blocked Paystack transfer before provider POST",
+      context: {
+        rail: params.rail,
+        subjectId: params.subjectId,
+        reference: params.reference,
+        error: safetyGate.error,
+      },
+    });
+    return safetyGate;
   }
 
   const transfer = await paystackPostTransfer({
