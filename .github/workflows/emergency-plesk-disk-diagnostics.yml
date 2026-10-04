@@ -1,0 +1,81 @@
+name: Emergency Plesk disk diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Read-only disk diagnostics
+    runs-on: ubuntu-latest
+    environment: Production
+    steps:
+      - name: Validate SSH configuration
+        env:
+          SSH_HOST: ${{ secrets.PLESK_SSH_HOST }}
+          SSH_PORT: ${{ secrets.PLESK_SSH_PORT }}
+          SSH_USER: ${{ secrets.PLESK_SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.PLESK_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_HOST"
+          test -n "$SSH_PORT"
+          test -n "$SSH_USER"
+          test -n "$SSH_PRIVATE_KEY"
+          echo "SSH configuration present"
+
+      - name: Configure SSH
+        env:
+          SSH_HOST: ${{ secrets.PLESK_SSH_HOST }}
+          SSH_PORT: ${{ secrets.PLESK_SSH_PORT }}
+          SSH_PRIVATE_KEY: ${{ secrets.PLESK_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Run read-only disk diagnostics
+        env:
+          SSH_HOST: ${{ secrets.PLESK_SSH_HOST }}
+          SSH_PORT: ${{ secrets.PLESK_SSH_PORT }}
+          SSH_USER: ${{ secrets.PLESK_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_ed25519 -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" 'bash -s' <<'REMOTE'
+          set -u
+          echo "=== HOST ==="
+          hostname || true
+          date || true
+
+          echo
+          echo "=== FILESYSTEM USAGE ==="
+          df -h || true
+
+          echo
+          echo "=== SHALEAN HOME TOP LEVEL ==="
+          du -h --max-depth=1 /var/www/vhosts/shalean.co.za 2>/dev/null | sort -hr | head -30 || true
+
+          echo
+          echo "=== PRODUCTION RELEASES ==="
+          du -sh /var/www/vhosts/shalean.co.za/plesk-production-releases/* 2>/dev/null | sort -hr | head -30 || true
+
+          echo
+          echo "=== PRICING-TEST RELEASES ==="
+          du -sh /var/www/vhosts/shalean.co.za/plesk-pricing-test-* 2>/dev/null | sort -hr | head -30 || true
+
+          echo
+          echo "=== SHALEAN SYSTEM LOGS ==="
+          du -sh /var/www/vhosts/system/shalean.co.za/logs/* 2>/dev/null | sort -hr | head -30 || true
+
+          echo
+          echo "=== LARGE FILES OVER 100 MB UNDER SHALEAN HOME ==="
+          find /var/www/vhosts/shalean.co.za -xdev -type f -size +100M -printf '%s %p\n' 2>/dev/null             | sort -nr | head -30             | awk '{ printf "%.1f MB ", $1/1048576; $1=""; sub(/^ /,""); print }' || true
+          REMOTE
+
+      - name: Confirm no changes were made
+        run: echo "Read-only diagnostic workflow complete. No files were deleted or modified on the server."

@@ -16,7 +16,7 @@ export type ShaleanDeploymentEnv =
 export const SHALEAN_SUPABASE_REFS = {
   production: "paqjwfulwywtsyyvdxrq",
   /** Retired/paused staging project retained only for explicit recovery or diagnostics. */
-  staging: "gbgnemlpyykyhpqqbgru",
+  staging: "jhubpsbwmjgydkzztxeu",
 } as const;
 
 export type EnvLike = Record<string, string | undefined>;
