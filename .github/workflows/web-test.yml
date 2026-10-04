@@ -106,6 +106,7 @@ jobs:
           app/api/cleaner/__tests__/cleanerJobsTeamApi.test.ts
           app/api/cleaner/__tests__/cleanerReadRoutesNoRepair.test.ts
           lib/cleaner/__tests__/applyPreviewEarningsToCleanerJobRows.test.ts
+          lib/cleaner/currentJobHeading.contract.test.ts
           lib/payout/__tests__/bookingPayoutAttributionRemoval.test.ts
           lib/payout/__tests__/bookingPayoutPersistEligibility.test.ts
           lib/payout/__tests__/bookingPayableForWeeklyBatch.test.ts

@@ -43,17 +43,18 @@ export function ActiveJobHero({
   onRefresh,
 }: ActiveJobHeroProps) {
   const { badgeClass, chipLabel } = toneForPhase(job.phaseDisplay);
+  const heroLabel = chipLabel === "In progress" ? "Current job" : "Active job";
 
   return (
     <section
-      aria-label="Active job"
+      aria-label={heroLabel}
       className={cn(
         "rounded-2xl border-2 border-amber-500/50 bg-amber-500/10 p-5 shadow-sm transition-[box-shadow,background-color,border-color] duration-200 ease-out hover:shadow-md dark:bg-amber-500/15",
       )}
     >
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span className={cn("rounded-md px-2 py-1 text-xs font-bold uppercase tracking-wider", badgeClass)}>
-          Active job
+          {heroLabel}
         </span>
         <span className="rounded-full bg-background/80 px-2 py-0.5 text-xs font-medium text-foreground ring-1 ring-amber-600/25">
           {chipLabel}
