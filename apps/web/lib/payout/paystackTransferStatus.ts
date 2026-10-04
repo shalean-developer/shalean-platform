@@ -125,6 +125,20 @@ async function applyPayoutTransferSuccess(
   // A successful audit row may still have incomplete downstream reconciliation
   // from an earlier crash. Always replay the remaining idempotent convergence.
   await maybeMarkPayoutPaid(supabase, transfer.payout_id);
+
+  const transferCode = data.transfer_code?.trim();
+  if (transferCode) {
+    const { error: referenceErr } = await supabase
+      .from("cleaner_payouts")
+      .update({
+        payment_method: "paystack",
+        payment_reference: transferCode,
+      })
+      .eq("id", transfer.payout_id);
+
+    if (referenceErr) throw new Error(referenceErr.message);
+  }
+
   await maybeMarkPayoutRunPaid(supabase, transfer.payout_id);
 
   const { error: bookingSyncErr } = await supabase.rpc("mark_bookings_paid_for_cleaner_payout", {
@@ -149,18 +163,20 @@ async function markOutboxSucceeded(supabase: SupabaseClient, data: PaystackTrans
   const reference = data.reference?.trim();
   const now = new Date().toISOString();
   if (transferCode) {
-    await supabase
+    const { error } = await supabase
       .from("payout_transfer_outbox")
       .update({ status: "succeeded", transfer_code: transferCode, updated_at: now })
       .eq("transfer_code", transferCode)
       .neq("status", "succeeded");
+    if (error) throw new Error(error.message);
   }
   if (reference) {
-    await supabase
+    const { error } = await supabase
       .from("payout_transfer_outbox")
       .update({ status: "succeeded", transfer_code: transferCode ?? null, updated_at: now })
       .eq("reference", reference)
       .neq("status", "succeeded");
+    if (error) throw new Error(error.message);
   }
 }
 
