@@ -7,6 +7,7 @@ import {
   submitPaystackTransferViaOutbox,
 } from "@/lib/payout/paystackTransferExecutor";
 import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
+import { applyTransferSuccess } from "@/lib/payout/paystackTransferStatus";
 
 type PayoutRow = {
   id: string;
@@ -252,23 +253,53 @@ export async function payCleanerPayoutWithPaystack(
   if (existingErr) return { ok: false, error: existingErr.message };
   if (existingSuccess) {
     const existing = existingSuccess as { transfer_code: string | null; reference?: string | null };
-    const now = new Date().toISOString();
-    await admin
+    const transferCode = existing.transfer_code?.trim() ?? null;
+    const reference = existing.reference?.trim() || immutableCleanerPayoutReference(payout.id);
+
+    if (!transferCode) {
+      return {
+        ok: false,
+        error: "Successful payout transfer is missing transfer_code.",
+        status: 500,
+        needsReconcile: true,
+      };
+    }
+
+    try {
+      await applyTransferSuccess(admin, {
+        transfer_code: transferCode,
+        reference,
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Successful payout reconciliation failed.",
+        status: 500,
+        needsReconcile: true,
+      };
+    }
+
+    const { error: referenceErr } = await admin
       .from("cleaner_payouts")
       .update({
-        status: "paid",
-        paid_at: now,
-        payment_status: "success",
         payment_method: "paystack",
-        payment_reference: existing.transfer_code ?? payout.payment_reference ?? null,
+        payment_reference: transferCode,
       })
-      .eq("id", payout.id)
-      .eq("status", "approved");
-    await admin.rpc("mark_bookings_paid_for_cleaner_payout", { p_payout_id: payout.id });
+      .eq("id", payout.id);
+
+    if (referenceErr) {
+      return {
+        ok: false,
+        error: referenceErr.message,
+        status: 500,
+        needsReconcile: true,
+      };
+    }
+
     return {
       ok: true,
-      transferCode: existing.transfer_code,
-      reference: existing.reference ?? immutableCleanerPayoutReference(payout.id),
+      transferCode,
+      reference,
       skippedExisting: true,
     };
   }
