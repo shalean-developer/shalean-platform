@@ -39,11 +39,20 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     const refund = read("lib/booking/refund/refundBookingPayment.ts");
     expect(sql).toContain("claim_booking_refund_workflow");
     expect(sql).toContain("booking_payout_already_paid");
+    expect(sql).toContain("stale_refund_claim");
+    expect(sql).toContain("refund_claim_already_in_flight");
+    expect(sql).toContain("invalid_refund_claim_transition");
+    expect(sql).toContain("p_expected_booking_snapshot");
+    expect(sql).toContain("p_expected_provider_state");
     expect(sql).toContain("for update;");
     expect(sql).toContain("public.booking_roster_member_payouts");
     expect(sql).toContain("public.team_job_member_payouts");
     expect(refund).toContain('admin.rpc("claim_booking_refund_workflow"');
-    expect(refund).toContain("persistRefundClaimWorkflow(admin, row.id, row.booking_snapshot, workflow)");
+    expect(refund).toContain("p_expected_booking_snapshot: expectedSnapshot");
+    expect(refund).toContain("p_refund_id: refundId");
+    expect(refund).toContain("p_expected_provider_state: expectedProviderState");
+    expect(refund).toContain('"failed"');
+    expect(refund).toContain("refund_claim_conflict");
   });
 
   it("uses Johannesburg business dates and rejects future payment dates", () => {
