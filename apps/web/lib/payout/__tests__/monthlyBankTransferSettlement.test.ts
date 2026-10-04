@@ -160,6 +160,18 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(pay).toContain("await failPayoutExecution(admin, payout.id)");
   });
 
+  it("makes processing-payout resume convergence outbox-aware", () => {
+    const pay = read("lib/payout/paystackPayout.ts");
+    const recipient = read("lib/payout/ensurePaystackRecipient.ts");
+    expect(pay).toContain("convergeDeterministicResumeFailure");
+    expect(pay).toContain("Existing Paystack transfer requires reconciliation");
+    expect(pay).toContain('admin.rpc("fail_cleaner_payout_outbox_validation"');
+    expect(pay).toContain("deterministicResumeBlock");
+    expect(pay).toContain("ensuredResume.retryable");
+    expect(recipient).toContain("retryable: true");
+    expect(recipient).toContain("retryable: false");
+  });
+
   it("keeps Paystack optional while stamping Paystack settlement truth", () => {
     const pay = read("lib/payout/paystackPayout.ts");
     const webhook = read("lib/payout/paystackTransferStatus.ts");
