@@ -6,6 +6,7 @@ on:
       - "supabase/migrations/**"
       - "apps/web/lib/security/__tests__/master00bBlogSearchPath.test.ts"
       - "apps/web/lib/security/__tests__/master00bAdminAuditSearchPath.test.ts"
+      - "apps/web/lib/security/__tests__/master00bBookingReferenceSearchPath.test.ts"
       - ".github/workflows/master-00b-security-contract.yml"
 
 jobs:
@@ -24,4 +25,4 @@ jobs:
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
-      - run: npm run test -- lib/security/__tests__/master00bBlogSearchPath.test.ts lib/security/__tests__/master00bAdminAuditSearchPath.test.ts
+      - run: npm run test -- lib/security/__tests__/master00bBlogSearchPath.test.ts lib/security/__tests__/master00bAdminAuditSearchPath.test.ts lib/security/__tests__/master00bBookingReferenceSearchPath.test.ts
