@@ -4,9 +4,6 @@
 
 export const ABOUT_FOUNDING_YEAR = 2022;
 
-/** Highlighted weekly cleans figure (also referenced on legacy marketing about UI). */
-export const ABOUT_WEEKLY_HOMES_CLEANED_DISPLAY = "4,500+";
-
 export type AboutReview = {
   quote: string;
   author: string;

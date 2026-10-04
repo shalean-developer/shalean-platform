@@ -498,7 +498,7 @@ export const SERVICE_CONFIG: Record<ServiceSlug, ServiceConfig> = {
     slug: "moving-cleaning",
     label: "Moving Cleaning",
     shortLabel: "Move In/Out",
-    description: "Move-in or move-out clean to ensure a smooth handover and full deposit return.",
+    description: "Detailed move-in or move-out cleaning for a smooth property handover.",
     icon: Truck,
     cleanerMode: "team",
     basePrice: 1200,
