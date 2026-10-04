@@ -700,7 +700,7 @@ returns boolean
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   v_outbox public.payout_transfer_outbox%rowtype;
   v_error text := left(trim(coalesce(p_error, 'validation_failed')), 2000);
