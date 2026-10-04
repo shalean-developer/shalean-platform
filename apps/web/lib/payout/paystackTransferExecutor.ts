@@ -106,10 +106,18 @@ async function validateCleanerPayoutBeforeProviderPost(
     p_allow_existing_processing: true,
   });
   if (guardErr) {
+    const message = String(guardErr.message ?? "Payout failed locked linked-booking validation.");
+    const permanentBusinessRule = [
+      "linked_refund_or_ineligible_booking_blocks_payout",
+      "payout_cleaner_mismatch",
+      "payout_not_found",
+      "payout_not_approved",
+      "payout_not_processing",
+    ].some((code) => message.includes(code));
     return {
       ok: false,
-      error: String(guardErr.message ?? "Payout failed locked linked-booking validation."),
-      status: 409,
+      error: message,
+      status: permanentBusinessRule ? 409 : 500,
     };
   }
 
@@ -420,41 +428,35 @@ export async function submitPaystackTransferViaOutbox(
     const now = new Date().toISOString();
     const permanentValidationFailure = safetyGate.status >= 400 && safetyGate.status < 500;
 
-    if (permanentValidationFailure) {
-      await admin
-        .from("payout_transfer_outbox")
-        .update({
-          status: "failed",
-          last_error: safetyGate.error.slice(0, 2000),
-          updated_at: now,
-        })
-        .eq("id", outbox.id);
+    if (permanentValidationFailure && params.rail === "cleaner_payout") {
+      const { error: terminalErr } = await admin.rpc("fail_cleaner_payout_outbox_validation", {
+        p_outbox_id: outbox.id,
+        p_error: safetyGate.error,
+      });
 
-      if (outbox.transfer_row_id) {
-        await admin
-          .from(auditTable(params.rail))
-          .update({
-            status: "failed",
-            error: safetyGate.error.slice(0, 2000),
-          })
-          .eq("id", outbox.transfer_row_id)
-          .neq("status", "success");
-      }
-
-      if (params.rail === "cleaner_payout") {
-        await admin
-          .from("cleaner_payouts")
-          .update({ payment_status: "failed" })
-          .eq("id", params.subjectId)
-          .eq("status", "approved")
-          .eq("payment_status", "processing");
+      if (terminalErr) {
+        void logSystemEvent({
+          level: "error",
+          source: "PAYSTACK_OUTBOX_TERMINAL_CONVERGENCE",
+          message: "Could not atomically converge permanently blocked payout outbox; leaving it retryable",
+          context: {
+            payoutId: params.subjectId,
+            outboxId: outbox.id,
+            reference: params.reference,
+            error: terminalErr.message,
+          },
+        });
+        return {
+          ok: false,
+          error: terminalErr.message || "Could not converge blocked payout outbox.",
+          status: 500,
+        };
       }
 
       void logPayoutAuditEvent(admin, {
         eventType: "payout_transfer_failed",
         actorUserId: params.initiatedBy,
-        payoutId: params.rail === "cleaner_payout" ? params.subjectId : null,
-        disbursementId: params.rail === "cleaner_earnings" ? params.subjectId : null,
+        payoutId: params.subjectId,
         amountCents: amount,
         reference: params.reference,
         context: {
