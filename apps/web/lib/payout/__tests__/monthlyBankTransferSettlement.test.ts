@@ -196,6 +196,14 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(pay).toContain('outboxStatus === "pending"');
   });
 
+  it("keeps transient outbox lease-claim errors reconcilable", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+    expect(executor).toContain("if (claimErr)");
+    expect(executor).toContain("error: claimErr.message");
+    expect(executor).toContain("status: 500");
+    expect(executor).toContain("needsReconcile: true");
+  });
+
   it("keeps Paystack optional while stamping Paystack settlement truth", () => {
     const pay = read("lib/payout/paystackPayout.ts");
     const webhook = read("lib/payout/paystackTransferStatus.ts");
