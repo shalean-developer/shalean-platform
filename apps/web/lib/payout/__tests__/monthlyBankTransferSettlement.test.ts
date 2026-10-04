@@ -34,6 +34,18 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(sql).toContain("status = 'paid'");
   });
 
+  it("serializes refund claims and retries against paid cleaner payouts", () => {
+    const sql = read("../../supabase/migrations/20261004113000_atomic_bank_transfer_settlement.sql");
+    const refund = read("lib/booking/refund/refundBookingPayment.ts");
+    expect(sql).toContain("claim_booking_refund_workflow");
+    expect(sql).toContain("booking_payout_already_paid");
+    expect(sql).toContain("for update;");
+    expect(sql).toContain("public.booking_roster_member_payouts");
+    expect(sql).toContain("public.team_job_member_payouts");
+    expect(refund).toContain('admin.rpc("claim_booking_refund_workflow"');
+    expect(refund).toContain("persistRefundClaimWorkflow(admin, row.id, row.booking_snapshot, workflow)");
+  });
+
   it("uses Johannesburg business dates and rejects future payment dates", () => {
     const mark = read("lib/payout/markPayoutPaid.ts");
     const panel = read("components/admin/office/OfficePayoutDetailPanel.tsx");
