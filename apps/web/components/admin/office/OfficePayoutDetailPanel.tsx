@@ -101,7 +101,14 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
   const [visitEditMode, setVisitEditMode] = useState(false);
   const [visitEdits, setVisitEdits] = useState<Record<string, string>>({});
   const [bankReference, setBankReference] = useState("");
-  const [bankPaidDate, setBankPaidDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [bankPaidDate, setBankPaidDate] = useState(() =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Johannesburg",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date()),
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
