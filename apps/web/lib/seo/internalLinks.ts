@@ -16,6 +16,7 @@ import {
   type LocationSeoSlug,
 } from "@/lib/seo/capeTownSeoPages";
 import { SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS } from "@/lib/seo/seoRebuildPhase1";
+import { CLEANING_PRICES_CAPE_TOWN_PATH } from "@/lib/seo/marketingCleaningPricesHubMeta";
 
 /** Keyword-rich cross-page internal link (render `anchor` as link text). */
 export type SeoInternalLink = { href: string; anchor: string };
@@ -28,7 +29,7 @@ export type SeoInternalLink = { href: string; anchor: string };
  * Intent: do not sprinkle this href across every post — follow `PRICING_HUB_LINKING_GOVERNANCE` in
  * `lib/seo/blogGovernance.ts` (same folder as this module).
  */
-export const CAPE_TOWN_PRICING_AUTHORITY_HREF = "/services";
+export const CAPE_TOWN_PRICING_AUTHORITY_HREF = CLEANING_PRICES_CAPE_TOWN_PATH;
 
 /** Methodology + indicative bands (2026) — pair with {@link CAPE_TOWN_PRICING_AUTHORITY_HREF} on service pages, not as a duplicate hub link. */
 export const CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF = "/blog/how-much-does-cleaning-cost-cape-town-2026" as const;
@@ -65,7 +66,7 @@ function blogServicePhraseStandard(slugKey: string, role: "standard" | "deep"): 
   const k = `${slugKey}|${role}|phrase`;
   const variants =
     role === "standard"
-      ? ["Standard cleaning service", "Standard home cleaning", "Recurring standard cleaning"]
+      ? ["Regular cleaning service", "Regular home cleaning", "Recurring regular cleaning"]
       : ["Deep cleaning service", "Deep home cleaning", "One-off deep cleaning"];
   const idx = stableHash(k) % variants.length;
   return variants[idx]!;
@@ -102,7 +103,7 @@ export function getBlogIntentServicePair(kind: BlogServiceLinkKind, slugKey: str
   if (kind === "airbnb") {
     return [
       link("airbnb-cleaning-cape-town", "airbnb", "Airbnb turnover cleaning"),
-      link("standard-cleaning-cape-town", "standard", "Standard home cleaning"),
+      link("standard-cleaning-cape-town", "standard", "Regular home cleaning"),
     ];
   }
   if (kind === "move-out") {
@@ -113,14 +114,14 @@ export function getBlogIntentServicePair(kind: BlogServiceLinkKind, slugKey: str
   }
   if (kind === "carpet") {
     return [
-      link("carpet-cleaning-cape-town", "carpet", "Carpet cleaning"),
-      link("standard-cleaning-cape-town", "standard", "Standard home cleaning"),
+      link("carpet-cleaning-cape-town", "carpet", "Carpet cleaning services"),
+      link("standard-cleaning-cape-town", "standard", "Regular home cleaning"),
     ];
   }
   if (kind === "deep") {
     return [
-      link("deep-cleaning-cape-town", "deep", "Deep cleaning service"),
-      link("standard-cleaning-cape-town", "standard", "Standard cleaning service"),
+      link("deep-cleaning-cape-town", "deep", "Deep cleaning services"),
+      link("standard-cleaning-cape-town", "standard", "Regular cleaning service"),
     ];
   }
   /* pricing + standard default */
@@ -217,7 +218,7 @@ export function getLocationHubRelatedServiceLinks(suburbDisplayName: string, hub
   return [
     {
       href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path,
-      anchor: pickServiceLocationAnchor(`${key}|hubrel|standard`, "Standard cleaning services", s),
+      anchor: pickServiceLocationAnchor(`${key}|hubrel|standard`, "Regular cleaning services", s),
     },
     {
       href: CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path,
@@ -226,6 +227,10 @@ export function getLocationHubRelatedServiceLinks(suburbDisplayName: string, hub
     {
       href: CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path,
       anchor: pickServiceLocationAnchor(`${key}|hubrel|moveout`, "Move-out cleaning services", s),
+    },
+    {
+      href: CAPE_TOWN_SERVICE_SEO["carpet-cleaning-cape-town"].path,
+      anchor: pickServiceLocationAnchor(`${key}|hubrel|carpet`, "Carpet cleaning services", s),
     },
     {
       href: CAPE_TOWN_PRICING_AUTHORITY_HREF,
@@ -255,24 +260,24 @@ export function getBlogAboveFoldServiceLink(slug: string): SeoInternalLink {
   if (kind === "carpet") {
     return {
       href: CAPE_TOWN_SERVICE_SEO["carpet-cleaning-cape-town"].path,
-      anchor: pickServiceLocationAnchor(`${key}|fold|carpet`, "Professional carpet cleaning", city),
+      anchor: pickServiceLocationAnchor(`${key}|fold|carpet`, "Carpet cleaning services", city),
     };
   }
   if (kind === "deep") {
     return {
       href: CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path,
-      anchor: pickServiceLocationAnchor(`${key}|fold|deep`, "Deep cleaning", city),
+      anchor: pickServiceLocationAnchor(`${key}|fold|deep`, "Deep cleaning services", city),
     };
   }
   if (kind === "pricing") {
     return {
       href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path,
-      anchor: pickServiceLocationAnchor(`${key}|fold|pricing`, "Standard cleaning bookings", city),
+      anchor: pickServiceLocationAnchor(`${key}|fold|pricing`, "Regular cleaning bookings", city),
     };
   }
   return {
     href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path,
-    anchor: pickServiceLocationAnchor(`${key}|fold|standard`, "Standard home cleaning", city),
+    anchor: pickServiceLocationAnchor(`${key}|fold|standard`, "Regular home cleaning", city),
   };
 }
 
@@ -282,7 +287,7 @@ export function getLocationHubAboveFoldServiceLink(suburbDisplayName: string, hu
   const key = hubSlugKey.trim() || "hub";
   return {
     href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path,
-    anchor: pickServiceLocationAnchor(`${key}|fold|local`, "Standard cleaning", s),
+    anchor: pickServiceLocationAnchor(`${key}|fold|local`, "Regular cleaning", s),
   };
 }
 
@@ -343,7 +348,7 @@ export function getSecondaryEditorialBlogLink(serviceSlug: CapeTownSeoServiceSlu
 /** Visible footer strip — replaces reliance on screen-reader-only crawl lists. */
 export function getPopularCapeTownFooterStripLinks(): { href: string; label: string }[] {
   return [
-    { href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path, label: "Standard cleaning" },
+    { href: CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path, label: "Regular cleaning" },
     { href: CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path, label: "Deep cleaning" },
     { href: CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path, label: "Move-out cleaning" },
     { href: CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path, label: "Airbnb cleaning" },

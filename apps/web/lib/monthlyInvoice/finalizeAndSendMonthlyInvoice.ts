@@ -12,7 +12,6 @@ import {
 } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
 import { initializePaystackForMonthlyInvoice } from "@/lib/monthlyInvoice/initializePaystackForMonthlyInvoice";
 import { sendMonthlyInvoiceEmail } from "@/lib/monthlyInvoice/sendMonthlyInvoiceEmail";
-import { settleMonthlyInvoiceChildren } from "@/lib/monthlyInvoice/settleMonthlyInvoiceChildren";
 import { syncMonthlyInvoiceToZohoBooks } from "@/lib/monthlyInvoice/syncMonthlyInvoiceToZohoBooks";
 import { markZohoInvoiceSent } from "@/lib/zoho/zohoBooksService";
 import { resolveMonthlyInvoiceCustomerEmail } from "@/lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail";
@@ -43,6 +42,12 @@ export async function finalizeAndSendMonthlyInvoice(
     actor?: string;
     source: string;
     emailBreaker?: EmailBreaker;
+    /**
+     * Bounded recovery only: resume a draft that already has exactly one
+     * finalization snapshot/event but no Paystack/Zoho/email-send state.
+     * Prevents duplicate invoice_finalized events after a pre-Paystack failure.
+     */
+    resumePartialFinalize?: boolean;
   },
 ): Promise<FinalizeAndSendMonthlyInvoiceResult> {
   const { data: head, error: headErr } = await admin
@@ -153,6 +158,7 @@ export async function finalizeAndSendMonthlyInvoice(
       .eq("monthly_invoice_id", row.id)
       .neq("status", "cancelled");
 
+    const { settleMonthlyInvoiceChildren } = await import("@/lib/monthlyInvoice/settleMonthlyInvoiceChildren");
     const childSettlement = await settleMonthlyInvoiceChildren(admin, {
       invoiceId: row.id,
       children: (lines ?? []) as {
@@ -182,34 +188,71 @@ export async function finalizeAndSendMonthlyInvoice(
     return { ok: false, error: "customer_email_missing" };
   }
 
-  const snapshot = await buildMonthlyInvoiceSnapshot(admin, row.id);
+  let snapshot = await buildMonthlyInvoiceSnapshot(admin, row.id);
   if (!snapshot) return { ok: false, error: "snapshot_build_failed" };
 
-  const { data: snapRows, error: snapErr } = await admin
-    .from("monthly_invoices")
-    .update({
-      snapshot_at_finalize: snapshot,
-      snapshot_current: wrapSnapshotCurrentV1(snapshot),
-      snapshot_version: 1,
-    })
-    .eq("id", row.id)
-    .eq("status", "draft")
-    .select("id");
+  let reusePartialFinalize = false;
+  if (params.resumePartialFinalize) {
+    const [{ data: partialRow }, { data: finalizedEvents, error: finalizedEventsError }] = await Promise.all([
+      admin
+        .from("monthly_invoices")
+        .select("snapshot_at_finalize, snapshot_current, paystack_reference, payment_link, sent_at, finalized_at, zoho_invoice_id, initial_invoice_email_dispatch_claimed")
+        .eq("id", row.id)
+        .maybeSingle(),
+      admin
+        .from("monthly_invoice_events")
+        .select("id")
+        .eq("invoice_id", row.id)
+        .eq("kind", "invoice_finalized"),
+    ]);
 
-  if (snapErr) return { ok: false, error: snapErr.message };
-  if (!snapRows?.length) return { ok: false, error: "snapshot_not_applied" };
+    if (finalizedEventsError) return { ok: false, error: finalizedEventsError.message };
 
-  await appendMonthlyInvoiceSnapshotEvent(
-    admin,
-    row.id,
-    {
-      kind: "invoice_finalized",
-      at: new Date().toISOString(),
-      total_amount_cents: cents,
-      booking_count: Math.round(Number(snapshot.totals.total_bookings ?? 0)),
-    },
-    { source: params.source },
-  );
+    const hasPartialSnapshot =
+      partialRow?.snapshot_at_finalize != null && partialRow?.snapshot_current != null;
+    const noExternalState =
+      !String(partialRow?.paystack_reference ?? "").trim() &&
+      !String(partialRow?.payment_link ?? "").trim() &&
+      !partialRow?.sent_at &&
+      !partialRow?.finalized_at &&
+      !String(partialRow?.zoho_invoice_id ?? "").trim() &&
+      partialRow?.initial_invoice_email_dispatch_claimed !== true;
+
+    if (hasPartialSnapshot || (finalizedEvents?.length ?? 0) > 0) {
+      if (!hasPartialSnapshot || (finalizedEvents?.length ?? 0) !== 1 || !noExternalState) {
+        return { ok: false, error: "partial_finalize_state_not_resumable" };
+      }
+      reusePartialFinalize = true;
+    }
+  }
+
+  if (!reusePartialFinalize) {
+    const { data: snapRows, error: snapErr } = await admin
+      .from("monthly_invoices")
+      .update({
+        snapshot_at_finalize: snapshot,
+        snapshot_current: wrapSnapshotCurrentV1(snapshot),
+        snapshot_version: 1,
+      })
+      .eq("id", row.id)
+      .eq("status", "draft")
+      .select("id");
+
+    if (snapErr) return { ok: false, error: snapErr.message };
+    if (!snapRows?.length) return { ok: false, error: "snapshot_not_applied" };
+
+    await appendMonthlyInvoiceSnapshotEvent(
+      admin,
+      row.id,
+      {
+        kind: "invoice_finalized",
+        at: new Date().toISOString(),
+        total_amount_cents: cents,
+        booking_count: Math.round(Number(snapshot.totals.total_bookings ?? 0)),
+      },
+      { source: params.source },
+    );
+  }
 
   const pay = await initializePaystackForMonthlyInvoice(admin, { invoiceId: row.id, customerEmail: email });
   if (!pay.ok) return { ok: false, error: pay.error };

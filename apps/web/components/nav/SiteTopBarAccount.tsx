@@ -1,12 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { signOut } from "@/lib/auth/authClient";
 import { useAuth } from "@/lib/auth/useAuth";
-import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { readCachedUserRole } from "@/lib/auth/userRole";
+import {
+  publicHeaderAccountLabel,
+  publicHeaderDashboardHref,
+  publicHeaderPostAuthRedirect,
+  publicHeaderShowsCustomerBookings,
+} from "@/lib/auth/publicHeaderAuthRouting";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -16,6 +22,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+
+type SiteTopBarAccountVariant = "topbar" | "header" | "promotion";
 
 function userDisplayName(user: User | null): string {
   const meta = user?.user_metadata as Record<string, unknown> | undefined;
@@ -26,8 +35,7 @@ function userDisplayName(user: User | null): string {
   return name || user?.email || "Account";
 }
 
-function avatarLetter(user: User | null, cleanerLoggedIn: boolean): string {
-  if (cleanerLoggedIn && !user) return "C";
+function avatarLetter(user: User | null): string {
   return userDisplayName(user).trim()[0]?.toUpperCase() ?? "S";
 }
 
@@ -40,40 +48,32 @@ function avatarImageUrl(user: User | null): string | null {
   return null;
 }
 
-function SiteTopBarAccountInner() {
+function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant }) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [cleanerLoggedIn, setCleanerLoggedIn] = useState(false);
-
-  useEffect(() => {
-    const sb = getSupabaseBrowser();
-    if (!sb) {
-      setCleanerLoggedIn(false);
-      return;
-    }
-    const sync = () => {
-      void sb.auth.getSession().then(({ data }) => {
-        setCleanerLoggedIn(Boolean(data.session?.access_token));
-      });
-    };
-    sync();
-    const { data: sub } = sb.auth.onAuthStateChange(() => sync());
-    return () => sub.subscription.unsubscribe();
-  }, []);
-
-  const redirectTarget = useMemo(() => {
-    const q = searchParams.toString();
-    return `${pathname}${q ? `?${q}` : ""}`;
-  }, [pathname, searchParams]);
+  const redirectTarget = useMemo(
+    () => publicHeaderPostAuthRedirect(pathname, searchParams.toString()),
+    [pathname, searchParams],
+  );
 
   const loginHref = `/auth/login?redirect=${encodeURIComponent(redirectTarget)}`;
-  const loggedIn = Boolean(user || cleanerLoggedIn);
-  const accountHref = user ? "/account" : "/jobs";
-  const avatarName = user ? userDisplayName(user) : "Cleaner account";
-  const avatarPhoto = user ? avatarImageUrl(user) : null;
-  const avatarInitial = avatarLetter(user, cleanerLoggedIn);
+  const loggedIn = Boolean(user);
+  const cachedRole = readCachedUserRole();
+  const accountHref = publicHeaderDashboardHref(cachedRole);
+  const accountLabel = publicHeaderAccountLabel(cachedRole);
+  const showCustomerBookings = publicHeaderShowsCustomerBookings(cachedRole);
+  const avatarName = userDisplayName(user);
+  const avatarPhoto = avatarImageUrl(user);
+  const avatarInitial = avatarLetter(user);
+  const headerVariant = variant !== "topbar";
+  const promotionVariant = variant === "promotion";
+
+  useEffect(() => {
+    router.prefetch(accountHref);
+    if (showCustomerBookings) router.prefetch("/account/bookings");
+  }, [accountHref, router, showCustomerBookings]);
 
   async function handleLogout() {
     if (user) await signOut();
@@ -83,16 +83,33 @@ function SiteTopBarAccountInner() {
   }
 
   if (loading) {
-    return <div className="h-7 w-14 shrink-0 animate-pulse rounded-lg bg-white/20" aria-hidden />;
+    return (
+      <div
+        className={cn(
+          "shrink-0 animate-pulse",
+          headerVariant
+            ? "h-11 w-[4.75rem] rounded-full bg-primary/25"
+            : "h-7 w-14 rounded-lg bg-white/20",
+        )}
+        aria-hidden
+      />
+    );
   }
 
   if (!loggedIn) {
     return (
       <Link
         href={loginHref}
-        className="shrink-0 rounded-lg border border-white/35 px-3 py-1 text-xs font-semibold text-white transition hover:bg-white/10"
+        className={cn(
+          "shrink-0 font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+          promotionVariant
+            ? "inline-flex min-h-11 items-center justify-center rounded-md border border-[#0051ff] px-4 text-sm text-[#0051ff] hover:bg-[#eef4ff]"
+            : headerVariant
+              ? "inline-flex min-h-11 items-center justify-center rounded-full bg-primary px-5 py-2.5 text-sm text-primary-foreground shadow-[var(--ui-shadow-sm)] hover:brightness-95"
+              : "rounded-lg border border-white/35 px-3 py-1 text-xs text-white hover:bg-white/10",
+        )}
       >
-        Log In
+        Sign in
       </Link>
     );
   }
@@ -102,28 +119,46 @@ function SiteTopBarAccountInner() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full outline-none ring-2 ring-white/25 transition hover:ring-white/50 focus-visible:ring-white/60"
+          className={cn(
+            "inline-flex items-center justify-center rounded-full outline-none transition focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+            headerVariant
+              ? "h-11 w-11 ring-1 ring-border hover:bg-primary/10"
+              : "h-8 w-8 ring-2 ring-white/25 hover:ring-white/50 focus-visible:ring-white/60",
+          )}
           aria-label="Account menu"
         >
-          <Avatar className="h-7 w-7 border-white/30">
+          <Avatar className={cn(headerVariant ? "h-10 w-10 border-border" : "h-7 w-7 border-white/30")}>
             {avatarPhoto ? <AvatarImage src={avatarPhoto} alt="" referrerPolicy="no-referrer" /> : null}
-            <AvatarFallback className="bg-white/15 text-xs font-semibold text-white">
+            <AvatarFallback
+              className={cn(
+                "text-xs font-semibold",
+                headerVariant ? "bg-primary text-primary-foreground" : "bg-white/15 text-white",
+              )}
+            >
               {avatarInitial}
             </AvatarFallback>
           </Avatar>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[220px]">
-        <DropdownMenuLabel className="px-4">
+      <DropdownMenuContent align="end" className="min-w-[220px] rounded-2xl p-2 shadow-[var(--ui-shadow-lg)]">
+        <DropdownMenuLabel className="px-3 py-2">
           <span className="block truncate text-sm">{avatarName}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href={accountHref}>{user ? "My Account" : "Cleaner Workspace"}</Link>
+        <DropdownMenuItem
+          onSelect={() => {
+            router.push(accountHref);
+          }}
+        >
+          {accountLabel}
         </DropdownMenuItem>
-        {user ? (
-          <DropdownMenuItem asChild>
-            <Link href="/account/bookings">My Bookings</Link>
+        {showCustomerBookings ? (
+          <DropdownMenuItem
+            onSelect={() => {
+              router.push("/account/bookings");
+            }}
+          >
+            My Bookings
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuSeparator />
@@ -141,14 +176,26 @@ function SiteTopBarAccountInner() {
   );
 }
 
-function SiteTopBarAccountFallback() {
-  return <div className="h-7 w-14 shrink-0 animate-pulse rounded-lg bg-white/20" aria-hidden />;
+function SiteTopBarAccountFallback({ variant }: { variant: SiteTopBarAccountVariant }) {
+  return (
+    <div
+      className={cn(
+        "shrink-0 animate-pulse",
+        variant === "promotion"
+          ? "h-11 w-[4.75rem] rounded-md bg-primary/15"
+          : variant === "header"
+            ? "h-11 w-[4.75rem] rounded-full bg-primary/25"
+            : "h-7 w-14 rounded-lg bg-white/20",
+      )}
+      aria-hidden
+    />
+  );
 }
 
-export function SiteTopBarAccount() {
+export function SiteTopBarAccount({ variant = "topbar" }: { variant?: SiteTopBarAccountVariant }) {
   return (
-    <Suspense fallback={<SiteTopBarAccountFallback />}>
-      <SiteTopBarAccountInner />
+    <Suspense fallback={<SiteTopBarAccountFallback variant={variant} />}>
+      <SiteTopBarAccountInner variant={variant} />
     </Suspense>
   );
 }

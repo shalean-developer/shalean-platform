@@ -10,9 +10,13 @@ import {
   countPlatformTeamJobsOnDate,
   fetchTeamCapacityUsageSlotsByTeam,
   MAX_TEAM_BOOKINGS_PER_DAY,
+  TEAM_CAPACITY_CONSUMING_STATUSES,
   TEAM_MIN_ROSTER_MEMBERS,
 } from "@/lib/dispatch/teamJobsPerDay";
-import { isDispatchTeamPoolServiceType } from "@/lib/dispatch/teamServiceTypeDb";
+import {
+  isDispatchTeamPoolServiceType,
+  teamServiceTypeMatchesBookingV2Slug,
+} from "@/lib/dispatch/teamServiceTypeDb";
 
 export type DispatchTeamAvailabilityRow = {
   id: string;
@@ -24,13 +28,6 @@ export type DispatchTeamAvailabilityRow = {
   qualified_member_count: number;
 };
 
-const TEAM_BOOKING_RESERVATION_STATUSES = [
-  "pending",
-  "pending_payment",
-  "assigned",
-  "in_progress",
-  "confirmed",
-] as const;
 
 function capabilityGateFromBookingV2Slug(serviceSlug: string): ServiceCapabilityGate {
   return String(serviceSlug ?? "").trim().toLowerCase() === "moving-cleaning" ? "move" : "deep";
@@ -45,7 +42,7 @@ async function loadTeamSlotUsageByTeamOnDate(
     .from("bookings")
     .select("team_id, assigned_team_id, is_team_job, status")
     .eq("date", dateYmd)
-    .in("status", [...TEAM_BOOKING_RESERVATION_STATUSES]);
+    .in("status", [...TEAM_CAPACITY_CONSUMING_STATUSES]);
   if (error) return { map: new Map(), error: error.message };
 
   const map = new Map<string, number>();
@@ -92,9 +89,13 @@ export async function loadDispatchTeamsForBooking(
     .limit(250);
   if (tErr) return { teams: [], platformAtCapacity: false, error: tErr.message };
 
-  const teamRows = (teamsRaw ?? []).filter((row) =>
-    isDispatchTeamPoolServiceType(String((row as { service_type?: string }).service_type ?? "")),
-  );
+  const teamRows = (teamsRaw ?? []).filter((row) => {
+    const serviceType = String((row as { service_type?: string }).service_type ?? "");
+    return (
+      isDispatchTeamPoolServiceType(serviceType) &&
+      teamServiceTypeMatchesBookingV2Slug(serviceType, opts.serviceSlug)
+    );
+  });
   const teamIds = teamRows.map((t) => String((t as { id?: string }).id ?? "").trim()).filter(Boolean);
   if (teamIds.length === 0) {
     return { teams: [], platformAtCapacity: false, error: null };

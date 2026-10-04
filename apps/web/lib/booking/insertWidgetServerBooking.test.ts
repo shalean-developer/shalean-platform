@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
       deep: tariff(),
       carpet: tariff(),
       move: tariff(),
+      office: tariff(),
     },
     extras: {},
     bundles: [],

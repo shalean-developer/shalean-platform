@@ -1,6 +1,9 @@
 name: Build prebuilt Plesk production bundle
 
 on:
+  push:
+    branches:
+      - production
   workflow_dispatch:
 
 permissions:
@@ -104,7 +107,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch --orphan deploy-production-publish
-          git rm -rf .
+          git rm -rf --ignore-unmatch .
+          git clean -fdx
           cp "$RUNNER_TEMP/production-runtime.tar.gz" production-runtime.tar.gz
           cp "$RUNNER_TEMP/activate.sh" activate.sh
           printf '%s\n' "$GITHUB_SHA" > release-sha.txt

@@ -1,6 +1,5 @@
 import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
-import { directAnswerHowMuchDoesCleaningCost } from "@/lib/seo/location-featured-snippet-copy";
-import { getLocationMetaPriceHint } from "@/lib/seo/location-pricing";
+import { getCanonicalLocationPricingAnswer } from "@/lib/seo/location-pricing";
 
 export type FaqPair = { q: string; a: string };
 
@@ -14,16 +13,14 @@ function stemVariant(slug: string): 0 | 1 | 2 {
 /** People-Also-Ask + long-tail commercial FAQs — merged into hub FAQ schema + accordion. */
 export function buildPeopleAlsoAskFaqs(location: CapeTownLocationRow): FaqPair[] {
   const { name, city, slug } = location;
-  const priceLead = directAnswerHowMuchDoesCleaningCost(location).split(". ")[0] ?? "";
-  const hint = getLocationMetaPriceHint(location);
   const tone = stemVariant(slug);
 
   const suppliesLead =
     tone === 0
-      ? `Yes—Shalean crews servicing ${name} normally arrive with professional cleaning products and equipment matched to your booked scope.`
+      ? `Supply and equipment responsibility in ${name} depends on the service: Deep and Move In / Out Cleaning include Shalean-provided cleaning supplies, while Regular home cleaning and Airbnb Cleaning use customer-provided products and equipment unless a separate supplies option or charge is selected or agreed.`
       : tone === 1
-        ? `Supplies are included on standard Shalean visits in ${name} unless you note estate rules, allergies, or BYO-product preferences at checkout.`
-        : `Professional visits in ${name} include products and tools for the checklist you confirm—add notes if your building restricts certain chemicals.`;
+        ? `For Regular home cleaning and Airbnb Cleaning in ${name}, customers provide the usual products and equipment unless a separate supplies option or charge is selected or agreed. Deep and Move In / Out Cleaning include Shalean-provided cleaning supplies.`
+        : `Check the booked service before preparing supplies in ${name}: Deep and Move In / Out Cleaning include Shalean-provided cleaning supplies; Regular home cleaning and Airbnb Cleaning use customer-provided products and equipment unless a separate supplies arrangement is selected or agreed.`;
 
   const sameDayLead =
     tone === 0
@@ -35,7 +32,7 @@ export function buildPeopleAlsoAskFaqs(location: CapeTownLocationRow): FaqPair[]
   return [
     {
       q: `How much does a cleaner cost in ${name}?`,
-      a: `${priceLead}. Your locked total reflects bedrooms, bathrooms, tier, and add-ons online before payment. Planning bands: ${hint}.`,
+      a: getCanonicalLocationPricingAnswer(location),
     },
     {
       q: `Is cleaning priced per hour or per job in ${name}?`,
@@ -68,13 +65,30 @@ function normalizeKey(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-/** Dedupe by question stem — PAA items win on overlap with dynamic CMS FAQs. */
+function semanticFaqKey(question: string): string {
+  const q = normalizeKey(question);
+  if (/how much.*(cleaner|cleaning).*cost/.test(q)) return "intent:pricing";
+  if (/(cleaner|cleaners).*(bring|provide).*suppl|suppl.*(bring|provide)/.test(q)) return "intent:supplies";
+  if (/same-day|how soon.*book|availability/.test(q)) return "intent:availability";
+  return `question:${q}`;
+}
+
+/** Dedupe by semantic FAQ intent — earlier primary items win, then secondary fills unique intents. */
 export function mergeLocationFaqs(paa: FaqPair[], secondary: FaqPair[]): FaqPair[] {
-  const keys = new Set(paa.map((x) => normalizeKey(x.q)));
-  const out = [...paa];
+  const keys = new Set<string>();
+  const out: FaqPair[] = [];
+
+  for (const item of paa) {
+    const key = semanticFaqKey(item.q);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    out.push(item);
+  }
+
   for (const item of secondary) {
-    if (keys.has(normalizeKey(item.q))) continue;
-    keys.add(normalizeKey(item.q));
+    const key = semanticFaqKey(item.q);
+    if (keys.has(key)) continue;
+    keys.add(key);
     out.push(item);
   }
   return out;

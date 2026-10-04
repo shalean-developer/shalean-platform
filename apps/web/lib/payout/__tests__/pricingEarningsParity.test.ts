@@ -242,13 +242,16 @@ describe("pricing / earnings parity matrix", () => {
     expect(memberRows.map((row) => row.payout_cents)).toEqual([27_000, 25_000, 25_000]);
     expect(memberRows.reduce((sum, row) => sum + row.payout_cents, 0)).toBe(display.internalEarningsCents);
 
-    // Intentional current divergence: team jobs persist per-cleaner display and team member rows;
-    // legacy booking payout columns remain zero, so the solo weekly batch predicate excludes them.
+    // Canonical team jobs intentionally keep booking-level solo payout columns at zero.
+    // Weekly team-member batching supplies the authoritative member row as the payout basis.
     expect(bookingColumns.cleaner_payout_cents + bookingColumns.cleaner_bonus_cents).toBe(0);
     expect(frozen).toBe(display.displayEarningsCents);
-    expect(bookingPayableForWeeklyBatch(bookingColumns, new Map())).toEqual({
-      payable: false,
-      reason: "missing_cleaner_payout_basis",
-    });
+    expect(
+      bookingPayableForWeeklyBatch(
+        bookingColumns,
+        new Map(),
+        { payoutBasisCents: memberRows[0]!.payout_cents },
+      ),
+    ).toEqual({ payable: true });
   });
 });

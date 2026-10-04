@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { recordSystemMetric } from "@/lib/observability/recordSystemMetric";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 import {
   detectRecurringMonthlyDriftForRows,
   type RecurringMonthlyDriftBookingRow,
@@ -92,8 +93,10 @@ export type BookingEarningsHealthRow = {
   cleaner_earnings_total_cents?: number | null;
   cleaner_payout_cents?: number | null;
   cleaner_id?: string | null;
+  payout_owner_cleaner_id?: string | null;
   selected_cleaner_id?: string | null;
   team_id?: string | null;
+  metadata?: unknown;
   is_team_job?: boolean | null;
 };
 
@@ -341,7 +344,12 @@ export function detectCompletedMissingCompletionTimestamp(rows: readonly Booking
 
 export function detectCompletedMissingEarningsBasis(rows: readonly BookingEarningsHealthRow[]): ProductionHealthFinding[] {
   const ids = rows
-    .filter((row) => norm(row.status) === "completed" && !hasEarningsBasis(row))
+    .filter(
+      (row) =>
+        norm(row.status) === "completed" &&
+        !bookingHasActivePayoutAttributionRemoval(row) &&
+        !hasEarningsBasis(row),
+    )
     .map((row, i) => idOf(row, `completed-booking-${i}`));
   const findings: ProductionHealthFinding[] = [];
   addFinding(
@@ -756,7 +764,7 @@ export async function runProductionHealthScan(
         name: "completed_booking_earnings",
         query: admin
           .from("bookings")
-          .select("id, status, display_earnings_cents, payout_frozen_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_id, selected_cleaner_id, team_id, is_team_job")
+          .select("id, status, display_earnings_cents, payout_frozen_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_id, payout_owner_cleaner_id, selected_cleaner_id, team_id, is_team_job, metadata")
           .eq("status", "completed")
           .order("created_at", { ascending: false })
           .limit(scanLimit),

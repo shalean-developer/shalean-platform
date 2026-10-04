@@ -6,13 +6,17 @@ import {
   resolveReviewCleanerIdForSubmission,
 } from "@/lib/reviews/customerReviewFollowUpContract";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import { customerCanAccessBookingRow } from "@/lib/customer/customerBookingOwnership";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
+import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-async function getUserIdFromBearer(request: Request): Promise<{ userId: string } | NextResponse> {
+async function getUserFromBearer(request: Request): Promise<{ userId: string; email: string } | NextResponse> {
   const authHeader = request.headers.get("authorization");
   const token = authHeader?.replace(/^Bearer\s+/i, "").trim() ?? "";
   if (!token) {
@@ -31,13 +35,19 @@ async function getUserIdFromBearer(request: Request): Promise<{ userId: string }
     return NextResponse.json({ error: "Invalid or expired session." }, { status: 401 });
   }
 
-  return { userId: userData.user.id };
+  let email = "";
+  try {
+    email = normalizeEmail(String(userData.user.email ?? ""));
+  } catch {
+    email = "";
+  }
+  return { userId: userData.user.id, email };
 }
 
 export async function POST(request: Request) {
-  const auth = await getUserIdFromBearer(request);
+  const auth = await getUserFromBearer(request);
   if (auth instanceof NextResponse) return auth;
-  const { userId } = auth;
+  const { userId, email: viewerEmail } = auth;
 
   let body: { bookingId?: string; rating?: number; comment?: string };
   try {
@@ -47,10 +57,11 @@ export async function POST(request: Request) {
   }
 
   const bookingId = typeof body.bookingId === "string" ? body.bookingId.trim() : "";
-  const rating = Math.round(Number(body.rating));
+  const rawRating = Number(body.rating);
+  const rating = Number.isInteger(rawRating) ? rawRating : Number.NaN;
   const comment = typeof body.comment === "string" ? body.comment.trim().slice(0, 2000) : "";
 
-  if (!bookingId || rating < 1 || rating > 5) {
+  if (!bookingId || !Number.isFinite(rating) || rating < 1 || rating > 5) {
     return NextResponse.json({ error: "bookingId and rating 1–5 required." }, { status: 400 });
   }
 
@@ -59,10 +70,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
   }
 
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const { data: booking, error: bErr } = await admin
     .from("bookings")
     .select(
-      "id, user_id, cleaner_id, payout_owner_cleaner_id, status, completed_at, is_team_job, team_id",
+      `id, ${ownershipColumn}, customer_email, cleaner_id, payout_owner_cleaner_id, status, completed_at, is_team_job, team_id`,
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -71,7 +83,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Booking not found." }, { status: 404 });
   }
 
-  if (String((booking as { user_id?: string }).user_id) !== userId) {
+  if (!customerCanAccessBookingRow(booking as Record<string, unknown>, userId, viewerEmail)) {
     return NextResponse.json({ error: "Not your booking." }, { status: 403 });
   }
 
@@ -110,15 +122,30 @@ export async function POST(request: Request) {
     if (insErr.code === "23505") {
       return NextResponse.json({ error: "You already reviewed this booking." }, { status: 409 });
     }
-    return NextResponse.json({ error: insErr.message }, { status: 500 });
+    await reportOperationalIssue("error", "api/bookings/review", insErr.message, {
+      bookingId,
+      phase: "insert",
+      code: insErr.code,
+    });
+    return NextResponse.json({ error: "Could not save your review. Please try again." }, { status: 500 });
   }
 
-  logReviewKpiEvent("review_submitted", { booking_id: bookingId, rating, source: "api_post" });
+  const kpi = await logReviewKpiEvent("review_submitted", {
+    booking_id: bookingId,
+    rating,
+    source: "api_post",
+  });
+  if (!kpi.ok) {
+    await reportOperationalIssue("warn", "api/bookings/review", kpi.error, {
+      bookingId,
+      phase: "review_submitted_kpi",
+    });
+  }
   return NextResponse.json({ ok: true });
 }
 
 export async function PATCH(request: Request) {
-  const auth = await getUserIdFromBearer(request);
+  const auth = await getUserFromBearer(request);
   if (auth instanceof NextResponse) return auth;
   const { userId } = auth;
 
@@ -142,8 +169,9 @@ export async function PATCH(request: Request) {
 
   let nextRating: number | undefined;
   if (hasRating) {
-    nextRating = Math.round(Number(body.rating));
-    if (nextRating < 1 || nextRating > 5) {
+    const rawNextRating = Number(body.rating);
+    nextRating = Number.isInteger(rawNextRating) ? rawNextRating : Number.NaN;
+    if (!Number.isFinite(nextRating) || nextRating < 1 || nextRating > 5) {
       return NextResponse.json({ error: "rating must be 1–5." }, { status: 400 });
     }
   }
@@ -185,7 +213,11 @@ export async function PATCH(request: Request) {
   const { error: upErr } = await admin.from("reviews").update(patch).eq("id", String((rev as { id: string }).id));
 
   if (upErr) {
-    return NextResponse.json({ error: upErr.message }, { status: 500 });
+    await reportOperationalIssue("error", "api/bookings/review", upErr.message, {
+      bookingId,
+      phase: "update",
+    });
+    return NextResponse.json({ error: "Could not update your review. Please try again." }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

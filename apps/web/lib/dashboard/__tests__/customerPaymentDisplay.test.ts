@@ -83,6 +83,40 @@ describe("customerPaymentRowDisplay", () => {
     expect(d.countsAsPaidTransaction).toBe(false);
   });
 
+  it("does not treat a Paystack reference alone as captured payment", () => {
+    const d = customerPaymentRowDisplay(
+      dashboardFromRaw(
+        raw({
+          status: "assigned",
+          payment_status: null,
+          payment_completed_at: null,
+          paystack_reference: "bv2_pending_reference",
+          amount_paid_cents: 0,
+          total_paid_zar: 0,
+        }),
+      ),
+    );
+    expect(d.badgeLabel).toBe("Awaiting payment");
+    expect(d.countsAsPaidTransaction).toBe(false);
+  });
+
+  it("uses authoritative success even for a zero-cash fully-covered booking", () => {
+    const d = customerPaymentRowDisplay(
+      dashboardFromRaw(
+        raw({
+          status: "confirmed",
+          payment_status: "success",
+          payment_completed_at: null,
+          paystack_reference: "bv2_r0",
+          amount_paid_cents: 0,
+          total_paid_zar: 0,
+        }),
+      ),
+    );
+    expect(d.badgeLabel).toBe("Paid");
+    expect(d.countsAsPaidTransaction).toBe(true);
+  });
+
   it("labels full refund distinctly from Paid when capture payment_status stays success (MODEL A)", () => {
     const d = customerPaymentRowDisplay(
       dashboardFromRaw(

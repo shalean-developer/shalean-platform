@@ -23,6 +23,7 @@ export type SalesDocumentQuoteRequestDetails = {
   property_type: string;
   bedrooms: number | null;
   bathrooms: number | null;
+  extra_rooms?: number | null;
   suburb: string;
   preferred_date: string | null;
   message: string | null;
@@ -78,7 +79,7 @@ export type SalesDocumentRow = {
 
 const NON_EDITABLE_STATUSES = new Set(["paid", "refunded", "void", "expired"]);
 
-/** Quotes and invoices may be edited until a payment is recorded. */
+/** Draft/sent quotes and unpaid invoices may be edited. Accepted quotes are immutable. */
 export function salesDocumentIsEditableWithoutPayment(params: {
   document_type: SalesDocumentType;
   status: string;
@@ -86,6 +87,7 @@ export function salesDocumentIsEditableWithoutPayment(params: {
 }): boolean {
   const st = String(params.status ?? "").toLowerCase();
   if (NON_EDITABLE_STATUSES.has(st)) return false;
+  if (params.document_type === "quote" && st === "accepted") return false;
   if (Math.max(0, Math.round(Number(params.amount_paid_cents ?? 0))) > 0) return false;
   return true;
 }

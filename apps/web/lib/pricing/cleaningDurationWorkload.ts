@@ -56,6 +56,13 @@ export type DurationWorkloadInput = {
   extras?: readonly string[] | null;
   teamMemberCount?: number | null;
   recurringSnapshotDurationMinutes?: number | null;
+  /** Admin snapshot / catalog coefficients override hardcoded service duration rates. */
+  durationRateMinutes?: {
+    baseMinutes: number;
+    bedroomMinutes: number;
+    bathroomMinutes: number;
+    extraRoomMinutes: number;
+  } | null;
   /** Admin snapshot / catalog limits override hardcoded service policy min/max. */
   durationMinuteLimits?: { minMinutes: number; maxMinutes: number } | null;
 };
@@ -193,6 +200,7 @@ const EXTRA_DURATION_POLICIES: Record<string, ExtraDurationPolicy> = {
   "blinds-cleaning": durationExtra("blinds-cleaning", 30, 0.25),
   "balcony-cleaning": durationExtra("balcony-cleaning", 45, 0.35, "elevated"),
   "carpet-cleaning": durationExtra("carpet-cleaning", 60, 0.5, "specialized"),
+  "deep-carpet-cleaning": durationExtra("deep-carpet-cleaning", 60, 0.5, "specialized"),
   "ceiling-cleaning": durationExtra("ceiling-cleaning", 45, 0.4, "elevated"),
   "garage-cleaning": durationExtra("garage-cleaning", 45, 0.35, "elevated"),
   "mattress-cleaning": durationExtra("mattress-cleaning", 45, 0.35, "specialized"),
@@ -345,11 +353,12 @@ export function resolveCanonicalDurationWorkload(input: DurationWorkloadInput): 
     extraEffects.push({ ...policy, count: 1 });
   }
 
+  const durationRates = input.durationRateMinutes ?? servicePolicy;
   let rawDuration =
-    servicePolicy.baseMinutes +
-    rooms * servicePolicy.bedroomMinutes +
-    bathrooms * servicePolicy.bathroomMinutes +
-    extraRooms * servicePolicy.extraRoomMinutes +
+    durationRates.baseMinutes +
+    rooms * durationRates.bedroomMinutes +
+    bathrooms * durationRates.bathroomMinutes +
+    extraRooms * durationRates.extraRoomMinutes +
     extraMinutes;
 
   if (rooms >= 10 || bathrooms >= 6 || extraRooms >= 8) {

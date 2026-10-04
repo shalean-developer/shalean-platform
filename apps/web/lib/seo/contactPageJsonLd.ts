@@ -2,10 +2,14 @@ import { buildPrimaryLocalBusinessBase } from "@/lib/seo/primaryLocalBusinessJso
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { absoluteCanonicalUrl, SITE_ORIGIN } from "@/lib/site/canonical";
 import {
-  CUSTOMER_SUPPORT_EMAIL,
   CUSTOMER_SUPPORT_TELEPHONE_E164,
   CUSTOMER_SUPPORT_TELEPHONE_DISPLAY,
 } from "@/lib/site/customerSupport";
+import {
+  PUBLIC_BUSINESS_EMAIL,
+  PUBLIC_BUSINESS_OPENING_HOURS_SPECIFICATION,
+  PUBLIC_BUSINESS_SERVICE_AREA,
+} from "@/lib/site/publicBusinessIdentity";
 
 const CONTACT_PATH = "/contact";
 const CONTACT_URL = absoluteCanonicalUrl(CONTACT_PATH);
@@ -45,18 +49,13 @@ export function buildContactPageJsonLdGraph(): Record<string, unknown> {
             "@type": "ContactPoint",
             contactType: "customer service",
             telephone: CUSTOMER_SUPPORT_TELEPHONE_E164,
-            email: CUSTOMER_SUPPORT_EMAIL,
-            areaServed: { "@type": "Country", name: "South Africa" },
+            email: PUBLIC_BUSINESS_EMAIL,
+            areaServed: { ...PUBLIC_BUSINESS_SERVICE_AREA },
             availableLanguage: ["English", "Afrikaans"],
-            hoursAvailable: {
-              "@type": "OpeningHoursSpecification",
-              dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
-              opens: "08:00",
-              closes: "18:00",
-            },
+            hoursAvailable: { ...PUBLIC_BUSINESS_OPENING_HOURS_SPECIFICATION },
           },
         ],
-        description: `Reach Shalean on ${CUSTOMER_SUPPORT_TELEPHONE_DISPLAY} or ${CUSTOMER_SUPPORT_EMAIL} for Cape Town cleaning bookings and support.`,
+        description: `Reach Shalean on ${CUSTOMER_SUPPORT_TELEPHONE_DISPLAY} or ${PUBLIC_BUSINESS_EMAIL} for Cape Town cleaning bookings and support.`,
       },
     ],
   };

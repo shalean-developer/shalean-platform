@@ -1,45 +1,56 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-
-const CONTACT_EMAIL = "hello@shalean.co.za";
-
-export const CONTACT_FORM_TOPICS = [
-  { value: "new-booking", label: "New booking" },
-  { value: "existing-booking", label: "Existing booking" },
-  { value: "reschedule", label: "Reschedule" },
-  { value: "payments", label: "Payments & invoices" },
-  { value: "complaint", label: "Complaint or feedback" },
-  { value: "cleaner-application", label: "Cleaner application" },
-  { value: "business", label: "Business enquiry" },
-  { value: "general", label: "General enquiry" },
-] as const;
-
-type TopicValue = (typeof CONTACT_FORM_TOPICS)[number]["value"];
+import {
+  CONTACT_FORM_TOPICS,
+  type ContactFormTopic,
+} from "@/lib/contact/contactFormContract";
 
 export function ContactPageForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [topic, setTopic] = useState<TopicValue>("general");
+  const [topic, setTopic] = useState<ContactFormTopic>("general");
   const [message, setMessage] = useState("");
+  const [company, setCompany] = useState("");
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [error, setError] = useState("");
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const topicLabel = CONTACT_FORM_TOPICS.find((t) => t.value === topic)?.label ?? "Enquiry";
-    const subject = `Shalean contact: ${topicLabel}`;
-    const body = [
-      `Name: ${name.trim()}`,
-      `Email: ${email.trim()}`,
-      phone.trim() ? `Phone: ${phone.trim()}` : null,
-      `Topic: ${topicLabel}`,
-      "",
-      message.trim(),
-    ]
-      .filter(Boolean)
-      .join("\n");
+    if (status === "sending") return;
 
-    window.location.href = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    setStatus("sending");
+    setError("");
+
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name,
+          email,
+          phone,
+          topic,
+          message,
+          company,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "We could not send your message right now.");
+      }
+
+      setStatus("sent");
+      setMessage("");
+    } catch (err) {
+      setStatus("error");
+      setError(err instanceof Error ? err.message : "We could not send your message right now.");
+    }
   }
 
   const inputClass =
@@ -49,8 +60,22 @@ export function ContactPageForm() {
     <form onSubmit={handleSubmit} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-6 sm:p-8">
       <h2 className="text-lg font-bold text-slate-900 sm:text-xl">Send us a message</h2>
       <p className="mt-2 text-sm text-slate-600">
-        Fill in the form and your email app will open with your message ready to send.
+        Fill in the form and we&apos;ll send your message directly to hello@shalean.co.za.
       </p>
+
+      <div className="hidden" aria-hidden="true">
+        <label>
+          Company
+          <input
+            type="text"
+            name="company"
+            tabIndex={-1}
+            autoComplete="off"
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+          />
+        </label>
+      </div>
 
       <div className="mt-6 grid gap-5 sm:grid-cols-2">
         <label className="block text-sm font-medium text-slate-700">
@@ -94,7 +119,7 @@ export function ContactPageForm() {
             name="topic"
             required
             value={topic}
-            onChange={(e) => setTopic(e.target.value as TopicValue)}
+            onChange={(e) => setTopic(e.target.value as ContactFormTopic)}
             className={inputClass}
           >
             {CONTACT_FORM_TOPICS.map(({ value, label }) => (
@@ -119,11 +144,24 @@ export function ContactPageForm() {
         />
       </label>
 
+      {status === "sent" ? (
+        <p className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800" role="status">
+          Message sent successfully. We&apos;ll reply as soon as possible.
+        </p>
+      ) : null}
+
+      {status === "error" ? (
+        <p className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800" role="alert">
+          {error}
+        </p>
+      ) : null}
+
       <button
         type="submit"
-        className="mt-6 inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition hover:bg-blue-700"
+        disabled={status === "sending"}
+        className="mt-6 inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        Compose email
+        {status === "sending" ? "Sending…" : "Send message"}
       </button>
     </form>
   );

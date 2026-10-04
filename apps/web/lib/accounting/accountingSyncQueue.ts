@@ -36,7 +36,7 @@ export async function enqueueAccountingSync(
     .eq("entity_id", params.entityId)
     .maybeSingle();
 
-  if (existing?.sync_status === "synced") return;
+  if (existing?.sync_status === "synced" || existing?.sync_status === "ignored") return;
 
   if (existing?.id) {
     await admin
@@ -103,6 +103,24 @@ export async function markSyncSucceeded(
       external_accounting_id: externalAccountingId ?? null,
       sync_errors: null,
       last_synced_at: now,
+      next_retry_at: null,
+      updated_at: now,
+    })
+    .eq("id", recordId);
+}
+
+
+export async function markSyncIgnored(
+  admin: SupabaseClient,
+  recordId: string,
+  reason: string,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await admin
+    .from("accounting_sync_records")
+    .update({
+      sync_status: "ignored",
+      sync_errors: `accounting_not_applicable:${reason}`.slice(0, 2000),
       next_retry_at: null,
       updated_at: now,
     })

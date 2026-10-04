@@ -49,7 +49,7 @@ const SAMPLE_VALUES: Record<string, string> = {
   payment_link: "https://shalean.co.za/book",
   review_link: "https://shalean.co.za/review",
   booking_link: "https://shalean.co.za/book",
-  service: "Standard Cleaning",
+  service: "Regular Cleaning",
   location: "Claremont, Cape Town",
   pay: "R250",
   line: "Your Shalean account is ready",

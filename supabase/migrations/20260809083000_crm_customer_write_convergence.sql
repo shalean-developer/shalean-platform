@@ -172,11 +172,5 @@ before insert or update of customer_id, customer_email, customer_phone, customer
 on public.sales_documents
 for each row execute function public.crm_customer_write_convergence_trigger();
 
-drop trigger if exists customer_care_cases_crm_customer_convergence on public.customer_care_cases;
-create trigger customer_care_cases_crm_customer_convergence
-before insert or update of customer_id, customer_email, customer_phone
-on public.customer_care_cases
-for each row execute function public.crm_customer_write_convergence_trigger();
-
 comment on function public.resolve_crm_customer_for_write(uuid,text,text,text,text)
 is 'Canonical P4 CRM resolver used by database write convergence triggers. Auth/email preferred; ambiguous aliases fail closed.';

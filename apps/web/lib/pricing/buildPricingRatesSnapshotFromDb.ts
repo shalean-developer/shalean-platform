@@ -1,17 +1,18 @@
 import type { BookingServiceId } from "@/components/booking/serviceCategories";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PRICING_ENGINE_ALGORITHM_VERSION } from "@/lib/pricing/engineVersion";
-import type { PricingRatesSnapshot, SnapshotBundleRow } from "@/lib/pricing/pricingRatesSnapshot";
+import type { PricingRatesSnapshot, PricingSnapshotServiceId, SnapshotBundleRow } from "@/lib/pricing/pricingRatesSnapshot";
 import type { ServiceTariff } from "@/lib/pricing/pricingConfig";
 import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
 import { resolvePricingServiceRow } from "@/lib/booking-v2/resolvePricingServiceSlug";
 
-const SERVICE_KEYS: readonly BookingServiceId[] = [
+const SERVICE_KEYS: readonly PricingSnapshotServiceId[] = [
   "standard",
   "airbnb",
   "deep",
   "move",
   "carpet",
+  "office",
 ];
 
 function serviceTypeToServiceIds(st: string): BookingServiceId[] {
@@ -28,11 +29,12 @@ function scopeToBundleServices(scope: string): BookingServiceId[] | undefined {
   return undefined;
 }
 
-function rowToTariff(row: {
+export function pricingServiceRowToTariff(row: {
   base_price: number;
   price_per_bedroom: number;
   price_per_bathroom: number;
   price_per_extra_room: number;
+  service_fee_zar?: number | null;
   duration_base: number;
   duration_per_bedroom: number;
   duration_per_bathroom: number;
@@ -46,12 +48,18 @@ function rowToTariff(row: {
     Number.isFinite(minHoursRaw) && minHoursRaw > 0 ? minHoursRaw : DEFAULT_SERVICE_DURATION_LIMITS.minHours;
   const maxHours =
     Number.isFinite(maxHoursRaw) && maxHoursRaw > 0 ? maxHoursRaw : DEFAULT_SERVICE_DURATION_LIMITS.maxHours;
+  const serviceFeeRaw = row.service_fee_zar == null ? null : Number(row.service_fee_zar);
+  const serviceFeeZar =
+    serviceFeeRaw != null && Number.isFinite(serviceFeeRaw) && serviceFeeRaw >= 0
+      ? Math.round(serviceFeeRaw)
+      : null;
 
   return {
     base: Math.round(Number(row.base_price) || 0),
     bedroom: Math.round(Number(row.price_per_bedroom) || 0),
     bathroom: Math.round(Number(row.price_per_bathroom) || 0),
     extraRoom: Math.round(Number(row.price_per_extra_room) || 0),
+    ...(serviceFeeZar != null ? { serviceFeeZar } : {}),
     duration: {
       base: Number(row.duration_base) || 0,
       bedroom: Number(row.duration_per_bedroom) || 0,
@@ -72,7 +80,7 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
   const { data: svcRows, error: svcErr } = await supabase
     .from("pricing_services")
     .select(
-      "slug, base_price, price_per_bedroom, price_per_bathroom, price_per_extra_room, duration_base, duration_per_bedroom, duration_per_bathroom, duration_per_extra_room, min_hours, max_hours",
+      "slug, base_price, price_per_bedroom, price_per_bathroom, price_per_extra_room, service_fee_zar, duration_base, duration_per_bedroom, duration_per_bathroom, duration_per_extra_room, min_hours, max_hours",
     )
     .eq("is_active", true)
     .order("sort_order", { ascending: true });
@@ -82,17 +90,18 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
     return null;
   }
 
-  const services = {} as Record<BookingServiceId, ServiceTariff>;
+  const services = {} as Record<PricingSnapshotServiceId, ServiceTariff>;
   const bySlug: Record<string, ServiceTariff> = {};
   for (const raw of svcRows ?? []) {
     const row = raw as Record<string, unknown>;
     const slug = typeof row.slug === "string" ? row.slug.trim() : "";
     if (!slug) continue;
-    bySlug[slug] = rowToTariff({
+    bySlug[slug] = pricingServiceRowToTariff({
       base_price: Number(row.base_price),
       price_per_bedroom: Number(row.price_per_bedroom),
       price_per_bathroom: Number(row.price_per_bathroom),
       price_per_extra_room: Number(row.price_per_extra_room),
+      service_fee_zar: row.service_fee_zar == null ? null : Number(row.service_fee_zar),
       duration_base: Number(row.duration_base),
       duration_per_bedroom: Number(row.duration_per_bedroom),
       duration_per_bathroom: Number(row.duration_per_bathroom),
@@ -102,7 +111,7 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
     });
   }
 
-  const fallback = rowToTariff({
+  const fallback = pricingServiceRowToTariff({
     base_price: 0,
     price_per_bedroom: 0,
     price_per_bathroom: 0,
@@ -124,7 +133,7 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
 
   const { data: extRows, error: extErr } = await supabase
     .from("pricing_extras")
-    .select("slug, price, service_type, name, description, is_popular")
+    .select("slug, price, service_type, service_slugs, name, description, is_popular")
     .eq("is_active", true)
     .order("sort_order", { ascending: true });
 
@@ -140,11 +149,24 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
     if (!slug) continue;
     const price = Math.round(Number(row.price) || 0);
     const st = typeof row.service_type === "string" ? row.service_type : "all";
+    const assigned = Array.isArray(row.service_slugs)
+      ? row.service_slugs.flatMap((value): PricingSnapshotServiceId[] => {
+          switch (String(value)) {
+            case "regular-cleaning": return ["standard"];
+            case "airbnb-cleaning": return ["airbnb"];
+            case "deep-cleaning": return ["deep"];
+            case "moving-cleaning": return ["move"];
+            case "carpet-cleaning": return ["carpet"];
+            case "office-cleaning": return ["office"];
+            default: return [];
+          }
+        })
+      : [];
     const name = typeof row.name === "string" ? row.name : undefined;
     const description = typeof row.description === "string" ? row.description : undefined;
     extras[slug] = {
       price,
-      services: serviceTypeToServiceIds(st),
+      services: assigned.length ? [...new Set(assigned)] : serviceTypeToServiceIds(st),
       ...(name ? { name } : {}),
       ...(description ? { description } : {}),
       ...(row.is_popular === true ? { isPopular: true as const } : {}),

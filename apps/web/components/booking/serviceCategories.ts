@@ -3,6 +3,7 @@
  */
 
 import type { ServiceCategoryKind } from "./CategoryPicker";
+import { REGULAR_CLEANING_PUBLIC_NAME } from "@/lib/services/publicServiceNames";
 
 export type BookingServiceId =
   | "standard"
@@ -44,7 +45,7 @@ export type ServiceCategory = {
 };
 
 export const SERVICE_TYPE_DISPLAY: Record<BookingServiceTypeKey, string> = {
-  standard_cleaning: "Standard Cleaning",
+  standard_cleaning: REGULAR_CLEANING_PUBLIC_NAME,
   airbnb_cleaning: "Airbnb Cleaning",
   deep_cleaning: "Deep Cleaning",
   move_cleaning: "Move In/Out Cleaning",
@@ -105,12 +106,12 @@ export function getBookingSummaryServiceLabel(
 export const SERVICE_CATEGORIES: ServiceCategory[] = [
   {
     id: "regular",
-    name: "Regular Cleaning",
+    name: REGULAR_CLEANING_PUBLIC_NAME,
     description: "For routine home cleaning",
     services: [
       {
         id: "standard",
-        name: "Standard Cleaning",
+        name: REGULAR_CLEANING_PUBLIC_NAME,
         description: "Most popular for weekly cleaning",
         badge: "Most popular",
         baseTimeMultiplier: 1,

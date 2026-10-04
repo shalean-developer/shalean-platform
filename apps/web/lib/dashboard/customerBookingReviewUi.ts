@@ -8,9 +8,15 @@ export function isBookingPendingCustomerReview(
   reviewedIds: ReadonlySet<string>,
 ): boolean {
   return (
-    isDashboardBookingAuthoritativelyCompleted(booking) &&
-    bookingIsReviewSubmissionEligibleAssignee(booking.raw) &&
+    isBookingCustomerReviewEligible(booking) &&
     !reviewedIds.has(booking.id)
+  );
+}
+
+export function isBookingCustomerReviewEligible(booking: DashboardBooking): boolean {
+  return (
+    isDashboardBookingAuthoritativelyCompleted(booking) &&
+    bookingIsReviewSubmissionEligibleAssignee(booking.raw)
   );
 }
 

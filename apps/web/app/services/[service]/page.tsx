@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { SeoCapeTownServicePage } from "@/components/seo/SeoCapeTownServicePage";
-import { getPublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
+import {
+  isPrimaryCapeTownServiceSlug,
+  PrimaryCapeTownServicePageTemplate,
+} from "@/components/services/PrimaryCapeTownServicePageTemplate";
 import {
   buildCapeTownServiceMetadata,
   CAPE_TOWN_SEO_SERVICE_SLUGS,
@@ -30,10 +33,16 @@ export default async function ServicePage({ params, searchParams }: Props) {
   if (!capeTownSeo) notFound();
   const sp = await searchParams;
   const location = typeof sp?.location === "string" ? sp.location : null;
-  const trustStats = await getPublicReviewBannerStats();
   return (
     <MarketingLayout>
-      <SeoCapeTownServicePage slug={capeTownSeo.slug} trustStats={trustStats} initialLocationSlug={location} />
+      {isPrimaryCapeTownServiceSlug(capeTownSeo.slug) ? (
+        <PrimaryCapeTownServicePageTemplate
+          slug={capeTownSeo.slug}
+          initialLocationSlug={location}
+        />
+      ) : (
+        <SeoCapeTownServicePage slug={capeTownSeo.slug} initialLocationSlug={location} />
+      )}
     </MarketingLayout>
   );
 }

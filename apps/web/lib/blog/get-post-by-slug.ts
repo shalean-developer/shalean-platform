@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { coerceBlogImageSrcForNext, resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
 import { isBlogDraftPreviewAllowed } from "@/lib/blog/blog-draft-preview";
 import { assignStableBlogBlockIds } from "@/lib/blog/assign-stable-block-ids";
@@ -124,6 +125,12 @@ async function fetchRelatedForInject(
   return ranked.map((p) => ({ slug: p.slug, title: p.title }));
 }
 
+const loadPublishedPostBySlugCached = unstable_cache(
+  async (slug: string) => loadPostBySlug(slug),
+  ["published-blog-post-by-slug-v1"],
+  { revalidate: 300, tags: ["blog-public"] },
+);
+
 export async function getPostBySlug(
   slug: string,
   opts?: GetPostBySlugOptions,
@@ -132,7 +139,12 @@ export async function getPostBySlug(
   if (!trimmed) return null;
 
   try {
-    return await loadPostBySlug(trimmed, opts);
+    // Public blog traffic is bot/crawler heavy. Cache anonymous published-post
+    // reads for 5 minutes so generateMetadata + page renders and repeated crawler
+    // hits do not repeatedly fan out into Supabase. Preview remains uncached.
+    return opts?.previewToken
+      ? await loadPostBySlug(trimmed, opts)
+      : await loadPublishedPostBySlugCached(trimmed);
   } catch (err) {
     console.error("❌ getPostBySlug FAILED — returning null (maps to 404; check logs for root cause)", {
       slug: trimmed,

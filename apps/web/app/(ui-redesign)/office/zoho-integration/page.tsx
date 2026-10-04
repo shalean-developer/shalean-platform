@@ -12,6 +12,52 @@ import { cn } from "@/lib/utils";
 
 type CategoryMapping = { platform_category: string; zoho_account_name: string };
 
+type RepairDryRunCheck = {
+  kind: "booking" | "monthly_invoice" | "sales_document";
+  id: string;
+  expected_amount_cents: number;
+  payment_transaction_id: string | null;
+  queue_record_id: string | null;
+  current_zoho_invoice_id: string | null;
+  current_zoho_invoice_number: string | null;
+  action: "create_and_pay" | "already_linked_review" | "blocked";
+  ok: boolean;
+  issues: string[];
+};
+
+type RepairDryRunPayload = {
+  ok: boolean;
+  mode: "dry-run";
+  writes_performed: false;
+  allowlist_count: number;
+  zoho_organization_id_masked: string | null;
+  expected_zoho_organization_suffix: string;
+  correct_zoho_organization: boolean;
+  blocked_count: number;
+  create_and_pay_count: number;
+  already_linked_review_count: number;
+  checks: RepairDryRunCheck[];
+};
+
+type RepairApplyResult = {
+  kind: "booking" | "monthly_invoice" | "sales_document";
+  id: string;
+  ok: boolean;
+  outcome: "created_paid_linked" | "resumed_paid_linked" | "already_complete" | "failed";
+  invoice_number?: string | null;
+  error?: string;
+};
+
+type RepairApplyPayload = {
+  ok: boolean;
+  attempted: number;
+  succeeded: number;
+  failed: number;
+  writes_performed: true;
+  scope: string;
+  results: RepairApplyResult[];
+};
+
 type IntegrationPayload = {
   zoho_configured: boolean;
   organization_id: string | null;
@@ -45,6 +91,10 @@ export default function ZohoIntegrationPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [dryRunning, setDryRunning] = useState(false);
+  const [dryRun, setDryRun] = useState<RepairDryRunPayload | null>(null);
+  const [applyingRepair, setApplyingRepair] = useState(false);
+  const [applyResult, setApplyResult] = useState<RepairApplyPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mappings, setMappings] = useState<CategoryMapping[]>([]);
   const [autoSync, setAutoSync] = useState(true);
@@ -116,6 +166,51 @@ export default function ZohoIntegrationPage() {
     }
   };
 
+  const runRepairDryRun = async () => {
+    setDryRunning(true);
+    setError(null);
+    try {
+      const res = await adminFetch<RepairDryRunPayload>(
+        "/api/admin/inv-e2e-01d/zoho-repair-dry-run",
+      );
+      if (!res.ok || !res.data) throw new Error(res.error ?? "Dry-run audit failed");
+      setDryRun(res.data);
+    } catch (e) {
+      setDryRun(null);
+      setError(e instanceof Error ? e.message : "Dry-run audit failed");
+    } finally {
+      setDryRunning(false);
+    }
+  };
+
+  const applyTargetedRepair = async () => {
+    const confirmation = window.prompt(
+      "Production write action. Type APPLY_INV_E2E_01D_10 exactly to create or resume payment for the 10 audited Zoho invoices.",
+    );
+    if (confirmation !== "APPLY_INV_E2E_01D_10") return;
+
+    setApplyingRepair(true);
+    setApplyResult(null);
+    setError(null);
+    try {
+      const res = await adminFetch<RepairApplyPayload>(
+        "/api/admin/inv-e2e-01d/zoho-repair-apply",
+        {
+          method: "POST",
+          body: JSON.stringify({ confirmation }),
+        },
+      );
+      if (!res.data) throw new Error(res.error ?? "Targeted repair failed");
+      setApplyResult(res.data);
+      await load();
+      await runRepairDryRun();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Targeted repair failed");
+    } finally {
+      setApplyingRepair(false);
+    }
+  };
+
   const retrySync = async (recordId: string) => {
     try {
       await adminFetch("/api/admin/zoho-integration/retry", {
@@ -147,6 +242,10 @@ export default function ZohoIntegrationPage() {
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
               Refresh
             </OfficeZohoSecondaryButton>
+            <OfficeZohoSecondaryButton onClick={() => void runRepairDryRun()} disabled={dryRunning}>
+              <RefreshCw className={cn("h-4 w-4", dryRunning && "animate-spin")} />
+              {dryRunning ? "Running dry run…" : "Run INV-E2E dry run"}
+            </OfficeZohoSecondaryButton>
             <OfficeZohoPrimaryButton onClick={() => void runSync()} disabled={syncing}>
               <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
               Run sync now
@@ -157,6 +256,108 @@ export default function ZohoIntegrationPage() {
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
+      )}
+
+      {dryRun && (
+        <section className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">INV-E2E repair dry run</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Read-only audit. No Zoho or Supabase writes were performed.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {dryRun.ok &&
+                dryRun.correct_zoho_organization &&
+                dryRun.blocked_count === 0 &&
+                dryRun.create_and_pay_count + dryRun.already_linked_review_count === 10 && (
+                  <OfficeZohoPrimaryButton
+                    onClick={() => void applyTargetedRepair()}
+                    disabled={applyingRepair}
+                  >
+                    {applyingRepair ? "Applying targeted repair…" : "Apply INV-E2E repair"}
+                  </OfficeZohoPrimaryButton>
+                )}
+              <span
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs font-semibold",
+                  dryRun.ok && dryRun.correct_zoho_organization
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-amber-100 text-amber-800",
+                )}
+              >
+                {dryRun.ok && dryRun.correct_zoho_organization ? "PASS" : "REVIEW"}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <StatusCard label="Allowlist" ok={dryRun.allowlist_count === 10} detail={`${dryRun.allowlist_count} records`} />
+            <StatusCard label="Zoho org" ok={dryRun.correct_zoho_organization} detail={dryRun.zoho_organization_id_masked ?? "Missing"} />
+            <StatusCard label="Blocked" ok={dryRun.blocked_count === 0} detail={`${dryRun.blocked_count} blocked`} />
+            <StatusCard
+              label="Ready to repair"
+              ok={dryRun.create_and_pay_count + dryRun.already_linked_review_count === 10}
+              detail={`${dryRun.create_and_pay_count} create · ${dryRun.already_linked_review_count} resume/review`}
+            />
+          </div>
+
+          <div className="mt-4 space-y-2">
+            {dryRun.checks.map((check) => (
+              <div key={`${check.kind}:${check.id}`} className="rounded border bg-white px-3 py-2 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium">
+                    {check.kind} · {check.id.slice(0, 8)}…
+                  </span>
+                  <span className={check.ok ? "text-emerald-700" : "text-amber-700"}>
+                    {check.action}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  Expected R{(check.expected_amount_cents / 100).toFixed(2)}
+                  {check.current_zoho_invoice_number ? ` · linked ${check.current_zoho_invoice_number}` : ""}
+                </p>
+                {check.issues.length > 0 && (
+                  <p className="mt-1 text-xs text-red-600">{check.issues.join(" · ")}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {applyResult && (
+        <section
+          className={cn(
+            "rounded-xl border p-5",
+            applyResult.ok ? "border-emerald-200 bg-emerald-50/50" : "border-amber-200 bg-amber-50/50",
+          )}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">INV-E2E targeted repair result</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                {applyResult.succeeded} succeeded · {applyResult.failed} failed · {applyResult.attempted} attempted
+              </p>
+            </div>
+            <span className={applyResult.ok ? "text-emerald-700" : "text-amber-700"}>
+              {applyResult.ok ? "COMPLETE" : "REVIEW FAILURES"}
+            </span>
+          </div>
+          <div className="mt-4 space-y-2">
+            {applyResult.results.map((item) => (
+              <div key={`${item.kind}:${item.id}`} className="rounded border bg-white px-3 py-2 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium">{item.kind} · {item.id.slice(0, 8)}…</span>
+                  <span className={item.ok ? "text-emerald-700" : "text-red-700"}>{item.outcome}</span>
+                </div>
+                {item.invoice_number && <p className="mt-1 text-xs text-slate-500">{item.invoice_number}</p>}
+                {item.error && <p className="mt-1 text-xs text-red-600">{item.error}</p>}
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       <div className="grid gap-4 md:grid-cols-3">

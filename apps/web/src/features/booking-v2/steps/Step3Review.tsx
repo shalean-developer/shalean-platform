@@ -9,24 +9,22 @@ import {
   Users,
   Clock,
   Star,
-  ShieldCheck,
-  CreditCard,
   X,
   ChevronLeft,
   ChevronRight,
-  RefreshCw,
   Package,
 } from "lucide-react";
-import { CleanerCountSelector } from "@/src/features/booking-v2/components/CleanerCountSelector";
 import { CleanerPreferenceSection } from "@/src/features/booking-v2/components/CleanerPreferenceSection";
 import { formatAreasServedPreview } from "@/src/features/booking-v2/components/CleanerCard";
 import { EquipmentSection } from "@/src/features/booking-v2/components/EquipmentSection";
 import { RoomCountSelector } from "@/src/features/booking-v2/components/RoomCountSelector";
 import { TeamAvailabilitySection } from "@/src/features/booking-v2/components/TeamAvailabilitySection";
 import type { AvailableCleanerV2 } from "@/src/features/booking-v2/types";
+import { cachedClientRequest } from "@/lib/booking-v2/clientRequestCache";
 import { cn } from "@/lib/utils";
 import {
   SERVICE_CONFIG,
+  serviceShowsEquipmentQuestion,
   type FormQuestion,
 } from "@/src/features/booking-v2/config/serviceConfig";
 import type {
@@ -40,7 +38,13 @@ import {
   recurringFrequencyLabel,
   shouldShowRecurringDayPicker,
 } from "@/src/features/booking-v2/config/recurringScheduleOptions";
-import { estimateRecurringMonthlySpend } from "@/lib/recurring/estimateMonthlyRevenue";
+import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
+import {
+  DEEP_CLEANING_RECURRING_FREQUENCY,
+  recurringFrequenciesForService,
+  serviceAllowsRecurringBookings,
+  serviceUsesRecurringDayPicker,
+} from "@/lib/booking-v2/serviceRecurringPolicy";
 import { TimeSlotPicker } from "@/src/features/booking-v2/components/TimeSlotPicker";
 import {
   ServiceQuestionOptionCards,
@@ -51,6 +55,7 @@ import {
   CONTACT_PHONE_VALIDATION_MESSAGE,
   isValidContactPhone,
 } from "@/lib/booking/contactPhoneValidation";
+import { bookingDetailsQuestionStage } from "@/src/features/booking-v2/steps/serviceProgressiveDisclosure";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -177,8 +182,12 @@ function ModalQuestionField({ question }: { question: FormQuestion }) {
   const { register, control } = useFormContext() as any;
   const fieldKey = `serviceDetails.${question.key}`;
 
-  if (question.key === "bedrooms" || question.key === "bathrooms") {
-    const kind = question.key as "bedrooms" | "bathrooms";
+  if (
+    question.key === "bedrooms" ||
+    question.key === "bathrooms" ||
+    question.key === "extraRooms"
+  ) {
+    const kind = question.key as "bedrooms" | "bathrooms" | "extraRooms";
     return (
       <div>
         <label htmlFor={question.key} className="mb-1.5 block text-sm font-medium text-slate-700">
@@ -395,45 +404,6 @@ function LocationEditPanel() {
         />
       </div>
 
-      <div>
-        <label htmlFor="edit-access" className="mb-1.5 block text-sm font-medium text-slate-700">
-          Access instructions (optional)
-        </label>
-        <input
-          id="edit-access"
-          type="text"
-          placeholder="e.g. Ring bell, use side gate…"
-          {...register("accessInstructions")}
-          className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label htmlFor="edit-parking" className="mb-1.5 block text-sm font-medium text-slate-700">
-            Parking (optional)
-          </label>
-          <input
-            id="edit-parking"
-            type="text"
-            placeholder="Street parking…"
-            {...register("parkingInstructions")}
-            className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-          />
-        </div>
-        <div>
-          <label htmlFor="edit-gate" className="mb-1.5 block text-sm font-medium text-slate-700">
-            Gate code (optional)
-          </label>
-          <input
-            id="edit-gate"
-            type="text"
-            placeholder="e.g. #1234"
-            {...register("gateCode")}
-            className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-          />
-        </div>
-      </div>
     </div>
   );
 }
@@ -444,8 +414,16 @@ function EquipmentEditPanel() {
 
 function PropertyEditPanel() {
   const { serviceSlug, liveConfig } = useBookingV2();
+  const { watch } = useFormContext<BookingV2FormData>();
   const config = SERVICE_CONFIG[serviceSlug];
-  const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
+  const serviceDetails = watch("serviceDetails") ?? {};
+  const step1Questions = (liveConfig?.step1Questions ?? config.step1Questions).filter((question) => {
+    if (bookingDetailsQuestionStage(serviceSlug, question) == null) return false;
+    if (!question.showWhen) return true;
+    return question.showWhen.values.includes(
+      String(serviceDetails[question.showWhen.key] ?? ""),
+    );
+  });
 
   return (
     <div className="space-y-4">
@@ -459,7 +437,15 @@ function PropertyEditPanel() {
 // ─── Schedule edit panel ───────────────────────────────────────────────────────
 
 function ScheduleEditPanel() {
-  const { scheduling } = useBookingV2();
+  const { scheduling, serviceSlug } = useBookingV2();
+  const isDeepCleaning = serviceSlug === "deep-cleaning";
+  const isCarpetCleaning = serviceSlug === "carpet-cleaning";
+  const isAirbnbCleaning = serviceSlug === "airbnb-cleaning";
+  const allowsRecurringBookings = serviceAllowsRecurringBookings(serviceSlug);
+  const serviceRecurringFrequencies = recurringFrequenciesForService(serviceSlug);
+  const recurringFrequencyOptions = RECURRING_FREQUENCIES.filter((option) =>
+    serviceRecurringFrequencies.includes(option.value),
+  );
 
   const { control, watch, setValue } = useFormContext<BookingV2FormData>();
   const bookingType = watch("bookingType");
@@ -469,38 +455,69 @@ function ScheduleEditPanel() {
   const today = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
-    if (bookingType === "recurring" && recurringFrequency === "custom") {
+    if (!allowsRecurringBookings && bookingType === "recurring") {
+      setValue("bookingType", "once_off", { shouldDirty: true, shouldValidate: true });
+      setValue("recurringFrequency", "", { shouldDirty: true, shouldValidate: true });
+      setValue("recurringDays", [], { shouldDirty: true, shouldValidate: true });
+      return;
+    }
+    if (bookingType !== "recurring") return;
+    if (isDeepCleaning) {
+      if (recurringFrequency !== DEEP_CLEANING_RECURRING_FREQUENCY) {
+        setValue("recurringFrequency", DEEP_CLEANING_RECURRING_FREQUENCY, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+      setValue("recurringDays", [], { shouldDirty: true, shouldValidate: true });
+      return;
+    }
+    if (recurringFrequency === "custom") {
       setValue("recurringFrequency", "weekly", { shouldDirty: true });
     }
-  }, [bookingType, recurringFrequency, setValue]);
+  }, [allowsRecurringBookings, bookingType, isDeepCleaning, recurringFrequency, setValue]);
 
   return (
     <div className="space-y-5">
-      {/* Booking type */}
-      <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          Booking type
-        </p>
-        <Controller name="bookingType" control={control}
-          render={({ field }) => (
-            <div className="flex gap-3">
-              {[{ value: "once_off", label: "Once-off" }, { value: "recurring", label: "Recurring" }].map((opt) => (
-                <button key={opt.value} type="button" onClick={() => field.onChange(opt.value)}
-                  className={cn(
-                    "flex-1 rounded-xl border py-2.5 text-sm font-semibold transition",
-                    field.value === opt.value
-                      ? "border-blue-600 bg-blue-50 text-blue-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300",
-                  )}>
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          )}
-        />
-      </div>
+      {allowsRecurringBookings ? (
+        <>
+          {/* Booking type */}
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Booking type
+            </p>
+            <Controller name="bookingType" control={control}
+              render={({ field }) => (
+                <div className="flex gap-3">
+                  {[{ value: "once_off", label: "Once-off" }, { value: "recurring", label: isDeepCleaning ? "Monthly" : "Recurring" }].map((opt) => (
+                    <button key={opt.value} type="button" onClick={() => {
+                      field.onChange(opt.value);
+                      if (isDeepCleaning) {
+                        setValue(
+                          "recurringFrequency",
+                          opt.value === "recurring" ? DEEP_CLEANING_RECURRING_FREQUENCY : "",
+                          { shouldDirty: true, shouldValidate: true },
+                        );
+                        setValue("recurringDays", [], { shouldDirty: true, shouldValidate: true });
+                      }
+                    }}
+                      className={cn(
+                        "flex-1 rounded-xl border py-2.5 text-sm font-semibold transition",
+                        field.value === opt.value
+                          ? "border-blue-600 bg-blue-50 text-blue-700"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300",
+                      )}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            />
+          </div>
 
-      <hr className="border-slate-100" />
+          <hr className="border-slate-100" />
+        </>
+      ) : null}
 
       {/* Date */}
       <div>
@@ -537,7 +554,7 @@ function ScheduleEditPanel() {
       </div>
 
       {/* Recurring options */}
-      {bookingType === "recurring" && (
+      {allowsRecurringBookings && bookingType === "recurring" && !isDeepCleaning && (
         <>
           <hr className="border-slate-100" />
           <div className="space-y-4">
@@ -549,7 +566,7 @@ function ScheduleEditPanel() {
               <Controller name="recurringFrequency" control={control}
                 render={({ field }) => (
                   <div className="flex flex-wrap gap-2">
-                    {RECURRING_FREQUENCIES.map((opt) => (
+                    {recurringFrequencyOptions.map((opt) => (
                       <button key={opt.value} type="button" onClick={() => field.onChange(opt.value)}
                         className={cn(
                           "rounded-xl border px-4 py-2 text-sm font-medium transition",
@@ -565,7 +582,7 @@ function ScheduleEditPanel() {
               />
             </div>
 
-            {shouldShowRecurringDayPicker(recurringFrequency) && (
+            {serviceUsesRecurringDayPicker(serviceSlug) && shouldShowRecurringDayPicker(recurringFrequency) && (
               <div>
                 <p className="mb-1 text-sm font-medium text-slate-700">Preferred days</p>
                 <p className="mb-2 text-xs text-slate-500">
@@ -598,32 +615,6 @@ function ScheduleEditPanel() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="edit-start" className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Start date
-                </label>
-                <Controller name="recurringStartDate" control={control}
-                  render={({ field }) => (
-                    <input id="edit-start" type="date" min={today}
-                      value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value)}
-                      className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-                  )}
-                />
-              </div>
-              <div>
-                <label htmlFor="edit-end" className="mb-1.5 block text-sm font-medium text-slate-700">
-                  End date (optional)
-                </label>
-                <Controller name="recurringEndDate" control={control}
-                  render={({ field }) => (
-                    <input id="edit-end" type="date" min={today}
-                      value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value)}
-                      className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-                  )}
-                />
-              </div>
-            </div>
           </div>
         </>
       )}
@@ -635,18 +626,22 @@ function CleanerEditPanel() {
   const { serviceSlug, liveConfig } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
   const isTeamMode = (liveConfig?.cleanerMode ?? config.cleanerMode) === "team";
+  const isCarpetCleaning = serviceSlug === "carpet-cleaning";
 
   const { watch, setValue } = useFormContext<BookingV2FormData>();
   const date = watch("date");
   const time = watch("time");
-  const cleanerCount = watch("cleanerCount") ?? 1;
+  const pricingSummary = watch("pricingSummary");
+  const cleanerCount = isCarpetCleaning ? 1 : (watch("cleanerCount") ?? 1);
   const selectedCleanerIds = watch("selectedCleanerIds") ?? [];
   const selectedCleanerDetails = watch("selectedCleanerDetails") ?? [];
   const assignedTeamId = watch("assignedTeamId") ?? "";
   const serviceAreaLocationId = watch("serviceAreaLocationId") ?? "";
 
   const durationMinutes = Math.round(
-    (liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours) * 60,
+    pricingSummary?.team_scaled_duration_minutes ??
+      pricingSummary?.estimated_duration_minutes ??
+      (liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours) * 60,
   );
 
   function toggleCleaner(cleaner: AvailableCleanerV2) {
@@ -683,16 +678,31 @@ function CleanerEditPanel() {
         />
       ) : (
         <>
-          <CleanerCountSelector
-            value={cleanerCount}
-            onChange={(n) => {
-              setValue("cleanerCount", n);
-              if (selectedCleanerIds.length > n) {
-                setValue("selectedCleanerIds", selectedCleanerIds.slice(0, n));
-                setValue("selectedCleanerDetails", selectedCleanerDetails.slice(0, n));
-              }
-            }}
-          />
+          {!isCarpetCleaning ? (
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <span className="text-sm font-medium text-slate-700">
+                {cleanerCount === 1 ? "1 cleaner included" : `${cleanerCount} cleaners selected`}
+              </span>
+              {cleanerCount < 3 ? (
+                <button type="button" onClick={() => setValue("cleanerCount", cleanerCount + 1, { shouldDirty: true })}
+                  className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700">
+                  Add another cleaner
+                </button>
+              ) : null}
+              {cleanerCount > 1 ? (
+                <button type="button" onClick={() => {
+                  const next = cleanerCount - 1;
+                  setValue("cleanerCount", next, { shouldDirty: true });
+                  if (selectedCleanerIds.length > next) {
+                    setValue("selectedCleanerIds", selectedCleanerIds.slice(0, next));
+                    setValue("selectedCleanerDetails", selectedCleanerDetails.slice(0, next));
+                  }
+                }} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600">
+                  Remove extra cleaner
+                </button>
+              ) : null}
+            </div>
+          ) : null}
 
           <CleanerPreferenceSection
             serviceSlug={serviceSlug}
@@ -702,7 +712,9 @@ function CleanerEditPanel() {
             locationId={serviceAreaLocationId.trim()}
             selectedIds={selectedCleanerIds}
             selectedDetails={selectedCleanerDetails}
-            maxSelect={cleanerCount}
+            maxSelect={isCarpetCleaning ? 1 : cleanerCount}
+            heading={isCarpetCleaning ? "Choose your specialist" : undefined}
+            personLabel={isCarpetCleaning ? "specialist" : undefined}
             onToggle={toggleCleaner}
             onClearAll={clearCleanerSelection}
             onResync={(matched) =>
@@ -789,12 +801,17 @@ function ExtrasEditPanel() {
 
 // ─── Cleaner preview card (read-only, used in the Review step) ─────────────────
 
-function CleanerPreviewCard({ cleaner }: { cleaner: AvailableCleanerV2 }) {
+function CleanerPreviewCard({
+  cleaner,
+  preferenceLabel = "Preferred cleaner",
+}: {
+  cleaner: AvailableCleanerV2;
+  preferenceLabel?: string;
+}) {
   const areas = formatAreasServedPreview(cleaner.areasServed);
 
   return (
-    <div className="flex min-w-0 max-w-full flex-col items-center gap-2 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-4 text-center">
-      {/* Avatar */}
+    <div className="flex min-w-0 max-w-full items-start gap-3 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/60 p-3 sm:p-4">
       <div
         className={cn(
           "flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold",
@@ -805,34 +822,34 @@ function CleanerPreviewCard({ cleaner }: { cleaner: AvailableCleanerV2 }) {
         {cleaner.initials}
       </div>
 
-      {/* Name */}
-      <p className="w-full truncate text-sm font-semibold leading-snug text-slate-900">{cleaner.name}</p>
+      <div className="min-w-0 flex-1">
+        <p className="break-words text-sm font-semibold leading-snug text-slate-900">
+          {cleaner.name}
+        </p>
 
-      {/* Rating + jobs */}
-      <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
-        {cleaner.rating != null && (
-          <span className="flex items-center gap-0.5">
-            <Star className="h-3 w-3 fill-amber-400 text-amber-400" aria-hidden />
-            {cleaner.rating.toFixed(1)}
-          </span>
-        )}
-        <span>{cleaner.jobsCompleted.toLocaleString()} jobs</span>
-      </div>
-
-      {/* Areas */}
-      {areas ? (
-        <div className="w-full min-w-0 text-xs text-slate-400">
-          <p className="line-clamp-2 break-words">{areas.primary}</p>
-          {areas.moreCount > 0 ? (
-            <p className="mt-0.5 font-medium">+{areas.moreCount} more</p>
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+          {cleaner.rating != null ? (
+            <span className="inline-flex items-center gap-0.5">
+              <Star className="h-3 w-3 fill-amber-400 text-amber-400" aria-hidden />
+              {cleaner.rating.toFixed(1)}
+            </span>
           ) : null}
+          <span>{cleaner.jobsCompleted.toLocaleString()} jobs</span>
         </div>
-      ) : null}
 
-      {/* Badge */}
-      <span className="rounded-full border border-blue-200 bg-white px-2.5 py-0.5 text-xs font-medium text-blue-700">
-        Preferred cleaner
-      </span>
+        {areas ? (
+          <div className="mt-1.5 min-w-0 text-xs text-slate-400">
+            <p className="line-clamp-2 break-words">{areas.primary}</p>
+            {areas.moreCount > 0 ? (
+              <p className="mt-0.5 font-medium">+{areas.moreCount} more</p>
+            ) : null}
+          </div>
+        ) : null}
+
+        <span className="mt-2 inline-flex rounded-full border border-blue-200 bg-white px-2.5 py-0.5 text-xs font-medium text-blue-700">
+          {preferenceLabel}
+        </span>
+      </div>
     </div>
   );
 }
@@ -843,17 +860,19 @@ function ReviewSection({
   number,
   title,
   onEdit,
+  className,
   children,
 }: {
   number: number;
   title: string;
   onEdit: () => void;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white">
+    <div className={cn("rounded-2xl border border-slate-100 bg-white", className)}>
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-3.5 sm:px-5">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-3.5 py-2 sm:px-4">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[11px] font-bold text-white">
             {number}
@@ -870,7 +889,7 @@ function ReviewSection({
         </button>
       </div>
       {/* Body */}
-      <div className="min-w-0 px-4 py-4 sm:px-5">{children}</div>
+      <div className="min-w-0 px-3.5 py-2.5 sm:px-4">{children}</div>
     </div>
   );
 }
@@ -880,11 +899,23 @@ function ReviewSection({
 type EditPanel = "location" | "equipment" | "property" | "schedule" | "cleaner" | "extras" | null;
 
 export function Step3Review() {
-  const { serviceSlug, liveConfig } = useBookingV2();
+  const {
+    serviceSlug,
+    liveConfig,
+    goToStep,
+    editDetailsSection,
+    editScheduleSection,
+  } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
+  const isRegularCleaning = serviceSlug === "regular-cleaning";
+  const isDeepCleaning = serviceSlug === "deep-cleaning";
+  const isMovingCleaning = serviceSlug === "moving-cleaning";
+  const isCarpetCleaning = serviceSlug === "carpet-cleaning";
+  const isOfficeCleaning = serviceSlug === "office-cleaning";
+  const isAirbnbCleaning = serviceSlug === "airbnb-cleaning";
+  const isCoreCloseoutService =
+    isRegularCleaning || isDeepCleaning || isMovingCleaning;
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
-  const serviceLabel = liveConfig?.label ?? config.label;
-  const serviceDescription = liveConfig?.description ?? config.description;
   const estimatedDurationHours = liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours;
   const { watch, getValues, reset, setValue } = useFormContext<BookingV2FormData>();
   const values = watch();
@@ -903,14 +934,27 @@ export function Step3Review() {
     const params = new URLSearchParams({ serviceSlug });
     const date = getValues("date");
     const time = getValues("time");
-    const duration = Math.round(estimatedDurationHours * 60);
+    const pricingSummary = getValues("pricingSummary");
+    const duration = Math.round(
+      pricingSummary?.team_scaled_duration_minutes ??
+        pricingSummary?.estimated_duration_minutes ??
+        estimatedDurationHours * 60,
+    );
     if (date) params.set("date", date);
     if (time) params.set("time", time);
     params.set("durationMinutes", String(duration));
     if (locationId) params.set("locationId", locationId);
 
-    fetch(`/api/booking-v2/available-cleaners?${params.toString()}`)
-      .then((r) => r.json())
+    const url = `/api/booking-v2/available-cleaners?${params.toString()}`;
+    cachedClientRequest(
+      `available-cleaners:${url}`,
+      async () => {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`available_cleaners_http_${response.status}`);
+        return response.json() as Promise<{ cleaners?: AvailableCleanerV2[] }>;
+      },
+      20_000,
+    )
       .then((json: { cleaners?: AvailableCleanerV2[] }) => {
         const all = json.cleaners ?? [];
         const matched = all.filter((c) => ids.includes(c.id));
@@ -932,6 +976,77 @@ export function Step3Review() {
     setSnapshot(getValues());
     setEditPanel(panel);
   }
+
+  function editCoreDetails() {
+    editDetailsSection("property");
+  }
+
+  function editCoreSchedule() {
+    editScheduleSection("booking_type");
+    goToStep(2);
+  }
+
+  function editCoreCleaner() {
+    editScheduleSection("cleaner");
+    goToStep(2);
+  }
+
+  function editCoreAddons() {
+    editDetailsSection(
+      isRegularCleaning ? "equipment" : isDeepCleaning ? "pets" : "condition",
+    );
+  }
+
+  function editOfficeDetails() {
+    editDetailsSection("rooms");
+  }
+
+  function editOfficeSchedule() {
+    editScheduleSection("booking_type");
+    goToStep(2);
+  }
+
+  function editOfficeCleaner() {
+    editScheduleSection("cleaner");
+    goToStep(2);
+  }
+
+  function editCarpetDetails() {
+    editDetailsSection("rooms");
+  }
+
+  function editCarpetSchedule() {
+    editScheduleSection("date_time");
+    goToStep(2);
+  }
+
+  function editCarpetCleaner() {
+    editScheduleSection("cleaner");
+    goToStep(2);
+  }
+
+  function editCarpetAddons() {
+    editDetailsSection("condition");
+  }
+
+  function editAirbnbDetails() {
+    editDetailsSection("property");
+  }
+
+  function editAirbnbSchedule() {
+    editScheduleSection("date_time");
+    goToStep(2);
+  }
+
+  function editAirbnbCleaner() {
+    editScheduleSection("cleaner");
+    goToStep(2);
+  }
+
+  function editAirbnbAddons() {
+    editDetailsSection("turnover");
+  }
+
   function saveEdit() {
     setEditPanel(null);
     setSnapshot(null);
@@ -942,14 +1057,34 @@ export function Step3Review() {
     setSnapshot(null);
   }
 
+  const visibleServiceDetailKeys = new Set(
+    step1Questions
+      .filter((question) => bookingDetailsQuestionStage(serviceSlug, question) != null)
+      .map((question) => question.key),
+  );
   const serviceDetails = Object.entries(values.serviceDetails ?? {}).filter(
-    ([, val]) => val !== "" && val !== null && val !== undefined,
+    ([key, val]) =>
+      visibleServiceDetailKeys.has(key) &&
+      val !== "" &&
+      val !== null &&
+      val !== undefined,
   );
   const selectedExtras = values.selectedExtras ?? [];
   const pricingSummary = values.pricingSummary;
   const extrasSource = liveConfig?.extras ?? [];
+  const showAddonsReview = extrasSource.length > 0 || selectedExtras.length > 0;
   const estimatedTotal =
     pricingSummary?.estimated_total ?? pricingSummary?.total ?? liveConfig?.basePrice ?? config.basePrice;
+  const showEquipment =
+    serviceShowsEquipmentQuestion(serviceSlug) &&
+    (values.equipmentRequired === "yes" || values.equipmentRequired === "no");
+  const hasServiceDetails = serviceDetails.length > 0;
+  const detailSectionCount = Number(hasServiceDetails);
+  const cleanDetailsNumber = 2 + Number(showEquipment);
+  const scheduleNumber = 2 + Number(showEquipment) + detailSectionCount;
+  const cleanerNumber = scheduleNumber + 1;
+  const extrasNumber =
+    scheduleNumber + 1 + Number(values.cleanerMode === "individual_cleaners");
 
   return (
     <>
@@ -959,13 +1094,25 @@ export function Step3Review() {
           <LocationEditPanel />
         </EditModal>
       )}
-      {editPanel === "equipment" && (
+      {showEquipment && editPanel === "equipment" && (
         <EditModal title="Edit equipment" onSave={saveEdit} onCancel={cancelEdit}>
           <EquipmentEditPanel />
         </EditModal>
       )}
       {editPanel === "property" && (
-        <EditModal title="Edit clean details" onSave={saveEdit} onCancel={cancelEdit}>
+        <EditModal
+          title={
+            isCarpetCleaning
+              ? "Edit carpet scope"
+              : isOfficeCleaning
+                ? "Edit office scope"
+                : isAirbnbCleaning
+                  ? "Edit Airbnb details"
+                  : "Edit clean details"
+          }
+          onSave={saveEdit}
+          onCancel={cancelEdit}
+        >
           <PropertyEditPanel />
         </EditModal>
       )}
@@ -975,7 +1122,11 @@ export function Step3Review() {
         </EditModal>
       )}
       {editPanel === "cleaner" && (
-        <EditModal title="Edit cleaner preference" onSave={saveEdit} onCancel={cancelEdit}>
+        <EditModal
+          title={isCarpetCleaning ? "Edit specialist preference" : "Edit cleaner preference"}
+          onSave={saveEdit}
+          onCancel={cancelEdit}
+        >
           <CleanerEditPanel />
         </EditModal>
       )}
@@ -986,64 +1137,33 @@ export function Step3Review() {
       )}
 
       {/* ── Page ── */}
-      <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 
         {/* Header */}
-        <div className="text-center">
+        <div className="mb-1 text-center sm:col-span-2">
           <h2 className="text-xl font-bold text-slate-900">Review your booking</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Everything look right? Make any changes before you pay.
+          <p className="mt-0.5 text-sm text-slate-500">
+            Check the details below before payment.
           </p>
         </div>
 
-        {/* Service badge */}
-        <div className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-4 sm:gap-4 sm:px-5">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600">
-            <config.icon className="h-6 w-6 text-white" aria-hidden />
-          </div>
-          <div className="min-w-0">
-            <p className="text-base font-bold text-blue-900">{serviceLabel}</p>
-            <p className="mt-0.5 text-xs text-blue-700/80 sm:truncate">{serviceDescription}</p>
-          </div>
-        </div>
-
         {/* ① Location */}
-        <ReviewSection number={1} title="Location" onEdit={() => openEdit("location")}>
-          <div className="flex items-start gap-2.5">
-            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" aria-hidden />
-            <div>
-              <p className="text-sm font-semibold text-slate-900">
-                {values.address || "—"}
-              </p>
-              <p className="mt-0.5 text-sm text-slate-500">
-                {[values.suburb, values.city].filter(Boolean).join(", ")}
-                {values.postalCode && `, ${values.postalCode}`}
-              </p>
-            </div>
+        <ReviewSection
+          number={1}
+          title="Location"
+          onEdit={() => openEdit("location")}
+          className={showEquipment ? undefined : "sm:col-span-2"}
+        >
+          <div className="flex items-center gap-2.5">
+            <MapPin className="h-4 w-4 shrink-0 text-blue-500" aria-hidden />
+            <p className="min-w-0 text-sm font-medium text-slate-800">
+              {[values.address, values.suburb, values.city, values.postalCode].filter(Boolean).join(" · ")}
+            </p>
           </div>
 
-          {(values.accessInstructions || values.gateCode || values.parkingInstructions) && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {values.accessInstructions && (
-                <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-                  Access: {values.accessInstructions}
-                </span>
-              )}
-              {values.gateCode && (
-                <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-                  Gate: {values.gateCode}
-                </span>
-              )}
-              {values.parkingInstructions && (
-                <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-                  Parking: {values.parkingInstructions}
-                </span>
-              )}
-            </div>
-          )}
         </ReviewSection>
 
-        {(values.equipmentRequired === "yes" || values.equipmentRequired === "no") && (
+        {showEquipment && (
           <ReviewSection number={2} title="Equipment" onEdit={() => openEdit("equipment")}>
             <div className="flex items-start gap-2.5">
               <Package className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" aria-hidden />
@@ -1072,104 +1192,109 @@ export function Step3Review() {
           </ReviewSection>
         )}
 
-        {/* ② Clean details */}
-        {serviceDetails.length > 0 && (
-          <ReviewSection number={2} title="Clean details" onEdit={() => openEdit("property")}>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+        {/* ② Service details / Carpet scope + condition */}
+        {isCarpetCleaning ? (
+          <ReviewSection
+            number={cleanDetailsNumber}
+            title="Carpet details"
+            onEdit={editCarpetDetails}
+            className="sm:col-span-2"
+          >
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
               {serviceDetails.map(([key, val]) => {
                 const question = step1Questions.find((q) => q.key === key);
-                if (question?.type === "textarea") {
-                  return (
-                    <div key={key} className="col-span-2">
-                      <p className="text-xs text-slate-400">{question?.label ?? key}</p>
-                      <p className="mt-0.5 text-sm text-slate-700">{String(val)}</p>
-                    </div>
-                  );
-                }
-                const displayVal =
-                  question?.options?.find((o) => o.value === String(val))?.label ??
-                  String(val);
+                const displayVal = question?.options?.find((o) => o.value === String(val))?.label ?? String(val);
                 return (
-                  <div key={key}>
-                    <p className="text-xs text-slate-400">{question?.label ?? key}</p>
-                    <p className="mt-0.5 text-sm font-medium capitalize text-slate-800">
-                      {displayVal}
-                    </p>
-                  </div>
+                  <span key={key} className="text-sm text-slate-700">
+                    <span className="text-slate-400">{question?.label ?? key}: </span>
+                    <span className="font-medium text-slate-800">
+                      {key === "bedrooms" && String(val) === "0" ? "Studio / no bedrooms" : displayVal}
+                    </span>
+                  </span>
                 );
               })}
             </div>
           </ReviewSection>
-        )}
+        ) : isAirbnbCleaning ? (
+          <ReviewSection
+            number={cleanDetailsNumber}
+            title="Airbnb details"
+            onEdit={editAirbnbDetails}
+            className="sm:col-span-2"
+          >
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+              {serviceDetails.map(([key, val]) => {
+                const question = step1Questions.find((q) => q.key === key);
+                const displayVal = question?.options?.find((o) => o.value === String(val))?.label ?? String(val);
+                return (
+                  <span key={key} className="text-sm text-slate-700">
+                    <span className="text-slate-400">{question?.label ?? key}: </span>
+                    <span className="font-medium text-slate-800">
+                      {key === "bedrooms" && String(val) === "0" ? "Studio / no bedrooms" : displayVal}
+                    </span>
+                  </span>
+                );
+              })}
+            </div>
+          </ReviewSection>
+        ) : serviceDetails.length > 0 ? (
+          <ReviewSection
+            number={cleanDetailsNumber}
+            title={isOfficeCleaning ? "Office details" : "Clean details"}
+            onEdit={isCoreCloseoutService ? editCoreDetails : () => openEdit("property")}
+            className="sm:col-span-2"
+          >
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+              {serviceDetails.map(([key, val]) => {
+                const question = step1Questions.find((q) => q.key === key);
+                const displayVal = question?.options?.find((o) => o.value === String(val))?.label ?? String(val);
+                return (
+                  <span key={key} className="text-sm text-slate-700">
+                    <span className="text-slate-400">{question?.label ?? key}: </span>
+                    <span className="font-medium text-slate-800">
+                      {key === "bedrooms" && String(val) === "0" ? "Studio / no bedrooms" : displayVal}
+                    </span>
+                  </span>
+                );
+              })}
+            </div>
+          </ReviewSection>
+        ) : null}
 
         {/* ③ Schedule */}
         <ReviewSection
-          number={serviceDetails.length > 0 ? 3 : 2}
+          number={scheduleNumber}
           title="Schedule"
-          onEdit={() => openEdit("schedule")}
+          onEdit={
+            isOfficeCleaning
+              ? editOfficeSchedule
+              : isCarpetCleaning
+                ? editCarpetSchedule
+                : isAirbnbCleaning
+                  ? editAirbnbSchedule
+                  : isCoreCloseoutService
+                    ? editCoreSchedule
+                    : () => openEdit("schedule")
+          }
+          className="sm:col-span-2"
         >
-          {/* Date + time cards */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-400">
-                <Calendar className="h-3.5 w-3.5" aria-hidden />
-                Date
-              </p>
-              <p className="text-sm font-bold text-slate-900">
-                {values.date ? formatDate(values.date) : "—"}
-              </p>
-            </div>
-            <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center">
-              <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-400">
-                <Clock className="h-3.5 w-3.5" aria-hidden />
-                Time
-              </p>
-              <p className="text-2xl font-bold text-blue-600">{values.time || "—"}</p>
-            </div>
-          </div>
-
-          {/* Booking meta chips */}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-              {values.bookingType === "recurring" ? (
-                <>
-                  <RefreshCw className="h-3 w-3 text-blue-500" />
-                  Recurring
-                  {values.recurringFrequency
-                    ? ` · ${recurringFrequencyLabel(values.recurringFrequency)}`
-                    : ""}
-                </>
-              ) : (
-                "Once-off"
-              )}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+            <span className="inline-flex items-center gap-1.5 font-medium text-slate-800">
+              <Calendar className="h-4 w-4 text-blue-500" aria-hidden />
+              {values.date ? formatDate(values.date) : "—"}
             </span>
-
-            {values.cleanerMode === "individual_cleaners" && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-                <Users className="h-3 w-3 text-blue-500" />
-                {values.cleanerCount} cleaner{values.cleanerCount > 1 ? "s" : ""}
+            <span className="inline-flex items-center gap-1.5 font-bold text-blue-600">
+              <Clock className="h-4 w-4" aria-hidden />
+              {values.time || "—"}
+            </span>
+            {!isCarpetCleaning && !isAirbnbCleaning ? (
+              <span className="text-slate-500">
+                {values.bookingType === "recurring"
+                  ? `Recurring${values.recurringFrequency ? ` · ${recurringFrequencyLabel(values.recurringFrequency)}` : ""}`
+                  : "Once-off"}
               </span>
-            )}
-            {values.cleanerMode === "individual_cleaners" && (() => {
-              const n = (values.selectedCleanerDetails ?? []).length;
-              return (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-                  {n > 0
-                    ? `${n} preferred cleaner${n > 1 ? "s" : ""} selected`
-                    : "Best available cleaner"}
-                </span>
-              );
-            })()}
-
-            {values.cleanerMode === "team" && values.assignedTeamId && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-                <Users className="h-3 w-3 text-blue-500" />
-                {values.assignedTeamName?.trim() || "Selected team"}
-              </span>
-            )}
-
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-              <Clock className="h-3 w-3 text-blue-500" />
+            ) : null}
+            <span className="text-slate-500">
               {values.pricingSummary?.estimated_duration_minutes > 0
                 ? formatEstimatedCleaningTimeLabel(values.pricingSummary.estimated_duration_minutes)
                 : `Estimated cleaning time: ${estimatedDurationHours} hours`}
@@ -1178,6 +1303,7 @@ export function Step3Review() {
 
           {/* Recurring preferred days */}
           {values.bookingType === "recurring" &&
+            serviceUsesRecurringDayPicker(values.serviceSlug) &&
             shouldShowRecurringDayPicker(values.recurringFrequency) &&
             (values.recurringDays ?? []).length > 0 && (
               <p className="mt-2 text-xs text-slate-500">
@@ -1195,37 +1321,58 @@ export function Step3Review() {
           const hasIds = cleanerIds.length > 0;
           return (
             <ReviewSection
-              number={serviceDetails.length > 0 ? 4 : 3}
-              title="Cleaner preference"
-              onEdit={() => openEdit("cleaner")}
+              number={cleanerNumber}
+              title={isCarpetCleaning ? "Specialist" : "Cleaner preference"}
+              onEdit={
+                isOfficeCleaning
+                  ? editOfficeCleaner
+                  : isCarpetCleaning
+                    ? editCarpetCleaner
+                    : isAirbnbCleaning
+                      ? editAirbnbCleaner
+                      : isCoreCloseoutService
+                        ? editCoreCleaner
+                        : () => openEdit("cleaner")
+              }
             >
               {!hasDetails && !hasIds ? (
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-50">
-                    <Users className="h-5 w-5 text-blue-500" aria-hidden />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800">
-                      Best available cleaner
-                    </p>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      We&apos;ll assign the best available cleaner for your booking.
-                    </p>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 shrink-0 text-blue-500" aria-hidden />
+                  <p className="text-sm font-medium text-slate-800">
+                    {isCarpetCleaning ? "Shalean chooses specialist" : "Best available cleaner"}
+                  </p>
                 </div>
               ) : hasDetails ? (
-                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-2.5">
                   {cleanerDetails.map((cleaner) => (
-                    <CleanerPreviewCard key={cleaner.id} cleaner={cleaner} />
+                    <CleanerPreviewCard
+                      key={cleaner.id}
+                      cleaner={cleaner}
+                      preferenceLabel={
+                        isCarpetCleaning ? "Preferred specialist" : "Preferred cleaner"
+                      }
+                    />
                   ))}
                 </div>
               ) : (
                 /* IDs saved but details not yet synced (e.g. navigated directly to Step 3) */
                 <p className="text-sm text-slate-500">
-                  {cleanerIds.length} preferred cleaner{cleanerIds.length > 1 ? "s" : ""} selected.
+                  {isCarpetCleaning
+                    ? "Preferred specialist selected."
+                    : `${cleanerIds.length} preferred cleaner${cleanerIds.length > 1 ? "s" : ""} selected.`}
                   <button
                     type="button"
-                    onClick={() => openEdit("cleaner")}
+                    onClick={
+                      isOfficeCleaning
+                        ? editOfficeCleaner
+                        : isCarpetCleaning
+                          ? editCarpetCleaner
+                          : isAirbnbCleaning
+                            ? editAirbnbCleaner
+                            : isCoreCloseoutService
+                              ? editCoreCleaner
+                              : () => openEdit("cleaner")
+                    }
                     className="ml-1.5 font-medium text-blue-600 hover:underline"
                   >
                     Go back to view
@@ -1236,48 +1383,57 @@ export function Step3Review() {
           );
         })()}
 
-        {/* ⑤ Add-ons */}
-        <ReviewSection
-          number={
-            values.cleanerMode === "individual_cleaners"
-              ? serviceDetails.length > 0 ? 5 : 4
-              : serviceDetails.length > 0 ? 4 : 3
-          }
-          title="Add-ons"
-          onEdit={() => openEdit("extras")}
-        >
-          {selectedExtras.length === 0 ? (
-            <div className="flex items-center gap-2 text-sm text-slate-400">
-              <Package className="h-4 w-4" aria-hidden />
-              No add-ons selected.
-            </div>
-          ) : (
-            <SelectedExtrasList
-              extras={
-                pricingSummary?.selected_extras?.length
-                  ? pricingSummary.selected_extras
-                  : selectedExtras.map((id) => {
-                      const extra = extrasSource.find((e) => e.id === id);
-                      return {
-                        extra_id: id,
-                        name: extra?.label ?? id,
-                        price: extra?.priceZar ?? 0,
-                        quantity: 1,
-                        total: extra?.priceZar ?? 0,
-                      };
-                    })
-              }
-            />
-          )}
-        </ReviewSection>
+        {/* ⑤ Add-ons — hide entirely when this service has no DB-backed extras. */}
+        {showAddonsReview ? (
+          <ReviewSection
+            number={extrasNumber}
+            title="Add-ons"
+            onEdit={
+              isOfficeCleaning
+                ? editOfficeDetails
+                : isCarpetCleaning
+                  ? editCarpetAddons
+                  : isAirbnbCleaning
+                    ? editAirbnbAddons
+                    : isCoreCloseoutService
+                      ? editCoreAddons
+                      : () => openEdit("extras")
+            }
+            className={values.cleanerMode === "individual_cleaners" ? undefined : "sm:col-span-2"}
+          >
+            {selectedExtras.length === 0 ? (
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <Package className="h-4 w-4" aria-hidden />
+                No add-ons selected.
+              </div>
+            ) : (
+              <SelectedExtrasList
+                extras={
+                  pricingSummary?.selected_extras?.length
+                    ? pricingSummary.selected_extras
+                    : selectedExtras.map((id) => {
+                        const extra = extrasSource.find((e) => e.id === id);
+                        return {
+                          extra_id: id,
+                          name: extra?.label ?? id,
+                          price: extra?.priceZar ?? 0,
+                          quantity: 1,
+                          total: extra?.priceZar ?? 0,
+                        };
+                      })
+                }
+              />
+            )}
+          </ReviewSection>
+        ) : null}
 
         {/* Price breakdown */}
-        <div className="rounded-2xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-3.5 sm:px-5">
+        <div className="rounded-2xl border border-slate-200 bg-white sm:col-span-2">
+          <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-2.5 sm:px-5">
             <h3 className="text-sm font-bold text-slate-800">Price breakdown</h3>
           </div>
 
-          <div className="min-w-0 space-y-2.5 px-4 py-4 sm:px-5">
+          <div className="min-w-0 space-y-2 px-4 py-3 sm:px-5">
             <CustomerPriceBreakdown pricing={pricingSummary} />
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
               <span className="text-base font-bold text-slate-900">
@@ -1290,22 +1446,29 @@ export function Step3Review() {
             {values.bookingType === "recurring" && values.recurringFrequency ? (
               <div className="space-y-1 border-t border-slate-100 pt-3 text-xs text-slate-600">
                 {(() => {
-                  const { visitsPerMonth, estimatedMonthlyZar } = estimateRecurringMonthlySpend({
+                  const prepaid = buildRecurringPrepaymentQuote({
+                    startDate: values.recurringStartDate || values.date,
                     frequency: values.recurringFrequency,
-                    daysOfWeek: values.recurringDays ?? [],
-                    pricePerVisitZar: estimatedTotal,
+                    recurringDays: values.recurringDays ?? [],
+                    perVisitZar: estimatedTotal,
+                    serviceSlug,
                   });
+                  if (!prepaid) return <p>Choose a supported recurring schedule to continue.</p>;
                   return (
                     <>
                       <p>
-                        About {visitsPerMonth} visit{visitsPerMonth === 1 ? "" : "s"}/month · estimated
-                        monthly total{" "}
+                        {serviceSlug === "deep-cleaning"
+                          ? "Monthly plan"
+                          : `First 30 days: ${prepaid.visitCount} visit${prepaid.visitCount === 1 ? "" : "s"}`}{" "}
+                        · total{" "}
                         <span className="font-semibold text-slate-800">
-                          R{estimatedMonthlyZar.toLocaleString("en-ZA")}
+                          R{prepaid.grossPackageZar.toLocaleString("en-ZA")}
                         </span>
                       </p>
                       <p className="font-medium text-slate-700">
-                        Amount due today: R{estimatedTotal.toLocaleString("en-ZA")} (this visit)
+                        {serviceSlug === "deep-cleaning"
+                          ? `Amount due today: R${prepaid.grossPackageZar.toLocaleString("en-ZA")} (one monthly visit)`
+                          : `Amount due today: R${prepaid.grossPackageZar.toLocaleString("en-ZA")} (first 30 days)`}
                       </p>
                     </>
                   );
@@ -1314,31 +1477,17 @@ export function Step3Review() {
             ) : null}
           </div>
 
-          <div className="border-t border-slate-100 bg-slate-50 px-4 py-3 sm:px-5">
+          <div className="border-t border-slate-100 bg-slate-50 px-4 py-2.5 sm:px-5">
             <p className="text-xs text-slate-400">
               {values.bookingType === "recurring"
-                ? "Pay today for this visit. Future visits bill at the same per-visit price (or on your monthly invoice if enabled)."
+                ? serviceSlug === "deep-cleaning"
+                  ? "One deep-clean visit is charged each month while the monthly plan remains active."
+                  : "Pay all visits in each 30-day billing cycle together. The package renews automatically while the recurring booking remains active."
                 : "Final amount confirmed before payment. No hidden fees."}
             </p>
           </div>
         </div>
 
-        {/* Trust strip */}
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
-          {[
-            { Icon: ShieldCheck, label: "Vetted cleaners" },
-            { Icon: CreditCard, label: "Secure payment" },
-            { Icon: Star, label: "Satisfaction guarantee" },
-          ].map(({ Icon, label }) => (
-            <div
-              key={label}
-              className="flex flex-row items-center gap-2.5 rounded-xl border border-slate-100 bg-white p-3 sm:flex-col sm:items-center sm:gap-1.5 sm:text-center"
-            >
-              <Icon className="h-5 w-5 shrink-0 text-blue-600" aria-hidden />
-              <p className="text-xs font-medium text-slate-600">{label}</p>
-            </div>
-          ))}
-        </div>
       </div>
     </>
   );

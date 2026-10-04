@@ -1,6 +1,6 @@
 /** Canonical `bookings.service_slug` values for income budget lines. */
 export const INCOME_BUDGET_SERVICE_OPTIONS = [
-  { slug: "standard", label: "Standard cleaning" },
+  { slug: "standard", label: "Regular cleaning" },
   { slug: "airbnb", label: "Airbnb cleaning" },
   { slug: "deep", label: "Deep cleaning" },
   { slug: "move", label: "Move-in / move-out" },

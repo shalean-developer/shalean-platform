@@ -13,7 +13,7 @@ export default function ReviewFunnelPage() {
 
   const funnelSteps = useMemo(() => {
     if (!data) return [];
-    const base = Math.max(data.completedJobs, data.promptsSent, 1);
+    const base = Math.max(data.completedJobs, data.promptsSent, data.reviewsReceived, 1);
     return [
       { label: "Completed jobs", value: data.completedJobs, pct: 100, color: "bg-blue-500" },
       {
@@ -24,8 +24,8 @@ export default function ReviewFunnelPage() {
       },
       {
         label: "Reviews received",
-        value: data.reviewsSubmitted,
-        pct: Math.round((data.reviewsSubmitted / base) * 100),
+        value: data.reviewsReceived,
+        pct: Math.round((data.reviewsReceived / base) * 100),
         color: "bg-emerald-500",
       },
     ];
@@ -58,7 +58,7 @@ export default function ReviewFunnelPage() {
         {[
           { label: "Completed jobs", value: data?.completedJobs ?? "—", icon: CheckCircle2, color: "bg-blue-50 text-blue-600" },
           { label: "Requests sent", value: data?.promptsSent ?? "—", icon: Send, color: "bg-violet-50 text-violet-600" },
-          { label: "Reviews received", value: data?.reviewsSubmitted ?? "—", icon: Star, color: "bg-yellow-50 text-yellow-600" },
+          { label: "Reviews received", value: data?.reviewsReceived ?? "—", icon: Star, color: "bg-yellow-50 text-yellow-600" },
           {
             label: "Conversion rate",
             value: data?.conversionPct != null ? `${data.conversionPct}%` : "—",
@@ -106,8 +106,16 @@ export default function ReviewFunnelPage() {
                 </div>
               </div>
             ))}
-            {data?.clickThroughPct != null ? (
-              <p className="text-xs text-slate-500">Prompt click-through: {data.clickThroughPct}%</p>
+            {data ? (
+              <div className="space-y-1 text-xs text-slate-500">
+                {data.clickThroughPct != null ? (
+                  <p>Prompt click-through: {data.clickThroughPct}%</p>
+                ) : null}
+                <p>
+                  Prompt-attributed reviews: {data.promptedReviewsSubmitted}
+                  {data.promptsSent > 0 ? ` of ${data.promptsSent} prompts` : ""}
+                </p>
+              </div>
             ) : null}
           </div>
         )}
@@ -154,7 +162,8 @@ export default function ReviewFunnelPage() {
           </div>
           <ul className="space-y-2 text-xs text-slate-600">
             <li>Prompts are logged when SMS/email review requests succeed.</li>
-            <li>Conversion = reviews submitted ÷ prompts sent in the window.</li>
+            <li>Reviews received = all reviews created in the selected window.</li>
+            <li>Conversion = prompt-attributed reviews ÷ successful prompts sent.</li>
             <li>Completed jobs count uses bookings with status completed.</li>
           </ul>
         </div>

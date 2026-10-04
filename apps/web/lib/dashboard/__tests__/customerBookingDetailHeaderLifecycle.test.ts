@@ -88,7 +88,7 @@ describe("customer booking detail header lifecycle", () => {
     expect(attrs["data-detail-operational-phase"]).toBe(describeDashboardBookingOperational(b).operationalPhase);
   });
 
-  it("on canonical mismatch, detail display fields stay derived; canonical exposed only as diagnostics", () => {
+  it("on canonical mismatch, detail keeps canonical display while exposing parity diagnostics", () => {
     const raw = baseRaw();
     raw.canonicalLifecycle = {
       bookingId: raw.id,
@@ -108,9 +108,8 @@ describe("customer booking detail header lifecycle", () => {
     const attrs = customerBookingDetailHeaderDataAttributes(b);
     expect(attrs["data-canonical-parity"]).toBe("mismatch");
     expect(attrs["data-canonical-operational-phase"]).toBe("completed");
-    expect(attrs["data-detail-lifecycle-source"]).toBe("derived");
-    expect(attrs["data-detail-operational-phase"]).not.toBe("completed");
-    expect(attrs["data-detail-operational-phase"]).toBe(describeDashboardBookingOperational(b).operationalPhase);
+    expect(attrs["data-detail-lifecycle-source"]).toBe("canonical");
+    expect(attrs["data-detail-operational-phase"]).toBe("completed");
   });
 
   it("visible customer status label reflects cleaner assignment", () => {

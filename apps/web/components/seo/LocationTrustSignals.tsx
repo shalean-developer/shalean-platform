@@ -1,32 +1,24 @@
-import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
 import { BadgeCheck, CalendarClock, Home, Star } from "lucide-react";
 
 type Props = {
   location: CapeTownLocationRow;
-  trustStats: PublicReviewBannerStats | null;
 };
 
 /**
  * E-E-A-T strip for programmatic hubs — uses verified Google aggregate + operational facts only.
  */
-export function LocationTrustSignals({ location, trustStats }: Props) {
+export function LocationTrustSignals({ location }: Props) {
   const { name } = location;
   const googleAvg = GOOGLE_BUSINESS_REVIEWS.rating;
   const googleCount = GOOGLE_BUSINESS_REVIEWS.count;
-  const rpcAvg = trustStats?.avgRating != null ? trustStats.avgRating.toFixed(1) : null;
-  const rpcCount = trustStats?.reviewCount;
 
   const householdLine =
-    rpcCount != null && rpcCount >= 50
-      ? `Trusted by ${rpcCount}+ verified bookings near ${name} (city-wide Shalean data).`
-      : `Trusted by ${googleCount}+ Google-reviewed Cape Town customers—including recurring visits in ${name}.`;
+    `Trusted by ${googleCount}+ Google reviewers across Cape Town.`;
 
   const ratingLine =
-    rpcAvg && rpcCount != null
-      ? `Rated ★${rpcAvg}+ from ${rpcCount}+ verified booking reviews.`
-      : `Rated ★${googleAvg}+ on Google from ${googleCount}+ local reviews.`;
+    `Rated ★${googleAvg} on Google from ${googleCount}+ reviews.`;
 
   return (
     <section

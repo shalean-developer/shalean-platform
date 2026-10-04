@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { bookingCreationLifecyclePatch } from "@/lib/booking/bookingCreationProfiles";
 
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -50,6 +51,7 @@ import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsFo
 import { BOOKING_EXTRA_ID_SET } from "@/lib/pricing/extrasConfig";
 import { processPaystackInitializeBody } from "@/lib/booking/paystackInitializeCore";
 import { reportOperationalIssue, logSystemEvent } from "@/lib/logging/systemLog";
+import { ensureReviewFollowUpForCompletedBooking } from "@/lib/reviews/ensureReviewFollowUp";
 import { aggregatePaymentLinkDeliveryStats } from "@/lib/pay/paymentLinkDeliveryStats";
 import { getServiceLabel, parseBookingServiceId, type BookingServiceId } from "@/components/booking/serviceCategories";
 import { getDemandSupplySnapshotByCity } from "@/lib/pricing/demandSupplySurge";
@@ -70,6 +72,7 @@ import {
 import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
 import type { AdminMarkPaidMethod } from "@/lib/booking/adminMarkBookingPaid";
 import { settleAdminBookingPaymentAlreadyReceived } from "@/lib/admin/settleAdminBookingPaymentAlreadyReceived";
+import { resolveLegacyJobDurationWorkload } from "@/lib/booking/quote/resolveBookingDurationWorkload";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -937,6 +940,13 @@ export async function POST(request: Request) {
   const extrasPersist = sanitizeBookingExtrasForPersist(extrasAllowed, {
     where: "POST /api/admin/bookings",
   });
+  const adminSlotDurationMinutes = resolveLegacyJobDurationWorkload({
+    service: parseBookingServiceId(serviceRaw),
+    rooms,
+    bathrooms,
+    extraRooms: 0,
+    extras: extrasPersist.map((extra) => extra.slug),
+  }).duration_minutes;
 
   const adminSlotOverride =
     body.admin_slot_override === true ||
@@ -976,6 +986,7 @@ export async function POST(request: Request) {
         cleanerId,
         dateYmd: date,
         timeHm,
+        durationMinutes: adminSlotDurationMinutes,
       });
       if (conflictBookingId) {
         return NextResponse.json(
@@ -1154,6 +1165,7 @@ export async function POST(request: Request) {
           cleanerId,
           dateYmd: date,
           timeHm,
+          durationMinutes: adminSlotDurationMinutes,
         });
         if (lateConflictPaid) {
           return bail(
@@ -1271,9 +1283,7 @@ export async function POST(request: Request) {
               admin_force_slot_override: true,
             }
           : {}),
-        is_monthly_billing_booking: false,
-        payment_status: "pending",
-        billing_type: "per_booking",
+        ...bookingCreationLifecyclePatch("admin_payment_received"),
       },
       rooms,
       bathrooms,
@@ -1452,6 +1462,7 @@ export async function POST(request: Request) {
         cleanerId: selectedCleanerId,
         dateYmd: date,
         timeHm,
+        durationMinutes: adminSlotDurationMinutes,
       });
       if (lateConflictMonthly) {
         return bail(
@@ -1689,9 +1700,7 @@ export async function POST(request: Request) {
               admin_force_slot_override: true,
             }
           : {}),
-        is_monthly_billing_booking: true,
-        payment_status: "pending_monthly",
-        billing_type: "recurring_invoice",
+        ...bookingCreationLifecyclePatch("admin_monthly"),
       },
       rooms,
       bathrooms,
@@ -1886,6 +1895,29 @@ export async function POST(request: Request) {
     await runAdminBookingPostCreateNormalizationAndEarnings(admin, newBookingId, "admin_booking_create_monthly");
     await syncAdminPreferredCleanerRoster(admin, newBookingId, selectedCleanerIds);
 
+    if (adminMarkCompleted) {
+      const { data: reviewBooking, error: reviewBookingErr } = await admin
+        .from("bookings")
+        .select(
+          "id, customer_email, status, completed_at, cleaner_id, payout_owner_cleaner_id, is_team_job, team_id",
+        )
+        .eq("id", newBookingId)
+        .maybeSingle();
+      if (reviewBookingErr) {
+        void reportOperationalIssue(
+          "warn",
+          "admin_booking_create",
+          "review follow-up booking refetch failed",
+          { bookingId: newBookingId, error: reviewBookingErr.message },
+        );
+      } else if (reviewBooking) {
+        await ensureReviewFollowUpForCompletedBooking(
+          admin,
+          reviewBooking as Record<string, unknown>,
+        );
+      }
+    }
+
     void logSystemEvent({
       level: "info",
       source: "admin_booking_create",
@@ -1962,6 +1994,7 @@ export async function POST(request: Request) {
         cleanerId,
         dateYmd: date,
         timeHm,
+        durationMinutes: adminSlotDurationMinutes,
       });
       if (lateConflictPaystack) {
         return bail(

@@ -7,8 +7,11 @@ export const KEYWORD_PRIMARY_ROUTE: Record<string, string> = {
   "cleaning services cape town": "/services",
   "cleaning services claremont": "/locations/claremont-cleaning-services",
   "deep cleaning cape town": "/services/deep-cleaning-cape-town",
+  "deep cleaning services cape town": "/services/deep-cleaning-cape-town",
   "standard cleaning cape town": "/services/standard-cleaning-cape-town",
   "move out cleaning cape town": "/services/move-out-cleaning-cape-town",
   "cleaning prices cape town": "/blog/how-much-does-cleaning-cost-cape-town-2026",
   "airbnb cleaning cape town": "/services/airbnb-cleaning-cape-town",
+  "carpet cleaning cape town": "/services/carpet-cleaning-cape-town",
+  "carpet cleaning services cape town": "/services/carpet-cleaning-cape-town",
 };

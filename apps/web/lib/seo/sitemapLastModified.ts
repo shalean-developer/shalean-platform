@@ -32,7 +32,7 @@ const STATIC_CONTENT_LASTMOD: Record<string, string> = {
   "/blog": "2026-07-15T00:00:00.000Z",
   "/faq": "2026-06-01T00:00:00.000Z",
   "/reviews": "2026-06-01T00:00:00.000Z",
-  "/quote": "2026-06-01T00:00:00.000Z",
+  "/quote": "2026-10-02T00:00:00.000Z",
   "/privacy-policy": "2026-05-01T00:00:00.000Z",
   "/terms-of-service": "2026-05-01T00:00:00.000Z",
   "/locations": "2026-07-01T00:00:00.000Z",

@@ -143,8 +143,39 @@ export async function POST(request: Request) {
   const normalized = normalizeBody(body);
   if (!normalized.ok) return NextResponse.json({ error: normalized.error }, { status: 400 });
 
-  const recipient = await createPaystackRecipient(normalized);
-  if (!recipient.ok) return NextResponse.json({ error: recipient.error }, { status: recipient.status ?? 400 });
+  const { data: existingData, error: existingError } = await admin
+    .from("cleaner_payment_details")
+    .select("account_number, bank_code, account_name, recipient_code")
+    .eq("cleaner_id", session.cleanerId)
+    .maybeSingle();
+  if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
+
+  const existing = existingData as Pick<
+    PaymentDetailsRow,
+    "account_number" | "bank_code" | "account_name" | "recipient_code"
+  > | null;
+  const bankDetailsUnchanged = Boolean(
+    existing &&
+      String(existing.account_number ?? "").replace(/\s+/g, "").trim() === normalized.accountNumber &&
+      String(existing.bank_code ?? "").trim() === normalized.bankCode &&
+      String(existing.account_name ?? "").replace(/\s+/g, " ").trim() === normalized.accountName,
+  );
+
+  // Preserve a valid Paystack recipient when the cleaner re-saves unchanged bank details.
+  // If the bank account changed, never carry a recipient tied to the old account forward.
+  let recipientCode: string | null = bankDetailsUnchanged
+    ? existing?.recipient_code?.trim() || null
+    : null;
+  let paystackWarning: string | null = null;
+  if (process.env.PAYSTACK_SECRET_KEY?.trim()) {
+    const recipient = await createPaystackRecipient(normalized);
+    if (recipient.ok) {
+      recipientCode = recipient.recipientCode;
+    } else {
+      // Bank-transfer operation must remain available even when Paystack recipient creation fails.
+      paystackWarning = recipient.error;
+    }
+  }
 
   const now = new Date().toISOString();
   const { data, error } = await admin
@@ -155,7 +186,7 @@ export async function POST(request: Request) {
         account_number: normalized.accountNumber,
         bank_code: normalized.bankCode,
         account_name: normalized.accountName,
-        recipient_code: recipient.recipientCode,
+        recipient_code: recipientCode,
         updated_at: now,
       },
       { onConflict: "cleaner_id" },
@@ -165,5 +196,8 @@ export async function POST(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ details: serializeDetails((data as PaymentDetailsRow | null) ?? null) });
+  return NextResponse.json({
+    details: serializeDetails((data as PaymentDetailsRow | null) ?? null),
+    ...(paystackWarning ? { warning: `Bank details saved. Paystack recipient was not created: ${paystackWarning}` } : {}),
+  });
 }

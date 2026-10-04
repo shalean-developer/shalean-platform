@@ -25,4 +25,14 @@ describe("time-slot occupancy preload", () => {
     expect(src).toContain("needBookings = params.preloadedOccupyingBookings == null");
     expect(src).toContain("preloadedOccupyingBookings");
   });
+
+  it("reports timing evidence for both database waves and slot evaluation", () => {
+    const engine = readFileSync(join(root, "lib/booking/availabilityEngine.ts"), "utf8");
+    const route = readFileSync(join(root, "app/api/booking/time-slots/route.ts"), "utf8");
+    expect(engine).toContain("wave1Ms");
+    expect(engine).toContain("wave2Ms");
+    expect(engine).toContain("evaluationMs");
+    expect(route).toContain('"X-Booking-Slots-Total-Ms"');
+    expect(route).toContain('console.info("[api/booking/time-slots] timing"');
+  });
 });

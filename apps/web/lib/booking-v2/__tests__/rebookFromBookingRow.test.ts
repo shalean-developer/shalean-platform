@@ -30,10 +30,10 @@ const baseRow = (): BookingRow =>
 
 describe("rebookFromBookingRow", () => {
   it("builds rebook URL with canonical slug mapping", () => {
-    expect(rebookBookUrlFromBookingRow(baseRow())).toBe("/book/regular-cleaning?rebook=bk-123&step=2");
+    expect(rebookBookUrlFromBookingRow(baseRow())).toBe("/book/regular-cleaning?rebook=bk-123&step=schedule");
     expect(
       rebookBookUrlFromBookingRow({ id: "x", service: null, service_slug: "deep-cleaning" }),
-    ).toBe("/book/deep-cleaning?rebook=x&step=2");
+    ).toBe("/book/deep-cleaning?rebook=x&step=schedule");
   });
 
   it("maps row fields, equipment, preferred cleaner, and clears schedule", () => {

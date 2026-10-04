@@ -8,10 +8,66 @@ import {
   lastDayYmdOfInvoiceMonth,
 } from "@/lib/recurring/johannesburgCalendar";
 import {
-  expectedOccurrenceDatesForPlanInMonth,
-  recurringPlanScheduleRowFromDb,
-  type RecurringPlanScheduleRow,
-} from "@/lib/recurring/reconcileRecurringPlanOccurrences";
+  occurrenceDatesInclusive,
+  type MonthlyPattern,
+  type RecurringScheduleRow,
+} from "@/lib/recurring/calculateNextRunDate";
+
+export type RecurringPlanScheduleRow = RecurringScheduleRow & {
+  id: string;
+  customer_id: string;
+  price: number | string;
+  booking_snapshot_template: unknown;
+  preferred_cleaner_id?: string | null;
+  skip_next_occurrence_date?: string | null;
+  monthly_pattern?: MonthlyPattern | null;
+  monthly_nth?: number | null;
+};
+
+function recurringPlanScheduleRowFromDb(raw: Record<string, unknown>): RecurringPlanScheduleRow {
+  const mp = raw.monthly_pattern;
+  return {
+    id: String(raw.id ?? ""),
+    customer_id: String(raw.customer_id ?? ""),
+    price: raw.price as number | string,
+    frequency: raw.frequency as RecurringScheduleRow["frequency"],
+    days_of_week: Array.isArray(raw.days_of_week) ? (raw.days_of_week as number[]) : [],
+    start_date: String(raw.start_date ?? ""),
+    end_date: raw.end_date != null ? String(raw.end_date) : null,
+    monthly_pattern:
+      mp === "nth_weekday" || mp === "last_weekday" || mp === "mirror_start_date" ? mp : null,
+    monthly_nth: typeof raw.monthly_nth === "number" ? raw.monthly_nth : null,
+    booking_snapshot_template: raw.booking_snapshot_template,
+    preferred_cleaner_id: raw.preferred_cleaner_id != null ? String(raw.preferred_cleaner_id) : null,
+    skip_next_occurrence_date:
+      raw.skip_next_occurrence_date != null ? String(raw.skip_next_occurrence_date) : null,
+  };
+}
+
+function expectedOccurrenceDatesForPlanInMonth(
+  plan: RecurringPlanScheduleRow,
+  invoiceMonthYm: string,
+): string[] {
+  const schedule: RecurringScheduleRow = {
+    frequency: plan.frequency,
+    days_of_week: Array.isArray(plan.days_of_week) ? plan.days_of_week : [],
+    start_date: plan.start_date,
+    end_date: plan.end_date,
+    monthly_pattern: plan.monthly_pattern ?? null,
+    monthly_nth: typeof plan.monthly_nth === "number" ? plan.monthly_nth : null,
+  };
+
+  if (schedule.days_of_week.length === 0) return [];
+
+  const monthStart = `${invoiceMonthYm}-01`;
+  const monthEnd = lastDayYmdOfInvoiceMonth(invoiceMonthYm);
+  const fromYmd = compareYmd(monthStart, plan.start_date) >= 0 ? monthStart : plan.start_date;
+  const throughYmd =
+    plan.end_date && compareYmd(plan.end_date, monthEnd) < 0 ? plan.end_date : monthEnd;
+
+  if (compareYmd(fromYmd, throughYmd) > 0) return [];
+  return occurrenceDatesInclusive(schedule, fromYmd, throughYmd);
+}
 
 export type MonthlyInvoiceFinalizeReadiness = {
   ready: boolean;
@@ -166,8 +222,10 @@ export async function assessMonthlyInvoiceFinalizeReadiness(
     const { data: planBookings } = await admin
       .from("bookings")
       .select("date, recurring_id, monthly_invoice_id")
-      .eq("recurring_id", plan.id)
-      .neq("status", "cancelled");
+      .eq("recurring_id", plan.id);
+    // A cancelled scheduled occurrence still proves that the occurrence existed
+    // and was intentionally resolved. It should not make the month look
+    // perpetually incomplete or require a replacement booking.
     allBookingsByPlanId.set(plan.id, (planBookings ?? []) as BookingRow[]);
   }
 

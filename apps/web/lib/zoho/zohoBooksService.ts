@@ -3,6 +3,7 @@ import "server-only";
 import { normalizeBillingEmail } from "@/lib/zoho/shaleanBillingContactEmail";
 import { zohoBooksClient } from "@/lib/zoho/zohoBooksClient";
 import { formatZohoOrderReference, type ZohoOrderKind } from "@/lib/zoho/zohoOrderReference";
+import { formatZohoReference } from "@/lib/zoho/zohoReference";
 import type {
   ZohoBankAccountsResponse,
   ZohoChartAccountsResponse,
@@ -49,6 +50,33 @@ export async function lookupZohoCustomerContactId(options: {
  * Looks up a customer contact id in Zoho Books.
  * Never returns an unrelated first search hit when an exact match was required.
  */
+async function findContactIdExhaustive(options: {
+  email?: string | null;
+  contactName?: string | null;
+}): Promise<string | null> {
+  const billingEmail = normalizeBillingEmail(options.email);
+  const contactName = String(options.contactName ?? "").trim().toLowerCase();
+
+  let page = 1;
+  for (;;) {
+    const res = await zohoBooksClient.get<ZohoContactListResponse & {
+      page_context?: { has_more_page?: boolean };
+    }>(
+      `/contacts?contact_type=customer&filter_by=Status.All&page=${page}&per_page=200`,
+    );
+
+    for (const contact of res.contacts ?? []) {
+      const email = contact.email?.trim().toLowerCase() ?? "";
+      const name = contact.contact_name?.trim().toLowerCase() ?? "";
+      if (billingEmail && email === billingEmail.toLowerCase()) return contact.contact_id;
+      if (contactName && name === contactName) return contact.contact_id;
+    }
+
+    if (!res.page_context?.has_more_page) return null;
+    page += 1;
+  }
+}
+
 async function findContactId(options: {
   email?: string | null;
   contactName?: string | null;
@@ -57,23 +85,33 @@ async function findContactId(options: {
   const contactName = String(options.contactName ?? "").trim();
 
   if (billingEmail) {
+    const exactEmailRes = await zohoBooksClient.get<ZohoContactListResponse>(
+      `/contacts?contact_type=customer&filter_by=Status.All&email=${encodeURIComponent(billingEmail)}`,
+    );
+    const exactEmailContacts = exactEmailRes.contacts ?? [];
+    const byEmail = exactEmailContacts.find(
+      (c) => c.email?.trim().toLowerCase() === billingEmail.toLowerCase(),
+    );
+    if (byEmail) return byEmail.contact_id;
+
+    // Keep the broader text lookup for legacy rows where contact_name was
+    // incorrectly stored as the email string.
     const res = await zohoBooksClient.get<ZohoContactListResponse>(
-      `/contacts?contact_type=customer&search_text=${encodeURIComponent(billingEmail)}`,
+      `/contacts?contact_type=customer&filter_by=Status.All&search_text=${encodeURIComponent(billingEmail)}`,
     );
     const contacts = res.contacts ?? [];
-    const byEmail = contacts.find((c) => c.email?.toLowerCase() === billingEmail.toLowerCase());
-    if (byEmail) return byEmail.contact_id;
-    // Legacy rows where contact_name was wrongly set to the email string.
     const legacy = contacts.find((c) => c.contact_name?.toLowerCase() === billingEmail.toLowerCase());
     if (legacy) return legacy.contact_id;
   }
 
   if (contactName.length >= 2) {
     const res = await zohoBooksClient.get<ZohoContactListResponse>(
-      `/contacts?contact_type=customer&search_text=${encodeURIComponent(contactName)}`,
+      `/contacts?contact_type=customer&filter_by=Status.All&contact_name=${encodeURIComponent(contactName)}`,
     );
     const contacts = res.contacts ?? [];
-    const exact = contacts.find((c) => c.contact_name?.trim().toLowerCase() === contactName.toLowerCase());
+    const exact = contacts.find(
+      (c) => c.contact_name?.trim().toLowerCase() === contactName.toLowerCase(),
+    );
     if (exact) return exact.contact_id;
   }
 
@@ -117,7 +155,8 @@ export async function getOrCreateContact(params: {
       if (msg.includes("3062") || /already exists/i.test(msg)) {
         const fallbackId =
           (await findContactId({ email: billingEmail, contactName })) ??
-          (billingEmail ? await findContactId({ email: billingEmail }) : null);
+          (billingEmail ? await findContactId({ email: billingEmail }) : null) ??
+          (await findContactIdExhaustive({ email: billingEmail, contactName }));
         if (fallbackId) return { ok: true, contactId: fallbackId };
       }
       throw createErr;
@@ -596,7 +635,7 @@ export async function markZohoInvoicePaid(
           amount_applied: params.amountZar,
         },
       ],
-      ...(params.reference ? { reference_number: params.reference } : {}),
+      ...(params.reference ? { reference_number: formatZohoReference(params.reference) } : {}),
     });
 
     return { ok: true, paymentId: res.payment.payment_id };
@@ -677,7 +716,7 @@ export async function createZohoExpense(
       amount: params.amountZar,
       ...(params.vendorId ? { vendor_id: params.vendorId } : {}),
       ...(params.description ? { description: params.description } : {}),
-      ...(params.referenceNumber ? { reference_number: params.referenceNumber } : {}),
+      ...(params.referenceNumber ? { reference_number: formatZohoReference(params.referenceNumber) } : {}),
       currency_code: params.currencyCode ?? "ZAR",
     });
     return { ok: true, expenseId: res.expense.expense_id };

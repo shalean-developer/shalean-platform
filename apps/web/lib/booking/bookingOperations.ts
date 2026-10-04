@@ -65,6 +65,7 @@ import {
   type AdminEditBookingDetailsResult,
 } from "@/lib/booking/adminEditBookingDetails";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { ensureReviewFollowUpForCompletedBooking } from "@/lib/reviews/ensureReviewFollowUp";
 import {
   insertRecurringOccurrenceBooking,
   type RecurringRowForInsert,
@@ -360,6 +361,31 @@ export async function markBookingCompleted(
   args: CleanerLifecycleOperationArgs,
 ): Promise<BookingOperationResult<Record<string, unknown>>> {
   const out = await runCleanerLifecycleOperation(args, "complete", "booking.completed");
+
+  if (out.ok) {
+    const { data: reviewBooking, error: reviewBookingErr } = await args.admin
+      .from("bookings")
+      .select(
+        "id, customer_email, status, completed_at, cleaner_id, payout_owner_cleaner_id, is_team_job, team_id",
+      )
+      .eq("id", args.bookingId)
+      .maybeSingle();
+
+    if (reviewBookingErr) {
+      await reportOperationalIssue(
+        "warn",
+        "bookingOperations/markBookingCompleted",
+        reviewBookingErr.message,
+        { bookingId: args.bookingId, phase: "review_follow_up_refetch" },
+      );
+    } else if (reviewBooking) {
+      await ensureReviewFollowUpForCompletedBooking(
+        args.admin,
+        reviewBooking as Record<string, unknown>,
+      );
+    }
+  }
+
   if (out.ok && out.event && isBookingCompletedRouterEnabled()) {
     try {
       const nav = await routeBookingNotificationEvent(out.event, { admin: args.admin });

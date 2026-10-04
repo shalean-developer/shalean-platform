@@ -3,6 +3,10 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { readCustomerProfileContact } from "@/lib/customer/readCustomerProfileContact";
+import {
+  resolveMonthlyInvoicePaymentSource,
+  type MonthlyInvoicePaymentSource,
+} from "@/lib/admin/invoices/monthlyInvoicePaymentSource";
 import type { InvoiceTimelineDbEvent } from "@/lib/monthlyInvoice/buildInvoiceHumanTimeline";
 import { resolveMonthlyInvoiceCustomerEmail } from "@/lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail";
 
@@ -22,6 +26,7 @@ export type AdminInvoiceBundle = {
   adjustmentCreatorEmails: Record<string, string>;
   events: InvoiceTimelineDbEvent[];
   cleanersById: Record<string, { id: string; full_name: string | null }>;
+  paymentSource: MonthlyInvoicePaymentSource;
 };
 
 function asEventRows(raw: unknown): InvoiceTimelineDbEvent[] {
@@ -132,6 +137,28 @@ export async function loadAdminInvoiceBundle(
   if (evRes.error) return { ok: false, error: "load_failed", message: evRes.error.message };
 
   const invoice = invRes.data as Record<string, unknown>;
+  const eventRows = asEventRows(evRes.data);
+  const eventKinds = eventRows.map((e) => String(e.payload.kind ?? "")).filter(Boolean);
+  const [{ count: paystackDedupCount }, { count: paystackLedgerCount }] = await Promise.all([
+    admin
+      .from("monthly_invoice_paystack_charge_dedup")
+      .select("charge_reference", { count: "exact", head: true })
+      .eq("invoice_id", invoiceId),
+    admin
+      .from("payment_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("entity_type", "monthly_invoice")
+      .eq("entity_id", invoiceId)
+      .eq("gateway", "paystack"),
+  ]);
+  const paymentSource = resolveMonthlyInvoicePaymentSource({
+    status: String(invoice.status ?? ""),
+    totalAmountCents: Number(invoice.total_amount_cents ?? 0),
+    amountPaidCents: Number(invoice.amount_paid_cents ?? 0),
+    closureReason: typeof invoice.closure_reason === "string" ? invoice.closure_reason : null,
+    eventKinds,
+    hasPaystackLedger: (paystackDedupCount ?? 0) > 0 || (paystackLedgerCount ?? 0) > 0,
+  });
   const customerId = String(invoice.customer_id ?? "");
   const month = String(invoice.month ?? "");
   const status = String(invoice.status ?? "draft");
@@ -191,8 +218,9 @@ export async function loadAdminInvoiceBundle(
       bookings: (bookRes.data ?? []) as Record<string, unknown>[],
       adjustments,
       adjustmentCreatorEmails,
-      events: asEventRows(evRes.data),
+      events: eventRows,
       cleanersById,
+      paymentSource,
     },
   };
 }

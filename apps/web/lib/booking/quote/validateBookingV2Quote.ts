@@ -5,7 +5,6 @@ import { assertQuotePricingInputsConsumed } from "@/lib/booking-v2/assertQuotePr
 import { DB_SLUG_MAP } from "@/lib/booking-v2/loadBookingV2CatalogMaps";
 import { resolveMovingPricingSlug } from "@/lib/booking-v2/resolvePricingServiceSlug";
 
-const MAX_PRICE_DRIFT_RATIO = 0.01;
 const MAX_DURATION_DRIFT_RATIO = 0.01;
 
 export type V2QuoteValidationFailureCode =
@@ -37,7 +36,24 @@ export type V2QuoteValidationSuccess = { ok: true };
 
 export type V2QuoteValidationResult = V2QuoteValidationSuccess | V2QuoteValidationFailure;
 
-/** Client-stale codes: safe to continue with server-authoritative pricing. */
+/**
+ * Checkout may never silently move from the amount the customer reviewed to a
+ * different server amount. Booking V2 prices are integer ZAR, but keep a small
+ * floating tolerance for legacy serialized values.
+ */
+export function bookingQuoteTotalsDiffer(
+  clientReviewedTotal: number | null | undefined,
+  serverTotal: number,
+): boolean {
+  return (
+    typeof clientReviewedTotal === "number" &&
+    Number.isFinite(clientReviewedTotal) &&
+    Number.isFinite(serverTotal) &&
+    Math.abs(serverTotal - clientReviewedTotal) > 0.005
+  );
+}
+
+/** Client-stale codes: safe to continue only when the payable total is unchanged. */
 export const V2_QUOTE_SOFT_FAILURE_CODES: ReadonlySet<V2QuoteValidationFailureCode> = new Set([
   "quote_client_signature_mismatch",
   "quote_price_drift",
@@ -153,17 +169,19 @@ export function assertV2ConfirmQuoteIntegrity(params: {
       : clientPricingSummary.total;
   const serverTotal = serverBreakdown.estimated_total;
 
-  if (typeof clientTotal === "number" && clientTotal > 0 && serverTotal > 0) {
-    const priceDrift = Math.abs(serverTotal - clientTotal) / serverTotal;
-    if (priceDrift > MAX_PRICE_DRIFT_RATIO) {
-      return {
-        ok: false,
-        status: 422,
-        error: "The price for your booking changed. Please refresh and try again.",
-        code: "quote_price_drift",
-        soft: true,
-      };
-    }
+  if (
+    typeof clientTotal === "number" &&
+    clientTotal > 0 &&
+    serverTotal > 0 &&
+    bookingQuoteTotalsDiffer(clientTotal, serverTotal)
+  ) {
+    return {
+      ok: false,
+      status: 422,
+      error: "The price for your booking changed. Please refresh and try again.",
+      code: "quote_price_drift",
+      soft: true,
+    };
   }
 
   const clientDuration = clientPricingSummary.estimated_duration_minutes;

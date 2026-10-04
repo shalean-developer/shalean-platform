@@ -10,6 +10,7 @@ import { CANONICAL_BOOKING_SEMANTIC_ORDER } from "@/lib/analytics/bookingAnalyti
 import { BOOKING_FUNNEL_SESSION_LS_KEY, getAnalyticsSessionId } from "@/lib/analytics/sessionId";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
+import { shouldSendClientEvent } from "@/lib/analytics/clientEventDedupe";
 
 export { ANALYTICS_EVENTS, BOOKING_FUNNEL_SESSION_LS_KEY, BOOKING_FUNNEL_ROW, CANONICAL_BOOKING_SEMANTIC_ORDER };
 
@@ -210,6 +211,8 @@ export function trackBookingFunnelEvent(
       href: window.location.href,
     },
   };
+
+  if (!shouldSendClientEvent(`booking-funnel:${step}:${eventType}`, payload)) return;
 
   if (process.env.NODE_ENV === "development") {
     console.debug("[booking-funnel]", payload);

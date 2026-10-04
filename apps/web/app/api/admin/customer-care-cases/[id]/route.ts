@@ -6,25 +6,11 @@ import { updateCustomerCareCase } from "@/lib/customerCare/customerCareCases";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-async function canManageCase(admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>, userId: string) {
-  for (const permission of ["customer.contact", "incident.manage"]) {
-    const { data } = await admin.rpc("admin_has_permission", {
-      p_user_id: userId,
-      p_permission: permission,
-      p_branch_id: null,
-      p_team_id: null,
-    });
-    if (data === true) return true;
-  }
-  return false;
-}
-
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-  if (!(await canManageCase(admin, auth.userId))) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
 
   const { id } = await ctx.params;
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;

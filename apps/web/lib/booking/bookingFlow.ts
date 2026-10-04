@@ -131,12 +131,12 @@ export const BOOKING_FLOW_STEP_PATH: Record<BookingFlowStep, string> = {
   checkout: "/book",
 };
 
-const BOOKING_FLOW_V2_STEP: Record<BookingFlowStep, number> = {
-  entry: 1,
-  quote: 1,
-  details: 1,
-  when: 2,
-  checkout: 4,
+const BOOKING_FLOW_V2_STEP: Record<BookingFlowStep, string> = {
+  entry: "details",
+  quote: "details",
+  details: "details",
+  when: "schedule",
+  checkout: "payment",
 };
 
 /**
@@ -145,18 +145,18 @@ const BOOKING_FLOW_V2_STEP: Record<BookingFlowStep, number> = {
  */
 export function legacyFlowStepQueryToCheckoutPath(stepRaw: string | null | undefined): string {
   const s = stepRaw?.trim().toLowerCase() ?? "";
-  if (s === "cleaner") return "/book?step=3";
-  if (s === "payment") return "/book?step=4";
+  if (s === "cleaner") return "/book?step=review";
+  if (s === "payment") return "/book?step=payment";
   const normalized = normalizeBookingStepParam(stepRaw ?? null);
   const step = BOOKING_FLOW_V2_STEP[normalized];
-  return step === 1 ? "/book" : `/book?step=${step}`;
+  return step === "details" ? "/book" : `/book?step=${step}`;
 }
 
 /** Canonical booking-v2 URLs under `/book`. Extra keys are filtered to allowed booking query params. */
 export function bookingFlowHref(step: BookingFlowStep, extra?: Record<string, string>): string {
   const path = BOOKING_FLOW_STEP_PATH[step];
   const merged = new URLSearchParams();
-  merged.set("step", String(BOOKING_FLOW_V2_STEP[step]));
+  merged.set("step", BOOKING_FLOW_V2_STEP[step]);
   if (extra) {
     for (const [k, v] of Object.entries(extra)) {
       if (v) merged.set(k, v);

@@ -36,21 +36,42 @@ export async function applySalesDocumentPayment(
   if (!row) return { ok: true, skipped: true, reason: "not_found" };
   if (row.document_type !== "invoice") return { ok: false, error: "not_an_invoice" };
 
-  const total = Math.max(0, Math.round(Number(row.total_cents ?? 0)));
-  if (paidIn !== total) {
-    await logSystemEvent({
-      level: "error",
-      source: "sales_document/payment",
-      message: "sales_document.payment_amount_mismatch",
-      context: { documentId: row.id, reference: ref, paidInCents: paidIn, expectedCents: total },
-    });
-    return { ok: false, error: `amount_mismatch:${paidIn}:${total}` };
-  }
-
   const st = String(row.status ?? "").toLowerCase();
   if (st === "paid") return { ok: true, skipped: true, reason: "already_paid" };
   if (!["sent", "accepted"].includes(st)) {
     return { ok: false, error: `document_not_payable_status:${st || "unknown"}` };
+  }
+
+  const total = Math.max(0, Math.round(Number(row.total_cents ?? 0)));
+  const prevPaid = Math.max(0, Math.round(Number(row.amount_paid_cents ?? 0)));
+  const storedBalance = Math.max(0, Math.round(Number(row.balance_cents ?? 0)));
+  const computedBalance = Math.max(0, total - prevPaid);
+
+  if (storedBalance !== computedBalance) {
+    await logSystemEvent({
+      level: "error",
+      source: "sales_document/payment",
+      message: "sales_document.balance_state_mismatch",
+      context: {
+        documentId: row.id,
+        reference: ref,
+        totalCents: total,
+        amountPaidCents: prevPaid,
+        storedBalanceCents: storedBalance,
+        computedBalanceCents: computedBalance,
+      },
+    });
+    return { ok: false, error: `balance_state_mismatch:${storedBalance}:${computedBalance}` };
+  }
+
+  if (paidIn !== computedBalance) {
+    await logSystemEvent({
+      level: "error",
+      source: "sales_document/payment",
+      message: "sales_document.payment_amount_mismatch",
+      context: { documentId: row.id, reference: ref, paidInCents: paidIn, expectedCents: computedBalance },
+    });
+    return { ok: false, error: `amount_mismatch:${paidIn}:${computedBalance}` };
   }
 
   if (!salesDocumentPaystackReferencesMatch(row.id, row.paystack_reference, ref)) {
@@ -77,23 +98,38 @@ export async function applySalesDocumentPayment(
   }
 
   const nowIso = new Date().toISOString();
+  const newPaid = prevPaid + paidIn;
+  const newBalance = Math.max(0, total - newPaid);
+  if (newPaid > total || newBalance !== 0) {
+    await admin.from("sales_document_paystack_charge_dedup").delete().eq("charge_reference", ref);
+    return { ok: false, error: "sales_document_settlement_not_full_after_balance_charge" };
+  }
+
   const { error: updErr } = await admin
     .from("sales_documents")
     .update({
       status: "paid",
-      amount_paid_cents: total,
-      balance_cents: 0,
+      amount_paid_cents: newPaid,
+      balance_cents: newBalance,
       paystack_reference: ref,
+      payment_link: null,
+      payment_link_expires_at: null,
       updated_at: nowIso,
     })
     .eq("id", row.id);
-  if (updErr) return { ok: false, error: updErr.message };
+  if (updErr) {
+    await admin
+      .from("sales_document_paystack_charge_dedup")
+      .delete()
+      .eq("charge_reference", ref);
+    return { ok: false, error: updErr.message };
+  }
 
   const zohoId = String(row.zoho_invoice_id ?? "").trim();
   if (zohoId && process.env.ZOHO_CLIENT_ID && process.env.ZOHO_REFRESH_TOKEN) {
     const zohoRes = await markZohoInvoicePaid({
       zohoInvoiceId: zohoId,
-      amountZar: total / 100,
+      amountZar: paidIn / 100,
       paymentDate: todayYmdJhb(),
       reference: ref,
       customerEmail: row.customer_email,
@@ -113,7 +149,15 @@ export async function applySalesDocumentPayment(
     level: "info",
     source: "sales_document/payment",
     message: "sales_document.paid",
-    context: { documentId: row.id, reference: ref, amountCents: paidIn, dedupInserted },
+    context: {
+      documentId: row.id,
+      reference: ref,
+      amountCents: paidIn,
+      amountPaidBeforeCents: prevPaid,
+      amountPaidAfterCents: newPaid,
+      totalCents: total,
+      dedupInserted,
+    },
   });
 
   await notifyAdminSalesDocumentInvoicePaid(admin, {

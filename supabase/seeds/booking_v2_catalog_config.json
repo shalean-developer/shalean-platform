@@ -12,14 +12,11 @@
         "all"
       ],
       "extraSlugs": [
-        "inside-cabinets",
-        "inside-oven",
         "inside-fridge",
-        "interior-walls",
-        "ironing",
+        "inside-oven",
         "laundry",
-        "interior-windows",
-        "water-plants"
+        "ironing",
+        "interior-windows"
       ],
       "showCleaningProductsQuestion": true,
       "allowsExtraCleaner": true,
@@ -182,12 +179,10 @@
         "all"
       ],
       "extraSlugs": [
-        "balcony-cleaning",
-        "carpet-cleaning",
-        "ceiling-cleaning",
-        "garage-cleaning",
-        "mattress-cleaning",
-        "outside-windows"
+        "inside-cabinets",
+        "inside-wardrobes",
+        "blinds-cleaning",
+        "interior-walls"
       ],
       "showCleaningProductsQuestion": false,
       "allowsExtraCleaner": false,
@@ -357,13 +352,9 @@
         "all"
       ],
       "extraSlugs": [
-        "inside-oven",
+        "appliances-cleaning",
         "inside-cabinets",
-        "interior-walls",
-        "inside-fridge",
-        "balcony-cleaning",
-        "garage-cleaning",
-        "outside-windows"
+        "garage-cleaning"
       ],
       "showCleaningProductsQuestion": false,
       "allowsExtraCleaner": false,
@@ -538,7 +529,7 @@
     },
     {
       "slug": "office-cleaning",
-      "pricingSlug": "standard",
+      "pricingSlug": "office",
       "label": "Office Cleaning",
       "shortLabel": "Office",
       "description": "Professional cleaning for offices and workspaces to keep your team productive.",
@@ -549,11 +540,10 @@
       ],
       "extraSlugs": [
         "office-kitchen",
-        "interior-windows",
-        "carpet-cleaning",
-        "office-sanitisation"
+        "office-sanitisation",
+        "waste-removal"
       ],
-      "showCleaningProductsQuestion": true,
+      "showCleaningProductsQuestion": false,
       "allowsExtraCleaner": true,
       "step1Questions": [
         {
@@ -604,84 +594,33 @@
         },
         {
           "key": "bathrooms",
-          "label": "Bathrooms / kitchenettes",
+          "label": "Bathrooms",
           "type": "select",
           "required": true,
           "group": "rooms",
           "options": [
             {
               "value": "1",
-              "label": "1"
+              "label": "1 bathroom"
             },
             {
               "value": "2",
-              "label": "2"
+              "label": "2 bathrooms"
             },
             {
               "value": "3",
-              "label": "3"
+              "label": "3 bathrooms"
             },
             {
               "value": "4",
-              "label": "4+"
+              "label": "4+ bathrooms"
             }
           ]
-        },
-        {
-          "key": "frequency",
-          "label": "Cleaning frequency",
-          "type": "select",
-          "required": true,
-          "group": "rooms",
-          "options": [
-            {
-              "value": "daily",
-              "label": "Daily (Mon–Fri)"
-            },
-            {
-              "value": "twice_week",
-              "label": "Twice a week"
-            },
-            {
-              "value": "weekly",
-              "label": "Weekly"
-            },
-            {
-              "value": "once_off",
-              "label": "Once-off"
-            }
-          ]
-        },
-        {
-          "key": "afterHours",
-          "label": "Preferred cleaning time",
-          "type": "radio",
-          "required": true,
-          "centered": true,
-          "options": [
-            {
-              "value": "during_hours",
-              "label": "During office hours"
-            },
-            {
-              "value": "after_hours",
-              "label": "After hours / evenings"
-            },
-            {
-              "value": "weekends",
-              "label": "Weekends only"
-            }
-          ]
-        },
-        {
-          "key": "specialInstructions",
-          "label": "Special instructions (optional)",
-          "type": "textarea",
-          "placeholder": "Access code, areas to avoid, IT equipment notes..."
         }
       ],
       "isActive": true,
-      "sortOrder": 40
+      "sortOrder": 40,
+      "showEquipmentQuestion": false
     },
     {
       "slug": "carpet-cleaning",
@@ -695,13 +634,13 @@
         "all"
       ],
       "extraSlugs": [
-        "stain-treatment",
+        "sofa-upholstery",
         "pet-odour-treatment",
         "fabric-protector",
         "mattress-cleaning"
       ],
-      "showCleaningProductsQuestion": true,
-      "allowsExtraCleaner": true,
+      "showCleaningProductsQuestion": false,
+      "allowsExtraCleaner": false,
       "step1Questions": [
         {
           "key": "propertyType",
@@ -726,7 +665,7 @@
         },
         {
           "key": "carpetRooms",
-          "label": "Number of carpeted rooms",
+          "label": "Carpeted rooms",
           "type": "select",
           "required": true,
           "group": "rooms",
@@ -749,9 +688,44 @@
             },
             {
               "value": "5",
-              "label": "5+ rooms"
+              "label": "5 rooms"
+            },
+            {
+              "value": "6",
+              "label": "6+ rooms"
             }
-          ]
+          ],
+          "hint": "Each carpeted room is priced and timed separately."
+        },
+        {
+          "key": "rugCount",
+          "label": "Number of rugs",
+          "type": "select",
+          "required": true,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "0",
+              "label": "No rugs"
+            },
+            {
+              "value": "1",
+              "label": "1 rug"
+            },
+            {
+              "value": "2",
+              "label": "2 rugs"
+            },
+            {
+              "value": "3",
+              "label": "3 rugs"
+            },
+            {
+              "value": "4",
+              "label": "4+ rugs"
+            }
+          ],
+          "hint": "Area rugs and runners — priced per rug."
         },
         {
           "key": "carpetType",
@@ -774,32 +748,7 @@
             },
             {
               "value": "persian_rug",
-              "label": "Persian / area rug"
-            }
-          ]
-        },
-        {
-          "key": "sofaCount",
-          "label": "Number of sofas to clean",
-          "type": "select",
-          "required": true,
-          "group": "rooms",
-          "options": [
-            {
-              "value": "0",
-              "label": "No sofas"
-            },
-            {
-              "value": "1",
-              "label": "1 sofa"
-            },
-            {
-              "value": "2",
-              "label": "2 sofas"
-            },
-            {
-              "value": "3",
-              "label": "3+ sofas"
+              "label": "Persian / delicate"
             }
           ]
         },
@@ -820,34 +769,11 @@
               "label": "No"
             }
           ]
-        },
-        {
-          "key": "hasPets",
-          "label": "Do you have any pets?",
-          "type": "radio",
-          "required": true,
-          "group": "yesno",
-          "centered": true,
-          "options": [
-            {
-              "value": "yes",
-              "label": "Yes"
-            },
-            {
-              "value": "no",
-              "label": "No"
-            }
-          ]
-        },
-        {
-          "key": "specialInstructions",
-          "label": "Special instructions (optional)",
-          "type": "textarea",
-          "placeholder": "Problem areas, delicate rugs, stain details..."
         }
       ],
       "isActive": true,
-      "sortOrder": 50
+      "sortOrder": 50,
+      "showEquipmentQuestion": false
     },
     {
       "slug": "airbnb-cleaning",
@@ -867,7 +793,7 @@
         "interior-windows",
         "inspection-photos"
       ],
-      "showCleaningProductsQuestion": true,
+      "showCleaningProductsQuestion": false,
       "allowsExtraCleaner": true,
       "step1Questions": [
         {
@@ -972,43 +898,18 @@
         },
         {
           "key": "linens",
-          "label": "Linen service",
+          "label": "Fresh linen for the beds?",
           "type": "radio",
           "required": true,
           "centered": true,
           "options": [
             {
               "value": "change",
-              "label": "Change and make beds"
+              "label": "Yes — fresh linen will be available"
             },
             {
               "value": "no_change",
-              "label": "No linen change needed"
-            }
-          ]
-        },
-        {
-          "key": "guestCheckout",
-          "label": "Guest checkout time",
-          "type": "select",
-          "required": true,
-          "group": "logistics",
-          "options": [
-            {
-              "value": "10am",
-              "label": "By 10:00 AM"
-            },
-            {
-              "value": "11am",
-              "label": "By 11:00 AM"
-            },
-            {
-              "value": "12pm",
-              "label": "By 12:00 PM"
-            },
-            {
-              "value": "flexible",
-              "label": "Flexible"
+              "label": "No linen change"
             }
           ]
         },
@@ -1036,33 +937,11 @@
               "label": "Managed by agent"
             }
           ]
-        },
-        {
-          "key": "welcomeBasket",
-          "label": "Restock welcome essentials?",
-          "type": "radio",
-          "required": true,
-          "centered": true,
-          "options": [
-            {
-              "value": "yes",
-              "label": "Yes — I'll leave supplies"
-            },
-            {
-              "value": "no",
-              "label": "No"
-            }
-          ]
-        },
-        {
-          "key": "specialInstructions",
-          "label": "Special host instructions (optional)",
-          "type": "textarea",
-          "placeholder": "Staging preferences, check-in checklist, fragile items..."
         }
       ],
       "isActive": true,
-      "sortOrder": 60
+      "sortOrder": 60,
+      "showEquipmentQuestion": false
     }
   ],
   "scheduling": {

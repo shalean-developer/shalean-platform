@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { evaluateLifecycleEmailAlerts } from "@/lib/admin/lifecycleEmailMonitoring";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { computeReviewPromptConversionRate } from "@/lib/reviews/reviewFunnelMetrics";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,8 +26,6 @@ export async function GET(request: Request) {
     failedRes,
     skippedRes,
     sentTotalRes,
-    reviewSentRes,
-    reviewConvertedRes,
     rebookSentRes,
     metricsRes,
     topErrorsRes,
@@ -55,12 +54,6 @@ export async function GET(request: Request) {
       .from("booking_lifecycle_jobs")
       .select("id", { count: "exact", head: true })
       .eq("status", "sent"),
-    admin
-      .from("booking_lifecycle_jobs")
-      .select("booking_id")
-      .eq("job_type", "review_request")
-      .eq("status", "sent"),
-    admin.from("reviews").select("booking_id"),
     admin
       .from("booking_lifecycle_jobs")
       .select("id, booking_id, customer_email, sent_at")
@@ -101,20 +94,14 @@ export async function GET(request: Request) {
       ? Math.round((skipped / (sentTotal + skipped + failed)) * 1000) / 10
       : null;
 
-  const reviewBookingIds = new Set(
-    (reviewSentRes.data ?? []).map((r) => r.booking_id).filter(Boolean),
+  const reviewFunnel = await computeReviewPromptConversionRate(
+    admin,
+    weekStart.toISOString(),
+    now.toISOString(),
   );
-  const reviewIdsWithReview = new Set(
-    (reviewConvertedRes.data ?? []).map((r) => r.booking_id).filter(Boolean),
-  );
-  let reviewConverted = 0;
-  for (const id of reviewBookingIds) {
-    if (reviewIdsWithReview.has(id)) reviewConverted++;
-  }
+  const reviewConverted = reviewFunnel.reviewsSubmitted;
   const reviewConversionRate =
-    reviewBookingIds.size > 0
-      ? Math.round((reviewConverted / reviewBookingIds.size) * 1000) / 10
-      : null;
+    reviewFunnel.conversionRate == null ? null : Math.round(reviewFunnel.conversionRate * 1000) / 10;
 
   let rebookConverted = 0;
   const rebookJobs = rebookSentRes.data ?? [];
@@ -157,7 +144,12 @@ export async function GET(request: Request) {
     topSkipReasons: topReasons(topSkipRes.data ?? [], "skipped_reason"),
     reviewConversionRate,
     reviewConverted,
-    reviewSent: reviewBookingIds.size,
+    reviewSent: reviewFunnel.promptsSent,
+    reviewPromptClicks: reviewFunnel.promptClicks,
+    reviewClickThroughRate:
+      reviewFunnel.clickThroughRate == null
+        ? null
+        : Math.round(reviewFunnel.clickThroughRate * 1000) / 10,
     rebookConversionRate,
     rebookConverted,
     rebookSent: rebookJobs.length,

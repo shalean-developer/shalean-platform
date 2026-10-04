@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { AlertCircle, MailCheck, ShieldCheck } from "lucide-react";
 
 import { AuthCard } from "@/components/auth/AuthShell";
 import { requestOfficeEmailCode, verifyOfficeEmailCode } from "@/lib/auth/officeEmailClient";
 
 export function MfaForm({ redirect }: { redirect: string }) {
-  const router = useRouter();
   const [code, setCode] = useState("");
   const [maskedEmail, setMaskedEmail] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
@@ -56,8 +54,11 @@ export function MfaForm({ redirect }: { redirect: string }) {
         setError(result.error ?? "Verification failed.");
         return;
       }
-      router.replace(redirect);
-      router.refresh();
+      // The verification response sets an HttpOnly cookie that middleware must
+      // see on the very next Office request. Force a document navigation instead
+      // of using the client router so no pre-verification RSC/redirect cache can
+      // send the user straight back to /auth/mfa after a valid code.
+      window.location.replace(redirect);
     } catch (verifyError) {
       setError(verifyError instanceof Error ? verifyError.message : "Verification failed.");
     } finally {

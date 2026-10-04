@@ -35,10 +35,10 @@ const sqlHost = host.replace(/'/g, "''");
 
 /** [jobname, cron expression, path] */
 const HTTP_JOBS = [
-  ["generate-recurring-bookings", "*/10 * * * *", "/api/cron/generate-recurring-bookings"],
+  ["generate-recurring-bookings", "*/20 * * * *", "/api/cron/generate-recurring-bookings"],
   ["charge-recurring-bookings", "*/10 * * * *", "/api/cron/charge-recurring-bookings"],
   ["dispatch-timeouts", "*/2 * * * *", "/api/cron/dispatch-timeouts"],
-  ["retry-failed-jobs", "*/2 * * * *", "/api/cron/retry-failed-jobs"],
+  ["retry-failed-jobs", "*/10 * * * *", "/api/cron/retry-failed-jobs"],
   ["whatsapp-worker", "*/2 * * * *", "/api/cron/whatsapp-worker"],
   ["booking-lifecycle", "*/15 * * * *", "/api/cron/booking-lifecycle"],
   ["review-prompts", "*/10 * * * *", "/api/cron/review-prompts"],
@@ -48,7 +48,7 @@ const HTTP_JOBS = [
   ["booking-reminders", "*/15 * * * *", "/api/cron/booking-reminders"],
   ["payment-link-reminders", "*/15 * * * *", "/api/cron/payment-link-reminders"],
   ["deferred-payment-link-emails", "*/5 * * * *", "/api/cron/deferred-payment-link-emails"],
-  ["ops-health", "*/15 * * * *", "/api/cron/ops-health"],
+  ["ops-health", "*/30 * * * *", "/api/cron/ops-health"],
   ["reconcile-paystack-transfers", "*/30 * * * *", "/api/cron/reconcile-paystack-transfers"],
   ["expire-pending-payments", "0 * * * *", "/api/cron/expire-pending-payments"],
   ["ai-optimize", "0 * * * *", "/api/cron/ai-optimize"],
@@ -61,14 +61,16 @@ const HTTP_JOBS = [
   ["referral-campaigns", "0 7 1 * *", "/api/cron/referral-campaigns"],
   ["payout-integrity-daily", "15 4 * * *", "/api/cron/payout-integrity-daily"],
   ["repair-monthly-payment-state-drift", "30 4 * * *", "/api/cron/repair-monthly-payment-state-drift"],
-  ["gsc-sync", "15 5 * * *", "/api/cron/gsc-sync"],
+  // SITE-E2E-07: provider-dependent SEO jobs are intentionally omitted while
+  // production lacks verified GSC / SERP provider configuration.
   ["customer-retention", "30 7 * * *", "/api/cron/customer-retention"],
   ["extend-cleaner-availability", "30 2 * * *", "/api/cron/extend-cleaner-availability"],
   ["charge-monthly-invoices", "55 21 * * *", "/api/cron/charge-monthly-invoices"],
   ["seo-optimization", "20 6 * * 1", "/api/cron/seo-optimization"],
+  // Monthly cleaner payout closeout order: generate previous month → freeze → create review run.
   ["generate-payouts", "0 6 * * 1", "/api/cron/generate-payouts"],
-  ["create-payout-run", "0 7 * * 1", "/api/cron/create-payout-run"],
-  ["freeze-payouts", "0 8 * * 1", "/api/cron/freeze-payouts"],
+  ["freeze-payouts", "0 7 * * 1", "/api/cron/freeze-payouts"],
+  ["create-payout-run", "0 8 * * 1", "/api/cron/create-payout-run"],
   ["prune-system-logs", "0 4 * * *", "/api/cron/prune-system-logs"],
 ];
 

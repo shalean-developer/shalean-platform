@@ -6,8 +6,12 @@ import { SeoBreadcrumbs } from "@/components/seo/SeoBreadcrumbs";
 import type { AirbnbAreaLandingBlock } from "@/lib/seo/airbnbAreaLandingPages";
 import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 import { googleReviewsServiceTrustLine } from "@/lib/seo/googleReviews";
-import { getBrandSameAsForJsonLd } from "@/lib/site/brandSameAs";
 import { SITE_ORIGIN, absoluteCanonicalUrl } from "@/lib/site/canonical";
+import {
+  buildPrimaryLocalBusinessBase,
+  capeTownAdministrativeServiceArea,
+  PRIMARY_LOCAL_BUSINESS_ID,
+} from "@/lib/seo/primaryLocalBusinessJsonLd";
 import { buildSeoBookingHref, recommendedSeoExtras } from "@/lib/booking/seoBookingPrefill";
 import { CANONICAL_AIRBNB_CHECKLIST_CAPE_TOWN_HREF } from "@/lib/blog/canonicalEditorialBlogLinks";
 
@@ -17,7 +21,7 @@ type Props = { block: AirbnbAreaLandingBlock };
 
 export function AirbnbAreaServiceLanding({ block }: Props) {
   const pageUrl = absoluteCanonicalUrl(block.path);
-  const localBusinessId = `${SITE_ORIGIN}/#localbusiness`;
+  const localBusinessId = PRIMARY_LOCAL_BUSINESS_ID;
   const serviceNodeId = `${pageUrl}#service`;
   const hubHref = `/locations/${block.locationHubSlug}`;
   const bookingHref = buildSeoBookingHref("details", {
@@ -26,20 +30,7 @@ export function AirbnbAreaServiceLanding({ block }: Props) {
     extras: recommendedSeoExtras("airbnb"),
     source: `seo_airbnb_area_${block.key}`,
   });
-  const sameAs = getBrandSameAsForJsonLd();
-
-  const localBusinessNode: Record<string, unknown> = {
-    "@type": "LocalBusiness",
-    "@id": localBusinessId,
-    name: "Shalean Cleaning Services",
-    url: SITE_ORIGIN,
-    address: {
-      "@type": "PostalAddress",
-      addressLocality: "Cape Town",
-      addressCountry: "ZA",
-    },
-  };
-  if (sameAs.length > 0) localBusinessNode.sameAs = sameAs;
+  const localBusinessNode = buildPrimaryLocalBusinessBase();
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -52,6 +43,7 @@ export function AirbnbAreaServiceLanding({ block }: Props) {
         serviceType: "Airbnb Cleaning Service",
         url: pageUrl,
         areaServed: { "@type": "Place", name: `${block.areaName}, Cape Town, South Africa` },
+        serviceArea: capeTownAdministrativeServiceArea(),
         provider: { "@id": localBusinessId },
       },
       {

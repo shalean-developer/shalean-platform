@@ -14,9 +14,9 @@ export const FAQ_FEATURED: readonly FaqStructuredItem[] = [
   {
     id: "feat-cost",
     question: "How much does cleaning cost in Cape Town?",
-    lead: "Cleaning services in Cape Town typically cost between R300 and R900 depending on home size, service tier, bathrooms, and add-ons.",
+    lead: "Current base prices start from R250 for Regular Cleaning and Airbnb Cleaning, R300 for Office Cleaning, R500 for Carpet Cleaning, and R1,200 for Deep Cleaning or Move In / Out Cleaning.",
     paragraphs: [
-      "Your total is calculated online from bedrooms, bathrooms, service type (standard, deep, move-out, Airbnb, etc.), and extras—so you approve a locked quote before we dispatch.",
+      "Your final total is calculated online from the service, property details, extras, frequency, and other booking inputs—so use the live booking flow as the pricing authority before you confirm.",
       SEO_REBUILD_PHASE >= 2
         ? `Coastal and premium-band suburbs can trend higher when scope or routing is heavier; see [Sea Point cleaning services](${SEA_POINT_HUB}) for local context, then open [Get your exact price](/book) with your address.`
         : `Coastal and premium-band suburbs can trend higher when scope or routing is heavier; browse [cleaning services in Cape Town](${STD}) for scope and pricing bands, then open [Get your exact price](/book) with your address.`,
@@ -30,8 +30,8 @@ export const FAQ_FEATURED: readonly FaqStructuredItem[] = [
   },
   {
     id: "feat-standard",
-    question: "What's included in a standard clean?",
-    lead: "Standard cleaning is a maintenance visit focused on kitchens, bathrooms, living areas, and floors using an agreed checklist—not a full detail reset.",
+    question: "What's included in a regular clean?",
+    lead: "Regular cleaning is a maintenance visit focused on kitchens, bathrooms, living areas, and floors using an agreed checklist—not a full detail reset.",
     paragraphs: [
       "It’s designed for weekly or fortnightly upkeep: surfaces wiped, floors vacuumed/mopped where booked, bathrooms sanitised, and kitchens refreshed to a predictable baseline.",
       "Compare scope with [deep cleaning](/services/deep-cleaning-cape-town) when grease, grout, or built-up dust needs extra dwell time.",
@@ -57,10 +57,10 @@ export const FAQ_FEATURED: readonly FaqStructuredItem[] = [
   {
     id: "feat-supplies",
     question: "Do cleaners bring supplies?",
-    lead: "Yes—teams arrive with professional-grade products and equipment aligned to the scope you confirmed.",
+    lead: "Supplies and equipment depend on the service you book.",
     paragraphs: [
-      "If you prefer specific eco brands or fragrance-free products, mention it in booking notes—we’ll align where possible.",
-      "Rare speciality finishes (untreated wood, delicate stone) should be called out so crews bring the right approach.",
+      "Deep Cleaning and Move In / Out Cleaning include Shalean-provided cleaning supplies. For Regular home cleaning and Airbnb Cleaning, customers provide the usual products and equipment unless a separate supplies option or charge is selected or agreed.",
+      "Office and specialist services can have different requirements, so use the booking scope as the authority. Add allergy, product, or delicate-surface notes before checkout.",
     ],
     keywords: ["supplies", "products", "equipment", "vacuum", "mop", "chemicals"],
     showInlineCta: false,
@@ -111,10 +111,10 @@ export const FAQ_CATEGORY_GROUPS: readonly FaqCategoryGroup[] = [
     items: [
       {
         id: "svc-deep-vs-standard",
-        question: "What's the difference between standard and deep cleaning?",
-        lead: "Standard cleaning maintains a lighter weekly baseline; deep cleaning allocates extra time to detail zones like grout, appliance fronts, and built-up grease or limescale.",
+        question: "What's the difference between regular and deep cleaning?",
+        lead: "Regular cleaning maintains a lighter weekly baseline; deep cleaning allocates extra time to detail zones like grout, appliance fronts, and built-up grease or limescale.",
         paragraphs: [
-          `Read the full deep scope on our [deep cleaning guide](${DEEP}), then compare with [standard cleaning](${STD}).`,
+          `Read the full deep scope on our [deep cleaning guide](${DEEP}), then compare with [regular cleaning](${STD}).`,
         ],
         keywords: ["deep", "standard", "difference", "vs"],
         showInlineCta: true,

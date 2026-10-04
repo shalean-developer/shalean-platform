@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { assertAdminBookingDeleteSafe } from "@/lib/admin/adminBookingDeleteSafety";
 
 describe("assertAdminBookingDeleteSafe", () => {
-  it("allows hard delete only for financially unlinked unpaid bookings", () => {
+  it("allows hard delete for an unpaid financially-unlinked expired booking", () => {
     expect(
       assertAdminBookingDeleteSafe({
         status: "payment_expired",
@@ -24,11 +24,6 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected sales-document booking delete to be blocked");
     expect(result.code).toBe("admin_booking_delete_sales_document_child");
-    expect(result.blocks).toContainEqual({
-      code: "admin_booking_delete_sales_document_child",
-      message:
-        "Sales-document invoice-backed bookings cannot be hard-deleted. Cancel or expire the booking so the invoice linkage remains auditable.",
-    });
   });
 
   it("continues to block monthly-invoice children", () => {

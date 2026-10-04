@@ -84,7 +84,15 @@ describe("payout amount override + maker-checker", () => {
           return {
             select: () => ({
               eq: () => ({
-                maybeSingle: async () => ({ data: { recipient_code: "RCP_test" }, error: null }),
+                maybeSingle: async () => ({
+                  data: {
+                    account_number: "1234567890",
+                    bank_code: "632005",
+                    account_name: "Cleaner One",
+                    recipient_code: null,
+                  },
+                  error: null,
+                }),
               }),
             }),
           };

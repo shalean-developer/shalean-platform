@@ -14,8 +14,8 @@ export type ShaleanDeploymentEnv =
 
 /** Canonical Supabase project refs for governed remote environments (never secrets). */
 export const SHALEAN_SUPABASE_REFS = {
-  production: "tchayecuvzssixyxlvfu",
-  /** Active governed staging project used by pricing-test.shalean.co.za. */
+  production: "paqjwfulwywtsyyvdxrq",
+  /** Retired/paused staging project retained only for explicit recovery or diagnostics. */
   staging: "jhubpsbwmjgydkzztxeu",
 } as const;
 
@@ -47,6 +47,32 @@ export function resolveDeploymentEnvironment(env: EnvLike = process.env): Shalea
 
   if (env.NODE_ENV === "production" && env.VERCEL === "1") return "preview";
   return "local";
+}
+
+/**
+ * Display-only environment identity for banners and other non-security UI.
+ * Keep the core resolver authoritative for safety decisions; this only avoids
+ * labelling the known pricing-test host as LOCAL when platform metadata is absent.
+ */
+export function resolveDeploymentDisplayEnvironment(
+  env: EnvLike = process.env,
+): ShaleanDeploymentEnv {
+  const resolved = resolveDeploymentEnvironment(env);
+  if (resolved !== "local") return resolved;
+
+  for (const raw of [env.NEXT_PUBLIC_SITE_URL, env.NEXT_PUBLIC_APP_URL]) {
+    const value = raw?.trim();
+    if (!value) continue;
+    try {
+      if (new URL(value).hostname.toLowerCase() === "pricing-test.shalean.co.za") {
+        return "staging";
+      }
+    } catch {
+      // Ignore malformed display-only origins and preserve the core resolution.
+    }
+  }
+
+  return resolved;
 }
 
 export function isCustomerFacingProduction(env: EnvLike = process.env): boolean {
@@ -95,7 +121,13 @@ export function supabaseRefFromUrl(url: string | undefined | null): string | nul
  */
 export function expectedSupabaseRefForDeployment(
   deployment: ShaleanDeploymentEnv = resolveDeploymentEnvironment(),
+  env: EnvLike = process.env,
 ): string | null {
+  // An explicitly configured non-production project ref lets isolated UAT
+  // environments identify their intended Supabase project without redefining
+  // the canonical shared staging project.
+  const explicit = env.SHALEAN_EXPECTED_SUPABASE_REF?.trim();
+  if (deployment !== "production" && explicit) return explicit;
   if (deployment === "production") return SHALEAN_SUPABASE_REFS.production;
   if (deployment === "staging") return SHALEAN_SUPABASE_REFS.staging;
   return null;

@@ -7,7 +7,7 @@ const TERMS_HREF = "/terms-of-service";
 const PRIVACY_HREF = "/privacy-policy";
 
 export const AUTH_CARD_CLASS =
-  "rounded-2xl border border-zinc-200/90 bg-white p-6 shadow-md shadow-zinc-900/5 sm:p-8 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none";
+  "bg-transparent";
 
 type AuthShellProps = {
   children: ReactNode;
@@ -52,8 +52,8 @@ export function AuthBackLink({ href, children }: { href: string; children: React
 /** Minimal full-screen auth chrome — no marketing header or footer. */
 export function AuthShell({ children }: AuthShellProps) {
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-zinc-100 px-4 py-10 sm:py-12 dark:bg-zinc-950">
-      <div className="mb-8 flex w-full max-w-[440px] flex-col items-center text-center">
+    <div className="flex min-h-dvh flex-col items-center bg-white px-5 py-8 sm:py-10 dark:bg-zinc-950">
+      <div className="mb-16 flex w-full max-w-[600px] flex-col items-center text-center sm:mb-24">
         <Link
           href="/"
           className="inline-flex flex-col items-center gap-2 transition hover:opacity-90"
@@ -66,7 +66,7 @@ export function AuthShell({ children }: AuthShellProps) {
         </Link>
       </div>
 
-      <div className="w-full max-w-[440px]">{children}</div>
+      <div className="w-full max-w-[600px]">{children}</div>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   markSyncFailed,
+  markSyncIgnored,
   markSyncSucceeded,
   computeNextRetryAt,
 } from "@/lib/accounting/accountingSyncQueue";
@@ -13,8 +14,12 @@ import {
   isZohoConfigured,
   loadZohoIntegrationSettings,
 } from "@/lib/accounting/zohoIntegrationSettings";
-import { syncInvoiceStatusesFromZoho } from "@/lib/accounting/syncInvoiceMetadata";
-import { markZohoInvoicePaid } from "@/lib/zoho/zohoBooksService";
+import {
+  refreshInvoiceStatusFromZoho,
+  syncInvoiceStatusesFromZoho,
+} from "@/lib/accounting/syncInvoiceMetadata";
+import { syncMonthlyInvoiceToZohoBooks } from "@/lib/monthlyInvoice/syncMonthlyInvoiceToZohoBooks";
+import { getZohoInvoice, markZohoInvoicePaid } from "@/lib/zoho/zohoBooksService";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 
 type SyncRecord = {
@@ -29,7 +34,10 @@ type SyncRecord = {
 async function processPaymentTransactionSync(
   admin: SupabaseClient,
   entityId: string,
-): Promise<{ ok: true; externalId?: string } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; externalId?: string; ignoredReason?: string }
+  | { ok: false; error: string }
+> {
   const { data: pt } = await admin
     .from("payment_transactions")
     .select(
@@ -40,6 +48,17 @@ async function processPaymentTransactionSync(
 
   if (!pt) return { ok: false, error: "payment_transaction_not_found" };
   if (pt.external_accounting_id && pt.sync_status === "synced") {
+    if (pt.entity_type === "monthly_invoice" && pt.entity_id) {
+      const { data: inv } = await admin
+        .from("monthly_invoices")
+        .select("zoho_invoice_id")
+        .eq("id", pt.entity_id)
+        .maybeSingle();
+      const zohoInvoiceId = String(inv?.zoho_invoice_id ?? "").trim();
+      if (zohoInvoiceId) {
+        await refreshInvoiceStatusFromZoho(admin, "monthly_invoice", pt.entity_id, zohoInvoiceId);
+      }
+    }
     return { ok: true, externalId: pt.external_accounting_id };
   }
 
@@ -50,26 +69,73 @@ async function processPaymentTransactionSync(
   if (pt.entity_type === "booking") {
     const { data: b } = await admin
       .from("bookings")
-      .select("zoho_invoice_id, customer_email, customer_name")
+      .select(
+        "zoho_invoice_id, customer_email, customer_name, is_test, is_monthly_billing_booking, sales_document_id",
+      )
       .eq("id", pt.entity_id)
       .maybeSingle();
+
+    const ignoredReason =
+      b?.is_test === true
+        ? "booking_test"
+        : b?.is_monthly_billing_booking === true
+          ? "booking_monthly_owned"
+          : b?.sales_document_id
+            ? "booking_sales_document_owned"
+            : null;
+
+    if (ignoredReason) {
+      await admin
+        .from("payment_transactions")
+        .update({
+          sync_status: "ignored",
+          sync_errors: `accounting_not_applicable:${ignoredReason}`,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", entityId);
+      return { ok: true, ignoredReason };
+    }
+
     zohoInvoiceId = b?.zoho_invoice_id ?? null;
     customerEmail = b?.customer_email ?? undefined;
     customerName = b?.customer_name ?? undefined;
   } else if (pt.entity_type === "monthly_invoice") {
     const { data: inv } = await admin
       .from("monthly_invoices")
-      .select("zoho_invoice_id, customer_id")
+      .select("id, zoho_invoice_id, customer_id, month, due_date, status, total_amount_cents")
       .eq("id", pt.entity_id)
       .maybeSingle();
+
     zohoInvoiceId = inv?.zoho_invoice_id ?? null;
+
+    if (!zohoInvoiceId && inv?.id && inv.customer_id && inv.month) {
+      const totalCents = Math.max(0, Math.round(Number(inv.total_amount_cents ?? 0)));
+      if (totalCents <= 0) {
+        return { ok: false, error: "monthly_invoice_zero_total_no_zoho" };
+      }
+
+      const sync = await syncMonthlyInvoiceToZohoBooks(admin, {
+        invoiceId: inv.id,
+        customerId: inv.customer_id,
+        month: inv.month,
+        dueDate: String(inv.due_date ?? ""),
+        balanceZar: totalCents / 100,
+        status: inv.status,
+      });
+
+      if (!sync.ok) {
+        return { ok: false, error: `zoho_invoice_create_before_payment_failed:${sync.error}` };
+      }
+      zohoInvoiceId = sync.zohoInvoiceId;
+    }
+
     if (inv?.customer_id) {
       const { data: profile } = await admin
         .from("user_profiles")
-        .select("billing_email, full_name, email")
+        .select("billing_email, full_name")
         .eq("id", inv.customer_id)
         .maybeSingle();
-      customerEmail = profile?.billing_email ?? profile?.email ?? undefined;
+      customerEmail = profile?.billing_email ?? undefined;
       customerName = profile?.full_name ?? undefined;
     }
   } else if (pt.entity_type === "sales_document") {
@@ -85,12 +151,37 @@ async function processPaymentTransactionSync(
 
   if (!zohoInvoiceId) return { ok: false, error: "no_zoho_invoice_for_payment" };
 
+  const zohoInvoice = await getZohoInvoice(zohoInvoiceId);
+  if (!zohoInvoice.ok) {
+    return { ok: false, error: `zoho_invoice_lookup_failed:${zohoInvoice.error}` };
+  }
+
+  if (zohoInvoice.balanceCents <= 0) {
+    await admin
+      .from("payment_transactions")
+      .update({
+        sync_status: "ignored",
+        sync_errors: "accounting_not_applicable:zoho_invoice_already_settled",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", entityId);
+    return { ok: true, ignoredReason: "zoho_invoice_already_settled" };
+  }
+
+  if (pt.amount_cents > zohoInvoice.balanceCents) {
+    return {
+      ok: false,
+      error: `zoho_balance_mismatch:payment_cents=${pt.amount_cents}:balance_cents=${zohoInvoice.balanceCents}`,
+    };
+  }
+
   const paidDate = pt.paid_at ? pt.paid_at.slice(0, 10) : new Date().toISOString().slice(0, 10);
   const res = await markZohoInvoicePaid({
     zohoInvoiceId,
     amountZar: pt.amount_cents / 100,
     paymentDate: paidDate,
     reference: pt.gateway_reference,
+    contactId: zohoInvoice.customerId ?? undefined,
     customerEmail,
     customerName,
   });
@@ -108,6 +199,10 @@ async function processPaymentTransactionSync(
     })
     .eq("id", entityId);
 
+  if (pt.entity_type === "monthly_invoice" && pt.entity_id && zohoInvoiceId) {
+    await refreshInvoiceStatusFromZoho(admin, "monthly_invoice", pt.entity_id, zohoInvoiceId);
+  }
+
   return { ok: true, externalId: res.paymentId };
 }
 
@@ -116,7 +211,9 @@ async function processSyncRecord(
   record: SyncRecord,
   settings: Awaited<ReturnType<typeof loadZohoIntegrationSettings>>,
 ): Promise<void> {
-  let result: { ok: true; externalId?: string } | { ok: false; error: string };
+  let result:
+    | { ok: true; externalId?: string; ignoredReason?: string }
+    | { ok: false; error: string };
 
   switch (record.entity_type) {
     case "expense":
@@ -136,7 +233,11 @@ async function processSyncRecord(
   }
 
   if (result.ok) {
-    await markSyncSucceeded(admin, record.id, result.externalId ?? null);
+    if (result.ignoredReason) {
+      await markSyncIgnored(admin, record.id, result.ignoredReason);
+    } else {
+      await markSyncSucceeded(admin, record.id, result.externalId ?? null);
+    }
   } else {
     await markSyncFailed(
       admin,
@@ -173,6 +274,7 @@ export type ProcessAccountingSyncResult = {
 export async function processAccountingSyncQueue(
   admin: SupabaseClient,
   limit = 50,
+  invoiceStatusLimit = 5,
 ): Promise<ProcessAccountingSyncResult> {
   if (!isZohoConfigured()) {
     return { processed: 0, succeeded: 0, failed: 0, invoice_status_sync: { synced: 0, failed: 0 } };
@@ -188,7 +290,9 @@ export async function processAccountingSyncQueue(
   const { data: pending } = await admin
     .from("accounting_sync_records")
     .select("id, entity_type, entity_id, retry_count, sync_status, next_retry_at")
-    .in("sync_status", ["pending", "failed"])
+    .or(
+      `sync_status.eq.pending,and(sync_status.eq.failed,retry_count.lt.${settings.max_retry_attempts})`,
+    )
     .or(`next_retry_at.is.null,next_retry_at.lte.${now}`)
     .order("created_at", { ascending: true })
     .limit(limit);
@@ -210,7 +314,10 @@ export async function processAccountingSyncQueue(
     else failed++;
   }
 
-  const invoiceStatusSync = await syncInvoiceStatusesFromZoho(admin, 25);
+  const invoiceStatusSync =
+    invoiceStatusLimit > 0
+      ? await syncInvoiceStatusesFromZoho(admin, invoiceStatusLimit)
+      : { synced: 0, failed: 0 };
 
   await admin
     .from("zoho_integration_settings")

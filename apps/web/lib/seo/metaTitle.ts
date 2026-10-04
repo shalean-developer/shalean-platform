@@ -1,3 +1,5 @@
+import { REGULAR_CLEANING_PUBLIC_NAME } from "@/lib/services/publicServiceNames";
+
 /** SERP title cap — balances pixel width vs keeping primary keywords + brand visible. */
 export const DEFAULT_SERP_TITLE_MAX = 65;
 /** Blog posts / taxonomy titles often carry a longer headline before geo + brand. */
@@ -101,12 +103,13 @@ export function serviceTitleBaseFromBookingLabel(label: string): string {
 }
 
 /**
- * CTR `<title>` base for `/services/*`: aligns standard cleaning with “home cleaning” queries
- * without collapsing specialised slugs (deep, move-out, Airbnb, etc.) into one phrase.
+ * CTR `<title>` base for `/services/*`: keeps Regular Cleaning as the public product label
+ * while supporting “standard home cleaning” naturally in service metadata/body copy.
  */
 export function serviceTitleBaseForCtr(bookingLabel: string, slug: string): string {
   const raw = serviceTitleBaseFromBookingLabel(bookingLabel);
-  if (slug === "standard-cleaning-cape-town") return "Home Cleaning Services";
+  if (slug === "standard-cleaning-cape-town") return REGULAR_CLEANING_PUBLIC_NAME;
+  if (slug === "deep-cleaning-cape-town") return "Deep Cleaning Services";
   return raw;
 }
 

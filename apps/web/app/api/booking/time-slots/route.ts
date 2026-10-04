@@ -24,12 +24,27 @@ export type TimeSlotAvailability = {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function jsonSlots(slots: TimeSlotAvailability[]) {
+type SlotTiming = {
+  wave1Ms: number;
+  wave2Ms: number;
+  evaluationMs: number;
+  totalMs: number;
+};
+
+function timingHeader(value: number | undefined): string {
+  return String(Math.max(0, Math.round(value ?? 0)));
+}
+
+function jsonSlots(slots: TimeSlotAvailability[], timing?: SlotTiming) {
   return NextResponse.json(
     { slots },
     {
       headers: {
         "Cache-Control": "private, max-age=20, stale-while-revalidate=40",
+        "X-Booking-Slots-Wave1-Ms": timingHeader(timing?.wave1Ms),
+        "X-Booking-Slots-Wave2-Ms": timingHeader(timing?.wave2Ms),
+        "X-Booking-Slots-Evaluation-Ms": timingHeader(timing?.evaluationMs),
+        "X-Booking-Slots-Total-Ms": timingHeader(timing?.totalMs),
       },
     },
   );
@@ -92,6 +107,7 @@ export async function GET(request: Request) {
   }
 
   try {
+    let timing: SlotTiming | undefined;
     const slots = await getAvailableTimeSlots(admin, {
       selectedDate,
       durationMinutes,
@@ -102,9 +118,22 @@ export async function GET(request: Request) {
       stepMinutes: 30,
       locationId,
       bookingServiceSlug,
+      onTiming: (measured) => {
+        timing = measured;
+      },
     });
 
-    return jsonSlots(slots);
+    console.info("[api/booking/time-slots] timing", {
+      date: selectedDate,
+      locationId,
+      service: bookingServiceSlug,
+      slots: slots.length,
+      wave1Ms: timingHeader(timing?.wave1Ms),
+      wave2Ms: timingHeader(timing?.wave2Ms),
+      evaluationMs: timingHeader(timing?.evaluationMs),
+      totalMs: timingHeader(timing?.totalMs),
+    });
+    return jsonSlots(slots, timing);
   } catch (error) {
     console.error("[api/booking/time-slots] unexpected error:", error);
     return jsonSlots([]);

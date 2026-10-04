@@ -3,16 +3,16 @@ export type MoneyPageFaq = { q: string; a: string };
 
 export const STANDARD_CLEANING_SNIPPET_FAQS: MoneyPageFaq[] = [
   {
-    q: "Is standard cleaning the same as a deep clean?",
-    a: "No. Standard visits maintain surfaces, floors, and wet rooms on a lighter checklist. Deep cleans add dwell on build-up, edges, and heavy kitchens or bathrooms—book deep when that reset is honest, then return to standard for rhythm.",
+    q: "Is Regular Cleaning the same as a deep clean?",
+    a: "No. Regular Cleaning is Shalean’s standard home-cleaning option for maintaining surfaces, floors, kitchens, and bathrooms on a lighter checklist. Deep cleans add extra time for build-up, edges, and heavier kitchens or bathrooms.",
   },
   {
     q: "Do you offer same-day cleaning in Cape Town?",
     a: "Yes — same-day bookings are available when cleaner routing and slots allow. Pick your rooms online and you’ll see live availability before checkout.",
   },
   {
-    q: "What's included in a standard cleaning service?",
-    a: "Standard visits focus on dusting reachable surfaces, vacuuming and mopping floors where applicable, kitchen surfaces and the sink area, bathroom sanitisation and fixtures, and general tidying—exact scope follows the checklist tied to your quote.",
+    q: "What's included in Regular Cleaning?",
+    a: "Regular Cleaning covers the standard home-cleaning checklist: reachable-surface dusting, vacuuming and mopping where applicable, kitchen surfaces and sink area, bathroom sanitisation and fixtures, and general tidying. Exact scope follows the checklist tied to your quote.",
   },
   {
     q: "How long does a cleaning session take?",

@@ -35,12 +35,9 @@ export type CustomerReviewFollowUpEligibility =
   | { allowed: true }
   | { allowed: false; skipReason: string };
 
-/** Team or solo: enough context to prompt for a rating (SMS / lifecycle email). */
+/** Team or solo: enough context to prompt for a rating and later accept submission. */
 export function bookingHasReviewAssignee(row: Record<string, unknown>): boolean {
-  const cid = String(row.cleaner_id ?? "").trim();
-  if (cid) return true;
-  if (row.is_team_job === true && String(row.team_id ?? "").trim()) return true;
-  return false;
+  return resolveReviewCleanerIdForSubmission(row) != null;
 }
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
@@ -128,7 +125,12 @@ export function evaluateCustomerReviewPromptEligibility(row: Record<string, unkn
  */
 export function evaluateCustomerReviewSubmissionEligibility(row: Record<string, unknown>): CustomerReviewFollowUpEligibility {
   const prompt = evaluateCustomerReviewPromptEligibility(row);
-  if (!prompt.allowed) return prompt;
+  if (!prompt.allowed) {
+    if (prompt.skipReason === "review_prompt_no_assignee") {
+      return { allowed: false, skipReason: "review_submit_requires_cleaner_id" };
+    }
+    return prompt;
+  }
 
   if (resolveReviewCleanerIdForSubmission(row) == null) {
     return { allowed: false, skipReason: "review_submit_requires_cleaner_id" };

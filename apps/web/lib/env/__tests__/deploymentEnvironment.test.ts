@@ -3,6 +3,7 @@ import { collectEnvironmentSafetyIssues } from "@/lib/env/assertEnvironmentSafet
 import {
   expectedSupabaseRefForDeployment,
   outboundTestMessageMarker,
+  resolveDeploymentDisplayEnvironment,
   resolveDeploymentEnvironment,
   SHALEAN_SUPABASE_REFS,
   supabaseRefFromUrl,
@@ -33,6 +34,12 @@ describe("resolveDeploymentEnvironment", () => {
     expect(resolveDeploymentEnvironment({ VERCEL_GIT_COMMIT_REF: "development" })).toBe(
       "development",
     );
+  });
+
+  it("uses the pricing-test origin only as a display fallback", () => {
+    const env = { NEXT_PUBLIC_SITE_URL: "https://pricing-test.shalean.co.za" };
+    expect(resolveDeploymentEnvironment(env)).toBe("local");
+    expect(resolveDeploymentDisplayEnvironment(env)).toBe("staging");
   });
 });
 

@@ -109,12 +109,12 @@ export function CleanerCard({ cleaner, isSelected, isDisabled = false, onSelect 
 
             <span
               className={cn(
-                "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center",
-                !isSelected && "opacity-0",
+                "mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                isSelected ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500",
               )}
-              aria-hidden={!isSelected}
             >
-              <CheckCircle2 className="h-5 w-5 text-blue-600" />
+              {isSelected ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> : null}
+              {isSelected ? "Selected" : "Select"}
             </span>
           </div>
 

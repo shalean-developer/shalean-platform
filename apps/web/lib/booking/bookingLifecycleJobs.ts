@@ -5,6 +5,7 @@ import { computeLifecycleScheduledIso } from "@/lib/booking/lifecycleSchedule";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 
 export type ScheduleLifecycleJobsParams = {
   bookingId: string;
@@ -51,15 +52,21 @@ export async function scheduleBookingLifecycleJobs(
     { job_type: "rebook_offer", scheduled_for: times.rebookOffer },
   ];
 
+  const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
   const { data: bookingMeta } = await supabase
     .from("bookings")
-    .select("recurring_id, is_recurring_generated, user_id, booking_snapshot")
+    .select(`recurring_id, is_recurring_generated, ${ownershipColumn}, booking_snapshot`)
     .eq("id", params.bookingId)
     .maybeSingle();
 
+  const bookingMetaRow = (bookingMeta ?? {}) as Record<string, unknown>;
   const rebookEligible = await evaluateRebookEligibility({
     supabase,
-    userId: params.userId ?? (typeof bookingMeta?.user_id === "string" ? bookingMeta.user_id : null),
+    userId:
+      params.userId ??
+      (ownershipColumn === "customer_id"
+        ? (typeof bookingMetaRow.customer_id === "string" ? bookingMetaRow.customer_id : null)
+        : (typeof bookingMetaRow.user_id === "string" ? bookingMetaRow.user_id : null)),
     customerEmail: email,
     excludeBookingId: params.bookingId,
     recurringId: typeof bookingMeta?.recurring_id === "string" ? bookingMeta.recurring_id : null,

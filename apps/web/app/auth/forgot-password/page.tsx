@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, Mail } from "lucide-react";
-import { AuthBackLink, AuthCard } from "@/components/auth/AuthShell";
+import { AuthCard } from "@/components/auth/AuthShell";
 import { requestPasswordReset } from "@/lib/auth/authClient";
 
 function ForgotPasswordForm() {
@@ -51,9 +51,11 @@ function ForgotPasswordForm() {
   return (
     <>
       <AuthCard>
-        <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Reset your password</h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Enter your email and we&apos;ll send you a link to choose a new password.
+        <h1 className="text-center text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+          Request a password reset
+        </h1>
+        <p className="mx-auto mt-2 max-w-lg text-center text-sm leading-6 text-zinc-500 dark:text-zinc-400">
+          Enter the email address associated with your account and we&apos;ll send you a link to reset your password.
         </p>
 
         <form onSubmit={(e) => void onSubmit(e)} className="mt-6 space-y-4">
@@ -128,8 +130,6 @@ function ForgotPasswordForm() {
           </Link>
         </p>
       </AuthCard>
-
-      <AuthBackLink href={loginHref}>← Back to sign in</AuthBackLink>
     </>
   );
 }

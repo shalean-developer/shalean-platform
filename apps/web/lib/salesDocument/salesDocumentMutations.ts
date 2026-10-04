@@ -13,6 +13,8 @@ import { createBookingFromSalesQuoteInvoice } from "@/lib/salesDocument/createBo
 import { ensureSalesDocumentCustomer } from "@/lib/salesDocument/ensureSalesDocumentCustomer";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { syncSalesDocumentToZoho } from "@/lib/salesDocument/syncSalesDocumentToZoho";
+import { recordSalesQuoteAcceptanceSnapshot } from "@/lib/salesDocument/recordSalesQuoteAcceptanceSnapshot";
+import { markQuoteOpportunityWon } from "@/lib/salesDocument/salesOpportunityLifecycle";
 
 export type CreateSalesDocumentInput = {
   document_type: SalesDocumentType;
@@ -229,18 +231,29 @@ export async function convertSalesQuoteToInvoice(
 
   if (existingLookupErr) return { ok: false, error: existingLookupErr.message };
   if (existingInvoice?.id) {
-    await admin.from("sales_documents").update({ status: "accepted" }).eq("id", quoteId);
     const invoiceId = String(existingInvoice.id);
     const bookingResult = await createBookingFromSalesQuoteInvoice(admin, { quoteId, invoiceId });
     if (!bookingResult.ok) {
       await logSystemEvent({
-        level: "warn",
+        level: "error",
         source: "sales_document/convert",
-        message: "booking_create_failed",
+        message: "booking_create_failed_before_accept",
         context: { quoteId, invoiceId, error: bookingResult.error },
       });
       return { ok: false, error: `booking_create_failed:${bookingResult.error}` };
     }
+
+    const snapshot = await recordSalesQuoteAcceptanceSnapshot(admin, { quoteId, invoiceId });
+    if (!snapshot.ok) return snapshot;
+
+    const { error: acceptErr } = await admin
+      .from("sales_documents")
+      .update({ status: "accepted" })
+      .eq("id", quoteId)
+      .neq("status", "accepted");
+    if (acceptErr) return { ok: false, error: acceptErr.message };
+
+    await markQuoteOpportunityWon(admin, quoteId, "quote_accepted");
     return { ok: true, invoiceId };
   }
 
@@ -298,21 +311,33 @@ export async function convertSalesQuoteToInvoice(
 
   if (!created.ok) return created;
 
-  await admin.from("sales_documents").update({ status: "accepted" }).eq("id", quoteId);
-
   const bookingResult = await createBookingFromSalesQuoteInvoice(admin, {
     quoteId,
     invoiceId: created.id,
   });
   if (!bookingResult.ok) {
     await logSystemEvent({
-      level: "warn",
+      level: "error",
       source: "sales_document/convert",
-      message: "booking_create_failed",
+      message: "booking_create_failed_before_accept",
       context: { quoteId, invoiceId: created.id, error: bookingResult.error },
     });
     return { ok: false, error: `booking_create_failed:${bookingResult.error}` };
   }
 
+  const snapshot = await recordSalesQuoteAcceptanceSnapshot(admin, {
+    quoteId,
+    invoiceId: created.id,
+  });
+  if (!snapshot.ok) return snapshot;
+
+  const { error: acceptErr } = await admin
+    .from("sales_documents")
+    .update({ status: "accepted" })
+    .eq("id", quoteId)
+    .neq("status", "accepted");
+  if (acceptErr) return { ok: false, error: acceptErr.message };
+
+  await markQuoteOpportunityWon(admin, quoteId, "quote_accepted");
   return { ok: true, invoiceId: created.id };
 }

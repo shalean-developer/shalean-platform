@@ -66,6 +66,29 @@ export default function TermsOfServicePage() {
         for typical policies.
       </p>
 
+      <h2 className="mt-10 text-xl font-semibold text-slate-900">Satisfaction guarantee</h2>
+      <p className="mt-3 text-base leading-relaxed text-slate-600">
+        We want the cleaning service you receive to match the scope confirmed in your booking. If you believe an
+        item included in your confirmed cleaning scope was missed or was not completed to a reasonable cleaning
+        standard, please contact Shalean as soon as possible after the service.
+      </p>
+      <p className="mt-3 text-base leading-relaxed text-slate-600">
+        We will review the concern against the booking details, selected service, add-ons, and applicable cleaning
+        checklist. Where we confirm that an included part of the agreed scope was missed, Shalean will arrange an
+        appropriate corrective clean where re-cleaning is reasonably possible. If re-cleaning is not reasonably
+        possible, we will provide another appropriate resolution after reviewing the circumstances.
+      </p>
+      <p className="mt-3 text-base leading-relaxed text-slate-600">
+        The satisfaction guarantee applies only to items included in the confirmed booking scope. It does not cover
+        pre-existing damage, permanent stains or deterioration, maintenance or repairs, mould or specialist
+        remediation, items excluded from the selected service, or results that cannot reasonably be achieved through
+        normal cleaning.
+      </p>
+      <p className="mt-3 text-base leading-relaxed text-slate-600">
+        Customers must provide reasonable access for any approved corrective service. Any refund or credit, where
+        applicable, will be considered after the service concern has been reviewed and is not automatic.
+      </p>
+
       <h2 className="mt-10 text-xl font-semibold text-slate-900">Contact</h2>
       <p className="mt-3 text-base leading-relaxed text-slate-600">
         For service questions, email{" "}

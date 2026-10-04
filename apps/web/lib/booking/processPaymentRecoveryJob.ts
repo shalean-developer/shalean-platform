@@ -11,6 +11,7 @@ import {
   sendPaymentRecoveryEmail,
 } from "@/lib/email/paymentRecoveryEmails";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { expirePendingPaymentTerminal } from "@/lib/booking/expirePendingPaymentTerminal";
 
 export type PaymentRecoveryJobRow = {
   id: string;
@@ -150,7 +151,21 @@ export async function processPaymentRecoveryJob(
     return terminal ? "terminal" : "retry";
   }
 
-  const bookingRow = booking as Record<string, unknown>;
+  let bookingRow = booking as Record<string, unknown>;
+  if (jobType === "booking_payment_expired" && String(bookingRow.status ?? "").trim().toLowerCase() === "pending_payment") {
+    const expired = await expirePendingPaymentTerminal(supabase, {
+      bookingId,
+      reason: "booking_payment_expired",
+      paymentNeedsFollowUp: false,
+    });
+    if (!expired.ok) {
+      await reportOperationalIssue("error", "processPaymentRecoveryJob", expired.error, { jobId, bookingId });
+      return "retry";
+    }
+    if (expired.transitioned) {
+      bookingRow = { ...bookingRow, status: "payment_expired", payment_link: null };
+    }
+  }
   const eligibility = evaluatePaymentRecoveryJobEligibility(bookingRow, jobType);
   if (!eligibility.eligible) {
     if (eligibility.action === "cancel") {

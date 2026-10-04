@@ -1,53 +1,49 @@
-import { googleBusinessAggregateRatingSchema } from "@/lib/seo/googleReviews";
+import { HOME_STARTING_PRICE_ZAR } from "@/lib/seo/homePageMeta";
 import { SITE_ORIGIN } from "@/lib/site/canonical";
-import { CUSTOMER_SUPPORT_EMAIL, CUSTOMER_SUPPORT_TELEPHONE_E164 } from "@/lib/site/customerSupport";
+import { CUSTOMER_SUPPORT_TELEPHONE_E164 } from "@/lib/site/customerSupport";
+import {
+  PUBLIC_BUSINESS_ADDRESS,
+  PUBLIC_BUSINESS_EMAIL,
+  PUBLIC_BUSINESS_NAME,
+  PUBLIC_BUSINESS_OPENING_HOURS,
+  PUBLIC_BUSINESS_OPENING_HOURS_SPECIFICATION,
+  PUBLIC_BUSINESS_SERVICE_AREA,
+} from "@/lib/site/publicBusinessIdentity";
 import { getBrandSameAsForJsonLd } from "@/lib/site/brandSameAs";
 
 /** Stable @id aligned with homepage — reuse on hub pages so Google maps one primary entity. */
 export const PRIMARY_LOCAL_BUSINESS_ID = `${SITE_ORIGIN}/#localbusiness`;
 
 /** Representative image for LocalBusiness (logo asset not in public/ — uses verified marketing hero). */
-export const PRIMARY_LOCAL_BUSINESS_IMAGE = `${SITE_ORIGIN}/images/marketing/cape-town-house-cleaning-kitchen.webp`;
-
-const CAPE_TOWN_CITY = {
-  "@type": "City",
-  name: "Cape Town",
-  containedInPlace: { "@type": "Country", name: "South Africa" },
-} as const;
-
-/** Approximate coords for registered Claremont address (39 Harvey Rd) — LocalBusiness `geo`. */
-const PRIMARY_BUSINESS_GEO = {
-  "@type": "GeoCoordinates",
-  latitude: -33.9768,
-  longitude: 18.4686,
-} as const;
+export const PRIMARY_LOCAL_BUSINESS_IMAGE = `${SITE_ORIGIN}/images/marketing/homepage-hero-cleaning-team-cape-town.webp`;
 
 /**
  * Core LocalBusiness node for Shalean — used on homepage graph and standalone on money pages.
- * Telephone/email match `customerSupport` (single source of truth).
+ * Name, phone, address and opening hours are aligned to the live Google Business Profile.
+ * Unverified approximate geo coordinates are intentionally omitted.
+ * Public email is site-owned because GBP does not expose an email field.
+ *
+ * Do not attach Google Business Profile aggregate ratings here. Those ratings are displayed
+ * visibly as third-party trust evidence, but are not Shalean-authored review markup.
  */
 export function buildPrimaryLocalBusinessBase(): Record<string, unknown> {
   const node: Record<string, unknown> = {
     "@type": "LocalBusiness",
     "@id": PRIMARY_LOCAL_BUSINESS_ID,
-    name: "Shalean Cleaning Services",
+    name: PUBLIC_BUSINESS_NAME,
     image: [PRIMARY_LOCAL_BUSINESS_IMAGE],
     url: SITE_ORIGIN,
     telephone: CUSTOMER_SUPPORT_TELEPHONE_E164,
-    email: CUSTOMER_SUPPORT_EMAIL,
-    /** ZAR entry bands + moderate tier hint for rich results. */
-    priceRange: "$$ - From R280",
-    openingHours: "Mo-Su 08:00-18:00",
+    email: PUBLIC_BUSINESS_EMAIL,
+    /** ZAR entry band aligned with the canonical homepage marketing starting price. */
+    priceRange: `$$ - From R${HOME_STARTING_PRICE_ZAR}`,
+    openingHours: PUBLIC_BUSINESS_OPENING_HOURS,
+    openingHoursSpecification: [{ ...PUBLIC_BUSINESS_OPENING_HOURS_SPECIFICATION }],
     address: {
       "@type": "PostalAddress",
-      streetAddress: "39 Harvey Rd",
-      addressLocality: "Claremont",
-      addressRegion: "Western Cape",
-      postalCode: "7708",
-      addressCountry: "ZA",
+      ...PUBLIC_BUSINESS_ADDRESS,
     },
-    geo: { ...PRIMARY_BUSINESS_GEO },
-    aggregateRating: googleBusinessAggregateRatingSchema(),
+    areaServed: { ...PUBLIC_BUSINESS_SERVICE_AREA },
     knowsAbout: [
       "House cleaning",
       "Maid services",
@@ -69,7 +65,7 @@ export function buildPrimaryLocalBusinessBase(): Record<string, unknown> {
  */
 export function primaryLocalBusinessMoneyPageAreaServed(): unknown[] {
   return [
-    { ...CAPE_TOWN_CITY },
+    { ...PUBLIC_BUSINESS_SERVICE_AREA },
     { "@type": "Place", name: "Claremont" },
     { "@type": "Place", name: "Sea Point" },
     { "@type": "Place", name: "Constantia" },
@@ -97,7 +93,13 @@ export function buildPrimaryLocalBusinessStandaloneGraphJsonLd(): Record<string,
   };
 }
 
-/** Explicit local service region on `Service` / `CleaningService` nodes (alongside `areaServed`). */
+/** Explicit local service region on Service nodes (alongside `areaServed`). */
 export function capeTownAdministrativeServiceArea(): Record<string, unknown> {
-  return { "@type": "AdministrativeArea", name: "Cape Town" };
+  return {
+    ...PUBLIC_BUSINESS_SERVICE_AREA,
+    containedInPlace: {
+      ...PUBLIC_BUSINESS_SERVICE_AREA.containedInPlace,
+      containedInPlace: { ...PUBLIC_BUSINESS_SERVICE_AREA.containedInPlace.containedInPlace },
+    },
+  };
 }

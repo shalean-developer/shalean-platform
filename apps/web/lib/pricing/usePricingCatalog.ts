@@ -31,7 +31,7 @@ export type PricingCatalogResponse = {
 
 const FALLBACK_SERVICES: CatalogService[] = [
   { id: "deep", name: "Deep Cleaning", description: "Top-to-bottom refresh for your home." },
-  { id: "standard", name: "Standard Cleaning", description: "Regular upkeep, done right." },
+  { id: "standard", name: "Regular Cleaning", description: "Regular upkeep, done right." },
   { id: "move", name: "Move-Out Cleaning", description: "Handover-ready, stress-free." },
 ];
 

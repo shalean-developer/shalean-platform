@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
 import type { BookingV2SchedulingConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
+import { recurringScheduleAllowedForService } from "@/lib/booking-v2/serviceRecurringPolicy";
 import {
   filterCustomerOnlineBookingTimeSlots,
   isCustomerOnlineBookingTimeSlot,
@@ -9,6 +10,10 @@ import {
   CONTACT_PHONE_VALIDATION_MESSAGE,
   isValidContactPhone,
 } from "@/lib/booking/contactPhoneValidation";
+import {
+  canonicalBookingCount,
+  canonicalCarpetCount,
+} from "@/lib/booking-v2/carpetCountValidation";
 
 const contactPhoneField = z
   .string()
@@ -160,7 +165,11 @@ export const signInSchema = z.object({
 });
 
 export const signUpSchema = z.object({
-  fullName: z.string().min(2, "Enter your full name"),
+  fullName: z
+    .string()
+    .trim()
+    .min(2, "Enter your full name")
+    .refine((value) => !value.includes("@"), "Enter your full name, not your email address"),
   email: z.string().email("Enter a valid email address"),
   phone: contactPhoneField,
   password: z.string().min(8, "Password must be at least 8 characters"),
@@ -168,6 +177,27 @@ export const signUpSchema = z.object({
 
 export type SignInData = z.infer<typeof signInSchema>;
 export type SignUpData = z.infer<typeof signUpSchema>;
+
+// ─── Server quote lock ────────────────────────────────────────────────────────
+
+export const bookingV2QuoteSchema = z.object({
+  serviceSlug: z.enum(SERVICE_SLUGS),
+  serviceDetails: z.preprocess(normalizeServiceDetails, z.record(serviceDetailValueSchema)),
+  selectedExtras: z.array(z.string()).default([]),
+  equipmentRequired: z.preprocess(
+    (value) => {
+      if (value === true || value === "yes") return "yes";
+      if (value === false || value === "no" || value === "" || value == null) return "no";
+      return value;
+    },
+    z.enum(["yes", "no"]),
+  ).optional().default("no"),
+  equipmentQuote: equipmentQuoteSchema.nullable().optional().default(null),
+  bookingType: z.enum(["once_off", "recurring"]),
+  recurringFrequency: z.enum(["weekly", "fortnightly", "monthly", "custom", ""]).optional().default(""),
+  cleanerMode: z.enum(["team", "individual_cleaners"]),
+  cleanerCount: z.number().min(1).max(3).default(1),
+});
 
 // ─── Full booking schema (for confirm API) ────────────────────────────────────
 
@@ -197,7 +227,7 @@ export const bookingV2ConfirmSchema = z.object({
   equipmentQuote: equipmentQuoteSchema.nullable().optional().default(null),
   bookingType: z.enum(["once_off", "recurring"]),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  time: z.string().min(1),
+  time: z.string().min(1, "Return to Schedule and select a time before paying."),
   alternativeDate: z.string().optional().default(""),
   alternativeTime: z.string().optional().default(""),
   recurringFrequency: z.enum(["weekly", "fortnightly", "monthly", "custom", ""]).optional(),
@@ -209,6 +239,12 @@ export const bookingV2ConfirmSchema = z.object({
   assignedTeamName: z.string().optional().default(""),
   cleanerCount: z.number().min(1).max(3).default(1),
   selectedCleanerIds: z.array(z.string()).optional().default([]),
+  quoteLock: z.object({
+    pricingVersionId: z.string().uuid(),
+    quoteSignature: z.string().min(1),
+    lockedAt: z.string().datetime(),
+    expiresAt: z.string().datetime(),
+  }).nullable().optional(),
   pricingSummary: z
     .object({
       basePrice: z.number().optional(),
@@ -240,6 +276,171 @@ export const bookingV2ConfirmSchema = z.object({
     (v) => (v == null || v === "" ? undefined : v),
     z.string().optional(),
   ),
+}).superRefine((data, ctx) => {
+  if (data.serviceSlug === "carpet-cleaning") {
+    const details = data.serviceDetails ?? {};
+    const propertyType = String(details.propertyType ?? "").trim();
+    const carpetRooms = canonicalCarpetCount(details.carpetRooms, { min: 1, max: 25 });
+    const rugCount = canonicalCarpetCount(details.rugCount, { min: 0, max: 25 });
+    const carpetType = String(details.carpetType ?? "").trim();
+    const stains = String(details.stains ?? "").trim();
+
+    if (!["house", "apartment", "townhouse"].includes(propertyType)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Choose a valid property type.",
+        path: ["serviceDetails", "propertyType"],
+      });
+    }
+    if (carpetRooms == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the exact number of carpeted rooms (1–25).",
+        path: ["serviceDetails", "carpetRooms"],
+      });
+    }
+    if (rugCount == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the exact number of rugs (0–25).",
+        path: ["serviceDetails", "rugCount"],
+      });
+    }
+    if (!["standard", "thick_pile", "berber", "persian_rug"].includes(carpetType)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Choose a valid carpet type.",
+        path: ["serviceDetails", "carpetType"],
+      });
+    }
+    if (!["yes", "no"].includes(stains)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Tell us whether there are visible stains.",
+        path: ["serviceDetails", "stains"],
+      });
+    }
+
+    if (data.cleanerCount !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Carpet Cleaning uses one specialist per booking.",
+        path: ["cleanerCount"],
+      });
+    }
+    if ((data.selectedCleanerIds ?? []).length > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Choose at most one preferred Carpet Cleaning specialist.",
+        path: ["selectedCleanerIds"],
+      });
+    }
+  }
+
+  if (data.serviceSlug === "airbnb-cleaning") {
+    const details = data.serviceDetails ?? {};
+    const propertyType = String(details.propertyType ?? "").trim();
+    const bedrooms = canonicalBookingCount(details.bedrooms, { min: 0, max: 25 });
+    const bathrooms = canonicalBookingCount(details.bathrooms, { min: 1, max: 25 });
+    const rawExtraRooms = details.extraRooms;
+    const extraRooms =
+      rawExtraRooms === undefined || rawExtraRooms === ""
+        ? 0
+        : canonicalBookingCount(rawExtraRooms, { min: 0, max: 25 });
+    const linens = String(details.linens ?? "").trim();
+    const keyAccess = String(details.keyAccess ?? "").trim();
+
+    if (!["house", "apartment", "townhouse"].includes(propertyType)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Choose a valid Airbnb property type.",
+        path: ["serviceDetails", "propertyType"],
+      });
+    }
+    if (bedrooms == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the exact number of bedrooms (0–25).",
+        path: ["serviceDetails", "bedrooms"],
+      });
+    }
+    if (bathrooms == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the exact number of bathrooms (1–25).",
+        path: ["serviceDetails", "bathrooms"],
+      });
+    }
+    if (extraRooms == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the exact number of extra rooms (0–25).",
+        path: ["serviceDetails", "extraRooms"],
+      });
+    }
+    if (!["change", "no_change"].includes(linens)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Choose whether fresh linen will be available.",
+        path: ["serviceDetails", "linens"],
+      });
+    }
+    if (!["lockbox", "smart_lock", "in_person", "managed"].includes(keyAccess)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Choose a valid key or access method.",
+        path: ["serviceDetails", "keyAccess"],
+      });
+    }
+    if (
+      (keyAccess === "lockbox" || keyAccess === "smart_lock") &&
+      !data.gateCode.trim()
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the access code for this turnover.",
+        path: ["gateCode"],
+      });
+    }
+    if (data.cleanerMode !== "individual_cleaners") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Airbnb Cleaning uses individual cleaner selection.",
+        path: ["cleanerMode"],
+      });
+    }
+    if ((data.selectedCleanerIds ?? []).length > data.cleanerCount) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Preferred cleaners cannot exceed the selected cleaner count.",
+        path: ["selectedCleanerIds"],
+      });
+    }
+  }
+
+  if (
+    !recurringScheduleAllowedForService({
+      serviceSlug: data.serviceSlug,
+      bookingType: data.bookingType,
+      recurringFrequency: data.recurringFrequency ?? "",
+      recurringDays: data.recurringDays ?? [],
+    })
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        data.serviceSlug === "moving-cleaning"
+          ? "Moving Cleaning is available as a once-off booking only."
+          : data.serviceSlug === "carpet-cleaning"
+            ? "Carpet Cleaning is available as a once-off booking only."
+            : data.serviceSlug === "airbnb-cleaning"
+              ? "Airbnb Cleaning is available as a once-off turnover booking only."
+              : data.serviceSlug === "deep-cleaning"
+                ? "Deep Cleaning recurring bookings must be monthly with one visit per cycle."
+                : "Select a valid recurring schedule.",
+      path: ["recurringFrequency"],
+    });
+  }
 });
 
 export type BookingV2ConfirmPayload = z.infer<typeof bookingV2ConfirmSchema>;

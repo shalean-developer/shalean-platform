@@ -1121,6 +1121,7 @@ async function persistCleanerPayoutIfUnsetCore(
       total_paid_cents: r.total_paid_cents,
       amount_paid_cents: r.amount_paid_cents,
       total_paid_zar: r.total_paid_zar,
+      base_amount_cents: r.base_amount_cents,
     };
     const finDiag = bookingFinancialDiagnostics(capRow);
     const capOk = assertHybridPayoutWithinFinancialCap({
@@ -1226,6 +1227,7 @@ async function persistCleanerPayoutIfUnsetCore(
     total_paid_cents: r.total_paid_cents,
     amount_paid_cents: r.amount_paid_cents,
     total_paid_zar: r.total_paid_zar,
+    base_amount_cents: r.base_amount_cents,
   };
   const finDiag = bookingFinancialDiagnostics(capRow);
   const capOk = assertHybridPayoutWithinFinancialCap({
@@ -1408,20 +1410,17 @@ async function verifyDisplayEarningsRowAfterWrite(
 }
 
 /**
- * Eligibility skips (e.g. terminal booking) may legitimately leave display unset.
- * Only bypass {@link finalizePersistResult} when display is already persisted —
- * otherwise callers like cleaner complete would see `ok: true` then fail verify.
+ * Eligibility skips are policy outcomes, not failed writes.
+ *
+ * Pending-payment, dispatch-funnel, terminal, and other recognized ineligible
+ * bookings may intentionally have no persisted display earnings. Completion
+ * callers apply their own stricter display/earnings gates after this policy
+ * decision, so do not turn a valid skip into a write failure here.
  */
-async function shouldBypassFinalizeForEligibilitySkip(
-  admin: SupabaseClient,
-  bookingId: string,
+function shouldBypassFinalizeForEligibilitySkip(
   core: PersistCleanerPayoutIfUnsetResult,
-): Promise<boolean> {
-  if (!core.ok || !core.skipped || !isPayoutEligibilitySkipReason(core.skipReason)) {
-    return false;
-  }
-  const cents = await fetchBookingDisplayEarningsCents(admin, bookingId);
-  return hasPersistedDisplayEarningsBasis(cents);
+): boolean {
+  return core.ok && core.skipped && isPayoutEligibilitySkipReason(core.skipReason);
 }
 
 async function finalizePersistResult(
@@ -1490,21 +1489,21 @@ export async function persistCleanerPayoutIfUnset(
     }
 
     const first = await persistCleanerPayoutIfUnsetCore(params);
-    if (await shouldBypassFinalizeForEligibilitySkip(params.admin, params.bookingId, first)) {
+    if (shouldBypassFinalizeForEligibilitySkip(first)) {
       return first;
     }
     let out = await finalizePersistResult(params.admin, params.bookingId, params.cleanerId, first);
-    if (await shouldBypassFinalizeForEligibilitySkip(params.admin, params.bookingId, out)) {
+    if (shouldBypassFinalizeForEligibilitySkip(out)) {
       return out;
     }
     if (!out.ok) {
       await new Promise((r) => setTimeout(r, 200));
       const second = await persistCleanerPayoutIfUnsetCore(params);
-      if (await shouldBypassFinalizeForEligibilitySkip(params.admin, params.bookingId, second)) {
+      if (shouldBypassFinalizeForEligibilitySkip(second)) {
         return second;
       }
       out = await finalizePersistResult(params.admin, params.bookingId, params.cleanerId, second);
-      if (await shouldBypassFinalizeForEligibilitySkip(params.admin, params.bookingId, out)) {
+      if (shouldBypassFinalizeForEligibilitySkip(out)) {
         return out;
       }
     }

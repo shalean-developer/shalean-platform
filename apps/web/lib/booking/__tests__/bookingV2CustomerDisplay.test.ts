@@ -64,6 +64,46 @@ describe("bookingV2CustomerDisplay", () => {
     ]);
   });
 
+  it("formats the selected pet category", () => {
+    expect(cleanDetailLinesFromServiceDetails({ hasPets: "dogs_and_cats" })).toEqual([
+      { label: "Pets on site", value: "Dogs & Cats" },
+    ]);
+  });
+
+
+  it("formats Carpet details with customer-facing labels and values", () => {
+    expect(
+      cleanDetailLinesFromServiceDetails({
+        stains: "no",
+        rugCount: "1",
+        carpetType: "thick_pile",
+        carpetRooms: "3",
+        propertyType: "apartment",
+      }),
+    ).toEqual([
+      { label: "Visible stains", value: "No" },
+      { label: "Rugs", value: "1" },
+      { label: "Carpet type", value: "Thick Pile" },
+      { label: "Carpeted rooms", value: "3" },
+      { label: "Property type", value: "Apartment / flat" },
+    ]);
+  });
+
+
+  it("formats Airbnb details with cleaner-friendly labels and values", () => {
+    expect(
+      cleanDetailLinesFromServiceDetails({
+        linens: "change",
+        keyAccess: "smart_lock",
+        propertyType: "townhouse",
+      }),
+    ).toEqual([
+      { label: "Linen service", value: "Change linens" },
+      { label: "Key access", value: "Smart lock" },
+      { label: "Property type", value: "Townhouse" },
+    ]);
+  });
+
   it("builds price lines from pricing_summary", () => {
     expect(
       priceLinesFromPricingSummary({

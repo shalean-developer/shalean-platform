@@ -380,6 +380,12 @@ export async function getAvailableTimeSlots(
     locationExpandedIds?: string[] | null;
     bookingServiceSlug?: string | null;
     serviceLabelForCapability?: string | null;
+    onTiming?: (timing: {
+      wave1Ms: number;
+      wave2Ms: number;
+      evaluationMs: number;
+      totalMs: number;
+    }) => void;
   },
 ): Promise<TimeSlotAvailabilityRow[]> {
   const startHour = args.startHour ?? 7;
@@ -387,6 +393,7 @@ export async function getAvailableTimeSlots(
   const stepMinutes = args.stepMinutes ?? 30;
   const out: TimeSlotAvailabilityRow[] = [];
   const soft = isBookingSoftFulfillmentEnabled();
+  const startedAt = performance.now();
 
   try {
     const loc = (args.locationId ?? "").trim();
@@ -399,15 +406,18 @@ export async function getAvailableTimeSlots(
     const jobDurationMinutes = Math.max(30, Math.round(args.durationMinutes));
 
     // Wave 1 — independent reads in parallel (was sequential before).
+    const wave1StartedAt = performance.now();
     const [availabilityRows, preloadedCleaners] = await Promise.all([
       fetchAvailabilityForDate(admin, args.selectedDate),
       fetchAvailableCleanersForSlotGrid(admin),
     ]);
+    const wave1Ms = performance.now() - wave1StartedAt;
 
     const cleanerIds = preloadedCleaners.map((c) => c.id);
     const needPrefs = Boolean((args.bookingServiceSlug ?? "").trim());
 
     // Wave 2 — dependent on cleaner ids; still one round-trip set.
+    const wave2StartedAt = performance.now();
     const [preloadedLocs, preloadedOccupyingBookings, preloadedCleanerPreferences] = await Promise.all([
       fetchCleanerLocationsForIds(admin, cleanerIds),
       fetchOccupyingBookingsForDate(admin, args.selectedDate),
@@ -415,6 +425,7 @@ export async function getAvailableTimeSlots(
         ? fetchCleanerPreferencesByCleanerIds(admin, cleanerIds)
         : Promise.resolve(new Map()),
     ]);
+    const wave2Ms = performance.now() - wave2StartedAt;
 
     const dayFulfillmentFallback: BookingFulfillmentMode =
       soft && loc
@@ -436,6 +447,7 @@ export async function getAvailableTimeSlots(
       slotTimes.push(`${hh}:${mm}`);
     }
 
+    const evaluationStartedAt = performance.now();
     const slotRows = await Promise.all(
       slotTimes.map(async (time) => {
         const mins = Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
@@ -489,6 +501,12 @@ export async function getAvailableTimeSlots(
       }),
     );
     out.push(...slotRows);
+    args.onTiming?.({
+      wave1Ms,
+      wave2Ms,
+      evaluationMs: performance.now() - evaluationStartedAt,
+      totalMs: performance.now() - startedAt,
+    });
   } catch (e) {
     console.error("[availabilityEngine] getAvailableTimeSlots failed:", e);
     return [];

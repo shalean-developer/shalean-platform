@@ -23,7 +23,7 @@ async function syncBookingInvoiceToZoho(
   const { data, error } = await admin
     .from("bookings")
     .select(
-      `${ownershipColumn}, paystack_reference, amount_paid_cents, total_paid_cents, zoho_invoice_id, payment_completed_at`,
+      `${ownershipColumn}, paystack_reference, amount_paid_cents, total_paid_cents, zoho_invoice_id, payment_completed_at, status`,
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -37,8 +37,12 @@ async function syncBookingInvoiceToZoho(
     total_paid_cents?: number | null;
     zoho_invoice_id?: string | null;
     payment_completed_at?: string | null;
+    status?: string | null;
   };
 
+  if (String(row.status ?? "").trim().toLowerCase() === "cancelled") {
+    return { ok: false, error: "booking_cancelled" };
+  }
   if (!row.payment_completed_at) return { ok: false, error: "booking_not_paid" };
 
   const existing = String(row.zoho_invoice_id ?? "").trim();
@@ -88,6 +92,37 @@ async function syncMonthlyInvoiceRowToZoho(
 
   const existing = String(row.zoho_invoice_id ?? "").trim();
   const status = String(row.status ?? "").toLowerCase();
+
+  if (!existing && status === "draft") {
+    const { data: bookings, error: bookingsErr } = await admin
+      .from("bookings")
+      .select("status")
+      .eq("monthly_invoice_id", invoiceId);
+    if (bookingsErr) return { ok: false, error: bookingsErr.message };
+
+    const open = (bookings ?? []).filter((b) => {
+      const s = String((b as { status?: string | null }).status ?? "").toLowerCase();
+      return s !== "completed" && s !== "cancelled";
+    }).length;
+    if (open > 0) return { ok: false, error: "monthly_invoice_open_bookings" };
+
+    const { assessMonthlyInvoiceFinalizeReadiness } = await import("@/lib/monthlyInvoice/isMonthlyInvoiceReadyToFinalize");
+    const { todayJohannesburg } = await import("@/lib/recurring/johannesburgCalendar");
+    const readiness = await assessMonthlyInvoiceFinalizeReadiness(admin, {
+      invoiceId,
+      customerId: row.customer_id,
+      month: row.month,
+      todayYmd: todayJohannesburg(),
+    });
+    if (!readiness.ready) return { ok: false, error: readiness.reason ?? "monthly_invoice_not_ready" };
+
+    const { resolveMonthlyInvoiceCustomerEmail } = await import("@/lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail");
+    const outboundEmail = await resolveMonthlyInvoiceCustomerEmail(admin, {
+      customerId: row.customer_id,
+      invoiceId,
+    });
+    if (!outboundEmail) return { ok: false, error: "monthly_invoice_contact_required" };
+  }
   const paidCents = Math.max(0, Math.round(Number(row.amount_paid_cents ?? 0)));
   const paymentReference = String(row.paystack_reference ?? invoiceId).trim() || invoiceId;
 
@@ -98,9 +133,17 @@ async function syncMonthlyInvoiceRowToZoho(
     const zohoInv = await getZohoInvoice(zohoInvoiceId);
     if (zohoInv.ok && zohoInv.balanceCents <= 0) return null;
 
-    const amountZar = zohoInv.ok
-      ? Math.min(paidCents, zohoInv.balanceCents) / 100
-      : paidCents / 100;
+    if (!zohoInv.ok) {
+      return { ok: false, error: `zoho_invoice_lookup_failed:${zohoInv.error}` };
+    }
+    if (paidCents > zohoInv.balanceCents) {
+      return {
+        ok: false,
+        error: `zoho_balance_mismatch:payment_cents=${paidCents}:balance_cents=${zohoInv.balanceCents}`,
+      };
+    }
+
+    const amountZar = paidCents / 100;
     if (amountZar <= 0) return null;
 
     const contactRes = await resolveZohoCustomerContactForMonthlyInvoice(admin, {
@@ -113,6 +156,7 @@ async function syncMonthlyInvoiceRowToZoho(
       amountZar,
       paymentDate: todayYmdJhb(),
       reference: paymentReference,
+      contactId: zohoInv.customerId ?? undefined,
       customerEmail: contact?.email,
       customerName: contact?.name,
     });
@@ -234,7 +278,9 @@ export function billingDocumentCanManualSync(doc: {
   zoho_linked: boolean;
   amount_cents: number;
   status: string;
+  sync_eligible?: boolean;
 }): boolean {
+  if (doc.sync_eligible === false) return false;
   if (doc.zoho_linked) return false;
   if (doc.amount_cents <= 0) return false;
   if (doc.status === "requested") return false;

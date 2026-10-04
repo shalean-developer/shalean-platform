@@ -80,7 +80,7 @@ describe("customerBookingCardOperationalDisplay", () => {
     expect(d.lifecycleSource).toBe("derived");
   });
 
-  it("falls back to derived when canonical disagrees with describe (safety)", () => {
+  it("keeps server canonical lifecycle authoritative when local derivation disagrees", () => {
     const raw = baseRaw();
     raw.canonicalLifecycle = {
       bookingId: raw.id,
@@ -98,8 +98,9 @@ describe("customerBookingCardOperationalDisplay", () => {
     };
     const b = dashboardFromRaw(raw);
     const d = customerBookingCardOperationalDisplay(b);
-    expect(d.lifecycleSource).toBe("derived");
-    expect(d.operationalPhase).not.toBe("completed");
+    expect(d.lifecycleSource).toBe("canonical");
+    expect(d.operationalPhase).toBe("completed");
+    expect(d.displayBadge).toBe("Completed");
   });
 
   it("status label reflects cleaner assignment for accepted bookings", () => {

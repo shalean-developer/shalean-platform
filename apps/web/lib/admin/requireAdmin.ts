@@ -82,7 +82,12 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
     return ["cleaner.documents.view"];
   }
 
-  if (path.includes("/invoices") || path.includes("/billing-documents") || path.includes("/sales-documents")) {
+  if (
+    path.includes("/invoices") ||
+    path.includes("/invoice-registry") ||
+    path.includes("/billing-documents") ||
+    path.includes("/sales-documents")
+  ) {
     if (path.includes("/refund")) return ["refund.approve.high"];
     if (
       path.includes("/reconcile") ||
@@ -163,7 +168,9 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
 
   if (path.startsWith("/api/admin/pricing-")) return ["pricing.manage"];
   if (path.includes("/workforce/training-compliance")) {
-    return read ? ["cleaner.view"] : ["cleaner.edit"];
+    return read
+      ? ["cleaner.view", "cleaner.documents.view", "incident.manage"]
+      : ["cleaner.edit", "incident.manage"];
   }
 
   if (
@@ -173,7 +180,11 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
   ) {
     return read ? ["cleaner.view"] : ["cleaner.edit"];
   }
-  if (path.includes("/reviews") || path.includes("/review-funnel")) {
+  if (
+    path.includes("/reviews") ||
+    path.includes("/review-funnel") ||
+    path.includes("/office-review-funnel")
+  ) {
     return read ? ["customer.view", "marketing.view"] : ["customer.contact"];
   }
   if (path.includes("/blog/")) {

@@ -61,4 +61,11 @@ describe("dashboardLifecycleAlignment", () => {
     expect(withOffers.assignmentSemanticPhase).toBe(without.assignmentSemanticPhase);
     expect(withOffers.operationalPhase).toBe(without.operationalPhase);
   });
+  it("same row exposes one viewer-independent dashboard alignment across canonical surfaces", () => {
+    const row = fixtureRow({ status: "assigned", dispatch_status: "assigned", cleaner_id: "22222222-2222-4222-8222-222222222222", cleaner_response_status: "accepted", assignment_type: "user_selected", payment_needs_follow_up: false });
+    const wire = buildDashboardLifecycleAlignmentWire(row);
+    for (const viewer of ["admin", "customer", "cleaner"] as const) {
+      expect(toCanonicalBookingLifecycleSurface(row, viewer).dashboardAlignment).toEqual(wire);
+    }
+  });
 });

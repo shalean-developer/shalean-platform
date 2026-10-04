@@ -95,10 +95,7 @@ function ZohoBadge({ linked }: { linked: boolean }) {
 }
 
 function canManualSync(doc: AdminBillingDocumentRow): boolean {
-  if (doc.zoho_linked) return false;
-  if (doc.amount_cents <= 0) return false;
-  if (doc.status === "requested") return false;
-  return true;
+  return doc.sync_eligible;
 }
 
 function canEditBillingDocument(doc: AdminBillingDocumentRow): boolean {
@@ -145,6 +142,9 @@ function BillingDocumentRow({
       </td>
       <td className="px-4 py-3">
         <ZohoBadge linked={doc.zoho_linked} />
+        {!doc.zoho_linked && !doc.sync_eligible && doc.sync_hold_reason ? (
+          <p className="mt-1 text-[11px] font-medium text-slate-500">{doc.sync_hold_reason}</p>
+        ) : null}
       </td>
       <td className="px-4 py-3 text-right">
         <div className="flex items-center justify-end gap-3">
@@ -177,7 +177,9 @@ export default function OfficeBillingPage() {
   const initialTab = parseTabParam(searchParams.get("tab"));
   const [docs, setDocs] = useState<AdminBillingDocumentRow[]>([]);
   const [summary, setSummary] = useState<AdminBillingDocumentsSummary | null>(null);
+  const [pagination, setPagination] = useState({ page: 1, page_size: 50, total_filtered: 0, total_pages: 1 });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<FilterTab>(initialTab);  const [syncingKey, setSyncingKey] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -185,26 +187,35 @@ export default function OfficeBillingPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const params = new URLSearchParams();
       if (q.trim()) params.set("q", q.trim());
       if (tab !== "all") params.set("kind", tab);
-      const res = await adminFetch<{ documents: AdminBillingDocumentRow[]; summary: AdminBillingDocumentsSummary }>(
-        `/api/admin/billing-documents?${params.toString()}`,
-      );
+      params.set("page", String(pagination.page));
+      params.set("page_size", String(pagination.page_size));
+      const res = await adminFetch<{
+        documents: AdminBillingDocumentRow[];
+        summary: AdminBillingDocumentsSummary;
+        pagination: { page: number; page_size: number; total_filtered: number; total_pages: number };
+      }>(`/api/admin/billing-documents?${params.toString()}`);
       if (!res.ok) {
         setDocs([]);
         setSummary(null);
+        setLoadError(res.error ?? "Could not load the billing reconciliation inbox.");
         return;
       }
       setDocs(res.data?.documents ?? []);
       setSummary(res.data?.summary ?? null);
+      if (res.data?.pagination) setPagination(res.data.pagination);
     } catch {
       setDocs([]);
       setSummary(null);
+      setLoadError("Could not load the billing reconciliation inbox.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, [q, tab]);
+  }, [q, tab, pagination.page, pagination.page_size]);
 
   useEffect(() => {
     void load();
@@ -214,6 +225,10 @@ export default function OfficeBillingPage() {
     const nextTab = parseTabParam(searchParams.get("tab"));
     setTab((current) => (current === nextTab ? current : nextTab));
   }, [searchParams]);
+
+  useEffect(() => {
+    setPagination((current) => ({ ...current, page: 1 }));
+  }, [q, tab]);
   const syncDocument = useCallback(
     async (doc: AdminBillingDocumentRow) => {
       const key = `${doc.kind}:${doc.id}`;
@@ -351,6 +366,11 @@ export default function OfficeBillingPage() {
         </button>
       </div>
 
+      {loadError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          Billing data could not be loaded completely. {loadError}
+        </div>
+      ) : null}
       {syncError ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{syncError}</div>
       ) : null}
@@ -402,6 +422,32 @@ export default function OfficeBillingPage() {
           </table>
         </div>
       </div>
+
+      {!loading && !loadError && pagination.total_pages > 1 ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-slate-500">
+            Page {pagination.page} of {pagination.total_pages} · {pagination.total_filtered} matching document(s)
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={pagination.page <= 1}
+              onClick={() => setPagination((current) => ({ ...current, page: current.page - 1 }))}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={pagination.page >= pagination.total_pages}
+              onClick={() => setPagination((current) => ({ ...current, page: current.page + 1 }))}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {summary && summary.missing_zoho > 0 ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">

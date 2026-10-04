@@ -7,10 +7,11 @@
  *
  * Usage:
  *   node scripts/env/seed-uat-booking-fixtures.mjs --env staging
- *   node scripts/env/seed-uat-booking-fixtures.mjs --env development
  *   node scripts/env/seed-uat-booking-fixtures.mjs --env staging --reset
  *
- * Requires docs/audits/environments/evidence/.secrets-local/{env}.keys.env
+ * Development is local-only and uses the governed
+ * `npm run dev:local:seed:catalog` workflow.
+ * Requires docs/audits/environments/evidence/.secrets-local/staging.keys.env
  * Never prints secret values. Never targets production.
  */
 import { createRequire } from "node:module";
@@ -25,10 +26,9 @@ const require = createRequire(resolve(root, "apps/web/package.json"));
 const { createClient } = require("@supabase/supabase-js");
 
 const REFS = {
-  staging: "gbgnemlpyykyhpqqbgru",
-  development: "mbvixuzfvzbooiurvxwz",
+  staging: "jhubpsbwmjgydkzztxeu",
 };
-const PRODUCTION_REF = "tchayecuvzssixyxlvfu";
+const PRODUCTION_REF = "paqjwfulwywtsyyvdxrq";
 const MARKER = "FARAI-UAT-BOOK";
 
 /** Fixed UUIDs — idempotent across re-runs. */
@@ -206,9 +206,9 @@ const LOCATION_UPSERTS = [
 function parseArgs(argv) {
   const env = argv.includes("--env") ? argv[argv.indexOf("--env") + 1] : null;
   const reset = argv.includes("--reset");
-  if (!env || !REFS[env]) {
+  if (env !== "staging") {
     console.error(
-      "Usage: node scripts/env/seed-uat-booking-fixtures.mjs --env staging|development [--reset]",
+      "Usage: node scripts/env/seed-uat-booking-fixtures.mjs --env staging [--reset]",
     );
     process.exit(1);
   }

@@ -51,6 +51,42 @@ describe("bookingPayoutConstraintCapCents", () => {
     expect(cap).toBe(0);
   });
 
+  it("prepaid success: uses settled visit subtotal when cash is R0", () => {
+    const cap = bookingPayoutConstraintCapCents({
+      billing_type: "prepaid",
+      payment_status: "success",
+      total_paid_cents: 0,
+      amount_paid_cents: 0,
+      total_paid_zar: 0,
+      base_amount_cents: 65_000,
+    });
+    expect(cap).toBe(65_000);
+  });
+
+  it("prepaid pending: does not let quoted subtotal authorize payout before settlement", () => {
+    const cap = bookingPayoutConstraintCapCents({
+      billing_type: "prepaid",
+      payment_status: "pending",
+      total_paid_cents: 0,
+      amount_paid_cents: 0,
+      total_paid_zar: 0,
+      base_amount_cents: 65_000,
+    });
+    expect(cap).toBe(0);
+  });
+
+  it("prepaid success: preserves higher collected-cash cap when cash exceeds visit subtotal", () => {
+    const cap = bookingPayoutConstraintCapCents({
+      billing_type: "prepaid",
+      payment_status: "success",
+      total_paid_cents: 68_000,
+      amount_paid_cents: 68_000,
+      total_paid_zar: 680,
+      base_amount_cents: 65_000,
+    });
+    expect(cap).toBe(68_000);
+  });
+
   it("accrual: ignores sentinel 0 amount_paid_cents and uses zar line", () => {
     const cap = bookingPayoutConstraintCapCents({
       billing_type: "recurring_invoice",
@@ -84,6 +120,39 @@ describe("bookingPayoutConstraintCapCents", () => {
 });
 
 describe("assertHybridPayoutWithinFinancialCap", () => {
+  it("allows R300 cleaner payout on a settled R0 prepaid visit worth R650 before service fee", () => {
+    const r = assertHybridPayoutWithinFinancialCap({
+      row: {
+        billing_type: "prepaid",
+        payment_status: "success",
+        total_paid_cents: 0,
+        amount_paid_cents: 0,
+        total_paid_zar: 0,
+        base_amount_cents: 65_000,
+      },
+      payoutCents: 30_000,
+      bonusCents: 0,
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it("still rejects payout above the settled visit subtotal", () => {
+    const r = assertHybridPayoutWithinFinancialCap({
+      row: {
+        billing_type: "prepaid",
+        payment_status: "success",
+        total_paid_cents: 0,
+        amount_paid_cents: 0,
+        total_paid_zar: 0,
+        base_amount_cents: 65_000,
+      },
+      payoutCents: 66_000,
+      bonusCents: 0,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.cap).toBe(65_000);
+  });
+
   it("allows hybrid within accrual cap", () => {
     const r = assertHybridPayoutWithinFinancialCap({
       row: {

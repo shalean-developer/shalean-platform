@@ -74,11 +74,19 @@ export async function listTeamJobMemberWeeklyPayoutCandidates(params: {
     const ymd = weeklyBatchDayYmd(booking);
     if (!ymd || !isYmdInInclusiveRange(ymd, periodStart, periodEnd)) continue;
 
-    const gate = bookingPayableForWeeklyBatch(booking, invoiceStatusById);
-    if (!gate.payable) continue;
-
     const payoutCents = Math.max(0, Math.floor(Number(member.payout_cents) || 0));
     if (payoutCents <= 0) continue;
+
+    /*
+     * Canonical team jobs intentionally keep bookings.cleaner_payout_cents at 0;
+     * the authoritative cleaner money is this team_job_member_payouts row.
+     * Reuse the shared payment/refund/accrual gate, but provide this member row
+     * as the payout basis instead of inventing a booking-level solo payout.
+     */
+    const gate = bookingPayableForWeeklyBatch(booking, invoiceStatusById, {
+      payoutBasisCents: payoutCents,
+    });
+    if (!gate.payable) continue;
 
     out.push({
       id,

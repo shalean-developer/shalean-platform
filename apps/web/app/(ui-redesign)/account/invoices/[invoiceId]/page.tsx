@@ -11,9 +11,9 @@ import { daysPastDueJhb, invoiceOverdueEscalationText } from "@/lib/dashboard/in
 import { customerMonthlyInvoiceStatusLabel } from "@/lib/dashboard/monthlyInvoiceUi";
 import { trustMonthlyInvoicePayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import { CustomerInvoiceTimeline } from "@/components/dashboard/customer-invoice-timeline";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 function monthLabel(ym: string): string {
   if (!/^\d{4}-\d{2}$/.test(ym)) return ym;
@@ -40,9 +40,9 @@ export default function AccountInvoiceDetailPage() {
 
   if (loading) {
     return (
-      <div className="space-y-4 animate-pulse">
-        <div className="h-8 w-48 rounded-xl bg-muted" />
-        <div className="h-64 rounded-2xl bg-muted" />
+      <div className="space-y-4" aria-hidden>
+        <div className="h-8 w-48 animate-pulse rounded-lg bg-muted" />
+        <div className="h-64 animate-pulse rounded-2xl border border-border bg-card" />
       </div>
     );
   }
@@ -51,8 +51,10 @@ export default function AccountInvoiceDetailPage() {
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-bold text-foreground">Invoice</h1>
-        <p className="text-sm text-red-600">{error ?? "Not found."}</p>
-        <Button asChild variant="outline" className="rounded-xl">
+        <Card className="border-destructive/30 bg-destructive/5" role="alert">
+          <CardContent className="p-4 text-sm text-destructive">{error ?? "Not found."}</CardContent>
+        </Card>
+        <Button asChild variant="outline">
           <Link href="/account/invoices">Back to invoices</Link>
         </Button>
       </div>
@@ -71,56 +73,55 @@ export default function AccountInvoiceDetailPage() {
     ? trustMonthlyInvoicePayPageUrl(invoice.id, paystackRef, paymentLink || "")
     : "";
   const canOfferPay = balance > 0 && invoice.status !== "paid" && Boolean(payHref);
+  const isOverdue = invoice.is_overdue && invoice.status !== "paid";
 
   return (
-    <div className="space-y-6">
-      <div>
-        <Button asChild variant="ghost" size="sm" className="-ml-2 rounded-lg text-blue-600">
-          <Link href="/account/invoices">← All invoices</Link>
-        </Button>
-      </div>
+    <div className="space-y-6 pb-8">
+      <Button asChild variant="ghost" size="sm" className="-ml-2 text-primary">
+        <Link href="/account/invoices">← All invoices</Link>
+      </Button>
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">{monthLabel(invoice.month)}</h1>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="break-words text-2xl font-bold tracking-tight text-foreground">{monthLabel(invoice.month)}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {customerMonthlyInvoiceStatusLabel(invoice.status)} · Due {fmtDueYmd(invoice.due_date)}
           </p>
         </div>
-        {invoice.is_overdue && invoice.status !== "paid" ? (
-          <Badge variant="destructive" className="rounded-lg text-[10px] uppercase">
-            Overdue
-          </Badge>
-        ) : null}
-      </div>
+        {isOverdue ? <Badge variant="destructive">Overdue</Badge> : null}
+      </header>
 
-      {invoice.is_overdue && invoice.status !== "paid" ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-          <p className="font-semibold">Payment overdue</p>
-          <p className="mt-1 text-amber-900/90 dark:text-amber-200/90">
-            {invoiceOverdueEscalationText(daysPastDueJhb(invoice.due_date, new Date()))}
-          </p>
-        </div>
+      {isOverdue ? (
+        <Card className="border-destructive/30 bg-destructive/5" role="alert">
+          <CardContent className="p-4">
+            <p className="font-semibold text-foreground">Payment overdue</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {invoiceOverdueEscalationText(daysPastDueJhb(invoice.due_date, new Date()))}
+            </p>
+          </CardContent>
+        </Card>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="rounded-2xl border-border bg-card shadow-sm">
-          <CardContent className="p-6">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Amounts</h2>
-            <dl className="mt-4 space-y-3 text-sm">
-              <div className="flex justify-between gap-2">
+        <Card>
+          <CardHeader className="border-b border-border pb-4">
+            <CardTitle className="text-base">Amounts</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-5">
+            <dl className="space-y-3 text-sm">
+              <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Total</dt>
                 <dd className="font-semibold tabular-nums text-foreground">{formatZarFromCents(invoice.total_amount_cents)}</dd>
               </div>
-              <div className="flex justify-between gap-2">
+              <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Paid</dt>
                 <dd className="font-semibold tabular-nums text-foreground">{formatZarFromCents(invoice.amount_paid_cents)}</dd>
               </div>
-              <div className="flex justify-between gap-2">
-                <dt className="text-muted-foreground">Balance</dt>
-                <dd className="font-semibold tabular-nums text-foreground">{formatZarFromCents(balance)}</dd>
+              <div className="flex justify-between gap-3 border-t border-border pt-3">
+                <dt className="font-medium text-foreground">Balance</dt>
+                <dd className="font-bold tabular-nums text-foreground">{formatZarFromCents(balance)}</dd>
               </div>
-              <div className="flex justify-between gap-2">
+              <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Visits</dt>
                 <dd className="font-semibold tabular-nums text-foreground">{invoice.total_bookings}</dd>
               </div>
@@ -128,57 +129,55 @@ export default function AccountInvoiceDetailPage() {
             <p className="mt-4 text-xs text-muted-foreground">
               Payments for monthly billing are handled outside this screen when we send your invoice. Contact support if you need help.
             </p>
-            {canOfferPay ? (
-              <div className="mt-4">
-                {payHref ? (
-                  <Button asChild size="lg" className="w-full rounded-xl">
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              {canOfferPay ? (
+                payHref ? (
+                  <Button asChild size="lg" className="w-full sm:w-auto">
                     <a href={payHref} target="_blank" rel="noopener noreferrer">
                       Pay now
                     </a>
                   </Button>
                 ) : (
-                  <Button type="button" size="lg" className="w-full rounded-xl" disabled>
+                  <Button type="button" size="lg" className="w-full sm:w-auto" disabled>
                     Pay now
                   </Button>
-                )}
-              </div>
-            ) : null}
-            <Button asChild variant="outline" size="sm" className="mt-4 w-full rounded-xl">
-              <a
-                href={`/api/account/invoices/monthly/${invoice.id}/pdf`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Download PDF
-              </a>
-            </Button>
-            <Button type="button" variant="outline" size="sm" className="mt-4 rounded-xl" onClick={() => void refetch()}>
-              Refresh
-            </Button>
+                )
+              ) : null}
+              <Button asChild variant="outline" className="w-full sm:w-auto">
+                <a href={`/api/account/invoices/monthly/${invoice.id}/pdf`} target="_blank" rel="noopener noreferrer">
+                  Download PDF
+                </a>
+              </Button>
+              <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void refetch()}>
+                Refresh
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl border-border bg-card shadow-sm">
-          <CardContent className="p-6">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Activity</h2>
-            <div className="mt-4">
-              <CustomerInvoiceTimeline invoice={invoice} />
-            </div>
+        <Card>
+          <CardHeader className="border-b border-border pb-4">
+            <CardTitle className="text-base">Activity</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-5">
+            <CustomerInvoiceTimeline invoice={invoice} />
           </CardContent>
         </Card>
       </div>
 
-      <Card className="rounded-2xl border-border bg-card shadow-sm">
-        <CardContent className="p-6">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Visits on this invoice</h2>
+      <Card>
+        <CardHeader className="border-b border-border pb-4">
+          <CardTitle className="text-base">Visits on this invoice</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-5">
           {bookingsLoading ? (
-            <p className="mt-4 text-sm text-muted-foreground">Loading visits…</p>
+            <p className="text-sm text-muted-foreground">Loading visits…</p>
           ) : bookingsError ? (
-            <p className="mt-4 text-sm text-red-600">{bookingsError}</p>
+            <p className="text-sm text-destructive" role="alert">{bookingsError}</p>
           ) : invoiceBookings.length === 0 ? (
-            <p className="mt-4 text-sm text-muted-foreground">No visits linked yet.</p>
+            <p className="text-sm text-muted-foreground">No visits linked yet.</p>
           ) : (
-            <ul className="mt-4 divide-y divide-border">
+            <ul className="divide-y divide-border">
               {invoiceBookings.map((b) => {
                 const label =
                   serviceLabelFromBookingRow({ service: b.service, service_slug: b.service_slug }) ??
@@ -190,14 +189,14 @@ export default function AccountInvoiceDetailPage() {
                     ? `R ${Math.round(b.total_paid_zar).toLocaleString("en-ZA")}`
                     : null;
                 return (
-                  <li key={b.id} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{label}</p>
+                  <li key={b.id} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-semibold text-foreground">{label}</p>
                       <p className="text-xs text-muted-foreground">{when}</p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3 sm:justify-end">
                       {amount ? <p className="text-sm font-semibold tabular-nums text-foreground">{amount}</p> : null}
-                      <Button asChild variant="ghost" size="sm" className="rounded-lg text-blue-600">
+                      <Button asChild variant="ghost" size="sm" className="text-primary">
                         <Link href={customerBookingDetailPath(b.id)}>View booking</Link>
                       </Button>
                     </div>

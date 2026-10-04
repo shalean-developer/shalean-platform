@@ -1,9 +1,9 @@
 import {
   SERVICE_CONFIG,
   SERVICE_SLUGS,
-  serviceShowsEquipmentQuestion,
   type ServiceSlug,
 } from "@/src/features/booking-v2/config/serviceConfig";
+import { serviceRequiresCustomerEquipmentChoice } from "@/lib/booking-v2/serviceSuppliesPolicy";
 import { EXTRA_CLEANER_SERVICE_SLUGS } from "@/lib/booking-v2/propertyFactorPricing";
 import type { BookingV2CatalogConfig, BookingV2ServiceDefinition } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { DB_SLUG_MAP, EXTRA_TYPE_MAP } from "@/lib/booking-v2/loadBookingV2CatalogMaps";
@@ -24,8 +24,8 @@ export function buildDefaultBookingV2CatalogConfig(): BookingV2CatalogConfig {
       cleanerMode: config.cleanerMode,
       extraTypes: [...EXTRA_TYPE_MAP[slug]],
       extraSlugs: [...extraSlugsForService(slug)],
-      showEquipmentQuestion: serviceShowsEquipmentQuestion(slug),
-      showCleaningProductsQuestion: serviceShowsEquipmentQuestion(slug),
+      showEquipmentQuestion: serviceRequiresCustomerEquipmentChoice(slug),
+      showCleaningProductsQuestion: serviceRequiresCustomerEquipmentChoice(slug),
       allowsExtraCleaner: EXTRA_CLEANER_SERVICE_SLUGS.has(slug),
       step1Questions: config.step1Questions.map((q) => ({ ...q, options: q.options?.map((o) => ({ ...o })) })),
       isActive: true,
@@ -67,11 +67,19 @@ export function parseBookingV2CatalogConfig(raw: unknown): BookingV2CatalogConfi
         : [...EXTRA_TYPE_MAP[slug as ServiceSlug]];
 
     const questionsRaw = row.step1Questions;
-    const step1Questions = Array.isArray(questionsRaw)
-      ? questionsRaw.filter((q): q is BookingV2ServiceDefinition["step1Questions"][number] => {
-          return Boolean(q && typeof q === "object" && typeof (q as { key?: unknown }).key === "string");
-        })
-      : SERVICE_CONFIG[slug as ServiceSlug].step1Questions;
+    const step1Questions =
+      slug === "carpet-cleaning"
+        ? SERVICE_CONFIG["carpet-cleaning"].step1Questions
+        : Array.isArray(questionsRaw)
+          ? questionsRaw.filter((q): q is BookingV2ServiceDefinition["step1Questions"][number] => {
+              return Boolean(q && typeof q === "object" && typeof (q as { key?: unknown }).key === "string");
+            })
+          : SERVICE_CONFIG[slug as ServiceSlug].step1Questions;
+
+    const policyShowsEquipment = serviceRequiresCustomerEquipmentChoice(slug as ServiceSlug);
+    const configuredShowEquipment =
+      row.showEquipmentQuestion === true ||
+      (row.showEquipmentQuestion !== false && row.showCleaningProductsQuestion !== false && policyShowsEquipment);
 
     services.push({
       slug: slug as ServiceSlug,
@@ -83,21 +91,18 @@ export function parseBookingV2CatalogConfig(raw: unknown): BookingV2CatalogConfi
         typeof row.description === "string" ? row.description : SERVICE_CONFIG[slug as ServiceSlug].description,
       cleanerMode: row.cleanerMode === "team" ? "team" : "individual_cleaners",
       extraTypes,
-      extraSlugs: Array.isArray(row.extraSlugs)
-        ? row.extraSlugs.filter((s): s is string => typeof s === "string" && s.trim().length > 0)
-        : [...extraSlugsForService(slug as ServiceSlug)],
-      showEquipmentQuestion:
-        row.showEquipmentQuestion === true ||
-        (row.showEquipmentQuestion !== false &&
-          row.showCleaningProductsQuestion !== false &&
-          serviceShowsEquipmentQuestion(slug as ServiceSlug)),
-      showCleaningProductsQuestion:
-        row.showEquipmentQuestion === true ||
-        (row.showEquipmentQuestion !== false &&
-          row.showCleaningProductsQuestion !== false &&
-          serviceShowsEquipmentQuestion(slug as ServiceSlug)),
+      extraSlugs:
+        slug === "carpet-cleaning"
+          ? [...extraSlugsForService("carpet-cleaning")]
+          : Array.isArray(row.extraSlugs)
+            ? row.extraSlugs.filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+            : [...extraSlugsForService(slug as ServiceSlug)],
+      showEquipmentQuestion: configuredShowEquipment,
+      showCleaningProductsQuestion: configuredShowEquipment,
       allowsExtraCleaner:
-        row.allowsExtraCleaner === true || EXTRA_CLEANER_SERVICE_SLUGS.has(slug as ServiceSlug),
+        slug === "carpet-cleaning"
+          ? false
+          : row.allowsExtraCleaner === true || EXTRA_CLEANER_SERVICE_SLUGS.has(slug as ServiceSlug),
       step1Questions,
       isActive: row.isActive !== false,
       sortOrder: typeof row.sortOrder === "number" ? row.sortOrder : undefined,

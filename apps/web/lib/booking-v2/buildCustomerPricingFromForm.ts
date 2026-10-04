@@ -1,4 +1,4 @@
-import { SERVICE_CONFIG, serviceShowsEquipmentQuestion } from "@/src/features/booking-v2/config/serviceConfig";
+import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import { calculateCustomerTotal } from "@/lib/booking-v2/calculateCustomerTotal";
 import { buildAuthoritativeQuotePersistPatch } from "@/lib/booking/quote/bookingQuotePersistence";
@@ -8,6 +8,7 @@ import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
 import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
 import { resolveMovingPricingSlug } from "@/lib/booking-v2/resolvePricingServiceSlug";
+import { serviceRequiresCustomerEquipmentChoice } from "@/lib/booking-v2/serviceSuppliesPolicy";
 
 export type BuildCustomerPricingFromFormParams = {
   serviceSlug: BookingV2FormData["serviceSlug"];
@@ -78,7 +79,7 @@ export function buildCustomerTotalInputFromForm(
   const showEquipmentQuestion =
     liveConfig?.showEquipmentQuestion ??
     liveConfig?.showCleaningProductsQuestion ??
-    serviceShowsEquipmentQuestion(serviceSlug);
+    serviceRequiresCustomerEquipmentChoice(serviceSlug);
 
   const catalogSource: LiveServiceConfig =
     liveConfig ?? {
@@ -91,8 +92,7 @@ export function buildCustomerTotalInputFromForm(
       allowsExtraCleaner:
         serviceSlug === "regular-cleaning" ||
         serviceSlug === "airbnb-cleaning" ||
-        serviceSlug === "office-cleaning" ||
-        serviceSlug === "carpet-cleaning",
+        serviceSlug === "office-cleaning",
       step1Questions: staticConfig.step1Questions,
       basePrice: staticConfig.basePrice,
       pricePerBedroom: 0,
@@ -100,6 +100,10 @@ export function buildCustomerTotalInputFromForm(
       pricePerExtraRoom: 0,
       pricePerExtraCleaner: staticConfig.pricePerExtraCleaner,
       estimatedDurationHours: staticConfig.estimatedDurationHours,
+      durationBaseHours: staticConfig.estimatedDurationHours,
+      durationPerBedroomHours: 0,
+      durationPerBathroomHours: 0,
+      durationPerExtraRoomHours: 0,
       minDurationHours: DEFAULT_SERVICE_DURATION_LIMITS.minHours,
       maxDurationHours: DEFAULT_SERVICE_DURATION_LIMITS.maxHours,
       extras: [],
@@ -117,7 +121,8 @@ export function buildCustomerTotalInputFromForm(
     serviceDetails: values.serviceDetails ?? {},
     selectedExtras: values.selectedExtras ?? [],
     cleanerMode: values.cleanerMode,
-    cleanerCount: values.cleanerCount ?? 1,
+    cleanerCount:
+      serviceSlug === "carpet-cleaning" ? 1 : (values.cleanerCount ?? 1),
     bookingType: values.bookingType,
     recurringFrequency: values.recurringFrequency ?? "",
     equipmentRequired,
@@ -128,7 +133,12 @@ export function buildCustomerTotalInputFromForm(
       pricePerBathroom: rates.pricePerBathroom,
       pricePerExtraRoom: rates.pricePerExtraRoom,
       pricePerExtraCleaner: catalogSource.pricePerExtraCleaner,
+      serviceFeeZar: catalogSource.serviceFeeZar,
       estimatedDurationHours: catalogSource.estimatedDurationHours,
+      durationBaseHours: catalogSource.durationBaseHours,
+      durationPerBedroomHours: catalogSource.durationPerBedroomHours,
+      durationPerBathroomHours: catalogSource.durationPerBathroomHours,
+      durationPerExtraRoomHours: catalogSource.durationPerExtraRoomHours,
       minDurationHours: catalogSource.minDurationHours,
       maxDurationHours: catalogSource.maxDurationHours,
       extras: catalogSource.extras,

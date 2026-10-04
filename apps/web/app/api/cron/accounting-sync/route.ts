@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   const lockResult = await withCronLock(
     admin,
     { jobName: CRON_LOCK_KEYS.accountingSync, leaseSeconds: 600 },
-    async () => processAccountingSyncQueue(admin, 75),
+    async () => processAccountingSyncQueue(admin, 10, 0),
   );
 
   if (lockResult.skipped) {

@@ -96,7 +96,7 @@ export function AreasWeServeView() {
                   aria-labelledby={`region-${regionSlug(region)}`}
                 >
                   <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
-                    <MapPin className="size-5 text-blue-600" aria-hidden />
+                    <MapPin className="size-5 text-[#0051FF]" aria-hidden />
                     <h3
                       id={`region-${regionSlug(region)}`}
                       className="text-xl font-bold tracking-tight text-slate-900"

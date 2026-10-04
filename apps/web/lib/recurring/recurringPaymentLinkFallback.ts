@@ -10,6 +10,7 @@ import { persistPaymentLinkDelivery } from "@/lib/admin/persistPaymentLinkDelive
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { recordPaymentLinkDecision, resolvePaymentLinkDispatchDecision } from "@/lib/pay/paymentDecisionDispatch";
 import { trustPayPageUrl } from "@/lib/pay/trustPayPageUrl";
+import { scheduleBookingPaymentRecoveryJobs } from "@/lib/booking/bookingPaymentRecoveryJobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type BookingHead = {
@@ -99,7 +100,7 @@ export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, boo
     .update({
       payment_link: init.authorizationUrl,
       payment_link_expires_at: expiresAt,
-      ...(preservedUserId ? { user_id: preservedUserId } : {}),
+      ...(preservedUserId ? { [ownershipColumn]: preservedUserId } : {}),
     })
     .eq("id", bookingId)
     .eq("status", "pending_payment");
@@ -107,6 +108,21 @@ export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, boo
   if (patchErr) {
     await reportOperationalIssue("error", "recurring/fallback", patchErr.message, { bookingId });
     return false;
+  }
+
+  const recoveryScheduled = await scheduleBookingPaymentRecoveryJobs(admin, {
+    bookingId,
+    customerEmail: email,
+    createdAt: new Date().toISOString(),
+    paymentLinkExpiresAt: expiresAt,
+  });
+  if (!recoveryScheduled.ok) {
+    await reportOperationalIssue(
+      "warn",
+      "recurring/fallback",
+      "terminal payment recovery scheduling failed",
+      { bookingId, paymentLinkExpiresAt: expiresAt },
+    );
   }
 
   await admin.from("bookings").update({ recurring_fallback_at: new Date().toISOString() }).eq("id", bookingId);

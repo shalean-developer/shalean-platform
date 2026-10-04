@@ -22,16 +22,19 @@ type PaymentRow = {
 export async function ensurePaystackRecipient(
   admin: SupabaseClient,
   cleanerId: string,
-): Promise<{ ok: true; recipientCode: string } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; recipientCode: string }
+  | { ok: false; error: string; retryable: boolean; status?: number }
+> {
   const { data: row, error } = await admin
     .from("cleaner_payment_details")
     .select("cleaner_id, account_number, bank_code, account_name, recipient_code")
     .eq("cleaner_id", cleanerId)
     .maybeSingle();
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: error.message, retryable: true, status: 500 };
   const p = row as PaymentRow | null;
-  if (!p) return { ok: false, error: "No bank details on file for this cleaner." };
+  if (!p) return { ok: false, error: "No bank details on file for this cleaner.", retryable: false, status: 400 };
 
   const existing = p.recipient_code?.trim();
   if (existing) return { ok: true, recipientCode: existing };
@@ -39,16 +42,24 @@ export async function ensurePaystackRecipient(
   const accountNumber = String(p.account_number ?? "").replace(/\s+/g, "").trim();
   const bankCode = String(p.bank_code ?? "").trim();
   const accountName = String(p.account_name ?? "").replace(/\s+/g, " ").trim();
-  if (!/^\d{6,20}$/.test(accountNumber)) return { ok: false, error: "Invalid account number on file." };
-  if (!/^[A-Za-z0-9_-]{2,20}$/.test(bankCode)) return { ok: false, error: "Invalid bank code on file." };
-  if (accountName.length < 2) return { ok: false, error: "Account name missing on file." };
+  if (!/^\d{6,20}$/.test(accountNumber)) {
+    return { ok: false, error: "Invalid account number on file.", retryable: false, status: 400 };
+  }
+  if (!/^[A-Za-z0-9_-]{2,20}$/.test(bankCode)) {
+    return { ok: false, error: "Invalid bank code on file.", retryable: false, status: 400 };
+  }
+  if (accountName.length < 2) {
+    return { ok: false, error: "Account name missing on file.", retryable: false, status: 400 };
+  }
 
   const { data: cleaner, error: cErr } = await admin.from("cleaners").select("id, full_name").eq("id", cleanerId).maybeSingle();
-  if (cErr) return { ok: false, error: cErr.message };
+  if (cErr) return { ok: false, error: cErr.message, retryable: true, status: 500 };
   const displayName = String((cleaner as { full_name?: string | null } | null)?.full_name ?? "").trim() || accountName;
 
   const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
-  if (!secret) return { ok: false, error: "PAYSTACK_SECRET_KEY is not configured." };
+  if (!secret) {
+    return { ok: false, error: "PAYSTACK_SECRET_KEY is not configured.", retryable: false, status: 500 };
+  }
 
   const base = getPaystackBaseUrl();
   let res: Response;
@@ -68,16 +79,23 @@ export async function ensurePaystackRecipient(
       }),
     });
   } catch {
-    return { ok: false, error: "Network error while creating Paystack recipient." };
+    return { ok: false, error: "Network error while creating Paystack recipient.", retryable: true, status: 503 };
   }
 
   const json = (await res.json().catch(() => ({}))) as PaystackRecipientJson;
   if (!res.ok || json.status === false) {
-    return { ok: false, error: json.message ?? "Paystack transferrecipient failed." };
+    return {
+      ok: false,
+      error: json.message ?? "Paystack transferrecipient failed.",
+      retryable: res.status >= 500 || res.status === 429 || res.status === 408,
+      status: res.status,
+    };
   }
 
   const recipientCode = json.data?.recipient_code?.trim();
-  if (!recipientCode) return { ok: false, error: "Paystack did not return recipient_code." };
+  if (!recipientCode) {
+    return { ok: false, error: "Paystack did not return recipient_code.", retryable: true, status: 502 };
+  }
 
   const now = new Date().toISOString();
   const { error: upErr } = await admin
@@ -85,7 +103,14 @@ export async function ensurePaystackRecipient(
     .update({ recipient_code: recipientCode, updated_at: now })
     .eq("cleaner_id", cleanerId);
 
-  if (upErr) return { ok: false, error: `Recipient created but DB update failed: ${upErr.message}` };
+  if (upErr) {
+    return {
+      ok: false,
+      error: `Recipient created but DB update failed: ${upErr.message}`,
+      retryable: true,
+      status: 500,
+    };
+  }
 
   return { ok: true, recipientCode };
 }

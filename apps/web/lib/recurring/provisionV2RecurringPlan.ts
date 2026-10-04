@@ -47,6 +47,8 @@ export type ProvisionV2RecurringPlanParams = {
   startDate: string;
   endDate?: string | null;
   totalPaidZar: number;
+  /** Catalogue price for each generated visit; differs from the aggregate prepaid checkout. */
+  perVisitPriceZar?: number;
   durationMinutes: number;
   /** booking.service (e.g. "regular-cleaning") */
   service: string;
@@ -56,6 +58,9 @@ export type ProvisionV2RecurringPlanParams = {
   rooms: number;
   bathrooms: number;
   preferredCleanerIds?: readonly string[];
+  /** Frozen Booking V2 catalog evidence from the originating quote lock. */
+  pricingVersionId?: string | null;
+  pricingSummary?: unknown;
 };
 
 export type ProvisionV2RecurringPlanResult =
@@ -93,6 +98,7 @@ export async function provisionV2RecurringPlan(
   params: ProvisionV2RecurringPlanParams,
 ): Promise<ProvisionV2RecurringPlanResult> {
   const { bookingId, customerId, recurringFrequency, recurringDays, startDate } = params;
+  const perVisitPriceZar = Math.max(0, Math.round(params.perVisitPriceZar ?? params.totalPaidZar));
 
   const frequency = mapFrequency(recurringFrequency);
   if (!frequency) {
@@ -176,16 +182,19 @@ export async function provisionV2RecurringPlan(
       rooms: params.rooms,
       bathrooms: params.bathrooms,
       extras: [],
-      finalPrice: params.totalPaidZar,
+      finalPrice: perVisitPriceZar,
       finalHours: durationHours,
       surge: 1,
-      price: params.totalPaidZar,
+      price: perVisitPriceZar,
       duration: durationHours,
+      ...(params.pricingVersionId ? { pricing_version_id: params.pricingVersionId } : {}),
     },
+    ...(params.pricingVersionId ? { pricing_version_id: params.pricingVersionId } : {}),
+    ...(params.pricingSummary ? { pricingSummary: params.pricingSummary } : {}),
     customer: {
       email: "",
     },
-    total_zar: params.totalPaidZar,
+    total_zar: perVisitPriceZar,
     ...(params.preferredCleanerIds && params.preferredCleanerIds.length > 0
       ? { selectedCleanerIds: [...params.preferredCleanerIds] }
       : {}),
@@ -199,7 +208,7 @@ export async function provisionV2RecurringPlan(
       days_of_week: daysOfWeek,
       start_date: startDate,
       end_date: params.endDate ?? null,
-      price: params.totalPaidZar,
+      price: perVisitPriceZar,
       status: "active",
       next_run_date: nextRun,
       booking_snapshot_template: bookingSnapshotTemplate,

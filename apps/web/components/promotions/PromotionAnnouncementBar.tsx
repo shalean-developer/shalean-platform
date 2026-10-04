@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
 import { promoBookingHref, trackPromoEvent } from "./promoCta";
 
@@ -35,12 +36,19 @@ function clearPromoBarChrome() {
   document.documentElement.removeAttribute("data-promo-announcement");
 }
 
-/** Fixed bottom announcement bar for active seasonal / homepage promotions. */
+/** Fixed bottom announcement bar for active seasonal promotions outside the homepage. */
 export function PromotionAnnouncementBar() {
+  const pathname = usePathname();
+  const homepage = pathname === "/";
   const [promo, setPromo] = useState<DisplayPromo | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
+    if (homepage) {
+      setPromo(null);
+      return;
+    }
+
     void (async () => {
       try {
         const res = await fetch("/api/promotions?surface=announcement");
@@ -58,10 +66,10 @@ export function PromotionAnnouncementBar() {
         // ignore
       }
     })();
-  }, []);
+  }, [homepage]);
 
   useEffect(() => {
-    if (!promo || dismissed) {
+    if (homepage || !promo || dismissed) {
       clearPromoBarChrome();
       return;
     }
@@ -71,9 +79,9 @@ export function PromotionAnnouncementBar() {
     );
     document.documentElement.setAttribute("data-promo-announcement", "");
     return () => clearPromoBarChrome();
-  }, [promo, dismissed]);
+  }, [homepage, promo, dismissed]);
 
-  if (!promo || dismissed) return null;
+  if (homepage || !promo || dismissed) return null;
 
   const bg = promo.colours?.primary ?? "#0d1b69";
   const accent = promo.colours?.accent ?? "#34d399";

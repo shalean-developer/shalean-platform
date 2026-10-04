@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getPaystackBaseUrl } from "@/lib/payout/paystackOrigin";
 import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
+import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
+import { applyTransferSuccess } from "@/lib/payout/paystackTransferStatus";
 
 /**
  * Single Paystack money-send entry point for cleaner payouts.
@@ -55,6 +57,7 @@ type OutboxRow = {
   transfer_row_id: string | null;
   reference: string;
   attempts: number;
+  updated_at: string;
 };
 
 function auditTable(rail: PayoutTransferRail): "payout_transfers" | "earnings_disbursement_transfers" {
@@ -63,6 +66,105 @@ function auditTable(rail: PayoutTransferRail): "payout_transfers" | "earnings_di
 
 function subjectColumn(rail: PayoutTransferRail): "payout_id" | "disbursement_id" {
   return rail === "cleaner_payout" ? "payout_id" : "disbursement_id";
+}
+
+async function releaseOutboxSendLease(
+  admin: SupabaseClient,
+  outboxId: string,
+  attempts: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data, error } = await admin
+    .from("payout_transfer_outbox")
+    .update({ status: "pending", updated_at: new Date().toISOString() })
+    .eq("id", outboxId)
+    .eq("status", "sending")
+    .eq("attempts", attempts)
+    .select("id")
+    .maybeSingle();
+
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "Outbox lease changed before release." };
+  return { ok: true };
+}
+
+
+async function validateCleanerPayoutBeforeProviderPost(
+  admin: SupabaseClient,
+  params: SubmitPaystackTransferParams,
+  amount: number,
+): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+  if (params.rail !== "cleaner_payout") return { ok: true };
+
+  const { data: payoutData, error: payoutErr } = await admin
+    .from("cleaner_payouts")
+    .select("id, cleaner_id, total_amount_cents, status, payment_status, amount_adjusted_at")
+    .eq("id", params.subjectId)
+    .maybeSingle();
+  if (payoutErr) return { ok: false, error: payoutErr.message, status: 500 };
+  if (!payoutData) return { ok: false, error: "Payout not found.", status: 404 };
+
+  const payout = payoutData as {
+    cleaner_id?: string | null;
+    total_amount_cents?: number | null;
+    status?: string | null;
+    payment_status?: string | null;
+    amount_adjusted_at?: string | null;
+  };
+  if (String(payout.status ?? "").toLowerCase() !== "approved") {
+    return { ok: false, error: "Payout is no longer approved.", status: 409 };
+  }
+  if (String(payout.payment_status ?? "").toLowerCase() !== "processing") {
+    return { ok: false, error: "Payout is no longer in processing state.", status: 409 };
+  }
+  if (String(payout.cleaner_id ?? "").trim() !== params.cleanerId.trim()) {
+    return { ok: false, error: "Payout cleaner does not match outbox cleaner.", status: 409 };
+  }
+  if (Math.max(0, Math.round(Number(payout.total_amount_cents) || 0)) !== amount) {
+    return { ok: false, error: "Payout amount does not match outbox amount.", status: 409 };
+  }
+
+  const { error: guardErr } = await admin.rpc("claim_cleaner_payout_paystack_processing", {
+    p_payout_id: params.subjectId,
+    p_allow_existing_processing: true,
+  });
+  if (guardErr) {
+    const message = String(guardErr.message ?? "Payout failed locked linked-booking validation.");
+    const permanentBusinessRule = [
+      "linked_refund_or_ineligible_booking_blocks_payout",
+      "payout_cleaner_mismatch",
+      "payout_not_found",
+      "payout_not_approved",
+      "payout_not_processing",
+    ].some((code) => message.includes(code));
+    return {
+      ok: false,
+      error: message,
+      status: permanentBusinessRule ? 409 : 500,
+    };
+  }
+
+  const loaded = await loadCleanerPayoutBatchItems(admin, params.subjectId);
+  if (loaded.error) return { ok: false, error: loaded.error, status: 500 };
+  if (loaded.items.length === 0) {
+    return { ok: false, error: "Payout has no linked earning items.", status: 409 };
+  }
+  if (loaded.items.some((item) => item.is_test)) {
+    return { ok: false, error: "Payout contains a test booking.", status: 409 };
+  }
+  if (loaded.items.some((item) => item.cleaner_id !== params.cleanerId)) {
+    return { ok: false, error: "Payout contains earning items for a different cleaner.", status: 409 };
+  }
+  if (loaded.items.some((item) => item.refunded_at)) {
+    return { ok: false, error: "Payout contains refunded bookings.", status: 409 };
+  }
+  if (loaded.items.some((item) => String(item.booking_status ?? "").toLowerCase() !== "completed")) {
+    return { ok: false, error: "Payout contains non-completed bookings.", status: 409 };
+  }
+  if (!payout.amount_adjusted_at && loaded.totalCents !== amount) {
+    return { ok: false, error: "Payout total does not match linked booking totals.", status: 409 };
+  }
+
+  return { ok: true };
 }
 
 /** Stable weekly-batch reference — never append timestamps. */
@@ -116,7 +218,10 @@ async function paystackPostTransfer(body: Record<string, unknown>): Promise<
 
 async function paystackGetTransferByReference(
   reference: string,
-): Promise<{ ok: true; transferCode: string | null; status: string | null } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; transferCode: string | null; status: string | null }
+  | { ok: false; error: string; httpStatus?: number; networkError?: boolean }
+> {
   const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
   if (!secret) return { ok: false, error: "PAYSTACK_SECRET_KEY is not configured." };
   const origin = getPaystackBaseUrl();
@@ -129,7 +234,11 @@ async function paystackGetTransferByReference(
       data?: { transfer_code?: string; status?: string };
     };
     if (!res.ok || json.status === false) {
-      return { ok: false, error: json.message ?? `Verify failed ${res.status}` };
+      return {
+        ok: false,
+        error: json.message ?? `Verify failed ${res.status}`,
+        httpStatus: res.status,
+      };
     }
     return {
       ok: true,
@@ -137,7 +246,11 @@ async function paystackGetTransferByReference(
       status: String(json.data?.status ?? "").trim().toLowerCase() || null,
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Network error verifying transfer" };
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Network error verifying transfer",
+      networkError: true,
+    };
   }
 }
 
@@ -147,7 +260,7 @@ async function loadOutboxByReference(
 ): Promise<OutboxRow | null> {
   const { data, error } = await admin
     .from("payout_transfer_outbox")
-    .select("id, status, transfer_code, transfer_row_id, reference, attempts")
+    .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at")
     .eq("reference", reference)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -186,9 +299,25 @@ export async function submitPaystackTransferViaOutbox(
 
   const existingSuccess = await loadSuccessTransfer(admin, params.rail, params.subjectId);
   if (existingSuccess) {
+    const transferCode = existingSuccess.transfer_code?.trim() ?? null;
+    if (transferCode) {
+      try {
+        await applyTransferSuccess(admin, {
+          transfer_code: transferCode,
+          reference: existingSuccess.reference?.trim() || params.reference,
+        });
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : "Existing successful transfer reconciliation failed.",
+          needsReconcile: true,
+        };
+      }
+    }
+
     return {
       ok: true,
-      transferCode: existingSuccess.transfer_code,
+      transferCode,
       reference: existingSuccess.reference?.trim() || params.reference,
       skippedExisting: true,
       outboxId: "",
@@ -232,6 +361,111 @@ export async function submitPaystackTransferViaOutbox(
       transferCode: null,
       reference: params.reference,
       outboxId: outbox.id,
+      needsReconcile: true,
+    };
+  }
+
+  // Exclusive sender lease. A second worker never POSTs while another owns "sending".
+  // If a worker crashed after leasing but before POST, verify the immutable reference first.
+  if (outbox && outbox.status === "sending") {
+    const verified = await paystackGetTransferByReference(params.reference);
+    if (verified.ok && verified.transferCode) {
+      const table = auditTable(params.rail);
+      if (!outbox.transfer_row_id) {
+        return {
+          ok: false,
+          error: "Recovered Paystack transfer has no linked transfer audit row.",
+          needsReconcile: true,
+        };
+      }
+
+      const { error: auditErr } = await admin
+        .from(table)
+        .update({
+          transfer_code: verified.transferCode,
+          status: "processing",
+          ...(params.rail === "cleaner_earnings" ? { reference: params.reference } : {}),
+        })
+        .eq("id", outbox.transfer_row_id)
+        .neq("status", "success");
+
+      if (auditErr) {
+        return {
+          ok: false,
+          error: `Recovered Paystack transfer could not update audit row: ${auditErr.message}`,
+          needsReconcile: true,
+        };
+      }
+
+      const providerSucceeded = verified.status === "success" || verified.status === "successful";
+      if (providerSucceeded) {
+        try {
+          await applyTransferSuccess(admin, {
+            transfer_code: verified.transferCode,
+            reference: params.reference,
+          });
+        } catch (error) {
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : "Recovered transfer success reconciliation failed.",
+            needsReconcile: true,
+          };
+        }
+      } else {
+        const { data: retired, error: retireErr } = await admin
+          .from("payout_transfer_outbox")
+          .update({
+            status: "submitted",
+            transfer_code: verified.transferCode,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", outbox.id)
+          .eq("status", "sending")
+          .eq("attempts", outbox.attempts)
+          .select("id")
+          .maybeSingle();
+
+        if (retireErr || !retired) {
+          return {
+            ok: false,
+            error: retireErr?.message ?? "Recovered outbox lease changed before submission convergence.",
+            needsReconcile: true,
+          };
+        }
+      }
+
+      return {
+        ok: true,
+        transferCode: verified.transferCode,
+        reference: params.reference,
+        skippedExisting: true,
+        outboxId: outbox.id,
+        needsReconcile: !providerSucceeded,
+      };
+    }
+
+    const leaseAgeMs = Date.now() - new Date(outbox.updated_at).getTime();
+    const verifyNotFound =
+      !verified.ok &&
+      (verified.httpStatus === 404 || /not found|does not exist/i.test(verified.error));
+
+    if (verifyNotFound && Number.isFinite(leaseAgeMs) && leaseAgeMs >= 15 * 60 * 1000) {
+      const released = await releaseOutboxSendLease(admin, outbox.id, outbox.attempts);
+      if (!released.ok) {
+        return {
+          ok: false,
+          error: released.error,
+          needsReconcile: true,
+        };
+      }
+      return submitPaystackTransferViaOutbox(admin, params);
+    }
+
+    return {
+      ok: false,
+      error: verified.ok
+        ? "Payout transfer is still leased for submission."
+        : verified.error,
       needsReconcile: true,
     };
   }
@@ -286,7 +520,7 @@ export async function submitPaystackTransferViaOutbox(
         transfer_row_id: transferRowId || null,
         status: "pending",
       })
-      .select("id, status, transfer_code, transfer_row_id, reference, attempts")
+      .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at")
       .maybeSingle();
 
     if (outboxErr) {
@@ -315,24 +549,32 @@ export async function submitPaystackTransferViaOutbox(
     });
   }
 
-  // Claim outbox for send
+  // Claim outbox for send using an exclusive pending -> sending lease.
+  const expectedAttempts = outbox.attempts ?? 0;
   const { data: claimed, error: claimErr } = await admin
     .from("payout_transfer_outbox")
     .update({
-      status: "pending",
-      attempts: (outbox.attempts ?? 0) + 1,
+      status: "sending",
+      attempts: expectedAttempts + 1,
       updated_at: new Date().toISOString(),
     })
     .eq("id", outbox.id)
-    .in("status", ["pending", "failed"])
-    .select("id, status, transfer_code, transfer_row_id, reference, attempts")
+    .eq("status", "pending")
+    .eq("attempts", expectedAttempts)
+    .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at")
     .maybeSingle();
 
-  if (claimErr) return { ok: false, error: claimErr.message };
-  if (!claimed && outbox.status !== "pending") {
-    // Concurrent worker — reload
+  if (claimErr) {
+    return {
+      ok: false,
+      error: claimErr.message,
+      status: 500,
+      needsReconcile: true,
+    };
+  }
+  if (!claimed) {
     const again = await loadOutboxByReference(admin, params.reference);
-    if (again?.status === "submitted" || again?.transfer_code) {
+    if (again?.status === "submitted" || again?.status === "succeeded" || again?.transfer_code) {
       return {
         ok: true,
         transferCode: again.transfer_code,
@@ -341,6 +583,91 @@ export async function submitPaystackTransferViaOutbox(
         outboxId: again.id,
       };
     }
+    return {
+      ok: false,
+      error: "Payout outbox send is already leased or no longer eligible.",
+      needsReconcile: true,
+    };
+  }
+  outbox = claimed as OutboxRow;
+
+  const safetyGate = await validateCleanerPayoutBeforeProviderPost(admin, params, amount);
+  if (!safetyGate.ok) {
+    const now = new Date().toISOString();
+    const permanentValidationFailure = safetyGate.status >= 400 && safetyGate.status < 500;
+
+    if (permanentValidationFailure && params.rail === "cleaner_payout") {
+      const { error: terminalErr } = await admin.rpc("fail_cleaner_payout_outbox_validation", {
+        p_outbox_id: outbox.id,
+        p_error: safetyGate.error,
+        p_expected_status: "sending",
+        p_expected_attempts: outbox.attempts,
+      });
+
+      if (terminalErr) {
+        void logSystemEvent({
+          level: "error",
+          source: "PAYSTACK_OUTBOX_TERMINAL_CONVERGENCE",
+          message: "Could not atomically converge permanently blocked payout outbox; leaving it retryable",
+          context: {
+            payoutId: params.subjectId,
+            outboxId: outbox.id,
+            reference: params.reference,
+            error: terminalErr.message,
+          },
+        });
+        const released = await releaseOutboxSendLease(admin, outbox.id, outbox.attempts);
+        return {
+          ok: false,
+          error: released.ok
+            ? terminalErr.message || "Could not converge blocked payout outbox."
+            : `${terminalErr.message || "Could not converge blocked payout outbox."} Lease release also failed: ${released.error}`,
+          status: 500,
+          needsReconcile: true,
+        };
+      }
+
+      void logPayoutAuditEvent(admin, {
+        eventType: "payout_transfer_failed",
+        actorUserId: params.initiatedBy,
+        payoutId: params.subjectId,
+        amountCents: amount,
+        reference: params.reference,
+        context: {
+          reason: "permanent_pre_provider_validation_failure",
+          error: safetyGate.error,
+          outboxId: outbox.id,
+        },
+      });
+    }
+
+    void logSystemEvent({
+      level: "warn",
+      source: "PAYSTACK_OUTBOX_SAFETY_GATE",
+      message: permanentValidationFailure
+        ? "Permanently blocked Paystack transfer before provider POST"
+        : "Temporarily blocked Paystack transfer before provider POST",
+      context: {
+        rail: params.rail,
+        subjectId: params.subjectId,
+        reference: params.reference,
+        error: safetyGate.error,
+        permanent: permanentValidationFailure,
+      },
+    });
+    if (!permanentValidationFailure && params.rail === "cleaner_payout") {
+      const released = await releaseOutboxSendLease(admin, outbox.id, outbox.attempts);
+      return {
+        ok: false,
+        error: released.ok
+          ? safetyGate.error
+          : `${safetyGate.error} Lease release also failed: ${released.error}`,
+        status: safetyGate.status,
+        needsReconcile: true,
+      };
+    }
+
+    return safetyGate;
   }
 
   const transfer = await paystackPostTransfer({
@@ -368,7 +695,9 @@ export async function submitPaystackTransferViaOutbox(
             paystack_response: { resumed: true, message: transfer.error },
             updated_at: now,
           })
-          .eq("id", outbox.id);
+          .eq("id", outbox.id)
+          .eq("status", "sending")
+          .eq("attempts", outbox.attempts);
         if (outbox.transfer_row_id) {
           await admin
             .from(table)
@@ -392,7 +721,9 @@ export async function submitPaystackTransferViaOutbox(
           last_error: transfer.error.slice(0, 2000),
           updated_at: now,
         })
-        .eq("id", outbox.id);
+        .eq("id", outbox.id)
+        .eq("status", "sending")
+        .eq("attempts", outbox.attempts);
       void logPayoutAuditEvent(admin, {
         eventType: "payout_transfer_needs_reconcile",
         actorUserId: params.initiatedBy,
@@ -417,7 +748,9 @@ export async function submitPaystackTransferViaOutbox(
         last_error: transfer.error.slice(0, 2000),
         updated_at: now,
       })
-      .eq("id", outbox.id);
+      .eq("id", outbox.id)
+      .eq("status", "sending")
+      .eq("attempts", outbox.attempts);
     if (outbox.transfer_row_id) {
       await admin
         .from(table)
@@ -449,7 +782,9 @@ export async function submitPaystackTransferViaOutbox(
       last_error: null,
       updated_at: now,
     })
-    .eq("id", outbox.id);
+    .eq("id", outbox.id)
+    .eq("status", "sending")
+    .eq("attempts", outbox.attempts);
 
   if (outUpErr) {
     // Money may have moved — never mark failed.
@@ -510,7 +845,7 @@ export async function processPaystackTransferOutboxBatch(
   const { data, error } = await admin
     .from("payout_transfer_outbox")
     .select("id, rail, subject_id, cleaner_id, amount_cents, recipient_code, reference, status")
-    .in("status", ["pending", "needs_reconcile"])
+    .in("status", ["pending", "sending", "needs_reconcile"])
     .order("created_at", { ascending: true })
     .limit(limit);
 

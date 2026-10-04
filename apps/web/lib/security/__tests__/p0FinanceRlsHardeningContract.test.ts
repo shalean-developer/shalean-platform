@@ -9,7 +9,7 @@ const WEB_ROOT = path.resolve(HERE, "..", "..", "..");
 const REPO_ROOT = path.resolve(WEB_ROOT, "..", "..");
 
 function read(rel: string): string {
-  return readFileSync(path.join(REPO_ROOT, rel), "utf8");
+  return readFileSync(path.join(REPO_ROOT, rel), "utf8").replace(/\r\n/g, "\n");
 }
 
 const migration = read("supabase/migrations/20260812065000_p0_01_harden_finance_rls.sql");

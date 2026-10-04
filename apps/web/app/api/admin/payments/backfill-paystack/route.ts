@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireFinanceApi } from "@/lib/auth/requireFinanceApi";
+import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import {
   backfillPaystackPaymentTransactions,
   countMissingPaystackPaymentTransactions,
@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const auth = await requireFinanceApi(request);
+  const auth = await requireAdminApi(request, ["finance.full.view", "payment.reconcile"]);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const admin = getSupabaseAdmin();
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireFinanceApi(request);
+  const auth = await requireAdminApi(request, ["payment.reconcile"]);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const admin = getSupabaseAdmin();

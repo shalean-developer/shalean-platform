@@ -73,10 +73,10 @@ export type GetEligibleCleanersParams = {
 
 /**
  * Shared select for day occupancy — keep in sync with {@link getEligibleCleaners} bookings query.
- * The authoritative calendar column is `bookings.date`; the table has no `booking_date` column.
+ * The authoritative calendar columns are `bookings.date` + `bookings.time`.
  */
 export const OCCUPYING_BOOKINGS_SELECT =
-  "id, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, time, start_time, end_time, duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot";
+  "id, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, time, duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot";
 
 /** One day of slot-occupying bookings (used by the time-slot grid preload). */
 export async function fetchOccupyingBookingsForDate(

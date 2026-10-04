@@ -1,11 +1,12 @@
 import type { RecurringFrequency } from "@/src/features/booking-v2/types";
 
 export const RECURRING_FREQUENCY_OPTIONS: {
-  value: Exclude<RecurringFrequency, "custom">;
+  value: RecurringFrequency;
   label: string;
 }[] = [
+  { value: "custom", label: "Custom" },
   { value: "weekly", label: "Weekly" },
-  { value: "fortnightly", label: "Every 2 weeks" },
+  { value: "fortnightly", label: "Fortnightly" },
   { value: "monthly", label: "Monthly" },
 ];
 
@@ -32,8 +33,9 @@ export function shouldShowRecurringDayPicker(
 }
 
 export function recurringFrequencyLabel(frequency: RecurringFrequency | "" | undefined): string {
-  if (frequency === "weekly" || frequency === "custom") return "Weekly";
-  if (frequency === "fortnightly") return "Every 2 weeks";
+  if (frequency === "custom") return "Custom";
+  if (frequency === "weekly") return "Weekly";
+  if (frequency === "fortnightly") return "Fortnightly";
   if (frequency === "monthly") return "Monthly";
   return "";
 }

@@ -1,4 +1,5 @@
 import "server-only";
+import { bookingCreationLifecyclePatch } from "@/lib/booking/bookingCreationProfiles";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
@@ -71,13 +72,9 @@ export async function insertWidgetDraftBookingRow(
       paystack_reference: paystackReference,
       user_id: resolved.user_id,
       customer_email: resolved.customer_email,
-      amount_paid_cents: 0,
-      total_paid_cents: 0,
+      ...bookingCreationLifecyclePatch("widget_draft"),
       base_amount_cents: 0,
       extras_amount_cents: 0,
-      currency: "ZAR",
-      status: "pending",
-      dispatch_status: "searching",
       cleaner_response_status: CLEANER_RESPONSE.NONE,
       surge_multiplier: 1,
       service_slug: serviceSlug,

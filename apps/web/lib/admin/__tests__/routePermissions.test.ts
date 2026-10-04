@@ -48,6 +48,11 @@ describe("priorityPermissionsForRequest", () => {
       "customer.view",
       "marketing.view",
     ]);
+    expect(
+      priorityPermissionsForRequest(
+        new Request("https://example.test/api/admin/office-review-funnel"),
+      ),
+    ).toEqual(["customer.view", "marketing.view"]);
   });
 
   it("keeps sensitive cleaner resources on dedicated permissions", () => {

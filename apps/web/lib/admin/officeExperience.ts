@@ -3,6 +3,9 @@ import type { AdminPermission } from "@/lib/admin/requirePermission";
 export type OfficeRoleKey = "owner" | "manager" | "operations" | "finance" | "customer-care" | "workforce" | "marketing" | "supervisor" | "restricted";
 export type OfficeAccessPolicy = { path: string; anyOf: AdminPermission[]; audience: OfficeRoleKey[] };
 
+/** Explicit Office entry routes that intentionally do not require a page-level RBAC policy. */
+export const OFFICE_POLICY_EXEMPT_PATHS = ["/office"] as const;
+
 /** Single source of truth for page visibility, sidebar navigation and command search. More-specific prefixes must appear first. */
 export const OFFICE_ACCESS_POLICIES: OfficeAccessPolicy[] = [
   { path: "/office/payouts/approvals", anyOf: ["payout.approve"], audience: ["owner"] },
@@ -20,6 +23,7 @@ export const OFFICE_ACCESS_POLICIES: OfficeAccessPolicy[] = [
   { path: "/office/blog", anyOf: ["content.draft", "content.publish"], audience: ["owner", "manager", "marketing"] },
   { path: "/office/invoices", anyOf: ["invoice.manage"], audience: ["owner", "manager", "finance"] },
   { path: "/office/sales-documents/create", anyOf: ["invoice.manage"], audience: ["owner", "finance"] },
+  { path: "/office/leads-sales", anyOf: ["invoice.manage", "customer.contact", "marketing.view"], audience: ["owner", "manager", "finance", "customer-care", "marketing"] },
   { path: "/office/sales-documents", anyOf: ["invoice.manage", "customer.contact", "marketing.view"], audience: ["owner", "manager", "finance", "customer-care", "marketing"] },
   { path: "/office/templates/editor", anyOf: ["template.manage"], audience: ["owner", "manager", "operations", "marketing"] },
   { path: "/office/templates", anyOf: ["template.manage"], audience: ["owner", "manager", "operations", "marketing"] },
@@ -48,6 +52,8 @@ export const OFFICE_ACCESS_POLICIES: OfficeAccessPolicy[] = [
   { path: "/office/security", anyOf: ["role.manage", "audit.view"], audience: ["owner"] },
   { path: "/office/admin-users", anyOf: ["user.manage", "role.manage"], audience: ["owner"] },
 
+  { path: "/office/customer-care", anyOf: ["customer.view", "customer.contact", "incident.manage"], audience: ["owner", "manager", "operations", "customer-care"] },
+  { path: "/office/workforce/training", anyOf: ["cleaner.view", "cleaner.documents.view", "incident.manage"], audience: ["owner", "manager", "workforce"] },
   { path: "/office/recurring", anyOf: ["booking.view"], audience: ["owner", "manager", "operations", "customer-care", "supervisor"] },
   { path: "/office/schedule", anyOf: ["booking.view", "team.view"], audience: ["owner", "manager", "operations", "workforce", "supervisor"] },
   { path: "/office/cleaner-applications", anyOf: ["application.decide"], audience: ["owner", "manager", "workforce"] },
@@ -83,6 +89,10 @@ export const OFFICE_ACCESS_POLICIES: OfficeAccessPolicy[] = [
 
 export function policyForOfficePath(pathname: string): OfficeAccessPolicy | null {
   return OFFICE_ACCESS_POLICIES.find(({ path }) => pathname === path || pathname.startsWith(`${path}/`)) ?? null;
+}
+
+export function isOfficePolicyExemptPath(pathname: string): boolean {
+  return OFFICE_POLICY_EXEMPT_PATHS.some((path) => pathname === path);
 }
 
 export function hasAnyOfficePermission(permissions: ReadonlySet<string> | readonly string[], required: readonly AdminPermission[]): boolean {

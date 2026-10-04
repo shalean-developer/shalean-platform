@@ -147,7 +147,7 @@ export function OfficeRecurringPlanConfirmDialog({
                     {plan.id.slice(0, 8)}
                   </p>
                   <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{customer}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">{plan.service_label ?? "Standard Cleaning"}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">{plan.service_label ?? "Regular Cleaning"}</p>
                   <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
                     <span>{frequency}</span>
                     {plan.next_run_date ? <span>Next: {plan.next_run_date}</span> : null}

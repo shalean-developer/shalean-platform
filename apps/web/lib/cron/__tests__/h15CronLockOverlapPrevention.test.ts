@@ -163,6 +163,8 @@ describe("H-15 cron lock — route governance", () => {
     // Review prompt rows are claimed with conditional timestamp updates in the worker,
     // so overlapping invocations are intentionally CAS-safe without a global lease.
     "review-prompts",
+    // Temporary INV-E2E-03D Zoho account audit probe is read-only and idempotent.
+    "zoho-expense-accounts-audit",
   ];
 
   for (const route of protectedRoutes) {

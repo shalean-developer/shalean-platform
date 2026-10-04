@@ -6,12 +6,12 @@ DEPLOY_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUNDLE="$DEPLOY_DIR/pricing-test-runtime.tar.gz"
 LIVE="$ROOT/pricing-test-runtime"
 BACKUPS="$ROOT/plesk-pricing-test-releases"
-RESULT="$ROOT/plesk-pricing-test-deploy-result.txt"
+RESULT="$ROOT/plesk-pricing-test-preview-result.txt"
 HEALTH_URL="https://pricing-test.shalean.co.za/api/health/environment"
 EXPECTED_REF="jhubpsbwmjgydkzztxeu"
 
 fail(){
-  printf 'PLESK_AUTO_03=ERROR\nREASON=%s\n' "$*" > "$RESULT"
+  printf 'PLESK_PR_PREVIEW_DEPLOY=ERROR\nREASON=%s\n' "$*" > "$RESULT"
   cat "$RESULT" >&2
   exit 1
 }
@@ -50,7 +50,6 @@ if [ -d "$LIVE" ]; then
   ROLLBACK="$BACKUPS/rollback-$STAMP"
   mv "$LIVE" "$ROLLBACK"
 fi
-
 mv "$CANDIDATE" "$LIVE"
 mkdir -p "$LIVE/tmp"
 touch "$LIVE/tmp/restart.txt"
@@ -74,7 +73,7 @@ if [ "$ok" != true ]; then
     mkdir -p "$LIVE/tmp"
     touch "$LIVE/tmp/restart.txt"
   fi
-  printf 'PLESK_AUTO_03=ROLLBACK\nFAILED_SHA=%s\n' "$META_SHA" > "$RESULT"
+  printf 'PLESK_PR_PREVIEW_DEPLOY=ROLLBACK\nFAILED_SHA=%s\n' "$META_SHA" > "$RESULT"
   cat "$RESULT" >&2
   exit 1
 fi
@@ -98,11 +97,9 @@ for _,path in items:
 PY
 
 {
-  echo "PLESK_AUTO_03=PASS"
+  echo "PLESK_PR_PREVIEW_DEPLOY=PASS"
   echo "RELEASE_SHA=$META_SHA"
-  echo "CURRENT=$LIVE"
-  echo "PREVIOUS=$ROLLBACK"
+  echo "ROLLBACK=$ROLLBACK"
   echo "HEALTH_URL=$HEALTH_URL"
-  echo "LIVE_ACTIVATION=PERFORMED"
 } > "$RESULT"
 cat "$RESULT"

@@ -45,9 +45,7 @@ export function customerBookingStatusLabel(b: DashboardBooking): CustomerBooking
 }
 
 /**
- * Customer booking card: prefer API `raw.canonicalLifecycle` when it matches the same
- * {@link describeDashboardBookingOperational} pass (no customer-facing copy drift). Otherwise
- * fall back to the describe result. Visible badge text is {@link displayBadge} (operational),
+ * Customer booking card: API `raw.canonicalLifecycle` is authoritative whenever present.\n * Local derivation is retained only for legacy/fallback payloads that do not carry the canonical surface. Visible badge text is {@link displayBadge} (operational),
  * aligned with admin/cleaner surfaces; {@link statusLabel} remains for payment/completion copy.
  */
 export function customerBookingCardOperationalDisplay(booking: DashboardBooking): {
@@ -61,12 +59,7 @@ export function customerBookingCardOperationalDisplay(booking: DashboardBooking)
   const c = booking.raw.canonicalLifecycle;
   const statusLabel = customerBookingStatusLabel(booking);
 
-  if (
-    c &&
-    c.displayBadge === op.displayBadge &&
-    c.operationalPhase === op.operationalPhase &&
-    c.displayTone === op.displayTone
-  ) {
+  if (c) {
     return {
       statusLabel,
       displayBadge: c.displayBadge,
@@ -95,8 +88,7 @@ export function customerBookingDetailOperationalPhase(booking: DashboardBooking)
 
 /**
  * Data attributes for the customer booking detail card header (`/dashboard/bookings/[id]`).
- * Reflects `raw.canonicalLifecycle` when present; on parity mismatch, exposes canonical fields only
- * as diagnostics — visible label/tone/badge stay {@link customerBookingCardOperationalDisplay}.
+ * Reflects `raw.canonicalLifecycle` when present. Parity mismatch remains diagnostic only;\n * visible lifecycle fields continue to use the authoritative canonical surface.
  */
 export function customerBookingDetailHeaderDataAttributes(booking: DashboardBooking): Record<string, string> {
   const card = customerBookingCardOperationalDisplay(booking);

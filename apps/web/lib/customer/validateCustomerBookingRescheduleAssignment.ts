@@ -52,8 +52,17 @@ export async function validateCustomerBookingRescheduleAssignment(
     typeof row.cleaner_id === "string" && row.cleaner_id.trim() ? row.cleaner_id.trim() : null;
   if (!cleanerId) return { ok: true };
 
-  const durationMinutes =
-    resolveSchedulingDurationMinutes(row, "validateCustomerBookingRescheduleAssignment") ?? 120;
+  const durationMinutes = resolveSchedulingDurationMinutes(
+    row,
+    "validateCustomerBookingRescheduleAssignment",
+  );
+  if (durationMinutes == null) {
+    return {
+      ok: false,
+      status: 409,
+      error: "We could not verify this booking\'s duration safely. Please contact support to reschedule.",
+    };
+  }
   const slotStart = hmToMinutes(nextTime);
   const slotEnd = slotStart == null ? null : slotStart + durationMinutes;
 

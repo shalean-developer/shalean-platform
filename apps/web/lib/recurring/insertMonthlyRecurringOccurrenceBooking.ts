@@ -1,4 +1,5 @@
 import "server-only";
+import { bookingCreationLifecyclePatch } from "@/lib/booking/bookingCreationProfiles";
 
 import crypto from "crypto";
 
@@ -126,11 +127,9 @@ export async function insertMonthlyRecurringOccurrenceBooking(
     customer_phone: params.customerPhone,
     ...customerOwnershipPatch,
     amount_paid_cents: 0,
-    currency: "ZAR",
+    ...bookingCreationLifecyclePatch("recurring_monthly"),
     booking_snapshot: snapshot,
     ...lockedDurationMinutesPatch(locked),
-    status: "pending" as const,
-    dispatch_status: "searching" as const,
     surge_multiplier: 1,
     surge_reason: null,
     service: locked.service != null ? getServiceLabel(locked.service) : null,
@@ -149,10 +148,6 @@ export async function insertMonthlyRecurringOccurrenceBooking(
     total_price: null,
     price_snapshot: provisionalPriceSnapshotJson(locked),
     recurring_id: params.recurring.id,
-    is_recurring_generated: true,
-    is_monthly_billing_booking: true,
-    billing_type: "recurring_invoice" as const,
-    payment_status: "pending_monthly" as const,
     recurring_retry_count: 0,
     ...(preferredCleanerIds.length > 1 ? { cleaner_count: preferredCleanerIds.length } : {}),
     ...cleanerPatch,

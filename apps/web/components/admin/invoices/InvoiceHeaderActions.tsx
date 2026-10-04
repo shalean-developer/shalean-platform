@@ -47,6 +47,7 @@ export type InvoiceHeaderActionsProps = {
   amountPaidCents: number;
   balanceCents: number;
   bookingCountToSettle: number;
+  canRevertManualPaid?: boolean;
   /** Payment due date YYYY-MM-DD */
   dueDate?: string | null;
   /** Document/billing date YYYY-MM-DD (defaults to 1st of month when unset) */
@@ -110,6 +111,11 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [closeErr, setCloseErr] = useState<string | null>(null);
 
+  const [revertOpen, setRevertOpen] = useState(false);
+  const [revertConfirmText, setRevertConfirmText] = useState("");
+  const [revertReason, setRevertReason] = useState("");
+  const [revertErr, setRevertErr] = useState<string | null>(null);
+
   const [resendOpen, setResendOpen] = useState(false);
   const [resendChannel, setResendChannel] = useState<"email" | "whatsapp">("email");
   const [resendErr, setResendErr] = useState<string | null>(null);
@@ -141,6 +147,7 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
   const canSyncPayment =
     !props.isClosed && ["sent", "partially_paid", "overdue"].includes(st) && Boolean(props.paystackReference?.trim());
   const canRefund = !props.isClosed && st === "paid";
+  const canRevertManualPaid = Boolean(props.canRevertManualPaid) && props.isClosed && st === "paid";
   const canHardClose = !props.isClosed && ["draft", "sent", "partially_paid", "overdue", "paid"].includes(st);
   const canSendInvoice = !props.isClosed && st === "draft";
 
@@ -381,6 +388,60 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
     }
   }
 
+  async function revertToDraftSubmit() {
+    if (actionLock.current) return;
+    actionLock.current = true;
+    setRevertErr(null);
+    if (revertConfirmText.trim() !== "REVERT") {
+      setRevertErr("typed_confirm_invalid — type REVERT exactly (all caps).");
+      actionLock.current = false;
+      return;
+    }
+    if (!revertReason.trim()) {
+      setRevertErr("Reason is required.");
+      actionLock.current = false;
+      return;
+    }
+    setBusy("revert_manual_paid");
+    const idempotencyKey = crypto.randomUUID();
+    try {
+      const res = await authFetch(
+        props.getAccessToken,
+        `/api/admin/invoices/${encodeURIComponent(props.invoiceId)}/revert-to-draft`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            typedConfirm: revertConfirmText.trim(),
+            reason: revertReason.trim(),
+          }),
+          headers: { "Idempotency-Key": idempotencyKey },
+        },
+      );
+      if (!res.ok) {
+        setRevertErr(await readJsonError(res));
+        return;
+      }
+      const data = (await res.json().catch(() => ({}))) as {
+        restoredBookingCount?: number;
+        zohoReconciliationRequired?: boolean;
+      };
+      setToast({
+        text: data.zohoReconciliationRequired
+          ? `Invoice restored to draft and ${data.restoredBookingCount ?? 0} booking(s) reset. Zoho reconciliation is still required.`
+          : `Invoice restored to draft and ${data.restoredBookingCount ?? 0} booking(s) reset.`,
+      });
+      setRevertOpen(false);
+      setRevertConfirmText("");
+      setRevertReason("");
+      await props.onDone();
+    } catch (e) {
+      setRevertErr(e instanceof Error ? e.message : "Could not revert invoice.");
+    } finally {
+      setBusy(null);
+      actionLock.current = false;
+    }
+  }
+
   async function hardCloseSubmit() {
     if (actionLock.current) return;
     actionLock.current = true;
@@ -614,6 +675,23 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
       >
         Mark paid
       </Button>
+      {canRevertManualPaid ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full justify-center border-amber-300 text-amber-800 hover:bg-amber-50 sm:w-auto"
+          disabled={busy !== null}
+          onClick={() => {
+            setRevertErr(null);
+            setRevertConfirmText("");
+            setRevertReason("");
+            setRevertOpen(true);
+          }}
+        >
+          Revert to draft
+        </Button>
+      ) : null}
       {canRefund ? (
         <Button
           type="button"
@@ -922,6 +1000,66 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
             </Button>
             <Button type="button" variant="destructive" disabled={busy !== null} onClick={() => void markPaidSubmit()}>
               Confirm mark paid
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={revertOpen}
+        onOpenChange={(open) => {
+          if (busy) return;
+          setRevertOpen(open);
+          if (!open) setRevertErr(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Revert manual payment to draft?</DialogTitle>
+            <DialogDescription>
+              Use this only when an invoice was marked paid by mistake. The server blocks this action if a real
+              Paystack payment or a paid cleaner payout exists.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+            <p>
+              The invoice will return to draft, linked bookings will return to monthly-pending payment state, and
+              payout eligibility created by the mistaken manual settlement will be removed.
+            </p>
+            <p className="text-xs opacity-90">
+              Zoho invoice linkage is preserved. If the payment was also posted in Zoho Books, accounting
+              reconciliation is still required.
+            </p>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="revert-confirm">Type REVERT to confirm</Label>
+            <Input
+              id="revert-confirm"
+              autoComplete="off"
+              placeholder="REVERT"
+              value={revertConfirmText}
+              disabled={busy !== null}
+              onChange={(e) => setRevertConfirmText(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="revert-reason">Reason</Label>
+            <Textarea
+              id="revert-reason"
+              rows={2}
+              placeholder="e.g. Marked paid by mistake"
+              value={revertReason}
+              disabled={busy !== null}
+              onChange={(e) => setRevertReason(e.target.value)}
+            />
+          </div>
+          {revertErr ? <p className="text-sm text-red-600 dark:text-red-400">{revertErr}</p> : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setRevertOpen(false)} disabled={busy !== null}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" disabled={busy !== null} onClick={() => void revertToDraftSubmit()}>
+              {busy === "revert_manual_paid" ? "Reverting…" : "Confirm revert"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -9,7 +9,7 @@ const CORE_SERVICE_SLUGS = [
 ] as const satisfies readonly CapeTownSeoServiceSlug[];
 
 const CORE_LABELS: Record<(typeof CORE_SERVICE_SLUGS)[number], string> = {
-  "standard-cleaning-cape-town": "Standard cleaning",
+  "standard-cleaning-cape-town": "Regular cleaning",
   "deep-cleaning-cape-town": "Deep cleaning",
   "move-out-cleaning-cape-town": "Move-out cleaning",
 };

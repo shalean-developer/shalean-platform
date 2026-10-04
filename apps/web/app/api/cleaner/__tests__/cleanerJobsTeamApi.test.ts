@@ -303,15 +303,69 @@ class IssueReportsEmptyQuery {
   }
 }
 
-class MockSupabase {
-  tables: { cleaners: Row[]; team_members: Row[]; bookings: Row[]; booking_cleaners: Row[] };
+class TeamJobMemberPayoutsQuery {
+  private cleanerIdEq: string | null = null;
+  private bookingIdsIn: string[] | null = null;
 
-  constructor(seed: { cleaners?: Row[]; team_members?: Row[]; bookings?: Row[]; booking_cleaners?: Row[] }) {
+  constructor(private db: MockSupabase) {}
+
+  select() {
+    return this;
+  }
+
+  eq(col: string, value: unknown) {
+    if (col === "cleaner_id") this.cleanerIdEq = String(value ?? "");
+    return this;
+  }
+
+  in(col: string, values: unknown[]) {
+    if (col === "booking_id") {
+      this.bookingIdsIn = values.map((v) => String(v ?? "").trim()).filter(Boolean);
+    }
+    return this;
+  }
+
+  private rows(): Row[] {
+    let rows = [...(this.db.tables.team_job_member_payouts ?? [])];
+    if (this.cleanerIdEq) {
+      rows = rows.filter((r) => String(r.cleaner_id ?? "") === this.cleanerIdEq);
+    }
+    if (this.bookingIdsIn?.length) {
+      const allowed = new Set(this.bookingIdsIn);
+      rows = rows.filter((r) => allowed.has(String(r.booking_id ?? "")));
+    }
+    return rows;
+  }
+
+  then(onfulfilled?: (value: { data: Row[]; error: null }) => void): Promise<{ data: Row[]; error: null }> {
+    const payload = { data: this.rows().map((r) => ({ ...r })), error: null as null };
+    if (onfulfilled) onfulfilled(payload);
+    return Promise.resolve(payload);
+  }
+}
+
+class MockSupabase {
+  tables: {
+    cleaners: Row[];
+    team_members: Row[];
+    bookings: Row[];
+    booking_cleaners: Row[];
+    team_job_member_payouts: Row[];
+  };
+
+  constructor(seed: {
+    cleaners?: Row[];
+    team_members?: Row[];
+    bookings?: Row[];
+    booking_cleaners?: Row[];
+    team_job_member_payouts?: Row[];
+  }) {
     this.tables = {
       cleaners: seed.cleaners ?? [],
       team_members: seed.team_members ?? [],
       bookings: seed.bookings ?? [],
       booking_cleaners: seed.booking_cleaners ?? [],
+      team_job_member_payouts: seed.team_job_member_payouts ?? [],
     };
   }
 
@@ -322,6 +376,7 @@ class MockSupabase {
     if (table === "booking_cleaners") return new BookingCleanersQuery(this);
     if (table === "booking_line_items") return new BookingLineItemsEmptyQuery() as unknown as CleanersQuery;
     if (table === "cleaner_job_issue_reports") return new IssueReportsEmptyQuery() as unknown as CleanersQuery;
+    if (table === "team_job_member_payouts") return new TeamJobMemberPayoutsQuery(this) as unknown as CleanersQuery;
     throw new Error(`unexpected table ${table}`);
   }
 }
@@ -391,6 +446,72 @@ describe("GET /api/cleaner/jobs — team visibility", { timeout: 60_000 }, () =>
     expect(ids).toEqual(["b-own", "b-team"]);
     const teamRow = json.jobs.find((j) => j.id === "b-team");
     expect(teamRow?.teamMemberCount).toBe(3);
+  });
+
+  it("uses authenticated cleaner's team-member payout on team job cards", async () => {
+    mockState.admin = new MockSupabase({
+      cleaners: [{ id: "cleaner-1" }],
+      team_members: [
+        { cleaner_id: "cleaner-1", team_id: "team-a" },
+        { cleaner_id: "cleaner-2", team_id: "team-a" },
+      ],
+      team_job_member_payouts: [
+        { booking_id: "b-team-pay", cleaner_id: "cleaner-1", payout_cents: 27_000, status: "pending" },
+        { booking_id: "b-team-pay", cleaner_id: "cleaner-2", payout_cents: 25_000, status: "pending" },
+      ],
+      bookings: [
+        {
+          id: "b-team-pay",
+          cleaner_id: null,
+          payout_owner_cleaner_id: "cleaner-1",
+          team_id: "team-a",
+          is_team_job: true,
+          status: "assigned",
+          cleaner_response_status: "pending",
+          service: "Deep",
+          date: "2099-05-02",
+          time: "08:00",
+          display_earnings_cents: 25_000,
+          cleaner_earnings_total_cents: 52_000,
+          earnings_summary: {
+            model_version: "v3",
+            per_cleaner_earnings: [
+              {
+                cleaner_id: "cleaner-1",
+                role: "lead",
+                base_earning_cents: 27_000,
+                bonus_cents: 0,
+                deduction_cents: 0,
+                total_cents: 27_000,
+              },
+              {
+                cleaner_id: "cleaner-2",
+                role: "member",
+                base_earning_cents: 25_000,
+                bonus_cents: 0,
+                deduction_cents: 0,
+                total_cents: 25_000,
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    const { GET } = await import("@/app/api/cleaner/jobs/route");
+    const res = await GET(new Request("http://localhost/api/cleaner/jobs?view=card"));
+    expect(res.status).toBe(200);
+
+    const json = (await res.json()) as {
+      jobs: Array<{
+        id: string;
+        displayEarningsCents?: number | null;
+        earnings_cents?: number | null;
+      }>;
+    };
+    expect(json.jobs).toHaveLength(1);
+    expect(json.jobs[0]?.displayEarningsCents).toBe(27_000);
+    expect(json.jobs[0]?.earnings_cents).toBe(27_000);
   });
 
   it("lite=1 keeps full visibility but omits line items and team roster payload", async () => {

@@ -10,6 +10,10 @@ import {
 } from "@/lib/booking-v2/customerBookingTimeSlots";
 import type { BookingV2SchedulingConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import type { BookingFulfillmentMode } from "@/lib/booking/bookingFulfillmentMode";
+import {
+  bookingV2ScheduleAvailabilityCacheKey,
+  normalizedBookingDurationMinutes,
+} from "@/lib/booking-v2/bookingV2ScheduleVerification";
 
 type SlotRow = {
   time: string;
@@ -17,6 +21,15 @@ type SlotRow = {
   availableInstant?: boolean;
   fulfillmentMode?: BookingFulfillmentMode;
 };
+
+type VerifiedSlotSnapshot = {
+  key: string;
+  slots: SlotRow[];
+  verifiedAt: number;
+};
+
+const SLOT_AVAILABILITY_CACHE_MS = 20_000;
+const slotAvailabilityCache = new Map<string, VerifiedSlotSnapshot>();
 
 function buildV2AvailabilityMap(
   slots: SlotRow[],
@@ -89,8 +102,9 @@ export function useBookingV2ScheduleAvailability(args: {
   dayFulfillmentMode: BookingFulfillmentMode | null;
   loading: boolean;
   fetchError: boolean;
+  slotsVerified: boolean;
 } {
-  const [slots, setSlots] = useState<SlotRow[] | null>(null);
+  const [snapshot, setSnapshot] = useState<VerifiedSlotSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState(false);
 
@@ -99,20 +113,49 @@ export function useBookingV2ScheduleAvailability(args: {
     [args.serviceDetails],
   );
 
-  const canFetch = Boolean(args.dateYmd && args.locationId && args.serviceSlug);
+  const normalizedDurationMinutes = normalizedBookingDurationMinutes(args.durationMinutes);
+  const normalizedExtrasSignature = [...new Set(
+    args.selectedExtras.map((extra) => extra.trim()).filter(Boolean),
+  )]
+    .sort()
+    .join("\u001f");
+  const normalizedExtras = useMemo(
+    () => (normalizedExtrasSignature ? normalizedExtrasSignature.split("\u001f") : []),
+    [normalizedExtrasSignature],
+  );
+  const requestKey = bookingV2ScheduleAvailabilityCacheKey({
+    dateYmd: args.dateYmd,
+    locationId: args.locationId,
+    serviceSlug: args.serviceSlug,
+    bedrooms,
+    bathrooms,
+    extraRooms,
+    extras: normalizedExtras,
+    durationMinutes: normalizedDurationMinutes,
+  });
+  const canFetch = requestKey != null;
 
   useEffect(() => {
-    if (!canFetch || !args.dateYmd || !args.locationId) {
-      setSlots(null);
-      setLoading(false);
-      setFetchError(false);
+    if (!canFetch || !requestKey || !args.dateYmd || !args.locationId) {
       return;
     }
 
     const ac = new AbortController();
-    setLoading(true);
-    setFetchError(false);
-    setSlots(null);
+    const cached = slotAvailabilityCache.get(requestKey);
+    const hasFreshCache =
+      Boolean(cached) && Date.now() - (cached?.verifiedAt ?? 0) <= SLOT_AVAILABILITY_CACHE_MS;
+    queueMicrotask(() => {
+      if (ac.signal.aborted) return;
+      if (hasFreshCache && cached) {
+        setSnapshot(cached);
+      } else {
+        setSnapshot((current) => (current?.key === requestKey ? current : null));
+      }
+      // A verified cached result remains immediately interactive while the
+      // background refresh keeps server-authoritative availability current.
+      setLoading(!hasFreshCache);
+      setFetchError(false);
+    });
 
     const url = scheduleAvailabilityUrl({
       dateYmd: args.dateYmd,
@@ -121,8 +164,8 @@ export function useBookingV2ScheduleAvailability(args: {
       bedrooms,
       bathrooms,
       extraRooms,
-      extras: args.selectedExtras,
-      durationMinutes: args.durationMinutes,
+      extras: normalizedExtras,
+      durationMinutes: normalizedDurationMinutes,
     });
 
     void (async () => {
@@ -131,15 +174,19 @@ export function useBookingV2ScheduleAvailability(args: {
         const json = (await res.json()) as { slots?: SlotRow[] };
         if (ac.signal.aborted) return;
         if (!res.ok) {
-          setSlots([]);
           setFetchError(true);
           return;
         }
-        setSlots(json.slots ?? []);
+        const verifiedSnapshot = {
+          key: requestKey,
+          slots: json.slots ?? [],
+          verifiedAt: Date.now(),
+        } satisfies VerifiedSlotSnapshot;
+        slotAvailabilityCache.set(requestKey, verifiedSnapshot);
+        setSnapshot(verifiedSnapshot);
         setFetchError(false);
       } catch {
         if (ac.signal.aborted) return;
-        setSlots([]);
         setFetchError(true);
       } finally {
         if (!ac.signal.aborted) setLoading(false);
@@ -149,29 +196,33 @@ export function useBookingV2ScheduleAvailability(args: {
     return () => ac.abort();
   }, [
     canFetch,
+    requestKey,
     args.dateYmd,
     args.locationId,
     args.serviceSlug,
     bedrooms,
     bathrooms,
     extraRooms,
-    args.selectedExtras.join(","),
-    args.durationMinutes,
+    normalizedExtras,
+    normalizedDurationMinutes,
   ]);
+
+  const slots = snapshot?.key === requestKey ? snapshot.slots : null;
+  const slotsVerified = Boolean(requestKey && snapshot?.key === requestKey);
 
   const availability = useMemo(() => {
     if (!args.dateYmd) return undefined;
     if (!args.locationId) return checkoutScheduleSlotsAllUnavailable();
     // Keep prior map while refreshing so Step 2 does not clear the selected time mid-fetch.
-    if (loading && slots === null) return undefined;
+    if (!slotsVerified && slots === null) return undefined;
     if (slots === null) return checkoutScheduleSlotsAllUnavailable();
     return buildV2AvailabilityMap(slots, args.dateYmd, args.scheduling);
-  }, [args.dateYmd, args.locationId, args.scheduling, loading, slots]);
+  }, [args.dateYmd, args.locationId, args.scheduling, slots, slotsVerified]);
 
   const fulfillmentBySlot = useMemo(() => {
-    if (!args.dateYmd || !args.locationId || loading || slots === null) return undefined;
+    if (!args.dateYmd || !args.locationId || !slotsVerified || slots === null) return undefined;
     return buildFulfillmentMap(slots, args.dateYmd, args.scheduling);
-  }, [args.dateYmd, args.locationId, args.scheduling, loading, slots]);
+  }, [args.dateYmd, args.locationId, args.scheduling, slots, slotsVerified]);
 
   const dayFulfillmentMode = useMemo((): BookingFulfillmentMode | null => {
     if (!fulfillmentBySlot) return null;
@@ -187,7 +238,8 @@ export function useBookingV2ScheduleAvailability(args: {
     availability,
     fulfillmentBySlot,
     dayFulfillmentMode,
-    loading: canFetch && loading,
-    fetchError,
+    loading: canFetch && loading && !slotsVerified,
+    fetchError: canFetch && fetchError,
+    slotsVerified,
   };
 }

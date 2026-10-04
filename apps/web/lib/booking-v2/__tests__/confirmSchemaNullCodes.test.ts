@@ -53,3 +53,19 @@ describe("bookingV2ConfirmSchema null optional codes", () => {
     }
   });
 });
+
+describe("bookingV2ConfirmSchema schedule validation", () => {
+  it("returns a customer-friendly message when time is missing", () => {
+    const parsed = bookingV2ConfirmSchema.safeParse({
+      ...base,
+      time: "",
+    });
+
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues[0]?.message).toBe(
+        "Return to Schedule and select a time before paying.",
+      );
+    }
+  });
+});

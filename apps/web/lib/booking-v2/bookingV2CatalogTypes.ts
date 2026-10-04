@@ -76,7 +76,14 @@ export type LiveServiceConfig = {
   pricePerBathroom: number;
   pricePerExtraRoom: number;
   pricePerExtraCleaner: number;
+  /** Service-specific customer fee from pricing_services; global fee config is the fallback. */
+  serviceFeeZar?: number;
   estimatedDurationHours: number;
+  /** Authoritative duration coefficients from pricing_services (hours). */
+  durationBaseHours?: number;
+  durationPerBedroomHours?: number;
+  durationPerBathroomHours?: number;
+  durationPerExtraRoomHours?: number;
   /** Admin-configured duration clamp from `pricing_services`. */
   minDurationHours: number;
   maxDurationHours: number;
@@ -98,4 +105,6 @@ export type BookingV2CatalogPayload = {
   feesConfig: import("@/lib/booking-v2/types").BookingV2FeesConfig;
   scheduling: BookingV2SchedulingConfig;
   activeServiceSlugs: ServiceSlug[];
+  /** Server-only signal: active pricing/extras rows were read successfully. */
+  extrasCatalogAuthoritative: boolean;
 };

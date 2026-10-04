@@ -20,8 +20,9 @@ describe("legacyMarketingRedirectMatrix", () => {
     expect(resolveLegacyMarketingExactRedirect("/cleaning-services-cape-town")?.destination).toBe(
       "/services",
     );
-    expect(resolveLegacyMarketingExactRedirect("/cleaning-prices-cape-town")?.destination).toBe(
-      "/blog/how-much-does-cleaning-cost-cape-town-2026",
+    expect(resolveLegacyMarketingExactRedirect("/cleaning-prices-cape-town")).toBeNull();
+    expect(resolveLegacyMarketingExactRedirect("/pricing")?.destination).toBe(
+      "/cleaning-prices-cape-town",
     );
   });
 

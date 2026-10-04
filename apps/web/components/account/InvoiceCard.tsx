@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Download, ExternalLink, FileText } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { formatZarFromCents } from "@/lib/dashboard/formatZar";
 import { customerMonthlyInvoiceStatusLabel } from "@/lib/dashboard/monthlyInvoiceUi";
 import type { CustomerMonthlyInvoiceRow } from "@/lib/dashboard/monthlyInvoiceTypes";
@@ -20,25 +22,9 @@ function balanceFor(inv: CustomerMonthlyInvoiceRow): number {
 
 function StatusBadge({ inv }: { inv: CustomerMonthlyInvoiceRow }) {
   const status = inv.status?.toLowerCase();
-  if (status === "paid") {
-    return (
-      <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
-        Paid
-      </span>
-    );
-  }
-  if (inv.is_overdue && status !== "paid") {
-    return (
-      <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">
-        Overdue
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
-      {customerMonthlyInvoiceStatusLabel(inv.status)}
-    </span>
-  );
+  if (status === "paid") return <Badge variant="success">Paid</Badge>;
+  if (inv.is_overdue && status !== "paid") return <Badge variant="destructive">Overdue</Badge>;
+  return <Badge variant="warning">{customerMonthlyInvoiceStatusLabel(inv.status)}</Badge>;
 }
 
 interface InvoiceCardProps {
@@ -55,82 +41,80 @@ export function InvoiceCard({ invoice: inv }: InvoiceCardProps) {
   const canPay = balance > 0 && inv.status !== "paid" && Boolean(payHref);
   const pdfHref = `/api/account/invoices/monthly/${inv.id}/pdf`;
   const hasZoho = Boolean(inv.zoho_invoice_id?.trim());
+  const isPaid = inv.status === "paid";
+  const isOverdue = inv.is_overdue && !isPaid;
 
   return (
-    <div
-      className={cn(
-        "rounded-2xl border bg-white p-5 shadow-sm transition",
-        inv.is_overdue && inv.status !== "paid" ? "border-red-200" : "border-gray-100",
-      )}
-    >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-4">
-          <div
-            className={cn(
-              "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
-              inv.status === "paid" ? "bg-green-50" : inv.is_overdue ? "bg-red-50" : "bg-amber-50",
-            )}
-          >
-            <FileText
+    <Card className={cn("transition-colors", isOverdue && "border-destructive/30")}>
+      <CardContent className="p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <div
               className={cn(
-                "h-5 w-5",
-                inv.status === "paid" ? "text-green-600" : inv.is_overdue ? "text-red-600" : "text-amber-600",
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
+                isPaid
+                  ? "bg-success/10 text-success"
+                  : isOverdue
+                    ? "bg-destructive/10 text-destructive"
+                    : "bg-warning/15 text-warning-foreground",
               )}
-              strokeWidth={1.75}
-            />
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="font-semibold text-gray-900">{monthLabel(inv.month)}</p>
-              <StatusBadge inv={inv} />
+            >
+              <FileText className="h-5 w-5" strokeWidth={1.75} aria-hidden />
             </div>
-            <div className="mt-1 flex flex-wrap gap-4 text-sm text-gray-500">
-              <span>
-                Total:{" "}
-                <span className="font-medium text-gray-900">{formatZarFromCents(inv.total_amount_cents)}</span>
-              </span>
-              <span>
-                Paid:{" "}
-                <span className="font-medium text-gray-900">{formatZarFromCents(inv.amount_paid_cents)}</span>
-              </span>
-              {balance > 0 ? (
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="break-words font-semibold text-foreground">{monthLabel(inv.month)}</p>
+                <StatusBadge inv={inv} />
+              </div>
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                 <span>
-                  Balance:{" "}
-                  <span className={cn("font-medium", inv.is_overdue ? "text-red-600" : "text-gray-900")}>
-                    {formatZarFromCents(balance)}
-                  </span>
+                  Total: <span className="font-medium text-foreground">{formatZarFromCents(inv.total_amount_cents)}</span>
                 </span>
-              ) : null}
+                <span>
+                  Paid: <span className="font-medium text-foreground">{formatZarFromCents(inv.amount_paid_cents)}</span>
+                </span>
+                {balance > 0 ? (
+                  <span>
+                    Balance:{" "}
+                    <span className={cn("font-medium", isOverdue ? "text-destructive" : "text-foreground")}>
+                      {formatZarFromCents(balance)}
+                    </span>
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {inv.total_bookings} visit{inv.total_bookings !== 1 ? "s" : ""}
+              </p>
             </div>
-            <p className="mt-1 text-xs text-gray-400">{inv.total_bookings} visit{inv.total_bookings !== 1 ? "s" : ""}</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            {canPay ? (
+              <Button asChild size="sm">
+                <a href={payHref} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                  Pay now
+                </a>
+              </Button>
+            ) : null}
+            {hasZoho ? (
+              <Button asChild variant="outline" size="sm">
+                <a href={pdfHref} target="_blank" rel="noopener noreferrer">
+                  <Download className="mr-1.5 h-4 w-4" aria-hidden />
+                  PDF
+                </a>
+              </Button>
+            ) : (
+              <span className="inline-flex items-center rounded-xl border border-dashed border-border px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                Invoice syncing
+              </span>
+            )}
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/account/invoices/${inv.id}`}>View</Link>
+            </Button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {canPay ? (
-            <Button asChild size="sm" className="rounded-xl bg-blue-600 text-white hover:bg-blue-700">
-              <a href={payHref} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                Pay now
-              </a>
-            </Button>
-          ) : null}
-          {hasZoho ? (
-            <Button asChild variant="outline" size="sm" className="rounded-xl">
-              <a href={pdfHref} target="_blank" rel="noopener noreferrer">
-                <Download className="mr-1.5 h-4 w-4" />
-                PDF
-              </a>
-            </Button>
-          ) : (
-            <span className="inline-flex items-center rounded-xl border border-dashed border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500">
-              Invoice syncing
-            </span>
-          )}
-          <Button asChild variant="outline" size="sm" className="rounded-xl">
-            <Link href={`/account/invoices/${inv.id}`}>View</Link>
-          </Button>
-        </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

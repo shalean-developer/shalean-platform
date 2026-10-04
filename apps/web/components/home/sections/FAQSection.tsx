@@ -11,7 +11,7 @@ const faqs = [
   {
     id: "duration",
     q: "How long does cleaning take?",
-    a: "Most standard cleans for a two-bedroom home take two to three hours. Deep and move cleans run longer because we tackle build-up, fixtures, and hard-to-reach areas. Your quote shows an estimated duration before you pay.",
+    a: "Most regular cleans for a two-bedroom home take two to three hours. Deep and move cleans run longer because we tackle build-up, fixtures, and hard-to-reach areas. Your quote shows an estimated duration before you pay.",
   },
   {
     id: "availability",
@@ -26,12 +26,12 @@ const faqs = [
   {
     id: "included",
     q: "What is included?",
-    a: "Standard visits cover dusting reachable surfaces, vacuuming and mopping floors, sanitising bathrooms, and refreshing kitchens. Deep, move, and Airbnb packages extend that scope — add-ons like ovens or interior windows can be toggled before checkout.",
+    a: "Regular visits cover dusting reachable surfaces, vacuuming and mopping floors, sanitising bathrooms, and refreshing kitchens. Deep, move, and Airbnb packages extend that scope — add-ons like ovens or interior windows can be toggled before checkout.",
   },
   {
     id: "supplies",
     q: "Do cleaners bring supplies?",
-    a: "Yes. Teams arrive with professional-grade products and equipment. If you need hypoallergenic options or want us to use your supplies, add a short note when you book.",
+    a: "It depends on the service. Deep and Move In / Out Cleaning include Shalean-provided cleaning supplies. For Regular home cleaning and Airbnb Cleaning, customers provide the usual products and equipment unless a separate supplies option or charge is selected or agreed. Office and specialist services follow the booking scope.",
   },
 ] as const;
 

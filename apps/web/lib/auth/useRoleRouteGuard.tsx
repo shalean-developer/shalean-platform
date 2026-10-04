@@ -27,6 +27,12 @@ type Options = {
    * widening access for accounts that are not linked to a cleaner profile.
    */
   allowLinkedCleaner?: boolean;
+  /**
+   * Development-only visual preview escape hatch. This is ignored in production
+   * and only activates for localhost/127.0.0.1. Keep disabled unless a shell
+   * explicitly needs local design review without an authenticated session.
+   */
+  allowLocalhostDevBypass?: boolean;
 };
 
 type CleanerMeResponse = { cleaner?: { id?: string | null } | null };
@@ -37,6 +43,11 @@ export function canUseLinkedCleanerAccess(
   linkedCleaner: boolean,
 ): boolean {
   return requiredRole === "cleaner" && allowLinkedCleaner && linkedCleaner;
+}
+
+function canUseLocalhostDevBypass(allowed: boolean): boolean {
+  if (!allowed || process.env.NODE_ENV === "production" || typeof window === "undefined") return false;
+  return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 }
 
 async function hasLinkedCleaner(token: string): Promise<boolean> {
@@ -57,7 +68,12 @@ async function hasLinkedCleaner(token: string): Promise<boolean> {
  * Lightweight role guard — no full-page "Checking access" spinner.
  * Redirects unauthenticated users to `/login`; wrong role to the correct dashboard.
  */
-export function useRoleRouteGuard({ requiredRole, trustCache = true, allowLinkedCleaner = false }: Options): {
+export function useRoleRouteGuard({
+  requiredRole,
+  trustCache = true,
+  allowLinkedCleaner = false,
+  allowLocalhostDevBypass = false,
+}: Options): {
   state: RoleRouteGuardState;
   retry: () => void;
 } {
@@ -68,12 +84,21 @@ export function useRoleRouteGuard({ requiredRole, trustCache = true, allowLinked
   const runId = useRef(0);
 
   useLayoutEffect(() => {
+    if (canUseLocalhostDevBypass(allowLocalhostDevBypass)) {
+      setState({ status: "ready" });
+      return;
+    }
     if (trustCache && readCachedUserRole() === requiredRole) {
       setState({ status: "ready" });
     }
-  }, [requiredRole, trustCache]);
+  }, [requiredRole, trustCache, allowLocalhostDevBypass]);
 
   const verify = useCallback(async () => {
+    if (canUseLocalhostDevBypass(allowLocalhostDevBypass)) {
+      setState({ status: "ready" });
+      return;
+    }
+
     const id = ++runId.current;
     try {
       const sb = getSupabaseBrowser();
@@ -138,17 +163,19 @@ export function useRoleRouteGuard({ requiredRole, trustCache = true, allowLinked
     } catch {
       if (runId.current === id) setState({ status: "timeout" });
     }
-  }, [requiredRole, trustCache, allowLinkedCleaner]);
+  }, [requiredRole, trustCache, allowLinkedCleaner, allowLocalhostDevBypass]);
 
   useEffect(() => {
     void verify();
+    if (canUseLocalhostDevBypass(allowLocalhostDevBypass)) return;
     const sb = getSupabaseBrowser();
     if (!sb) return;
     const { data: sub } = sb.auth.onAuthStateChange(() => void verify());
     return () => sub.subscription.unsubscribe();
-  }, [verify]);
+  }, [verify, allowLocalhostDevBypass]);
 
   useEffect(() => {
+    if (canUseLocalhostDevBypass(allowLocalhostDevBypass)) return;
     if (state.status === "unauthenticated") {
       const next = encodeURIComponent(pathname);
       scheduleAppRouterReplace(router, `/login?redirect=${next}`);
@@ -161,7 +188,7 @@ export function useRoleRouteGuard({ requiredRole, trustCache = true, allowLinked
     if (state.status === "wrong_role") {
       scheduleAppRouterReplace(router, state.actualRoute);
     }
-  }, [state, pathname, router]);
+  }, [state, pathname, router, allowLocalhostDevBypass]);
 
   return { state, retry: () => void verify() };
 }

@@ -1,0 +1,435 @@
+import { expect, test, type Page } from "@playwright/test";
+
+const STORAGE_KEY = "shalean:booking-v2:v1";
+const LOCATION_ID = "11111111-1111-4111-8111-111111111111";
+const CITY_ID = "22222222-2222-4222-8222-222222222222";
+const RETAINED_QUERY = "promo=P05G10&source=rd-p05g&ref=FRIEND123";
+
+const SERVICES = [
+  { slug: "regular-cleaning", label: "Regular Cleaning", cleanerMode: "individual_cleaners" },
+  { slug: "deep-cleaning", label: "Deep Cleaning", cleanerMode: "team" },
+  { slug: "moving-cleaning", label: "Moving Cleaning", cleanerMode: "team" },
+  { slug: "office-cleaning", label: "Office Cleaning", cleanerMode: "individual_cleaners" },
+  { slug: "carpet-cleaning", label: "Carpet Cleaning", cleanerMode: "individual_cleaners" },
+  { slug: "airbnb-cleaning", label: "Airbnb Cleaning", cleanerMode: "individual_cleaners" },
+] as const;
+
+function liveServiceFixture(slug: string) {
+  return {
+    slug,
+    label: "Test Cleaning",
+    shortLabel: "Test",
+    description: "Smoke fixture",
+    cleanerMode: slug === "deep-cleaning" || slug === "moving-cleaning" ? "team" : "individual_cleaners",
+    showEquipmentQuestion: slug === "regular-cleaning",
+    allowsExtraCleaner: true,
+    step1Questions: [
+      { key: "propertyType", label: "Property type", type: "select", required: true, options: [{ value: "house", label: "House" }] },
+      { key: "bedrooms", label: "Bedrooms", type: "number", required: true },
+      { key: "bathrooms", label: "Bathrooms", type: "number", required: true },
+    ],
+    basePrice: 500,
+    pricePerBedroom: 0,
+    pricePerBathroom: 0,
+    pricePerExtraRoom: 0,
+    pricePerExtraCleaner: 0,
+    serviceFeeZar: 0,
+    estimatedDurationHours: 3,
+    durationBaseHours: 3,
+    durationPerBedroomHours: 0,
+    durationPerBathroomHours: 0,
+    durationPerExtraRoomHours: 0,
+    minDurationHours: 1,
+    maxDurationHours: 12,
+    extras: [],
+  };
+}
+
+function authoritativeQuoteFixture(signature: string) {
+  return {
+    pricingSummary: {
+      base_service_price: 500,
+      property_factors_total: 0,
+      bedrooms_price: 0,
+      bathrooms_price: 0,
+      extra_rooms_price: 0,
+      property_size_price: 0,
+      selected_extras: [],
+      selected_extras_total: 0,
+      supplies_equipment_fee: 0,
+      equipment_logistics_fee: 0,
+      equipment_distance_km: 0,
+      equipment_base_fee: 0,
+      equipment_distance_charge: 0,
+      manual_quote_required: false,
+      extra_cleaner_cost: 0,
+      cleaning_service_subtotal: 500,
+      subtotal_before_service_fee: 500,
+      service_fee: 0,
+      recurring_discount: 0,
+      estimated_total: 500,
+      estimated_duration_minutes: 180,
+      team_scaled_duration_minutes: 180,
+      quote_signature: signature,
+      calculation_version: 1,
+      lineItems: [{ label: "Cleaning service", amountZar: 500 }],
+      basePrice: 500,
+      extrasTotal: 0,
+      cleanerSurcharge: 0,
+      total: 500,
+    },
+    quoteLock: {
+      pricingVersionId: "11111111-1111-4111-8111-111111111112",
+      quoteSignature: signature,
+      lockedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    },
+  };
+}
+
+type StoredDraft = Record<string, unknown> & {
+  serviceSlug?: string;
+  address?: string;
+  date?: string;
+  time?: string;
+  pendingBookingId?: string | null;
+};
+
+function closureDraft(serviceSlug: string, cleanerMode: string): Record<string, unknown> {
+  const teamMode = cleanerMode === "team";
+  const carpetDetails =
+    serviceSlug === "carpet-cleaning"
+      ? {
+          rugCount: "0",
+          carpetType: "standard",
+          stains: "no",
+        }
+      : {};
+  const airbnbDetails =
+    serviceSlug === "airbnb-cleaning"
+      ? {
+          linens: "change",
+          keyAccess: "managed",
+        }
+      : {};
+  return {
+    serviceSlug,
+    serviceDetails: {
+      propertyType: "house",
+      bedrooms: "2",
+      bathrooms: "1",
+      extraRooms: "0",
+      hasPets: "no",
+      lastCleaned: "1_3_months",
+      moveType: "move_out",
+      furnished: "no",
+      officeSize: "small",
+      carpetRooms: "2",
+      ...carpetDetails,
+      ...airbnbDetails,
+    },
+    address: "1 Closure Test Street",
+    suburb: "Claremont",
+    serviceAreaLocationId: LOCATION_ID,
+    serviceAreaCityId: CITY_ID,
+    city: "Cape Town",
+    postalCode: "7708",
+    accessInstructions: "Ring the bell",
+    parkingInstructions: "Street parking",
+    gateCode: "1234",
+    contactPhone: "+27710000000",
+    selectedExtras: [],
+    equipmentRequired: "no",
+    equipmentQuote: null,
+    bookingType: "once_off",
+    date: "2026-11-16",
+    time: "08:30",
+    alternativeDate: "",
+    alternativeTime: "",
+    recurringFrequency: "",
+    recurringDays: [],
+    recurringStartDate: "",
+    recurringEndDate: "",
+    cleanerMode,
+    assignedTeamId: teamMode ? "team-closure" : "",
+    assignedTeamName: teamMode ? "Closure Test Team" : "",
+    cleanerCount: 1,
+    selectedCleanerIds: teamMode ? [] : ["cleaner-closure"],
+    selectedCleanerDetails: teamMode
+      ? []
+      : [
+          {
+            id: "cleaner-closure",
+            name: "Closure Test Cleaner",
+            initials: "CT",
+            rating: 4.9,
+            jobsCompleted: 100,
+          },
+        ],
+    pendingBookingId: null,
+  };
+}
+
+async function seedDraft(page: Page, serviceSlug: string, cleanerMode: string) {
+  const draft = closureDraft(serviceSlug, cleanerMode);
+  await page.addInitScript(
+    ({ key, value }) => {
+      if (!window.localStorage.getItem(key)) {
+        window.localStorage.setItem(key, JSON.stringify(value));
+      }
+    },
+    { key: STORAGE_KEY, value: draft },
+  );
+}
+
+async function readDraft(page: Page): Promise<StoredDraft> {
+  return page.evaluate((key) => {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as StoredDraft) : {};
+  }, STORAGE_KEY);
+}
+
+async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
+  const forbiddenMutations: string[] = [];
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+
+    if (request.method() === "POST" && path === "/api/booking-v2/quote") {
+      await route.fulfill({ status: 200, json: authoritativeQuoteFixture("e2e-authoritative") });
+      return;
+    }
+
+    if (path.startsWith("/api/analytics/")) {
+      await route.fulfill({ status: 204, body: "" });
+      return;
+    }
+
+
+    if (request.method() !== "GET") {
+      forbiddenMutations.push(`${request.method()} ${path}`);
+      await route.abort("blockedbyclient");
+      return;
+    }
+
+    if (path === "/api/booking-v2/services") {
+      await route.fulfill({
+        status: 200,
+        json: {
+          catalog: Object.fromEntries(SERVICES.map((service) => [service.slug, liveServiceFixture(service.slug)])),
+          scheduling: {
+            leadMinutes: 0,
+            slotStartHour: 8,
+            slotEndHour: 12,
+            slotIntervalMinutes: 30,
+            timezone: "Africa/Johannesburg",
+          },
+        },
+      });
+      return;
+    }
+
+    if (path === "/api/booking/time-slots") {
+      await route.fulfill({
+        status: 200,
+        json: {
+          slots: [{ time: "08:30", available: true }],
+        },
+      });
+      return;
+    }
+
+    if (path === "/api/booking-v2/available-cleaners") {
+      await route.fulfill({
+        status: 200,
+        json: {
+          cleaners: [
+            {
+              id: "cleaner-closure",
+              name: "Closure Test Cleaner",
+              initials: "CT",
+              avatarColor: "bg-blue-100 text-blue-700",
+              rating: 4.9,
+              jobsCompleted: 100,
+              areasServed: null,
+              isAvailable: true,
+              slotEligible: true,
+              badges: ["recommended"],
+              unavailableReason: null,
+            },
+          ],
+        },
+      });
+      return;
+    }
+
+    if (path === "/api/booking-v2/team-availability") {
+      await route.fulfill({
+        status: 200,
+        json: {
+          available: true,
+          teams: [
+            {
+              id: "team-closure",
+              name: "Closure Test Team",
+              available: true,
+              active_member_count: 2,
+              qualified_member_count: 2,
+            },
+          ],
+        },
+      });
+      return;
+    }
+
+    // Promotion, profile, cleaner and other optional GETs stay local and fail closed.
+    await route.fulfill({ status: 404, json: { error: `unmocked_e2e_get:${path}` } });
+  });
+
+  return forbiddenMutations;
+}
+
+async function expectNoHorizontalOverflow(page: Page) {
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+}
+
+async function expectRetainedBookingParams(page: Page, expectedStep: string) {
+  await expect
+    .poll(
+      () => {
+        const url = new URL(page.url());
+        return {
+          step: url.searchParams.get("step"),
+          promo: url.searchParams.get("promo"),
+          source: url.searchParams.get("source"),
+          ref: url.searchParams.get("ref"),
+        };
+      },
+      { timeout: 10_000 },
+    )
+    .toEqual({
+      step: expectedStep,
+      promo: "P05G10",
+      source: "rd-p05g",
+      ref: "FRIEND123",
+    });
+}
+
+test.describe("RD-P05G — Booking V2 closure audit", () => {
+  test("booking hub exposes exactly the six governed services on desktop and mobile", async ({ page }) => {
+    const forbiddenMutations = await installNonMutatingApiSandbox(page);
+
+    for (const viewport of [
+      { width: 1440, height: 1000 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const response = await page.goto("/book", { waitUntil: "domcontentloaded" });
+      expect(response?.status()).toBeLessThan(400);
+      await expect(page.getByRole("heading", { name: "Choose your cleaning service", exact: true })).toBeVisible();
+
+      const serviceLinks = page.locator('a[href^="/book/"]').filter({ has: page.locator("h2") });
+      await expect(serviceLinks).toHaveCount(6);
+      for (const service of SERVICES) {
+        const serviceHeading = page.getByRole("heading", { name: service.label, exact: true });
+        await expect(serviceHeading).toBeVisible();
+        await expect(serviceLinks.filter({ has: serviceHeading })).toHaveCount(1);
+      }
+      await expectNoHorizontalOverflow(page);
+    }
+
+    expect(forbiddenMutations, "Booking hub closure smoke must remain read-only").toEqual([]);
+  });
+
+  for (const service of SERVICES) {
+    test(`${service.label} Step 1 is contained and exposes accessible booking navigation on desktop/mobile`, async ({ page }) => {
+      const forbiddenMutations = await installNonMutatingApiSandbox(page);
+
+      for (const viewport of [
+        { width: 1440, height: 1000 },
+        { width: 390, height: 844 },
+      ]) {
+        await page.setViewportSize(viewport);
+        const response = await page.goto(`/book/${service.slug}?${RETAINED_QUERY}`, {
+          waitUntil: "domcontentloaded",
+        });
+        expect(response?.status()).toBeLessThan(400);
+        await expect(page.getByRole("navigation", { name: "Booking progress" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Details", exact: true })).toHaveAttribute(
+          "aria-current",
+          "step",
+        );
+        await expect(page.getByRole("button", { name: /Back/, exact: false })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Continue →", exact: true })).toBeVisible();
+        await expectNoHorizontalOverflow(page);
+      }
+
+      expect(forbiddenMutations, `${service.label} Step 1 smoke must not submit data`).toEqual([]);
+    });
+
+    test(`${service.label} draft resumes and preserves referral/promo/source through Review ↔ Payment`, async ({ page }) => {
+      await seedDraft(page, service.slug, service.cleanerMode);
+      const forbiddenMutations = await installNonMutatingApiSandbox(page);
+
+      const response = await page.goto(`/book/${service.slug}?step=review&${RETAINED_QUERY}`, {
+        waitUntil: "domcontentloaded",
+      });
+      expect(response?.status()).toBeLessThan(400);
+      await expect(page.getByRole("heading", { name: "Review your booking", exact: true })).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByRole("button", { name: "Review", exact: true })).toHaveAttribute(
+        "aria-current",
+        "step",
+      );
+      await expectRetainedBookingParams(page, "review");
+      await expectNoHorizontalOverflow(page);
+
+      // A reload proves the local Booking V2 draft is resumable on the same route.
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(page.getByRole("heading", { name: "Review your booking", exact: true })).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByRole("heading", { name: "Location", exact: true }).locator("xpath=../../..").getByText(/1 Closure Test Street/)).toBeVisible();
+      await expectRetainedBookingParams(page, "review");
+
+      const persisted = await readDraft(page);
+      expect(persisted).toMatchObject({
+        serviceSlug: service.slug,
+        address: "1 Closure Test Street",
+        date: "2026-11-16",
+        time: "08:30",
+        pendingBookingId: null,
+      });
+
+      await page.getByRole("button", { name: "Proceed to payment →", exact: true }).click();
+      await expectRetainedBookingParams(page, "payment");
+      await expect(page.getByRole("heading", { name: /^(Welcome back!|Confirm & pay)$/ })).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByRole("navigation", { name: "Booking progress" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Payment", exact: true })).toHaveAttribute(
+        "aria-current",
+        "step",
+      );
+      await expectNoHorizontalOverflow(page);
+
+      await page.getByRole("button", { name: "← Back", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "Review your booking", exact: true })).toBeVisible({ timeout: 10_000 });
+      await expectRetainedBookingParams(page, "review");
+
+      const afterRoundTrip = await readDraft(page);
+      expect(afterRoundTrip).toMatchObject({
+        serviceSlug: service.slug,
+        address: "1 Closure Test Street",
+        date: "2026-11-16",
+        time: "08:30",
+        pendingBookingId: null,
+      });
+
+      expect(
+        forbiddenMutations,
+        `${service.label} closure transition must not confirm a booking or start payment`,
+      ).toEqual([]);
+    });
+  }
+});

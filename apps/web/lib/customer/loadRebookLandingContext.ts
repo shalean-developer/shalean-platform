@@ -110,7 +110,7 @@ function buildLastBookingSummary(row: BookingRow, rebookToken: string | null): R
     completedDateLabel: formatCompletedDate(row),
     rebookUrl: rebookToken
       ? rebookBookUrlFromBookingRowWithToken(row, rebookToken)
-      : `/book/${serviceSlug}?rebook=${encodeURIComponent(row.id)}&step=2`,
+      : `/book/${serviceSlug}?rebook=${encodeURIComponent(row.id)}&step=schedule`,
     isRegularCleaning: serviceSlug === "regular-cleaning",
     monthsSinceLastBooking: months,
   };

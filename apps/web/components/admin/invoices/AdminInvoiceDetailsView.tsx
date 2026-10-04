@@ -19,6 +19,7 @@ import { categoryAggregateSummaryLines, sumAdjustmentAmountsByCategory } from "@
 import { formatCurrency } from "@/lib/admin/invoices/invoiceAdminFormatters";
 import { invoiceBookingOptionsFromRows } from "@/lib/admin/invoices/invoiceBookingSelectOptions";
 import { splitHumanTimelineLines } from "@/lib/admin/invoices/invoiceTimelinePresentation";
+import { monthlyInvoicePaymentSourceLabel } from "@/lib/admin/invoices/monthlyInvoicePaymentSource";
 import { formatZohoOrderReference } from "@/lib/zoho/zohoOrderReference";
 import type { AdminInvoiceBundle } from "@/lib/admin/invoices/loadAdminInvoiceBundle";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
@@ -42,6 +43,16 @@ export function AdminInvoiceDetailsView({
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [zohoRefreshBusy, setZohoRefreshBusy] = useState(false);
   const [zohoSyncBusy, setZohoSyncBusy] = useState(false);
+  const [zohoReconcileBusy, setZohoReconcileBusy] = useState(false);
+  const [zohoReconciliation, setZohoReconciliation] = useState<{
+    reconciliationRequired: boolean;
+    code: string;
+    localStatus?: string;
+    localBalanceCents?: number;
+    zohoStatus?: string;
+    zohoBalanceCents?: number;
+    zohoInvoiceNumber?: string;
+  } | null>(null);
   const [zohoRefreshToast, setZohoRefreshToast] = useState<{ text: string; error?: boolean } | null>(null);
 
   const load = useCallback(async () => {
@@ -114,6 +125,58 @@ export function AdminInvoiceDetailsView({
       setZohoRefreshBusy(false);
     }
   }, [getAccessToken, invoiceId, load]);
+
+  const checkZohoReconciliation = useCallback(async () => {
+    setZohoReconcileBusy(true);
+    setZohoRefreshToast(null);
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error("Not signed in.");
+      const res = await fetch(`/api/admin/invoices/${encodeURIComponent(invoiceId)}/zoho-reconciliation`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const j = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        linked?: boolean;
+        reconciliationRequired?: boolean;
+        code?: string;
+        localStatus?: string;
+        localBalanceCents?: number;
+        zohoStatus?: string;
+        zohoBalanceCents?: number;
+        zohoInvoiceNumber?: string;
+      };
+      if (!res.ok) throw new Error(j.error ?? `Request failed (${res.status})`);
+      if (!j.linked) {
+        setZohoReconciliation(null);
+        setZohoRefreshToast({ text: "This invoice is not linked to Zoho yet." });
+        return;
+      }
+      setZohoReconciliation({
+        reconciliationRequired: Boolean(j.reconciliationRequired),
+        code: String(j.code ?? "aligned"),
+        localStatus: j.localStatus,
+        localBalanceCents: j.localBalanceCents,
+        zohoStatus: j.zohoStatus,
+        zohoBalanceCents: j.zohoBalanceCents,
+        zohoInvoiceNumber: j.zohoInvoiceNumber,
+      });
+      setZohoRefreshToast({
+        text: j.reconciliationRequired
+          ? "Zoho and Shalean do not match. Reconcile the Zoho invoice/payment before syncing again."
+          : "Zoho and Shalean are aligned.",
+        error: Boolean(j.reconciliationRequired),
+      });
+    } catch (e) {
+      setZohoRefreshToast({
+        text: e instanceof Error ? e.message : "Zoho reconciliation check failed.",
+        error: true,
+      });
+    } finally {
+      setZohoReconcileBusy(false);
+    }
+  }, [getAccessToken, invoiceId]);
 
   const syncToZoho = useCallback(async () => {
     setZohoSyncBusy(true);
@@ -211,6 +274,20 @@ export function AdminInvoiceDetailsView({
     return n;
   }, [state]);
 
+  const canRevertManualPaid = useMemo(() => {
+    if (state.status !== "ready") return false;
+    const inv = state.data.invoice;
+    if (String(inv.status ?? "").toLowerCase() !== "paid" || !Boolean(inv.is_closed)) return false;
+    let hasManualMarkPaid = false;
+    let hasGatewayPayment = false;
+    for (const event of state.data.events ?? []) {
+      const kind = String((event.payload as Record<string, unknown>)?.kind ?? "").toLowerCase();
+      if (kind === "admin_mark_paid") hasManualMarkPaid = true;
+      if (kind === "payment_received" || kind === "payment_applied") hasGatewayPayment = true;
+    }
+    return hasManualMarkPaid && !hasGatewayPayment;
+  }, [state]);
+
   if (state.status === "loading") {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -289,6 +366,19 @@ export function AdminInvoiceDetailsView({
 
   const headerActions = (
     <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:justify-end">
+      {hasInvoicePdf ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={zohoReconcileBusy}
+          className="w-full justify-center sm:w-auto"
+          title="Read the current Zoho invoice status and compare it with Shalean."
+          onClick={() => void checkZohoReconciliation()}
+        >
+          {zohoReconcileBusy ? "Checking Zoho…" : "Check Zoho status"}
+        </Button>
+      ) : null}
       {canSyncToZoho ? (
         <Button
           type="button"
@@ -343,6 +433,7 @@ export function AdminInvoiceDetailsView({
         amountPaidCents={paidCents}
         balanceCents={balanceCents}
         bookingCountToSettle={bookingCountToSettle}
+        canRevertManualPaid={canRevertManualPaid}
         dueDate={dueDate}
         invoiceDate={invoiceDate}
         billingMonth={month}
@@ -353,6 +444,14 @@ export function AdminInvoiceDetailsView({
         onDone={load}
         />
       </div>
+      {zohoReconciliation?.reconciliationRequired ? (
+        <div className="col-span-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+          <span className="font-semibold">Zoho reconciliation required.</span>{" "}
+          Shalean: {zohoReconciliation.localStatus ?? "unknown"} / {formatCurrency(zohoReconciliation.localBalanceCents ?? 0, currency)} balance.{" "}
+          Zoho: {zohoReconciliation.zohoStatus ?? "unknown"} / {formatCurrency(zohoReconciliation.zohoBalanceCents ?? 0, currency)} balance
+          {zohoReconciliation.zohoInvoiceNumber ? ` · ${zohoReconciliation.zohoInvoiceNumber}` : ""}. Resolve the Zoho payment/status first, then run Check Zoho status again.
+        </div>
+      ) : null}
       {zohoRefreshToast ? (
         <p
           className={`col-span-full text-xs ${zohoRefreshToast.error ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-300"}`}
@@ -394,6 +493,22 @@ export function AdminInvoiceDetailsView({
       />
 
       {isClosed ? <InvoiceClosedBanner closedAtIso={lastInvoiceClosed?.at ?? null} via={lastInvoiceClosed?.via ?? null} /> : null}
+
+      <Card className="border-slate-200 bg-slate-50/70">
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Payment source
+            </p>
+            <p className="mt-1 text-base font-bold text-zinc-900 dark:text-zinc-50">
+              {monthlyInvoicePaymentSourceLabel(state.data.paymentSource)}
+            </p>
+          </div>
+          <p className="max-w-xl text-xs text-zinc-600 dark:text-zinc-400">
+            Derived from invoice events and gateway ledger evidence. This explains how the invoice was settled; it does not replace the invoice status.
+          </p>
+        </CardContent>
+      </Card>
 
       <InvoiceTimeline rows={timelineRows} featured />
 

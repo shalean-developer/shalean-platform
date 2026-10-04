@@ -115,7 +115,13 @@ export type CustomerTotalInput = {
     pricePerBathroom: number;
     pricePerExtraRoom: number;
     pricePerExtraCleaner: number;
+    serviceFeeZar?: number;
     estimatedDurationHours: number;
+    /** Authoritative duration coefficients from pricing_services (hours). */
+    durationBaseHours?: number;
+    durationPerBedroomHours?: number;
+    durationPerBathroomHours?: number;
+    durationPerExtraRoomHours?: number;
     minDurationHours: number;
     maxDurationHours: number;
     extras: Array<{ id: string; label: string; priceZar: number }>;

@@ -4,7 +4,6 @@ import { MAX_TEAM_BOOKINGS_PER_DAY, TEAM_SERVICES } from "@/src/features/booking
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const date = searchParams.get("date");
@@ -36,7 +35,7 @@ export async function GET(request: Request) {
   const availableTeams = teams.filter((t) => t.available);
   const available = !platformAtCapacity && availableTeams.length > 0;
 
-  return NextResponse.json({
+  const payload = {
     available,
     totalBooked,
     maxSlots: MAX_TEAM_BOOKINGS_PER_DAY,
@@ -47,5 +46,13 @@ export async function GET(request: Request) {
       active_member_count: team.active_member_count,
       qualified_member_count: team.qualified_member_count,
     })),
-  });
+  };
+
+  return service === "moving-cleaning"
+    ? NextResponse.json(payload, {
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
+      })
+    : NextResponse.json(payload);
 }

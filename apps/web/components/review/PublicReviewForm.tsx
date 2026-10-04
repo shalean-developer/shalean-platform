@@ -40,7 +40,7 @@ export function PublicReviewForm({ initialBookingId }: Props) {
   const base = getPublicAppUrlBase();
   const bookingId = initialBookingId.trim();
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
-  const [rating, setRating] = useState(5);
+  const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

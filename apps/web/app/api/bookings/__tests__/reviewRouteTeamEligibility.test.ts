@@ -10,13 +10,18 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 
 vi.mock("@/lib/reviews/reviewKpiServer", () => ({
-  logReviewKpiEvent: vi.fn(),
+  logReviewKpiEvent: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
+vi.mock("@/lib/customer/customerBookingsForUser", () => ({
+  resolveBookingOwnershipColumn: vi.fn(),
 }));
 
 import { POST } from "@/app/api/bookings/review/route";
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logReviewKpiEvent } from "@/lib/reviews/reviewKpiServer";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 
 /**
  * Production Readiness Audit H-8.
@@ -55,7 +60,9 @@ const TEAM_LEAD = "55555555-5555-4555-8555-555555555555";
 
 type MockBookingRow = {
   id: string;
-  user_id: string | null;
+  user_id?: string | null;
+  customer_id?: string | null;
+  customer_email?: string | null;
   cleaner_id: string | null;
   payout_owner_cleaner_id: string | null;
   status: string;
@@ -127,6 +134,7 @@ function buildPubAuth(userId: string | null) {
 const createClientMock = vi.mocked(createClient);
 const getSupabaseAdminMock = vi.mocked(getSupabaseAdmin);
 const logReviewKpiMock = vi.mocked(logReviewKpiEvent);
+const resolveBookingOwnershipColumnMock = vi.mocked(resolveBookingOwnershipColumn);
 
 function makeRequest(body: Record<string, unknown>, opts?: { token?: string }): Request {
   return new Request("http://test/api/bookings/review", {
@@ -144,6 +152,7 @@ describe("POST /api/bookings/review (H-8 team-job reviewability)", () => {
     vi.clearAllMocks();
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://stub");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon");
+    resolveBookingOwnershipColumnMock.mockResolvedValue("user_id");
   });
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -382,6 +391,61 @@ describe("POST /api/bookings/review (H-8 team-job reviewability)", () => {
     const res = await POST(makeRequest({ bookingId: BOOKING_ID, rating: 5 }));
     expect(res.status).toBe(400);
     expect(state.reviewInsert).toBeNull();
+  });
+
+  it("(7c) production customer_id ownership can submit a completed review", async () => {
+    resolveBookingOwnershipColumnMock.mockResolvedValueOnce("customer_id");
+    createClientMock.mockReturnValueOnce(buildPubAuth(USER_ID) as never);
+    const { admin, state } = buildAdmin({
+      bookingRow: {
+        id: BOOKING_ID,
+        customer_id: USER_ID,
+        customer_email: "u@x.co",
+        cleaner_id: SOLO_CLEANER,
+        payout_owner_cleaner_id: null,
+        status: "completed",
+        completed_at: "2026-04-01T10:00:00Z",
+        is_team_job: false,
+        team_id: null,
+      },
+    });
+    getSupabaseAdminMock.mockReturnValue(admin as unknown as ReturnType<typeof getSupabaseAdmin>);
+
+    const res = await POST(makeRequest({ bookingId: BOOKING_ID, rating: 5 }));
+    expect(res.status).toBe(200);
+    expect(state.bookingSelect).toContain("customer_id");
+    expect(state.bookingSelect).not.toMatch(/(^|,\\s*)user_id(,|$)/);
+    expect(state.reviewInsert).toMatchObject({ booking_id: BOOKING_ID, user_id: USER_ID });
+  });
+
+  it("(7d) email-owned orphan booking can be reviewed by the matching signed-in customer", async () => {
+    resolveBookingOwnershipColumnMock.mockResolvedValueOnce("customer_id");
+    createClientMock.mockReturnValueOnce(buildPubAuth(USER_ID) as never);
+    const { admin, state } = buildAdmin({
+      bookingRow: {
+        id: BOOKING_ID,
+        customer_id: null,
+        customer_email: "u@x.co",
+        cleaner_id: SOLO_CLEANER,
+        payout_owner_cleaner_id: null,
+        status: "completed",
+        completed_at: "2026-04-01T10:00:00Z",
+        is_team_job: false,
+        team_id: null,
+      },
+    });
+    getSupabaseAdminMock.mockReturnValue(admin as unknown as ReturnType<typeof getSupabaseAdmin>);
+
+    const res = await POST(makeRequest({ bookingId: BOOKING_ID, rating: 4 }));
+    expect(res.status).toBe(200);
+    expect(state.reviewInsert).not.toBeNull();
+  });
+
+  it("(7e) rejects non-finite rating before touching the database", async () => {
+    createClientMock.mockReturnValueOnce(buildPubAuth(USER_ID) as never);
+    const res = await POST(makeRequest({ bookingId: BOOKING_ID, rating: "not-a-number" }));
+    expect(res.status).toBe(400);
+    expect(getSupabaseAdminMock).not.toHaveBeenCalled();
   });
 
   it("(8) team submission inserts a non-null cleaner_id (NOT NULL DB constraint compliance)", async () => {

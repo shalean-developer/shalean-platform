@@ -1,4 +1,5 @@
 import type { HomeWidgetServiceKey } from "@/lib/pricing/calculatePrice";
+import { REGULAR_CLEANING_PUBLIC_NAME } from "@/lib/services/publicServiceNames";
 
 export type WidgetServiceGroupId = "regular" | "specialised";
 
@@ -22,11 +23,11 @@ export type WidgetServiceGroupDef = {
 export const WIDGET_SERVICE_GROUPS: readonly WidgetServiceGroupDef[] = [
   {
     id: "regular",
-    name: "Regular Cleaning",
+    name: REGULAR_CLEANING_PUBLIC_NAME,
     subtitle: "Maintenance & guest turnovers",
     description: "Weekly / maintenance cleaning and guest turnovers.",
     services: [
-      { id: "standard", name: "Standard Cleaning", subtitle: "Regular home upkeep" },
+      { id: "standard", name: REGULAR_CLEANING_PUBLIC_NAME, subtitle: "Regular home upkeep" },
       { id: "airbnb", name: "Airbnb Cleaning", subtitle: "Between-guest refresh" },
     ],
   },

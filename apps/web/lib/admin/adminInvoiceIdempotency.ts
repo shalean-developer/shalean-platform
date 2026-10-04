@@ -8,6 +8,7 @@ const TTL_MS = 12 * 60 * 1000;
 export type AdminInvoiceIdempotentAction =
   | "adjustment"
   | "mark_paid"
+  | "revert_manual_paid"
   | "hard_close"
   | "resend_invoice"
   | "send_invoice"

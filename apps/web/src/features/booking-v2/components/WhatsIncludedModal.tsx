@@ -38,7 +38,7 @@ export function WhatsIncludedModal() {
         onClick={() => setOpen(true)}
         className="text-sm font-semibold text-blue-600 underline-offset-2 hover:underline"
       >
-        What&apos;s included in standard cleaning
+        What&apos;s included in regular cleaning
       </button>
 
       {open ? (

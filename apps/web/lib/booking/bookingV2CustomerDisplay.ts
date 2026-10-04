@@ -2,6 +2,7 @@ import type { BookingRow } from "@/lib/dashboard/types";
 import type { StoredPriceLine } from "@/lib/dashboard/storedPriceBreakdown";
 import { getServiceLabel, parseBookingServiceId } from "@/components/booking/serviceCategories";
 import { customerPriceLinesFromPricingSummary } from "@/lib/booking-v2/adminPricingDisplay";
+import { petAnswerLabel } from "@/lib/booking-v2/petOptions";
 
 /** Service labels for booking-v2 slugs (keep in sync with `SERVICE_CONFIG`). */
 export const BOOKING_V2_SERVICE_LABELS: Record<string, string> = {
@@ -19,13 +20,18 @@ const SERVICE_DETAIL_FIELD_LABELS: Record<string, string> = {
   cleaningProducts: "Cleaning products at home",
   equipmentRequired: "Equipment delivery",
   specialInstructions: "Special instructions",
-  carpetRooms: "Carpet rooms",
+  carpetRooms: "Carpeted rooms",
+  rugCount: "Rugs",
+  carpetType: "Carpet type",
+  stains: "Visible stains",
   squareMeters: "Square meters",
   furnished: "Furnished",
   ovenType: "Oven type",
   laundryIncluded: "Laundry included",
   keyCollection: "Key collection",
   turnoverTime: "Turnover time",
+  linens: "Linen service",
+  keyAccess: "Key access",
 };
 
 const ROOM_DETAIL_KEYS = new Set(["bedrooms", "bathrooms", "extraRooms", "rooms"]);
@@ -103,7 +109,25 @@ function formatServiceDetailValue(key: string, value: unknown): string | null {
     if (s === "office") return "Office";
     if (s === "studio") return "Studio";
   }
-  if (key === "hasPets" || key === "cleaningProducts" || key === "furnished" || key === "laundryIncluded") {
+  if (key === "hasPets") return petAnswerLabel(s);
+  if (key === "stains") {
+    if (s === "yes") return "Yes";
+    if (s === "no") return "No";
+  }
+  if (key === "carpetType") return humanizeBookingToken(s);
+  if (key === "linens") {
+    if (s === "change") return "Change linens";
+    if (s === "no_change") return "No linen change";
+    return humanizeBookingToken(s);
+  }
+  if (key === "keyAccess") {
+    if (s === "smart_lock") return "Smart lock";
+    if (s === "lockbox") return "Lockbox";
+    if (s === "meet_host") return "Meet host";
+    if (s === "key_collection") return "Key collection";
+    return humanizeBookingToken(s);
+  }
+  if (key === "cleaningProducts" || key === "furnished" || key === "laundryIncluded") {
     if (s === "yes") return "Yes";
     if (s === "no") return "No";
   }

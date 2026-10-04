@@ -471,7 +471,7 @@ export function PostEditorForm({
   const [tplArea, setTplArea] = useState("Claremont");
   const [tplCity, setTplCity] = useState("Cape Town");
   const [tplService, setTplService] = useState("Home cleaning");
-  const [tplA, setTplA] = useState("Standard cleaning");
+  const [tplA, setTplA] = useState("Regular cleaning");
   const [tplB, setTplB] = useState("Deep cleaning");
   const [tplTopic, setTplTopic] = useState("home cleaning");
   const [draftPreviewQuery, setDraftPreviewQuery] = useState<string | null>(null);

@@ -1,7 +1,7 @@
 import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 
-/** Verified Google Business Profile aggregate (must match JSON-LD AggregateRating). */
+/** Verified Google Business Profile aggregate used by public Google trust UI. */
 export const PUBLIC_AGGREGATE_RATING = GOOGLE_BUSINESS_REVIEWS.rating;
 export const PUBLIC_AGGREGATE_REVIEW_COUNT = GOOGLE_BUSINESS_REVIEWS.count;
 

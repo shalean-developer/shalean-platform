@@ -156,18 +156,17 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
         externalRef: id,
         metadata: { source: "cron_auto_complete_past_date" },
       });
-      void routeBookingNotificationEvent(event, { admin }).then((nav) => {
-        if (!nav.ok) {
-          void reportOperationalIssue(
-            "warn",
-            "cron/booking-lifecycle/routeBookingNotificationEvent(completed)",
-            nav.message,
-            { bookingId: id, code: nav.code },
-          );
-        }
-      });
+      const nav = await routeBookingNotificationEvent(event, { admin });
+      if (!nav.ok) {
+        await reportOperationalIssue(
+          "warn",
+          "cron/booking-lifecycle/routeBookingNotificationEvent(completed)",
+          nav.message,
+          { bookingId: id, code: nav.code },
+        );
+      }
     } else {
-      void notifyBookingEvent({ type: "completed", supabase: admin, bookingId: id });
+      await notifyBookingEvent({ type: "completed", supabase: admin, bookingId: id });
     }
 
     try {

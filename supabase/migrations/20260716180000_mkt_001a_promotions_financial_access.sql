@@ -28,15 +28,28 @@ REVOKE ALL ON TABLE public.promotions FROM anon;
 REVOKE ALL ON TABLE public.promotions FROM authenticated;
 GRANT ALL ON TABLE public.promotions TO service_role;
 
--- 2. Drop the policy that exposed all columns of active promotions to anon.
---    (Redundant once grants are revoked, but removed for clarity/defense.)
+-- 2. Restrict public reads to active rows. Column grants below prevent access to
+--    financial and internal fields even when querying the base relation.
 DROP POLICY IF EXISTS promotions_public_read_active ON public.promotions;
+CREATE POLICY promotions_public_read_active
+  ON public.promotions FOR SELECT TO anon, authenticated
+  USING (status = 'active');
+
+GRANT SELECT (
+  id, slug, name, description, promotion_type, status, starts_at, ends_at,
+  banner_image_url, hero_image_url, logo_url, landing_page_path, promo_code,
+  auto_apply, discount_type, discount_value, max_discount_zar,
+  min_booking_amount_zar, cta_label, terms_html, display_config,
+  qr_code_data_url, content_generated_at, template_key, stackable,
+  stack_priority, show_on_homepage, show_on_booking, show_on_pricing,
+  show_announcement_bar, show_popup, show_featured_card, show_dashboard_card,
+  show_booking_banner, created_at, updated_at
+) ON TABLE public.promotions TO anon, authenticated;
 
 -- 3. Safe public projection — non-sensitive campaign fields only, active rows only.
---    security_invoker = false: the view runs as its owner so anon receives ONLY
---    these columns without any table grant/RLS on `promotions` itself.
+--    security_invoker = true: caller permissions and active-row RLS both apply.
 CREATE OR REPLACE VIEW public.public_active_promotions
-WITH (security_invoker = false) AS
+WITH (security_invoker = true) AS
 SELECT
   id,
   slug,
@@ -78,7 +91,7 @@ FROM public.promotions
 WHERE status = 'active';
 
 COMMENT ON VIEW public.public_active_promotions IS
-  'MKT-001A: safe public projection of active promotions. Excludes budget_zar, budget_spent_zar, revenue_generated_zar, usage_limit_*, *_count, created_by, updated_by, duplicated_from_id, and eligibility JSON. security_invoker=false so anon gets only these columns.';
+  'MKT-001A: security-invoker public projection of active promotions. Base-table column grants and RLS exclude financial/internal fields and inactive rows.';
 
 REVOKE ALL ON public.public_active_promotions FROM anon;
 REVOKE ALL ON public.public_active_promotions FROM authenticated;

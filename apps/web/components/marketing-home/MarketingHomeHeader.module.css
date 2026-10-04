@@ -1,0 +1,129 @@
+.root {
+  --campaign-navy: #00164e;
+  --campaign-blue: #0051ff;
+  background: #ffffff;
+  box-shadow: 0 10px 28px rgb(0 22 78 / 0.1);
+}
+
+.utilityBar {
+  background: #ffffff;
+  color: #34446f;
+}
+
+.utilityInner {
+  align-items: center;
+  display: flex;
+  font-size: 0.75rem;
+  justify-content: space-between;
+  margin: 0 auto;
+  max-width: var(--ui-container-marketing);
+  min-height: 2rem;
+  padding: 0 var(--ui-page-gutter);
+}
+
+.utilityInner span {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.utilityInner svg {
+  color: var(--campaign-blue);
+  height: 0.85rem;
+  width: 0.85rem;
+}
+
+.root > div:not(.utilityBar) {
+  background: #ffffff !important;
+  border-top: 1px solid #eef2f8;
+  padding-bottom: 0.8rem !important;
+  padding-top: 0.8rem !important;
+}
+
+.root nav[aria-label="Primary"] > a,
+.root nav[aria-label="Primary"] > div > button {
+  color: var(--campaign-navy) !important;
+}
+
+.root nav[aria-label="Primary"] > a:hover,
+.root nav[aria-label="Primary"] > div > button:hover,
+.root nav[aria-label="Primary"] > div > button[aria-expanded="true"] {
+  background: #edf4ff !important;
+}
+
+.root a[aria-label="Shalean home"] {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+
+.root button[aria-label="Open menu"],
+.root button[aria-label="Close menu"] {
+  background: #edf4ff !important;
+  border-color: #d8e5fb !important;
+  color: var(--campaign-navy) !important;
+}
+
+.root a[href^="/auth/login"] {
+  background: var(--campaign-blue) !important;
+  border-radius: 0.375rem !important;
+  color: #ffffff !important;
+  min-height: 3rem !important;
+  padding: 0.75rem 1.5rem !important;
+}
+
+.root nav[aria-label="Primary"] > div:hover > div {
+  visibility: visible !important;
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+  pointer-events: auto !important;
+}
+
+/*
+ * Homepage horizontal alignment authority.
+ * Match the hero and every marketing HomeSection exactly: the shared 112rem
+ * marketing canvas plus the responsive canonical page gutter.
+ */
+.root > div:not(.utilityBar) {
+  padding-left: var(--ui-page-gutter) !important;
+  padding-right: var(--ui-page-gutter) !important;
+}
+
+.root > div:not(.utilityBar) > div:first-child {
+  max-width: var(--ui-container-marketing) !important;
+}
+
+@media (max-width: 47.99rem) {
+  .utilityInner {
+    justify-content: center;
+  }
+
+  .utilityInner span:last-child {
+    display: none;
+  }
+}
+
+/* The desktop reference keeps the header visually quiet; service search remains in mobile/menu flows. */
+@media (min-width: 80rem) {
+  .root div:has(> div > input[aria-label="Search Shalean cleaning services"]) {
+    display: none !important;
+  }
+}
+
+/* Homepage header top-level navigation and text actions use canonical Body text at normal weight. */
+.root nav[aria-label="Primary"] > a,
+.root nav[aria-label="Primary"] > div > button,
+.root a[href^="/auth/login"] {
+  font-size: 0.875rem !important;
+  line-height: var(--ui-leading-body) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.025em !important;
+  text-transform: uppercase !important;
+}
+
+/* Keep dropdown/service descriptions compact; primary menu actions also use normal-weight Body text. */
+.root nav[aria-label="Primary"] > div > div a[class*="rounded-full"] {
+  font-size: var(--ui-text-body) !important;
+  line-height: var(--ui-leading-body) !important;
+  font-weight: 400 !important;
+}

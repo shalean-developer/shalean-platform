@@ -90,6 +90,71 @@ async function resolvePaystackAccountId(admin: SupabaseClient): Promise<string |
   return byName?.id ?? null;
 }
 
+async function paymentAccountingApplicability(
+  admin: SupabaseClient,
+  entityType: PaymentEntityType,
+  entityId: string,
+): Promise<{ applicable: true } | { applicable: false; reason: string }> {
+  if (entityType !== "booking") return { applicable: true };
+
+  const { data: booking } = await admin
+    .from("bookings")
+    .select("is_test, is_monthly_billing_booking, sales_document_id")
+    .eq("id", entityId)
+    .maybeSingle();
+
+  if (!booking) return { applicable: true };
+  if (booking.is_test === true) return { applicable: false, reason: "booking_test" };
+  if (booking.is_monthly_billing_booking === true) {
+    return { applicable: false, reason: "booking_monthly_owned" };
+  }
+  if (booking.sales_document_id) {
+    return { applicable: false, reason: "booking_sales_document_owned" };
+  }
+  return { applicable: true };
+}
+
+async function ensurePaymentAccountingQueue(
+  admin: SupabaseClient,
+  paymentTransactionId: string,
+): Promise<void> {
+  await enqueueAccountingSync(admin, {
+    entityType: "payment_transaction",
+    entityId: paymentTransactionId,
+  });
+
+  const { data: existing, error: readErr } = await admin
+    .from("accounting_sync_records")
+    .select("id, sync_status")
+    .eq("entity_type", "payment_transaction")
+    .eq("entity_id", paymentTransactionId)
+    .maybeSingle();
+
+  if (!readErr && existing?.id) return;
+
+  const now = new Date().toISOString();
+  const { error: insertErr } = await admin.from("accounting_sync_records").insert({
+    entity_type: "payment_transaction",
+    entity_id: paymentTransactionId,
+    sync_status: "pending",
+    created_at: now,
+    updated_at: now,
+  });
+
+  if (insertErr && (insertErr as { code?: string }).code !== "23505") {
+    await logSystemEvent({
+      level: "error",
+      source: "payments/recordGatewayPayment",
+      message: "payment_accounting_queue_enrollment_failed",
+      context: {
+        payment_transaction_id: paymentTransactionId,
+        read_error: readErr?.message ?? null,
+        insert_error: insertErr.message,
+      },
+    });
+  }
+}
+
 /**
  * Idempotent: one payment_transaction per (gateway, gateway_reference).
  * Auto-creates an approved Paystack Fees expense linked to booking/payment.
@@ -227,10 +292,23 @@ export async function recordGatewayPayment(
     }
   }
 
-  void enqueueAccountingSync(admin, {
-    entityType: "payment_transaction",
-    entityId: paymentTransactionId,
-  });
+  const accountingApplicability = await paymentAccountingApplicability(
+    admin,
+    params.entityType,
+    params.entityId,
+  );
+  if (accountingApplicability.applicable) {
+    await ensurePaymentAccountingQueue(admin, paymentTransactionId);
+  } else {
+    await admin
+      .from("payment_transactions")
+      .update({
+        sync_status: "ignored",
+        sync_errors: `accounting_not_applicable:${accountingApplicability.reason}`,
+        updated_at: now,
+      })
+      .eq("id", paymentTransactionId);
+  }
 
   if (bookingId) {
     await admin

@@ -392,7 +392,7 @@ export async function adminMarkBookingPaid(
     });
   }
 
-  if (st === "pending_payment") {
+  if (st === "pending_payment" || st === "payment_expired") {
     patch.status = hasCleanerRef ? "assigned" : "pending";
     patch.dispatch_status = hasCleanerRef ? "assigned" : "searching";
   }

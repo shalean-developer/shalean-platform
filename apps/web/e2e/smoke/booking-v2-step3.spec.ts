@@ -1,0 +1,421 @@
+import { expect, test, type Page } from "@playwright/test";
+
+const STORAGE_KEY = "shalean:booking-v2:v1";
+const LOCATION_ID = "11111111-1111-4111-8111-111111111111";
+const CITY_ID = "22222222-2222-4222-8222-222222222222";
+
+type CleanerMode = "team" | "individual_cleaners";
+
+function liveServiceFixture(slug: string) {
+  return {
+    slug,
+    label: "Test Cleaning",
+    shortLabel: "Test",
+    description: "Smoke fixture",
+    cleanerMode: slug === "deep-cleaning" || slug === "moving-cleaning" ? "team" : "individual_cleaners",
+    showEquipmentQuestion: slug === "regular-cleaning",
+    allowsExtraCleaner: true,
+    step1Questions: [
+      { key: "propertyType", label: "Property type", type: "select", required: true, options: [{ value: "house", label: "House" }] },
+      { key: "bedrooms", label: "Bedrooms", type: "number", required: true },
+      { key: "bathrooms", label: "Bathrooms", type: "number", required: true },
+    ],
+    basePrice: 500,
+    pricePerBedroom: 0,
+    pricePerBathroom: 0,
+    pricePerExtraRoom: 0,
+    pricePerExtraCleaner: 0,
+    serviceFeeZar: 0,
+    estimatedDurationHours: 3,
+    durationBaseHours: 3,
+    durationPerBedroomHours: 0,
+    durationPerBathroomHours: 0,
+    durationPerExtraRoomHours: 0,
+    minDurationHours: 1,
+    maxDurationHours: 12,
+    extras: [],
+  };
+}
+
+function authoritativeQuoteFixture(signature: string) {
+  return {
+    pricingSummary: {
+      base_service_price: 500,
+      property_factors_total: 0,
+      bedrooms_price: 0,
+      bathrooms_price: 0,
+      extra_rooms_price: 0,
+      property_size_price: 0,
+      selected_extras: [],
+      selected_extras_total: 0,
+      supplies_equipment_fee: 0,
+      equipment_logistics_fee: 0,
+      equipment_distance_km: 0,
+      equipment_base_fee: 0,
+      equipment_distance_charge: 0,
+      manual_quote_required: false,
+      extra_cleaner_cost: 0,
+      cleaning_service_subtotal: 500,
+      subtotal_before_service_fee: 500,
+      service_fee: 0,
+      recurring_discount: 0,
+      estimated_total: 500,
+      estimated_duration_minutes: 180,
+      team_scaled_duration_minutes: 180,
+      quote_signature: signature,
+      calculation_version: 1,
+      lineItems: [{ label: "Cleaning service", amountZar: 500 }],
+      basePrice: 500,
+      extrasTotal: 0,
+      cleanerSurcharge: 0,
+      total: 500,
+    },
+    quoteLock: {
+      pricingVersionId: "11111111-1111-4111-8111-111111111112",
+      quoteSignature: signature,
+      lockedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    },
+  };
+}
+
+type StoredDraft = Record<string, unknown> & {
+  address?: string;
+  bookingType?: string;
+  recurringFrequency?: string;
+  recurringDays?: string[];
+  date?: string;
+  time?: string;
+  cleanerCount?: number;
+  selectedCleanerIds?: string[];
+  assignedTeamId?: string;
+  assignedTeamName?: string;
+  pricingSummary?: { total?: number; estimated_total?: number };
+  quoteLock?: { quoteSignature?: string };
+};
+
+function reviewDraft(serviceSlug: string, cleanerMode: CleanerMode): Record<string, unknown> {
+  const individual = cleanerMode === "individual_cleaners";
+  const deepCleaning = serviceSlug === "deep-cleaning";
+  return {
+    serviceSlug,
+    serviceDetails: {
+      propertyType: "house",
+      bedrooms: "2",
+      bathrooms: "1",
+      extraRooms: "0",
+      hasPets: "no",
+      lastCleaned: "1_3_months",
+    },
+    address: "1 Review Test Street",
+    suburb: "Claremont",
+    serviceAreaLocationId: LOCATION_ID,
+    serviceAreaCityId: CITY_ID,
+    city: "Cape Town",
+    postalCode: "7708",
+    accessInstructions: "Ring the bell",
+    parkingInstructions: "Street parking",
+    gateCode: "1234",
+    contactPhone: "+27710000000",
+    selectedExtras: individual ? ["inside-oven"] : ["inside-cabinets"],
+    equipmentRequired: "no",
+    equipmentQuote: null,
+    bookingType: "recurring",
+    date: "2026-11-16",
+    time: "08:30",
+    alternativeDate: "",
+    alternativeTime: "",
+    recurringFrequency: deepCleaning ? "monthly" : "weekly",
+    recurringDays: deepCleaning ? [] : ["Monday"],
+    recurringStartDate: "2026-11-16",
+    recurringEndDate: "",
+    cleanerMode,
+    assignedTeamId: individual ? "" : "team-alpha",
+    assignedTeamName: individual ? "" : "RD Team Alpha",
+    cleanerCount: individual ? 2 : 1,
+    selectedCleanerIds: individual ? ["cleaner-alice"] : [],
+    selectedCleanerDetails: individual
+      ? [
+          {
+            id: "cleaner-alice",
+            name: "Alice Test",
+            initials: "AT",
+            avatarColor: "bg-slate-100 text-slate-700",
+            rating: 4.9,
+            jobsCompleted: 120,
+            areasServed: "Claremont, Rondebosch",
+            isAvailable: true,
+            slotEligible: true,
+            badges: ["recommended"],
+            unavailableReason: null,
+          },
+        ]
+      : [],
+  };
+}
+
+async function seedDraft(
+  page: Page,
+  serviceSlug: string,
+  cleanerMode: CleanerMode,
+  overrides: Record<string, unknown> = {},
+) {
+  const draft = { ...reviewDraft(serviceSlug, cleanerMode), ...overrides };
+  await page.addInitScript(
+    ({ key, value }) => {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    },
+    { key: STORAGE_KEY, value: draft },
+  );
+}
+
+async function readDraft(page: Page): Promise<StoredDraft> {
+  return page.evaluate((key) => {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as StoredDraft) : {};
+  }, STORAGE_KEY);
+}
+
+async function expectDraft(page: Page, expected: Record<string, unknown>) {
+  await expect
+    .poll(async () => readDraft(page), { timeout: 7_500 })
+    .toMatchObject(expected);
+}
+
+async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
+  const forbiddenMutations: string[] = [];
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+
+    if (request.method() === "POST" && path === "/api/booking-v2/quote") {
+      await route.fulfill({ status: 200, json: authoritativeQuoteFixture("e2e-authoritative") });
+      return;
+    }
+
+    if (path.startsWith("/api/analytics/")) {
+      await route.fulfill({ status: 204, body: "" });
+      return;
+    }
+
+
+    if (request.method() !== "GET") {
+      forbiddenMutations.push(`${request.method()} ${path}`);
+      await route.abort("blockedbyclient");
+      return;
+    }
+
+    if (path === "/api/booking/time-slots") {
+      await route.fulfill({
+        status: 200,
+        json: { slots: [{ time: "08:30", available: true }] },
+      });
+      return;
+    }
+
+    if (path === "/api/booking-v2/available-cleaners") {
+      const selectedId = path.includes("closure") ? "cleaner-closure" : "cleaner-alice";
+      await route.fulfill({
+        status: 200,
+        json: {
+          cleaners: [
+            {
+              id: selectedId,
+              name: selectedId === "cleaner-closure" ? "Closure Test Cleaner" : "Alice Test",
+              isAvailable: true,
+              slotEligible: true,
+            },
+          ],
+        },
+      });
+      return;
+    }
+
+    if (path === "/api/booking-v2/services") {
+      await route.fulfill({
+        status: 200,
+        json: {
+          catalog: { "regular-cleaning": liveServiceFixture("regular-cleaning"), "deep-cleaning": liveServiceFixture("deep-cleaning") },
+          scheduling: {
+            leadMinutes: 0,
+            slotStartHour: 8,
+            slotEndHour: 12,
+            slotIntervalMinutes: 30,
+            timezone: "Africa/Johannesburg",
+          },
+        },
+      });
+      return;
+    }
+
+    if (path === "/api/booking-v2/team-availability") {
+      await route.fulfill({
+        status: 200,
+        json: {
+          available: true,
+          teams: [
+            {
+              id: "team-alpha",
+              name: "RD Team Alpha",
+              available: true,
+              active_member_count: 2,
+              qualified_member_count: 2,
+            },
+          ],
+        },
+      });
+      return;
+    }
+
+    // Step 3 should not need a real backend for this seeded review state.
+    await route.fulfill({ status: 404, json: { error: `unmocked_e2e_get:${path}` } });
+  });
+
+  return forbiddenMutations;
+}
+
+async function expectReviewPrice(page: Page) {
+  // The pricing hook first renders an optimistic client total, then replaces it
+  // with the mocked authoritative server quote. In the full closure suite,
+  // localStorage can briefly be one render ahead of the visible review card.
+  // Wait for the authoritative quote lock, then assert the UI and persisted
+  // draft agree on that exact settled review price.
+  await expect
+    .poll(async () => {
+      const draft = await readDraft(page);
+      return {
+        quoteSignature: draft.quoteLock?.quoteSignature ?? null,
+        amount: Number(draft.pricingSummary?.estimated_total ?? draft.pricingSummary?.total ?? 0),
+      };
+    }, { timeout: 7_500 })
+    .toEqual({ quoteSignature: "e2e-authoritative", amount: 500 });
+
+  const priceCard = page
+    .getByRole("heading", { name: "Price breakdown", exact: true })
+    .locator("xpath=../..");
+  await expect(priceCard.getByText("R500", { exact: true }).first()).toBeVisible();
+}
+
+async function expectReviewSectionNumbers(page: Page, titles: string[]) {
+  const headingOrder = (await page.locator("h3").allTextContents()).map((text) => text.trim());
+  let previousIndex = -1;
+
+  for (let index = 0; index < titles.length; index += 1) {
+    const title = titles[index];
+    const nextIndex = headingOrder.indexOf(title, previousIndex + 1);
+    expect(nextIndex, `${title} should follow the previous review section`).toBeGreaterThan(previousIndex);
+    previousIndex = nextIndex;
+
+    const heading = page.getByRole("heading", { name: title, exact: true });
+    await expect(heading).toBeVisible();
+    const number = heading.locator("xpath=..").locator("span").first();
+    await expect(number).toBeVisible();
+    await expect(number).toHaveText(String(index + 1));
+  }
+}
+
+test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
+  test("regular review preserves customer, schedule, cleaner, pricing, draft and payment transition", async ({ page }) => {
+    await seedDraft(page, "regular-cleaning", "individual_cleaners");
+    const forbiddenMutations = await installNonMutatingApiSandbox(page);
+
+    const response = await page.goto("/book/regular-cleaning?step=review", { waitUntil: "domcontentloaded" });
+    expect(response?.status()).toBeLessThan(400);
+    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=review/);
+    await expect(page.getByRole("heading", { name: "Review your booking" })).toBeVisible();
+
+    await expect(page.getByText(/1 Review Test Street.*Claremont.*Cape Town.*7708/)).toBeVisible();
+    await expect(page.getByText("08:30", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Recurring · Weekly/)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Cleaner preference", exact: true }).locator("xpath=../../..").getByText("Alice Test", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("inside-oven", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Price breakdown" })).toBeVisible();
+    await expectReviewSectionNumbers(page, [
+      "Location",
+      "Equipment",
+      "Clean details",
+      "Schedule",
+      "Cleaner preference",
+      "Add-ons",
+    ]);
+    await expectReviewPrice(page);
+
+    await expectDraft(page, {
+      address: "1 Review Test Street",
+      bookingType: "recurring",
+      recurringFrequency: "weekly",
+      recurringDays: ["Monday"],
+      date: "2026-11-16",
+      time: "08:30",
+      cleanerCount: 2,
+      selectedCleanerIds: ["cleaner-alice"],
+    });
+
+    const locationHeading = page.getByRole("heading", { name: "Location" });
+    const locationHeader = locationHeading.locator("xpath=../..");
+    await locationHeader.getByRole("button", { name: "Edit" }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.locator("#edit-address").fill("99 Temporary Review Street");
+    await expectDraft(page, { address: "99 Temporary Review Street" });
+    await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expectDraft(page, { address: "1 Review Test Street" });
+
+    await page.getByRole("button", { name: "Proceed to payment →" }).click();
+    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=payment/);
+
+    expect(forbiddenMutations, "Review smoke must not submit a booking or payment mutation").toEqual([]);
+  });
+
+  test("deep review preserves assigned team and reaches Payment without booking mutation", async ({ page }) => {
+    await seedDraft(page, "deep-cleaning", "team");
+    const forbiddenMutations = await installNonMutatingApiSandbox(page);
+
+    const response = await page.goto("/book/deep-cleaning?step=review", { waitUntil: "domcontentloaded" });
+    expect(response?.status()).toBeLessThan(400);
+    await expect(page).toHaveURL(/\/book\/deep-cleaning\?step=review/);
+    await expect(page.getByRole("heading", { name: "Review your booking" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Clean details", exact: true })).toBeVisible();
+    await expect(page.getByText("08:30", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Recurring · Monthly/)).toBeVisible();
+    await expectReviewSectionNumbers(page, [
+      "Location",
+      "Clean details",
+      "Schedule",
+      "Add-ons",
+    ]);
+    await expectReviewPrice(page);
+
+    await expectDraft(page, {
+      assignedTeamId: "team-alpha",
+      assignedTeamName: "RD Team Alpha",
+      date: "2026-11-16",
+      time: "08:30",
+    });
+
+    await page.getByRole("button", { name: "Proceed to payment →" }).click();
+    await expect(page).toHaveURL(/\/book\/deep-cleaning\?step=payment/);
+
+    expect(forbiddenMutations, "Team review smoke must not submit a booking or payment mutation").toEqual([]);
+  });
+
+  test("review labels a missing time clearly without mutating the draft", async ({ page }) => {
+    await seedDraft(page, "regular-cleaning", "individual_cleaners", { time: "" });
+    const forbiddenMutations = await installNonMutatingApiSandbox(page);
+
+    const response = await page.goto("/book/regular-cleaning?step=review", { waitUntil: "domcontentloaded" });
+    expect(response?.status()).toBeLessThan(400);
+    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=review/);
+    await expect(page.getByRole("heading", { name: "Review your booking" })).toBeVisible();
+    await expect(page.getByText("No time selected.", { exact: true })).toBeAttached();
+
+    const scheduleHeading = page.getByRole("heading", { name: "Schedule", exact: true });
+    const scheduleSection = scheduleHeading.locator("xpath=../../..");
+    await expect(scheduleSection.getByText("—", { exact: true })).toBeVisible();
+
+    await expectDraft(page, { time: "" });
+    expect(forbiddenMutations, "Missing-time presentation check must remain read-only").toEqual([]);
+  });
+});

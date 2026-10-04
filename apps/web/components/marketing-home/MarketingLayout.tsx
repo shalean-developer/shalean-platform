@@ -1,19 +1,19 @@
 import type { ReactNode } from "react";
-import { FooterSection } from "@/components/home/sections/FooterSection";
+import { SiteFooter } from "@/components/nav/SiteFooter";
 
 type Props = Readonly<{
   children: ReactNode;
 }>;
 
 /**
- * Shared shell for marketing-style pages: visible footer internal links (see `FooterSection`).
+ * Shared shell for marketing-style pages: visible footer internal links.
  * Global header lives in root `layout.tsx` (`GlobalTopNav`).
  */
 export default function MarketingLayout({ children }: Props) {
   return (
     <>
       {children}
-      <FooterSection />
+      <SiteFooter />
     </>
   );
 }

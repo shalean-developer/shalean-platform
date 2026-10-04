@@ -58,7 +58,7 @@ export async function adjustBookingTeamMemberPayoutEarnings(
   const { data: booking, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, date, status, team_id, cleaner_id, payout_owner_cleaner_id, payout_id, payout_status, payout_paid_at, is_team_job, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id, total_paid_cents, amount_paid_cents, total_paid_zar, cleaner_payout_cents, cleaner_bonus_cents, display_earnings_cents, cleaner_earnings_total_cents, payout_frozen_cents, earnings_summary",
+      "id, date, status, team_id, cleaner_id, payout_owner_cleaner_id, payout_id, payout_status, payout_paid_at, is_team_job, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id, total_paid_cents, amount_paid_cents, total_paid_zar, base_amount_cents, cleaner_payout_cents, cleaner_bonus_cents, display_earnings_cents, cleaner_earnings_total_cents, payout_frozen_cents, earnings_summary",
     )
     .eq("id", params.bookingId)
     .maybeSingle();

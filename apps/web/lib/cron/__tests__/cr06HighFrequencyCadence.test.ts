@@ -38,8 +38,8 @@ describe("CR-06 high-frequency cron cadence", () => {
     expect(generatorScheduleFor(generator, "whatsapp-worker")).toBe("*/2 * * * *");
   });
 
-  it("keeps CR-05 retry-failed-jobs reduction in the canonical setup generator", () => {
-    expect(generatorScheduleFor(generator, "retry-failed-jobs")).toBe("*/2 * * * *");
+  it("keeps the QUOTA-01 retry-failed-jobs cadence in the canonical setup generator", () => {
+    expect(generatorScheduleFor(generator, "retry-failed-jobs")).toBe("*/10 * * * *");
   });
 
   it("keeps both canonical HTTP routes intact", () => {

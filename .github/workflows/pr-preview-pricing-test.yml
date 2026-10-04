@@ -1,0 +1,165 @@
+name: PR preview — pricing-test
+
+on:
+  pull_request:
+    branches:
+      - production
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or SHA to preview
+        required: true
+        type: string
+      pr_number:
+        description: Optional PR number for preview metadata
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pricing-test-preview
+  cancel-in-progress: true
+
+jobs:
+  build-preview:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: pricing-test-preview
+      url: https://pricing-test.shalean.co.za
+    env:
+      SHALEAN_APP_ENV: "staging"
+      SHALEAN_ENFORCE_ENV_SAFETY: "true"
+      SHALEAN_EXPECTED_SUPABASE_REF: "jhubpsbwmjgydkzztxeu"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_SITE_URL: "https://pricing-test.shalean.co.za"
+      NEXT_PUBLIC_APP_URL: "https://pricing-test.shalean.co.za"
+      NEXT_PUBLIC_SUPABASE_URL: "https://jhubpsbwmjgydkzztxeu.supabase.co"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ vars.PLESK_TEST_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_IlDDZwioRpJRr2F6-B8WFA_uBrbZnkT' }}"
+      NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "${{ vars.PLESK_TEST_PAYSTACK_PUBLIC_KEY || 'pk_test_preview_disabled' }}"
+
+    steps:
+      - name: Resolve preview ref
+        id: preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+            echo "pr=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ inputs.ref }}" >> "$GITHUB_OUTPUT"
+            echo "pr=${{ inputs.pr_number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout exact preview head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.preview.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact checkout and staging configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOT="$(git rev-parse HEAD)"
+          WANT="$(git rev-parse "${{ steps.preview.outputs.sha }}")"
+          test "$GOT" = "$WANT"
+          test "$SHALEAN_APP_ENV" = "staging"
+          test "$NEXT_PUBLIC_SUPABASE_URL" = "https://jhubpsbwmjgydkzztxeu.supabase.co"
+          test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -n "$NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY"
+          case "$NEXT_PUBLIC_SUPABASE_ANON_KEY" in sb_publishable_*|eyJ*) ;; *) exit 1 ;; esac
+          case "$NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY" in pk_test_*) ;; *) exit 1 ;; esac
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false --package-lock-only=false --ignore-scripts @tailwindcss/postcss@4.1.14
+
+      - name: Build standalone staging runtime
+        working-directory: apps/web
+        env:
+          FACEBOOK_APP_ID: "build-only-placeholder"
+          FACEBOOK_APP_SECRET: "build-only-placeholder"
+        run: |
+          set -euo pipefail
+          node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build --webpack
+          test -f .next/standalone/apps/web/server.js
+
+      - name: Create preview deployment bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA="$(git rev-parse HEAD)"
+          STAGE="$RUNNER_TEMP/plesk-pricing-test-stage"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          cp -a apps/web/.next/standalone/apps/web/. "$STAGE/"
+          rm -rf "$STAGE/public" "$STAGE/.next/static"
+          mkdir -p "$STAGE/.next"
+          cp -a apps/web/public "$STAGE/public"
+          cp -a apps/web/.next/static "$STAGE/.next/static"
+          cat > "$STAGE/build-meta.json" <<META
+          {
+            "artifact_sha": "$SHA",
+            "artifact_branch": "$GITHUB_HEAD_REF",
+            "preview_pr": "${{ steps.preview.outputs.pr }}",
+            "target_host": "pricing-test.shalean.co.za",
+            "deployment_environment": "staging",
+            "supabase_ref": "jhubpsbwmjgydkzztxeu",
+            "server_secrets_baked_in": false
+          }
+          META
+          mv "$STAGE/server.js" "$STAGE/server.next.js"
+          cat > "$STAGE/server.js" <<'NODE'
+          'use strict';
+          process.env.SHALEAN_RELEASE_SHA = process.env.SHALEAN_RELEASE_SHA || require('./build-meta.json').artifact_sha;
+          require('./server.next.js');
+          NODE
+          tar -czf "$RUNNER_TEMP/pricing-test-runtime.tar.gz" -C "$STAGE" .
+          cp scripts/plesk-activate-prebuilt-pricing-test.sh "$RUNNER_TEMP/activate.sh"
+          sha256sum "$RUNNER_TEMP/pricing-test-runtime.tar.gz"
+
+      - name: Publish preview branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA="$(git rev-parse HEAD)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --orphan deploy-pricing-test-publish
+          git rm -rf --ignore-unmatch .
+          git clean -fdx
+          cp "$RUNNER_TEMP/pricing-test-runtime.tar.gz" pricing-test-runtime.tar.gz
+          cp "$RUNNER_TEMP/activate.sh" activate.sh
+          printf '%s\n' "$SHA" > release-sha.txt
+          printf '%s\n' "${{ steps.preview.outputs.pr }}" > preview-pr.txt
+          git add pricing-test-runtime.tar.gz activate.sh release-sha.txt preview-pr.txt
+          git commit -m "preview: pricing-test PR ${{ steps.preview.outputs.pr }} $SHA"
+          git push --force origin HEAD:refs/heads/deploy/pr-preview
+
+      - name: Add preview link to PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh pr comment "$PR_NUMBER" --body "Preview bundle published for \`$SHA\`. Preview artifact is isolated on \`deploy/pr-preview\`; canonical pricing-test staging remains owned by \`deploy/staging\`. Review the artifact metadata before any manual activation: https://pricing-test.shalean.co.za"

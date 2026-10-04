@@ -1,19 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { getDashboardAccessToken } from "@/lib/dashboard/dashboardFetch";
 
 export type ReferralLandingAudience = "loading" | "referrer" | "friend";
 
 /**
  * `/refer` serves two audiences:
- * - **referrer** — existing customers sharing the program (default, or own `?ref=` code)
+ * - **referrer** — existing customers sharing the program (default, or own referral code)
  * - **friend** — someone who opened another person's referral link
+ *
+ * The referral code is resolved by the server route and passed in explicitly so
+ * hydration timing cannot drop the query parameter for anonymous visitors.
  */
-export function useReferralLandingAudience(): ReferralLandingAudience {
-  const searchParams = useSearchParams();
-  const refFromQuery = searchParams.get("ref")?.trim().toUpperCase() ?? null;
+export function useReferralLandingAudience(referralCode: string | null): ReferralLandingAudience {
+  const refFromQuery = referralCode?.trim().toUpperCase() || null;
   const [audience, setAudience] = useState<ReferralLandingAudience>(refFromQuery ? "loading" : "referrer");
 
   useEffect(() => {
@@ -22,6 +23,7 @@ export function useReferralLandingAudience(): ReferralLandingAudience {
       return;
     }
 
+    setAudience("loading");
     let cancelled = false;
 
     async function resolve() {

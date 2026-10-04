@@ -16,7 +16,10 @@ export type OfficeReviewFunnelSummary = {
   completedJobs: number;
   promptsSent: number;
   promptClicks: number;
-  reviewsSubmitted: number;
+  /** All reviews created in the selected window, regardless of acquisition source. */
+  reviewsReceived: number;
+  /** Reviews from bookings that had a successful review prompt in the selected window. */
+  promptedReviewsSubmitted: number;
   conversionPct: number | null;
   clickThroughPct: number | null;
   recentRequests: OfficeReviewFunnelRecentRequest[];
@@ -37,7 +40,7 @@ export async function loadOfficeReviewFunnelSummary(
   const sinceIso = new Date(Date.now() - windowDays * 86_400_000).toISOString();
   const sinceYmd = sinceIso.slice(0, 10);
 
-  const [funnel, completedRes, promptEventsRes, reviewedBookingIdsRes] = await Promise.all([
+  const [funnel, completedRes, promptEventsRes, reviewsCountRes] = await Promise.all([
     computeReviewPromptConversionRate(admin, sinceIso, untilIso),
     admin
       .from("bookings")
@@ -53,16 +56,54 @@ export async function loadOfficeReviewFunnelSummary(
       .limit(40),
     admin
       .from("reviews")
-      .select("booking_id")
+      .select("id", { count: "exact", head: true })
       .gte("created_at", sinceIso)
-      .limit(5000),
+      .lt("created_at", untilIso),
   ]);
 
-  const reviewedBookingIds = new Set(
-    (reviewedBookingIdsRes.data ?? [])
-      .map((r) => String((r as { booking_id?: string | null }).booking_id ?? "").trim())
-      .filter(Boolean),
-  );
+  if (completedRes.error) {
+    throw new Error(`Could not count completed jobs: ${completedRes.error.message}`);
+  }
+  if (promptEventsRes.error) {
+    throw new Error(`Could not load review prompt events: ${promptEventsRes.error.message}`);
+  }
+  if (reviewsCountRes.error) {
+    throw new Error(`Could not count reviews received: ${reviewsCountRes.error.message}`);
+  }
+
+  const reviewsReceived = reviewsCountRes.count ?? 0;
+
+  const recentPromptBookingIds = [
+    ...new Set(
+      (promptEventsRes.data ?? [])
+        .map((raw) => {
+          const row = raw as {
+            booking_id?: string | null;
+            payload?: Record<string, unknown> | null;
+          };
+          const payload = row.payload && typeof row.payload === "object" ? row.payload : {};
+          return String(row.booking_id ?? payload.booking_id ?? "").trim();
+        })
+        .filter(Boolean),
+    ),
+  ];
+
+  const reviewedBookingIds = new Set<string>();
+  if (recentPromptBookingIds.length > 0) {
+    const { data: recentReviews, error: recentReviewsError } = await admin
+      .from("reviews")
+      .select("booking_id")
+      .in("booking_id", recentPromptBookingIds);
+
+    if (recentReviewsError) {
+      throw new Error(`Could not resolve recent review-request outcomes: ${recentReviewsError.message}`);
+    }
+
+    for (const row of recentReviews ?? []) {
+      const bookingId = String((row as { booking_id?: string | null }).booking_id ?? "").trim();
+      if (bookingId) reviewedBookingIds.add(bookingId);
+    }
+  }
 
   const nowMs = Date.now();
   const recentRequests: OfficeReviewFunnelRecentRequest[] = [];
@@ -97,7 +138,8 @@ export async function loadOfficeReviewFunnelSummary(
     completedJobs: completedRes.count ?? 0,
     promptsSent: funnel.promptsSent,
     promptClicks: funnel.promptClicks,
-    reviewsSubmitted: funnel.reviewsSubmitted,
+    reviewsReceived,
+    promptedReviewsSubmitted: funnel.reviewsSubmitted,
     conversionPct: funnel.conversionRate != null ? Math.round(funnel.conversionRate * 10000) / 100 : null,
     clickThroughPct: funnel.clickThroughRate != null ? Math.round(funnel.clickThroughRate * 10000) / 100 : null,
     recentRequests,

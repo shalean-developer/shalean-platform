@@ -32,7 +32,7 @@ type ServiceCard = PricedServiceCard | LinkOnlyServiceCard;
 
 const pricedServices: PricedServiceCard[] = [
   {
-    title: "Standard Cleaning",
+    title: "Regular Cleaning",
     description: "Regular upkeep for busy homes: dusting, floors, kitchens, bathrooms, and general refreshes.",
     icon: Home,
     service: "standard",

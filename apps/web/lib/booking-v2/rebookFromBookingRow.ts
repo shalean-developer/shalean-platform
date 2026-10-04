@@ -27,7 +27,7 @@ export function rebookBookUrlFromBookingRow(
   row: Pick<BookingRow, "id" | "service" | "service_slug">,
 ): string {
   const slug = bookingServiceSlugFromBookingRow(row);
-  return `/book/${slug}?rebook=${encodeURIComponent(row.id)}&step=2`;
+  return `/book/${slug}?rebook=${encodeURIComponent(row.id)}&step=schedule`;
 }
 
 /** Same as {@link rebookBookUrlFromBookingRow} but includes a signed `rt` token for unauthenticated prefill. */
@@ -37,7 +37,7 @@ export function rebookBookUrlFromBookingRowWithToken(
 ): string {
   const slug = bookingServiceSlugFromBookingRow(row);
   const rt = rebookToken.trim();
-  const base = `/book/${slug}?rebook=${encodeURIComponent(row.id)}&step=2`;
+  const base = `/book/${slug}?rebook=${encodeURIComponent(row.id)}&step=schedule`;
   return rt ? `${base}&rt=${encodeURIComponent(rt)}` : base;
 }
 

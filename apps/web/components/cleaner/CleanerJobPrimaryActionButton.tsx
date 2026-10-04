@@ -11,6 +11,7 @@ import { postCleanerLifecycleWithRetry } from "@/lib/cleaner/cleanerLifecyclePos
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { isCleanerJobEarningPositive, JOB_EARNING_BLOCK_COMPLETION_MESSAGE, resolveCleanerJobEarning } from "@/lib/cleaner/cleanerJobEarning";
 import { cleanerLifecycleFailureMessage } from "@/lib/cleaner/cleanerLifecycleClientErrors";
+import { cleanerUiCompletionTimingBlocked } from "@/lib/cleaner/cleanerJobCompletionGate";
 
 type CleanerJobPrimaryActionButtonProps = {
   bookingId: string;
@@ -23,8 +24,6 @@ type CleanerJobPrimaryActionButtonProps = {
   size?: "default" | "compact";
   variant?: "outline" | "hero";
 };
-
-const CLEANER_COMPLETION_MIN_ELAPSED_RATIO = 0.9;
 
 type EarlyFinishReason = "work_completed_faster" | "customer_requested_early_finish" | "property_required_less_work" | "other";
 
@@ -45,15 +44,6 @@ function resolveDurationMinutes(row: CleanerBookingRow): number | null {
   const hours = Number(row.duration_hours);
   if (Number.isFinite(hours) && hours > 0) return hours * 60;
   return null;
-}
-
-function completionRemainingMinutes(row: CleanerBookingRow, nowMs: number): number | null {
-  const durationMinutes = resolveDurationMinutes(row);
-  const startedAtMs = typeof row.started_at === "string" ? Date.parse(row.started_at) : Number.NaN;
-  if (durationMinutes == null || !Number.isFinite(startedAtMs)) return null;
-  const requiredMinutes = durationMinutes * CLEANER_COMPLETION_MIN_ELAPSED_RATIO;
-  const elapsedMinutes = Math.max(0, (nowMs - startedAtMs) / 60_000);
-  return Math.max(0, Math.ceil(requiredMinutes - elapsedMinutes));
 }
 
 function formatRemaining(minutes: number): string {
@@ -95,8 +85,16 @@ export function CleanerJobPrimaryActionButton({
   const nowMs = clockNowMs;
   const cta = useMemo(() => deriveCleanerJobPrimaryCta({ row: effectiveRow, nowMs, mapsQuery }), [effectiveRow, nowMs, mapsQuery]);
   const jobEarningPositive = isCleanerJobEarningPositive(resolveCleanerJobEarning(effectiveRow));
-  const remainingMinutes = cta.kind === "lifecycle" && cta.action === "complete" ? completionRemainingMinutes(effectiveRow, nowMs) : null;
-  const completionTimingBlocked = remainingMinutes != null && remainingMinutes > 0;
+  const completionTiming = cta.kind === "lifecycle" && cta.action === "complete"
+    ? cleanerUiCompletionTimingBlocked({
+        booking_snapshot: effectiveRow.booking_snapshot,
+        durationMinutes: resolveDurationMinutes(effectiveRow),
+        startedAt: effectiveRow.started_at,
+        nowMs,
+      })
+    : { blocked: false, remainingMinutes: null };
+  const remainingMinutes = completionTiming.remainingMinutes;
+  const completionTimingBlocked = completionTiming.blocked;
 
   const runLifecycle = useCallback(async (action: "accept" | "en_route" | "start" | "complete", mapsHref?: string) => {
     if (guardRef.current) return;

@@ -21,7 +21,7 @@ const DEFAULTS: ReferralProgramSettings = {
   rewardAmountZar: 50,
   checkoutDiscountZar: 50,
   minBookingValueZar: 0,
-  rewardOn: "first_paid_booking",
+  rewardOn: "first_completed_booking",
   rewardExpiryDays: null,
   maxRewardsPerCustomer: null,
   allowMultipleReferrals: true,

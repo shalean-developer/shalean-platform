@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { FooterSection } from "@/components/home/sections/FooterSection";
+import { SiteFooter } from "@/components/nav/SiteFooter";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { FaqFinalCta } from "@/components/faq/FaqFinalCta";
@@ -47,7 +47,7 @@ export default function FaqPage() {
   const faqJsonLd = buildFaqPageJsonLd(flattenAllFaqItems());
 
   return (
-    <div className="bg-white text-zinc-900">
+    <div className="bg-background text-foreground">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
       <GrowthTracking
         event={ANALYTICS_EVENTS.PAGE_VIEW}
@@ -60,7 +60,7 @@ export default function FaqPage() {
         <FaqTrustStrip />
         <FaqFinalCta />
       </main>
-      <FooterSection />
+      <SiteFooter />
       <FaqStickyMobileCta />
     </div>
   );

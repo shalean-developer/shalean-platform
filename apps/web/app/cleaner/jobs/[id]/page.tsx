@@ -43,7 +43,7 @@ import { wireLikeFromJobDetailCacheBody } from "@/lib/cleaner/cleanerQueuedLifec
 import { buildScheduleHintModel, latenessVsSchedule } from "@/lib/cleaner/cleanerJobDetailScheduleModel";
 import { buildUnifiedJobScope } from "@/lib/cleaner/cleanerJobDetailUnifiedScope";
 import { deriveMobilePhase } from "@/lib/cleaner/cleanerMobileBookingMap";
-import { stripExtraTimeSuffixFromDisplayLabel } from "@/lib/cleaner/cleanerExtraDisplayLabel";
+import { cleanerBookedLineItemPresentation } from "@/lib/cleaner/cleanerBookedLineItemDisplay";
 import { formatZarFromCents } from "@/lib/cleaner/cleanerZarFormat";
 import {
   cleanerJobEarningFromCents,
@@ -316,6 +316,12 @@ export default function CleanerJobDetailPage() {
   const [queueTtlBanner, setQueueTtlBanner] = useState<{ count: number; hadComplete: boolean } | null>(null);
   const [ttlCompleteLock, setTtlCompleteLock] = useState(false);
   const [contactSheetOpen, setContactSheetOpen] = useState(false);
+  const [showEarlyFinish, setShowEarlyFinish] = useState(false);
+  const [earlyFinishReason, setEarlyFinishReason] = useState<
+    "work_completed_faster" | "customer_requested_early_finish" | "property_required_less_work" | "other"
+  >("work_completed_faster");
+  const [earlyFinishBusy, setEarlyFinishBusy] = useState(false);
+  const [earlyFinishSent, setEarlyFinishSent] = useState(false);
   const jobControlRef = useRef<HTMLElement | null>(null);
   const postActionReconcileTimerRef = useRef<number | null>(null);
   const lifecycleGuardRef = useRef(false);
@@ -330,6 +336,20 @@ export default function CleanerJobDetailPage() {
     if (!job) return null;
     return { ...job, ...optimisticPatch };
   }, [job, optimisticPatch]);
+
+  const cleanerBookedLineItems = useMemo(() => {
+    return (displayJob?.lineItems ?? []).flatMap((item, idx) => {
+      const presentation = cleanerBookedLineItemPresentation(item);
+      if (!presentation) return [];
+      return [
+        {
+          ...presentation,
+          quantity: item.quantity,
+          key: `${item.slug ?? item.name}-${idx}`,
+        },
+      ];
+    });
+  }, [displayJob]);
 
   /** Same as `displayJob` — updated during render so `loadJob` / flush always see merged state without extra effect deps. */
   latestJobRef.current = displayJob;
@@ -656,6 +676,8 @@ export default function CleanerJobDetailPage() {
 
   useEffect(() => {
     setContactSheetOpen(false);
+    setShowEarlyFinish(false);
+    setEarlyFinishSent(false);
   }, [id]);
 
   useEffect(() => {
@@ -777,6 +799,29 @@ export default function CleanerJobDetailPage() {
     if (!n) return false;
     return NOTE_ALERT_RE.test(n);
   }, [displayJob?.job_notes]);
+
+  const requestEarlyFinish = useCallback(async () => {
+    if (!id || earlyFinishBusy) return;
+    setEarlyFinishBusy(true);
+    setActionErr(null);
+    try {
+      const headers = await getCleanerAuthHeaders();
+      const res = await fetch(`/api/cleaner/jobs/${encodeURIComponent(id)}/early-finish`, {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json" },
+        body: JSON.stringify({ reason: earlyFinishReason }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(body.error ?? "Could not request early completion.");
+      setEarlyFinishSent(true);
+      setShowEarlyFinish(false);
+      await loadJobRef.current?.();
+    } catch (error) {
+      setActionErr(error instanceof Error ? error.message : "Could not request early completion.");
+    } finally {
+      setEarlyFinishBusy(false);
+    }
+  }, [earlyFinishBusy, earlyFinishReason, id]);
 
   const scrollJobControlIntoView = useCallback(() => {
     window.requestAnimationFrame(() => {
@@ -1377,17 +1422,17 @@ export default function CleanerJobDetailPage() {
                   </dl>
                 </div>
               ) : null}
-              {displayJob.lineItems && displayJob.lineItems.length > 0 ? (
+              {cleanerBookedLineItems.length > 0 ? (
                 <div className="mt-4 border-t border-border pt-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Booked line items</p>
                   <ul className="mt-1.5 space-y-1.5 text-sm text-foreground">
-                    {displayJob.lineItems.map((it, idx) => (
-                      <li key={`${it.slug ?? it.name}-${idx}`} className="flex justify-between gap-2">
+                    {cleanerBookedLineItems.map((it) => (
+                      <li key={it.key} className="flex justify-between gap-2">
                         <span className="min-w-0">
-                          {stripExtraTimeSuffixFromDisplayLabel(String(it.name ?? ""))}
+                          {it.label}
                           {it.quantity > 1 ? <span className="text-muted-foreground"> ×{it.quantity}</span> : null}
                         </span>
-                        <span className="shrink-0 text-xs font-medium uppercase text-muted-foreground">{it.item_type}</span>
+                        <span className="shrink-0 text-xs font-medium text-muted-foreground">{it.category}</span>
                       </li>
                     ))}
                   </ul>
@@ -1509,13 +1554,62 @@ export default function CleanerJobDetailPage() {
                           </p>
                         ) : null}
                         {completionGateBlocked ? (
-                          <p
-                            role="status"
-                            data-testid="cleaner-job-detail-completion-gate-message"
-                            className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-950 dark:text-amber-50"
-                          >
-                            {completionGate.error}
-                          </p>
+                          <div className="space-y-2">
+                            <p
+                              role="status"
+                              data-testid="cleaner-job-detail-completion-gate-message"
+                              className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-950 dark:text-amber-50"
+                            >
+                              {completionGate.error}
+                            </p>
+                            {earlyFinishSent ? (
+                              <p className="text-sm font-medium text-emerald-700">
+                                Customer approval requested. Once approved, refresh this job and complete it.
+                              </p>
+                            ) : showEarlyFinish ? (
+                              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                                <label className="text-sm font-medium text-slate-700">Why did the job finish early?</label>
+                                <select
+                                  className="mt-2 w-full rounded-md border border-slate-300 bg-white p-2 text-sm"
+                                  value={earlyFinishReason}
+                                  onChange={(event) => setEarlyFinishReason(event.target.value as typeof earlyFinishReason)}
+                                >
+                                  <option value="work_completed_faster">Work completed faster than expected</option>
+                                  <option value="customer_requested_early_finish">Customer asked us to finish early</option>
+                                  <option value="property_required_less_work">Property required less work than expected</option>
+                                  <option value="other">Other</option>
+                                </select>
+                                <div className="mt-3 flex gap-2">
+                                  <Button
+                                    type="button"
+                                    className="min-h-11 flex-1"
+                                    disabled={earlyFinishBusy}
+                                    onClick={() => void requestEarlyFinish()}
+                                  >
+                                    {earlyFinishBusy ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}
+                                    Request customer approval
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="min-h-11"
+                                    disabled={earlyFinishBusy}
+                                    onClick={() => setShowEarlyFinish(false)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="text-left text-sm font-semibold text-blue-700 underline"
+                                onClick={() => setShowEarlyFinish(true)}
+                              >
+                                Finished early? Ask the customer to approve completion
+                              </button>
+                            )}
+                          </div>
                         ) : null}
                         {confirmPending === "complete" ? (
                           <div className="rounded-lg border border-emerald-600/35 bg-background p-3">

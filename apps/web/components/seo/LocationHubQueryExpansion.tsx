@@ -67,7 +67,7 @@ export function LocationHubQueryExpansion({ location, slug, tier }: Props) {
         ? `Lifts, parking, and compact layouts—scoped ${name} apartment cleans.`
         : `Apartments across ${name} benefit from stair/lift notes and realistic wet-area time—standard cycles maintain kitchens and bathrooms; deep visits tackle build-up before handovers or guests.`,
       links: [
-        { href: standard, label: `Standard cleaning (${city})` },
+        { href: standard, label: `Regular cleaning (${city})` },
         { href: airbnb, label: `Airbnb turnovers (${city})` },
       ],
     },

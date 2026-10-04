@@ -20,6 +20,10 @@ import {
   AnalyticsDateRangePicker,
   type AnalyticsRange,
 } from "@/components/admin/office/AnalyticsDateRangePicker";
+import {
+  OfficeZohoPageHeader,
+  OfficeZohoSecondaryButton,
+} from "@/components/admin/office/OfficeZohoChrome";
 
 function zar(value: number): string {
   return `R ${Math.round(value).toLocaleString("en-ZA")}`;
@@ -67,6 +71,9 @@ export default function AnalyticsPage() {
   );
   const chartTotal = useMemo(() => chartData.reduce((sum, d) => sum + d.value, 0), [chartData]);
   const currentRangeLabel = rangeLabel(range);
+  const analyticsSubtitle = data?.fetchedAt
+    ? `Business performance insights, revenue trends and customer metrics. Updated ${new Date(data.fetchedAt).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })} SAST.`
+    : "Business performance insights, revenue trends and customer metrics.";
 
   const kpis = data
     ? [
@@ -103,31 +110,23 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Analytics</h1>
-          <p className="mt-0.5 text-sm text-slate-500">
-            Business performance insights, revenue trends and customer metrics.
-            {data?.fetchedAt ? (
-              <span className="ml-1 text-slate-400">
-                Updated {new Date(data.fetchedAt).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })} SAST.
-              </span>
-            ) : null}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
-          >
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            Refresh
-          </button>
-          <AnalyticsDateRangePicker value={range} onChange={setRange} />
-        </div>
-      </div>
+      <OfficeZohoPageHeader
+        title="Analytics"
+        subtitle={analyticsSubtitle}
+        actions={
+          <>
+            <OfficeZohoSecondaryButton
+              onClick={() => void refetch()}
+              disabled={loading}
+              className="px-3 py-1.5 text-xs"
+            >
+              {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              Refresh
+            </OfficeZohoSecondaryButton>
+            <AnalyticsDateRangePicker value={range} onChange={setRange} />
+          </>
+        }
+      />
 
       {error ? (
         <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">

@@ -115,6 +115,7 @@ type JobState = {
   skipped_reason: string | null;
 
   processed_at: string | null;
+  scheduled_for?: string | null;
 
 };
 
@@ -164,6 +165,8 @@ function createMockSupabase(params: {
 
   sentHistory?: { sent_at: string }[];
 
+  reviewExists?: boolean;
+
 }) {
 
   let job = { ...params.job };
@@ -211,6 +214,10 @@ function createMockSupabase(params: {
       }
 
       if (table === "bookings") return { data: params.booking, error: null };
+
+      if (table === "reviews") {
+        return { data: params.reviewExists ? { id: "review-1" } : null, error: null };
+      }
 
       if (table === "lifecycle_email_settings") {
 
@@ -465,6 +472,177 @@ describe("processLifecycleJob enterprise scenarios", () => {
     expect(mock.getJob().status).toBe("skipped");
 
     expect(mock.getJob().skipped_reason).toBe(LIFECYCLE_SKIP.appointmentAlreadyPassed);
+
+  });
+
+
+
+  it("P3-13: review request waits in pending until authoritative completion", async () => {
+
+    const mock = createMockSupabase({
+
+      job: {
+
+        id: "job-review-wait",
+
+        booking_id: "book-review-wait",
+
+        job_type: "review_request",
+
+        customer_email: "customer@example.com",
+
+        status: "pending",
+
+        attempts: 0,
+
+        sent_at: null,
+
+        last_error: null,
+
+        skipped_reason: null,
+
+        processed_at: null,
+
+      },
+
+      booking: {
+
+        id: "book-review-wait",
+
+        status: "in_progress",
+
+        completed_at: null,
+
+        payment_status: "success",
+
+        service: "standard",
+
+        booking_snapshot: pastAppointmentSnapshot(),
+
+        location: "Cape Town",
+
+        cleaner_id: "00000000-0000-4000-8000-000000000001",
+
+      },
+
+    });
+
+
+
+    const result = await processLifecycleJob(mock as never, {
+
+      id: "job-review-wait",
+
+      booking_id: "book-review-wait",
+
+      job_type: "review_request",
+
+      customer_email: "customer@example.com",
+
+      attempts: 0,
+
+    });
+
+
+
+    expect(result).toBe("skipped");
+
+    expect(mocks.sendReviewEmail).not.toHaveBeenCalled();
+
+    expect(mock.getJob().status).toBe("pending");
+
+    expect(mock.getJob().skipped_reason).toBeNull();
+
+    expect(mock.getJob().scheduled_for).toBeTruthy();
+    expect(Date.parse(String(mock.getJob().scheduled_for))).toBeGreaterThan(Date.now());
+
+    expect(mocks.logSystemEvent).toHaveBeenCalledWith(
+
+      expect.objectContaining({ message: "lifecycle.review_request.deferred" }),
+
+    );
+
+  });
+
+
+
+  it("P3-13: already-reviewed booking skips lifecycle review email", async () => {
+
+    const mock = createMockSupabase({
+
+      job: {
+
+        id: "job-review-existing",
+
+        booking_id: "book-review-existing",
+
+        job_type: "review_request",
+
+        customer_email: "customer@example.com",
+
+        status: "pending",
+
+        attempts: 0,
+
+        sent_at: null,
+
+        last_error: null,
+
+        skipped_reason: null,
+
+        processed_at: null,
+
+      },
+
+      booking: {
+
+        id: "book-review-existing",
+
+        status: "completed",
+
+        completed_at: new Date().toISOString(),
+
+        payment_status: "success",
+
+        service: "standard",
+
+        booking_snapshot: pastAppointmentSnapshot(),
+
+        location: "Cape Town",
+
+        cleaner_id: "00000000-0000-4000-8000-000000000001",
+
+      },
+
+      reviewExists: true,
+
+    });
+
+
+
+    const result = await processLifecycleJob(mock as never, {
+
+      id: "job-review-existing",
+
+      booking_id: "book-review-existing",
+
+      job_type: "review_request",
+
+      customer_email: "customer@example.com",
+
+      attempts: 0,
+
+    });
+
+
+
+    expect(result).toBe("skipped");
+
+    expect(mocks.sendReviewEmail).not.toHaveBeenCalled();
+
+    expect(mock.getJob().status).toBe("skipped");
+
+    expect(mock.getJob().skipped_reason).toBe(LIFECYCLE_SKIP.reviewAlreadySubmitted);
 
   });
 

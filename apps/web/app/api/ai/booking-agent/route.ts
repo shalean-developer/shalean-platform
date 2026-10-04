@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { buildBookingAgentQuote } from "@/lib/ai/bookingAgentQuote";
 import { logAiDecision } from "@/lib/ai/logAiDecision";
 import { intentToStep1State, parseBookingIntent } from "@/lib/ai/parseBookingIntent";
-import { processPaystackInitializeBody } from "@/lib/booking/paystackInitializeCore";
 import { fetchSlotAdjustmentMap } from "@/lib/pricing/loadDynamicPricing";
 import { resolveVipTierForUserId } from "@/lib/booking/resolveVipTierServer";
 import { verifySupabaseAccessToken } from "@/lib/booking/verifySupabaseSession";
@@ -12,7 +11,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function summarizeQuote(dateYmd: string, priceZar: number): string {
-  return `Here’s your quote for ${dateYmd}: from R${priceZar.toLocaleString("en-ZA")} for the suggested time. Pick a slot to lock pricing, then confirm to pay securely.`;
+  return `Here’s your quote for ${dateYmd}: from R${priceZar.toLocaleString("en-ZA")} for the suggested time. Continue in the booking flow to choose a slot and pay securely.`;
 }
 
 async function resolveUserIdFromRequest(accessToken: string | undefined): Promise<string | null> {
@@ -23,11 +22,14 @@ async function resolveUserIdFromRequest(accessToken: string | undefined): Promis
 }
 
 /**
- * AI booking agent: natural-language quote + Paystack confirm (same validation as web checkout).
+ * AI booking agent: natural-language quote/recommendation only.
+ *
+ * Payment initiation is intentionally not supported here. Customer checkout must continue through
+ * the canonical `/book` → `/api/booking-v2/confirm` → payment-session flow.
  *
  * Body:
  * - `{ action: "quote", message: string, accessToken?: string, overrideTime?: string, dateYmd?: string }`
- * - `{ action: "pay", ... }` — same shape as `/api/paystack/initialize`
+ * - `{ action: "pay", ... }` — retired; returns 410 with the canonical booking path.
  */
 export async function POST(request: Request) {
   let body: Record<string, unknown>;
@@ -40,45 +42,20 @@ export async function POST(request: Request) {
   const action = typeof body.action === "string" ? body.action.trim() : "";
 
   if (action === "pay") {
-    const result = await processPaystackInitializeBody(body);
-    if (!result.ok) {
-      return NextResponse.json(
-        {
-          error: result.error,
-          ...(result.errorCode != null ? { errorCode: result.errorCode } : {}),
-        },
-        { status: result.status },
-      );
-    }
-    const userId = await resolveUserIdFromRequest(
-      typeof body.accessToken === "string" ? body.accessToken : undefined,
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Direct AI booking payment is retired. Continue through the booking flow to pay securely.",
+        errorCode: "AI_BOOKING_AGENT_PAY_RETIRED",
+        bookingPath: "/book",
+        customerPricingSot: "booking_v2",
+      },
+      { status: 410 },
     );
-    const admin = getSupabaseAdmin();
-    if (admin) {
-      const { error: evErr } = await admin.from("user_events").insert({
-        user_id: userId,
-        event_type: "booking_agent_confirm",
-        booking_id: null,
-        payload: { reference: result.reference, source: "ai_booking_agent" },
-      });
-      if (evErr) {
-        /* non-fatal if analytics schema lags */
-      }
-      await logAiDecision("booking_agent_pay", {
-        user_id: userId,
-        reference: result.reference,
-      });
-    }
-    return NextResponse.json({
-      ok: true,
-      authorizationUrl: result.authorizationUrl,
-      reference: result.reference,
-      confirmationLabel: "Pay now",
-    });
   }
 
   if (action !== "quote") {
-    return NextResponse.json({ error: "Invalid action. Use quote or pay." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid action. Use quote." }, { status: 400 });
   }
 
   const message = typeof body.message === "string" ? body.message : "";
@@ -164,6 +141,7 @@ export async function POST(request: Request) {
     smartExtras: quote.smartExtras,
     vipTier,
     summary,
-    confirmationHint: "POST with action pay using the same payload as /api/paystack/initialize.",
+    bookingPath: "/book",
+    confirmationHint: "Continue through /book to confirm the booking and start the server-created payment session.",
   });
 }

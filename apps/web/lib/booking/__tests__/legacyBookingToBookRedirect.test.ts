@@ -3,6 +3,8 @@ import {
   bookingV2PrefillPatchFromLegacySearchParams,
   buildBookHrefFromLegacySearchParams,
   buildBookHrefFromWidgetSelection,
+  buildBookServiceSelectionHref,
+  explicitBookServiceSlugFromParam,
   legacyServiceIdToBookSlug,
 } from "@/lib/booking/legacyBookingToBookRedirect";
 
@@ -10,6 +12,14 @@ describe("legacyBookingToBookRedirect", () => {
   it("maps airbnb to airbnb-cleaning slug", () => {
     expect(legacyServiceIdToBookSlug("airbnb")).toBe("airbnb-cleaning");
   });
+
+  it("resolves explicit Office intent without falling back to Regular", () => {
+    expect(explicitBookServiceSlugFromParam("office-cleaning")).toBe("office-cleaning");
+    expect(explicitBookServiceSlugFromParam("office")).toBe("office-cleaning");
+    expect(explicitBookServiceSlugFromParam("not-a-service")).toBeNull();
+  });
+
+
 
   it("builds /book slug path with step and marketing params", () => {
     const sp = new URLSearchParams({
@@ -21,10 +31,34 @@ describe("legacyBookingToBookRedirect", () => {
     });
     const href = buildBookHrefFromLegacySearchParams(sp, "schedule");
     expect(href).toContain("/book/airbnb-cleaning?");
-    expect(href).toContain("step=2");
+    expect(href).toContain("step=schedule");
     expect(href).toContain("bedrooms=2");
     expect(href).toContain("source=services_hub");
   });
+
+  it("preserves referral code when selecting a service on the booking hub", () => {
+    const href = buildBookServiceSelectionHref(
+      new URLSearchParams({ ref: "SHALEANQ2L2RADB" }),
+      "regular-cleaning",
+    );
+
+    expect(href).toBe(
+      "/book/regular-cleaning?service=regular-cleaning&ref=SHALEANQ2L2RADB&step=details&section=address",
+    );
+  });
+
+  it("builds the canonical Office booking path from the service picker", () => {
+    const href = buildBookServiceSelectionHref(
+      new URLSearchParams(),
+      "office-cleaning",
+    );
+
+    expect(href).toBe(
+      "/book/office-cleaning?service=office-cleaning&step=details&section=address",
+    );
+  });
+
+
 
   it("hands widget selections directly to the matching canonical funnel", () => {
     const href = buildBookHrefFromWidgetSelection({
@@ -39,7 +73,7 @@ describe("legacyBookingToBookRedirect", () => {
     });
 
     expect(href).toBe(
-      "/book/deep-cleaning?service=deep&bedrooms=3&bathrooms=2&extraRooms=1&extrasMode=replace&source=home_hero&serviceAreaLocationId=11111111-1111-4111-8111-111111111111&serviceAreaName=Claremont&step=1",
+      "/book/deep-cleaning?service=deep&bedrooms=3&bathrooms=2&extraRooms=1&extrasMode=replace&source=home_hero&serviceAreaLocationId=11111111-1111-4111-8111-111111111111&serviceAreaName=Claremont&step=details",
     );
   });
 
@@ -51,7 +85,7 @@ describe("legacyBookingToBookRedirect", () => {
     });
 
     expect(href).toBe(
-      "/book/moving-cleaning?service=move&extrasMode=replace&source=live_widget&location=Sea+Point&step=1",
+      "/book/moving-cleaning?service=move&extrasMode=replace&source=live_widget&location=Sea+Point&step=details",
     );
   });
 
@@ -62,7 +96,7 @@ describe("legacyBookingToBookRedirect", () => {
     });
 
     expect(href).toBe(
-      "/book/carpet-cleaning?service=carpet&extras=stain-treatment&extrasMode=replace&step=1",
+      "/book/carpet-cleaning?service=carpet&extras=stain-treatment&extrasMode=replace&step=details",
     );
   });
 

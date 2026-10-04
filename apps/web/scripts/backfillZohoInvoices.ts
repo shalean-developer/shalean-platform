@@ -31,6 +31,8 @@ const apply = process.argv.includes("--apply");
 const repairMislinked = process.argv.includes("--repair-mislinked");
 const repairAllContacts = process.argv.includes("--repair-all-contacts");
 const repairStale = process.argv.includes("--repair-stale") || repairAllContacts;
+const idsArg = process.argv.find((a) => a.startsWith("--ids="));
+const onlyIds = new Set((idsArg?.slice("--ids=".length) ?? "").split(",").map((x) => x.trim()).filter(Boolean));
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const ZOHO_THROTTLE_MS = 400;
@@ -51,6 +53,8 @@ type Row = {
   amount_paid_cents: number | null;
   paystack_reference: string | null;
   payment_status: string | null;
+  status: string | null;
+  is_test: boolean | null;
   is_monthly_billing_booking: boolean | null;
   sales_document_id?: string | null;
   payment_method?: string | null;
@@ -58,6 +62,8 @@ type Row = {
 };
 
 function isPaidPerVisit(r: Row): boolean {
+  if (r.is_test === true) return false;
+  if (String(r.status ?? "").trim().toLowerCase() === "cancelled") return false;
   if (r.is_monthly_billing_booking === true) return false;
   if (String(r.payment_status ?? "").toLowerCase() === "pending_monthly") return false;
   if (String(r.sales_document_id ?? "").trim()) return false;
@@ -158,6 +164,8 @@ async function main() {
     "amount_paid_cents",
     "paystack_reference",
     "payment_status",
+    "status",
+    "is_test",
     "is_monthly_billing_booking",
     "sales_document_id",
     "payment_method",
@@ -165,6 +173,11 @@ async function main() {
   ].join(", ");
 
   console.log(apply ? "Mode: APPLY (will write to Zoho + Supabase)" : "Mode: DRY-RUN (no writes)");
+  if (onlyIds.size > 0) console.log(`Bounded booking ids: ${onlyIds.size}`);
+  if (onlyIds.size > 0 && (repairMislinked || repairAllContacts || repairStale)) {
+    console.error("Repair flags cannot be combined with --ids; refusing bounded run.");
+    process.exit(1);
+  }
 
   if (repairMislinked && apply) {
     const mislinked = await repairMislinkedBookingZohoIds(admin);
@@ -203,6 +216,7 @@ async function main() {
     const rows = (data ?? []) as unknown as Row[];
     for (const r of rows) {
       scanned += 1;
+      if (onlyIds.size > 0 && !onlyIds.has(r.id)) continue;
       if (!isPaidPerVisit(r)) continue;
       eligible += 1;
 

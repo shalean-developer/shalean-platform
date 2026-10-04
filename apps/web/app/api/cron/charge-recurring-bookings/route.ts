@@ -29,7 +29,7 @@ export const dynamic = "force-dynamic";
 const MAX_CHARGE = 100;
 
 const RECURRING_CHARGE_BOOKING_SELECT_BASE =
-  "id, date, recurring_id, customer_email, paystack_reference, booking_snapshot, total_paid_zar, recurring_retry_count, recurring_first_failure_at, recurring_next_charge_attempt_at, payment_link_first_sent_at, payment_link_send_count, payment_status, is_monthly_billing_booking";
+  "id, date, recurring_id, customer_email, paystack_reference, booking_snapshot, total_price, total_paid_zar, recurring_retry_count, recurring_first_failure_at, recurring_next_charge_attempt_at, payment_link_first_sent_at, payment_link_send_count, payment_status, is_monthly_billing_booking";
 
 async function loadRecurringChargeCandidateBookings(
   admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
@@ -123,6 +123,7 @@ export async function POST(request: Request) {
   let fallback = 0;
   let skippedMonthlyDeferred = 0;
   let skippedFutureVisitDate = 0;
+  let skippedInactivePlan = 0;
   const todayYmd = todayJohannesburg();
 
   try {
@@ -153,6 +154,7 @@ export async function POST(request: Request) {
       customer_email: string | null;
       paystack_reference: string | null;
       booking_snapshot: unknown;
+      total_price: number | string | null;
       total_paid_zar: number | string | null;
       recurring_retry_count: number | null;
       recurring_first_failure_at: string | null;
@@ -176,11 +178,27 @@ export async function POST(request: Request) {
 
     const { data: rec, error: recErr } = await admin
       .from("recurring_bookings")
-      .select("paystack_authorization_code")
+      .select("paystack_authorization_code, status")
       .eq("id", row.recurring_id)
       .maybeSingle();
 
     if (recErr || !rec) continue;
+    const recurringStatus = String((rec as { status?: string | null }).status ?? "").trim().toLowerCase();
+    if (recurringStatus !== "active") {
+      skippedInactivePlan++;
+      await admin
+        .from("bookings")
+        .update({ recurring_next_charge_attempt_at: new Date(Date.now() + 24 * 3600_000).toISOString() })
+        .eq("id", row.id)
+        .eq("status", "pending_payment");
+      await logSystemEvent({
+        level: "info",
+        source: "cron/charge-recurring-bookings",
+        message: "recurring_package_charge_skipped_inactive_plan",
+        context: { booking_id: row.id, recurring_id: row.recurring_id, recurring_status: recurringStatus || null },
+      });
+      continue;
+    }
     const authCode = String((rec as { paystack_authorization_code?: string | null }).paystack_authorization_code ?? "").trim();
     if (!authCode) {
       const sendCount = Number(row.payment_link_send_count ?? 0);
@@ -216,12 +234,15 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const totalZarRaw = row.total_paid_zar;
+    // New recurring rows persist the immutable amount due in total_price.
+    // Legacy rows may predate that contract and used total_paid_zar as payable;
+    // retain that fallback without rewriting historical records.
+    const payableRaw = row.total_price ?? row.total_paid_zar;
     const amountZar =
-      typeof totalZarRaw === "number" && Number.isFinite(totalZarRaw)
-        ? Math.round(totalZarRaw)
-        : typeof totalZarRaw === "string" && /^\d+(\.\d+)?$/.test(totalZarRaw.trim())
-          ? Math.round(Number(totalZarRaw))
+      typeof payableRaw === "number" && Number.isFinite(payableRaw)
+        ? Math.round(payableRaw)
+        : typeof payableRaw === "string" && /^\d+(\.\d+)?$/.test(payableRaw.trim())
+          ? Math.round(Number(payableRaw))
           : 0;
     const amountCents = Math.max(0, amountZar) * 100;
     if (amountCents < 100) continue;
@@ -371,6 +392,7 @@ export async function POST(request: Request) {
       fallback,
       skipped_monthly_deferred: skippedMonthlyDeferred,
       skipped_future_visit_date: skippedFutureVisitDate,
+      skipped_inactive_plan: skippedInactivePlan,
     },
   });
   await logCronRun({
@@ -385,6 +407,7 @@ export async function POST(request: Request) {
       fallback,
       skipped_monthly_deferred: skippedMonthlyDeferred,
       skipped_future_visit_date: skippedFutureVisitDate,
+      skipped_inactive_plan: skippedInactivePlan,
     }),
   });
 
@@ -398,6 +421,7 @@ export async function POST(request: Request) {
     fallback,
     skipped_monthly_deferred: skippedMonthlyDeferred,
     skipped_future_visit_date: skippedFutureVisitDate,
+    skipped_inactive_plan: skippedInactivePlan,
   });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
