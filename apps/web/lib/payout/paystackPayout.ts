@@ -84,8 +84,14 @@ async function failPayoutExecution(
   admin: SupabaseClient,
   payoutId: string,
   status: "failed" | "partial_failed" = "failed",
-) {
-  await admin.from("cleaner_payouts").update({ payment_status: status }).eq("id", payoutId).eq("status", "approved");
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { error } = await admin
+    .from("cleaner_payouts")
+    .update({ payment_status: status })
+    .eq("id", payoutId)
+    .eq("status", "approved");
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 async function convergeDeterministicResumeFailure(
@@ -134,7 +140,10 @@ async function convergeDeterministicResumeFailure(
     return { ok: true };
   }
 
-  await failPayoutExecution(admin, payoutId);
+  const failed = await failPayoutExecution(admin, payoutId);
+  if (!failed.ok) {
+    return { ok: false, error: failed.error, needsReconcile: true };
+  }
   return { ok: true };
 }
 
