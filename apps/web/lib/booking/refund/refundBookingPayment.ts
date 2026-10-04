@@ -100,16 +100,32 @@ async function persistRefundClaimWorkflow(
   bookingId: string,
   snapshot: unknown,
   workflow: BookingRefundWorkflow,
+  refundId: string,
+  expectedProviderState: "failed" | null,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const expectedSnapshot =
+    snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)
+      ? snapshot
+      : {};
   const nextSnapshot = mergeRefundWorkflowIntoSnapshot(snapshot, workflow);
   const { error } = await admin.rpc("claim_booking_refund_workflow", {
     p_booking_id: bookingId,
+    p_expected_booking_snapshot: expectedSnapshot,
     p_booking_snapshot: nextSnapshot,
+    p_refund_id: refundId,
+    p_expected_provider_state: expectedProviderState,
   });
   if (error) {
     const message = String(error.message ?? "");
     if (message.includes("booking_payout_already_paid")) {
       return { ok: false, error: "booking_payout_already_paid" };
+    }
+    if (
+      message.includes("stale_refund_claim") ||
+      message.includes("refund_claim_already_in_flight") ||
+      message.includes("invalid_refund_claim_transition")
+    ) {
+      return { ok: false, error: "refund_claim_conflict" };
     }
     return { ok: false, error: message || "refund_claim_failed" };
   }
@@ -398,7 +414,14 @@ async function retryFailedRefund(
     provider_outcome: null,
   };
   workflow = upsertRefundRecord(workflow, record);
-  const claimed = await persistRefundClaimWorkflow(admin, row.id, row.booking_snapshot, workflow);
+  const claimed = await persistRefundClaimWorkflow(
+    admin,
+    row.id,
+    row.booking_snapshot,
+    workflow,
+    record.id,
+    "failed",
+  );
   if (!claimed.ok) return { ok: false, error: claimed.error };
 
   return finalizeProviderSubmission(admin, row, workflow, record, params, amountDecision.kind);
@@ -452,7 +475,14 @@ async function submitAndFinalizeRefund(
   };
 
   workflow = upsertRefundRecord(workflow, record);
-  const claimed = await persistRefundClaimWorkflow(admin, row.id, row.booking_snapshot, workflow);
+  const claimed = await persistRefundClaimWorkflow(
+    admin,
+    row.id,
+    row.booking_snapshot,
+    workflow,
+    record.id,
+    null,
+  );
   if (!claimed.ok) return { ok: false, error: claimed.error };
 
   return finalizeProviderSubmission(admin, row, workflow, record, params, amountDecision.kind);
