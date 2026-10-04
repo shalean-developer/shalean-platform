@@ -215,6 +215,15 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("Outbox lease changed before release.");
   });
 
+  it("replays incomplete downstream convergence after transfer audit success", () => {
+    const status = read("lib/payout/paystackTransferStatus.ts");
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+    expect(status).toContain("A successful audit row may still have incomplete downstream reconciliation");
+    expect(status).toContain('if (transfer.status !== "success")');
+    expect(executor).toContain("await applyTransferSuccess(admin");
+    expect(executor).toContain("Existing successful transfer reconciliation failed.");
+  });
+
   it("keeps Paystack optional while stamping Paystack settlement truth", () => {
     const pay = read("lib/payout/paystackPayout.ts");
     const webhook = read("lib/payout/paystackTransferStatus.ts");
