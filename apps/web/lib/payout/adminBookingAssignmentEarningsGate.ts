@@ -13,7 +13,7 @@ import {
 /** Columns loaded before admin PATCH so we can preflight earnings and revert a failed paid-solo assignment. */
 export function adminBookingBeforeAssignmentPatchSelectList(): string {
   return (
-    "user_id, cleaner_id, status, completed_at, payout_owner_cleaner_id, is_team_job, team_id, date, time, selected_cleaner_id, billing_type, monthly_invoice_id, is_recurring_generated, dispatch_status, cleaner_response_status, assigned_at, en_route_at, started_at, duration_minutes, estimated_duration_minutes, pricing_summary, display_earnings_cents, payout_earnings_cents, internal_earnings_cents, earnings_model_version, earnings_percentage_applied, earnings_cap_cents_applied, earnings_tenure_months_at_assignment, cleaner_earnings_total_cents, cleaner_line_earnings_finalized_at, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_percentage, payout_type, total_paid_zar, total_paid_cents, amount_paid_cents, base_amount_cents, service_fee_cents, payment_status, booking_snapshot, service, payout_id" +
+    "user_id, cleaner_id, status, completed_at, payout_owner_cleaner_id, is_team_job, team_id, date, time, selected_cleaner_id, billing_type, monthly_invoice_id, is_recurring_generated, dispatch_status, cleaner_response_status, assigned_at, en_route_at, started_at, duration_minutes, estimated_duration_minutes, pricing_summary, display_earnings_cents, payout_earnings_cents, internal_earnings_cents, earnings_model_version, earnings_percentage_applied, earnings_cap_cents_applied, earnings_tenure_months_at_assignment, cleaner_earnings_total_cents, cleaner_line_earnings_finalized_at, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_percentage, payout_type, total_paid_zar, total_paid_cents, amount_paid_cents, base_amount_cents, service_fee_cents, payment_status, booking_snapshot, service, payout_id, metadata" +
     bookingsPersistFullFinancialSelectSuffix()
   );
 }
@@ -64,6 +64,7 @@ export async function revertAdminBookingAssignmentToBeforeRow(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const patch: Record<string, unknown> = {
     cleaner_id: (before.cleaner_id as string | null | undefined) ?? null,
+    payout_owner_cleaner_id: (before.payout_owner_cleaner_id as string | null | undefined) ?? null,
     status: before.status ?? "pending",
     dispatch_status: before.dispatch_status ?? null,
     cleaner_response_status: before.cleaner_response_status ?? null,
@@ -84,6 +85,7 @@ export async function revertAdminBookingAssignmentToBeforeRow(
     company_revenue_cents: before.company_revenue_cents ?? null,
     payout_percentage: before.payout_percentage ?? null,
     payout_type: before.payout_type ?? null,
+    metadata: before.metadata ?? null,
   };
   const { error } = await admin.from("bookings").update(patch).eq("id", bookingId);
   if (error) return { ok: false, error: error.message };

@@ -14,6 +14,10 @@ import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleS
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
 import {
+  deactivatePayoutAttributionRemovalMarker,
+  readPayoutAttributionRemovalMarker,
+} from "@/lib/payout/bookingPayoutAttributionRemoval";
+import {
   adminBookingBeforeAssignmentPatchSelectList,
   bookingRequiresPersistedEarningsBeforeCleanerNotify,
   revertAdminBookingAssignmentToBeforeRow,
@@ -62,6 +66,125 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+type AssignmentEarningsSideEffectsSnapshot = {
+  lineItems: { id: string; cleaner_earnings_cents: number | null }[];
+  pendingLedgerRows: {
+    id: string;
+    cleaner_id: string;
+    booking_id: string;
+    amount_cents: number;
+    status: string;
+    created_at: string | null;
+    approved_at: string | null;
+    paid_at: string | null;
+    disbursement_id: string | null;
+  }[];
+};
+
+async function captureAssignmentEarningsSideEffects(
+  admin: SupabaseClient,
+  bookingId: string,
+): Promise<
+  | { ok: true; snapshot: AssignmentEarningsSideEffectsSnapshot }
+  | { ok: false; error: string }
+> {
+  const [lineItemsResult, ledgerResult] = await Promise.all([
+    admin
+      .from("booking_line_items")
+      .select("id, cleaner_earnings_cents")
+      .eq("booking_id", bookingId),
+    admin
+      .from("cleaner_earnings")
+      .select("id, cleaner_id, booking_id, amount_cents, status, created_at, approved_at, paid_at, disbursement_id")
+      .eq("booking_id", bookingId)
+      .eq("status", "pending"),
+  ]);
+
+  if (lineItemsResult.error) return { ok: false, error: lineItemsResult.error.message };
+  if (ledgerResult.error) return { ok: false, error: ledgerResult.error.message };
+
+  return {
+    ok: true,
+    snapshot: {
+      lineItems: ((lineItemsResult.data ?? []) as {
+        id: string;
+        cleaner_earnings_cents: number | null;
+      }[]).map((row) => ({
+        id: row.id,
+        cleaner_earnings_cents: row.cleaner_earnings_cents ?? null,
+      })),
+      pendingLedgerRows: (ledgerResult.data ?? []) as AssignmentEarningsSideEffectsSnapshot["pendingLedgerRows"],
+    },
+  };
+}
+
+async function restoreAssignmentEarningsSideEffects(
+  admin: SupabaseClient,
+  bookingId: string,
+  snapshot: AssignmentEarningsSideEffectsSnapshot | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!snapshot) return { ok: false, error: "Missing earnings side-effects snapshot." };
+
+  for (const row of snapshot.lineItems) {
+    const { error } = await admin
+      .from("booking_line_items")
+      .update({ cleaner_earnings_cents: row.cleaner_earnings_cents })
+      .eq("id", row.id)
+      .eq("booking_id", bookingId);
+    if (error) return { ok: false, error: `line item ${row.id}: ${error.message}` };
+  }
+
+  const { error: deleteErr } = await admin
+    .from("cleaner_earnings")
+    .delete()
+    .eq("booking_id", bookingId)
+    .eq("status", "pending");
+  if (deleteErr) return { ok: false, error: `pending ledger cleanup: ${deleteErr.message}` };
+
+  if (snapshot.pendingLedgerRows.length > 0) {
+    const { error: insertErr } = await admin
+      .from("cleaner_earnings")
+      .insert(snapshot.pendingLedgerRows);
+    if (insertErr) return { ok: false, error: `pending ledger restore: ${insertErr.message}` };
+  }
+
+  return { ok: true };
+}
+
+async function rollbackAssignmentAndEarningsSideEffects(params: {
+  admin: SupabaseClient;
+  bookingId: string;
+  before: Record<string, unknown>;
+  sideEffectsSnapshot: AssignmentEarningsSideEffectsSnapshot | null;
+}): Promise<{
+  ok: boolean;
+  assignmentReverted: boolean;
+  sideEffectsRestored: boolean;
+  error?: string;
+}> {
+  const sideEffects = await restoreAssignmentEarningsSideEffects(
+    params.admin,
+    params.bookingId,
+    params.sideEffectsSnapshot,
+  );
+  const assignment = await revertAdminBookingAssignmentToBeforeRow(
+    params.admin,
+    params.bookingId,
+    params.before,
+  );
+  const errors = [
+    sideEffects.ok ? null : `earnings side effects: ${sideEffects.error}`,
+    assignment.ok ? null : `assignment: ${assignment.error}`,
+  ].filter(Boolean);
+
+  return {
+    ok: sideEffects.ok && assignment.ok,
+    assignmentReverted: assignment.ok,
+    sideEffectsRestored: sideEffects.ok,
+    ...(errors.length ? { error: errors.join("; ") } : {}),
+  };
+}
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
@@ -537,6 +660,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     date?: string | null;
     time?: string | null;
     selected_cleaner_id?: string | null;
+    metadata?: unknown;
   } | null;
   const beforeStatus = String(beforeRow?.status ?? "pending").trim() || "pending";
   const beforeCompletedAt =
@@ -554,8 +678,24 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       ? updates.cleaner_id.trim()
       : null;
   const cleanerWasChanged = "cleaner_id" in updates && newCleaner !== oldCleaner;
-  if (cleanerWasChanged) {
+  const removalMarkerBefore = beforeRow
+    ? readPayoutAttributionRemovalMarker(beforeRow.metadata)
+    : null;
+  const restoreExistingHeaderAttribution =
+    "cleaner_id" in updates &&
+    Boolean(newCleaner) &&
+    newCleaner === oldCleaner &&
+    removalMarkerBefore != null;
+  const cleanerAttributionRefresh = cleanerWasChanged || restoreExistingHeaderAttribution;
+
+  if (cleanerAttributionRefresh) {
     Object.assign(updates, BOOKING_PAYOUT_COLUMNS_CLEAR);
+    if (restoreExistingHeaderAttribution && beforeRow && removalMarkerBefore) {
+      updates.metadata = deactivatePayoutAttributionRemovalMarker(beforeRow.metadata, {
+        cleared_at: new Date().toISOString(),
+        cleared_by_admin_id: adminAuth.userId,
+      });
+    }
     await logSystemEvent({
       level: "info",
       source: "admin_booking_reassignment",
@@ -566,6 +706,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       newCleanerId: newCleaner,
       },
     });
+  }
+
+  if (cleanerAttributionRefresh && newCleaner && beforeRow?.is_team_job !== true) {
+    updates.payout_owner_cleaner_id = newCleaner;
   }
 
   if (cleanerWasChanged && newCleaner) {
@@ -617,7 +761,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     completionDispatchNormalized = dispatchStatusNormalized;
   }
 
-  if (cleanerWasChanged && newCleaner && before && !bookingPaymentRecomputeBlockedByRefund(before as BookingPaidSignalRow)) {
+  if (cleanerAttributionRefresh && newCleaner && before && !bookingPaymentRecomputeBlockedByRefund(before as BookingPaidSignalRow)) {
     if (bookingRequiresPersistedEarningsBeforeCleanerNotify(before as never)) {
       const li = await ensureBookingLineItemsForEarningsIfMissing(admin, id, {
         isTeamJob: (before as { is_team_job?: boolean | null }).is_team_job,
@@ -705,14 +849,63 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     }
   }
 
-  if (cleanerWasChanged) {
+  let assignmentEarningsSideEffectsBefore: AssignmentEarningsSideEffectsSnapshot | null = null;
+  if (cleanerAttributionRefresh) {
+    const captured = await captureAssignmentEarningsSideEffects(admin, id);
+    if (!captured.ok) {
+      const rev = before
+        ? await revertAdminBookingAssignmentToBeforeRow(admin, id, before as never)
+        : { ok: false as const, error: "Missing pre-assignment snapshot." };
+      void reportOperationalIssue(
+        rev.ok ? "error" : "critical",
+        "admin_bookings_patch",
+        rev.ok
+          ? `earnings side-effects snapshot failed; assignment restored: ${captured.error}`
+          : `earnings side-effects snapshot failed and assignment restore failed: ${captured.error}; ${rev.error}`,
+        { bookingId: id },
+      );
+      return NextResponse.json(
+        {
+          error: "Could not safely prepare earnings for reassignment.",
+          code: "earnings_snapshot_failed",
+          assignment_reverted: rev.ok,
+        },
+        { status: 500 },
+      );
+    }
+    assignmentEarningsSideEffectsBefore = captured.snapshot;
+
     const rst = await resetBookingCleanerLineEarnings(admin, id);
     if (!rst.ok) {
-      void reportOperationalIssue("error", "admin_bookings_patch", `resetBookingCleanerLineEarnings: ${rst.error}`, {
-        bookingId: id,
-      });
+      const rollback = before
+        ? await rollbackAssignmentAndEarningsSideEffects({
+            admin,
+            bookingId: id,
+            before: before as unknown as Record<string, unknown>,
+            sideEffectsSnapshot: assignmentEarningsSideEffectsBefore,
+          })
+        : {
+            ok: false,
+            assignmentReverted: false,
+            sideEffectsRestored: false,
+            error: "Missing pre-assignment snapshot.",
+          };
+      void reportOperationalIssue(
+        rollback.ok ? "error" : "critical",
+        "admin_bookings_patch",
+        rollback.ok
+          ? `resetBookingCleanerLineEarnings failed; assignment and earnings side effects restored: ${rst.error}`
+          : `resetBookingCleanerLineEarnings failed and rollback was incomplete: ${rst.error}; ${rollback.error ?? "unknown"}`,
+        { bookingId: id },
+      );
       return NextResponse.json(
-        { error: "Could not reset earnings for reassignment.", code: "earnings_reset_failed" },
+        {
+          error: "Could not reset earnings for reassignment.",
+          code: "earnings_reset_failed",
+          assignment_reverted: rollback.assignmentReverted,
+          earnings_side_effects_restored: rollback.sideEffectsRestored,
+          rollback_complete: rollback.ok,
+        },
         { status: 500 },
       );
     }
@@ -724,7 +917,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     message?: string;
   } | null = null;
 
-  if (cleanerWasChanged && newCleaner) {
+  if (cleanerAttributionRefresh && newCleaner) {
     const { data: earnRefetch, error: earnRefetchErr } = await admin
       .from("bookings")
       .select(
@@ -793,7 +986,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
               forceDisplayRecompute: true,
             });
             const displayAfter = await fetchBookingDisplayEarningsCents(admin, id);
-            if (hasPersistedDisplayEarningsBasis(displayAfter)) {
+            const hasValidDisplayAfter = restoreExistingHeaderAttribution
+              ? isCompletableDisplayEarningsCents(displayAfter)
+              : hasPersistedDisplayEarningsBasis(displayAfter);
+            if (hasValidDisplayAfter) {
               earningsRecompute = { ok: true };
             } else if (payout.ok === false) {
               earningsRecompute = {
@@ -843,27 +1039,39 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   const earningsRevertDenyCodes = new Set(["refetch_failed", "refund_or_reversal_blocked", "terminal_booking_status"]);
   if (
-    cleanerWasChanged &&
+    cleanerAttributionRefresh &&
     newCleaner &&
     before &&
     bookingRequiresPersistedEarningsBeforeCleanerNotify(before as never) &&
     earningsRecompute &&
     earningsRecompute.ok === false &&
-    (!earningsRecompute.code || !earningsRevertDenyCodes.has(earningsRecompute.code))
+    (restoreExistingHeaderAttribution ||
+      !earningsRecompute.code ||
+      !earningsRevertDenyCodes.has(earningsRecompute.code))
   ) {
-    const rev = await revertAdminBookingAssignmentToBeforeRow(admin, id, before as never);
-    assignmentRevertedForEarnings = true;
-    if (!rev.ok) {
-      void reportOperationalIssue("critical", "admin_bookings_patch", `earnings failed and assignment revert failed: ${rev.error}`, {
-        bookingId: id,
-      });
+    const rollback = await rollbackAssignmentAndEarningsSideEffects({
+      admin,
+      bookingId: id,
+      before: before as unknown as Record<string, unknown>,
+      sideEffectsSnapshot: assignmentEarningsSideEffectsBefore,
+    });
+    assignmentRevertedForEarnings = rollback.assignmentReverted;
+    if (!rollback.ok) {
+      void reportOperationalIssue(
+        "critical",
+        "admin_bookings_patch",
+        `earnings failed and reassignment rollback was incomplete: ${rollback.error ?? "unknown"}`,
+        { bookingId: id },
+      );
       return NextResponse.json(
         {
           ok: false,
           error: earningsRecompute.message ?? "Earnings could not be persisted after assignment.",
           code: earningsRecompute.code ?? "earnings_persist_failed",
           earnings_recompute: earningsRecompute,
-          assignment_revert_failed: true,
+          assignment_revert_failed: !rollback.assignmentReverted,
+          earnings_side_effects_restore_failed: !rollback.sideEffectsRestored,
+          rollback_complete: false,
         },
         { status: 500 },
       );
@@ -887,6 +1095,60 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       },
       { status: 422 },
     );
+  }
+
+  if (
+    cleanerAttributionRefresh &&
+    !restoreExistingHeaderAttribution &&
+    newCleaner &&
+    !assignmentRevertedForEarnings &&
+    beforeRow &&
+    removalMarkerBefore
+  ) {
+    const clearedMetadata = deactivatePayoutAttributionRemovalMarker(beforeRow.metadata, {
+      cleared_at: new Date().toISOString(),
+      cleared_by_admin_id: adminAuth.userId,
+    });
+    const { error: markerClearErr } = await admin
+      .from("bookings")
+      .update({ metadata: clearedMetadata })
+      .eq("id", id)
+      .eq("cleaner_id", newCleaner);
+
+    if (markerClearErr) {
+      const rollback = before
+        ? await rollbackAssignmentAndEarningsSideEffects({
+            admin,
+            bookingId: id,
+            before: before as unknown as Record<string, unknown>,
+            sideEffectsSnapshot: assignmentEarningsSideEffectsBefore,
+          })
+        : {
+            ok: false,
+            assignmentReverted: false,
+            sideEffectsRestored: false,
+            error: "Missing pre-assignment snapshot.",
+          };
+      void reportOperationalIssue(
+        rollback.ok ? "error" : "critical",
+        "admin_bookings_patch",
+        rollback.ok
+          ? `payout attribution marker clear failed; assignment and earnings side effects restored: ${markerClearErr.message}`
+          : `payout attribution marker clear failed and rollback was incomplete: ${markerClearErr.message}; ${rollback.error ?? "unknown"}`,
+        { bookingId: id, newCleanerId: newCleaner },
+      );
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Could not finalize cleaner reassignment safely.",
+          code: "payout_attribution_marker_clear_failed",
+          assignment_reverted: rollback.assignmentReverted,
+          earnings_side_effects_restored: rollback.sideEffectsRestored,
+          rollback_complete: rollback.ok,
+        },
+        { status: 500 },
+      );
+    }
   }
 
   const needsAssignedNotify =

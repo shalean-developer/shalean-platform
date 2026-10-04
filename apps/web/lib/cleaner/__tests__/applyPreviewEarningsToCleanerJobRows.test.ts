@@ -62,6 +62,7 @@ describe("applyPreviewEarningsToCleanerJobRows", () => {
     expect(out[0]?.earnings_cents).toBe(50000);
     expect(out[0]?.earnings_estimated).toBe(true);
     expect(out[0]?.earnings_basis_pending).toBe(false);
+    expect(persistMock).not.toHaveBeenCalled();
   });
 
   it("preview returning 0 (truly invalid) emits earnings_basis_pending=true; never wires R0", async () => {
@@ -84,6 +85,41 @@ describe("applyPreviewEarningsToCleanerJobRows", () => {
     expect(out[0]?.displayEarningsCents).toBeNull();
     expect(out[0]?.display_earnings_cents).toBeNull();
     expect(out[0]?.earnings_cents).toBeNull();
+  });
+
+  it("suppresses active payout-attribution removals without previewing replacement earnings", async () => {
+    previewMock.mockReset();
+    previewMock.mockResolvedValue(50000);
+    const rows: Record<string, unknown>[] = [
+      {
+        id: BID,
+        cleaner_id: CID,
+        payout_owner_cleaner_id: CID,
+        display_earnings_cents: 0,
+        metadata: {
+          payout_attribution_removal_v1: {
+            active: true,
+            cleaner_id: CID,
+            header_cleaner_id_at_removal: CID,
+            removed_at: "2026-10-02T07:22:44Z",
+            removed_by_admin_id: "admin-1",
+            reason: null,
+          },
+        },
+      },
+    ];
+
+    const out = await applyPreviewEarningsToCleanerJobRows(admin, {
+      cleanerId: CID,
+      rows,
+      maxPreviews: 5,
+    });
+
+    expect(previewMock).not.toHaveBeenCalled();
+    expect(out[0]?.displayEarningsCents).toBeNull();
+    expect(out[0]?.earnings_cents).toBeNull();
+    expect(out[0]?.earnings_basis_pending).toBe(false);
+    expect(out[0]?.payout_attribution_removed).toBe(true);
   });
 
   it("uses persisted positive value directly (no preview) when display_earnings_cents > 0", async () => {

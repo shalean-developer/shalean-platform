@@ -77,8 +77,50 @@ describe("officePayoutPeriodReport", () => {
     );
     expect(allocs).toEqual([
       { cleaner_id: nyasha, cents: 30000 },
-      { cleaner_id: ethel, cents: 30000 },
+      { cleaner_id: ethel, cents: 42700 },
     ]);
+  });
+
+  it("does not resurrect explicitly cleared payout attribution from preserved completed-job ownership", () => {
+    const cleanerId = "ac73ea99-48b3-4c30-9d6b-5a8beab40f33";
+    const booking = {
+      cleaner_id: cleanerId,
+      payout_owner_cleaner_id: cleanerId,
+      payout_frozen_cents: null,
+      display_earnings_cents: 0,
+      cleaner_earnings_total_cents: 0,
+      cleaner_payout_cents: null,
+      earnings_summary: null,
+      metadata: {
+        payout_attribution_removal_v1: {
+          active: true,
+          cleaner_id: cleanerId,
+          removed_at: "2026-10-03T18:00:00.000Z",
+          removed_by_admin_id: "admin-1",
+          reason: "wrong cleaner",
+        },
+      },
+    };
+
+    expect(perCleanerAllocationsForBooking(booking, [])).toEqual([]);
+    expect(cleanerHasPayoutAllocationOnBooking(booking, [], cleanerId)).toBe(false);
+  });
+
+  it("does not hide a legitimate zero-earning visit without an explicit removal marker", () => {
+    const cleanerId = "ac73ea99-48b3-4c30-9d6b-5a8beab40f33";
+    const booking = {
+      cleaner_id: cleanerId,
+      payout_owner_cleaner_id: null,
+      payout_frozen_cents: null,
+      display_earnings_cents: 0,
+      cleaner_earnings_total_cents: 0,
+      cleaner_payout_cents: null,
+      earnings_summary: null,
+      metadata: null,
+    };
+
+    expect(perCleanerAllocationsForBooking(booking, [])).toEqual([{ cleaner_id: cleanerId, cents: 0 }]);
+    expect(cleanerHasPayoutAllocationOnBooking(booking, [], cleanerId)).toBe(true);
   });
 
   it("detects payroll attribution from earnings summary even when booking header points elsewhere", () => {

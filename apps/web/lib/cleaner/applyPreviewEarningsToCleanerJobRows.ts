@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveCleanerDashboardEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
-import { previewDisplayEarningsCentsForCleanerJob, persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
+import { previewDisplayEarningsCentsForCleanerJob } from "@/lib/payout/persistCleanerPayout";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 
 /** Default cap for sequential `previewDisplayEarningsCentsForCleanerJob` calls per HTTP request. */
 export const DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP = 50;
@@ -38,7 +39,7 @@ function isPositiveCents(n: number | null | undefined): n is number {
  *   1. If a persisted source resolves to **positive** cents (`resolveCleanerEarningsCents` >0),
  *      normalize camel/snake earnings fields and mark **not** estimated.
  *   2. Else (null or 0), run {@link previewDisplayEarningsCentsForCleanerJob} (up to `maxPreviews`):
- *      - preview returns positive → attach as estimate; never R0.
+ *      - preview returns positive → attach as a read-only estimate; never persist from GET surfaces and never R0.
  *      - preview returns null / 0 → `earnings_basis_pending: true` and clear any stale wire `0`.
  *
  * Cleaner UI must never display `R 0`: a `0` here is always paired with `earnings_basis_pending: true`
@@ -80,6 +81,20 @@ export async function applyPreviewEarningsToCleanerJobRows(
 
   for (const j of params.rows) {
     const id = String(j.id ?? "").trim();
+    if (bookingHasActivePayoutAttributionRemoval(j)) {
+      out.push({
+        ...j,
+        displayEarningsCents: null,
+        earnings_cents: null,
+        display_earnings_cents: null,
+        displayEarningsIsEstimate: false,
+        earnings_estimated: false,
+        earnings_is_estimate: false,
+        earnings_basis_pending: false,
+        payout_attribution_removed: true,
+      });
+      continue;
+    }
     const viewerPayoutCents = id ? viewerTeamPayoutByBooking.get(id) : undefined;
     const resolved = resolvedEarningsCentsFromWireRow(
       viewerPayoutCents == null ? j : { ...j, viewer_payout_cents: viewerPayoutCents },
@@ -123,10 +138,6 @@ export async function applyPreviewEarningsToCleanerJobRows(
       out.push({ ...clearedZero, earnings_basis_pending: true });
       continue;
     }
-
-    void persistCleanerPayoutIfUnset({ admin, bookingId: id, cleanerId }).catch(() => {
-      /* best-effort: preview already supplies the dashboard amount */
-    });
 
     out.push({
       ...j,

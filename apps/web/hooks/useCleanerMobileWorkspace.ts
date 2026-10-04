@@ -235,26 +235,11 @@ export function useCleanerMobileWorkspace() {
       if (!headers) return { ok: false, error: "Not signed in." };
       setActingId(bookingId);
       try {
-        if (action === "accept" || action === "reject") {
-          const res = await cleanerAuthenticatedFetch("/api/cleaner/respond", {
-            method: "POST",
-            headers: { ...headers, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              bookingId,
-              action,
-              ...(cleaner?.id ? { cleanerId: cleaner.id } : {}),
-            }),
-          });
-          const json = (await res.json()) as { ok?: boolean; error?: string };
-          if (!res.ok) return { ok: false, error: json.error ?? "Action failed." };
-          await load();
-          return { ok: true };
-        }
-
+        const idempotencyKey = crypto.randomUUID();
         const res = await cleanerAuthenticatedFetch(`/api/cleaner/jobs/${encodeURIComponent(bookingId)}`, {
           method: "POST",
           headers: { ...headers, "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
+          body: JSON.stringify({ action, idempotency_key: idempotencyKey }),
         });
         const json = (await res.json()) as { ok?: boolean; error?: string };
         if (!res.ok) return { ok: false, error: json.error ?? "Action failed." };
@@ -270,7 +255,7 @@ export function useCleanerMobileWorkspace() {
         setActingId(null);
       }
     },
-    [load, cleaner?.id],
+    [load],
   );
 
   const respondToOffer = useCallback(

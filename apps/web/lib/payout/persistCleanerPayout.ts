@@ -54,6 +54,7 @@ import {
   bookingFinancialDiagnostics,
 } from "@/lib/payout/bookingPayoutCapCents";
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const EARNINGS_MODEL_VERSION_FALLBACK = "v1_2026_earnings";
@@ -602,6 +603,7 @@ export const PREVIEW_EARNINGS_MISS = {
   COMPUTE_FAILED: "earnings_compute_failed",
   TEAM_MISSING_TEAM_ID: "team_missing_team_id",
   TEAM_MEMBER_NOT_ALLOCATED: "team_member_not_allocated",
+  ATTRIBUTION_REMOVED: "payout_attribution_removed",
 } as const;
 
 export type PreviewEarningsMissReason =
@@ -638,6 +640,15 @@ export async function previewDisplayEarningsCentsForCleanerJobDiagnostic(
     payout_owner_cleaner_id?: string | null;
     team_id?: string | null;
   };
+
+  if (bookingHasActivePayoutAttributionRemoval(row as unknown as Record<string, unknown>)) {
+    return {
+      ok: false,
+      amountCents: null,
+      source: null,
+      missingReason: PREVIEW_EARNINGS_MISS.ATTRIBUTION_REMOVED,
+    };
+  }
 
   /**
    * Pre-acceptance solo dispatch offers have `cleaner_id = NULL` and
@@ -779,17 +790,10 @@ async function persistCleanerPayoutIfUnsetCore(
 
   const persistEligibility = evaluatePersistCleanerPayoutEligibility(row as unknown as Record<string, unknown>);
   if (!persistEligibility.allowed) {
-    const context = { bookingId, cleanerId: expectedCleanerId };
-    if (persistEligibility.skipReason === "payout_eligibility_team_missing_team_id") {
-      void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", persistEligibility.skipReason, context);
-    } else {
-      void logSystemEvent({
-        level: "info",
-        source: "persistCleanerPayoutIfUnset",
-        message: persistEligibility.skipReason,
-        context,
-      });
-    }
+    void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", persistEligibility.skipReason, {
+      bookingId,
+      cleanerId: expectedCleanerId,
+    });
     return { ok: true, skipped: true, skipReason: persistEligibility.skipReason };
   }
 
@@ -1117,6 +1121,7 @@ async function persistCleanerPayoutIfUnsetCore(
       total_paid_cents: r.total_paid_cents,
       amount_paid_cents: r.amount_paid_cents,
       total_paid_zar: r.total_paid_zar,
+      base_amount_cents: r.base_amount_cents,
     };
     const finDiag = bookingFinancialDiagnostics(capRow);
     const capOk = assertHybridPayoutWithinFinancialCap({
@@ -1406,16 +1411,16 @@ async function verifyDisplayEarningsRowAfterWrite(
 
 /**
  * Eligibility skips are policy outcomes, not failed writes.
- * A terminal/unpaid/not-yet-assigned booking is intentionally ineligible and may
- * legitimately have no persisted display earnings. Do not convert that policy
- * decision into an operational error or retry storm.
+ *
+ * Pending-payment, dispatch-funnel, terminal, and other recognized ineligible
+ * bookings may intentionally have no persisted display earnings. Completion
+ * callers apply their own stricter display/earnings gates after this policy
+ * decision, so do not turn a valid skip into a write failure here.
  */
-async function shouldBypassFinalizeForEligibilitySkip(
-  _admin: SupabaseClient,
-  _bookingId: string,
+function shouldBypassFinalizeForEligibilitySkip(
   core: PersistCleanerPayoutIfUnsetResult,
-): Promise<boolean> {
-  return Boolean(core.ok && core.skipped && isPayoutEligibilitySkipReason(core.skipReason));
+): boolean {
+  return core.ok && core.skipped && isPayoutEligibilitySkipReason(core.skipReason);
 }
 
 async function finalizePersistResult(
@@ -1484,21 +1489,21 @@ export async function persistCleanerPayoutIfUnset(
     }
 
     const first = await persistCleanerPayoutIfUnsetCore(params);
-    if (await shouldBypassFinalizeForEligibilitySkip(params.admin, params.bookingId, first)) {
+    if (shouldBypassFinalizeForEligibilitySkip(first)) {
       return first;
     }
     let out = await finalizePersistResult(params.admin, params.bookingId, params.cleanerId, first);
-    if (await shouldBypassFinalizeForEligibilitySkip(params.admin, params.bookingId, out)) {
+    if (shouldBypassFinalizeForEligibilitySkip(out)) {
       return out;
     }
     if (!out.ok) {
       await new Promise((r) => setTimeout(r, 200));
       const second = await persistCleanerPayoutIfUnsetCore(params);
-      if (await shouldBypassFinalizeForEligibilitySkip(params.admin, params.bookingId, second)) {
+      if (shouldBypassFinalizeForEligibilitySkip(second)) {
         return second;
       }
       out = await finalizePersistResult(params.admin, params.bookingId, params.cleanerId, second);
-      if (await shouldBypassFinalizeForEligibilitySkip(params.admin, params.bookingId, out)) {
+      if (shouldBypassFinalizeForEligibilitySkip(out)) {
         return out;
       }
     }

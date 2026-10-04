@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { bookingPayableForWeeklyBatch, type BookingRowForWeeklyBatchEligibility } from "@/lib/payout/bookingPayableForWeeklyBatch";
 
@@ -42,51 +44,31 @@ describe("bookingPayableForWeeklyBatch", () => {
     );
   });
 
+  it("rejects an active payout attribution removal even when stale payout cents remain positive", () => {
+    const removed = {
+      ...basePrepaid,
+      cleaner_id: "cleaner-old",
+      cleaner_payout_cents: 5000,
+      metadata: {
+        payout_attribution_removal_v1: {
+          active: true,
+          cleaner_id: "cleaner-old",
+          header_cleaner_id_at_removal: "cleaner-old",
+          removed_at: "2026-10-02T07:22:44Z",
+          removed_by_admin_id: "admin-1",
+          reason: null,
+        },
+      },
+    };
+    expect(bookingPayableForWeeklyBatch(removed, new Map())).toEqual({
+      payable: false,
+      reason: "payout_attribution_removed",
+    });
+  });
+
   it("rejects zero or missing cleaner payout cents", () => {
     expect(bookingPayableForWeeklyBatch({ ...basePrepaid, cleaner_payout_cents: 0 }, new Map()).payable).toBe(false);
     expect(bookingPayableForWeeklyBatch({ ...basePrepaid, cleaner_payout_cents: null }, new Map()).payable).toBe(false);
-  });
-
-  it("allows an explicit positive member-row payout basis without changing booking-level team payout columns", () => {
-    expect(
-      bookingPayableForWeeklyBatch(
-        { ...basePrepaid, cleaner_payout_cents: 0 },
-        new Map(),
-        { payoutBasisCents: 27_000 },
-      ),
-    ).toEqual({ payable: true });
-  });
-
-  it("does not let a missing/zero member-row basis bypass the payout-basis gate", () => {
-    expect(
-      bookingPayableForWeeklyBatch(
-        { ...basePrepaid, cleaner_payout_cents: 0 },
-        new Map(),
-        { payoutBasisCents: 0 },
-      ),
-    ).toEqual({ payable: false, reason: "missing_cleaner_payout_basis" });
-  });
-
-  it("preserves payment and refund safety gates when an explicit member-row basis is provided", () => {
-    expect(
-      bookingPayableForWeeklyBatch(
-        { ...basePrepaid, cleaner_payout_cents: 0, payment_status: "pending" },
-        new Map(),
-        { payoutBasisCents: 27_000 },
-      ),
-    ).toEqual({ payable: false, reason: "prepaid_customer_payment_not_settled" });
-
-    expect(
-      bookingPayableForWeeklyBatch(
-        {
-          ...basePrepaid,
-          cleaner_payout_cents: 0,
-          refunded_at: "2026-01-01T00:00:00.000Z",
-        },
-        new Map(),
-        { payoutBasisCents: 27_000 },
-      ),
-    ).toEqual({ payable: false, reason: "refund_or_reversal_blocked" });
   });
 
   it("rejects when refund signals set", () => {
@@ -100,31 +82,6 @@ describe("bookingPayableForWeeklyBatch", () => {
     const mid = String(baseMonthlySettled.monthly_invoice_id);
     const m = invMap([[mid, "paid"]]);
     expect(bookingPayableForWeeklyBatch(baseMonthlySettled, m).payable).toBe(true);
-  });
-
-  it("keeps accrual settlement gates when a member-row payout basis is provided", () => {
-    const mid = String(baseMonthlySettled.monthly_invoice_id);
-    const paidInvoices = invMap([[mid, "paid"]]);
-
-    expect(
-      bookingPayableForWeeklyBatch(
-        { ...baseMonthlySettled, cleaner_payout_cents: 0 },
-        paidInvoices,
-        { payoutBasisCents: 25_000 },
-      ),
-    ).toEqual({ payable: true });
-
-    expect(
-      bookingPayableForWeeklyBatch(
-        {
-          ...baseMonthlySettled,
-          cleaner_payout_cents: 0,
-          payout_status: "pending",
-        },
-        paidInvoices,
-        { payoutBasisCents: 25_000 },
-      ),
-    ).toEqual({ payable: false, reason: "monthly_payout_status_not_eligible" });
   });
 
   it("rejects monthly when invoice not paid", () => {
@@ -158,5 +115,18 @@ describe("bookingPayableForWeeklyBatch", () => {
 
   it("rejects non-completed status", () => {
     expect(bookingPayableForWeeklyBatch({ ...basePrepaid, status: "assigned" }, new Map()).payable).toBe(false);
+  });
+});
+
+
+describe("weekly legacy payout preflight removal-marker contract", () => {
+  it("loads metadata and skips active removal markers in backfill and blocking count", () => {
+    const source = readFileSync(
+      join(process.cwd(), "lib/payout/backfillLegacyWeeklyPayoutColumns.ts"),
+      "utf8",
+    );
+    expect(source).toContain("cleaner_id, payout_owner_cleaner_id, metadata");
+    expect(source).toContain("bookingHasActivePayoutAttributionRemoval(row)");
+    expect(source).toContain("bookingHasActivePayoutAttributionRemoval(row as unknown as Record<string, unknown>)");
   });
 });

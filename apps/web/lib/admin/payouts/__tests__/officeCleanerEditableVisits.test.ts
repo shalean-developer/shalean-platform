@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveVisitEditBlockedReason } from "@/lib/admin/payouts/officeCleanerEditableVisits";
 
@@ -48,5 +50,17 @@ describe("resolveVisitEditBlockedReason", () => {
         batchStatusById,
       ),
     ).toMatch(/already paid/i);
+  });
+});
+
+
+describe("loadOfficeCleanerEditableVisits payout-removal metadata contract", () => {
+  it("selects booking metadata before resolving per-cleaner allocations", () => {
+    const source = readFileSync(
+      join(process.cwd(), "lib/admin/payouts/officeCleanerEditableVisits.ts"),
+      "utf8",
+    );
+    expect(source).toMatch(/\.select\([\s\S]*?earnings_summary, metadata/);
+    expect(source).toContain("perCleanerAllocationsForBooking(b, roster");
   });
 });

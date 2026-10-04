@@ -22,17 +22,15 @@ import {
 } from "@/lib/cleaner/applyPreviewEarningsToCleanerJobRows";
 import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
 import {
-  isStuckNullEarningsBooking,
   maybeLogStuckNullEarnings,
 } from "@/lib/cleaner/cleanerPayoutInvariantLogging";
-import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
 import { augmentCleanerJobsWithViewerRosterContext } from "@/lib/cleaner/pairedRosterMemberLifecycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DASHBOARD_BOOKING_SELECT =
-  "id, date, time, location, status, dispatch_status, service, service_slug, customer_name, completed_at, created_at, cleaner_response_status, assigned_at, accepted_at, en_route_at, started_at, cleaner_earnings_total_cents, payout_frozen_cents, display_earnings_cents, earnings_summary, is_team_job, team_id, cleaner_id, selected_cleaner_id, cleaner_count, assignment_type, fallback_reason, payment_needs_follow_up, is_recurring_generated, billing_type, monthly_invoice_id";
+  "id, date, time, location, status, dispatch_status, service, service_slug, customer_name, completed_at, created_at, cleaner_response_status, assigned_at, accepted_at, en_route_at, started_at, cleaner_earnings_total_cents, payout_frozen_cents, display_earnings_cents, earnings_summary, is_team_job, team_id, cleaner_id, selected_cleaner_id, cleaner_count, assignment_type, fallback_reason, payment_needs_follow_up, is_recurring_generated, billing_type, monthly_invoice_id, metadata";
 
 function wireDashboardJob(raw: Record<string, unknown>): CleanerBookingRow {
   return {
@@ -104,7 +102,7 @@ export async function GET(request: Request) {
           ? ("recurring_pending_payment" as const)
           : null;
       const dashboardLifecycle = buildDashboardLifecycleAlignmentWire(rec);
-      const base = { ...row, dashboardLifecycle };
+      const base = { ...row, dashboardLifecycle, metadata: rec.metadata };
       if (!banner && !visMode) return base;
       return {
         ...base,
@@ -119,24 +117,24 @@ export async function GET(request: Request) {
     prioritized as unknown as Record<string, unknown>[],
     cleanerId,
   );
-  const jobs = (await applyPreviewEarningsToCleanerJobRows(admin, {
+  const previewedJobs = await applyPreviewEarningsToCleanerJobRows(admin, {
     cleanerId,
     rows: withRosterContext,
     maxPreviews: DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP,
-  })) as unknown as typeof prioritized;
+  });
+  const jobs = previewedJobs.map((job) => {
+    const {
+      metadata: _internalMetadata,
+      earnings_summary: _internalEarningsSummary,
+      ...safeJob
+    } = job;
+    return safeJob;
+  }) as unknown as typeof prioritized;
 
   for (const j of jobs as Record<string, unknown>[]) {
     const id = String(j.id ?? "").trim();
     if (!id) continue;
     maybeLogStuckNullEarnings(id, j);
-    if (isStuckNullEarningsBooking(j)) {
-      scheduleStuckEarningsRecomputeDebounced({
-        admin,
-        bookingId: id,
-        cleanerId,
-        recomputeSource: "jobs_list",
-      });
-    }
   }
 
   const { today_cents, today_breakdown } = todayCentsAndBreakdownFromBookings(
