@@ -22,9 +22,20 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(sql).toContain("payout_paid_at = v_paid_at");
     expect(sql).toContain("bank_details_missing");
     expect(sql).toContain("public.cleaner_payment_details");
+    expect(sql).toContain("linked_earning_no_longer_payable");
+    expect(sql).toContain("refunded_at is not null");
+    expect(sql).toContain("future_paid_at_not_allowed");
     expect(sql).toContain("for update");
     expect(sql).toContain("public.cleaner_payout_runs");
     expect(sql).toContain("status = 'paid'");
+  });
+
+  it("uses Johannesburg business dates and rejects future payment dates", () => {
+    const mark = read("lib/payout/markPayoutPaid.ts");
+    const panel = read("components/admin/office/OfficePayoutDetailPanel.tsx");
+    expect(mark).toContain('timeZone: "Africa/Johannesburg"');
+    expect(mark).toContain("Payment date cannot be in the future.");
+    expect(panel).toContain('timeZone: "Africa/Johannesburg"');
   });
 
   it("supports system-prepared monthly batches and idempotent matching bank retries", () => {
