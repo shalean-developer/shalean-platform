@@ -102,6 +102,17 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(earnings).toContain('account_number, bank_code, account_name, recipient_code');
   });
 
+  it("mutually excludes refund claims and Paystack payout submission", () => {
+    const sql = read("../../supabase/migrations/20261004113000_atomic_bank_transfer_settlement.sql");
+    const pay = read("lib/payout/paystackPayout.ts");
+    expect(sql).toContain("claim_cleaner_payout_paystack_processing");
+    expect(sql).toContain("linked_refund_blocks_payout");
+    expect(sql).toContain("payment_status, '')) = 'processing'");
+    expect(sql).toContain("public.payout_transfers");
+    expect(pay).toContain('admin.rpc("claim_cleaner_payout_paystack_processing"');
+    expect(pay).toContain("Payout is blocked because a linked booking has an active or completed refund.");
+  });
+
   it("keeps Paystack optional while stamping Paystack settlement truth", () => {
     const pay = read("lib/payout/paystackPayout.ts");
     const webhook = read("lib/payout/paystackTransferStatus.ts");
