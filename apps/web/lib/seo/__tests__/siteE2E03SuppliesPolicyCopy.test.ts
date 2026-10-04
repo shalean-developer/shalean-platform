@@ -9,6 +9,7 @@ const files = [
   "lib/seo/location-paa-faqs.ts",
   "lib/seo/cleaningServicesCapeTownHub.ts",
   "lib/services/servicesHubFaqs.ts",
+  "app/(ui-redesign)/account/help/page.tsx",
 ].map((relativePath) => ({
   relativePath,
   source: readFileSync(join(process.cwd(), relativePath), "utf8"),
