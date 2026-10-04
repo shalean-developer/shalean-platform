@@ -33,10 +33,9 @@ describe("SITE-E2E-03 supplies policy copy", () => {
 
   it("states the service-specific policy in customer-facing shared copy", () => {
     const combined = files.map((file) => file.source).join("\n");
-    expect(combined).toContain("Deep Cleaning and Move In / Out Cleaning include");
-    expect(combined).toContain("Regular home cleaning and Airbnb Cleaning");
-    expect(combined).toContain("customers provide");
-    expect(combined).toContain("Office and specialist services");
+    expect(combined).toContain("Deep Cleaning, Move In / Out Cleaning, and Airbnb Cleaning include");
+    expect(combined).toContain("For Regular home cleaning, customers provide");
+    expect(combined).toContain("Office and Carpet Cleaning follow the confirmed booking scope");
   });
 
   it("keeps the Standard/Regular service page policy as the booking authority", () => {
