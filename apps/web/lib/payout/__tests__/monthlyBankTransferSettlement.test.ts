@@ -148,6 +148,8 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("Temporarily blocked Paystack transfer before provider POST");
     const sql = read("../../supabase/migrations/20261004113000_atomic_bank_transfer_settlement.sql");
     expect(sql).toContain("fail_cleaner_payout_outbox_validation");
+    expect(sql).toContain("outbox_not_safe_for_terminal_failure");
+    expect(sql).toContain("coalesce(v_outbox.attempts, 0) <> 0");
     expect(sql).toContain("transfer_audit_not_converged");
     expect(sql).toContain("payout_not_converged");
   });
@@ -173,6 +175,17 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(recipient).toContain("res.status === 408");
     expect(recipient).toContain("retryable: true");
     expect(recipient).toContain("retryable: false");
+  });
+
+  it("uses an optimistic attempts claim so terminal convergence cannot race a sender", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+    const pay = read("lib/payout/paystackPayout.ts");
+    expect(executor).toContain("const expectedAttempts = outbox.attempts ?? 0");
+    expect(executor).toContain('.eq("status", "pending")');
+    expect(executor).toContain('.eq("attempts", expectedAttempts)');
+    expect(executor).toContain("never POST from this worker unless it owns the claim");
+    expect(pay).toContain('outboxStatus === "failed"');
+    expect(pay).toContain('outboxStatus === "pending"');
   });
 
   it("keeps Paystack optional while stamping Paystack settlement truth", () => {
