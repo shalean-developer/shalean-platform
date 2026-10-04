@@ -34,6 +34,27 @@ describe("bookingPayoutPersistEligibility", () => {
     expect(r).toEqual({ allowed: true, mode: "completed" });
   });
 
+  it("blocks persistence while payout attribution removal is active", () => {
+    const r = evaluatePersistCleanerPayoutEligibility({
+      status: "completed",
+      completed_at: "2026-10-01T20:00:00Z",
+      cleaner_id: "cleaner-old",
+      is_team_job: false,
+      metadata: {
+        payout_attribution_removal_v1: {
+          active: true,
+          cleaner_id: "cleaner-old",
+          header_cleaner_id_at_removal: "cleaner-old",
+          removed_at: "2026-10-02T07:22:44Z",
+          removed_by_admin_id: "admin-1",
+          reason: null,
+        },
+      },
+    });
+    expect(r).toEqual({ allowed: false, skipReason: "payout_eligibility_attribution_removed" });
+    expect(isPayoutEligibilitySkipReason("payout_eligibility_attribution_removed")).toBe(true);
+  });
+
   it("blocks terminal bookings", () => {
     expect(evaluatePersistCleanerPayoutEligibility({ status: "cancelled" }).allowed).toBe(false);
     expect(evaluatePersistCleanerPayoutEligibility({ status: "failed" }).allowed).toBe(false);
