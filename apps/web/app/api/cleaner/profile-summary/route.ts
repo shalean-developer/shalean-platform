@@ -80,7 +80,11 @@ export async function GET(request: Request) {
     bank_code?: string | null;
     account_name?: string | null;
   } | null;
-  const has_payment_method = Boolean(pr?.recipient_code?.trim());
+  const has_payment_method = Boolean(
+    String(pr?.account_number ?? "").trim() &&
+    String(pr?.bank_code ?? "").trim() &&
+    String(pr?.account_name ?? "").trim(),
+  );
 
   const has_failed_transfer = (failedRows ?? []).length > 0;
 

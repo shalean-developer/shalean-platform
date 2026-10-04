@@ -18,7 +18,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const { data: payout, error: payoutErr } = await admin
     .from("cleaner_payouts")
-    .select("id, cleaner_id, total_amount_cents, calculated_amount_cents, adjustment_note, amount_adjusted_at, status, payment_status, payment_reference, period_start, period_end, created_at, approved_at, approved_by, paid_at")
+    .select("id, cleaner_id, total_amount_cents, calculated_amount_cents, adjustment_note, amount_adjusted_at, status, payment_status, payment_method, payment_reference, paid_by, period_start, period_end, created_at, approved_at, approved_by, paid_at")
     .eq("id", id)
     .maybeSingle();
 
@@ -39,7 +39,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       .eq("payout_id", id)
       .order("created_at", { ascending: false }),
     cleanerId
-      ? admin.from("cleaner_payment_details").select("cleaner_id, recipient_code").eq("cleaner_id", cleanerId).maybeSingle()
+      ? admin.from("cleaner_payment_details").select("cleaner_id, account_number, bank_code, account_name, recipient_code").eq("cleaner_id", cleanerId).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
   ]);
 
@@ -49,7 +49,18 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const loadedItems = await loadCleanerPayoutBatchItems(admin, id);
   if (loadedItems.error) return NextResponse.json({ error: loadedItems.error }, { status: 500 });
 
-  const hasRecipientCode = Boolean((paymentDetails as { recipient_code?: string | null } | null)?.recipient_code?.trim());
+  const details = paymentDetails as {
+    account_number?: string | null;
+    bank_code?: string | null;
+    account_name?: string | null;
+    recipient_code?: string | null;
+  } | null;
+  const bankReady = Boolean(
+    String(details?.account_number ?? "").trim() &&
+    String(details?.bank_code ?? "").trim() &&
+    String(details?.account_name ?? "").trim(),
+  );
+  const hasRecipientCode = Boolean(details?.recipient_code?.trim());
 
   return NextResponse.json({
     payout: {
@@ -72,9 +83,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     })),
     transfers: transfers ?? [],
     paymentReadiness: {
-      ready: hasRecipientCode,
-      missingBankDetails: hasRecipientCode ? 0 : 1,
-      reason: hasRecipientCode ? null : "Missing bank details",
+      ready: bankReady,
+      bankReady,
+      paystackReady: hasRecipientCode,
+      missingBankDetails: bankReady ? 0 : 1,
+      reason: bankReady ? null : "Missing bank details",
       checkedAt: new Date().toISOString(),
     },
   });

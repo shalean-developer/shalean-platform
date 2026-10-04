@@ -65,6 +65,9 @@ type BookingEarningsRow = {
 };
 
 type PaymentDetailsRow = {
+  account_number: string | null;
+  bank_code: string | null;
+  account_name: string | null;
   recipient_code: string | null;
 };
 
@@ -199,7 +202,11 @@ export async function GET(request: Request) {
             .order("completed_at", { ascending: false, nullsFirst: false })
             .order("id", { ascending: false }),
       }),
-      admin.from("cleaner_payment_details").select("recipient_code").eq("cleaner_id", session.cleanerId).maybeSingle(),
+      admin
+        .from("cleaner_payment_details")
+        .select("account_number, bank_code, account_name, recipient_code")
+        .eq("cleaner_id", session.cleanerId)
+        .maybeSingle(),
       ledgerTotalsQuery,
       ledgerFilteredQuery,
     ]);
@@ -641,8 +648,17 @@ export async function GET(request: Request) {
     },
     has_failed_transfer,
     paymentDetails: {
-      readyForPayout: Boolean((paymentDetails as PaymentDetailsRow | null)?.recipient_code?.trim()),
-      missingBankDetails: !((paymentDetails as PaymentDetailsRow | null)?.recipient_code?.trim()),
+      readyForPayout: Boolean(
+        String((paymentDetails as PaymentDetailsRow | null)?.account_number ?? "").trim() &&
+        String((paymentDetails as PaymentDetailsRow | null)?.bank_code ?? "").trim() &&
+        String((paymentDetails as PaymentDetailsRow | null)?.account_name ?? "").trim(),
+      ),
+      missingBankDetails: !(
+        String((paymentDetails as PaymentDetailsRow | null)?.account_number ?? "").trim() &&
+        String((paymentDetails as PaymentDetailsRow | null)?.bank_code ?? "").trim() &&
+        String((paymentDetails as PaymentDetailsRow | null)?.account_name ?? "").trim()
+      ),
+      paystackReady: Boolean((paymentDetails as PaymentDetailsRow | null)?.recipient_code?.trim()),
     },
     cleaner: { full_name: cleanerFullName },
     rows: out,

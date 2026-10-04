@@ -16,7 +16,9 @@ type PayoutDetailRow = {
   amount_adjusted_at: string | null;
   status: string;
   payment_status: string | null;
+  payment_method?: string | null;
   payment_reference: string | null;
+  paid_by?: string | null;
   period_start: string;
   period_end: string;
   approved_at: string | null;
@@ -43,6 +45,8 @@ type PayoutDetailResponse = {
   bookings: BookingLine[];
   paymentReadiness: {
     ready: boolean;
+    bankReady?: boolean;
+    paystackReady?: boolean;
     missingBankDetails: number;
     reason: string | null;
     checkedAt: string | null;
@@ -96,6 +100,15 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
   const [editNote, setEditNote] = useState("");
   const [visitEditMode, setVisitEditMode] = useState(false);
   const [visitEdits, setVisitEdits] = useState<Record<string, string>>({});
+  const [bankReference, setBankReference] = useState("");
+  const [bankPaidDate, setBankPaidDate] = useState(() =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Johannesburg",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date()),
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -273,6 +286,29 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
     }
   }
 
+  async function handleBankTransferPaid() {
+    const reference = bankReference.trim();
+    if (reference.length < 3) {
+      onToast("Enter the bank/EFT transfer reference first.", false);
+      return;
+    }
+    const paidAt = bankPaidDate ? `${bankPaidDate}T12:00:00+02:00` : undefined;
+    setBusy("bank-transfer");
+    const res = await adminFetch(`/api/admin/payouts/${encodeURIComponent(payoutId)}/bank-transfer`, {
+      method: "POST",
+      body: JSON.stringify({ reference, paid_at: paidAt }),
+    });
+    setBusy(null);
+    if (res.ok) {
+      onToast("Bank transfer recorded as paid", true);
+      setBankReference("");
+      await load();
+      await onChanged();
+    } else {
+      onToast(res.error ?? "Could not record bank transfer", false);
+    }
+  }
+
   async function handleExport() {
     setBusy("export");
     try {
@@ -327,7 +363,7 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
   const p = detail.payout;
   const statusKey = (p.status ?? "pending").toLowerCase();
   const status = STATUS_MAP[statusKey] ?? { label: p.status ?? "—", cls: "bg-slate-100 text-slate-600" };
-  const payBlocked = !detail.paymentReadiness.ready;
+  const payBlocked = detail.paymentReadiness.paystackReady !== true;
   const testCount = detail.bookings.filter((b) => b.is_test === true).length;
   const canEdit = statusKey === "pending" || statusKey === "frozen";
   const calculatedCents = p.calculated_amount_cents ?? p.total_amount_cents;
@@ -484,16 +520,48 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
             </button>
           ) : null}
           {statusKey === "approved" ? (
-            <button
-              type="button"
-              disabled={busy !== null || payBlocked}
-              title={payBlocked ? (detail.paymentReadiness.reason ?? "Missing bank details") : undefined}
-              onClick={() => void handlePay()}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {busy === "pay" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wallet className="h-3.5 w-3.5" />}
-              Pay via Paystack
-            </button>
+            <>
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1.5">
+                <input
+                  type="text"
+                  value={bankReference}
+                  onChange={(e) => setBankReference(e.target.value)}
+                  placeholder="Bank/EFT reference"
+                  className="w-40 rounded-md border border-emerald-200 bg-white px-2 py-1.5 text-xs text-slate-800"
+                  aria-label="Bank transfer reference"
+                />
+                <input
+                  type="date"
+                  value={bankPaidDate}
+                  onChange={(e) => setBankPaidDate(e.target.value)}
+                  className="rounded-md border border-emerald-200 bg-white px-2 py-1.5 text-xs text-slate-700"
+                  aria-label="Bank transfer payment date"
+                />
+                <button
+                  type="button"
+                  disabled={
+                    busy !== null ||
+                    bankReference.trim().length < 3 ||
+                    detail.paymentReadiness.bankReady === false
+                  }
+                  onClick={() => void handleBankTransferPaid()}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
+                >
+                  {busy === "bank-transfer" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wallet className="h-3.5 w-3.5" />}
+                  Record bank transfer paid
+                </button>
+              </div>
+              <button
+                type="button"
+                disabled={busy !== null || payBlocked}
+                title={payBlocked ? (detail.paymentReadiness.reason ?? "Missing bank details") : "Optional Paystack payout"}
+                onClick={() => void handlePay()}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+              >
+                {busy === "pay" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wallet className="h-3.5 w-3.5" />}
+                Pay via Paystack
+              </button>
+            </>
           ) : null}
           <Link
             href={`/office/cleaners/${encodeURIComponent(p.cleaner_id)}`}
@@ -531,10 +599,32 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
         </div>
       ) : null}
 
-      {!detail.paymentReadiness.ready ? (
+      {statusKey === "paid" ? (
+        <div className="mx-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950 sm:mx-6">
+          <p className="font-semibold">Settlement recorded</p>
+          <p className="mt-1 text-xs">
+            Method: {p.payment_method === "bank_transfer" ? "Bank transfer" : p.payment_method === "paystack" ? "Paystack" : "Historical / manual"}
+            {p.payment_reference ? ` · Reference: ${p.payment_reference}` : ""}
+            {p.paid_at ? ` · Paid: ${new Date(p.paid_at).toLocaleDateString("en-ZA")}` : ""}
+          </p>
+        </div>
+      ) : null}
+
+      {detail.paymentReadiness.bankReady === false && statusKey === "approved" ? (
         <div className="mx-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:mx-6">
-          <p className="font-semibold">Bank details required before Paystack</p>
-          <p className="mt-1 text-xs">{detail.paymentReadiness.reason ?? "Add bank details on the cleaner profile."}</p>
+          <p className="font-semibold">Bank details missing</p>
+          <p className="mt-1 text-xs">
+            Add the cleaner&apos;s bank account details before recording an external bank transfer.
+          </p>
+        </div>
+      ) : null}
+
+      {detail.paymentReadiness.bankReady !== false && detail.paymentReadiness.paystackReady !== true && statusKey === "approved" ? (
+        <div className="mx-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950 sm:mx-6">
+          <p className="font-semibold">Paystack is optional</p>
+          <p className="mt-1 text-xs">
+            Bank transfer is ready. Paystack payout remains unavailable until a Paystack recipient is configured.
+          </p>
         </div>
       ) : null}
 

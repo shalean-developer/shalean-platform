@@ -19,6 +19,7 @@ export type PayoutAuditEventType =
   | "payout_webhook_received"
   | "payout_retry"
   | "payout_manual_mark_paid"
+  | "payout_bank_transfer_paid"
   | "ledger_disburse_requested";
 
 /**

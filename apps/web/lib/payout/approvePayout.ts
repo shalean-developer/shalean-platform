@@ -62,12 +62,21 @@ export async function approveCleanerPayout(
   const cleanerId = String((payout as { cleaner_id?: string | null }).cleaner_id ?? "").trim();
   const { data: paymentDetails, error: paymentErr } = await admin
     .from("cleaner_payment_details")
-    .select("recipient_code")
+    .select("account_number, bank_code, account_name")
     .eq("cleaner_id", cleanerId)
     .maybeSingle();
   if (paymentErr) return { ok: false, error: paymentErr.message };
-  if (!String((paymentDetails as { recipient_code?: string | null } | null)?.recipient_code ?? "").trim()) {
-    return { ok: false, error: "Cleaner bank details are incomplete; Paystack recipient is missing." };
+  const bankDetails = paymentDetails as {
+    account_number?: string | null;
+    bank_code?: string | null;
+    account_name?: string | null;
+  } | null;
+  if (
+    !String(bankDetails?.account_number ?? "").trim() ||
+    !String(bankDetails?.bank_code ?? "").trim() ||
+    !String(bankDetails?.account_name ?? "").trim()
+  ) {
+    return { ok: false, error: "Cleaner bank details are incomplete; add bank account details before approval." };
   }
 
   const createdBy = String((payout as { created_by?: string | null }).created_by ?? "").trim();
