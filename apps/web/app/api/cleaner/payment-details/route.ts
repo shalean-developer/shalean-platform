@@ -143,7 +143,29 @@ export async function POST(request: Request) {
   const normalized = normalizeBody(body);
   if (!normalized.ok) return NextResponse.json({ error: normalized.error }, { status: 400 });
 
-  let recipientCode: string | null = null;
+  const { data: existingData, error: existingError } = await admin
+    .from("cleaner_payment_details")
+    .select("account_number, bank_code, account_name, recipient_code")
+    .eq("cleaner_id", session.cleanerId)
+    .maybeSingle();
+  if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
+
+  const existing = existingData as Pick<
+    PaymentDetailsRow,
+    "account_number" | "bank_code" | "account_name" | "recipient_code"
+  > | null;
+  const bankDetailsUnchanged = Boolean(
+    existing &&
+      String(existing.account_number ?? "").replace(/\s+/g, "").trim() === normalized.accountNumber &&
+      String(existing.bank_code ?? "").trim() === normalized.bankCode &&
+      String(existing.account_name ?? "").replace(/\s+/g, " ").trim() === normalized.accountName,
+  );
+
+  // Preserve a valid Paystack recipient when the cleaner re-saves unchanged bank details.
+  // If the bank account changed, never carry a recipient tied to the old account forward.
+  let recipientCode: string | null = bankDetailsUnchanged
+    ? existing?.recipient_code?.trim() || null
+    : null;
   let paystackWarning: string | null = null;
   if (process.env.PAYSTACK_SECRET_KEY?.trim()) {
     const recipient = await createPaystackRecipient(normalized);
