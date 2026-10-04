@@ -299,9 +299,25 @@ export async function submitPaystackTransferViaOutbox(
 
   const existingSuccess = await loadSuccessTransfer(admin, params.rail, params.subjectId);
   if (existingSuccess) {
+    const transferCode = existingSuccess.transfer_code?.trim() ?? null;
+    if (transferCode) {
+      try {
+        await applyTransferSuccess(admin, {
+          transfer_code: transferCode,
+          reference: existingSuccess.reference?.trim() || params.reference,
+        });
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : "Existing successful transfer reconciliation failed.",
+          needsReconcile: true,
+        };
+      }
+    }
+
     return {
       ok: true,
-      transferCode: existingSuccess.transfer_code,
+      transferCode,
       reference: existingSuccess.reference?.trim() || params.reference,
       skippedExisting: true,
       outboxId: "",
