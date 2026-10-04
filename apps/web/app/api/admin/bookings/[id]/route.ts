@@ -14,6 +14,10 @@ import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleS
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
 import {
+  deactivatePayoutAttributionRemovalMarker,
+  readPayoutAttributionRemovalMarker,
+} from "@/lib/payout/bookingPayoutAttributionRemoval";
+import {
   adminBookingBeforeAssignmentPatchSelectList,
   bookingRequiresPersistedEarningsBeforeCleanerNotify,
   revertAdminBookingAssignmentToBeforeRow,
@@ -41,7 +45,6 @@ import { fetchServiceQaForAdminBooking } from "@/lib/booking/bookingServiceQaSer
 import { canonicalDbBookingStatus } from "@/lib/booking/canonicalBookingStatus";
 import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensureBookingLineItemsForEarnings";
 import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
-import { resolveSchedulingDurationMinutes } from "@/lib/booking/quote/bookingQuotePersistence";
 import { assertAdminBookingDeleteSafe } from "@/lib/admin/adminBookingDeleteSafety";
 import { maybeProcessReferralClawbackOnBookingChange } from "@/lib/referrals/clawback";
 import { assertAdminBookingPatchDoesNotMutateAssignmentFields } from "@/lib/admin/adminBookingPatchAssignmentGuard";
@@ -439,7 +442,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (wantsPreferredCleaner) {
     const { data: prefRow, error: prefErr } = await admin
       .from("bookings")
-      .select("date, time, status, duration_minutes, estimated_duration_minutes, duration_hours, pricing_summary, booking_snapshot")
+      .select("date, time, status")
       .eq("id", id)
       .maybeSingle();
     if (prefErr || !prefRow) {
@@ -457,17 +460,6 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     const timeHm = normalizeTimeHm(timeRaw);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd) || !/^\d{2}:\d{2}$/.test(timeHm)) {
       return NextResponse.json({ error: "Booking must have a valid date and time before assigning a preferred cleaner." }, { status: 400 });
-    }
-
-    const preferredCleanerDurationMinutes = resolveSchedulingDurationMinutes(
-      prefRow as Record<string, unknown>,
-      "adminPreferredCleanerAssignment",
-    );
-    if (preferredCleanerDurationMinutes == null) {
-      return NextResponse.json(
-        { error: "Booking duration is missing; cannot verify cleaner overlap safely." },
-        { status: 409 },
-      );
     }
 
     const ignoreConflict = body.ignore_cleaner_slot_conflict === true;
@@ -491,7 +483,6 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
             cleanerId: sid,
             dateYmd,
             timeHm,
-            durationMinutes: preferredCleanerDurationMinutes,
             excludeBookingId: id,
           });
           if (conflictId) {
@@ -537,6 +528,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     date?: string | null;
     time?: string | null;
     selected_cleaner_id?: string | null;
+    metadata?: unknown;
   } | null;
   const beforeStatus = String(beforeRow?.status ?? "pending").trim() || "pending";
   const beforeCompletedAt =
@@ -554,8 +546,24 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       ? updates.cleaner_id.trim()
       : null;
   const cleanerWasChanged = "cleaner_id" in updates && newCleaner !== oldCleaner;
-  if (cleanerWasChanged) {
+  const removalMarkerBefore = beforeRow
+    ? readPayoutAttributionRemovalMarker(beforeRow.metadata)
+    : null;
+  const restoreExistingHeaderAttribution =
+    "cleaner_id" in updates &&
+    Boolean(newCleaner) &&
+    newCleaner === oldCleaner &&
+    removalMarkerBefore != null;
+  const cleanerAttributionRefresh = cleanerWasChanged || restoreExistingHeaderAttribution;
+
+  if (cleanerAttributionRefresh) {
     Object.assign(updates, BOOKING_PAYOUT_COLUMNS_CLEAR);
+    if (restoreExistingHeaderAttribution && beforeRow && removalMarkerBefore) {
+      updates.metadata = deactivatePayoutAttributionRemovalMarker(beforeRow.metadata, {
+        cleared_at: new Date().toISOString(),
+        cleared_by_admin_id: adminAuth.userId,
+      });
+    }
     await logSystemEvent({
       level: "info",
       source: "admin_booking_reassignment",
@@ -566,6 +574,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       newCleanerId: newCleaner,
       },
     });
+  }
+
+  if (cleanerAttributionRefresh && newCleaner && beforeRow?.is_team_job !== true) {
+    updates.payout_owner_cleaner_id = newCleaner;
   }
 
   if (cleanerWasChanged && newCleaner) {
@@ -617,7 +629,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     completionDispatchNormalized = dispatchStatusNormalized;
   }
 
-  if (cleanerWasChanged && newCleaner && before && !bookingPaymentRecomputeBlockedByRefund(before as BookingPaidSignalRow)) {
+  if (cleanerAttributionRefresh && newCleaner && before && !bookingPaymentRecomputeBlockedByRefund(before as BookingPaidSignalRow)) {
     if (bookingRequiresPersistedEarningsBeforeCleanerNotify(before as never)) {
       const li = await ensureBookingLineItemsForEarningsIfMissing(admin, id, {
         isTeamJob: (before as { is_team_job?: boolean | null }).is_team_job,
@@ -705,14 +717,26 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     }
   }
 
-  if (cleanerWasChanged) {
+  if (cleanerAttributionRefresh) {
     const rst = await resetBookingCleanerLineEarnings(admin, id);
     if (!rst.ok) {
-      void reportOperationalIssue("error", "admin_bookings_patch", `resetBookingCleanerLineEarnings: ${rst.error}`, {
-        bookingId: id,
-      });
+      const rev = before
+        ? await revertAdminBookingAssignmentToBeforeRow(admin, id, before as never)
+        : { ok: false as const, error: "Missing pre-assignment snapshot." };
+      void reportOperationalIssue(
+        rev.ok ? "error" : "critical",
+        "admin_bookings_patch",
+        rev.ok
+          ? `resetBookingCleanerLineEarnings failed; assignment restored: ${rst.error}`
+          : `resetBookingCleanerLineEarnings failed and restore failed: ${rst.error}; ${rev.error}`,
+        { bookingId: id },
+      );
       return NextResponse.json(
-        { error: "Could not reset earnings for reassignment.", code: "earnings_reset_failed" },
+        {
+          error: "Could not reset earnings for reassignment.",
+          code: "earnings_reset_failed",
+          assignment_reverted: rev.ok,
+        },
         { status: 500 },
       );
     }
@@ -724,7 +748,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     message?: string;
   } | null = null;
 
-  if (cleanerWasChanged && newCleaner) {
+  if (cleanerAttributionRefresh && newCleaner) {
     const { data: earnRefetch, error: earnRefetchErr } = await admin
       .from("bookings")
       .select(
@@ -793,7 +817,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
               forceDisplayRecompute: true,
             });
             const displayAfter = await fetchBookingDisplayEarningsCents(admin, id);
-            if (hasPersistedDisplayEarningsBasis(displayAfter)) {
+            const hasValidDisplayAfter = restoreExistingHeaderAttribution
+              ? isCompletableDisplayEarningsCents(displayAfter)
+              : hasPersistedDisplayEarningsBasis(displayAfter);
+            if (hasValidDisplayAfter) {
               earningsRecompute = { ok: true };
             } else if (payout.ok === false) {
               earningsRecompute = {
@@ -843,13 +870,15 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   const earningsRevertDenyCodes = new Set(["refetch_failed", "refund_or_reversal_blocked", "terminal_booking_status"]);
   if (
-    cleanerWasChanged &&
+    cleanerAttributionRefresh &&
     newCleaner &&
     before &&
     bookingRequiresPersistedEarningsBeforeCleanerNotify(before as never) &&
     earningsRecompute &&
     earningsRecompute.ok === false &&
-    (!earningsRecompute.code || !earningsRevertDenyCodes.has(earningsRecompute.code))
+    (restoreExistingHeaderAttribution ||
+      !earningsRecompute.code ||
+      !earningsRevertDenyCodes.has(earningsRecompute.code))
   ) {
     const rev = await revertAdminBookingAssignmentToBeforeRow(admin, id, before as never);
     assignmentRevertedForEarnings = true;
@@ -887,6 +916,48 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       },
       { status: 422 },
     );
+  }
+
+  if (
+    cleanerAttributionRefresh &&
+    !restoreExistingHeaderAttribution &&
+    newCleaner &&
+    !assignmentRevertedForEarnings &&
+    beforeRow &&
+    removalMarkerBefore
+  ) {
+    const clearedMetadata = deactivatePayoutAttributionRemovalMarker(beforeRow.metadata, {
+      cleared_at: new Date().toISOString(),
+      cleared_by_admin_id: adminAuth.userId,
+    });
+    const { error: markerClearErr } = await admin
+      .from("bookings")
+      .update({ metadata: clearedMetadata })
+      .eq("id", id)
+      .eq("cleaner_id", newCleaner);
+
+    if (markerClearErr) {
+      const rev = before
+        ? await revertAdminBookingAssignmentToBeforeRow(admin, id, before as never)
+        : { ok: false as const, error: "Missing pre-assignment snapshot." };
+      void reportOperationalIssue(
+        rev.ok ? "error" : "critical",
+        "admin_bookings_patch",
+        rev.ok
+          ? `payout attribution marker clear failed; assignment reverted: ${markerClearErr.message}`
+          : `payout attribution marker clear failed and assignment revert failed: ${markerClearErr.message}; ${rev.error}`,
+        { bookingId: id, newCleanerId: newCleaner },
+      );
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Could not finalize cleaner reassignment safely.",
+          code: "payout_attribution_marker_clear_failed",
+          assignment_reverted: rev.ok,
+        },
+        { status: 500 },
+      );
+    }
   }
 
   const needsAssignedNotify =
