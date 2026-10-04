@@ -6,6 +6,7 @@ import {
   CUSTOMER_SUPPORT_TELEPHONE_TEL,
 } from "@/lib/site/customerSupport";
 import { SHALEAN_SOCIAL_LINKS } from "@/lib/brand/shaleanSocialLinks";
+import { PUBLIC_BUSINESS_EMAIL, PUBLIC_BUSINESS_HOURS_LABEL } from "@/lib/site/publicBusinessIdentity";
 import { cn } from "@/lib/utils";
 
 type ContactItem = {
@@ -18,10 +19,10 @@ type ContactItem = {
 
 const CONTACT_ITEMS: ContactItem[] = [
   { icon: Shield, label: "No hidden fees, ever", showFrom: "md" },
-  { icon: Clock, label: "8am – 6pm (Mon - Sat)", showFrom: "sm" },
+  { icon: Clock, label: PUBLIC_BUSINESS_HOURS_LABEL, showFrom: "sm" },
   { icon: Phone, label: CUSTOMER_SUPPORT_TELEPHONE_DISPLAY, href: CUSTOMER_SUPPORT_TELEPHONE_TEL },
   { icon: MapPin, label: "Cape Town, South Africa", showFrom: "md" },
-  { icon: Mail, label: "hello@shalean.co.za", href: "mailto:hello@shalean.co.za", showFrom: "sm" },
+  { icon: Mail, label: PUBLIC_BUSINESS_EMAIL, href: `mailto:${PUBLIC_BUSINESS_EMAIL}`, showFrom: "sm" },
 ];
 
 function FacebookIcon() {
