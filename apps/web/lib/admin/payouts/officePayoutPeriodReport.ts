@@ -7,6 +7,7 @@ import {
 } from "@/lib/payout/monthBounds";
 import { MONTHLY_PAYOUT_START_YMD } from "@/lib/payout/payoutPeriodConfig";
 import { parseBookingEarningsSummary } from "@/lib/payout/bookingEarningsSummary";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export type PayoutBucket = "pending" | "eligible" | "batched_open" | "paid";
@@ -88,6 +89,7 @@ type BookingPeriodRow = {
   total_paid_cents: number | null;
   company_revenue_cents: number | null;
   earnings_summary?: unknown;
+  metadata?: unknown;
 };
 
 export type RosterCleanerRef = { cleaner_id: string; role?: string | null };
@@ -307,11 +309,14 @@ export function perCleanerAllocationsForBooking(
     | "cleaner_payout_cents"
     | "cleaner_earnings_total_cents"
     | "payout_frozen_cents"
+    | "metadata"
   >,
   roster: readonly RosterCleanerRef[],
   teamMemberPayouts?: readonly { cleaner_id: string; payout_cents: number; cleaner_payout_id?: string | null }[],
 ): CleanerVisitAllocation[] {
   const summary = parseBookingEarningsSummary(booking.earnings_summary);
+  if (bookingHasActivePayoutAttributionRemoval(booking)) return [];
+
   const rosterIds = [
     ...new Set(
       roster
@@ -486,7 +491,7 @@ export async function loadOfficePayoutPeriodReport(
     admin
       .from("bookings")
       .select(
-        "id, date, cleaner_id, payout_owner_cleaner_id, payout_status, payout_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, total_paid_zar, total_paid_cents, amount_paid_cents, company_revenue_cents, earnings_summary",
+        "id, date, cleaner_id, payout_owner_cleaner_id, payout_status, payout_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, total_paid_zar, total_paid_cents, amount_paid_cents, company_revenue_cents, earnings_summary, metadata",
       )
       .eq("status", "completed")
       .eq("is_test", false)
