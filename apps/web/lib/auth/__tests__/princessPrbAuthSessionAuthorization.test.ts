@@ -441,3 +441,16 @@ describe("MASTER-01A-03B Meta re-bootstrap dispatch contract", () => {
     expect(guard).not.toContain("fbq.q.push(args)");
   });
 });
+
+
+describe("MASTER-01A-03B tracker bootstrap script scope", () => {
+  it("wraps Meta and Clarity generated scripts in IIFEs before using return-based exclusion snippets", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const meta = readFileSync(resolve(process.cwd(), "components/analytics/MetaPixel.tsx"), "utf8");
+    const clarity = readFileSync(resolve(process.cwd(), "components/analytics/SessionReplayProvider.tsx"), "utf8");
+
+    expect(meta).toContain('(function(){${bootstrap}})();');
+    expect(clarity).toContain('(function(){${bootstrap}})();');
+  });
+});
