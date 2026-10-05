@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { ensureUserProfileForAuthUser } from "@/lib/admin/ensureUserProfileForAuthUser";
 import { resolveUserRoleServer } from "@/lib/auth/resolveUserRoleServer";
-import { dashboardRouteForRole } from "@/lib/auth/userRole";
+import { dashboardRouteForRole, safePostLoginRedirect } from "@/lib/auth/userRole";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Body = { access_token?: string };
+type Body = { access_token?: string; redirect?: string | null };
 
 /**
  * Repairs a missing user_profiles row for the currently authenticated auth user.
@@ -57,10 +57,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Invalid account role." }, { status: 403 });
   }
 
+  const destination = safePostLoginRedirect(body.redirect, resolved.role);
+
   return NextResponse.json({
     ok: true,
     created: repaired.created,
     role: resolved.role,
-    dashboardRoute: dashboardRouteForRole(resolved.role),
+    dashboardRoute: destination || dashboardRouteForRole(resolved.role),
   });
 }
