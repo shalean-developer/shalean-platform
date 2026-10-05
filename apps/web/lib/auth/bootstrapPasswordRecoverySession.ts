@@ -107,6 +107,7 @@ async function bootstrapPasswordRecoverySessionOnce(
   const hash = readHashParams(href);
   const tokenHash = (search.get("token_hash") ?? "").trim();
   const recoveryType = (search.get("type") ?? "").trim().toLowerCase();
+  let recoveryCredentialProcessed = false;
   if (tokenHash && recoveryType !== "recovery") {
     return {
       ok: false,
@@ -115,6 +116,7 @@ async function bootstrapPasswordRecoverySessionOnce(
     };
   }
   if (tokenHash && recoveryType === "recovery") {
+    recoveryCredentialProcessed = true;
     const { error } = await auth.verifyOtp({ token_hash: tokenHash, type: "recovery" });
     if (error) {
       const msg = error.message || "Could not verify reset link.";
@@ -130,6 +132,7 @@ async function bootstrapPasswordRecoverySessionOnce(
 
   const code = (search.get("code") ?? "").trim();
   if (!tokenHash && code) {
+    recoveryCredentialProcessed = true;
     const { error } = await auth.exchangeCodeForSession(code);
     if (error) {
       const msg = error.message || "Could not verify reset link.";
@@ -146,6 +149,7 @@ async function bootstrapPasswordRecoverySessionOnce(
     const refresh_token = (hash.get("refresh_token") ?? search.get("refresh_token") ?? "").trim();
     const type = (hash.get("type") ?? search.get("type") ?? "").trim().toLowerCase();
     if (access_token && refresh_token && (type === "recovery" || type === "")) {
+      recoveryCredentialProcessed = true;
       const { error } = await auth.setSession({ access_token, refresh_token });
       if (error) {
         const msg = error.message || "Could not verify reset link.";
@@ -158,6 +162,14 @@ async function bootstrapPasswordRecoverySessionOnce(
         };
       }
     }
+  }
+
+  if (!recoveryCredentialProcessed) {
+    return {
+      ok: false,
+      reason: "expired_or_invalid",
+      message: "This reset link is invalid or has expired. Request a new one from the sign-in page.",
+    };
   }
 
   const attempts = options?.pollAttempts ?? 20;
