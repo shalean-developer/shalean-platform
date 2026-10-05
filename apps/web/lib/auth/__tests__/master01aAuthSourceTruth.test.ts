@@ -188,3 +188,12 @@ describe("MASTER-01A-04 redirect hardening and guarded deep-link repair", () => 
     expect(route).toContain("safePostLoginRedirect(body.redirect, resolved.role)");
   });
 });
+
+
+describe("MASTER-01A-04 redirect control-character hardening", () => {
+  it("rejects browser-stripped control characters in post-login redirects", () => {
+    const userRole = read("apps/web/lib/auth/userRole.ts");
+
+    expect(userRole).toContain("/[\\u0000-\\u001f\\u007f]/.test(t)");
+  });
+});
