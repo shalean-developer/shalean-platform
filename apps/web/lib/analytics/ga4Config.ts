@@ -16,7 +16,7 @@ export const GA4_BRANCH = "cape-town";
 /**
  * Public GA4 must not initialise or send on these app surfaces (and their subpaths).
  */
-export const GA4_EXCLUDED_PATH_PREFIXES = ["/office", "/cleaner", "/jobs"] as const;
+export const GA4_EXCLUDED_PATH_PREFIXES = ["/office", "/cleaner", "/jobs", "/auth/reset-password"] as const;
 
 /** Public recruitment paths under `/cleaner` that must still receive GA4. */
 export const GA4_CLEANER_PUBLIC_PATH_PREFIXES = ["/cleaner/apply"] as const;
@@ -113,4 +113,4 @@ export function getGa4ConfigOptionsLiteral(): string {
 }
 
 export const GA4_PATH_EXCLUSION_SNIPPET =
-  'var __ga4p=(location.pathname||"").split("?")[0];if(/^\\/(office|jobs)(\\/|$)/.test(__ga4p)||(/^\\/cleaner(\\/|$)/.test(__ga4p)&&!/^\\/cleaner\\/apply(\\/|$)/.test(__ga4p)))return;';
+  'var __ga4p=(location.pathname||"").split("?")[0];if(/^\\/(office|jobs)(\\/|$)/.test(__ga4p)||/^\\/auth\\/reset-password(\\/|$)/.test(__ga4p)||(/^\\/cleaner(\\/|$)/.test(__ga4p)&&!/^\\/cleaner\\/apply(\\/|$)/.test(__ga4p)))return;';
