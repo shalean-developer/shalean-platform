@@ -107,6 +107,13 @@ async function bootstrapPasswordRecoverySessionOnce(
   const hash = readHashParams(href);
   const tokenHash = (search.get("token_hash") ?? "").trim();
   const recoveryType = (search.get("type") ?? "").trim().toLowerCase();
+  if (tokenHash && recoveryType !== "recovery") {
+    return {
+      ok: false,
+      reason: "expired_or_invalid",
+      message: "This reset link is invalid or has expired. Request a new one from the sign-in page.",
+    };
+  }
   if (tokenHash && recoveryType === "recovery") {
     const { error } = await auth.verifyOtp({ token_hash: tokenHash, type: "recovery" });
     if (error) {
