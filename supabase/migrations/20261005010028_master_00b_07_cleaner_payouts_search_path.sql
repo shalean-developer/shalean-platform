@@ -1,5 +1,4 @@
--- MASTER-00B-07 — canonical production-ledger version.
--- Pins search_path for cleaner payout immutability trigger.
-
-alter function public.cleaner_payouts_block_mutate_when_frozen()
-  set search_path = pg_catalog;
+-- MASTER-00B-07 — production migration-history mirror marker.
+-- Production already recorded version 20261005010028 during the governed
+-- 00B-07 rollout. Keep this timestamp locally so Supabase history comparison
+-- can account for it. The forward schema mutation remains 20261005014500.
