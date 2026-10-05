@@ -392,3 +392,18 @@ describe("MASTER-01A-03B sensitive reset-route analytics exclusion", () => {
     expect(gtm).toContain("GA4_PATH_EXCLUSION_SNIPPET");
   });
 });
+
+
+describe("MASTER-01A-03B tracker re-bootstrap after sensitive route", () => {
+  it("restores non-Google trackers after leaving the reset route", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const guard = readFileSync(resolve(process.cwd(), "components/analytics/Ga4RouteGuard.tsx"), "utf8");
+
+    expect(guard).toContain("ensureNonGoogleTrackersBootstrapped");
+    expect(guard).toContain("ensureMetaPixelBootstrapped");
+    expect(guard).toContain("ensureClarityBootstrapped");
+    expect(guard).toContain("ensureAhrefsBootstrapped");
+    expect(guard).toContain("if (!excluded) {");
+  });
+});
