@@ -19,7 +19,10 @@ export function MetaPixel() {
     "fbq.push=fbq;fbq.loaded=!0;fbq.version='2.0';fbq.queue=[];",
     scheduleThirdPartyScript(
       [
-        GA4_PATH_EXCLUSION_SNIPPET,
+        GA4_PATH_EXCLUSION_SNIPPET.replace(
+          "return;",
+          "window.__shaleanMetaBootstrapScheduled=false;return;",
+        ),
         `if(window.__shaleanMetaBootstrapped)return;`,
         `if(document.querySelector('script[src*="connect.facebook.net/en_US/fbevents.js"]')){window.__shaleanMetaBootstrapped=true;return;}`,
         `var s=document.createElement("script");`,
