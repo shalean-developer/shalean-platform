@@ -635,3 +635,20 @@ describe("MASTER-01A-03D recovery URL capture ordering", () => {
     expect(bootstrapIdx).toBeGreaterThan(scrubIdx);
   });
 });
+
+
+describe("MASTER-01A-03D recovery URL retention across effect replays", () => {
+  it("retains the original recovery URL in a ref before scrubbing", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const src = readFileSync(
+      resolve(process.cwd(), "app/auth/reset-password/page.tsx"),
+      "utf8",
+    );
+
+    expect(src).toContain('useRef<string | null>(null)');
+    expect(src).toContain("if (!recoveryHrefRef.current)");
+    expect(src).toContain("recoveryHrefRef.current = window.location.href");
+    expect(src).toContain("const recoveryHref = recoveryHrefRef.current");
+  });
+});
