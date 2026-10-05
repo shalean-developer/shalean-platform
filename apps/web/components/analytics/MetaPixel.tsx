@@ -33,7 +33,7 @@ export function MetaPixel() {
 
   return (
     <>
-      <script dangerouslySetInnerHTML={{ __html: bootstrap }} />
+      <script dangerouslySetInnerHTML={{ __html: `(function(){${bootstrap}})();` }} />
     </>
   );
 }
