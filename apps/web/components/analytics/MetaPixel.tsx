@@ -1,4 +1,5 @@
 import { scheduleThirdPartyScript } from "@/lib/analytics/deferThirdPartyScript";
+import { GA4_PATH_EXCLUSION_SNIPPET } from "@/lib/analytics/ga4Config";
 
 const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID?.trim();
 
@@ -11,15 +12,24 @@ export function MetaPixel() {
 
   const id = JSON.stringify(pixelId);
   const bootstrap = [
+    GA4_PATH_EXCLUSION_SNIPPET,
+    "window.__shaleanMetaBootstrapScheduled=true;",
     "window.fbq=window.fbq||function(){(fbq.q=fbq.q||[]).push(arguments)};",
     "if(!window._fbq)window._fbq=fbq;",
     "fbq.push=fbq;fbq.loaded=!0;fbq.version='2.0';fbq.queue=[];",
     scheduleThirdPartyScript(
       [
+        GA4_PATH_EXCLUSION_SNIPPET.replace(
+          "return;",
+          "window.__shaleanMetaBootstrapScheduled=false;return;",
+        ),
+        `if(window.__shaleanMetaBootstrapped)return;`,
+        `if(document.querySelector('script[src*="connect.facebook.net/en_US/fbevents.js"]')){window.__shaleanMetaBootstrapped=true;return;}`,
         `var s=document.createElement("script");`,
         `s.async=true;`,
         `s.src="https://connect.facebook.net/en_US/fbevents.js";`,
-        `s.onload=function(){fbq("init",${id});fbq("track","PageView");};`,
+        `s.onload=function(){window.__shaleanMetaBootstrapped=true;fbq("init",${id});fbq("track","PageView");};`,
+        `s.onerror=function(){window.__shaleanMetaBootstrapScheduled=false;};`,
         `document.head.appendChild(s);`,
       ].join(""),
     ),
@@ -27,17 +37,7 @@ export function MetaPixel() {
 
   return (
     <>
-      <script dangerouslySetInnerHTML={{ __html: bootstrap }} />
-      <noscript>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          height="1"
-          width="1"
-          style={{ display: "none" }}
-          alt=""
-          src={`https://www.facebook.com/tr?id=${encodeURIComponent(pixelId)}&ev=PageView&noscript=1`}
-        />
-      </noscript>
+      <script dangerouslySetInnerHTML={{ __html: `(function(){${bootstrap}})();` }} />
     </>
   );
 }

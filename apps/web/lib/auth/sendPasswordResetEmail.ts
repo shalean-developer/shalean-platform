@@ -3,6 +3,7 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import {
+  buildPasswordResetRecoveryUrl,
   getPasswordResetRedirectBase,
   passwordResetRedirectIsProductionLeak,
 } from "@/lib/auth/passwordResetRedirect";
@@ -144,9 +145,10 @@ export async function sendPasswordResetEmail(
       return { ok: false, reason: "link_failed" };
     }
 
-    const actionLink = String(data?.properties?.action_link ?? "").trim();
+    const hashedToken = String(data?.properties?.hashed_token ?? "").trim();
+    const actionLink = buildPasswordResetRecoveryUrl(redirectTo, hashedToken);
     if (!actionLink) {
-      await reportOperationalIssue("warn", "auth/password_reset", "generateLink returned no action_link", {
+      await reportOperationalIssue("warn", "auth/password_reset", "generateLink returned no hashed recovery token", {
         email,
       });
       return { ok: false, reason: "link_failed" };
@@ -155,7 +157,7 @@ export async function sendPasswordResetEmail(
       await reportOperationalIssue(
         "error",
         "auth/password_reset",
-        "Supabase recovery action_link targets production from non-production deployment",
+        "Environment-owned recovery link targets production from non-production deployment",
         { email },
       );
       return { ok: false, reason: "production_redirect" };
