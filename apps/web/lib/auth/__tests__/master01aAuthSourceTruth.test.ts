@@ -164,3 +164,27 @@ describe("MASTER-01A-04 profile-repair redirect preservation", () => {
     expect(page).toContain("window.location.replace(json.dashboardRoute)");
   });
 });
+
+
+describe("MASTER-01A-04 redirect hardening and guarded deep-link repair", () => {
+  it("rejects backslash-based post-login redirects", () => {
+    const userRole = read("apps/web/lib/auth/userRole.ts");
+
+    expect(userRole).toContain('t.includes("\\\\")');
+  });
+
+  it("carries pathname and query from role-guard missing-profile redirects", () => {
+    const guard = read("apps/web/lib/auth/useRoleRouteGuard.tsx");
+
+    expect(guard).toContain("useSearchParams");
+    expect(guard).toContain("searchParams.toString()");
+    expect(guard).toContain("/complete-profile?redirect=");
+    expect(guard).toContain("encodeURIComponent(requested)");
+  });
+
+  it("keeps role-safe redirect application server-side after repair", () => {
+    const route = read("apps/web/app/api/auth/complete-profile/route.ts");
+
+    expect(route).toContain("safePostLoginRedirect(body.redirect, resolved.role)");
+  });
+});
