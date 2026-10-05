@@ -591,3 +591,23 @@ describe("MASTER-01A-03D recovery credential referrer scrub", () => {
     );
   });
 });
+
+
+describe("MASTER-01A-03D recovery scrub before auth configuration", () => {
+  it("sanitizes recovery credentials before checking whether the Supabase client exists", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const src = readFileSync(
+      resolve(process.cwd(), "app/auth/reset-password/page.tsx"),
+      "utf8",
+    );
+
+    const effectIdx = src.indexOf("useEffect(() => {");
+    const scrubIdx = src.indexOf("scrubRecoveryCredentialsFromBrowserUrl()", effectIdx);
+    const clientIdx = src.indexOf("getSupabaseBrowser()", effectIdx);
+
+    expect(effectIdx).toBeGreaterThanOrEqual(0);
+    expect(scrubIdx).toBeGreaterThan(effectIdx);
+    expect(clientIdx).toBeGreaterThan(scrubIdx);
+  });
+});
