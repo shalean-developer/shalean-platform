@@ -7,6 +7,8 @@ export type RecoveryBootstrapResult =
   | { ok: true }
   | { ok: false; reason: "not_configured" | "auth_error" | "expired_or_invalid"; message: string };
 
+const recoveryBootstrapInflight = new Map<string, Promise<RecoveryBootstrapResult>>();
+
 type AuthLike = {
   exchangeCodeForSession: (code: string) => Promise<{ error: { message: string } | null }>;
   setSession: (tokens: {
@@ -68,6 +70,24 @@ export function isExpiredRecoveryMessage(message: string): boolean {
  * Establish a PASSWORD_RECOVERY session from the current URL, then poll briefly.
  */
 export async function bootstrapPasswordRecoverySession(
+  auth: AuthLike,
+  href: string,
+  options?: { pollAttempts?: number; pollDelayMs?: number },
+): Promise<RecoveryBootstrapResult> {
+  const key = href;
+  const existing = recoveryBootstrapInflight.get(key);
+  if (existing) return existing;
+
+  const pending = bootstrapPasswordRecoverySessionOnce(auth, href, options);
+  recoveryBootstrapInflight.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    recoveryBootstrapInflight.delete(key);
+  }
+}
+
+async function bootstrapPasswordRecoverySessionOnce(
   auth: AuthLike,
   href: string,
   options?: { pollAttempts?: number; pollDelayMs?: number },
