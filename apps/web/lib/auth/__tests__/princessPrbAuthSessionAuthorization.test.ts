@@ -426,3 +426,18 @@ describe("MASTER-01A-03B tracker scheduling idempotency", () => {
     expect(guard).toContain("window.__shaleanAhrefsBootstrapScheduled");
   });
 });
+
+
+describe("MASTER-01A-03B Meta re-bootstrap dispatch contract", () => {
+  it("uses Meta's callMethod-aware queue semantics in the fallback stub", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const guard = readFileSync(resolve(process.cwd(), "components/analytics/Ga4RouteGuard.tsx"), "utf8");
+
+    expect(guard).toContain('typeof fbq.callMethod === "function"');
+    expect(guard).toContain("fbq.callMethod(...args)");
+    expect(guard).toContain("fbq.queue = fbq.queue || []");
+    expect(guard).toContain("fbq.queue.push(args)");
+    expect(guard).not.toContain("fbq.q.push(args)");
+  });
+});
