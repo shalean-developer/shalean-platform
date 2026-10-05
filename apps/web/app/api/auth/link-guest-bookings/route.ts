@@ -9,7 +9,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 
 /**
- * Attach `user_id` to guest rows for this email after magic-link / OTP sign-in.
+ * Dashboard repair path: attach `user_id` to guest rows for the authenticated email.
  */
 export async function POST(request: Request) {
   const authHeader = request.headers.get("authorization");
