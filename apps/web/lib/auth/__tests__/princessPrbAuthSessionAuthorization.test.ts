@@ -467,3 +467,16 @@ describe("MASTER-01A-03B deferred tracker route recheck", () => {
     expect(clarity.match(/GA4_PATH_EXCLUSION_SNIPPET/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
   });
 });
+
+
+describe("MASTER-01A-03B deferred tracker abort cleanup", () => {
+  it("clears scheduled flags when deferred Meta or Clarity aborts on an excluded route", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const meta = readFileSync(resolve(process.cwd(), "components/analytics/MetaPixel.tsx"), "utf8");
+    const clarity = readFileSync(resolve(process.cwd(), "components/analytics/SessionReplayProvider.tsx"), "utf8");
+
+    expect(meta).toContain("window.__shaleanMetaBootstrapScheduled=false;return;");
+    expect(clarity).toContain("window.__shaleanClarityBootstrapScheduled=false;return;");
+  });
+});
