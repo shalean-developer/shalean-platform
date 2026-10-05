@@ -29,18 +29,16 @@ function ResetPasswordForm() {
 
     let active = true;
 
-    const { data: sub } = sb.auth.onAuthStateChange((event, session) => {
-      if (!active) return;
-      if (event === "PASSWORD_RECOVERY" || session) {
-        setSessionReady(true);
-        setSessionError(null);
-      }
-    });
-
     void (async () => {
       const result = await bootstrapPasswordRecoverySession(sb.auth, window.location.href);
       if (!active) return;
       if (result.ok) {
+        const current = new URL(window.location.href);
+        if (current.searchParams.has("token_hash")) {
+          current.searchParams.delete("token_hash");
+          current.searchParams.delete("type");
+          window.history.replaceState({}, "", `${current.pathname}${current.search}${current.hash}`);
+        }
         setSessionReady(true);
         setSessionError(null);
         return;
@@ -50,7 +48,6 @@ function ResetPasswordForm() {
 
     return () => {
       active = false;
-      sub.subscription.unsubscribe();
     };
   }, []);
 
@@ -58,8 +55,8 @@ function ResetPasswordForm() {
     e.preventDefault();
     setError(null);
     setInfo(null);
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
       return;
     }
     if (password !== confirm) {
@@ -127,11 +124,11 @@ function ResetPasswordForm() {
             name="password"
             autoComplete="new-password"
             required
-            minLength={6}
+            minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             wrapperClassName="mt-1.5"
-            placeholder="Min. 6 characters"
+            placeholder="Min. 8 characters"
           />
         </div>
 
@@ -144,7 +141,7 @@ function ResetPasswordForm() {
             name="confirm"
             autoComplete="new-password"
             required
-            minLength={6}
+            minLength={8}
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
             wrapperClassName="mt-1.5"
