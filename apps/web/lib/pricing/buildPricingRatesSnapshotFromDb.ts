@@ -73,6 +73,18 @@ export function pricingServiceRowToTariff(row: {
   };
 }
 
+export function resolveCompletePricingSnapshotServices(
+  bySlug: Record<string, ServiceTariff>,
+): Record<PricingSnapshotServiceId, ServiceTariff> | null {
+  const services = {} as Record<PricingSnapshotServiceId, ServiceTariff>;
+  for (const key of SERVICE_KEYS) {
+    const tariff = resolvePricingServiceRow(bySlug, key);
+    if (!tariff || !Number.isFinite(tariff.base) || tariff.base <= 0) return null;
+    services[key] = tariff;
+  }
+  return services;
+}
+
 /**
  * Builds the canonical {@link PricingRatesSnapshot} from live `pricing_*` tables (admin source of truth).
  */
@@ -90,7 +102,6 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
     return null;
   }
 
-  const services = {} as Record<PricingSnapshotServiceId, ServiceTariff>;
   const bySlug: Record<string, ServiceTariff> = {};
   for (const raw of svcRows ?? []) {
     const row = raw as Record<string, unknown>;
@@ -111,16 +122,12 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
     });
   }
 
-  for (const k of SERVICE_KEYS) {
-    const tariff = resolvePricingServiceRow(bySlug, k);
-    if (!tariff || !Number.isFinite(tariff.base) || tariff.base <= 0) {
-      console.error("[pricing] pricing_services incomplete:", {
-        missingService: k,
-        availableSlugs: Object.keys(bySlug).sort(),
-      });
-      return null;
-    }
-    services[k] = tariff;
+  const services = resolveCompletePricingSnapshotServices(bySlug);
+  if (!services) {
+    console.error("[pricing] pricing_services incomplete for frozen snapshot:", {
+      availableSlugs: Object.keys(bySlug).sort(),
+    });
+    return null;
   }
 
   const { data: extRows, error: extErr } = await supabase
