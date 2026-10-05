@@ -18,7 +18,7 @@ const PROJECT = "prj_eA7rHVSDiDXslAmrGwkdS4BtlVAc";
 const TEAM = "team_gSaraaY4wPNKtO0Pfx5MY42D";
 
 const REFS = {
-  staging: "jhubpsbwmjgydkzztxeu",
+  staging: "uwvnmluiqbczeduzjgse",
 };
 
 const ENV_IDS = {
