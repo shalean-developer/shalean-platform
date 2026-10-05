@@ -304,6 +304,14 @@ export function syncGa4RoutePolicy(pathname: string | null): void {
  * Uses `useLayoutEffect` and must mount **before** `{children}` in the root layout so
  * booking funnel effects cannot race ahead of disable-clear / bootstrap.
  */
+export function shouldForceSensitiveRouteHardNavigation(
+  pathname: string | null,
+  wasPreviouslyExcluded: boolean,
+): boolean {
+  const path = pathname?.split("?")[0]?.split("#")[0] ?? "";
+  return !wasPreviouslyExcluded && path === "/auth/reset-password";
+}
+
 export function Ga4RouteGuard() {
   const pathname = usePathname();
   const wasExcluded = useRef(isGa4PathExcluded(pathname));
@@ -314,6 +322,12 @@ export function Ga4RouteGuard() {
 
   useLayoutEffect(() => {
     const excluded = isGa4PathExcluded(pathname);
+
+    if (shouldForceSensitiveRouteHardNavigation(pathname, wasExcluded.current)) {
+      window.location.replace(window.location.href);
+      return;
+    }
+
     // Always silence (or restore) GA4 + Ads + GTM — including already-loaded destinations
     // after public → /office|/jobs|private /cleaner SPA navigation.
     applyAnalyticsRoutePolicy(pathname);
