@@ -63,6 +63,16 @@ function hasScriptSrcFragment(fragment: string): boolean {
   );
 }
 
+type MetaQueueFn = ((...args: unknown[]) => void) & {
+  q?: unknown[];
+  push?: MetaQueueFn;
+  loaded?: boolean;
+  version?: string;
+  queue?: unknown[];
+};
+
+type ClarityQueueFn = ((...args: unknown[]) => void) & { q?: unknown[] };
+
 export function ensureMetaPixelBootstrapped(): void {
   if (typeof window === "undefined" || isGa4PathExcluded(window.location.pathname)) return;
   const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID?.trim();
@@ -73,24 +83,16 @@ export function ensureMetaPixelBootstrapped(): void {
   }
 
   const w = window as Window & typeof globalThis & {
-    fbq?: ((...args: unknown[]) => void) & {
-      q?: unknown[];
-      push?: unknown;
-      loaded?: boolean;
-      version?: string;
-      queue?: unknown[];
-    };
+    fbq?: (...args: unknown[]) => void;
     _fbq?: unknown;
   };
-  const fbq =
-    w.fbq ||
-    Object.assign(
-      function fbqStub(...args: unknown[]) {
-        fbqStub.q = fbqStub.q || [];
-        fbqStub.q.push(args);
-      },
-      { q: [] as unknown[] },
-    );
+  const existingFbq = w.fbq as MetaQueueFn | undefined;
+  const fbq: MetaQueueFn =
+    existingFbq ??
+    ((...args: unknown[]) => {
+      fbq.q = fbq.q || [];
+      fbq.q.push(args);
+    });
   w.fbq = fbq;
   if (!w._fbq) w._fbq = fbq;
   fbq.push = fbq;
@@ -120,17 +122,15 @@ export function ensureClarityBootstrapped(): void {
   }
 
   const w = window as Window & typeof globalThis & {
-    clarity?: ((...args: unknown[]) => void) & { q?: unknown[] };
+    clarity?: (...args: unknown[]) => void;
   };
-  const clarity =
-    w.clarity ||
-    Object.assign(
-      function clarityStub(...args: unknown[]) {
-        clarityStub.q = clarityStub.q || [];
-        clarityStub.q.push(args);
-      },
-      { q: [] as unknown[] },
-    );
+  const existingClarity = w.clarity as ClarityQueueFn | undefined;
+  const clarity: ClarityQueueFn =
+    existingClarity ??
+    ((...args: unknown[]) => {
+      clarity.q = clarity.q || [];
+      clarity.q.push(args);
+    });
   w.clarity = clarity;
 
   const s = document.createElement("script");
