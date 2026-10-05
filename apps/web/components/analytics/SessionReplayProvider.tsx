@@ -16,5 +16,5 @@ export function SessionReplayProvider() {
     ),
   ].join("");
 
-  return <script dangerouslySetInnerHTML={{ __html: bootstrap }} />;
+  return <script dangerouslySetInnerHTML={{ __html: `(function(){${bootstrap}})();` }} />;
 }
