@@ -116,3 +116,23 @@ describe("MASTER-01A-04 missing-profile recovery path", () => {
     expect(route).toContain("Invalid or expired token.");
   });
 });
+
+
+describe("MASTER-01A-04 cleaner identity convergence", () => {
+  it("uses the canonical cleaner resolver for profile-role inference", () => {
+    const infer = read("apps/web/lib/admin/inferUserProfileRole.ts");
+    const resolver = read("apps/web/lib/auth/resolveUserRoleServer.ts");
+
+    expect(infer).toContain("fetchCleanerRowForSupabaseAuthUser");
+    expect(resolver).toContain("fetchCleanerRowForSupabaseAuthUser");
+    expect(infer).not.toContain('.eq("auth_user_id", userId).maybeSingle()');
+  });
+
+  it("keeps alternate cleaner auth links and legacy-id fallback in the shared resolver", () => {
+    const cleaner = read("apps/web/lib/cleaner/resolveCleanerFromRequest.ts");
+
+    expect(cleaner).toContain('.from("cleaner_auth_links")');
+    expect(cleaner).toContain('.eq("is_active", true)');
+    expect(cleaner).toContain('.eq("id", authUserId).maybeSingle()');
+  });
+});
