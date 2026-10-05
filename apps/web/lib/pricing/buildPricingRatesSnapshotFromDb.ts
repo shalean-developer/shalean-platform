@@ -111,24 +111,16 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
     });
   }
 
-  const fallback = pricingServiceRowToTariff({
-    base_price: 0,
-    price_per_bedroom: 0,
-    price_per_bathroom: 0,
-    price_per_extra_room: 0,
-    duration_base: 3.5,
-    duration_per_bedroom: 0.5,
-    duration_per_bathroom: 0.5,
-    duration_per_extra_room: 0.3,
-    min_hours: DEFAULT_SERVICE_DURATION_LIMITS.minHours,
-    max_hours: DEFAULT_SERVICE_DURATION_LIMITS.maxHours,
-  });
-  const baseTariff =
-    resolvePricingServiceRow(bySlug, "standard") ??
-    bySlug[Object.keys(bySlug)[0] ?? ""] ??
-    fallback;
   for (const k of SERVICE_KEYS) {
-    services[k] = resolvePricingServiceRow(bySlug, k) ?? baseTariff;
+    const tariff = resolvePricingServiceRow(bySlug, k);
+    if (!tariff || !Number.isFinite(tariff.base) || tariff.base <= 0) {
+      console.error("[pricing] pricing_services incomplete:", {
+        missingService: k,
+        availableSlugs: Object.keys(bySlug).sort(),
+      });
+      return null;
+    }
+    services[k] = tariff;
   }
 
   const { data: extRows, error: extErr } = await supabase
