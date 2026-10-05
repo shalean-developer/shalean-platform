@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { fetchUserRoleClient } from "@/lib/auth/resolvePostAuthDestination";
 import type { AppUserRole } from "@/lib/auth/userRole";
 import { readCachedUserRole } from "@/lib/auth/userRole";
@@ -79,6 +79,7 @@ export function useRoleRouteGuard({
 } {
   const router = useRouter();
   const pathname = usePathname() ?? "/";
+  const searchParams = useSearchParams();
   /** Always start `checking` so SSR and the first client render match (no localStorage in initializer). */
   const [state, setState] = useState<RoleRouteGuardState>({ status: "checking" });
   const runId = useRef(0);
@@ -182,13 +183,18 @@ export function useRoleRouteGuard({
       return;
     }
     if (state.status === "missing_profile") {
-      scheduleAppRouterReplace(router, "/complete-profile");
+      const query = searchParams.toString();
+      const requested = `${pathname}${query ? `?${query}` : ""}`;
+      scheduleAppRouterReplace(
+        router,
+        `/complete-profile?redirect=${encodeURIComponent(requested)}`,
+      );
       return;
     }
     if (state.status === "wrong_role") {
       scheduleAppRouterReplace(router, state.actualRoute);
     }
-  }, [state, pathname, router, allowLocalhostDevBypass]);
+  }, [state, pathname, router, searchParams, allowLocalhostDevBypass]);
 
   return { state, retry: () => void verify() };
 }
