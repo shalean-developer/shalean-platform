@@ -8,6 +8,32 @@ import { updatePassword } from "@/lib/auth/authClient";
 import { bootstrapPasswordRecoverySession } from "@/lib/auth/bootstrapPasswordRecoverySession";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
+function scrubRecoveryCredentialsFromBrowserUrl(): void {
+  const current = new URL(window.location.href);
+  const sensitiveKeys = [
+    "token_hash",
+    "type",
+    "code",
+    "access_token",
+    "refresh_token",
+    "error",
+    "error_code",
+    "error_description",
+  ];
+
+  for (const key of sensitiveKeys) current.searchParams.delete(key);
+
+  const hashParams = new URLSearchParams(current.hash.replace(/^#/, ""));
+  for (const key of sensitiveKeys) hashParams.delete(key);
+  const cleanHash = hashParams.toString();
+
+  window.history.replaceState(
+    {},
+    "",
+    `${current.pathname}${current.search}${cleanHash ? `#${cleanHash}` : ""}`,
+  );
+}
+
 function ResetPasswordForm() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -28,14 +54,9 @@ function ResetPasswordForm() {
 
     void (async () => {
       const result = await bootstrapPasswordRecoverySession(sb.auth, window.location.href);
+      scrubRecoveryCredentialsFromBrowserUrl();
       if (!active) return;
       if (result.ok) {
-        const current = new URL(window.location.href);
-        if (current.searchParams.has("token_hash")) {
-          current.searchParams.delete("token_hash");
-          current.searchParams.delete("type");
-          window.history.replaceState({}, "", `${current.pathname}${current.search}${current.hash}`);
-        }
         setSessionReady(true);
         setSessionError(null);
         return;
