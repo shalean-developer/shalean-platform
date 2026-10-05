@@ -204,3 +204,33 @@ describe("login link-user non-blocking contract", () => {
     ).resolves.toBeUndefined();
   });
 });
+
+
+describe("MASTER-01A-03A password recovery source-of-truth contract", () => {
+  it("keeps forgot-password enumeration-safe UI aligned with its API contract", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const src = readFileSync(resolve(process.cwd(), "app/auth/forgot-password/page.tsx"), "utf8");
+    expect(src).not.toContain("noAccount");
+    expect(src).toContain("We sent a password reset link to your email.");
+  });
+
+  it("keeps reset password policy aligned with signup at 8 characters", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const reset = readFileSync(resolve(process.cwd(), "app/auth/reset-password/page.tsx"), "utf8");
+    const signup = readFileSync(resolve(process.cwd(), "app/auth/signup/page.tsx"), "utf8");
+    expect(reset).toContain("password.length < 8");
+    expect(reset).toContain("minLength={8}");
+    expect(signup).toContain("password.length < 8");
+    expect(signup).toContain("minLength={8}");
+  });
+
+  it("does not document the retired auth callback as a live booking-link source", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const src = readFileSync(resolve(process.cwd(), "app/api/bookings/link-user/route.ts"), "utf8");
+    expect(src).not.toContain("/auth/callback");
+    expect(src).toContain("bearer token");
+  });
+});

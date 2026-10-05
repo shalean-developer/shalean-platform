@@ -102,7 +102,10 @@ jobs:
 
       - name: Auth source-of-truth regression
         if: steps.filter.outputs.run_suite == 'true'
-        run: npm run test -- lib/auth/__tests__/master01aAuthSourceTruth.test.ts
+        run: >-
+          npm run test --
+          lib/auth/__tests__/master01aAuthSourceTruth.test.ts
+          lib/auth/__tests__/princessPrbAuthSessionAuthorization.test.ts
 
       - name: Revenue path tests (booking, dispatch, cleaner API, cron locks, cost gates)
         if: steps.filter.outputs.run_suite == 'true'
