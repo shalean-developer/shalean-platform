@@ -57,7 +57,20 @@ async function resolvePostAuthDestinationOnce(
     }
 
     if (json.missingProfile) {
-      return { kind: "redirect", path: "/complete-profile", role: null };
+      const rawRedirect = String(redirectParam ?? "").trim();
+      const safeRedirect =
+        rawRedirect.startsWith("/") &&
+        !rawRedirect.startsWith("//") &&
+        !rawRedirect.includes("://")
+          ? rawRedirect
+          : "";
+      return {
+        kind: "redirect",
+        path: safeRedirect
+          ? `/complete-profile?redirect=${encodeURIComponent(safeRedirect)}`
+          : "/complete-profile",
+        role: null,
+      };
     }
 
     if (json.invalidRole) {
