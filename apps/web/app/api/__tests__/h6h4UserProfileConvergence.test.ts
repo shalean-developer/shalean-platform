@@ -32,55 +32,18 @@ const stripSql = (s: string) =>
  *     instead of routed to the monthly invoice rail.
  *
  * Post-fix surface area (this file's contracts):
- *   1. `apps/web/app/api/auth/create-from-guest/route.ts` —
- *      ensures a profile after createUser (or already-exists path)
- *   2. `apps/web/app/api/bookings/link-user/route.ts` —
- *      ensures a profile before attributing guest bookings
- *   3. `apps/web/app/api/auth/link-guest-bookings/route.ts` —
- *      ensures a profile before attributing guest bookings (sister flow)
- *   4. `apps/web/app/api/cron/generate-recurring-bookings/route.ts` —
+ *   1. `apps/web/app/api/bookings/link-user/route.ts` —
+ *      ensures a profile before attributing guest bookings after password auth
+ *   2. `apps/web/app/api/auth/link-guest-bookings/route.ts` —
+ *      ensures a profile before dashboard attribution repair
+ *   3. `apps/web/app/api/cron/generate-recurring-bookings/route.ts` —
  *      missing profile NEVER silently routes to `per_booking`; it surfaces
  *      a loud `recurring_skip_missing_profile` warning, advances the cursor,
  *      and skips the plan for this run.
- *   5. `supabase/migrations/20260939_h6_h4_user_profiles_backfill.sql` —
+ *   4. `supabase/migrations/20260939_h6_h4_user_profiles_backfill.sql` —
  *      idempotent one-shot insert for orphan auth users; never overwrites
  *      existing rows (`ON CONFLICT (id) DO NOTHING`).
  */
-
-describe("H-6 / H-4 — create-from-guest wires ensureUserProfileForAuthUser", () => {
-  const src = r("app/api/auth/create-from-guest/route.ts");
-
-  it("imports the helper", () => {
-    expect(src).toMatch(
-      /import\s+\{\s*ensureUserProfileForAuthUser\s*\}\s+from\s+"@\/lib\/admin\/ensureUserProfileForAuthUser"/,
-    );
-  });
-
-  it("captures the new auth user id from createUser", () => {
-    expect(src).toMatch(/const\s*\{\s*data:\s*createData,\s*error:\s*createError\s*\}\s*=\s*await\s+admin\.auth\.admin\.createUser\(/);
-  });
-
-  it("falls back to listUsers when createUser indicates 'already exists' so the helper can still target the right id", () => {
-    expect(src).toMatch(/admin\.auth\.admin\.listUsers/);
-    expect(src).toMatch(/normalizeEmail\(rowEmail\)/);
-  });
-
-  it("calls ensureUserProfileForAuthUser with the resolved id", () => {
-    expect(src).toMatch(
-      /await\s+ensureUserProfileForAuthUser\(\s*admin\s*,\s*resolvedAuthUserId\s*\)/,
-    );
-  });
-
-  it("logs but does NOT 5xx on profile-repair failure (magic link still goes out)", () => {
-    expect(src).toMatch(/source:\s*"create-from-guest"/);
-    expect(src).toMatch(/message:\s*"user_profile_repair_failed"/);
-    // After the ensure call, the next step must still be the OTP email.
-    const ensureIdx = src.indexOf("ensureUserProfileForAuthUser");
-    const otpIdx = src.indexOf("signInWithOtp");
-    expect(ensureIdx).toBeGreaterThan(0);
-    expect(otpIdx).toBeGreaterThan(ensureIdx);
-  });
-});
 
 describe("H-6 / H-4 — bookings/link-user wires ensureUserProfileForAuthUser", () => {
   const src = r("app/api/bookings/link-user/route.ts");
