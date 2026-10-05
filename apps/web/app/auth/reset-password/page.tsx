@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { AuthCard } from "@/components/auth/AuthShell";
@@ -11,7 +9,6 @@ import { bootstrapPasswordRecoverySession } from "@/lib/auth/bootstrapPasswordRe
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 function ResetPasswordForm() {
-  const router = useRouter();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -72,8 +69,7 @@ function ResetPasswordForm() {
       }
       setInfo("Your password has been updated. Redirecting to sign in…");
       window.setTimeout(() => {
-        router.replace("/auth/login");
-        router.refresh();
+        window.location.replace("/auth/login");
       }, 1500);
     } finally {
       setSubmitting(false);
@@ -85,12 +81,12 @@ function ResetPasswordForm() {
       <AuthCard>
         <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Link expired</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{sessionError}</p>
-        <Link
+        <a
           href="/auth/forgot-password"
           className="mt-6 inline-flex w-full justify-center rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground"
         >
           Request a new link
-        </Link>
+        </a>
       </AuthCard>
     );
   }
