@@ -564,3 +564,20 @@ describe("MASTER-01A-03D sensitive reset-route navigation interception", () => {
     expect(policy).toContain('window.location.pathname.startsWith("/auth/reset-password/")');
   });
 });
+
+
+describe("MASTER-01A-03D sensitive reset popstate handling", () => {
+  it("forces a document reload for reset-password history traversal", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const policy = readFileSync(
+      resolve(process.cwd(), "lib/analytics/analyticsRoutePolicy.ts"),
+      "utf8",
+    );
+
+    expect(policy).toContain('window.addEventListener(\n    "popstate"');
+    expect(policy).toContain('path === "/auth/reset-password"');
+    expect(policy).toContain('path.startsWith("/auth/reset-password/")');
+    expect(policy).toContain("window.location.reload()");
+  });
+});
