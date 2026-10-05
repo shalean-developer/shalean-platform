@@ -17,7 +17,6 @@ describe("MASTER-01A-01 auth callback session bootstrap", () => {
   });
 
   it("waits for an auth-state session instead of exchanging the PKCE code twice", async () => {
-    let callback: ((event: string, session: unknown | null) => void) | null = null;
     const unsubscribe = vi.fn();
     const auth = {
       getSession: vi
@@ -25,15 +24,14 @@ describe("MASTER-01A-01 auth callback session bootstrap", () => {
         .mockResolvedValueOnce({ data: { session: null } })
         .mockResolvedValueOnce({ data: { session: null } }),
       onAuthStateChange: vi.fn((cb: (event: string, session: unknown | null) => void) => {
-        callback = cb;
+        queueMicrotask(() => cb("SIGNED_IN", { access_token: "token" }));
         return { data: { subscription: { unsubscribe } } };
       }),
     };
 
-    const pending = bootstrapAuthCallbackSession(auth, { timeoutMs: 100 });
-    callback?.("SIGNED_IN", { access_token: "token" });
+    const result = await bootstrapAuthCallbackSession(auth, { timeoutMs: 100 });
 
-    await expect(pending).resolves.toEqual({ ok: true });
+    expect(result).toEqual({ ok: true });
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 
