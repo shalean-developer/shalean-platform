@@ -18,6 +18,9 @@ import {
 declare global {
   interface Window {
     __shaleanGa4Bootstrapped?: boolean;
+    __shaleanMetaBootstrapped?: boolean;
+    __shaleanClarityBootstrapped?: boolean;
+    __shaleanAhrefsBootstrapped?: boolean;
     /** True once gtag.js has been appended (or detected) — distinct from config queue. */
     __shaleanGa4LoaderPresent?: boolean;
     __shaleanAdsBootstrapped?: boolean;
@@ -50,6 +53,115 @@ function appendGa4LoaderScript(measurementId: string): void {
   s.onload = () => notifyAnalyticsTagLoaded();
   document.head.appendChild(s);
   window.__shaleanGa4LoaderPresent = true;
+}
+
+
+function hasScriptSrcFragment(fragment: string): boolean {
+  if (typeof document === "undefined") return false;
+  return Array.from(document.querySelectorAll("script[src]")).some((el) =>
+    String((el as HTMLScriptElement).src || "").includes(fragment),
+  );
+}
+
+export function ensureMetaPixelBootstrapped(): void {
+  if (typeof window === "undefined" || isGa4PathExcluded(window.location.pathname)) return;
+  const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID?.trim();
+  if (!pixelId || window.__shaleanMetaBootstrapped) return;
+  if (hasScriptSrcFragment("connect.facebook.net/en_US/fbevents.js")) {
+    window.__shaleanMetaBootstrapped = true;
+    return;
+  }
+
+  const w = window as Window & typeof globalThis & {
+    fbq?: ((...args: unknown[]) => void) & {
+      q?: unknown[];
+      push?: unknown;
+      loaded?: boolean;
+      version?: string;
+      queue?: unknown[];
+    };
+    _fbq?: unknown;
+  };
+  const fbq =
+    w.fbq ||
+    Object.assign(
+      function fbqStub(...args: unknown[]) {
+        fbqStub.q = fbqStub.q || [];
+        fbqStub.q.push(args);
+      },
+      { q: [] as unknown[] },
+    );
+  w.fbq = fbq;
+  if (!w._fbq) w._fbq = fbq;
+  fbq.push = fbq;
+  fbq.loaded = true;
+  fbq.version = "2.0";
+  fbq.queue = [];
+
+  const s = document.createElement("script");
+  s.async = true;
+  s.dataset.shaleanMeta = pixelId;
+  s.src = "https://connect.facebook.net/en_US/fbevents.js";
+  s.onload = () => {
+    w.fbq?.("init", pixelId);
+    w.fbq?.("track", "PageView");
+  };
+  document.head.appendChild(s);
+  window.__shaleanMetaBootstrapped = true;
+}
+
+export function ensureClarityBootstrapped(): void {
+  if (typeof window === "undefined" || isGa4PathExcluded(window.location.pathname)) return;
+  const clarityId = process.env.NEXT_PUBLIC_MICROSOFT_CLARITY_PROJECT_ID?.trim();
+  if (!clarityId || window.__shaleanClarityBootstrapped) return;
+  if (hasScriptSrcFragment(`clarity.ms/tag/${clarityId}`)) {
+    window.__shaleanClarityBootstrapped = true;
+    return;
+  }
+
+  const w = window as Window & typeof globalThis & {
+    clarity?: ((...args: unknown[]) => void) & { q?: unknown[] };
+  };
+  const clarity =
+    w.clarity ||
+    Object.assign(
+      function clarityStub(...args: unknown[]) {
+        clarityStub.q = clarityStub.q || [];
+        clarityStub.q.push(args);
+      },
+      { q: [] as unknown[] },
+    );
+  w.clarity = clarity;
+
+  const s = document.createElement("script");
+  s.async = true;
+  s.dataset.shaleanClarity = clarityId;
+  s.src = `https://www.clarity.ms/tag/${encodeURIComponent(clarityId)}`;
+  document.head.appendChild(s);
+  window.__shaleanClarityBootstrapped = true;
+}
+
+export function ensureAhrefsBootstrapped(): void {
+  if (typeof window === "undefined" || isGa4PathExcluded(window.location.pathname)) return;
+  if (window.__shaleanAhrefsBootstrapped) return;
+  if (hasScriptSrcFragment("analytics.ahrefs.com/analytics.js")) {
+    window.__shaleanAhrefsBootstrapped = true;
+    return;
+  }
+
+  const s = document.createElement("script");
+  s.async = true;
+  s.dataset.key = "q/bjTagLIl4JOoJFbBFE/A";
+  s.dataset.shaleanAhrefs = "1";
+  s.src = "https://analytics.ahrefs.com/analytics.js";
+  document.head.appendChild(s);
+  window.__shaleanAhrefsBootstrapped = true;
+}
+
+export function ensureNonGoogleTrackersBootstrapped(): void {
+  ensureMetaPixelBootstrapped();
+  ensureClarityBootstrapped();
+  ensureAhrefsBootstrapped();
 }
 
 /**
@@ -152,6 +264,7 @@ export function syncGa4RoutePolicy(pathname: string | null): void {
     ensureGa4Bootstrapped();
     ensureGoogleAdsBootstrapped();
     ensureGtmBootstrapped();
+    ensureNonGoogleTrackersBootstrapped();
   }
 }
 
@@ -182,6 +295,9 @@ export function Ga4RouteGuard() {
       ensureGa4Bootstrapped();
       ensureGoogleAdsBootstrapped();
       ensureGtmBootstrapped();
+    }
+    if (!excluded) {
+      ensureNonGoogleTrackersBootstrapped();
     }
     wasExcluded.current = excluded;
   }, [pathname]);
