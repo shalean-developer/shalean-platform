@@ -34,10 +34,13 @@ function sensitiveResetTargetFromHistoryUrl(
   if (url == null) return null;
   try {
     const target = new URL(String(url), window.location.href);
-    if (
-      target.pathname === "/auth/reset-password" &&
-      window.location.pathname !== "/auth/reset-password"
-    ) {
+    const sensitive =
+      target.pathname === "/auth/reset-password" ||
+      target.pathname.startsWith("/auth/reset-password/");
+    const alreadyOnSensitiveRoute =
+      window.location.pathname === "/auth/reset-password" ||
+      window.location.pathname.startsWith("/auth/reset-password/");
+    if (sensitive && !alreadyOnSensitiveRoute) {
       return target.toString();
     }
   } catch {
