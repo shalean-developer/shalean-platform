@@ -1,86 +1,82 @@
 import { describe, expect, it, vi } from "vitest";
 import { bootstrapAuthCallbackSession } from "@/lib/auth/bootstrapAuthCallbackSession";
 
-describe("MASTER-01A-01 auth callback PKCE bootstrap", () => {
-  it("exchanges a PKCE code before reading the session", async () => {
-    const calls: string[] = [];
+describe("MASTER-01A-01 auth callback session bootstrap", () => {
+  it("accepts a session already established by @supabase/ssr URL detection", async () => {
     const auth = {
-      exchangeCodeForSession: vi.fn(async (code: string) => {
-        calls.push(`exchange:${code}`);
-        return { error: null };
-      }),
-      getSession: vi.fn(async () => {
-        calls.push("session");
-        return { data: { session: { access_token: "token" } } };
-      }),
-    };
-
-    const result = await bootstrapAuthCallbackSession(
-      auth,
-      "https://example.test/auth/callback?code=pkce-code",
-      { pollAttempts: 1, pollDelayMs: 0 },
-    );
-
-    expect(result).toEqual({ ok: true });
-    expect(calls).toEqual(["exchange:pkce-code", "session"]);
-  });
-
-  it("returns an exchange error without treating the callback as signed in", async () => {
-    const auth = {
-      exchangeCodeForSession: vi.fn(async () => ({
-        error: { message: "invalid flow state" },
-      })),
-      getSession: vi.fn(async () => ({
-        data: { session: { access_token: "stale" } },
-      })),
-    };
-
-    const result = await bootstrapAuthCallbackSession(
-      auth,
-      "https://example.test/auth/callback?code=bad-code",
-      { pollAttempts: 1, pollDelayMs: 0 },
-    );
-
-    expect(result).toEqual({
-      ok: false,
-      reason: "exchange_failed",
-      message: "invalid flow state",
-    });
-    expect(auth.getSession).not.toHaveBeenCalled();
-  });
-
-  it("keeps the existing-session fallback for callbacks without a PKCE code", async () => {
-    const auth = {
-      exchangeCodeForSession: vi.fn(async () => ({ error: null })),
       getSession: vi.fn(async () => ({
         data: { session: { access_token: "token" } },
       })),
+      onAuthStateChange: vi.fn(),
     };
 
-    const result = await bootstrapAuthCallbackSession(
-      auth,
-      "https://example.test/auth/callback",
-      { pollAttempts: 1, pollDelayMs: 0 },
-    );
+    const result = await bootstrapAuthCallbackSession(auth, { timeoutMs: 10 });
 
     expect(result).toEqual({ ok: true });
-    expect(auth.exchangeCodeForSession).not.toHaveBeenCalled();
+    expect(auth.onAuthStateChange).not.toHaveBeenCalled();
   });
 
-  it("fails closed when no session appears", async () => {
+  it("waits for an auth-state session instead of exchanging the PKCE code twice", async () => {
+    let callback: ((event: string, session: unknown | null) => void) | null = null;
+    const unsubscribe = vi.fn();
     const auth = {
-      exchangeCodeForSession: vi.fn(async () => ({ error: null })),
-      getSession: vi.fn(async () => ({ data: { session: null } })),
+      getSession: vi
+        .fn()
+        .mockResolvedValueOnce({ data: { session: null } })
+        .mockResolvedValueOnce({ data: { session: null } }),
+      onAuthStateChange: vi.fn((cb: (event: string, session: unknown | null) => void) => {
+        callback = cb;
+        return { data: { subscription: { unsubscribe } } };
+      }),
     };
 
-    const result = await bootstrapAuthCallbackSession(
-      auth,
-      "https://example.test/auth/callback",
-      { pollAttempts: 2, pollDelayMs: 0 },
-    );
+    const pending = bootstrapAuthCallbackSession(auth, { timeoutMs: 100 });
+    callback?.("SIGNED_IN", { access_token: "token" });
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.reason).toBe("missing_session");
-    expect(auth.getSession).toHaveBeenCalledTimes(2);
+    await expect(pending).resolves.toEqual({ ok: true });
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes the race if a session appears immediately after listener registration", async () => {
+    const unsubscribe = vi.fn();
+    const auth = {
+      getSession: vi
+        .fn()
+        .mockResolvedValueOnce({ data: { session: null } })
+        .mockResolvedValueOnce({ data: { session: { access_token: "token" } } }),
+      onAuthStateChange: vi.fn(() => ({
+        data: { subscription: { unsubscribe } },
+      })),
+    };
+
+    const result = await bootstrapAuthCallbackSession(auth, { timeoutMs: 100 });
+
+    expect(result).toEqual({ ok: true });
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed when automatic callback detection never establishes a session", async () => {
+    vi.useFakeTimers();
+    try {
+      const unsubscribe = vi.fn();
+      const auth = {
+        getSession: vi.fn(async () => ({ data: { session: null } })),
+        onAuthStateChange: vi.fn(() => ({
+          data: { subscription: { unsubscribe } },
+        })),
+      };
+
+      const pending = bootstrapAuthCallbackSession(auth, { timeoutMs: 50 });
+      await vi.advanceTimersByTimeAsync(50);
+
+      await expect(pending).resolves.toEqual({
+        ok: false,
+        reason: "missing_session",
+        message: "No sign-in session found. Open the link from your email again, or request a new link.",
+      });
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
