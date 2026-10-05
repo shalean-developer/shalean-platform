@@ -108,8 +108,10 @@ export function buildPasswordResetRecoveryUrl(resetPageUrl: string, hashedToken:
   if (!token) return null;
   try {
     const url = new URL(resetPageUrl);
-    url.searchParams.set("token_hash", token);
-    url.searchParams.set("type", "recovery");
+    const hash = new URLSearchParams();
+    hash.set("token_hash", token);
+    hash.set("type", "recovery");
+    url.hash = hash.toString();
     return url.toString();
   } catch {
     return null;
