@@ -524,3 +524,32 @@ describe("MASTER-01A-03B recovery credential authority", () => {
     expect(auth.getSession).not.toHaveBeenCalled();
   });
 });
+
+
+describe("MASTER-01A-03D sensitive reset-route hard navigation", () => {
+  it("forces a document navigation only when entering reset-password from an already-loaded public route", async () => {
+    const { shouldForceSensitiveRouteHardNavigation } = await import(
+      "@/components/analytics/Ga4RouteGuard"
+    );
+
+    expect(
+      shouldForceSensitiveRouteHardNavigation("/auth/reset-password", false),
+    ).toBe(true);
+    expect(
+      shouldForceSensitiveRouteHardNavigation("/auth/reset-password", true),
+    ).toBe(false);
+    expect(shouldForceSensitiveRouteHardNavigation("/office", false)).toBe(false);
+    expect(shouldForceSensitiveRouteHardNavigation("/book", false)).toBe(false);
+  });
+
+  it("uses location.replace so the sensitive route reloads into a tracker-free document", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const guard = readFileSync(
+      resolve(process.cwd(), "components/analytics/Ga4RouteGuard.tsx"),
+      "utf8",
+    );
+
+    expect(guard).toContain("window.location.replace(window.location.href)");
+  });
+});
