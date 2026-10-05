@@ -331,3 +331,15 @@ describe("MASTER-01A-03B environment-owned recovery link contract", () => {
     expect(src).toContain("history.replaceState");
   });
 });
+
+
+describe("MASTER-01A-03B reset form recovery-authority contract", () => {
+  it("does not unlock the reset form from a pre-existing unrelated session", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const src = readFileSync(resolve(process.cwd(), "app/auth/reset-password/page.tsx"), "utf8");
+    expect(src).not.toContain("onAuthStateChange");
+    expect(src).toContain("bootstrapPasswordRecoverySession");
+    expect(src).toContain("if (result.ok)");
+  });
+});
