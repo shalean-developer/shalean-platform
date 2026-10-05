@@ -68,7 +68,14 @@ export function clearCachedUserRole(): void {
 export function safePostLoginRedirect(raw: string | null | undefined, role: AppUserRole): string {
   const fallback = dashboardRouteForRole(role);
   const t = String(raw ?? "").trim();
-  if (!t.startsWith("/") || t.startsWith("//") || t.includes("://")) return fallback;
+  if (
+    !t.startsWith("/") ||
+    t.startsWith("//") ||
+    t.includes("://") ||
+    t.includes("\\")
+  ) {
+    return fallback;
+  }
 
   if (t.startsWith("/admin") || t.startsWith("/cleaner")) return fallback;
 
