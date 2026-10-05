@@ -77,7 +77,6 @@ jobs:
         run: |
           set -euo pipefail
           npm ci
-          npm install --no-save --package-lock=false @tailwindcss/postcss@^4
           node -e "require.resolve('@tailwindcss/postcss')"
           echo "Linked @shalean packages:"
           ls -la node_modules/@shalean
