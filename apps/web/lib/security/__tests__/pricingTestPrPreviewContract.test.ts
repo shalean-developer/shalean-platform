@@ -9,9 +9,9 @@ const activator = readFileSync(join(root, "scripts/plesk-activate-prebuilt-prici
 describe("pricing-test PR preview safety contract", () => {
   it("builds PR previews only with staging public configuration", () => {
     expect(workflow).toContain('SHALEAN_APP_ENV: "staging"');
-    expect(workflow).toContain("https://jhubpsbwmjgydkzztxeu.supabase.co");
-    expect(workflow).toContain('SHALEAN_EXPECTED_SUPABASE_REF: "jhubpsbwmjgydkzztxeu"');
-    expect(workflow).toContain("PLESK_TEST_SUPABASE_PUBLISHABLE_KEY");
+    expect(workflow).toContain("https://uwvnmluiqbczeduzjgse.supabase.co");
+    expect(workflow).toContain('SHALEAN_EXPECTED_SUPABASE_REF: "uwvnmluiqbczeduzjgse"');
+    expect(workflow).toContain("PLESK_STAGING_SUPABASE_PUBLISHABLE_KEY");
     expect(workflow).toContain("sb_publishable_");
     expect(workflow).toContain("PLESK_TEST_PAYSTACK_PUBLIC_KEY");
     expect(workflow).toContain("pk_test_preview_disabled");
@@ -29,7 +29,7 @@ describe("pricing-test PR preview safety contract", () => {
 
   it("activates only a staging bundle and fails closed on environment drift", () => {
     expect(activator).toContain('HEALTH_URL="https://pricing-test.shalean.co.za/api/health/environment"');
-    expect(activator).toContain('EXPECTED_REF="jhubpsbwmjgydkzztxeu"');
+    expect(activator).toContain('EXPECTED_REF="uwvnmluiqbczeduzjgse"');
     expect(activator).toContain('LIVE="$ROOT/pricing-test-runtime"');
     expect(activator).toContain('d.get("deployment")=="staging"');
     expect(activator).toContain('d.get("paystack") or {}).get("secretMode")=="test"');
