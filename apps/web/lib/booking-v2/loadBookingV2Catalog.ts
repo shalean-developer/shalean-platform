@@ -84,6 +84,20 @@ export function assertAuthoritativePricingCatalogReads(params: {
   throw new Error(`Authoritative booking pricing could not be read (${detail})`);
 }
 
+export function assertAuthoritativePricingServiceCoverage(
+  dbServices: Record<string, DbServiceRow>,
+): void {
+  const missing = SERVICE_SLUGS.filter((serviceSlug) => {
+    const row = resolveBookingV2PricingServiceRow(dbServices, serviceSlug);
+    return !row || !Number.isFinite(row.base_price) || row.base_price <= 0;
+  });
+  if (missing.length > 0) {
+    throw new Error(
+      `Authoritative booking pricing is incomplete (missing/invalid: ${missing.join(", ")})`,
+    );
+  }
+}
+
 function ratesFromDbRow(dbSvc: DbServiceRow | null | undefined, staticFallback: { basePrice: number }) {
   return {
     basePrice: dbSvc?.base_price && dbSvc.base_price > 0 ? dbSvc.base_price : staticFallback.basePrice,
@@ -265,6 +279,7 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
       }
     }
 
+    assertAuthoritativePricingServiceCoverage(dbServices);
     configJson = (configRow as { config?: unknown } | null)?.config ?? null;
   }
 
