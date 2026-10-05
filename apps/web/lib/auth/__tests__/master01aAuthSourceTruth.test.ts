@@ -85,3 +85,34 @@ describe("MASTER-01A-04 sign-in role/profile source of truth", () => {
     expect(resolver).toContain("invalidRole: true");
   });
 });
+
+
+describe("MASTER-01A-04 missing-profile recovery path", () => {
+  it("repairs missing profiles through an authenticated server route", () => {
+    const route = read("apps/web/app/api/auth/complete-profile/route.ts");
+
+    expect(route).toContain("pub.auth.getUser(token)");
+    expect(route).toContain("ensureUserProfileForAuthUser(admin, userId)");
+    expect(route).toContain("resolveUserRoleServer(admin");
+    expect(route).toContain("dashboardRouteForRole(resolved.role)");
+    expect(route).not.toContain('role: "customer"');
+  });
+
+  it("does not send existing authenticated users back through signup", () => {
+    const page = read("apps/web/app/complete-profile/page.tsx");
+
+    expect(page).toContain('fetch("/api/auth/complete-profile"');
+    expect(page).toContain("window.location.replace(json.dashboardRoute)");
+    expect(page).not.toContain('href="/auth/signup"');
+    expect(page).not.toContain("Create account");
+  });
+
+  it("keeps missing-profile repair bound to the current authenticated access token", () => {
+    const page = read("apps/web/app/complete-profile/page.tsx");
+    const route = read("apps/web/app/api/auth/complete-profile/route.ts");
+
+    expect(page).toContain("session.access_token");
+    expect(route).toContain('access_token is required.');
+    expect(route).toContain("Invalid or expired token.");
+  });
+});
