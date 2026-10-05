@@ -343,12 +343,15 @@ describe("MASTER-01A-03B environment-owned recovery link contract", () => {
     expect(src).not.toContain("properties?.action_link");
   });
 
-  it("reset page scrubs the one-time token after verification", async () => {
+  it("reset page scrubs recovery credentials after verification", async () => {
     const { readFileSync } = await import("node:fs");
     const { resolve } = await import("node:path");
     const src = readFileSync(resolve(process.cwd(), "app/auth/reset-password/page.tsx"), "utf8");
-    expect(src).toContain('searchParams.delete("token_hash")');
-    expect(src).toContain("history.replaceState");
+    expect(src).toContain("scrubRecoveryCredentialsFromBrowserUrl");
+    expect(src).toContain('"token_hash"');
+    expect(src).toContain('"access_token"');
+    expect(src).toContain('"refresh_token"');
+    expect(src).toContain("window.history.replaceState");
   });
 });
 
@@ -522,5 +525,132 @@ describe("MASTER-01A-03B recovery credential authority", () => {
     );
     expect(result.ok).toBe(false);
     expect(auth.getSession).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("MASTER-01A-03D reset route document-navigation contract", () => {
+  it("does not use Next client navigation when leaving the sensitive reset route", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const src = readFileSync(
+      resolve(process.cwd(), "app/auth/reset-password/page.tsx"),
+      "utf8",
+    );
+
+    expect(src).not.toContain('from "next/link"');
+    expect(src).not.toContain('from "next/navigation"');
+    expect(src).not.toContain("router.push(");
+    expect(src).not.toContain("router.replace(");
+    expect(src).toContain('href="/auth/forgot-password"');
+    expect(src).toContain('window.location.replace("/auth/login")');
+  });
+
+  it("keeps global analytics history policy unchanged by the reset-route fix", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const policy = readFileSync(
+      resolve(process.cwd(), "lib/analytics/analyticsRoutePolicy.ts"),
+      "utf8",
+    );
+
+    expect(policy).not.toContain("sensitiveResetTargetFromHistoryUrl");
+    expect(policy).not.toContain('window.location.reload()');
+  });
+});
+
+
+describe("MASTER-01A-03D recovery credential referrer scrub", () => {
+  it("scrubs every supported recovery credential and error parameter before document exits", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const src = readFileSync(
+      resolve(process.cwd(), "app/auth/reset-password/page.tsx"),
+      "utf8",
+    );
+
+    for (const key of [
+      "token_hash",
+      "type",
+      "code",
+      "access_token",
+      "refresh_token",
+      "error",
+      "error_code",
+      "error_description",
+    ]) {
+      expect(src).toContain(`"${key}"`);
+    }
+    expect(src).toContain("scrubRecoveryCredentialsFromBrowserUrl()");
+    expect(src).toContain("window.history.replaceState");
+    expect(src.indexOf("scrubRecoveryCredentialsFromBrowserUrl()")).toBeLessThan(
+      src.indexOf("setSessionReady(true)"),
+    );
+    expect(src.indexOf("scrubRecoveryCredentialsFromBrowserUrl()")).toBeLessThan(
+      src.indexOf("setSessionError(result.message)"),
+    );
+  });
+});
+
+
+describe("MASTER-01A-03D recovery scrub before auth configuration", () => {
+  it("sanitizes recovery credentials before checking whether the Supabase client exists", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const src = readFileSync(
+      resolve(process.cwd(), "app/auth/reset-password/page.tsx"),
+      "utf8",
+    );
+
+    const effectIdx = src.indexOf("useEffect(() => {");
+    const scrubIdx = src.indexOf("scrubRecoveryCredentialsFromBrowserUrl()", effectIdx);
+    const clientIdx = src.indexOf("getSupabaseBrowser()", effectIdx);
+
+    expect(effectIdx).toBeGreaterThanOrEqual(0);
+    expect(scrubIdx).toBeGreaterThan(effectIdx);
+    expect(clientIdx).toBeGreaterThan(scrubIdx);
+  });
+});
+
+
+describe("MASTER-01A-03D recovery URL capture ordering", () => {
+  it("captures the original recovery URL before scrubbing the browser address bar", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const src = readFileSync(
+      resolve(process.cwd(), "app/auth/reset-password/page.tsx"),
+      "utf8",
+    );
+
+    const effectIdx = src.indexOf("useEffect(() => {");
+    const captureIdx = src.indexOf("recoveryHrefRef.current = window.location.href", effectIdx);
+    const readIdx = src.indexOf("const recoveryHref = recoveryHrefRef.current", effectIdx);
+    const scrubIdx = src.indexOf("scrubRecoveryCredentialsFromBrowserUrl()", effectIdx);
+    const bootstrapIdx = src.indexOf(
+      "bootstrapPasswordRecoverySession(sb.auth, recoveryHref)",
+      effectIdx,
+    );
+
+    expect(captureIdx).toBeGreaterThan(effectIdx);
+    expect(readIdx).toBeGreaterThan(captureIdx);
+    expect(scrubIdx).toBeGreaterThan(readIdx);
+    expect(bootstrapIdx).toBeGreaterThan(scrubIdx);
+  });
+});
+
+
+describe("MASTER-01A-03D recovery URL retention across effect replays", () => {
+  it("retains the original recovery URL in a ref before scrubbing", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const src = readFileSync(
+      resolve(process.cwd(), "app/auth/reset-password/page.tsx"),
+      "utf8",
+    );
+
+    expect(src).toContain('useRef<string | null>(null)');
+    expect(src).toContain("if (!recoveryHrefRef.current)");
+    expect(src).toContain("recoveryHrefRef.current = window.location.href");
+    expect(src).toContain("const recoveryHref = recoveryHrefRef.current");
   });
 });
