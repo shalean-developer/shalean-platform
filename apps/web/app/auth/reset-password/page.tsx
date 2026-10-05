@@ -44,6 +44,7 @@ function ResetPasswordForm() {
   const [sessionError, setSessionError] = useState<string | null>(null);
 
   useEffect(() => {
+    const recoveryHref = window.location.href;
     scrubRecoveryCredentialsFromBrowserUrl();
 
     const sb = getSupabaseBrowser();
@@ -55,7 +56,7 @@ function ResetPasswordForm() {
     let active = true;
 
     void (async () => {
-      const result = await bootstrapPasswordRecoverySession(sb.auth, window.location.href);
+      const result = await bootstrapPasswordRecoverySession(sb.auth, recoveryHref);
       if (!active) return;
       if (result.ok) {
         setSessionReady(true);
