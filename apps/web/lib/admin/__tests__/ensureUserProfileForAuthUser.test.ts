@@ -48,6 +48,17 @@ function buildFakeAdmin(opts: {
           }),
         };
       }
+      if (table === "cleaner_auth_links") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: null, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
       if (table !== "user_profiles") throw new Error(`unexpected table ${table}`);
       return {
         select(_cols?: string) {
