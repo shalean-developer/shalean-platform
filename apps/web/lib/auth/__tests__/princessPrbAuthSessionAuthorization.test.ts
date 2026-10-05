@@ -611,3 +611,27 @@ describe("MASTER-01A-03D recovery scrub before auth configuration", () => {
     expect(clientIdx).toBeGreaterThan(scrubIdx);
   });
 });
+
+
+describe("MASTER-01A-03D recovery URL capture ordering", () => {
+  it("captures the original recovery URL before scrubbing the browser address bar", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const src = readFileSync(
+      resolve(process.cwd(), "app/auth/reset-password/page.tsx"),
+      "utf8",
+    );
+
+    const effectIdx = src.indexOf("useEffect(() => {");
+    const captureIdx = src.indexOf("const recoveryHref = window.location.href", effectIdx);
+    const scrubIdx = src.indexOf("scrubRecoveryCredentialsFromBrowserUrl()", effectIdx);
+    const bootstrapIdx = src.indexOf(
+      "bootstrapPasswordRecoverySession(sb.auth, recoveryHref)",
+      effectIdx,
+    );
+
+    expect(captureIdx).toBeGreaterThan(effectIdx);
+    expect(scrubIdx).toBeGreaterThan(captureIdx);
+    expect(bootstrapIdx).toBeGreaterThan(scrubIdx);
+  });
+});
