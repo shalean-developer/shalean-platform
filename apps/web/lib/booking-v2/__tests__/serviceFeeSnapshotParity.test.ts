@@ -9,6 +9,7 @@ import {
 } from "@/lib/pricing/pricingRatesSnapshot";
 import {
   pricingServiceRowToTariff,
+  resolveCompletePricingSnapshotServices,
 } from "@/lib/pricing/buildPricingRatesSnapshotFromDb";
 import type { ServiceTariff } from "@/lib/pricing/pricingConfig";
 
@@ -159,5 +160,34 @@ describe("Booking V2 service-fee snapshot parity", () => {
     });
     expect(parsed).not.toBeNull();
     expect(parsed?.services.move.serviceFeeZar).toBeUndefined();
+  });
+});
+
+
+describe("Pricing snapshot coverage guard", () => {
+  it("rejects an empty pricing_services catalog instead of freezing zero-value tariffs", () => {
+    expect(resolveCompletePricingSnapshotServices({})).toBeNull();
+  });
+
+  it("rejects a zero-base service family", () => {
+    const tariffs = {
+      standard: pricingServiceRowToTariff({
+        base_price: 0,
+        price_per_bedroom: 0,
+        price_per_bathroom: 0,
+        price_per_extra_room: 0,
+        duration_base: 3.5,
+        duration_per_bedroom: 0.5,
+        duration_per_bathroom: 0.5,
+        duration_per_extra_room: 0.3,
+      }),
+      airbnb: movingTariff(30),
+      deep: movingTariff(60),
+      move: movingTariff(60),
+      carpet: movingTariff(50),
+      office: movingTariff(30),
+    };
+
+    expect(resolveCompletePricingSnapshotServices(tariffs)).toBeNull();
   });
 });

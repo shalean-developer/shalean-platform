@@ -73,6 +73,18 @@ export function pricingServiceRowToTariff(row: {
   };
 }
 
+export function resolveCompletePricingSnapshotServices(
+  bySlug: Record<string, ServiceTariff>,
+): Record<PricingSnapshotServiceId, ServiceTariff> | null {
+  const services = {} as Record<PricingSnapshotServiceId, ServiceTariff>;
+  for (const key of SERVICE_KEYS) {
+    const tariff = resolvePricingServiceRow(bySlug, key);
+    if (!tariff || !Number.isFinite(tariff.base) || tariff.base <= 0) return null;
+    services[key] = tariff;
+  }
+  return services;
+}
+
 /**
  * Builds the canonical {@link PricingRatesSnapshot} from live `pricing_*` tables (admin source of truth).
  */
@@ -90,7 +102,6 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
     return null;
   }
 
-  const services = {} as Record<PricingSnapshotServiceId, ServiceTariff>;
   const bySlug: Record<string, ServiceTariff> = {};
   for (const raw of svcRows ?? []) {
     const row = raw as Record<string, unknown>;
@@ -111,24 +122,12 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
     });
   }
 
-  const fallback = pricingServiceRowToTariff({
-    base_price: 0,
-    price_per_bedroom: 0,
-    price_per_bathroom: 0,
-    price_per_extra_room: 0,
-    duration_base: 3.5,
-    duration_per_bedroom: 0.5,
-    duration_per_bathroom: 0.5,
-    duration_per_extra_room: 0.3,
-    min_hours: DEFAULT_SERVICE_DURATION_LIMITS.minHours,
-    max_hours: DEFAULT_SERVICE_DURATION_LIMITS.maxHours,
-  });
-  const baseTariff =
-    resolvePricingServiceRow(bySlug, "standard") ??
-    bySlug[Object.keys(bySlug)[0] ?? ""] ??
-    fallback;
-  for (const k of SERVICE_KEYS) {
-    services[k] = resolvePricingServiceRow(bySlug, k) ?? baseTariff;
+  const services = resolveCompletePricingSnapshotServices(bySlug);
+  if (!services) {
+    console.error("[pricing] pricing_services incomplete for frozen snapshot:", {
+      availableSlugs: Object.keys(bySlug).sort(),
+    });
+    return null;
   }
 
   const { data: extRows, error: extErr } = await supabase
