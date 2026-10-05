@@ -18,6 +18,12 @@ import {
 declare global {
   interface Window {
     __shaleanGa4Bootstrapped?: boolean;
+    __shaleanMetaBootstrapped?: boolean;
+    __shaleanMetaBootstrapScheduled?: boolean;
+    __shaleanClarityBootstrapped?: boolean;
+    __shaleanClarityBootstrapScheduled?: boolean;
+    __shaleanAhrefsBootstrapped?: boolean;
+    __shaleanAhrefsBootstrapScheduled?: boolean;
     /** True once gtag.js has been appended (or detected) — distinct from config queue. */
     __shaleanGa4LoaderPresent?: boolean;
     __shaleanAdsBootstrapped?: boolean;
@@ -50,6 +56,138 @@ function appendGa4LoaderScript(measurementId: string): void {
   s.onload = () => notifyAnalyticsTagLoaded();
   document.head.appendChild(s);
   window.__shaleanGa4LoaderPresent = true;
+}
+
+
+function hasScriptSrcFragment(fragment: string): boolean {
+  if (typeof document === "undefined") return false;
+  return Array.from(document.querySelectorAll("script[src]")).some((el) =>
+    String((el as HTMLScriptElement).src || "").includes(fragment),
+  );
+}
+
+type MetaQueueFn = ((...args: unknown[]) => void) & {
+  q?: unknown[];
+  push?: MetaQueueFn;
+  loaded?: boolean;
+  version?: string;
+  queue?: unknown[];
+  callMethod?: (...args: unknown[]) => void;
+};
+
+type ClarityQueueFn = ((...args: unknown[]) => void) & { q?: unknown[] };
+
+export function ensureMetaPixelBootstrapped(): void {
+  if (typeof window === "undefined" || isGa4PathExcluded(window.location.pathname)) return;
+  const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID?.trim();
+  if (!pixelId || window.__shaleanMetaBootstrapped || window.__shaleanMetaBootstrapScheduled) return;
+  if (hasScriptSrcFragment("connect.facebook.net/en_US/fbevents.js")) {
+    window.__shaleanMetaBootstrapped = true;
+    return;
+  }
+
+  window.__shaleanMetaBootstrapScheduled = true;
+
+  const w = window as Window & typeof globalThis & {
+    fbq?: (...args: unknown[]) => void;
+    _fbq?: unknown;
+  };
+  const existingFbq = w.fbq as MetaQueueFn | undefined;
+  const fbq: MetaQueueFn =
+    existingFbq ??
+    ((...args: unknown[]) => {
+      if (typeof fbq.callMethod === "function") {
+        fbq.callMethod(...args);
+        return;
+      }
+      fbq.queue = fbq.queue || [];
+      fbq.queue.push(args);
+    });
+  w.fbq = fbq;
+  if (!w._fbq) w._fbq = fbq;
+  fbq.push = fbq;
+  fbq.loaded = true;
+  fbq.version = "2.0";
+  fbq.queue = fbq.queue || [];
+
+  const s = document.createElement("script");
+  s.async = true;
+  s.dataset.shaleanMeta = pixelId;
+  s.src = "https://connect.facebook.net/en_US/fbevents.js";
+  s.onload = () => {
+    window.__shaleanMetaBootstrapped = true;
+    w.fbq?.("init", pixelId);
+    w.fbq?.("track", "PageView");
+  };
+  s.onerror = () => {
+    window.__shaleanMetaBootstrapScheduled = false;
+  };
+  document.head.appendChild(s);
+}
+
+export function ensureClarityBootstrapped(): void {
+  if (typeof window === "undefined" || isGa4PathExcluded(window.location.pathname)) return;
+  const clarityId = process.env.NEXT_PUBLIC_MICROSOFT_CLARITY_PROJECT_ID?.trim();
+  if (!clarityId || window.__shaleanClarityBootstrapped || window.__shaleanClarityBootstrapScheduled) return;
+  if (hasScriptSrcFragment(`clarity.ms/tag/${clarityId}`)) {
+    window.__shaleanClarityBootstrapped = true;
+    return;
+  }
+
+  window.__shaleanClarityBootstrapScheduled = true;
+
+  const w = window as Window & typeof globalThis & {
+    clarity?: (...args: unknown[]) => void;
+  };
+  const existingClarity = w.clarity as ClarityQueueFn | undefined;
+  const clarity: ClarityQueueFn =
+    existingClarity ??
+    ((...args: unknown[]) => {
+      clarity.q = clarity.q || [];
+      clarity.q.push(args);
+    });
+  w.clarity = clarity;
+
+  const s = document.createElement("script");
+  s.async = true;
+  s.dataset.shaleanClarity = clarityId;
+  s.src = `https://www.clarity.ms/tag/${encodeURIComponent(clarityId)}`;
+  s.onload = () => {
+    window.__shaleanClarityBootstrapped = true;
+  };
+  s.onerror = () => {
+    window.__shaleanClarityBootstrapScheduled = false;
+  };
+  document.head.appendChild(s);
+}
+
+export function ensureAhrefsBootstrapped(): void {
+  if (typeof window === "undefined" || isGa4PathExcluded(window.location.pathname)) return;
+  if (window.__shaleanAhrefsBootstrapped || window.__shaleanAhrefsBootstrapScheduled) return;
+  if (hasScriptSrcFragment("analytics.ahrefs.com/analytics.js")) {
+    window.__shaleanAhrefsBootstrapped = true;
+    return;
+  }
+
+  window.__shaleanAhrefsBootstrapScheduled = true;
+  const s = document.createElement("script");
+  s.async = true;
+  s.dataset.key = "q/bjTagLIl4JOoJFbBFE/A";
+  s.dataset.shaleanAhrefs = "1";
+  s.src = "https://analytics.ahrefs.com/analytics.js";
+  s.onload = () => {
+    window.__shaleanAhrefsBootstrapped = true;
+  };
+  s.onerror = () => {
+    window.__shaleanAhrefsBootstrapScheduled = false;
+  };
+  document.head.appendChild(s);
+}
+
+export function ensureNonGoogleTrackersBootstrapped(): void {
+  ensureMetaPixelBootstrapped();
+  ensureClarityBootstrapped();
+  ensureAhrefsBootstrapped();
 }
 
 /**
@@ -152,6 +290,7 @@ export function syncGa4RoutePolicy(pathname: string | null): void {
     ensureGa4Bootstrapped();
     ensureGoogleAdsBootstrapped();
     ensureGtmBootstrapped();
+    ensureNonGoogleTrackersBootstrapped();
   }
 }
 
@@ -182,6 +321,9 @@ export function Ga4RouteGuard() {
       ensureGa4Bootstrapped();
       ensureGoogleAdsBootstrapped();
       ensureGtmBootstrapped();
+    }
+    if (!excluded) {
+      ensureNonGoogleTrackersBootstrapped();
     }
     wasExcluded.current = excluded;
   }, [pathname]);
