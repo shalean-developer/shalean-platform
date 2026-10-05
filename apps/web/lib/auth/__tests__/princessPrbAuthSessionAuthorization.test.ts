@@ -480,3 +480,47 @@ describe("MASTER-01A-03B deferred tracker abort cleanup", () => {
     expect(clarity).toContain("window.__shaleanClarityBootstrapScheduled=false;return;");
   });
 });
+
+
+describe("MASTER-01A-03B recovery credential authority", () => {
+  it("fails closed when an unrelated existing session is present without a recovery credential", async () => {
+    const { bootstrapPasswordRecoverySession } = await import(
+      "@/lib/auth/bootstrapPasswordRecoverySession"
+    );
+    const auth = {
+      exchangeCodeForSession: vi.fn(async () => ({ error: null })),
+      setSession: vi.fn(async () => ({ error: null })),
+      verifyOtp: vi.fn(async () => ({ error: null })),
+      getSession: vi.fn(async () => ({ data: { session: { access_token: "existing" } } })),
+    };
+    const result = await bootstrapPasswordRecoverySession(
+      auth,
+      "https://shalean.co.za/auth/reset-password",
+      { pollAttempts: 1, pollDelayMs: 1 },
+    );
+    expect(result.ok).toBe(false);
+    expect(auth.exchangeCodeForSession).not.toHaveBeenCalled();
+    expect(auth.setSession).not.toHaveBeenCalled();
+    expect(auth.verifyOtp).not.toHaveBeenCalled();
+    expect(auth.getSession).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when type=recovery is present but token_hash is empty", async () => {
+    const { bootstrapPasswordRecoverySession } = await import(
+      "@/lib/auth/bootstrapPasswordRecoverySession"
+    );
+    const auth = {
+      exchangeCodeForSession: vi.fn(async () => ({ error: null })),
+      setSession: vi.fn(async () => ({ error: null })),
+      verifyOtp: vi.fn(async () => ({ error: null })),
+      getSession: vi.fn(async () => ({ data: { session: { access_token: "existing" } } })),
+    };
+    const result = await bootstrapPasswordRecoverySession(
+      auth,
+      "https://shalean.co.za/auth/reset-password?type=recovery&token_hash=",
+      { pollAttempts: 1, pollDelayMs: 1 },
+    );
+    expect(result.ok).toBe(false);
+    expect(auth.getSession).not.toHaveBeenCalled();
+  });
+});
