@@ -24,7 +24,7 @@ const require = createRequire(resolve(root, "apps/web/package.json"));
 const { createClient } = require("@supabase/supabase-js");
 
 const REFS = {
-  staging: "jhubpsbwmjgydkzztxeu",
+  staging: "uwvnmluiqbczeduzjgse",
 };
 
 const USERS = {

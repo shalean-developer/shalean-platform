@@ -8,7 +8,7 @@ LIVE="$ROOT/pricing-test-runtime"
 BACKUPS="$ROOT/plesk-pricing-test-releases"
 RESULT="$ROOT/plesk-pricing-test-preview-result.txt"
 HEALTH_URL="https://pricing-test.shalean.co.za/api/health/environment"
-EXPECTED_REF="jhubpsbwmjgydkzztxeu"
+EXPECTED_REF="uwvnmluiqbczeduzjgse"
 
 fail(){
   printf 'PLESK_PR_PREVIEW_DEPLOY=ERROR\nREASON=%s\n' "$*" > "$RESULT"
