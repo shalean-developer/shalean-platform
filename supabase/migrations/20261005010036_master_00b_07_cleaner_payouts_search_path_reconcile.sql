@@ -1,3 +1,4 @@
--- MASTER-00B-07 — production ledger reconciliation marker.
--- Production recorded a second idempotent application under this timestamp.
--- Intentional no-op: the canonical schema mutation is 20261005010028.
+-- MASTER-00B-07 — production migration-history mirror marker.
+-- Production already recorded version 20261005010036 during the governed
+-- 00B-07 rollout. Keep this timestamp locally so Supabase history comparison
+-- can account for it. The forward schema mutation remains 20261005014500.
