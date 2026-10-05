@@ -83,7 +83,17 @@ export function installAnalyticsHistoryPolicyGuard(): void {
   };
   window.addEventListener(
     "popstate",
-    () => applyAnalyticsRoutePolicy(window.location.pathname),
+    () => {
+      const path = window.location.pathname;
+      const sensitive =
+        path === "/auth/reset-password" ||
+        path.startsWith("/auth/reset-password/");
+      if (sensitive) {
+        window.location.reload();
+        return;
+      }
+      applyAnalyticsRoutePolicy(path);
+    },
     true,
   );
   window.__shaleanAnalyticsHistoryGuardInstalled = true;
