@@ -56,7 +56,7 @@ describe("getPasswordResetRedirectBase", () => {
         "hash value",
       ),
     ).toBe(
-      "https://pricing-test.shalean.co.za/auth/reset-password?token_hash=hash+value&type=recovery",
+      "https://pricing-test.shalean.co.za/auth/reset-password#token_hash=hash+value&type=recovery",
     );
     expect(
       buildPasswordResetRecoveryUrl(
@@ -80,7 +80,7 @@ describe("bootstrapPasswordRecoverySession", () => {
     };
     const result = await bootstrapPasswordRecoverySession(
       auth,
-      "https://pricing-test.shalean.co.za/auth/reset-password?token_hash=hashed&type=recovery",
+      "https://pricing-test.shalean.co.za/auth/reset-password#token_hash=hashed&type=recovery",
       { pollAttempts: 1, pollDelayMs: 1 },
     );
     expect(result.ok).toBe(true);
@@ -110,7 +110,7 @@ describe("bootstrapPasswordRecoverySession", () => {
       getSession: vi.fn(async () => ({ data: { session: { access_token: "t" } } })),
     };
     const href =
-      "https://pricing-test.shalean.co.za/auth/reset-password?token_hash=once&type=recovery";
+      "https://pricing-test.shalean.co.za/auth/reset-password#token_hash=once&type=recovery";
     const first = bootstrapPasswordRecoverySession(auth, href, {
       pollAttempts: 1,
       pollDelayMs: 1,
@@ -652,5 +652,46 @@ describe("MASTER-01A-03D recovery URL retention across effect replays", () => {
     expect(src).toContain("if (!recoveryHrefRef.current)");
     expect(src).toContain("recoveryHrefRef.current = window.location.href");
     expect(src).toContain("const recoveryHref = recoveryHrefRef.current");
+  });
+});
+
+
+describe("MASTER-01A-03E fragment recovery token contract", () => {
+  it("keeps newly generated recovery bearer credentials out of the HTTP query string", async () => {
+    const { buildPasswordResetRecoveryUrl } = await import(
+      "@/lib/auth/passwordResetRedirect"
+    );
+    const url = buildPasswordResetRecoveryUrl(
+      "https://pricing-test.shalean.co.za/auth/reset-password",
+      "secret-hash",
+    );
+    expect(url).toBe(
+      "https://pricing-test.shalean.co.za/auth/reset-password#token_hash=secret-hash&type=recovery",
+    );
+    expect(url).not.toContain("?token_hash=");
+  });
+
+  it("accepts the direct token hash from the fragment", async () => {
+    const { bootstrapPasswordRecoverySession } = await import(
+      "@/lib/auth/bootstrapPasswordRecoverySession"
+    );
+    const auth = {
+      exchangeCodeForSession: vi.fn(async () => ({ error: null })),
+      setSession: vi.fn(async () => ({ error: null })),
+      verifyOtp: vi.fn(async () => ({ error: null })),
+      getSession: vi.fn(async () => ({ data: { session: { access_token: "t" } } })),
+    };
+
+    const result = await bootstrapPasswordRecoverySession(
+      auth,
+      "https://pricing-test.shalean.co.za/auth/reset-password#token_hash=fragment-hash&type=recovery",
+      { pollAttempts: 1, pollDelayMs: 1 },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(auth.verifyOtp).toHaveBeenCalledWith({
+      token_hash: "fragment-hash",
+      type: "recovery",
+    });
   });
 });
