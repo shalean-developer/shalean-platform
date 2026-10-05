@@ -526,31 +526,24 @@ describe("MASTER-01A-03B recovery credential authority", () => {
 });
 
 
-describe("MASTER-01A-03D sensitive reset-route navigation interception", () => {
-  it("intercepts pushState and replaceState before committing reset-password into SPA history", async () => {
+describe("MASTER-01A-03D reset route document-navigation contract", () => {
+  it("does not use Next client navigation when leaving the sensitive reset route", async () => {
     const { readFileSync } = await import("node:fs");
     const { resolve } = await import("node:path");
-    const policy = readFileSync(
-      resolve(process.cwd(), "lib/analytics/analyticsRoutePolicy.ts"),
+    const src = readFileSync(
+      resolve(process.cwd(), "app/auth/reset-password/page.tsx"),
       "utf8",
     );
 
-    const pushIdx = policy.indexOf("history.pushState = function shaleanPushState");
-    const pushAssignIdx = policy.indexOf("window.location.assign(sensitiveTarget)", pushIdx);
-    const pushOriginalIdx = policy.indexOf("originalPushState(data, unused, url)", pushIdx);
-    expect(pushIdx).toBeGreaterThanOrEqual(0);
-    expect(pushAssignIdx).toBeGreaterThan(pushIdx);
-    expect(pushOriginalIdx).toBeGreaterThan(pushAssignIdx);
-
-    const replaceIdx = policy.indexOf("history.replaceState = function shaleanReplaceState");
-    const replaceNavIdx = policy.indexOf("window.location.replace(sensitiveTarget)", replaceIdx);
-    const replaceOriginalIdx = policy.indexOf("originalReplaceState(data, unused, url)", replaceIdx);
-    expect(replaceIdx).toBeGreaterThanOrEqual(0);
-    expect(replaceNavIdx).toBeGreaterThan(replaceIdx);
-    expect(replaceOriginalIdx).toBeGreaterThan(replaceNavIdx);
+    expect(src).not.toContain('from "next/link"');
+    expect(src).not.toContain('from "next/navigation"');
+    expect(src).not.toContain("router.push(");
+    expect(src).not.toContain("router.replace(");
+    expect(src).toContain('href="/auth/forgot-password"');
+    expect(src).toContain('window.location.replace("/auth/login")');
   });
 
-  it("targets only /auth/reset-password from a different current path", async () => {
+  it("keeps global analytics history policy unchanged by the reset-route fix", async () => {
     const { readFileSync } = await import("node:fs");
     const { resolve } = await import("node:path");
     const policy = readFileSync(
@@ -558,59 +551,7 @@ describe("MASTER-01A-03D sensitive reset-route navigation interception", () => {
       "utf8",
     );
 
-    expect(policy).toContain('target.pathname === "/auth/reset-password"');
-    expect(policy).toContain('target.pathname.startsWith("/auth/reset-password/")');
-    expect(policy).toContain('window.location.pathname === "/auth/reset-password"');
-    expect(policy).toContain('window.location.pathname.startsWith("/auth/reset-password/")');
-  });
-});
-
-
-describe("MASTER-01A-03D sensitive reset popstate handling", () => {
-  it("forces a document reload for reset-password history traversal", async () => {
-    const { readFileSync } = await import("node:fs");
-    const { resolve } = await import("node:path");
-    const policy = readFileSync(
-      resolve(process.cwd(), "lib/analytics/analyticsRoutePolicy.ts"),
-      "utf8",
-    );
-
-    expect(policy).toContain('window.addEventListener(\n    "popstate"');
-    expect(policy).toContain('path === "/auth/reset-password"');
-    expect(policy).toContain('path.startsWith("/auth/reset-password/")');
-    expect(policy).toContain("window.location.reload()");
-  });
-});
-
-
-describe("MASTER-01A-03D hardened sensitive history interception", () => {
-  it("preserves same-origin History API semantics for sensitive navigation interception", async () => {
-    const { readFileSync } = await import("node:fs");
-    const { resolve } = await import("node:path");
-    const policy = readFileSync(
-      resolve(process.cwd(), "lib/analytics/analyticsRoutePolicy.ts"),
-      "utf8",
-    );
-
-    expect(policy).toContain("target.origin !== window.location.origin");
-  });
-
-  it("disables analytics and stops popstate propagation before sensitive-route reload", async () => {
-    const { readFileSync } = await import("node:fs");
-    const { resolve } = await import("node:path");
-    const policy = readFileSync(
-      resolve(process.cwd(), "lib/analytics/analyticsRoutePolicy.ts"),
-      "utf8",
-    );
-
-    const popIdx = policy.indexOf('"popstate"');
-    const policyIdx = policy.indexOf("applyAnalyticsRoutePolicy(path)", popIdx);
-    const stopIdx = policy.indexOf("event.stopImmediatePropagation()", popIdx);
-    const reloadIdx = policy.indexOf("window.location.reload()", popIdx);
-
-    expect(popIdx).toBeGreaterThanOrEqual(0);
-    expect(policyIdx).toBeGreaterThan(popIdx);
-    expect(stopIdx).toBeGreaterThan(policyIdx);
-    expect(reloadIdx).toBeGreaterThan(stopIdx);
+    expect(policy).not.toContain("sensitiveResetTargetFromHistoryUrl");
+    expect(policy).not.toContain('window.location.reload()');
   });
 });
