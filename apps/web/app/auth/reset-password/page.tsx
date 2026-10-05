@@ -41,6 +41,12 @@ function ResetPasswordForm() {
       const result = await bootstrapPasswordRecoverySession(sb.auth, window.location.href);
       if (!active) return;
       if (result.ok) {
+        const current = new URL(window.location.href);
+        if (current.searchParams.has("token_hash")) {
+          current.searchParams.delete("token_hash");
+          current.searchParams.delete("type");
+          window.history.replaceState({}, "", `${current.pathname}${current.search}${current.hash}`);
+        }
         setSessionReady(true);
         setSessionError(null);
         return;
