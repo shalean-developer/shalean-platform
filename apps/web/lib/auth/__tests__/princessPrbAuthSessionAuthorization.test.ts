@@ -343,12 +343,15 @@ describe("MASTER-01A-03B environment-owned recovery link contract", () => {
     expect(src).not.toContain("properties?.action_link");
   });
 
-  it("reset page scrubs the one-time token after verification", async () => {
+  it("reset page scrubs recovery credentials after verification", async () => {
     const { readFileSync } = await import("node:fs");
     const { resolve } = await import("node:path");
     const src = readFileSync(resolve(process.cwd(), "app/auth/reset-password/page.tsx"), "utf8");
-    expect(src).toContain('searchParams.delete("token_hash")');
-    expect(src).toContain("history.replaceState");
+    expect(src).toContain("scrubRecoveryCredentialsFromBrowserUrl");
+    expect(src).toContain('"token_hash"');
+    expect(src).toContain('"access_token"');
+    expect(src).toContain('"refresh_token"');
+    expect(src).toContain("window.history.replaceState");
   });
 });
 
