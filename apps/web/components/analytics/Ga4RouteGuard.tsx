@@ -72,6 +72,7 @@ type MetaQueueFn = ((...args: unknown[]) => void) & {
   loaded?: boolean;
   version?: string;
   queue?: unknown[];
+  callMethod?: (...args: unknown[]) => void;
 };
 
 type ClarityQueueFn = ((...args: unknown[]) => void) & { q?: unknown[] };
@@ -95,15 +96,19 @@ export function ensureMetaPixelBootstrapped(): void {
   const fbq: MetaQueueFn =
     existingFbq ??
     ((...args: unknown[]) => {
-      fbq.q = fbq.q || [];
-      fbq.q.push(args);
+      if (typeof fbq.callMethod === "function") {
+        fbq.callMethod(...args);
+        return;
+      }
+      fbq.queue = fbq.queue || [];
+      fbq.queue.push(args);
     });
   w.fbq = fbq;
   if (!w._fbq) w._fbq = fbq;
   fbq.push = fbq;
   fbq.loaded = true;
   fbq.version = "2.0";
-  fbq.queue = [];
+  fbq.queue = fbq.queue || [];
 
   const s = document.createElement("script");
   s.async = true;
