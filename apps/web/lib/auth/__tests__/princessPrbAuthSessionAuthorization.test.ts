@@ -559,6 +559,8 @@ describe("MASTER-01A-03D sensitive reset-route navigation interception", () => {
     );
 
     expect(policy).toContain('target.pathname === "/auth/reset-password"');
-    expect(policy).toContain('window.location.pathname !== "/auth/reset-password"');
+    expect(policy).toContain('target.pathname.startsWith("/auth/reset-password/")');
+    expect(policy).toContain('window.location.pathname === "/auth/reset-password"');
+    expect(policy).toContain('window.location.pathname.startsWith("/auth/reset-password/")');
   });
 });
