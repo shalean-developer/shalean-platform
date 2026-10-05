@@ -26,7 +26,7 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      const bootstrap = await bootstrapAuthCallbackSession(supabase.auth, window.location.href);
+      const bootstrap = await bootstrapAuthCallbackSession(supabase.auth);
       if (!bootstrap.ok) {
         setPhase("error");
         setMessage(bootstrap.message);
