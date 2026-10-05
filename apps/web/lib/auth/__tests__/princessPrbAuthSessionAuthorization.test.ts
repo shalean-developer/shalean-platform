@@ -47,9 +47,51 @@ describe("getPasswordResetRedirectBase", () => {
     const { getPasswordResetRedirectBase } = await load();
     expect(getPasswordResetRedirectBase()).toBe("https://shalean.co.za");
   });
+
+  it("builds an environment-owned recovery URL from the hashed token", async () => {
+    const { buildPasswordResetRecoveryUrl } = await load();
+    expect(
+      buildPasswordResetRecoveryUrl(
+        "https://pricing-test.shalean.co.za/auth/reset-password",
+        "hash value",
+      ),
+    ).toBe(
+      "https://pricing-test.shalean.co.za/auth/reset-password?token_hash=hash+value&type=recovery",
+    );
+    expect(
+      buildPasswordResetRecoveryUrl(
+        "https://pricing-test.shalean.co.za/auth/reset-password",
+        "",
+      ),
+    ).toBeNull();
+  });
 });
 
 describe("bootstrapPasswordRecoverySession", () => {
+  it("verifies a direct recovery token hash and succeeds when session appears", async () => {
+    const { bootstrapPasswordRecoverySession } = await import(
+      "@/lib/auth/bootstrapPasswordRecoverySession"
+    );
+    const auth = {
+      exchangeCodeForSession: vi.fn(async () => ({ error: null })),
+      setSession: vi.fn(async () => ({ error: null })),
+      verifyOtp: vi.fn(async () => ({ error: null })),
+      getSession: vi.fn(async () => ({ data: { session: { access_token: "t" } } })),
+    };
+    const result = await bootstrapPasswordRecoverySession(
+      auth,
+      "https://pricing-test.shalean.co.za/auth/reset-password?token_hash=hashed&type=recovery",
+      { pollAttempts: 1, pollDelayMs: 1 },
+    );
+    expect(result.ok).toBe(true);
+    expect(auth.verifyOtp).toHaveBeenCalledWith({
+      token_hash: "hashed",
+      type: "recovery",
+    });
+    expect(auth.exchangeCodeForSession).not.toHaveBeenCalled();
+    expect(auth.setSession).not.toHaveBeenCalled();
+  });
+
   it("exchanges PKCE code and succeeds when session appears", async () => {
     const { bootstrapPasswordRecoverySession } = await import(
       "@/lib/auth/bootstrapPasswordRecoverySession"
@@ -57,6 +99,7 @@ describe("bootstrapPasswordRecoverySession", () => {
     const auth = {
       exchangeCodeForSession: vi.fn(async () => ({ error: null })),
       setSession: vi.fn(async () => ({ error: null })),
+      verifyOtp: vi.fn(async () => ({ error: null })),
       getSession: vi.fn(async () => ({ data: { session: { access_token: "t" } } })),
     };
     const result = await bootstrapPasswordRecoverySession(
@@ -75,6 +118,7 @@ describe("bootstrapPasswordRecoverySession", () => {
     const auth = {
       exchangeCodeForSession: vi.fn(async () => ({ error: null })),
       setSession: vi.fn(async () => ({ error: null })),
+      verifyOtp: vi.fn(async () => ({ error: null })),
       getSession: vi.fn(async () => ({ data: { session: null } })),
     };
     const result = await bootstrapPasswordRecoverySession(
@@ -96,6 +140,7 @@ describe("bootstrapPasswordRecoverySession", () => {
     const auth = {
       exchangeCodeForSession: vi.fn(async () => ({ error: null })),
       setSession: vi.fn(async () => ({ error: null })),
+      verifyOtp: vi.fn(async () => ({ error: null })),
       getSession: vi.fn(async () => ({ data: { session: { access_token: "t" } } })),
     };
     const href =
@@ -232,5 +277,25 @@ describe("MASTER-01A-03A password recovery source-of-truth contract", () => {
     const src = readFileSync(resolve(process.cwd(), "app/api/bookings/link-user/route.ts"), "utf8");
     expect(src).not.toContain("/auth/callback");
     expect(src).toContain("bearer token");
+  });
+});
+
+
+describe("MASTER-01A-03B environment-owned recovery link contract", () => {
+  it("uses hashed_token instead of Supabase action_link for Resend recovery emails", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const src = readFileSync(resolve(process.cwd(), "lib/auth/sendPasswordResetEmail.ts"), "utf8");
+    expect(src).toContain("properties?.hashed_token");
+    expect(src).toContain("buildPasswordResetRecoveryUrl");
+    expect(src).not.toContain("properties?.action_link");
+  });
+
+  it("reset page scrubs the one-time token after verification", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const src = readFileSync(resolve(process.cwd(), "app/auth/reset-password/page.tsx"), "utf8");
+    expect(src).toContain('searchParams.delete("token_hash")');
+    expect(src).toContain("history.replaceState");
   });
 });
