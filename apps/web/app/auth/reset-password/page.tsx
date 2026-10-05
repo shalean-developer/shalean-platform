@@ -29,14 +29,6 @@ function ResetPasswordForm() {
 
     let active = true;
 
-    const { data: sub } = sb.auth.onAuthStateChange((event, session) => {
-      if (!active) return;
-      if (event === "PASSWORD_RECOVERY" || session) {
-        setSessionReady(true);
-        setSessionError(null);
-      }
-    });
-
     void (async () => {
       const result = await bootstrapPasswordRecoverySession(sb.auth, window.location.href);
       if (!active) return;
@@ -56,7 +48,6 @@ function ResetPasswordForm() {
 
     return () => {
       active = false;
-      sub.subscription.unsubscribe();
     };
   }, []);
 
