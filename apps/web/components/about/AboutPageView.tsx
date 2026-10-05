@@ -19,7 +19,6 @@ import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import {
   ABOUT_FOUNDING_YEAR,
   ABOUT_REVIEWS,
-  ABOUT_WEEKLY_HOMES_CLEANED_DISPLAY,
 } from "@/lib/about/about-page-content";
 import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 import { FOOTER_POPULAR_LOCATION_HUBS } from "@/lib/seo/locations";
@@ -85,7 +84,7 @@ export function AboutPageView() {
               Trusted Home Cleaning Services in Cape Town
             </h1>
             <p className="mt-5 max-w-2xl text-lg leading-relaxed text-zinc-600">
-              Thousands of homes cleaned every week by vetted professionals you can rely on.
+              Professional home cleaning across Cape Town with transparent pricing, flexible scheduling, and vetted cleaners.
             </p>
             <ul className="mt-8 flex max-w-xl flex-col gap-3">
               <TrustItem>Background-checked cleaners</TrustItem>
@@ -120,9 +119,9 @@ export function AboutPageView() {
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               emphasize
-              value={ABOUT_WEEKLY_HOMES_CLEANED_DISPLAY}
-              label="Homes cleaned weekly"
-              hint="Capacity-led scheduling across the metro"
+              value="6"
+              label="Core cleaning services"
+              hint="Regular, Deep, Moving, Office, Carpet & Airbnb"
             />
             <StatCard value={`Since ${ABOUT_FOUNDING_YEAR}`} label="Serving Cape Town" hint="Consistent hiring & training focus" />
             <StatCard

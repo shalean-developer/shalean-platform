@@ -88,7 +88,11 @@ export function parseBookingV2CatalogConfig(raw: unknown): BookingV2CatalogConfi
       shortLabel:
         typeof row.shortLabel === "string" ? row.shortLabel : SERVICE_CONFIG[slug as ServiceSlug].shortLabel,
       description:
-        typeof row.description === "string" ? row.description : SERVICE_CONFIG[slug as ServiceSlug].description,
+        slug === "moving-cleaning"
+          ? SERVICE_CONFIG["moving-cleaning"].description
+          : typeof row.description === "string"
+            ? row.description
+            : SERVICE_CONFIG[slug as ServiceSlug].description,
       cleanerMode: row.cleanerMode === "team" ? "team" : "individual_cleaners",
       extraTypes,
       extraSlugs:

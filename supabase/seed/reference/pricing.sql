@@ -88,7 +88,7 @@ INSERT INTO public.services (
     'Deep Cleaning', 'A thorough top-to-bottom clean of every surface, corner, and room.',
     1200, ARRAY['All regular areas','Walls, skirting, blinds','Oven & fridge interior'], 20, true),
   ('22222222-aaaa-4000-8000-000000000003', 'moving-cleaning',
-    'Moving Cleaning', 'Move-in or move-out clean for a smooth handover and full deposit return.',
+    'Moving Cleaning', 'Detailed move-in or move-out cleaning for a smooth property handover.',
     1200, ARRAY['Full property deep clean','Deposit-ready standard','Furnished or empty'], 30, true),
   ('22222222-aaaa-4000-8000-000000000004', 'office-cleaning',
     'Office Cleaning', 'Professional cleaning for offices and workspaces.',

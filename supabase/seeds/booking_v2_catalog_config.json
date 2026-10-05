@@ -345,7 +345,7 @@
       "pricingSlug": "move",
       "label": "Moving Cleaning",
       "shortLabel": "Move In/Out",
-      "description": "Move-in or move-out clean to ensure a smooth handover and full deposit return.",
+      "description": "Detailed move-in or move-out cleaning for a smooth property handover.",
       "cleanerMode": "team",
       "extraTypes": [
         "heavy",
