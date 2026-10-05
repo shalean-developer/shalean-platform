@@ -623,7 +623,8 @@ describe("MASTER-01A-03D recovery URL capture ordering", () => {
     );
 
     const effectIdx = src.indexOf("useEffect(() => {");
-    const captureIdx = src.indexOf("const recoveryHref = window.location.href", effectIdx);
+    const captureIdx = src.indexOf("recoveryHrefRef.current = window.location.href", effectIdx);
+    const readIdx = src.indexOf("const recoveryHref = recoveryHrefRef.current", effectIdx);
     const scrubIdx = src.indexOf("scrubRecoveryCredentialsFromBrowserUrl()", effectIdx);
     const bootstrapIdx = src.indexOf(
       "bootstrapPasswordRecoverySession(sb.auth, recoveryHref)",
@@ -631,7 +632,8 @@ describe("MASTER-01A-03D recovery URL capture ordering", () => {
     );
 
     expect(captureIdx).toBeGreaterThan(effectIdx);
-    expect(scrubIdx).toBeGreaterThan(captureIdx);
+    expect(readIdx).toBeGreaterThan(captureIdx);
+    expect(scrubIdx).toBeGreaterThan(readIdx);
     expect(bootstrapIdx).toBeGreaterThan(scrubIdx);
   });
 });
