@@ -34,6 +34,7 @@ function sensitiveResetTargetFromHistoryUrl(
   if (url == null) return null;
   try {
     const target = new URL(String(url), window.location.href);
+    if (target.origin !== window.location.origin) return null;
     const sensitive =
       target.pathname === "/auth/reset-password" ||
       target.pathname.startsWith("/auth/reset-password/");
@@ -83,12 +84,14 @@ export function installAnalyticsHistoryPolicyGuard(): void {
   };
   window.addEventListener(
     "popstate",
-    () => {
+    (event) => {
       const path = window.location.pathname;
       const sensitive =
         path === "/auth/reset-password" ||
         path.startsWith("/auth/reset-password/");
       if (sensitive) {
+        applyAnalyticsRoutePolicy(path);
+        event.stopImmediatePropagation();
         window.location.reload();
         return;
       }
