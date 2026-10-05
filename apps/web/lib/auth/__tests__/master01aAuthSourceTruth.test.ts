@@ -50,3 +50,38 @@ describe("MASTER-01A-02 auth/session source of truth", () => {
     expect(bookingsHook).not.toContain("/auth/callback");
   });
 });
+
+
+describe("MASTER-01A-04 sign-in role/profile source of truth", () => {
+  it("does not create or assign user_profiles roles from the browser sign-in path", () => {
+    const authClient = read("apps/web/lib/auth/authClient.ts");
+    const signInStart = authClient.indexOf("export async function signIn");
+    const signUpStart = authClient.indexOf("export async function signUp");
+    const signInSource = authClient.slice(signInStart, signUpStart);
+
+    expect(signInSource).not.toContain('.from("user_profiles")');
+    expect(signInSource).not.toContain('role: "customer"');
+    expect(signInSource).not.toContain(".insert(");
+    expect(signInSource).not.toContain(".upsert(");
+  });
+
+  it("keeps new-customer profile creation in signup, not signin", () => {
+    const authClient = read("apps/web/lib/auth/authClient.ts");
+    const signUpStart = authClient.indexOf("export async function signUp");
+    const signOutStart = authClient.indexOf("export async function signOut");
+    const signUpSource = authClient.slice(signUpStart, signOutStart);
+
+    expect(signUpSource).toContain('.from("user_profiles").upsert(');
+    expect(signUpSource).toContain('role: "customer"');
+  });
+
+  it("keeps post-login role resolution on the server-authoritative resolve-profile route", () => {
+    const login = read("apps/web/app/auth/login/LoginForm.tsx");
+    const resolver = read("apps/web/app/api/auth/resolve-profile/route.ts");
+
+    expect(login).toContain("resolvePostAuthDestination(session.access_token, redirect)");
+    expect(resolver).toContain("resolveUserRoleServer(admin");
+    expect(resolver).toContain("missingProfile: true");
+    expect(resolver).toContain("invalidRole: true");
+  });
+});
