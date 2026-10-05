@@ -314,7 +314,6 @@ export function Ga4RouteGuard() {
 
   useLayoutEffect(() => {
     const excluded = isGa4PathExcluded(pathname);
-
     // Always silence (or restore) GA4 + Ads + GTM — including already-loaded destinations
     // after public → /office|/jobs|private /cleaner SPA navigation.
     applyAnalyticsRoutePolicy(pathname);
