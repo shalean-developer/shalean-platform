@@ -124,6 +124,26 @@ describe("bootstrapPasswordRecoverySession", () => {
     expect(auth.verifyOtp).toHaveBeenCalledTimes(1);
   });
 
+  it("rejects token hashes without the recovery type before reading any existing session", async () => {
+    const { bootstrapPasswordRecoverySession } = await import(
+      "@/lib/auth/bootstrapPasswordRecoverySession"
+    );
+    const auth = {
+      exchangeCodeForSession: vi.fn(async () => ({ error: null })),
+      setSession: vi.fn(async () => ({ error: null })),
+      verifyOtp: vi.fn(async () => ({ error: null })),
+      getSession: vi.fn(async () => ({ data: { session: { access_token: "existing" } } })),
+    };
+    const result = await bootstrapPasswordRecoverySession(
+      auth,
+      "https://pricing-test.shalean.co.za/auth/reset-password?token_hash=hashed&type=email",
+      { pollAttempts: 1, pollDelayMs: 1 },
+    );
+    expect(result.ok).toBe(false);
+    expect(auth.verifyOtp).not.toHaveBeenCalled();
+    expect(auth.getSession).not.toHaveBeenCalled();
+  });
+
   it("exchanges PKCE code and succeeds when session appears", async () => {
     const { bootstrapPasswordRecoverySession } = await import(
       "@/lib/auth/bootstrapPasswordRecoverySession"
