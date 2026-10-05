@@ -37,12 +37,16 @@ export default function CompleteProfilePage() {
       }
 
       setEmail(session.user.email ?? null);
+      const redirect = new URL(window.location.href).searchParams.get("redirect");
 
       try {
         const res = await fetch("/api/auth/complete-profile", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ access_token: session.access_token }),
+          body: JSON.stringify({
+            access_token: session.access_token,
+            redirect,
+          }),
         });
         const json = (await res.json().catch(() => ({}))) as RepairResponse;
         if (!active) return;
