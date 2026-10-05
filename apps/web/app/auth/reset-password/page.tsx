@@ -44,6 +44,8 @@ function ResetPasswordForm() {
   const [sessionError, setSessionError] = useState<string | null>(null);
 
   useEffect(() => {
+    scrubRecoveryCredentialsFromBrowserUrl();
+
     const sb = getSupabaseBrowser();
     if (!sb) {
       setSessionError("Sign-in is not configured on this site.");
@@ -54,7 +56,6 @@ function ResetPasswordForm() {
 
     void (async () => {
       const result = await bootstrapPasswordRecoverySession(sb.auth, window.location.href);
-      scrubRecoveryCredentialsFromBrowserUrl();
       if (!active) return;
       if (result.ok) {
         setSessionReady(true);
