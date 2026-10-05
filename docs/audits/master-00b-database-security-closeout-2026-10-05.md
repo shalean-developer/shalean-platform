@@ -2,7 +2,7 @@
 
 Date closed: 2026-10-05  
 Scope closed: MASTER-00B-01 through MASTER-00B-07  
-Status: PASS after governed repository/production migration-history reconciliation for MASTER-00B-07.
+Status: PASS after governed repository/production migration-history reconciliation for MASTER-00B-07; current managed-environment ledger states are documented below.
 
 ## Stage-gate rule followed
 
@@ -60,6 +60,17 @@ The repository migration history was aligned to production without deleting or r
 - the MASTER-00B-07 regression contract points to the published forward version `20261005014500`.
 
 This accounts for all three known timestamps without deleting or rewriting production migration history. On production, a future migration sync can recognize the two already-recorded timestamps and safely apply the still-forward `20261005014500` mutation idempotently if it has not yet been recorded there.
+
+### Current managed-environment ledger evidence
+
+At closeout, the managed environments were checked directly:
+
+- staging `jhubpsbwmjgydkzztxeu`: no MASTER-00B-07 migration-ledger rows are present because the staging Supabase plan currently blocks governed connector migration writes; the DDL was applied manually and the effective schema was verified.
+- production `paqjwfulwywtsyyvdxrq`: ledger contains `20261005010028` and `20261005010036`; it does not currently contain `20261005014500`.
+
+Therefore neither currently managed environment is in the specific state "14500 recorded while 10028/10036 are absent".
+
+If any other environment has already recorded `20261005014500` but lacks the two earlier mirror versions, a normal migration push may not backfill those older timestamps. That environment must use a governed exceptional reconciliation path, such as an explicitly reviewed `supabase db push --include-all` or equivalent migration-history repair workflow, with pre/post `migration list` evidence. Do not run such an exceptional reconciliation blindly or rewrite migration history rows with ad-hoc SQL.
 
 ### Staging note
 
