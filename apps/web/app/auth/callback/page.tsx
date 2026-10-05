@@ -26,7 +26,7 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      const bootstrap = await bootstrapAuthCallbackSession(supabase.auth);
+      const bootstrap = await bootstrapAuthCallbackSession(supabase.auth, window.location.href);
       if (!bootstrap.ok) {
         setPhase("error");
         setMessage(bootstrap.message);
@@ -40,7 +40,8 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      if (new URL(window.location.href).searchParams.has("code")) {
+      const callbackUrl = new URL(window.location.href);
+      if (callbackUrl.searchParams.has("code") || callbackUrl.hash) {
         window.history.replaceState({}, "", "/auth/callback");
       }
 
