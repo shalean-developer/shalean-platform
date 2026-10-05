@@ -2,7 +2,7 @@
 
 Date closed: 2026-10-05  
 Scope closed: MASTER-00B-01 through MASTER-00B-07  
-Status: PASS, with one governed migration-ledger metadata exception on MASTER-00B-07.
+Status: PASS after governed repository/production migration-history reconciliation for MASTER-00B-07.
 
 ## Stage-gate rule followed
 
@@ -22,9 +22,9 @@ No item was intentionally promoted to production before its staging proof was co
 | MASTER-00B-04 | `assign_booking_reference()` search_path hardening | PASS |
 | MASTER-00B-05 | `bookings_trg_ensure_payout_owner_in_team()` search_path hardening | PASS |
 | MASTER-00B-06 | `bookings_trg_payout_frozen_immutable_after_eligible()` search_path hardening | PASS |
-| MASTER-00B-07 | `cleaner_payouts_block_mutate_when_frozen()` search_path hardening | PASS with governed migration-ledger metadata exception |
+| MASTER-00B-07 | `cleaner_payouts_block_mutate_when_frozen()` search_path hardening | PASS after migration-history reconciliation |
 
-## MASTER-00B-07 governed migration-ledger metadata exception
+## MASTER-00B-07 migration-history reconciliation
 
 Production Supabase project:
 
@@ -37,31 +37,37 @@ The effective production schema is correct and reconciled:
 - `SECURITY INVOKER` unchanged
 - volatility remains `VOLATILE`
 - trigger remains `BEFORE UPDATE` on `public.cleaner_payouts`
-- no duplicate trigger, function, table, or payout-row mutation was created by the duplicate migration execution
+- no duplicate trigger, function, table, or payout-row mutation was created
 
-The Supabase migration ledger contains two rows with the same migration name:
+Production had recorded the hardening twice under these migration versions:
 
-- version `20261005010028` — `master_00b_07_cleaner_payouts_search_path`
-- version `20261005010036` — `master_00b_07_cleaner_payouts_search_path`
+- `20261005010028` — `master_00b_07_cleaner_payouts_search_path`
+- `20261005010036` — `master_00b_07_cleaner_payouts_search_path`
 
-This is classified as a **governed migration-ledger metadata exception**, not active schema drift.
+The repository originally contained an unmatched local-only version:
 
-### Required handling
+- `20261005014500_master_00b_07_cleaner_payouts_search_path.sql`
 
-Do not delete or rewrite either Supabase migration-history row manually.
+That timestamp mismatch could cause future Supabase migration-history synchronization failures even though the effective schema was correct.
 
-Reason:
+### Governed reconciliation
 
-- the migration SQL is idempotent
-- effective schema state is correct
-- there is no duplicate database object or data side effect
-- rewriting migration history introduces more risk than retaining the harmless historical metadata anomaly
+The repository migration history was aligned to production without deleting or rewriting production migration-history rows:
 
-Future audits should treat these two ledger rows as one known historical exception and should verify the effective schema state rather than flagging this pair as unexplained drift.
+- `20261005010028_master_00b_07_cleaner_payouts_search_path.sql` is now the canonical schema mutation.
+- `20261005010036_master_00b_07_cleaner_payouts_search_path_reconcile.sql` is an intentional no-op reconciliation marker for the second production ledger version.
+- the unmatched local-only `20261005014500...` file was removed.
+- the MASTER-00B-07 regression contract now points to canonical version `20261005010028`.
+
+This makes the repository account for both production migration timestamps while preserving the effective schema and avoiding direct edits to Supabase migration history.
+
+### Staging note
+
+The staging project `jhubpsbwmjgydkzztxeu` received the 00B-07 DDL manually because its current Supabase plan blocks connector migration writes. At closeout, no 00B-07 ledger rows were present there. This is an explicit staging-environment limitation and must be reconciled if/when staging migration-ledger writes become available before using automated migration-history synchronization against staging.
 
 ### Regression rule going forward
 
-Never reuse the same migration name for a new migration application. Every new migration must use a unique timestamp/version and unique migration name.
+Never reuse the same migration name for a new migration application. Every governed migration should have a unique timestamp/version and a repository entry that can be reconciled against the target environment's ledger.
 
 ## Final production evidence for MASTER-00B-07
 
@@ -90,4 +96,4 @@ Final reconciliation showed:
 
 MASTER-00B-01 through MASTER-00B-07 are closed.
 
-The MASTER-00B-07 duplicate ledger-name/version pair is retained as a documented historical metadata exception and is not a blocker for moving to the next SHALEAN-E2E-MASTER stage.
+The MASTER-00B-07 production migration history is now represented in the repository by both recorded production timestamps. The staging ledger limitation remains explicitly documented and is not a production blocker.
