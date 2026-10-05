@@ -54,12 +54,12 @@ That timestamp mismatch could cause future Supabase migration-history synchroniz
 
 The repository migration history was aligned to production without deleting or rewriting production migration-history rows:
 
-- `20261005010028_master_00b_07_cleaner_payouts_search_path.sql` is now the canonical schema mutation.
-- `20261005010036_master_00b_07_cleaner_payouts_search_path_reconcile.sql` is an intentional no-op reconciliation marker for the second production ledger version.
-- the unmatched local-only `20261005014500...` file was removed.
-- the MASTER-00B-07 regression contract now points to canonical version `20261005010028`.
+- `20261005010028_master_00b_07_cleaner_payouts_search_path.sql` is an intentional no-op history mirror for the first production ledger version.
+- `20261005010036_master_00b_07_cleaner_payouts_search_path_reconcile.sql` is an intentional no-op history mirror for the second production ledger version.
+- `20261005014500_master_00b_07_cleaner_payouts_search_path.sql` is preserved as the published forward, idempotent schema-hardening migration.
+- the MASTER-00B-07 regression contract points to the published forward version `20261005014500`.
 
-This makes the repository account for both production migration timestamps while preserving the effective schema and avoiding direct edits to Supabase migration history.
+This accounts for all three known timestamps without deleting or rewriting production migration history. On production, a future migration sync can recognize the two already-recorded timestamps and safely apply the still-forward `20261005014500` mutation idempotently if it has not yet been recorded there.
 
 ### Staging note
 
@@ -96,4 +96,4 @@ Final reconciliation showed:
 
 MASTER-00B-01 through MASTER-00B-07 are closed.
 
-The MASTER-00B-07 production migration history is now represented in the repository by both recorded production timestamps. The staging ledger limitation remains explicitly documented and is not a production blocker.
+The MASTER-00B-07 repository now accounts for both recorded production timestamps and preserves the published forward `20261005014500` migration. The staging ledger limitation remains explicitly documented and is not a production blocker.
