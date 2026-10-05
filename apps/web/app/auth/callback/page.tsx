@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AuthCard } from "@/components/auth/AuthShell";
+import { bootstrapAuthCallbackSession } from "@/lib/auth/bootstrapAuthCallbackSession";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 type Phase = "loading" | "linked" | "error";
@@ -25,19 +26,23 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      let session = (await supabase.auth.getSession()).data.session;
-      if (!session) {
-        for (let i = 0; i < 12; i++) {
-          await new Promise((r) => setTimeout(r, 300));
-          session = (await supabase.auth.getSession()).data.session;
-          if (session) break;
-        }
+      const bootstrap = await bootstrapAuthCallbackSession(supabase.auth, window.location.href);
+      if (!bootstrap.ok) {
+        setPhase("error");
+        setMessage(bootstrap.message);
+        return;
       }
 
+      const session = (await supabase.auth.getSession()).data.session;
       if (!session) {
         setPhase("error");
         setMessage("No sign-in session found. Open the link from your email again, or request a new link.");
         return;
+      }
+
+      const callbackUrl = new URL(window.location.href);
+      if (callbackUrl.searchParams.has("code") || callbackUrl.hash) {
+        window.history.replaceState({}, "", "/auth/callback");
       }
 
       const res = await fetch("/api/bookings/link-user", {
