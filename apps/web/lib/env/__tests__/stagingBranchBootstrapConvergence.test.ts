@@ -5,11 +5,11 @@ import { describe, expect, it } from "vitest";
 const root = resolve(process.cwd(), "../..");
 const migrationPath = resolve(
   root,
-  "supabase/migrations/20261005070000_staging_branch_bootstrap_retire_gated_recurring_prepaid.sql",
+  "supabase/migrations/20261005070000_staging_branch_bootstrap_recurring_prepayment.sql",
 );
 
 describe("STAGING-BRANCH-BOOTSTRAP-01 recurring prepayment convergence", () => {
-  it("retires the two gated recurring prepayment tables idempotently", () => {
+  it("keeps the recurring prepayment ledger required by runtime checkout", () => {
     const sql = readFileSync(migrationPath, "utf8")
       .toLowerCase()
       .replace(/--[^\r\n]*/g, " ")
@@ -17,11 +17,22 @@ describe("STAGING-BRANCH-BOOTSTRAP-01 recurring prepayment convergence", () => {
       .trim();
 
     expect(sql).toContain(
-      "drop table if exists public.recurring_prepaid_allocations;",
+      "create table if not exists public.recurring_prepaid_packages",
     );
     expect(sql).toContain(
-      "drop table if exists public.recurring_prepaid_packages;",
+      "create table if not exists public.recurring_prepaid_allocations",
     );
-    expect(sql).not.toContain("blog_posts_draft_backup_202609");
+    expect(sql).toContain(
+      "grant all on table public.recurring_prepaid_packages to service_role",
+    );
+    expect(sql).toContain(
+      "grant all on table public.recurring_prepaid_allocations to service_role",
+    );
+    expect(sql).not.toContain(
+      "drop table if exists public.recurring_prepaid_packages",
+    );
+    expect(sql).not.toContain(
+      "drop table if exists public.recurring_prepaid_allocations",
+    );
   });
 });
