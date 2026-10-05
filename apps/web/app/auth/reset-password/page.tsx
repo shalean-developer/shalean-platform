@@ -1,8 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { AuthCard } from "@/components/auth/AuthShell";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -10,8 +8,33 @@ import { updatePassword } from "@/lib/auth/authClient";
 import { bootstrapPasswordRecoverySession } from "@/lib/auth/bootstrapPasswordRecoverySession";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
+function scrubRecoveryCredentialsFromBrowserUrl(): void {
+  const current = new URL(window.location.href);
+  const sensitiveKeys = [
+    "token_hash",
+    "type",
+    "code",
+    "access_token",
+    "refresh_token",
+    "error",
+    "error_code",
+    "error_description",
+  ];
+
+  for (const key of sensitiveKeys) current.searchParams.delete(key);
+
+  const hashParams = new URLSearchParams(current.hash.replace(/^#/, ""));
+  for (const key of sensitiveKeys) hashParams.delete(key);
+  const cleanHash = hashParams.toString();
+
+  window.history.replaceState(
+    {},
+    "",
+    `${current.pathname}${current.search}${cleanHash ? `#${cleanHash}` : ""}`,
+  );
+}
+
 function ResetPasswordForm() {
-  const router = useRouter();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -19,8 +42,15 @@ function ResetPasswordForm() {
   const [submitting, setSubmitting] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const recoveryHrefRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (!recoveryHrefRef.current) {
+      recoveryHrefRef.current = window.location.href;
+    }
+    const recoveryHref = recoveryHrefRef.current;
+    scrubRecoveryCredentialsFromBrowserUrl();
+
     const sb = getSupabaseBrowser();
     if (!sb) {
       setSessionError("Sign-in is not configured on this site.");
@@ -30,15 +60,9 @@ function ResetPasswordForm() {
     let active = true;
 
     void (async () => {
-      const result = await bootstrapPasswordRecoverySession(sb.auth, window.location.href);
+      const result = await bootstrapPasswordRecoverySession(sb.auth, recoveryHref);
       if (!active) return;
       if (result.ok) {
-        const current = new URL(window.location.href);
-        if (current.searchParams.has("token_hash")) {
-          current.searchParams.delete("token_hash");
-          current.searchParams.delete("type");
-          window.history.replaceState({}, "", `${current.pathname}${current.search}${current.hash}`);
-        }
         setSessionReady(true);
         setSessionError(null);
         return;
@@ -72,8 +96,7 @@ function ResetPasswordForm() {
       }
       setInfo("Your password has been updated. Redirecting to sign in…");
       window.setTimeout(() => {
-        router.replace("/auth/login");
-        router.refresh();
+        window.location.replace("/auth/login");
       }, 1500);
     } finally {
       setSubmitting(false);
@@ -85,12 +108,12 @@ function ResetPasswordForm() {
       <AuthCard>
         <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Link expired</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{sessionError}</p>
-        <Link
+        <a
           href="/auth/forgot-password"
           className="mt-6 inline-flex w-full justify-center rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground"
         >
           Request a new link
-        </Link>
+        </a>
       </AuthCard>
     );
   }
