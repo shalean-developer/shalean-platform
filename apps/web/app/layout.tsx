@@ -53,7 +53,7 @@ export default function RootLayout({
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){${GA4_PATH_EXCLUSION_SNIPPET}var s=document.createElement("script");s.src="https://analytics.ahrefs.com/analytics.js";s.async=true;s.dataset.key="q/bjTagLIl4JOoJFbBFE/A";document.head.appendChild(s);})();`,
+            __html: `(function(){${GA4_PATH_EXCLUSION_SNIPPET}window.__shaleanAhrefsBootstrapScheduled=true;if(window.__shaleanAhrefsBootstrapped||document.querySelector('script[src*="analytics.ahrefs.com/analytics.js"]')){window.__shaleanAhrefsBootstrapped=true;return;}var s=document.createElement("script");s.src="https://analytics.ahrefs.com/analytics.js";s.async=true;s.dataset.key="q/bjTagLIl4JOoJFbBFE/A";s.onload=function(){window.__shaleanAhrefsBootstrapped=true;};s.onerror=function(){window.__shaleanAhrefsBootstrapScheduled=false;};document.head.appendChild(s);})();`,
           }}
         />
       </head>
