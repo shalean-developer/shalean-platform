@@ -407,3 +407,22 @@ describe("MASTER-01A-03B tracker re-bootstrap after sensitive route", () => {
     expect(guard).toContain("if (!excluded) {");
   });
 });
+
+
+describe("MASTER-01A-03B tracker scheduling idempotency", () => {
+  it("marks deferred root trackers scheduled before the route guard can re-bootstrap them", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const meta = readFileSync(resolve(process.cwd(), "components/analytics/MetaPixel.tsx"), "utf8");
+    const clarity = readFileSync(resolve(process.cwd(), "components/analytics/SessionReplayProvider.tsx"), "utf8");
+    const layout = readFileSync(resolve(process.cwd(), "app/layout.tsx"), "utf8");
+    const guard = readFileSync(resolve(process.cwd(), "components/analytics/Ga4RouteGuard.tsx"), "utf8");
+
+    expect(meta).toContain("__shaleanMetaBootstrapScheduled=true");
+    expect(clarity).toContain("__shaleanClarityBootstrapScheduled=true");
+    expect(layout).toContain("__shaleanAhrefsBootstrapScheduled=true");
+    expect(guard).toContain("window.__shaleanMetaBootstrapScheduled");
+    expect(guard).toContain("window.__shaleanClarityBootstrapScheduled");
+    expect(guard).toContain("window.__shaleanAhrefsBootstrapScheduled");
+  });
+});
