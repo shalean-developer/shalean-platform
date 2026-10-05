@@ -136,3 +136,31 @@ describe("MASTER-01A-04 cleaner identity convergence", () => {
     expect(cleaner).toContain('.eq("id", authUserId).maybeSingle()');
   });
 });
+
+
+describe("MASTER-01A-04 profile-repair redirect preservation", () => {
+  it("carries only safe in-app redirects into complete-profile", () => {
+    const resolver = read("apps/web/lib/auth/resolvePostAuthDestination.ts");
+
+    expect(resolver).toContain('rawRedirect.startsWith("/")');
+    expect(resolver).toContain('!rawRedirect.startsWith("//")');
+    expect(resolver).toContain('!rawRedirect.includes("://")');
+    expect(resolver).toContain('/complete-profile?redirect=');
+  });
+
+  it("applies role-safe redirect only after server-side profile repair and role resolution", () => {
+    const route = read("apps/web/app/api/auth/complete-profile/route.ts");
+
+    expect(route).toContain("ensureUserProfileForAuthUser(admin, userId)");
+    expect(route).toContain("resolveUserRoleServer(admin");
+    expect(route).toContain("safePostLoginRedirect(body.redirect, resolved.role)");
+  });
+
+  it("forwards the preserved redirect from complete-profile into the repair endpoint", () => {
+    const page = read("apps/web/app/complete-profile/page.tsx");
+
+    expect(page).toContain('searchParams.get("redirect")');
+    expect(page).toContain("redirect,");
+    expect(page).toContain("window.location.replace(json.dashboardRoute)");
+  });
+});
