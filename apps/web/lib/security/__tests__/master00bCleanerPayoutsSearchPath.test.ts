@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 const root = resolve(process.cwd(), "../..");
 const migrationsDir = resolve(root, "supabase/migrations");
 const hardeningFile =
-  "20261005010028_master_00b_07_cleaner_payouts_search_path.sql";
+  "20261005014500_master_00b_07_cleaner_payouts_search_path.sql";
 
 const migrationFiles = readdirSync(migrationsDir)
   .filter((name) => name.endsWith(".sql"))
