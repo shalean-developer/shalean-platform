@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { AuthCard } from "@/components/auth/AuthShell";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -42,9 +42,13 @@ function ResetPasswordForm() {
   const [submitting, setSubmitting] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const recoveryHrefRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const recoveryHref = window.location.href;
+    if (!recoveryHrefRef.current) {
+      recoveryHrefRef.current = window.location.href;
+    }
+    const recoveryHref = recoveryHrefRef.current;
     scrubRecoveryCredentialsFromBrowserUrl();
 
     const sb = getSupabaseBrowser();
