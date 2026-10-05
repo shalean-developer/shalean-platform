@@ -13,6 +13,10 @@ type AuthLike = {
     access_token: string;
     refresh_token: string;
   }) => Promise<{ error: { message: string } | null }>;
+  verifyOtp: (params: {
+    token_hash: string;
+    type: "recovery";
+  }) => Promise<{ error: { message: string } | null }>;
   getSession: () => Promise<{ data: { session: unknown | null } }>;
 };
 
@@ -81,8 +85,24 @@ export async function bootstrapPasswordRecoverySession(
 
   const search = readSearchParams(href);
   const hash = readHashParams(href);
+  const tokenHash = (search.get("token_hash") ?? "").trim();
+  const recoveryType = (search.get("type") ?? "").trim().toLowerCase();
+  if (tokenHash && recoveryType === "recovery") {
+    const { error } = await auth.verifyOtp({ token_hash: tokenHash, type: "recovery" });
+    if (error) {
+      const msg = error.message || "Could not verify reset link.";
+      return {
+        ok: false,
+        reason: isExpiredRecoveryMessage(msg) ? "expired_or_invalid" : "auth_error",
+        message: isExpiredRecoveryMessage(msg)
+          ? "This reset link is invalid or has expired. Request a new one from the sign-in page."
+          : msg,
+      };
+    }
+  }
+
   const code = (search.get("code") ?? "").trim();
-  if (code) {
+  if (!tokenHash && code) {
     const { error } = await auth.exchangeCodeForSession(code);
     if (error) {
       const msg = error.message || "Could not verify reset link.";
@@ -94,7 +114,7 @@ export async function bootstrapPasswordRecoverySession(
           : msg,
       };
     }
-  } else {
+  } else if (!tokenHash) {
     const access_token = (hash.get("access_token") ?? search.get("access_token") ?? "").trim();
     const refresh_token = (hash.get("refresh_token") ?? search.get("refresh_token") ?? "").trim();
     const type = (hash.get("type") ?? search.get("type") ?? "").trim().toLowerCase();
