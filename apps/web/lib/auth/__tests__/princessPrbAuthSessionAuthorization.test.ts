@@ -555,3 +555,36 @@ describe("MASTER-01A-03D reset route document-navigation contract", () => {
     expect(policy).not.toContain('window.location.reload()');
   });
 });
+
+
+describe("MASTER-01A-03D recovery credential referrer scrub", () => {
+  it("scrubs every supported recovery credential and error parameter before document exits", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const src = readFileSync(
+      resolve(process.cwd(), "app/auth/reset-password/page.tsx"),
+      "utf8",
+    );
+
+    for (const key of [
+      "token_hash",
+      "type",
+      "code",
+      "access_token",
+      "refresh_token",
+      "error",
+      "error_code",
+      "error_description",
+    ]) {
+      expect(src).toContain(`"${key}"`);
+    }
+    expect(src).toContain("scrubRecoveryCredentialsFromBrowserUrl()");
+    expect(src).toContain("window.history.replaceState");
+    expect(src.indexOf("scrubRecoveryCredentialsFromBrowserUrl()")).toBeLessThan(
+      src.indexOf("setSessionReady(true)"),
+    );
+    expect(src.indexOf("scrubRecoveryCredentialsFromBrowserUrl()")).toBeLessThan(
+      src.indexOf("setSessionError(result.message)"),
+    );
+  });
+});
