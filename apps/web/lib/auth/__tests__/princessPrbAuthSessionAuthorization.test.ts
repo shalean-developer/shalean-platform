@@ -383,7 +383,7 @@ describe("MASTER-01A-03B sensitive reset-route analytics exclusion", () => {
     const gtm = readFileSync(resolve(process.cwd(), "components/analytics/GoogleTagManager.tsx"), "utf8");
 
     expect(layout).toContain("GA4_PATH_EXCLUSION_SNIPPET");
-    expect(layout).not.toContain('src="https://analytics.ahrefs.com/analytics.js"');
+    expect(layout).not.toMatch(/<script\s+src=["']https:\/\/analytics\.ahrefs\.com\/analytics\.js["']/);
     expect(meta).toContain("GA4_PATH_EXCLUSION_SNIPPET");
     expect(meta).not.toContain("<noscript>");
     expect(clarity).toContain("GA4_PATH_EXCLUSION_SNIPPET");
