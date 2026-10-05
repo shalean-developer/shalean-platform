@@ -57,11 +57,10 @@ export async function POST(request: Request) {
 
   /*
    * H-6 / H-4 — make sure the JWT-bearing user has a `user_profiles` row
-   * before we attribute bookings to them. The /auth/callback page hits this
-   * route immediately after magic-link verification, which is the only
-   * server-visible signal that a guest-upgrade user has signed in for the
-   * first time. Failure is logged but non-fatal: linking the booking is
-   * still preferable to a 500.
+   * before we attribute bookings to them. The canonical password sign-in /
+   * sign-up client calls this route after authentication; identity comes from
+   * the bearer token above. Failure is logged but non-fatal: linking the
+   * booking is still preferable to a 500.
    */
   const ensured = await ensureUserProfileForAuthUser(admin, userData.user.id);
   if ("error" in ensured) {

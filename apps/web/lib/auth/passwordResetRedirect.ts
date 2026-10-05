@@ -96,3 +96,24 @@ export function passwordResetRedirectIsProductionLeak(
     return false;
   }
 }
+
+
+/**
+ * Builds an environment-owned recovery URL for custom-email delivery.
+ * The one-time token hash is verified by Shalean's reset page via verifyOtp,
+ * so Resend recovery links do not depend on Supabase's redirect allowlist.
+ */
+export function buildPasswordResetRecoveryUrl(resetPageUrl: string, hashedToken: string): string | null {
+  const token = hashedToken.trim();
+  if (!token) return null;
+  try {
+    const url = new URL(resetPageUrl);
+    const hash = new URLSearchParams();
+    hash.set("token_hash", token);
+    hash.set("type", "recovery");
+    url.hash = hash.toString();
+    return url.toString();
+  } catch {
+    return null;
+  }
+}

@@ -7,11 +7,17 @@ export type RecoveryBootstrapResult =
   | { ok: true }
   | { ok: false; reason: "not_configured" | "auth_error" | "expired_or_invalid"; message: string };
 
+const recoveryBootstrapInflight = new Map<string, Promise<RecoveryBootstrapResult>>();
+
 type AuthLike = {
   exchangeCodeForSession: (code: string) => Promise<{ error: { message: string } | null }>;
   setSession: (tokens: {
     access_token: string;
     refresh_token: string;
+  }) => Promise<{ error: { message: string } | null }>;
+  verifyOtp: (params: {
+    token_hash: string;
+    type: "recovery";
   }) => Promise<{ error: { message: string } | null }>;
   getSession: () => Promise<{ data: { session: unknown | null } }>;
 };
@@ -68,6 +74,24 @@ export async function bootstrapPasswordRecoverySession(
   href: string,
   options?: { pollAttempts?: number; pollDelayMs?: number },
 ): Promise<RecoveryBootstrapResult> {
+  const key = href;
+  const existing = recoveryBootstrapInflight.get(key);
+  if (existing) return existing;
+
+  const pending = bootstrapPasswordRecoverySessionOnce(auth, href, options);
+  recoveryBootstrapInflight.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    recoveryBootstrapInflight.delete(key);
+  }
+}
+
+async function bootstrapPasswordRecoverySessionOnce(
+  auth: AuthLike,
+  href: string,
+  options?: { pollAttempts?: number; pollDelayMs?: number },
+): Promise<RecoveryBootstrapResult> {
   const urlError = recoveryErrorFromUrl(href);
   if (urlError) {
     return {
@@ -81,8 +105,34 @@ export async function bootstrapPasswordRecoverySession(
 
   const search = readSearchParams(href);
   const hash = readHashParams(href);
+  const tokenHash = (hash.get("token_hash") ?? search.get("token_hash") ?? "").trim();
+  const recoveryType = (hash.get("type") ?? search.get("type") ?? "").trim().toLowerCase();
+  let recoveryCredentialProcessed = false;
+  if (tokenHash && recoveryType !== "recovery") {
+    return {
+      ok: false,
+      reason: "expired_or_invalid",
+      message: "This reset link is invalid or has expired. Request a new one from the sign-in page.",
+    };
+  }
+  if (tokenHash && recoveryType === "recovery") {
+    recoveryCredentialProcessed = true;
+    const { error } = await auth.verifyOtp({ token_hash: tokenHash, type: "recovery" });
+    if (error) {
+      const msg = error.message || "Could not verify reset link.";
+      return {
+        ok: false,
+        reason: isExpiredRecoveryMessage(msg) ? "expired_or_invalid" : "auth_error",
+        message: isExpiredRecoveryMessage(msg)
+          ? "This reset link is invalid or has expired. Request a new one from the sign-in page."
+          : msg,
+      };
+    }
+  }
+
   const code = (search.get("code") ?? "").trim();
-  if (code) {
+  if (!tokenHash && code) {
+    recoveryCredentialProcessed = true;
     const { error } = await auth.exchangeCodeForSession(code);
     if (error) {
       const msg = error.message || "Could not verify reset link.";
@@ -94,11 +144,12 @@ export async function bootstrapPasswordRecoverySession(
           : msg,
       };
     }
-  } else {
+  } else if (!tokenHash) {
     const access_token = (hash.get("access_token") ?? search.get("access_token") ?? "").trim();
     const refresh_token = (hash.get("refresh_token") ?? search.get("refresh_token") ?? "").trim();
     const type = (hash.get("type") ?? search.get("type") ?? "").trim().toLowerCase();
     if (access_token && refresh_token && (type === "recovery" || type === "")) {
+      recoveryCredentialProcessed = true;
       const { error } = await auth.setSession({ access_token, refresh_token });
       if (error) {
         const msg = error.message || "Could not verify reset link.";
@@ -111,6 +162,14 @@ export async function bootstrapPasswordRecoverySession(
         };
       }
     }
+  }
+
+  if (!recoveryCredentialProcessed) {
+    return {
+      ok: false,
+      reason: "expired_or_invalid",
+      message: "This reset link is invalid or has expired. Request a new one from the sign-in page.",
+    };
   }
 
   const attempts = options?.pollAttempts ?? 20;

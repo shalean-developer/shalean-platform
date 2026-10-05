@@ -77,7 +77,6 @@ jobs:
         run: |
           set -euo pipefail
           npm ci
-          npm install --no-save --package-lock=false @tailwindcss/postcss@^4
           node -e "require.resolve('@tailwindcss/postcss')"
           echo "Linked @shalean packages:"
           ls -la node_modules/@shalean
@@ -95,6 +94,13 @@ jobs:
       - name: Mandatory privileged Office email verification security contract
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/security/__tests__/p0MandatoryAal2Contract.test.ts lib/security/__tests__/p0PrivilegedMfaRolloutContract.test.ts
+
+      - name: Auth source-of-truth regression
+        if: steps.filter.outputs.run_suite == 'true'
+        run: >-
+          npm run test --
+          lib/auth/__tests__/master01aAuthSourceTruth.test.ts
+          lib/auth/__tests__/princessPrbAuthSessionAuthorization.test.ts
 
       - name: Revenue path tests (booking, dispatch, cleaner API, cron locks, cost gates)
         if: steps.filter.outputs.run_suite == 'true'

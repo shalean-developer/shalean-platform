@@ -14,7 +14,6 @@ function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [noAccount, setNoAccount] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -25,7 +24,6 @@ function ForgotPasswordForm() {
     e.preventDefault();
     setError(null);
     setInfo(null);
-    setNoAccount(false);
     setSubmitting(true);
     try {
       const result = await requestPasswordReset(email);
@@ -33,10 +31,6 @@ function ForgotPasswordForm() {
         setInfo(
           "We sent a password reset link to your email. Check your inbox and spam folder — it may take a few minutes.",
         );
-        return;
-      }
-      if ("noAccount" in result) {
-        setNoAccount(true);
         return;
       }
       setError(result.error.message);
@@ -74,7 +68,6 @@ function ForgotPasswordForm() {
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
-                  setNoAccount(false);
                   setError(null);
                   setInfo(null);
                 }}
@@ -84,20 +77,6 @@ function ForgotPasswordForm() {
             </div>
           </div>
 
-          {noAccount ? (
-            <div
-              className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-100"
-              role="alert"
-            >
-              <p>No Shalean account exists for this email address.</p>
-              <p className="mt-2">
-                <Link href={signupHref} className="font-semibold text-primary hover:underline">
-                  Create an account
-                </Link>{" "}
-                to book with Shalean, then you can sign in anytime.
-              </p>
-            </div>
-          ) : null}
           {error ? (
             <div
               className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-950/50 dark:text-red-300"
