@@ -176,8 +176,8 @@ describe("MASTER-01A-04 redirect hardening and guarded deep-link repair", () => 
   it("carries pathname and query from role-guard missing-profile redirects", () => {
     const guard = read("apps/web/lib/auth/useRoleRouteGuard.tsx");
 
-    expect(guard).toContain("useSearchParams");
-    expect(guard).toContain("searchParams.toString()");
+    expect(guard).not.toContain("useSearchParams");
+    expect(guard).toContain("window.location.search");
     expect(guard).toContain("/complete-profile?redirect=");
     expect(guard).toContain("encodeURIComponent(requested)");
   });
