@@ -363,3 +363,32 @@ describe("MASTER-01A-03B reset form recovery-authority contract", () => {
     expect(src).toContain("if (result.ok)");
   });
 });
+
+
+describe("MASTER-01A-03B sensitive reset-route analytics exclusion", () => {
+  it("marks the password reset route as analytics-excluded", async () => {
+    const { isGa4PathExcluded } = await import("@/lib/analytics/ga4Config");
+    expect(isGa4PathExcluded("/auth/reset-password")).toBe(true);
+    expect(isGa4PathExcluded("/auth/reset-password/anything")).toBe(true);
+  });
+
+  it("gates every root third-party tracker before loading on the reset route", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const layout = readFileSync(resolve(process.cwd(), "app/layout.tsx"), "utf8");
+    const meta = readFileSync(resolve(process.cwd(), "components/analytics/MetaPixel.tsx"), "utf8");
+    const clarity = readFileSync(resolve(process.cwd(), "components/analytics/SessionReplayProvider.tsx"), "utf8");
+    const ga = readFileSync(resolve(process.cwd(), "components/analytics/GoogleAnalytics.tsx"), "utf8");
+    const ads = readFileSync(resolve(process.cwd(), "components/analytics/GoogleAds.tsx"), "utf8");
+    const gtm = readFileSync(resolve(process.cwd(), "components/analytics/GoogleTagManager.tsx"), "utf8");
+
+    expect(layout).toContain("GA4_PATH_EXCLUSION_SNIPPET");
+    expect(layout).not.toContain('src="https://analytics.ahrefs.com/analytics.js"');
+    expect(meta).toContain("GA4_PATH_EXCLUSION_SNIPPET");
+    expect(meta).not.toContain("<noscript>");
+    expect(clarity).toContain("GA4_PATH_EXCLUSION_SNIPPET");
+    expect(ga).toContain("GA4_PATH_EXCLUSION_SNIPPET");
+    expect(ads).toContain("GA4_PATH_EXCLUSION_SNIPPET");
+    expect(gtm).toContain("GA4_PATH_EXCLUSION_SNIPPET");
+  });
+});
