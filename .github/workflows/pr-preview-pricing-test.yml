@@ -35,12 +35,12 @@ jobs:
     env:
       SHALEAN_APP_ENV: "staging"
       SHALEAN_ENFORCE_ENV_SAFETY: "true"
-      SHALEAN_EXPECTED_SUPABASE_REF: "jhubpsbwmjgydkzztxeu"
+      SHALEAN_EXPECTED_SUPABASE_REF: "uwvnmluiqbczeduzjgse"
       NEXT_TELEMETRY_DISABLED: "1"
       NEXT_PUBLIC_SITE_URL: "https://pricing-test.shalean.co.za"
       NEXT_PUBLIC_APP_URL: "https://pricing-test.shalean.co.za"
-      NEXT_PUBLIC_SUPABASE_URL: "https://jhubpsbwmjgydkzztxeu.supabase.co"
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ vars.PLESK_TEST_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_IlDDZwioRpJRr2F6-B8WFA_uBrbZnkT' }}"
+      NEXT_PUBLIC_SUPABASE_URL: "https://uwvnmluiqbczeduzjgse.supabase.co"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ vars.PLESK_STAGING_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_Jl3ESJbVyt2gnuiVslYvHg_gy-LaG_1' }}"
       NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "${{ vars.PLESK_TEST_PAYSTACK_PUBLIC_KEY || 'pk_test_preview_disabled' }}"
 
     steps:
@@ -71,7 +71,7 @@ jobs:
           WANT="$(git rev-parse "${{ steps.preview.outputs.sha }}")"
           test "$GOT" = "$WANT"
           test "$SHALEAN_APP_ENV" = "staging"
-          test "$NEXT_PUBLIC_SUPABASE_URL" = "https://jhubpsbwmjgydkzztxeu.supabase.co"
+          test "$NEXT_PUBLIC_SUPABASE_URL" = "https://uwvnmluiqbczeduzjgse.supabase.co"
           test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
           test -n "$NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY"
           case "$NEXT_PUBLIC_SUPABASE_ANON_KEY" in sb_publishable_*|eyJ*) ;; *) exit 1 ;; esac
@@ -121,7 +121,7 @@ jobs:
             "preview_pr": "${{ steps.preview.outputs.pr }}",
             "target_host": "pricing-test.shalean.co.za",
             "deployment_environment": "staging",
-            "supabase_ref": "jhubpsbwmjgydkzztxeu",
+            "supabase_ref": "uwvnmluiqbczeduzjgse",
             "server_secrets_baked_in": false
           }
           META
