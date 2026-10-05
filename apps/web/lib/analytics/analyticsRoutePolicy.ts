@@ -28,28 +28,6 @@ function policyPathFromHistoryUrl(url: string | URL | null | undefined): string 
   }
 }
 
-function sensitiveResetTargetFromHistoryUrl(
-  url: string | URL | null | undefined,
-): string | null {
-  if (url == null) return null;
-  try {
-    const target = new URL(String(url), window.location.href);
-    if (target.origin !== window.location.origin) return null;
-    const sensitive =
-      target.pathname === "/auth/reset-password" ||
-      target.pathname.startsWith("/auth/reset-password/");
-    const alreadyOnSensitiveRoute =
-      window.location.pathname === "/auth/reset-password" ||
-      window.location.pathname.startsWith("/auth/reset-password/");
-    if (sensitive && !alreadyOnSensitiveRoute) {
-      return target.toString();
-    }
-  } catch {
-    // Let normal History API handling deal with malformed targets.
-  }
-  return null;
-}
-
 /**
  * Apply destination policy before History API observers (including GTM History Change)
  * process a soft navigation. This closes the interval between pushState/replaceState and
@@ -63,40 +41,18 @@ export function installAnalyticsHistoryPolicyGuard(): void {
   const originalReplaceState = history.replaceState.bind(history);
 
   history.pushState = function shaleanPushState(data, unused, url) {
-    const sensitiveTarget = sensitiveResetTargetFromHistoryUrl(url);
-    if (sensitiveTarget) {
-      window.location.assign(sensitiveTarget);
-      return;
-    }
     const path = policyPathFromHistoryUrl(url);
     if (path) applyAnalyticsRoutePolicy(path);
     return originalPushState(data, unused, url);
   };
   history.replaceState = function shaleanReplaceState(data, unused, url) {
-    const sensitiveTarget = sensitiveResetTargetFromHistoryUrl(url);
-    if (sensitiveTarget) {
-      window.location.replace(sensitiveTarget);
-      return;
-    }
     const path = policyPathFromHistoryUrl(url);
     if (path) applyAnalyticsRoutePolicy(path);
     return originalReplaceState(data, unused, url);
   };
   window.addEventListener(
     "popstate",
-    (event) => {
-      const path = window.location.pathname;
-      const sensitive =
-        path === "/auth/reset-password" ||
-        path.startsWith("/auth/reset-password/");
-      if (sensitive) {
-        applyAnalyticsRoutePolicy(path);
-        event.stopImmediatePropagation();
-        window.location.reload();
-        return;
-      }
-      applyAnalyticsRoutePolicy(path);
-    },
+    () => applyAnalyticsRoutePolicy(window.location.pathname),
     true,
   );
   window.__shaleanAnalyticsHistoryGuardInstalled = true;
