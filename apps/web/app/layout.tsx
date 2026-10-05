@@ -3,6 +3,7 @@ import dynamic from "next/dynamic";
 import { Suspense } from "react";
 import { AppNotificationProviders } from "@/components/ui/notifications/AppNotificationProviders";
 import { DeferredGrowthCtaTracking } from "@/components/analytics/DeferredGrowthCtaTracking";
+import { GA4_PATH_EXCLUSION_SNIPPET } from "@/lib/analytics/ga4Config";
 import { Ga4RouteGuard } from "@/components/analytics/Ga4RouteGuard";
 import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
 import { GoogleAds } from "@/components/analytics/GoogleAds";
@@ -51,9 +52,9 @@ export default function RootLayout({
           content="ce24dbc2c9078f8de7611b6589ba9e92f8a3b8d5fe5b5971adebcf9de3238b9c"
         />
         <script
-          src="https://analytics.ahrefs.com/analytics.js"
-          data-key="q/bjTagLIl4JOoJFbBFE/A"
-          async
+          dangerouslySetInnerHTML={{
+            __html: `(function(){${GA4_PATH_EXCLUSION_SNIPPET}var s=document.createElement("script");s.src="https://analytics.ahrefs.com/analytics.js";s.async=true;s.dataset.key="q/bjTagLIl4JOoJFbBFE/A";document.head.appendChild(s);})();`,
+          }}
         />
       </head>
       <body className="min-h-full flex flex-col">
