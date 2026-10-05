@@ -92,6 +92,38 @@ describe("bootstrapPasswordRecoverySession", () => {
     expect(auth.setSession).not.toHaveBeenCalled();
   });
 
+  it("deduplicates concurrent one-time token verification", async () => {
+    const { bootstrapPasswordRecoverySession } = await import(
+      "@/lib/auth/bootstrapPasswordRecoverySession"
+    );
+    let releaseVerify!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseVerify = resolve;
+    });
+    const auth = {
+      exchangeCodeForSession: vi.fn(async () => ({ error: null })),
+      setSession: vi.fn(async () => ({ error: null })),
+      verifyOtp: vi.fn(async () => {
+        await gate;
+        return { error: null };
+      }),
+      getSession: vi.fn(async () => ({ data: { session: { access_token: "t" } } })),
+    };
+    const href =
+      "https://pricing-test.shalean.co.za/auth/reset-password?token_hash=once&type=recovery";
+    const first = bootstrapPasswordRecoverySession(auth, href, {
+      pollAttempts: 1,
+      pollDelayMs: 1,
+    });
+    const second = bootstrapPasswordRecoverySession(auth, href, {
+      pollAttempts: 1,
+      pollDelayMs: 1,
+    });
+    releaseVerify();
+    await expect(Promise.all([first, second])).resolves.toEqual([{ ok: true }, { ok: true }]);
+    expect(auth.verifyOtp).toHaveBeenCalledTimes(1);
+  });
+
   it("exchanges PKCE code and succeeds when session appears", async () => {
     const { bootstrapPasswordRecoverySession } = await import(
       "@/lib/auth/bootstrapPasswordRecoverySession"
