@@ -526,30 +526,39 @@ describe("MASTER-01A-03B recovery credential authority", () => {
 });
 
 
-describe("MASTER-01A-03D sensitive reset-route hard navigation", () => {
-  it("forces a document navigation only when entering reset-password from an already-loaded public route", async () => {
-    const { shouldForceSensitiveRouteHardNavigation } = await import(
-      "@/components/analytics/Ga4RouteGuard"
-    );
-
-    expect(
-      shouldForceSensitiveRouteHardNavigation("/auth/reset-password", false),
-    ).toBe(true);
-    expect(
-      shouldForceSensitiveRouteHardNavigation("/auth/reset-password", true),
-    ).toBe(false);
-    expect(shouldForceSensitiveRouteHardNavigation("/office", false)).toBe(false);
-    expect(shouldForceSensitiveRouteHardNavigation("/book", false)).toBe(false);
-  });
-
-  it("uses location.replace so the sensitive route reloads into a tracker-free document", async () => {
+describe("MASTER-01A-03D sensitive reset-route navigation interception", () => {
+  it("intercepts pushState and replaceState before committing reset-password into SPA history", async () => {
     const { readFileSync } = await import("node:fs");
     const { resolve } = await import("node:path");
-    const guard = readFileSync(
-      resolve(process.cwd(), "components/analytics/Ga4RouteGuard.tsx"),
+    const policy = readFileSync(
+      resolve(process.cwd(), "lib/analytics/analyticsRoutePolicy.ts"),
       "utf8",
     );
 
-    expect(guard).toContain("window.location.replace(window.location.href)");
+    const pushIdx = policy.indexOf("history.pushState = function shaleanPushState");
+    const pushAssignIdx = policy.indexOf("window.location.assign(sensitiveTarget)", pushIdx);
+    const pushOriginalIdx = policy.indexOf("originalPushState(data, unused, url)", pushIdx);
+    expect(pushIdx).toBeGreaterThanOrEqual(0);
+    expect(pushAssignIdx).toBeGreaterThan(pushIdx);
+    expect(pushOriginalIdx).toBeGreaterThan(pushAssignIdx);
+
+    const replaceIdx = policy.indexOf("history.replaceState = function shaleanReplaceState");
+    const replaceNavIdx = policy.indexOf("window.location.replace(sensitiveTarget)", replaceIdx);
+    const replaceOriginalIdx = policy.indexOf("originalReplaceState(data, unused, url)", replaceIdx);
+    expect(replaceIdx).toBeGreaterThanOrEqual(0);
+    expect(replaceNavIdx).toBeGreaterThan(replaceIdx);
+    expect(replaceOriginalIdx).toBeGreaterThan(replaceNavIdx);
+  });
+
+  it("targets only /auth/reset-password from a different current path", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const policy = readFileSync(
+      resolve(process.cwd(), "lib/analytics/analyticsRoutePolicy.ts"),
+      "utf8",
+    );
+
+    expect(policy).toContain('target.pathname === "/auth/reset-password"');
+    expect(policy).toContain('window.location.pathname !== "/auth/reset-password"');
   });
 });
