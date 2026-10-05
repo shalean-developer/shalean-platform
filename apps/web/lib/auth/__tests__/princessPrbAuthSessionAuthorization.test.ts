@@ -581,3 +581,36 @@ describe("MASTER-01A-03D sensitive reset popstate handling", () => {
     expect(policy).toContain("window.location.reload()");
   });
 });
+
+
+describe("MASTER-01A-03D hardened sensitive history interception", () => {
+  it("preserves same-origin History API semantics for sensitive navigation interception", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const policy = readFileSync(
+      resolve(process.cwd(), "lib/analytics/analyticsRoutePolicy.ts"),
+      "utf8",
+    );
+
+    expect(policy).toContain("target.origin !== window.location.origin");
+  });
+
+  it("disables analytics and stops popstate propagation before sensitive-route reload", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const policy = readFileSync(
+      resolve(process.cwd(), "lib/analytics/analyticsRoutePolicy.ts"),
+      "utf8",
+    );
+
+    const popIdx = policy.indexOf('"popstate"');
+    const policyIdx = policy.indexOf("applyAnalyticsRoutePolicy(path)", popIdx);
+    const stopIdx = policy.indexOf("event.stopImmediatePropagation()", popIdx);
+    const reloadIdx = policy.indexOf("window.location.reload()", popIdx);
+
+    expect(popIdx).toBeGreaterThanOrEqual(0);
+    expect(policyIdx).toBeGreaterThan(popIdx);
+    expect(stopIdx).toBeGreaterThan(policyIdx);
+    expect(reloadIdx).toBeGreaterThan(stopIdx);
+  });
+});
