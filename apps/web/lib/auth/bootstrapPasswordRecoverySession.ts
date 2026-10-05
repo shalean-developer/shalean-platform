@@ -105,8 +105,8 @@ async function bootstrapPasswordRecoverySessionOnce(
 
   const search = readSearchParams(href);
   const hash = readHashParams(href);
-  const tokenHash = (search.get("token_hash") ?? "").trim();
-  const recoveryType = (search.get("type") ?? "").trim().toLowerCase();
+  const tokenHash = (hash.get("token_hash") ?? search.get("token_hash") ?? "").trim();
+  const recoveryType = (hash.get("type") ?? search.get("type") ?? "").trim().toLowerCase();
   let recoveryCredentialProcessed = false;
   if (tokenHash && recoveryType !== "recovery") {
     return {
