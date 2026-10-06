@@ -485,3 +485,54 @@ describe("MASTER-01A-06A account middleware redirect convergence", () => {
     expect(middleware).toContain('if (isOfficePortalPath(pathname) && !user)');
   });
 });
+
+
+describe("MASTER-01A-07 Office challenge session binding", () => {
+  it("persists the current session binding when issuing a code", () => {
+    const requestRoute = read("apps/web/app/api/auth/office-email-verification/request/route.ts");
+
+    expect(requestRoute).toContain("officeSessionBinding(token)");
+    expect(requestRoute).toContain("session_binding: sessionBinding");
+    expect(requestRoute).toContain("hashOfficeEmailCode(user.id, challengeId, sessionBinding, code)");
+  });
+
+  it("requires the current session binding when verifying a code", () => {
+    const verifyRoute = read("apps/web/app/api/auth/office-email-verification/verify/route.ts");
+
+    expect(verifyRoute).toContain('select("id, code_hash, session_binding');
+    expect(verifyRoute).toContain('.eq("session_binding", sessionBinding)');
+    expect(verifyRoute).toContain("challenge.session_binding !== sessionBinding");
+    expect(verifyRoute).toContain("Request a new security code for this login session.");
+  });
+
+  it("derives the binding from the authenticated Supabase JWT session_id", () => {
+    const helper = read("apps/web/lib/auth/officeEmailVerification.ts");
+    const permissionGate = read("apps/web/lib/admin/requirePermission.ts");
+    const middleware = read("apps/web/lib/supabase/supabaseMiddleware.ts");
+
+    expect(helper).toContain('claims.session_id === "string"');
+    expect(helper).toContain("office-auth-session:v2:");
+    expect(permissionGate).toContain("officeSessionBinding(token)");
+    expect(middleware).toContain("officeSessionBinding(token)");
+    expect(middleware).toContain("officeSessionBinding(browserAccessToken)");
+  });
+
+  it("cryptographically includes the session binding in the challenge hash", () => {
+    const helper = read("apps/web/lib/auth/officeEmailVerification.ts");
+
+    expect(helper).toContain("office-code:v2:");
+    expect(helper).toContain("sessionBinding");
+    expect(helper).toContain("Office verification session binding is required.");
+  });
+
+  it("keeps resend cooldown account-scoped while verification stays session-scoped", () => {
+    const requestRoute = read("apps/web/app/api/auth/office-email-verification/request/route.ts");
+    const cooldownStart = requestRoute.indexOf('.select("id, sent_at")');
+    const cooldownEnd = requestRoute.indexOf("if (latestError)", cooldownStart);
+    const cooldownLookup = requestRoute.slice(cooldownStart, cooldownEnd);
+
+    expect(cooldownLookup).toContain('.eq("user_id", user.id)');
+    expect(cooldownLookup).not.toContain('.eq("session_binding", sessionBinding)');
+    expect(requestRoute).toContain("session_binding: sessionBinding");
+  });
+});
