@@ -402,3 +402,28 @@ describe("MASTER-01A-05 post-logout cleanup resilience", () => {
     expect(signOutSource).toContain("if (error) throw new Error(error.message)");
   });
 });
+
+
+describe("MASTER-01A-06 protected customer auth redirect convergence", () => {
+  it("sends account-shell guests directly to canonical customer login", () => {
+    const guard = read("apps/web/components/auth/AuthGuard.tsx");
+
+    expect(guard).toContain("/auth/login?redirect=");
+    expect(guard).toContain("&intent=customer");
+    expect(guard).not.toContain("/login?redirect=");
+  });
+
+  it("preserves pathname and query through the account auth redirect", () => {
+    const guard = read("apps/web/components/auth/AuthGuard.tsx");
+
+    expect(guard).toContain("window.location.search");
+    expect(guard).toContain("const requested =");
+    expect(guard).toContain("encodeURIComponent(requested)");
+  });
+
+  it("avoids useSearchParams in the shared account guard", () => {
+    const guard = read("apps/web/components/auth/AuthGuard.tsx");
+
+    expect(guard).not.toContain("useSearchParams");
+  });
+});
