@@ -39,7 +39,7 @@ jobs:
           CHANGED="$(git diff --name-only "$BASE" "$HEAD" || true)"
           echo "Changed paths:"
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -Eq '^(apps/web/|packages/|\.github/workflows/web-test\.yml)'; then
+          if echo "$CHANGED" | grep -Eq '^(apps/web/|packages/|supabase/migrations/|\.github/workflows/web-test\.yml)'; then
             echo "run_suite=true" >> "$GITHUB_OUTPUT"
             echo "Web/package paths changed — running vitest suite."
           else
@@ -98,6 +98,10 @@ jobs:
       - name: MASTER-01B production test-route isolation contract
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/security/__tests__/master01bProductionTestRouteIsolation.test.ts
+
+      - name: MASTER-01C promotion telemetry abuse boundary contract
+        if: steps.filter.outputs.run_suite == 'true'
+        run: npm run test -- lib/security/__tests__/master01cPromotionTelemetryAbuseBoundary.test.ts
 
       - name: Auth source-of-truth regression
         if: steps.filter.outputs.run_suite == 'true'
