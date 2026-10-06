@@ -46,6 +46,14 @@ describe("MASTER-01B-01 production test-route isolation", () => {
       isProductionTestRouteBlocked("http://127.0.0.1:3000/api/test", {
         SHALEAN_APP_ENV: "staging",
         NODE_ENV: "production",
+        NEXT_PUBLIC_SITE_URL: "pricing-test.shalean.co.za",
+      }),
+    ).toBe(false);
+
+    expect(
+      isProductionTestRouteBlocked("http://127.0.0.1:3000/api/test", {
+        SHALEAN_APP_ENV: "staging",
+        NODE_ENV: "production",
         NEXT_PUBLIC_SITE_URL: "https://shalean.co.za",
       }),
     ).toBe(true);
@@ -98,6 +106,19 @@ describe("MASTER-01B-01 production test-route isolation", () => {
         SHALEAN_APP_ENV: "development",
       }),
     ).toBe(true);
+  });
+
+  it("blocks raw Vercel production/preview metadata even if app identity says staging", () => {
+    for (const vercelEnv of ["production", "preview"] as const) {
+      expect(
+        isProductionTestRouteBlocked("http://127.0.0.1:3000/api/test", {
+          SHALEAN_APP_ENV: "staging",
+          NODE_ENV: "production",
+          VERCEL_ENV: vercelEnv,
+          NEXT_PUBLIC_SITE_URL: "https://pricing-test.shalean.co.za",
+        }),
+      ).toBe(true);
+    }
   });
 
   it("blocks preview, malformed local origins, and staging config drift", () => {
