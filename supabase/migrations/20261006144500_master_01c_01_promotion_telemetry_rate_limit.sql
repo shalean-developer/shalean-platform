@@ -66,7 +66,7 @@ begin
   end if;
 
   -- Create a missing bucket without overwriting a concurrent creator.
-  insert into public.promotion_telemetry_rate_limit_buckets (
+  insert into public.promotion_telemetry_rate_limit_buckets as bucket (
     rate_key,
     window_started_at,
     request_count,
@@ -79,7 +79,7 @@ begin
     v_now
   )
   on conflict (rate_key) do nothing
-  returning window_started_at, request_count
+  returning bucket.window_started_at, bucket.request_count
   into v_started, v_count;
 
   if found then
