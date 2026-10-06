@@ -77,9 +77,6 @@ export async function GET(request: Request) {
 
 /** Track view/click/landing/qr/popup events (public, best-effort). */
 export async function POST(request: Request) {
-  const limit = checkPromotionTelemetryRateLimit(request);
-  if (!limit.allowed) return promotionTelemetryRateLimitResponse(limit);
-
   let body: {
     promotionId?: string;
     eventType?:
@@ -130,6 +127,9 @@ export async function POST(request: Request) {
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ ok: true });
+
+  const limit = await checkPromotionTelemetryRateLimit(admin, request);
+  if (!limit.allowed) return promotionTelemetryRateLimitResponse(limit);
 
   try {
     await recordPromotionEvent(admin, {
