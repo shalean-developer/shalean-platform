@@ -271,3 +271,53 @@ describe("MASTER-01A-04C complete-profile session timeout", () => {
     expect(page).toContain('window.location.replace("/auth/login")');
   });
 });
+
+
+describe("MASTER-01A-05 logout/session invalidation source of truth", () => {
+  it("confirms Supabase sign-out before clearing local auth state", () => {
+    const authClient = read("apps/web/lib/auth/authClient.ts");
+    const start = authClient.indexOf("export async function signOut");
+    const end = authClient.indexOf("export type MfaStatus", start);
+    const signOutSource = authClient.slice(start, end);
+
+    const remoteIdx = signOutSource.indexOf("await sb.auth.signOut()");
+    const errorIdx = signOutSource.indexOf("if (error) throw");
+    const sessionCacheIdx = signOutSource.indexOf("clearSupabaseSessionCache()");
+    const intentIdx = signOutSource.indexOf("clearAuthIntent()");
+    const roleIdx = signOutSource.indexOf("clearCachedUserRole()");
+    const cleanerIdx = signOutSource.indexOf('localStorage.removeItem("cleaner_id")');
+
+    expect(remoteIdx).toBeGreaterThanOrEqual(0);
+    expect(errorIdx).toBeGreaterThan(remoteIdx);
+    expect(sessionCacheIdx).toBeGreaterThan(errorIdx);
+    expect(intentIdx).toBeGreaterThan(errorIdx);
+    expect(roleIdx).toBeGreaterThan(errorIdx);
+    expect(cleanerIdx).toBeGreaterThan(errorIdx);
+  });
+
+  it("fails closed when browser auth is unavailable or Supabase sign-out fails", () => {
+    const authClient = read("apps/web/lib/auth/authClient.ts");
+    const start = authClient.indexOf("export async function signOut");
+    const end = authClient.indexOf("export type MfaStatus", start);
+    const signOutSource = authClient.slice(start, end);
+
+    expect(signOutSource).toContain('throw new Error("Supabase is not configured.")');
+    expect(signOutSource).toContain("if (error) throw new Error(error.message)");
+    expect(signOutSource).not.toContain("return { error:");
+  });
+
+  it("does not clear cleaner identity in callers before shared sign-out succeeds", () => {
+    for (const path of [
+      "apps/web/app/cleaner/profile/page.tsx",
+      "apps/web/app/(ui-redesign)/jobs/profile/page.tsx",
+      "apps/web/components/nav/SiteTopBarAccount.tsx",
+    ]) {
+      const source = read(path);
+      const signOutIdx = source.indexOf("signOut()");
+      const cleanerClearIdx = source.indexOf('removeItem("cleaner_id")');
+
+      expect(signOutIdx).toBeGreaterThanOrEqual(0);
+      expect(cleanerClearIdx === -1 || cleanerClearIdx > signOutIdx).toBe(true);
+    }
+  });
+});
