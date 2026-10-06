@@ -69,9 +69,17 @@ begin
     end,
     updated_at = v_now
   returning
-    promotion_telemetry_rate_limit_buckets.window_started_at,
-    promotion_telemetry_rate_limit_buckets.request_count
+    bucket.window_started_at,
+    bucket.request_count
   into v_started, v_count;
+
+  -- The fixed global bucket resets once per window; use that moment to prune
+  -- stale client buckets without scanning the table on every request.
+  if p_rate_key = 'global' and v_count = 1 then
+    delete from public.promotion_telemetry_rate_limit_buckets
+    where rate_key like 'client:%'
+      and updated_at < v_now - interval '1 day';
+  end if;
 
   allowed := v_count <= p_limit;
   retry_after_seconds := case
