@@ -97,7 +97,7 @@ begin
     0
   ) then
     allowed := false;
-    reason := 'global';
+    reason := 'busy';
     retry_after_seconds := 1;
     client_request_count := coalesce(v_client_count, 0);
     global_request_count := coalesce(v_global_count, 0);
@@ -227,4 +227,146 @@ $function$;
 revoke all on function public.consume_promotion_telemetry_limits(text, integer, integer, integer)
   from public, anon, authenticated;
 grant execute on function public.consume_promotion_telemetry_limits(text, integer, integer, integer)
+  to service_role;
+
+
+-- Rolling-deploy compatibility: legacy runtimes still call the original
+-- single-bucket RPC. Make those mutations participate in the same non-blocking
+-- advisory lock so old and new instances cannot race past a bucket ceiling.
+create or replace function public.consume_promotion_telemetry_rate_limit(
+  p_rate_key text,
+  p_limit integer,
+  p_window_seconds integer
+)
+returns table (
+  allowed boolean,
+  retry_after_seconds integer,
+  request_count integer
+)
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $legacy$
+declare
+  v_now timestamptz := clock_timestamp();
+  v_window interval;
+  v_started timestamptz;
+  v_count integer;
+begin
+  if p_rate_key is null or length(p_rate_key) = 0 or length(p_rate_key) > 128 then
+    raise exception 'invalid rate key';
+  end if;
+  if p_limit < 1 or p_limit > 100000 then
+    raise exception 'invalid rate limit';
+  end if;
+  if p_window_seconds < 1 or p_window_seconds > 3600 then
+    raise exception 'invalid rate window';
+  end if;
+
+  v_window := make_interval(secs => p_window_seconds);
+
+  -- Preserve the historical read-only fast reject.
+  select bucket.window_started_at, bucket.request_count
+  into v_started, v_count
+  from public.promotion_telemetry_rate_limit_buckets as bucket
+  where bucket.rate_key = p_rate_key;
+
+  if found
+     and v_started > v_now - v_window
+     and v_count >= p_limit then
+    allowed := false;
+    retry_after_seconds := greatest(
+      1,
+      ceil(extract(epoch from ((v_started + v_window) - v_now)))::integer
+    );
+    request_count := v_count;
+    return next;
+    return;
+  end if;
+
+  -- Coordinate with the combined RPC without queueing old runtime requests.
+  if not pg_try_advisory_xact_lock(
+    hashtext('promotion_telemetry_rate_limit'),
+    0
+  ) then
+    allowed := false;
+    retry_after_seconds := 1;
+    request_count := coalesce(v_count, 0);
+    return next;
+    return;
+  end if;
+
+  v_now := clock_timestamp();
+  v_started := null;
+  v_count := null;
+
+  select bucket.window_started_at, bucket.request_count
+  into v_started, v_count
+  from public.promotion_telemetry_rate_limit_buckets as bucket
+  where bucket.rate_key = p_rate_key;
+
+  if found
+     and v_started > v_now - v_window
+     and v_count >= p_limit then
+    allowed := false;
+    retry_after_seconds := greatest(
+      1,
+      ceil(extract(epoch from ((v_started + v_window) - v_now)))::integer
+    );
+    request_count := v_count;
+    return next;
+    return;
+  end if;
+
+  insert into public.promotion_telemetry_rate_limit_buckets as bucket (
+    rate_key,
+    window_started_at,
+    request_count,
+    updated_at
+  )
+  values (
+    p_rate_key,
+    v_now,
+    1,
+    v_now
+  )
+  on conflict (rate_key) do update
+  set
+    window_started_at = case
+      when bucket.window_started_at <= v_now - v_window then v_now
+      else bucket.window_started_at
+    end,
+    request_count = case
+      when bucket.window_started_at <= v_now - v_window then 1
+      else bucket.request_count + 1
+    end,
+    updated_at = v_now
+  where bucket.window_started_at <= v_now - v_window
+     or bucket.request_count < p_limit
+  returning bucket.request_count
+  into v_count;
+
+  if not found then
+    select bucket.request_count
+    into v_count
+    from public.promotion_telemetry_rate_limit_buckets as bucket
+    where bucket.rate_key = p_rate_key;
+
+    allowed := false;
+    retry_after_seconds := 1;
+    request_count := coalesce(v_count, p_limit);
+    return next;
+    return;
+  end if;
+
+  allowed := true;
+  retry_after_seconds := 0;
+  request_count := v_count;
+  return next;
+end;
+$legacy$;
+
+revoke all on function public.consume_promotion_telemetry_rate_limit(text, integer, integer)
+  from public, anon, authenticated;
+grant execute on function public.consume_promotion_telemetry_rate_limit(text, integer, integer)
   to service_role;
