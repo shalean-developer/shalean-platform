@@ -229,21 +229,30 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
 
     expect(combined.sql).toContain("pg_try_advisory_xact_lock");
     expect(combined.sql).not.toContain("perform pg_advisory_xact_lock");
-    expect(combined.sql).toContain(
+
+    const globalFastReject = combined.sql.indexOf(
       "fast reject already-saturated global traffic before taking the advisory",
     );
-    expect(combined.sql).toContain(
+    const clientFastReject = combined.sql.indexOf(
       "fast reject an already-saturated client before taking the advisory",
     );
-    expect(combined.sql).toContain(
+    const lock = combined.sql.indexOf("pg_try_advisory_xact_lock");
+    const lockedGlobalRecheck = combined.sql.indexOf(
       "saturation under the lock before touching any client bucket",
     );
-    expect(combined.sql).toContain(
+    const lockedClientRecheck = combined.sql.indexOf(
       "refresh the client snapshot under the same lock before any mutation",
     );
-    expect(combined.sql).toContain(
+    const mutations = combined.sql.indexOf(
       "both buckets have capacity under the same transaction lock",
     );
+
+    expect(globalFastReject).toBeGreaterThanOrEqual(0);
+    expect(clientFastReject).toBeGreaterThan(globalFastReject);
+    expect(lock).toBeGreaterThan(clientFastReject);
+    expect(lockedGlobalRecheck).toBeGreaterThan(lock);
+    expect(lockedClientRecheck).toBeGreaterThan(lockedGlobalRecheck);
+    expect(mutations).toBeGreaterThan(lockedClientRecheck);
 
     expect(legacy.sql).toContain(
       "making the global call read-only and delegating the client call to the new",
@@ -262,6 +271,13 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
       | "consume_promotion_telemetry_limits"
       | "consume_promotion_telemetry_rate_limit";
 
+    type RoutineState = {
+      name: FunctionName;
+      signature: string;
+      exists: boolean;
+      privileges: Record<Role, boolean>;
+    };
+
     const roles: Role[] = [
       "public",
       "anon",
@@ -272,67 +288,110 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
       "consume_promotion_telemetry_limits",
       "consume_promotion_telemetry_rate_limit",
     ];
-    const privilegeState = Object.fromEntries(
-      functionNames.map((name) => [
-        name,
-        Object.fromEntries(roles.map((role) => [role, false])) as Record<
-          Role,
-          boolean
-        >,
-      ]),
-    ) as Record<FunctionName, Record<Role, boolean>>;
-    const exists = Object.fromEntries(
-      functionNames.map((name) => [name, false]),
-    ) as Record<FunctionName, boolean>;
+
+    const normalizeIdentifier = (value: string) =>
+      value.trim().replace(/^"|"$/g, "").toLowerCase();
+
+    const normalizeArgTypes = (args: string) =>
+      args
+        .split(",")
+        .map((arg) =>
+          arg
+            .trim()
+            .replace(/\b(in|out|inout|variadic)\b/gi, "")
+            .trim()
+            .split(/\s+/)
+            .slice(-1)[0]
+            ?.toLowerCase(),
+        )
+        .filter(Boolean)
+        .join(",");
+
+    const keyFor = (name: FunctionName, args: string) =>
+      `${name}(${normalizeArgTypes(args)})`;
+
+    const routines = new Map<string, RoutineState>();
+
+    const roleList = (clause: string): Role[] =>
+      clause
+        .replace(/\bwith\s+grant\s+option\b/gi, "")
+        .split(",")
+        .map(normalizeIdentifier)
+        .filter((role): role is Role => roles.includes(role as Role));
 
     const sqlHistory = migrations.map(({ sql }) => sql).join("\n");
     const eventPattern =
-      /create\s+or\s+replace\s+function\s+public\.(consume_promotion_telemetry_limits|consume_promotion_telemetry_rate_limit)\s*\(|(grant|revoke)\s+(execute|all(?:\s+privileges)?)\s+on\s+(function\s+public\.(consume_promotion_telemetry_limits|consume_promotion_telemetry_rate_limit)\s*\([\s\S]*?\)|all\s+functions\s+in\s+schema\s+public)\s+(to|from)\s+([^;]+);/gi;
+      /create\s+or\s+replace\s+function\s+public\.(consume_promotion_telemetry_limits|consume_promotion_telemetry_rate_limit)\s*\(([^)]*)\)|drop\s+function\s+(?:if\s+exists\s+)?public\.(consume_promotion_telemetry_limits|consume_promotion_telemetry_rate_limit)\s*\(([^)]*)\)|(?:grant|revoke)\s+(?:execute|all(?:\s+privileges)?)\s+on\s+(?:function\s+public\.(consume_promotion_telemetry_limits|consume_promotion_telemetry_rate_limit)\s*\(([^)]*)\)|all\s+functions\s+in\s+schema\s+public)\s+(?:to|from)\s+([^;]+);/gi;
 
     for (const match of sqlHistory.matchAll(eventPattern)) {
-      const created = match[1]?.toLowerCase() as FunctionName | undefined;
-      if (created) {
-        if (!exists[created]) {
-          exists[created] = true;
-          privilegeState[created].public = true;
+      const statement = match[0].toLowerCase();
+
+      const createName = match[1]?.toLowerCase() as FunctionName | undefined;
+      if (createName) {
+        const key = keyFor(createName, match[2] ?? "");
+        const existing = routines.get(key);
+        if (existing) {
+          existing.exists = true;
+        } else {
+          routines.set(key, {
+            name: createName,
+            signature: key,
+            exists: true,
+            privileges: {
+              public: true,
+              anon: false,
+              authenticated: false,
+              service_role: false,
+            },
+          });
         }
         continue;
       }
 
-      const action = match[2]?.toLowerCase();
-      const target = match[4]?.toLowerCase() ?? "";
-      const directName = match[5]?.toLowerCase() as FunctionName | undefined;
-      const roleClause = (match[7] ?? "")
-        .toLowerCase()
-        .replace(/\bwith\s+grant\s+option\b/g, "");
-      const affectedRoles = roles.filter((role) =>
-        new RegExp(`(?:^|[,\\s])${role}(?:$|[,\\s])`, "i").test(
-          roleClause,
-        ),
-      );
-      const affectedFunctions = directName
-        ? [directName]
-        : functionNames.filter((name) => exists[name]);
-
-      for (const name of affectedFunctions) {
-        for (const role of affectedRoles) {
-          privilegeState[name][role] = action === "grant";
-        }
+      const dropName = match[3]?.toLowerCase() as FunctionName | undefined;
+      if (dropName) {
+        const key = keyFor(dropName, match[4] ?? "");
+        const routine = routines.get(key);
+        if (routine) routine.exists = false;
+        continue;
       }
 
-      expect(target).not.toContain("alter default privileges");
+      const directName = match[5]?.toLowerCase() as FunctionName | undefined;
+      const directArgs = match[6] ?? "";
+      const affectedRoles = roleList(match[7] ?? "");
+      const isGrant = statement.startsWith("grant");
+      const affected = directName
+        ? [routines.get(keyFor(directName, directArgs))].filter(
+            (routine): routine is RoutineState => Boolean(routine),
+          )
+        : [...routines.values()].filter((routine) => routine.exists);
+
+      for (const routine of affected) {
+        for (const role of affectedRoles) {
+          routine.privileges[role] = isGrant;
+        }
+      }
     }
 
-    for (const name of functionNames) {
-      expect(exists[name]).toBe(true);
-      expect(privilegeState[name]).toEqual({
+    const liveLimiterRoutines = [...routines.values()].filter(
+      (routine) => routine.exists && functionNames.includes(routine.name),
+    );
+
+    expect(
+      liveLimiterRoutines.map((routine) => routine.signature).sort(),
+    ).toEqual([
+      "consume_promotion_telemetry_rate_limit(integer,integer,integer)",
+      "consume_promotion_telemetry_limits(integer,integer,integer,integer)",
+    ]);
+
+    for (const routine of liveLimiterRoutines) {
+      expect(routine.privileges).toEqual({
         public: false,
         anon: false,
         authenticated: false,
         service_role: true,
       });
     }
-  });
 
   it("runs web-test for every forward migration change", () => {
     const workflow = readFileSync(
