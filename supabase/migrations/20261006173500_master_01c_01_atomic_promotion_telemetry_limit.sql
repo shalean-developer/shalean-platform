@@ -301,14 +301,30 @@ begin
 
   -- Old runtimes call this second with the client bucket. Delegate to the new
   -- combined limiter so client and global quotas are consumed atomically.
-  select *
-  into v_combined
-  from public.consume_promotion_telemetry_limits(
-    p_rate_key,
-    p_limit,
-    600,
-    p_window_seconds
-  );
+  -- Old runtimes cannot interpret the new 'busy' reason, so absorb brief
+  -- contention here with a tiny bounded retry during the rollout window.
+  for v_count in 0..3 loop
+    select *
+    into v_combined
+    from public.consume_promotion_telemetry_limits(
+      p_rate_key,
+      p_limit,
+      600,
+      p_window_seconds
+    );
+
+    exit when v_combined.reason is distinct from 'busy';
+
+    if v_count < 3 then
+      perform pg_sleep(
+        case v_count
+          when 0 then 0.005
+          when 1 then 0.015
+          else 0.030
+        end
+      );
+    end if;
+  end loop;
 
   if v_combined.reason = 'busy' then
     allowed := false;
