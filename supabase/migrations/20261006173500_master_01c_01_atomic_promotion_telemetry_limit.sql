@@ -66,8 +66,31 @@ begin
     return;
   end if;
 
+  -- Fast reject an already-saturated client before taking the advisory
+  -- lock. This keeps repeated rejected traffic from one source off the
+  -- serialized mutation path.
+  select bucket.window_started_at, bucket.request_count
+  into v_client_started, v_client_count
+  from public.promotion_telemetry_rate_limit_buckets as bucket
+  where bucket.rate_key = p_client_rate_key;
+
+  if found
+     and v_client_started > v_now - v_window
+     and v_client_count >= p_client_limit then
+    allowed := false;
+    reason := 'client';
+    retry_after_seconds := greatest(
+      1,
+      ceil(extract(epoch from ((v_client_started + v_window) - v_now)))::integer
+    );
+    client_request_count := v_client_count;
+    global_request_count := coalesce(v_global_count, 0);
+    return next;
+    return;
+  end if;
+
   -- Serialize the mutation boundary so the authoritative global recheck,
-  -- client saturation check, and both conditional increments are one atomic unit.
+  -- client recheck, and both conditional increments are one atomic unit.
   perform pg_advisory_xact_lock(
     hashtext('promotion_telemetry_rate_limit'),
     0
@@ -100,6 +123,10 @@ begin
   end if;
 
   -- Reject an already-saturated client without consuming global quota.
+  -- Refresh the client snapshot under the same lock before any mutation.
+  v_client_started := null;
+  v_client_count := null;
+
   select bucket.window_started_at, bucket.request_count
   into v_client_started, v_client_count
   from public.promotion_telemetry_rate_limit_buckets as bucket
