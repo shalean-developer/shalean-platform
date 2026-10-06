@@ -229,6 +229,8 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     const clientFastReject = atomicSql.indexOf(
       "fast reject an already-saturated client before taking the advisory",
     );
+    expect(atomicSql).not.toContain("perform pg_advisory_xact_lock");
+
     const lock = atomicSql.indexOf("pg_try_advisory_xact_lock");
     const lockedGlobalRecheck = atomicSql.indexOf(
       "saturation under the lock before touching any client bucket",
