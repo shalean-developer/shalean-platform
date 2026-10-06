@@ -196,7 +196,7 @@ export async function requireAnyAdminPermissionFromRequest(
   }
 
   const officeVerificationToken = requestCookie(request, OFFICE_VERIFICATION_COOKIE);
-  const sessionBinding = officeSessionBinding(user.last_sign_in_at);
+  const sessionBinding = officeSessionBinding(token);
   if (!verifyOfficeVerificationToken(officeVerificationToken, user.id, sessionBinding)) {
     return {
       ok: false,
