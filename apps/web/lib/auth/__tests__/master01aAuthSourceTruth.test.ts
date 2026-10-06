@@ -402,3 +402,86 @@ describe("MASTER-01A-05 post-logout cleanup resilience", () => {
     expect(signOutSource).toContain("if (error) throw new Error(error.message)");
   });
 });
+
+
+describe("MASTER-01A-06 protected customer auth redirect convergence", () => {
+  it("sends account-shell guests directly to canonical customer login", () => {
+    const guard = read("apps/web/components/auth/AuthGuard.tsx");
+
+    expect(guard).toContain("/auth/login?redirect=");
+    expect(guard).toContain("&intent=customer");
+    expect(guard).not.toContain("router, `/login?redirect=");
+    expect(guard).not.toContain("scheduleAppRouterReplace(router, `/login?redirect=");
+  });
+
+  it("preserves pathname and query through the account auth redirect", () => {
+    const guard = read("apps/web/components/auth/AuthGuard.tsx");
+
+    expect(guard).toContain("window.location.search");
+    expect(guard).toContain("const requested =");
+    expect(guard).toContain("encodeURIComponent(requested)");
+  });
+
+  it("avoids useSearchParams in the shared account guard", () => {
+    const guard = read("apps/web/components/auth/AuthGuard.tsx");
+
+    expect(guard).not.toContain("useSearchParams");
+  });
+});
+
+
+describe("MASTER-01A-06 active account role guard convergence", () => {
+  it("proves the live account layout uses AccountShell and the role guard", () => {
+    const layout = read("apps/web/app/(ui-redesign)/account/layout.tsx");
+    const shell = read("apps/web/src/features/account/AccountShell.tsx");
+
+    expect(layout).toContain("<AccountShell>");
+    expect(shell).toContain('useRoleRouteGuard({ requiredRole: "customer" })');
+  });
+
+  it("preserves pathname and query in the active unauthenticated customer branch", () => {
+    const guard = read("apps/web/lib/auth/useRoleRouteGuard.tsx");
+
+    expect(guard).toContain('state.status === "unauthenticated"');
+    expect(guard).toContain("window.location.search");
+    expect(guard).toContain("const requested =");
+    expect(guard).toContain('requiredRole === "customer"');
+    expect(guard).toContain("/auth/login?redirect=");
+    expect(guard).toContain("&intent=customer");
+  });
+
+  it("keeps non-customer role guards on their existing role-choice path", () => {
+    const guard = read("apps/web/lib/auth/useRoleRouteGuard.tsx");
+
+    expect(guard).toContain("scheduleAppRouterReplace(router, `/login?redirect=${next}`)");
+  });
+
+  it("does not use useSearchParams in the active shared role guard", () => {
+    const guard = read("apps/web/lib/auth/useRoleRouteGuard.tsx");
+
+    expect(guard).not.toContain("useSearchParams");
+  });
+});
+
+
+describe("MASTER-01A-06A account middleware redirect convergence", () => {
+  it("routes unauthenticated account requests directly to canonical customer login", () => {
+    const middleware = read("apps/web/lib/supabase/supabaseMiddleware.ts");
+    const accountIdx = middleware.indexOf('pathname.startsWith("/account") && !user');
+    const jobsIdx = middleware.indexOf('pathname.startsWith("/jobs") && !user', accountIdx);
+    const accountBlock = middleware.slice(accountIdx, jobsIdx);
+
+    expect(accountBlock).toContain('redirectUrl.pathname = "/auth/login"');
+    expect(accountBlock).toContain('redirectUrl.search = ""');
+    expect(accountBlock).toContain('redirectUrl.searchParams.set("redirect", pathname + request.nextUrl.search)');
+    expect(accountBlock).toContain('redirectUrl.searchParams.set("intent", "customer")');
+    expect(accountBlock).not.toContain('redirectUrl.pathname = "/login"');
+  });
+
+  it("leaves jobs and office middleware branches unchanged", () => {
+    const middleware = read("apps/web/lib/supabase/supabaseMiddleware.ts");
+
+    expect(middleware).toContain('if (pathname.startsWith("/jobs") && !user)');
+    expect(middleware).toContain('if (isOfficePortalPath(pathname) && !user)');
+  });
+});
