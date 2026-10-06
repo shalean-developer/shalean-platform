@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CleanerBankSearchCombobox } from "@/components/cleaner-profile/CleanerBankSearchCombobox";
 import { CleanerWorkSettingsCard } from "@/components/cleaner-dashboard/CleanerWorkSettingsCard";
-import { signOut } from "@/lib/auth/authClient";
+import { reportSignOutFailure, signOut } from "@/lib/auth/authClient";
 import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { accountHealthBadge, mapCleanerAccountHealthTier } from "@/lib/cleaner/mapCleanerAccountHealth";
@@ -201,6 +201,8 @@ export default function CleanerProfilePage() {
     try {
       await signOut();
       router.replace("/cleaner/login?redirect=%2Fcleaner%2Fdashboard");
+    } catch (e) {
+      reportSignOutFailure(e);
     } finally {
       setLogoutBusy(false);
     }
