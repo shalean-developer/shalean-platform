@@ -3,7 +3,7 @@ name: PR preview — pricing-test
 on:
   pull_request:
     branches:
-      - production
+      - preview-base/master-01b-01-staging
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
     inputs:
