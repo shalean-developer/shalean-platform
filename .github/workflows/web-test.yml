@@ -39,7 +39,7 @@ jobs:
           CHANGED="$(git diff --name-only "$BASE" "$HEAD" || true)"
           echo "Changed paths:"
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -Eq '^(apps/web/|packages/|supabase/migrations/20261006144500_master_01c_01_promotion_telemetry_rate_limit\.sql$|\.github/workflows/web-test\.yml)'; then
+          if echo "$CHANGED" | grep -Eq '^(apps/web/|packages/|supabase/migrations/20261006144500_master_01c_01_promotion_telemetry_rate_limit\.sql$|supabase/migrations/20261006173500_master_01c_01_atomic_promotion_telemetry_limit\.sql$|\.github/workflows/web-test\.yml)'; then
             echo "run_suite=true" >> "$GITHUB_OUTPUT"
             echo "Web/package paths changed — running vitest suite."
           else

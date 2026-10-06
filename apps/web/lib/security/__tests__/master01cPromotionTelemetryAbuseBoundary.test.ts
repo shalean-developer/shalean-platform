@@ -25,9 +25,15 @@ function adminWithRpc(
 }
 
 describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => {
-  it("consumes shared global and hashed-client buckets", async () => {
+  it("uses one atomic RPC for client and global limits", async () => {
     const { admin, rpc } = adminWithRpc(async () => ({
-      data: [{ allowed: true, retry_after_seconds: 0, request_count: 1 }],
+      data: [{
+        allowed: true,
+        reason: null,
+        retry_after_seconds: 0,
+        client_request_count: 1,
+        global_request_count: 1,
+      }],
       error: null,
     }));
 
@@ -35,24 +41,55 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
       checkPromotionTelemetryRateLimit(admin, request("203.0.113.10")),
     ).resolves.toEqual({ allowed: true });
 
-    expect(rpc).toHaveBeenCalledTimes(2);
-    expect(rpc.mock.calls[0]?.[0]).toBe("consume_promotion_telemetry_rate_limit");
-    expect(rpc.mock.calls[0]?.[1]).toMatchObject({
-      p_rate_key: "global",
-      p_limit: 600,
-      p_window_seconds: 60,
-    });
-
-    const clientKey = String(rpc.mock.calls[1]?.[1]?.p_rate_key ?? "");
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc.mock.calls[0]?.[0]).toBe("consume_promotion_telemetry_limits");
+    const args = rpc.mock.calls[0]?.[1] ?? {};
+    const clientKey = String(args.p_client_rate_key ?? "");
     expect(clientKey).toMatch(/^client:[0-9a-f]{64}$/);
     expect(clientKey).not.toContain("203.0.113.10");
-    expect(rpc.mock.calls[1]?.[1]).toMatchObject({
-      p_limit: 60,
+    expect(args).toMatchObject({
+      p_client_limit: 60,
+      p_global_limit: 600,
       p_window_seconds: 60,
     });
   });
 
-  it("fails closed if shared rate-limit state is unavailable", async () => {
+  it("retries transient lock contention outside the database", async () => {
+    let call = 0;
+    const { admin, rpc } = adminWithRpc(async () => {
+      call += 1;
+      if (call === 1) {
+        return {
+          data: [{
+            allowed: false,
+            reason: "busy",
+            retry_after_seconds: 1,
+            client_request_count: 0,
+            global_request_count: 0,
+          }],
+          error: null,
+        };
+      }
+      return {
+        data: [{
+          allowed: true,
+          reason: null,
+          retry_after_seconds: 0,
+          client_request_count: 1,
+          global_request_count: 1,
+        }],
+        error: null,
+      };
+    });
+
+    await expect(
+      checkPromotionTelemetryRateLimit(admin, request("203.0.113.10")),
+    ).resolves.toEqual({ allowed: true });
+
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it("fails closed if the atomic limiter RPC is unavailable", async () => {
     const { admin, rpc } = adminWithRpc(async () => ({
       data: null,
       error: { message: "db unavailable" },
@@ -68,9 +105,37 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     expect(rpc).toHaveBeenCalledTimes(1);
   });
 
-  it("stops at the global bucket when the shared global ceiling is exhausted", async () => {
+  it("returns client saturation from the atomic RPC", async () => {
     const { admin, rpc } = adminWithRpc(async () => ({
-      data: [{ allowed: false, retry_after_seconds: 17, request_count: 601 }],
+      data: [{
+        allowed: false,
+        reason: "client",
+        retry_after_seconds: 11,
+        client_request_count: 60,
+        global_request_count: 599,
+      }],
+      error: null,
+    }));
+
+    await expect(
+      checkPromotionTelemetryRateLimit(admin, request("203.0.113.10")),
+    ).resolves.toEqual({
+      allowed: false,
+      retryAfterSeconds: 11,
+      reason: "client",
+    });
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns global saturation from the atomic RPC", async () => {
+    const { admin, rpc } = adminWithRpc(async () => ({
+      data: [{
+        allowed: false,
+        reason: "global",
+        retry_after_seconds: 17,
+        client_request_count: null,
+        global_request_count: 600,
+      }],
       error: null,
     }));
 
@@ -109,39 +174,78 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     expect(postSource).toContain("promotionTelemetryRateLimitResponse(limit)");
   });
 
-  it("uses an atomic service-role-only database rate-limit contract", () => {
-    const sql = readFileSync(
+  it("uses one atomic service-role-only database limiter contract", () => {
+    const originalSql = readFileSync(
       resolve(
         root,
         "../../supabase/migrations/20261006144500_master_01c_01_promotion_telemetry_rate_limit.sql",
       ),
       "utf8",
     ).toLowerCase();
+    const atomicSql = readFileSync(
+      resolve(
+        root,
+        "../../supabase/migrations/20261006173500_master_01c_01_atomic_promotion_telemetry_limit.sql",
+      ),
+      "utf8",
+    ).toLowerCase();
 
-    expect(sql).toContain("promotion_telemetry_rate_limit_buckets");
-    expect(sql).toContain(
-      "create index if not exists promotion_telemetry_rate_limit_client_updated_idx",
+    expect(originalSql).toContain("promotion_telemetry_rate_limit_buckets");
+    expect(atomicSql).toContain("consume_promotion_telemetry_limits");
+    expect(atomicSql).toContain("pg_try_advisory_xact_lock");
+    expect(atomicSql).not.toContain("perform pg_advisory_xact_lock");
+    expect(atomicSql).toContain("fast reject already-saturated global traffic before taking the advisory");
+    expect(atomicSql).toContain("recheck global");
+    expect(atomicSql).toContain("saturation under the lock before touching any client bucket");
+
+    const globalFastReject = atomicSql.indexOf(
+      "fast reject already-saturated global traffic before taking the advisory",
     );
-    expect(sql).toContain("on public.promotion_telemetry_rate_limit_buckets (updated_at)");
-    expect(sql).toContain("where rate_key like 'client:%'");
-    expect(sql).toContain(
-      "insert into public.promotion_telemetry_rate_limit_buckets as bucket",
+    const clientFastReject = atomicSql.indexOf(
+      "fast reject an already-saturated client before taking the advisory",
     );
-    expect(sql).toContain("on conflict (rate_key) do nothing");
-    expect(sql).toContain(
-      "returning bucket.window_started_at, bucket.request_count",
+    const lock = atomicSql.indexOf("pg_try_advisory_xact_lock");
+    const lockedGlobalRecheck = atomicSql.indexOf(
+      "saturation under the lock before touching any client bucket",
     );
-    expect(sql).toContain("bucket.request_count < p_limit");
-    expect(sql).toContain("and v_count >= p_limit then");
-    expect(sql).toContain("fast reject path");
-    expect(sql).not.toContain("on conflict (rate_key) do update");
-    expect(sql).toContain("consume_promotion_telemetry_rate_limit");
-    expect(sql).toContain(
-      "revoke all on function public.consume_promotion_telemetry_rate_limit",
+    const lockedClientRecheck = atomicSql.indexOf(
+      "refresh the client snapshot under the same lock before any mutation",
     );
-    expect(sql).toContain("from public, anon, authenticated");
-    expect(sql).toContain("grant execute on function public.consume_promotion_telemetry_rate_limit");
-    expect(sql).toContain("to service_role");
+
+    expect(globalFastReject).toBeGreaterThanOrEqual(0);
+    expect(clientFastReject).toBeGreaterThan(globalFastReject);
+    expect(lock).toBeGreaterThan(clientFastReject);
+    expect(lockedGlobalRecheck).toBeGreaterThan(lock);
+    expect(lockedClientRecheck).toBeGreaterThan(lockedGlobalRecheck);
+    expect(atomicSql).toContain("both buckets have capacity under the same transaction lock");
+    expect(atomicSql).toContain(
+      "revoke all on function public.consume_promotion_telemetry_limits",
+    );
+    expect(atomicSql).toContain("from public, anon, authenticated");
+    expect(atomicSql).toContain(
+      "grant execute on function public.consume_promotion_telemetry_limits",
+    );
+    expect(atomicSql).toContain("to service_role");
+    expect(atomicSql).toContain(
+      "create or replace function public.consume_promotion_telemetry_rate_limit",
+    );
+    expect(atomicSql).toContain(
+      "rolling-deploy compatibility: old runtimes call the legacy rpc twice",
+    );
+    expect(atomicSql).toContain(
+      "making the global call read-only and delegating the client call to the new",
+    );
+    expect(atomicSql).toContain(
+      "client rejection cannot consume global quota",
+    );
+    expect(atomicSql).toContain(
+      "from public.consume_promotion_telemetry_limits(",
+    );
+    expect(atomicSql).toContain(
+      "old runtimes cannot interpret the new 'busy' reason",
+    );
+    expect(atomicSql).toContain("for v_count in 0..3 loop");
+    expect(atomicSql).toContain("perform pg_sleep(");
   });
 
   it("runs web-test when the governed telemetry migration changes", () => {
@@ -153,6 +257,9 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     expect(workflow).toContain(
       "supabase/migrations/20261006144500_master_01c_01_promotion_telemetry_rate_limit\\.sql$",
     );
+    expect(workflow).toContain(
+      "supabase/migrations/20261006173500_master_01c_01_atomic_promotion_telemetry_limit\\.sql$",
+    );
   });
 
   it("does not rely on process-local maps for the production boundary", () => {
@@ -162,6 +269,9 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     );
     expect(source).not.toContain("new Map");
     expect(source).not.toContain("sweepExpiredBuckets");
-    expect(source).toContain('admin.rpc("consume_promotion_telemetry_rate_limit"');
+    expect(source).toContain('admin.rpc("consume_promotion_telemetry_limits"');
+    expect(source).toContain('typed.reason === "busy"');
+    expect(source).toContain("BUSY_RETRY_DELAYS_MS");
+    expect(source).not.toContain('admin.from("promotion_telemetry_rate_limit_buckets")');
   });
 });

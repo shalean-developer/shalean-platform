@@ -13,13 +13,15 @@ export type PromotionTelemetryRateLimitDecision =
   | {
       allowed: false;
       retryAfterSeconds: number;
-      reason: "global" | "client" | "unavailable";
+      reason: "global" | "client" | "busy" | "unavailable";
     };
 
-type RateLimitRow = {
+type CombinedRateLimitRow = {
   allowed: boolean;
+  reason: "global" | "client" | "busy" | null;
   retry_after_seconds: number;
-  request_count: number;
+  client_request_count: number | null;
+  global_request_count: number | null;
 };
 
 function clientRateKey(request: Request): string {
@@ -28,66 +30,70 @@ function clientRateKey(request: Request): string {
   return `client:${hash}`;
 }
 
-async function consume(
-  admin: SupabaseClient,
-  key: string,
-  limit: number,
-): Promise<RateLimitRow | null> {
-  const { data, error } = await admin.rpc("consume_promotion_telemetry_rate_limit", {
-    p_rate_key: key,
-    p_limit: limit,
-    p_window_seconds: WINDOW_SECONDS,
-  });
-  if (error) return null;
+const BUSY_RETRY_DELAYS_MS = [5, 15, 30] as const;
 
-  const row = Array.isArray(data) ? data[0] : data;
-  if (!row || typeof row !== "object") return null;
-
-  const typed = row as Partial<RateLimitRow>;
-  if (
-    typeof typed.allowed !== "boolean" ||
-    typeof typed.retry_after_seconds !== "number" ||
-    typeof typed.request_count !== "number"
-  ) {
-    return null;
-  }
-
-  return {
-    allowed: typed.allowed,
-    retry_after_seconds: typed.retry_after_seconds,
-    request_count: typed.request_count,
-  };
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function checkPromotionTelemetryRateLimit(
   admin: SupabaseClient,
   request: Request,
 ): Promise<PromotionTelemetryRateLimitDecision> {
-  const global = await consume(admin, "global", GLOBAL_LIMIT);
-  if (!global) {
-    return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
-  }
-  if (!global.allowed) {
+  const args = {
+    p_client_rate_key: clientRateKey(request),
+    p_client_limit: CLIENT_LIMIT,
+    p_global_limit: GLOBAL_LIMIT,
+    p_window_seconds: WINDOW_SECONDS,
+  };
+
+  for (let attempt = 0; attempt <= BUSY_RETRY_DELAYS_MS.length; attempt += 1) {
+    const { data, error } = await admin.rpc("consume_promotion_telemetry_limits", args);
+
+    if (error) {
+      return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row || typeof row !== "object") {
+      return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
+    }
+
+    const typed = row as Partial<CombinedRateLimitRow>;
+    if (
+      typeof typed.allowed !== "boolean" ||
+      typeof typed.retry_after_seconds !== "number" ||
+      (typed.reason !== null &&
+        typed.reason !== "global" &&
+        typed.reason !== "client" &&
+        typed.reason !== "busy")
+    ) {
+      return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
+    }
+
+    if (typed.allowed) return { allowed: true };
+
+    if (typed.reason === "busy") {
+      const delay = BUSY_RETRY_DELAYS_MS[attempt];
+      if (delay !== undefined) {
+        await wait(delay);
+        continue;
+      }
+      return { allowed: false, retryAfterSeconds: 1, reason: "busy" };
+    }
+
+    if (typed.reason !== "global" && typed.reason !== "client") {
+      return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
+    }
+
     return {
       allowed: false,
-      retryAfterSeconds: Math.max(1, global.retry_after_seconds),
-      reason: "global",
+      retryAfterSeconds: Math.max(1, typed.retry_after_seconds),
+      reason: typed.reason,
     };
   }
 
-  const client = await consume(admin, clientRateKey(request), CLIENT_LIMIT);
-  if (!client) {
-    return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
-  }
-  if (!client.allowed) {
-    return {
-      allowed: false,
-      retryAfterSeconds: Math.max(1, client.retry_after_seconds),
-      reason: "client",
-    };
-  }
-
-  return { allowed: true };
+  return { allowed: false, retryAfterSeconds: 1, reason: "busy" };
 }
 
 export function promotionTelemetryRateLimitResponse(
@@ -98,7 +104,9 @@ export function promotionTelemetryRateLimitResponse(
       error:
         decision.reason === "unavailable"
           ? "Telemetry is temporarily unavailable."
-          : "Too many requests. Please try again shortly.",
+          : decision.reason === "busy"
+            ? "Telemetry is busy. Please try again shortly."
+            : "Too many requests. Please try again shortly.",
       retryAfterSeconds: decision.retryAfterSeconds,
     }),
     {
