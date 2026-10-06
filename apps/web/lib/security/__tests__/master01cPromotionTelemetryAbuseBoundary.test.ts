@@ -162,21 +162,25 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     expect(atomicSql).toContain("recheck global");
     expect(atomicSql).toContain("saturation under the lock before touching any client bucket");
 
-    const fastReject = atomicSql.indexOf(
+    const globalFastReject = atomicSql.indexOf(
       "fast reject already-saturated global traffic before taking the advisory",
     );
+    const clientFastReject = atomicSql.indexOf(
+      "fast reject an already-saturated client before taking the advisory",
+    );
     const lock = atomicSql.indexOf("pg_advisory_xact_lock");
-    const lockedRecheck = atomicSql.indexOf(
+    const lockedGlobalRecheck = atomicSql.indexOf(
       "saturation under the lock before touching any client bucket",
     );
-    const clientCheck = atomicSql.indexOf(
-      "reject an already-saturated client without consuming global quota",
+    const lockedClientRecheck = atomicSql.indexOf(
+      "refresh the client snapshot under the same lock before any mutation",
     );
 
-    expect(fastReject).toBeGreaterThanOrEqual(0);
-    expect(lock).toBeGreaterThan(fastReject);
-    expect(lockedRecheck).toBeGreaterThan(lock);
-    expect(clientCheck).toBeGreaterThan(lockedRecheck);
+    expect(globalFastReject).toBeGreaterThanOrEqual(0);
+    expect(clientFastReject).toBeGreaterThan(globalFastReject);
+    expect(lock).toBeGreaterThan(clientFastReject);
+    expect(lockedGlobalRecheck).toBeGreaterThan(lock);
+    expect(lockedClientRecheck).toBeGreaterThan(lockedGlobalRecheck);
     expect(atomicSql).toContain("both buckets have capacity under the same transaction lock");
     expect(atomicSql).toContain(
       "revoke all on function public.consume_promotion_telemetry_limits",
