@@ -78,6 +78,21 @@ describe("MASTER-01B-01 production test-route isolation", () => {
     ).toBe(true);
   });
 
+  it("blocks self-hosted production builds when governed non-production identity is absent", () => {
+    expect(
+      isProductionTestRouteBlocked("http://127.0.0.1:3000/api/test", {
+        NODE_ENV: "production",
+      }),
+    ).toBe(true);
+
+    expect(
+      isProductionTestRouteBlocked("http://localhost:3000/api/test", {
+        NODE_ENV: "production",
+        SHALEAN_APP_ENV: "local",
+      }),
+    ).toBe(true);
+  });
+
   it("blocks preview, malformed local origins, and staging config drift", () => {
     expect(
       isProductionTestRouteBlocked("https://preview.example.com/api/test", {
