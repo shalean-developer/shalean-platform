@@ -271,3 +271,134 @@ describe("MASTER-01A-04C complete-profile session timeout", () => {
     expect(page).toContain('window.location.replace("/auth/login")');
   });
 });
+
+
+describe("MASTER-01A-05 logout/session invalidation source of truth", () => {
+  it("confirms Supabase sign-out before clearing local auth state", () => {
+    const authClient = read("apps/web/lib/auth/authClient.ts");
+    const start = authClient.indexOf("export async function signOut");
+    const end = authClient.indexOf("export type MfaStatus", start);
+    const signOutSource = authClient.slice(start, end);
+
+    const remoteIdx = signOutSource.indexOf("await sb.auth.signOut()");
+    const errorIdx = signOutSource.indexOf("if (error) throw");
+    const sessionCacheIdx = signOutSource.indexOf("clearSupabaseSessionCache()");
+    const intentIdx = signOutSource.indexOf("clearAuthIntent()");
+    const roleIdx = signOutSource.indexOf("clearCachedUserRole()");
+    const cleanerIdx = signOutSource.indexOf('localStorage.removeItem("cleaner_id")');
+
+    expect(remoteIdx).toBeGreaterThanOrEqual(0);
+    expect(errorIdx).toBeGreaterThan(remoteIdx);
+    expect(sessionCacheIdx).toBeGreaterThan(errorIdx);
+    expect(intentIdx).toBeGreaterThan(errorIdx);
+    expect(roleIdx).toBeGreaterThan(errorIdx);
+    expect(cleanerIdx).toBeGreaterThan(errorIdx);
+  });
+
+  it("fails closed when browser auth is unavailable or Supabase sign-out fails", () => {
+    const authClient = read("apps/web/lib/auth/authClient.ts");
+    const start = authClient.indexOf("export async function signOut");
+    const end = authClient.indexOf("export type MfaStatus", start);
+    const signOutSource = authClient.slice(start, end);
+
+    expect(signOutSource).toContain('throw new Error("Supabase is not configured.")');
+    expect(signOutSource).toContain("if (error) throw new Error(error.message)");
+    expect(signOutSource).not.toContain("return { error:");
+  });
+
+  it("does not clear cleaner identity in callers before shared sign-out succeeds", () => {
+    for (const path of [
+      "apps/web/app/cleaner/profile/page.tsx",
+      "apps/web/app/(ui-redesign)/jobs/profile/page.tsx",
+      "apps/web/components/nav/SiteTopBarAccount.tsx",
+    ]) {
+      const source = read(path);
+      const signOutIdx = source.indexOf("signOut()");
+      const cleanerClearIdx = source.indexOf('removeItem("cleaner_id")');
+
+      expect(signOutIdx).toBeGreaterThanOrEqual(0);
+      expect(cleanerClearIdx === -1 || cleanerClearIdx > signOutIdx).toBe(true);
+    }
+  });
+});
+
+
+describe("MASTER-01A-05 logout caller rejection handling", () => {
+  it("handles shared sign-out rejection at every web logout entry point", () => {
+    const callers = [
+      "apps/web/app/complete-profile/page.tsx",
+      "apps/web/components/account/AccountRouteLayout.tsx",
+      "apps/web/components/nav/HeaderLoginButton.tsx",
+      "apps/web/src/features/account/AccountNav.tsx",
+      "apps/web/components/nav/SiteTopBarAccount.tsx",
+      "apps/web/app/cleaner/profile/page.tsx",
+      "apps/web/src/features/office/OfficeShell.tsx",
+      "apps/web/components/dashboard/dashboard-shell.tsx",
+      "apps/web/app/(ui-redesign)/jobs/profile/page.tsx",
+      "apps/web/components/cleaner-dashboard/CleanerRouteShell.tsx",
+      "apps/web/components/booking/checkout/BookingCheckoutHeader.tsx",
+    ];
+
+    for (const path of callers) {
+      const source = read(path);
+      expect(source).toContain("signOut");
+      expect(source).toContain("reportSignOutFailure");
+    }
+  });
+
+  it("restores busy state when account or cleaner logout fails", () => {
+    const accountNav = read("apps/web/src/features/account/AccountNav.tsx");
+    const cleanerProfile = read("apps/web/app/cleaner/profile/page.tsx");
+
+    expect(accountNav).toContain("finally {");
+    expect(accountNav).toContain("setBusy(false)");
+    expect(cleanerProfile).toContain("finally {");
+    expect(cleanerProfile).toContain("setLogoutBusy(false)");
+  });
+
+  it("keeps navigation after successful sign-out, not in the failure branch", () => {
+    for (const path of [
+      "apps/web/components/account/AccountRouteLayout.tsx",
+      "apps/web/src/features/office/OfficeShell.tsx",
+      "apps/web/app/(ui-redesign)/jobs/profile/page.tsx",
+      "apps/web/components/cleaner-dashboard/CleanerRouteShell.tsx",
+    ]) {
+      const source = read(path);
+      const signOutIdx = source.indexOf("await signOut()");
+      const failureIdx = source.indexOf("reportSignOutFailure", signOutIdx);
+      expect(signOutIdx).toBeGreaterThanOrEqual(0);
+      expect(failureIdx).toBeGreaterThan(signOutIdx);
+    }
+  });
+});
+
+
+describe("MASTER-01A-05 post-logout cleanup resilience", () => {
+  it("treats local cleanup as best-effort after remote sign-out succeeds", () => {
+    const authClient = read("apps/web/lib/auth/authClient.ts");
+    const start = authClient.indexOf("export async function signOut");
+    const end = authClient.indexOf("export type MfaStatus", start);
+    const signOutSource = authClient.slice(start, end);
+
+    const remoteIdx = signOutSource.indexOf("await sb.auth.signOut()");
+    const cleanupIdx = signOutSource.indexOf("clearSupabaseSessionCache()");
+    const localStorageIdx = signOutSource.indexOf('localStorage.removeItem("cleaner_id")');
+
+    expect(remoteIdx).toBeGreaterThanOrEqual(0);
+    expect(cleanupIdx).toBeGreaterThan(remoteIdx);
+    expect(localStorageIdx).toBeGreaterThan(remoteIdx);
+    expect(signOutSource).toContain("best effort after remote sign-out succeeded");
+    expect(signOutSource).toContain("try {");
+    expect(signOutSource).toContain("catch {");
+  });
+
+  it("only rejects for missing Supabase or actual Supabase sign-out failure", () => {
+    const authClient = read("apps/web/lib/auth/authClient.ts");
+    const start = authClient.indexOf("export async function signOut");
+    const end = authClient.indexOf("export type MfaStatus", start);
+    const signOutSource = authClient.slice(start, end);
+
+    expect(signOutSource).toContain('throw new Error("Supabase is not configured.")');
+    expect(signOutSource).toContain("if (error) throw new Error(error.message)");
+  });
+});
