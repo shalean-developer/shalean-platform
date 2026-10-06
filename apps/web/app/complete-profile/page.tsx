@@ -12,6 +12,16 @@ type RepairResponse = {
 };
 
 const PROFILE_REPAIR_TIMEOUT_MS = 8_000;
+const PROFILE_SESSION_TIMEOUT_MS = 8_000;
+
+async function getBoundedProfileSession() {
+  return await Promise.race([
+    getSupabaseSession(),
+    new Promise<null>((resolve) => {
+      window.setTimeout(() => resolve(null), PROFILE_SESSION_TIMEOUT_MS);
+    }),
+  ]);
+}
 
 export default function CompleteProfilePage() {
   const [email, setEmail] = useState<string | null>(null);
@@ -29,7 +39,7 @@ export default function CompleteProfilePage() {
     let active = true;
 
     void (async () => {
-      const session = await getSupabaseSession();
+      const session = await getBoundedProfileSession();
       if (!active) return;
 
       if (!session?.access_token) {
