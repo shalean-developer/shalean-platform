@@ -54,6 +54,41 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     });
   });
 
+  it("retries transient lock contention outside the database", async () => {
+    let call = 0;
+    const { admin, rpc } = adminWithRpc(async () => {
+      call += 1;
+      if (call === 1) {
+        return {
+          data: [{
+            allowed: false,
+            reason: "busy",
+            retry_after_seconds: 1,
+            client_request_count: 0,
+            global_request_count: 0,
+          }],
+          error: null,
+        };
+      }
+      return {
+        data: [{
+          allowed: true,
+          reason: null,
+          retry_after_seconds: 0,
+          client_request_count: 1,
+          global_request_count: 1,
+        }],
+        error: null,
+      };
+    });
+
+    await expect(
+      checkPromotionTelemetryRateLimit(admin, request("203.0.113.10")),
+    ).resolves.toEqual({ allowed: true });
+
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
   it("fails closed if the atomic limiter RPC is unavailable", async () => {
     const { admin, rpc } = adminWithRpc(async () => ({
       data: null,
@@ -191,6 +226,13 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
       "grant execute on function public.consume_promotion_telemetry_limits",
     );
     expect(atomicSql).toContain("to service_role");
+    expect(atomicSql).toContain(
+      "create or replace function public.consume_promotion_telemetry_rate_limit",
+    );
+    expect(atomicSql).toContain(
+      "rolling-deploy compatibility: legacy runtimes still call the original",
+    );
+    expect(atomicSql).toContain("coordinate with the combined rpc without queueing old runtime requests");
   });
 
   it("runs web-test when the governed telemetry migration changes", () => {
@@ -215,6 +257,8 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     expect(source).not.toContain("new Map");
     expect(source).not.toContain("sweepExpiredBuckets");
     expect(source).toContain('admin.rpc("consume_promotion_telemetry_limits"');
+    expect(source).toContain('typed.reason === "busy"');
+    expect(source).toContain("BUSY_RETRY_DELAYS_MS");
     expect(source).not.toContain('admin.from("promotion_telemetry_rate_limit_buckets")');
   });
 });
