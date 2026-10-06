@@ -30,6 +30,13 @@ const postAuthResolver = fs.readFileSync(
   path.resolve(process.cwd(), "lib/auth/resolvePostAuthDestination.ts"),
   "utf8",
 );
+const sessionBindingMigration = fs.readFileSync(
+  path.resolve(
+    process.cwd(),
+    "../../supabase/migrations/20261006103000_master_01a_07_office_verification_session_binding.sql",
+  ),
+  "utf8",
+);
 
 describe("P0-04E privileged Office email verification flow contract", () => {
   it("routes only authoritatively resolved admin Office logins into verification", () => {
@@ -54,7 +61,9 @@ describe("P0-04E privileged Office email verification flow contract", () => {
     expect(requestRoute).toContain("OFFICE_CODE_RESEND_COOLDOWN_MS");
     expect(requestRoute).toContain("status: 429");
     expect(requestRoute).toContain('"Retry-After"');
-    expect(requestRoute).toContain("hashOfficeEmailCode(user.id, challengeId, code)");
+    expect(requestRoute).toContain("officeSessionBinding(user.last_sign_in_at)");
+    expect(requestRoute).toContain("hashOfficeEmailCode(user.id, challengeId, sessionBinding, code)");
+    expect(requestRoute).toContain("session_binding: sessionBinding");
   });
 
   it("guards seed recipients before calling the email provider", () => {
@@ -84,11 +93,19 @@ describe("P0-04E privileged Office email verification flow contract", () => {
     expect(verifyRoute).toContain("Another verification attempt was processed. Try again.");
   });
 
-  it("binds the verification cookie to the current Supabase sign-in session", () => {
+  it("binds both the email challenge and verification cookie to the current Supabase sign-in session", () => {
     expect(verificationHelper).toContain("officeSessionBinding(lastSignInAt");
+    expect(verificationHelper).toContain("office-code:v2:");
     expect(verificationHelper).toContain("payload.sid === expectedSessionBinding");
+    expect(requestRoute).toContain("officeSessionBinding(user.last_sign_in_at)");
+    expect(requestRoute).toContain('eq("session_binding", sessionBinding)');
     expect(verifyRoute).toContain("officeSessionBinding(user.last_sign_in_at)");
+    expect(verifyRoute).toContain('eq("session_binding", sessionBinding)');
+    expect(verifyRoute).toContain("verifyOfficeEmailCodeHash(");
+    expect(verifyRoute).toContain("sessionBinding,");
     expect(verifyRoute).toContain("createOfficeVerificationToken(user.id, sessionBinding)");
+    expect(sessionBindingMigration).toContain("add column if not exists session_binding text null");
+    expect(sessionBindingMigration).toContain("idx_office_email_verification_user_session_sent");
   });
 
   it("issues the signed Office verification cookie only after successful code verification", () => {
