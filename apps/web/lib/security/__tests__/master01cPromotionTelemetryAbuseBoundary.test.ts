@@ -120,6 +120,11 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
 
     expect(sql).toContain("promotion_telemetry_rate_limit_buckets");
     expect(sql).toContain(
+      "create index if not exists promotion_telemetry_rate_limit_client_updated_idx",
+    );
+    expect(sql).toContain("on public.promotion_telemetry_rate_limit_buckets (updated_at)");
+    expect(sql).toContain("where rate_key like 'client:%'");
+    expect(sql).toContain(
       "insert into public.promotion_telemetry_rate_limit_buckets as bucket",
     );
     expect(sql).toContain("on conflict (rate_key) do nothing");
