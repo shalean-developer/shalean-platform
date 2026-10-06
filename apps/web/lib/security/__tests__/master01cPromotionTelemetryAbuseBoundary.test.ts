@@ -241,6 +241,11 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     expect(atomicSql).toContain(
       "from public.consume_promotion_telemetry_limits(",
     );
+    expect(atomicSql).toContain(
+      "old runtimes cannot interpret the new 'busy' reason",
+    );
+    expect(atomicSql).toContain("for v_count in 0..3 loop");
+    expect(atomicSql).toContain("perform pg_sleep(");
   });
 
   it("runs web-test when the governed telemetry migration changes", () => {
