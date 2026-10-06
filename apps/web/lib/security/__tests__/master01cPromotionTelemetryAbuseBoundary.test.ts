@@ -279,6 +279,12 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
       "consume_promotion_telemetry_rate_limit",
       "promotion_telemetry_rate_limit_buckets",
     ];
+    const sensitivePrivilegePatterns = [
+      /\b(?:grant|revoke)\b[\s\S]*?\bon\s+all\s+functions\s+in\s+schema\s+public\b/i,
+      /\balter\s+default\s+privileges\b[\s\S]*?\bfunctions\b/i,
+      /\bgrant\s+["a-z0-9_]+["]?\s+to\s+(?:"?(?:anon|authenticated|service_role)"?)\b/i,
+      /\brevoke\s+["a-z0-9_]+["]?\s+from\s+(?:"?(?:anon|authenticated|service_role)"?)\b/i,
+    ];
 
     const laterTouches = migrationFiles
       .slice(atomicIndex + 1)
@@ -286,7 +292,11 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
         name,
         sql: readFileSync(resolve(migrationsDir, name), "utf8").toLowerCase(),
       }))
-      .filter(({ sql }) => protectedTerms.some((term) => sql.includes(term)))
+      .filter(
+        ({ sql }) =>
+          protectedTerms.some((term) => sql.includes(term)) ||
+          sensitivePrivilegePatterns.some((pattern) => pattern.test(sql)),
+      )
       .map(({ name }) => name);
 
     expect(laterTouches).toEqual([]);
