@@ -27,7 +27,7 @@ describe("P0-04E mandatory privileged Office email verification contract", () =>
     expect(rbacIndex).toBeGreaterThan(-1);
     expect(verificationIndex).toBeLessThan(rbacIndex);
     expect(permissionGate).toContain('code: "office_email_verification_required"');
-    expect(permissionGate).toContain("officeSessionBinding(user.last_sign_in_at)");
+    expect(permissionGate).toContain("officeSessionBinding(token)");
   });
 
   it("verifies the Supabase bearer session before trusting the Office verification cookie", () => {
@@ -45,6 +45,9 @@ describe("P0-04E mandatory privileged Office email verification contract", () =>
     expect(sessionBoundary).toContain("OFFICE_VERIFICATION_COOKIE");
     expect(sessionBoundary).toContain("verifyOfficeVerificationToken");
     expect(sessionBoundary).toContain("officeSessionBinding");
+    expect(sessionBoundary).toContain("browserAccessToken");
+    expect(sessionBoundary).toContain("supabase.auth.getSession()");
+    expect(sessionBoundary).toContain("officeSessionBinding(token)");
     expect(sessionBoundary).toContain('code: "office_email_verification_required"');
   });
 
@@ -64,7 +67,8 @@ describe("P0-04E mandatory privileged Office email verification contract", () =>
     expect(verificationHelper).toContain("OFFICE_VERIFICATION_TTL_MS = 8 * 60 * 60 * 1000");
     expect(verificationHelper).toContain("payload.uid === expectedUserId");
     expect(verificationHelper).toContain("payload.sid === expectedSessionBinding");
-    expect(verificationHelper).toContain("officeSessionBinding(lastSignInAt");
+    expect(verificationHelper).toContain('claims.session_id === "string"');
+    expect(verificationHelper).toContain("office-auth-session:v2:");
     expect(verificationHelper).toContain("payload.exp > now");
     expect(verificationHelper).toContain("httpOnly: true");
     expect(verificationHelper).toContain('sameSite: "lax"');
