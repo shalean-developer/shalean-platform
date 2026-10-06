@@ -199,9 +199,6 @@ export default function CleanerProfilePage() {
   const onLogout = async () => {
     setLogoutBusy(true);
     try {
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem("cleaner_id");
-      }
       await signOut();
       router.replace("/cleaner/login?redirect=%2Fcleaner%2Fdashboard");
     } finally {
