@@ -77,7 +77,6 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
 
   async function handleLogout() {
     if (user) await signOut();
-    if (typeof window !== "undefined") localStorage.removeItem("cleaner_id");
     router.push("/");
     router.refresh();
   }
