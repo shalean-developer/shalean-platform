@@ -43,14 +43,42 @@ begin
 
   v_window := make_interval(secs => p_window_seconds);
 
-  -- Serialize this telemetry limiter boundary so the global saturation check,
+  -- Fast reject already-saturated global traffic before taking the advisory
+  -- lock. This path is read-only and prevents rejected attack traffic from
+  -- queueing database connections behind the serialized mutation boundary.
+  select bucket.window_started_at, bucket.request_count
+  into v_global_started, v_global_count
+  from public.promotion_telemetry_rate_limit_buckets as bucket
+  where bucket.rate_key = 'global';
+
+  if found
+     and v_global_started > v_now - v_window
+     and v_global_count >= p_global_limit then
+    allowed := false;
+    reason := 'global';
+    retry_after_seconds := greatest(
+      1,
+      ceil(extract(epoch from ((v_global_started + v_window) - v_now)))::integer
+    );
+    client_request_count := null;
+    global_request_count := v_global_count;
+    return next;
+    return;
+  end if;
+
+  -- Serialize the mutation boundary so the authoritative global recheck,
   -- client saturation check, and both conditional increments are one atomic unit.
   perform pg_advisory_xact_lock(
     hashtext('promotion_telemetry_rate_limit'),
     0
   );
 
-  -- Reject globally saturated traffic before touching any client bucket.
+  -- The fast precheck is only an optimization. Refresh time and recheck global
+  -- saturation under the lock before touching any client bucket.
+  v_now := clock_timestamp();
+  v_global_started := null;
+  v_global_count := null;
+
   select bucket.window_started_at, bucket.request_count
   into v_global_started, v_global_count
   from public.promotion_telemetry_rate_limit_buckets as bucket
