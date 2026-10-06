@@ -70,7 +70,7 @@ From repo root (no `cd`):
 npm run test:e2e:revenue --prefix apps/web
 ```
 
-On **production**, the server must also have `ENABLE_DISPATCH_LOAD_TEST=true` or the load-test route returns 404.
+The load-test route is intentionally unavailable on **production** and always returns 404 there. Run this smoke suite only against local, staging, or preview environments.
 
 **cmd.exe:**
 
