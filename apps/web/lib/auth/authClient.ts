@@ -113,11 +113,27 @@ export async function signOut(): Promise<void> {
   const { error } = await sb.auth.signOut();
   if (error) throw new Error(error.message);
 
-  clearSupabaseSessionCache();
-  clearAuthIntent();
-  clearCachedUserRole();
+  try {
+    clearSupabaseSessionCache();
+  } catch {
+    /** best effort after remote sign-out succeeded */
+  }
+  try {
+    clearAuthIntent();
+  } catch {
+    /** best effort after remote sign-out succeeded */
+  }
+  try {
+    clearCachedUserRole();
+  } catch {
+    /** best effort after remote sign-out succeeded */
+  }
   if (typeof window !== "undefined") {
-    window.localStorage.removeItem("cleaner_id");
+    try {
+      window.localStorage.removeItem("cleaner_id");
+    } catch {
+      /** best effort after remote sign-out succeeded */
+    }
   }
 }
 
