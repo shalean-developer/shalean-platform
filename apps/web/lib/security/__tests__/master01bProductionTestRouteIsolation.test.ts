@@ -53,7 +53,7 @@ describe("MASTER-01B-01 production test-route isolation", () => {
     const cases = [
       {
         path: "app/api/test/create-booking/route.ts",
-        sensitive: "loadTestSecret()",
+        sensitive: "const secret = loadTestSecret();",
       },
       {
         path: "app/api/test/whatsapp-meta-direct/route.ts",
