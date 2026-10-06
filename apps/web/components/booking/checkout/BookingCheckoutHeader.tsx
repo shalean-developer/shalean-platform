@@ -20,7 +20,7 @@ import { BookingHistoryMobileSheet } from "@/components/booking/checkout/Booking
 import { BOOKING_SEGMENT_INDEX, type BookingCheckoutSegment } from "@/lib/booking/bookingCheckoutGuards";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/hooks/useUser";
-import { signOut } from "@/lib/auth/authClient";
+import { reportSignOutFailure, signOut } from "@/lib/auth/authClient";
 
 export type BookingCheckoutHeaderStepDef = {
   number: number;
@@ -250,8 +250,12 @@ export function BookingCheckoutHeader({ currentStep }: BookingCheckoutHeaderProp
             className="gap-2 text-red-600 focus:text-red-600 dark:text-red-400"
             onSelect={async (e) => {
               e.preventDefault();
-              await signOut();
-              router.refresh();
+              try {
+                await signOut();
+                router.refresh();
+              } catch (error) {
+                reportSignOutFailure(error);
+              }
             }}
           >
             <LogOut className="h-4 w-4" aria-hidden />

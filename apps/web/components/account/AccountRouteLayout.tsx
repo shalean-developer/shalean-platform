@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 import { DashboardToastProvider } from "@/components/dashboard/dashboard-toast-context";
-import { signOut } from "@/lib/auth/authClient";
+import { reportSignOutFailure, signOut } from "@/lib/auth/authClient";
 import { useAuth } from "@/lib/auth/useAuth";
 
 export function AccountRouteLayout({ children }: { children: ReactNode }) {
@@ -13,9 +13,13 @@ export function AccountRouteLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   async function handleLogout() {
-    await signOut();
-    router.push("/");
-    router.refresh();
+    try {
+      await signOut();
+      router.push("/");
+      router.refresh();
+    } catch (e) {
+      reportSignOutFailure(e);
+    }
   }
 
   return (

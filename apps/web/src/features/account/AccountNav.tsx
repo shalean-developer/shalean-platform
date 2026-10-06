@@ -39,7 +39,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { signOut } from "@/lib/auth/authClient";
+import { reportSignOutFailure, signOut } from "@/lib/auth/authClient";
 import { useUser } from "@/hooks/useUser";
 import { cn } from "@/lib/utils";
 
@@ -145,9 +145,15 @@ function LogoutDialog({ children }: { children: ReactNode }) {
 
   async function handleLogout() {
     setBusy(true);
-    await signOut();
-    router.push("/");
-    router.refresh();
+    try {
+      await signOut();
+      router.push("/");
+      router.refresh();
+    } catch (e) {
+      reportSignOutFailure(e);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -253,9 +259,13 @@ export function AccountHeader() {
   const firstName = name.split(" ")[0] ?? "there";
 
   async function handleLogout() {
-    await signOut();
-    router.push("/");
-    router.refresh();
+    try {
+      await signOut();
+      router.push("/");
+      router.refresh();
+    } catch (e) {
+      reportSignOutFailure(e);
+    }
   }
 
   return (

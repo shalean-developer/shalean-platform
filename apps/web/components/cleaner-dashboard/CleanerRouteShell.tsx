@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { signOut } from "@/lib/auth/authClient";
+import { reportSignOutFailure, signOut } from "@/lib/auth/authClient";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { Button } from "@/components/ui/button";
 import { CleanerBottomNav } from "./CleanerBottomNav";
@@ -131,9 +131,13 @@ export function CleanerRouteShell({ children }: { children: ReactNode }) {
   }, [needsAuthRedirect, onPublicPage, pathname, router]);
 
   const leaveWrongPortal = useCallback(async () => {
-    await signOut();
-    router.replace("/auth?intent=customer");
-    router.refresh();
+    try {
+      await signOut();
+      router.replace("/auth?intent=customer");
+      router.refresh();
+    } catch (e) {
+      reportSignOutFailure(e);
+    }
   }, [router]);
 
   if (onPublicPage) {

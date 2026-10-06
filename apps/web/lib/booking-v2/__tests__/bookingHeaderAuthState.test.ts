@@ -24,7 +24,8 @@ describe("booking header authentication control", () => {
 
   it("offers authenticated account actions and sign out", () => {
     expect(source).toContain('href="/account/bookings"');
-    expect(source).toContain("void signOut().then");
+    expect(source).toContain("void signOut()");
+    expect(source).toContain(".catch(reportSignOutFailure)");
     expect(source).toContain("<DropdownMenuTrigger asChild>");
   });
 });
