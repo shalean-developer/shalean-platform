@@ -371,3 +371,34 @@ describe("MASTER-01A-05 logout caller rejection handling", () => {
     }
   });
 });
+
+
+describe("MASTER-01A-05 post-logout cleanup resilience", () => {
+  it("treats local cleanup as best-effort after remote sign-out succeeds", () => {
+    const authClient = read("apps/web/lib/auth/authClient.ts");
+    const start = authClient.indexOf("export async function signOut");
+    const end = authClient.indexOf("export type MfaStatus", start);
+    const signOutSource = authClient.slice(start, end);
+
+    const remoteIdx = signOutSource.indexOf("await sb.auth.signOut()");
+    const cleanupIdx = signOutSource.indexOf("clearSupabaseSessionCache()");
+    const localStorageIdx = signOutSource.indexOf('localStorage.removeItem("cleaner_id")');
+
+    expect(remoteIdx).toBeGreaterThanOrEqual(0);
+    expect(cleanupIdx).toBeGreaterThan(remoteIdx);
+    expect(localStorageIdx).toBeGreaterThan(remoteIdx);
+    expect(signOutSource).toContain("best effort after remote sign-out succeeded");
+    expect(signOutSource).toContain("try {");
+    expect(signOutSource).toContain("catch {");
+  });
+
+  it("only rejects for missing Supabase or actual Supabase sign-out failure", () => {
+    const authClient = read("apps/web/lib/auth/authClient.ts");
+    const start = authClient.indexOf("export async function signOut");
+    const end = authClient.indexOf("export type MfaStatus", start);
+    const signOutSource = authClient.slice(start, end);
+
+    expect(signOutSource).toContain('throw new Error("Supabase is not configured.")');
+    expect(signOutSource).toContain("if (error) throw new Error(error.message)");
+  });
+});
