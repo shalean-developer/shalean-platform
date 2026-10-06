@@ -462,3 +462,26 @@ describe("MASTER-01A-06 active account role guard convergence", () => {
     expect(guard).not.toContain("useSearchParams");
   });
 });
+
+
+describe("MASTER-01A-06A account middleware redirect convergence", () => {
+  it("routes unauthenticated account requests directly to canonical customer login", () => {
+    const middleware = read("apps/web/lib/supabase/supabaseMiddleware.ts");
+    const accountIdx = middleware.indexOf('pathname.startsWith("/account") && !user');
+    const jobsIdx = middleware.indexOf('pathname.startsWith("/jobs") && !user', accountIdx);
+    const accountBlock = middleware.slice(accountIdx, jobsIdx);
+
+    expect(accountBlock).toContain('redirectUrl.pathname = "/auth/login"');
+    expect(accountBlock).toContain('redirectUrl.search = ""');
+    expect(accountBlock).toContain('redirectUrl.searchParams.set("redirect", pathname + request.nextUrl.search)');
+    expect(accountBlock).toContain('redirectUrl.searchParams.set("intent", "customer")');
+    expect(accountBlock).not.toContain('redirectUrl.pathname = "/login"');
+  });
+
+  it("leaves jobs and office middleware branches unchanged", () => {
+    const middleware = read("apps/web/lib/supabase/supabaseMiddleware.ts");
+
+    expect(middleware).toContain('if (pathname.startsWith("/jobs") && !user)');
+    expect(middleware).toContain('if (isOfficePortalPath(pathname) && !user)');
+  });
+});
