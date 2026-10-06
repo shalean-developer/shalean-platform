@@ -59,7 +59,11 @@ export default function CompleteProfilePage() {
         window.location.replace(json.dashboardRoute);
       } catch (e) {
         if (!active) return;
-        setError(e instanceof Error ? e.message : "Could not repair your account profile. Contact support.");
+        setError(
+          e instanceof Error
+            ? e.message
+            : "Could not restore your sign-in session. Sign out and try again.",
+        );
         setRepairing(false);
       }
     })();

@@ -207,3 +207,24 @@ describe("MASTER-01A-04A complete-profile session lookup", () => {
     expect(page).not.toContain("sb.auth.getSession()");
   });
 });
+
+
+describe("MASTER-01A-04A complete-profile session failure handling", () => {
+  it("uses the guarded session helper instead of direct auth.getSession", () => {
+    const page = read("apps/web/app/complete-profile/page.tsx");
+    const browser = read("apps/web/lib/supabase/browser.ts");
+
+    expect(page).toContain("getSupabaseSession");
+    expect(page).not.toContain("sb.auth.getSession()");
+    expect(browser).toContain("export async function getSupabaseSession()");
+    expect(browser).toContain("catch {");
+    expect(browser).toContain("return null;");
+  });
+
+  it("fails closed to login when the guarded session helper yields no session", () => {
+    const page = read("apps/web/app/complete-profile/page.tsx");
+
+    expect(page).toContain('if (!session?.access_token)');
+    expect(page).toContain('window.location.replace("/auth/login")');
+  });
+});
