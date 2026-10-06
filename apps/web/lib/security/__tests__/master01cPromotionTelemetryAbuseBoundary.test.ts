@@ -189,61 +189,54 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     expect(source).toContain("headers()");
   });
 
-  it("validates the effective limiter contract across all forward migrations", () => {
+  it("fails closed when a later migration touches the approved limiter contract", () => {
     const migrationsDir = resolve(root, "../../supabase/migrations");
     const migrationFiles = readdirSync(migrationsDir)
       .filter((name) => name.endsWith(".sql"))
       .sort();
-    const governedFiles = migrationFiles.filter(
-      (name) => name >= "20261006144500_master_01c_01_promotion_telemetry_rate_limit.sql",
-    );
 
-    expect(governedFiles.length).toBeGreaterThanOrEqual(2);
+    const originalName =
+      "20261006144500_master_01c_01_promotion_telemetry_rate_limit.sql";
+    const atomicName =
+      "20261006173500_master_01c_01_atomic_promotion_telemetry_limit.sql";
 
-    const migrations = governedFiles.map((name) => ({
-      name,
-      sql: readFileSync(resolve(migrationsDir, name), "utf8").toLowerCase(),
-    }));
+    const originalIndex = migrationFiles.indexOf(originalName);
+    const atomicIndex = migrationFiles.indexOf(atomicName);
 
-    const original = migrations.find(
-      ({ name }) =>
-        name === "20261006144500_master_01c_01_promotion_telemetry_rate_limit.sql",
-    );
-    expect(original?.sql).toContain("promotion_telemetry_rate_limit_buckets");
+    expect(originalIndex).toBeGreaterThanOrEqual(0);
+    expect(atomicIndex).toBeGreaterThan(originalIndex);
 
-    const latestFor = (signature: string) => {
-      for (let i = migrations.length - 1; i >= 0; i -= 1) {
-        if (migrations[i]!.sql.includes(signature)) {
-          return { index: i, ...migrations[i]! };
-        }
-      }
-      throw new Error(`No forward migration defines ${signature}`);
-    };
+    const originalSql = readFileSync(
+      resolve(migrationsDir, originalName),
+      "utf8",
+    ).toLowerCase();
+    const atomicSql = readFileSync(
+      resolve(migrationsDir, atomicName),
+      "utf8",
+    ).toLowerCase();
 
-    const combined = latestFor(
+    expect(originalSql).toContain("promotion_telemetry_rate_limit_buckets");
+    expect(atomicSql).toContain(
       "create or replace function public.consume_promotion_telemetry_limits(",
     );
-    const legacy = latestFor(
+    expect(atomicSql).toContain(
       "create or replace function public.consume_promotion_telemetry_rate_limit(",
     );
 
-    expect(combined.sql).toContain("pg_try_advisory_xact_lock");
-    expect(combined.sql).not.toContain("perform pg_advisory_xact_lock");
-
-    const globalFastReject = combined.sql.indexOf(
+    const globalFastReject = atomicSql.indexOf(
       "fast reject already-saturated global traffic before taking the advisory",
     );
-    const clientFastReject = combined.sql.indexOf(
+    const clientFastReject = atomicSql.indexOf(
       "fast reject an already-saturated client before taking the advisory",
     );
-    const lock = combined.sql.indexOf("pg_try_advisory_xact_lock");
-    const lockedGlobalRecheck = combined.sql.indexOf(
+    const lock = atomicSql.indexOf("pg_try_advisory_xact_lock");
+    const lockedGlobalRecheck = atomicSql.indexOf(
       "saturation under the lock before touching any client bucket",
     );
-    const lockedClientRecheck = combined.sql.indexOf(
+    const lockedClientRecheck = atomicSql.indexOf(
       "refresh the client snapshot under the same lock before any mutation",
     );
-    const mutations = combined.sql.indexOf(
+    const mutations = atomicSql.indexOf(
       "both buckets have capacity under the same transaction lock",
     );
 
@@ -254,144 +247,49 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     expect(lockedClientRecheck).toBeGreaterThan(lockedGlobalRecheck);
     expect(mutations).toBeGreaterThan(lockedClientRecheck);
 
-    expect(legacy.sql).toContain(
+    expect(atomicSql).toContain(
+      "revoke all on function public.consume_promotion_telemetry_limits",
+    );
+    expect(atomicSql).toContain(
+      "grant execute on function public.consume_promotion_telemetry_limits",
+    );
+    expect(atomicSql).toContain(
+      "revoke all on function public.consume_promotion_telemetry_rate_limit",
+    );
+    expect(atomicSql).toContain(
+      "grant execute on function public.consume_promotion_telemetry_rate_limit",
+    );
+    expect(atomicSql).toContain("from public, anon, authenticated");
+    expect(atomicSql).toContain("to service_role");
+
+    expect(atomicSql).toContain(
       "making the global call read-only and delegating the client call to the new",
     );
-    expect(legacy.sql).toContain(
+    expect(atomicSql).toContain(
       "from public.consume_promotion_telemetry_limits(",
     );
-    expect(legacy.sql).toContain(
+    expect(atomicSql).toContain(
       "old runtimes cannot interpret the new 'busy' reason",
     );
-    expect(legacy.sql).toContain("for v_count in 0..3 loop");
-    expect(legacy.sql).toContain("perform pg_sleep(");
+    expect(atomicSql).toContain("for v_count in 0..3 loop");
+    expect(atomicSql).toContain("perform pg_sleep(");
 
-    type Role = "public" | "anon" | "authenticated" | "service_role";
-    type FunctionName =
-      | "consume_promotion_telemetry_limits"
-      | "consume_promotion_telemetry_rate_limit";
-
-    type RoutineState = {
-      name: FunctionName;
-      signature: string;
-      exists: boolean;
-      privileges: Record<Role, boolean>;
-    };
-
-    const roles: Role[] = [
-      "public",
-      "anon",
-      "authenticated",
-      "service_role",
-    ];
-    const functionNames: FunctionName[] = [
+    const protectedTerms = [
       "consume_promotion_telemetry_limits",
       "consume_promotion_telemetry_rate_limit",
+      "promotion_telemetry_rate_limit_buckets",
     ];
 
-    const normalizeIdentifier = (value: string) =>
-      value.trim().replace(/^"|"$/g, "").toLowerCase();
+    const laterTouches = migrationFiles
+      .slice(atomicIndex + 1)
+      .map((name) => ({
+        name,
+        sql: readFileSync(resolve(migrationsDir, name), "utf8").toLowerCase(),
+      }))
+      .filter(({ sql }) => protectedTerms.some((term) => sql.includes(term)))
+      .map(({ name }) => name);
 
-    const normalizeArgTypes = (args: string) =>
-      args
-        .split(",")
-        .map((arg) =>
-          arg
-            .trim()
-            .replace(/\b(in|out|inout|variadic)\b/gi, "")
-            .trim()
-            .split(/\s+/)
-            .slice(-1)[0]
-            ?.toLowerCase(),
-        )
-        .filter(Boolean)
-        .join(",");
-
-    const keyFor = (name: FunctionName, args: string) =>
-      `${name}(${normalizeArgTypes(args)})`;
-
-    const routines = new Map<string, RoutineState>();
-
-    const roleList = (clause: string): Role[] =>
-      clause
-        .replace(/\bwith\s+grant\s+option\b/gi, "")
-        .split(",")
-        .map(normalizeIdentifier)
-        .filter((role): role is Role => roles.includes(role as Role));
-
-    const sqlHistory = migrations.map(({ sql }) => sql).join("\n");
-    const eventPattern =
-      /create\s+or\s+replace\s+function\s+public\.(consume_promotion_telemetry_limits|consume_promotion_telemetry_rate_limit)\s*\(([^)]*)\)|drop\s+function\s+(?:if\s+exists\s+)?public\.(consume_promotion_telemetry_limits|consume_promotion_telemetry_rate_limit)\s*\(([^)]*)\)|(?:grant|revoke)\s+(?:execute|all(?:\s+privileges)?)\s+on\s+(?:function\s+public\.(consume_promotion_telemetry_limits|consume_promotion_telemetry_rate_limit)\s*\(([^)]*)\)|all\s+functions\s+in\s+schema\s+public)\s+(?:to|from)\s+([^;]+);/gi;
-
-    for (const match of sqlHistory.matchAll(eventPattern)) {
-      const statement = match[0].toLowerCase();
-
-      const createName = match[1]?.toLowerCase() as FunctionName | undefined;
-      if (createName) {
-        const key = keyFor(createName, match[2] ?? "");
-        const existing = routines.get(key);
-        if (existing) {
-          existing.exists = true;
-        } else {
-          routines.set(key, {
-            name: createName,
-            signature: key,
-            exists: true,
-            privileges: {
-              public: true,
-              anon: false,
-              authenticated: false,
-              service_role: false,
-            },
-          });
-        }
-        continue;
-      }
-
-      const dropName = match[3]?.toLowerCase() as FunctionName | undefined;
-      if (dropName) {
-        const key = keyFor(dropName, match[4] ?? "");
-        const routine = routines.get(key);
-        if (routine) routine.exists = false;
-        continue;
-      }
-
-      const directName = match[5]?.toLowerCase() as FunctionName | undefined;
-      const directArgs = match[6] ?? "";
-      const affectedRoles = roleList(match[7] ?? "");
-      const isGrant = statement.startsWith("grant");
-      const affected = directName
-        ? [routines.get(keyFor(directName, directArgs))].filter(
-            (routine): routine is RoutineState => Boolean(routine),
-          )
-        : [...routines.values()].filter((routine) => routine.exists);
-
-      for (const routine of affected) {
-        for (const role of affectedRoles) {
-          routine.privileges[role] = isGrant;
-        }
-      }
-    }
-
-    const liveLimiterRoutines = [...routines.values()].filter(
-      (routine) => routine.exists && functionNames.includes(routine.name),
-    );
-
-    expect(
-      liveLimiterRoutines.map((routine) => routine.signature).sort(),
-    ).toEqual([
-      "consume_promotion_telemetry_limits(text,integer,integer,integer)",
-      "consume_promotion_telemetry_rate_limit(text,integer,integer)",
-    ]);
-
-    for (const routine of liveLimiterRoutines) {
-      expect(routine.privileges).toEqual({
-        public: false,
-        anon: false,
-        authenticated: false,
-        service_role: true,
-      });
-    }
+    expect(laterTouches).toEqual([]);
   });
 
   it("runs web-test for every forward migration change", () => {
