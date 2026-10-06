@@ -151,7 +151,7 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     );
 
     expect(workflow).toContain(
-      "supabase/migrations/20261006144500_master_01c_01_promotion_telemetry_rate_limit\\\\.sql$",
+      "supabase/migrations/20261006144500_master_01c_01_promotion_telemetry_rate_limit\\.sql$",
     );
   });
 
