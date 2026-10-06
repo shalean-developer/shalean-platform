@@ -66,7 +66,8 @@ async function hasLinkedCleaner(token: string): Promise<boolean> {
 
 /**
  * Lightweight role guard — no full-page "Checking access" spinner.
- * Redirects unauthenticated users to `/login`; wrong role to the correct dashboard.
+ * Redirects unauthenticated users to the appropriate canonical login route;
+ * wrong role goes to the correct dashboard.
  */
 export function useRoleRouteGuard({
   requiredRole,
@@ -177,8 +178,18 @@ export function useRoleRouteGuard({
   useEffect(() => {
     if (canUseLocalhostDevBypass(allowLocalhostDevBypass)) return;
     if (state.status === "unauthenticated") {
-      const next = encodeURIComponent(pathname);
-      scheduleAppRouterReplace(router, `/login?redirect=${next}`);
+      const query =
+        typeof window !== "undefined" ? window.location.search.replace(/^\?/, "") : "";
+      const requested = `${pathname}${query ? `?${query}` : ""}`;
+      const next = encodeURIComponent(requested);
+      if (requiredRole === "customer") {
+        scheduleAppRouterReplace(
+          router,
+          `/auth/login?redirect=${next}&intent=customer`,
+        );
+      } else {
+        scheduleAppRouterReplace(router, `/login?redirect=${next}`);
+      }
       return;
     }
     if (state.status === "missing_profile") {
@@ -194,7 +205,7 @@ export function useRoleRouteGuard({
     if (state.status === "wrong_role") {
       scheduleAppRouterReplace(router, state.actualRoute);
     }
-  }, [state, pathname, router, allowLocalhostDevBypass]);
+  }, [state, pathname, router, requiredRole, allowLocalhostDevBypass]);
 
   return { state, retry: () => void verify() };
 }
