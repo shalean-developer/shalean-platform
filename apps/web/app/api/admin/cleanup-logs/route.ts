@@ -1,6 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
+import { requireAdminPermissionFromRequest } from "@/lib/admin/requirePermission";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -29,30 +28,8 @@ function isCleanupTarget(v: unknown): v is CleanupTarget {
  * POST JSON body: `{ "targets": ["system_logs", ...] }` — each target must be listed explicitly.
  */
 export async function POST(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const token = authHeader?.replace(/^Bearer\s+/i, "").trim() ?? "";
-  if (!token) {
-    return NextResponse.json({ error: "Missing authorization." }, { status: 401 });
-  }
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) {
-    return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-  }
-
-  const pub = createClient(url, anon);
-  const {
-    data: { user },
-    error: userErr,
-  } = await pub.auth.getUser(token);
-  if (userErr || !user?.email) {
-    return NextResponse.json({ error: "Invalid or expired session." }, { status: 401 });
-  }
-  const adminAuth = await requireAdminUser(user);
-  if (!adminAuth.ok) {
-    return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
-  }
+  const auth = await requireAdminPermissionFromRequest(request, "system.logs.manage");
+  if (!auth.ok) return auth.response;
 
   let body: unknown;
   try {

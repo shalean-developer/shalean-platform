@@ -58,7 +58,8 @@ export type AdminPermission =
   | "system.settings"
   | "system.notifications"
   | "system.integrations"
-  | "system.logs";
+  | "system.logs"
+  | "system.logs.manage";
 
 export type PermissionScope = { branchId?: string | null; teamId?: string | null };
 
@@ -79,6 +80,7 @@ const AUDITED_ACCESS_PERMISSIONS = new Set<AdminPermission>([
   "booking.export",
   "customer.export",
   "bulk_export.approve",
+  "system.logs.manage",
 ]);
 
 function bearerToken(request: Request): string {
