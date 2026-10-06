@@ -95,6 +95,14 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/security/__tests__/p0MandatoryAal2Contract.test.ts lib/security/__tests__/p0PrivilegedMfaRolloutContract.test.ts
 
+      - name: MASTER-01B production test-route isolation contract
+        if: steps.filter.outputs.run_suite == 'true'
+        run: npm run test -- lib/security/__tests__/master01bProductionTestRouteIsolation.test.ts
+
+      - name: Staging branch bootstrap convergence
+        if: steps.filter.outputs.run_suite == 'true'
+        run: npm run test -- lib/env/__tests__/stagingBranchBootstrapConvergence.test.ts
+
       - name: Auth source-of-truth regression
         if: steps.filter.outputs.run_suite == 'true'
         run: >-
