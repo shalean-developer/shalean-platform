@@ -428,3 +428,37 @@ describe("MASTER-01A-06 protected customer auth redirect convergence", () => {
     expect(guard).not.toContain("useSearchParams");
   });
 });
+
+
+describe("MASTER-01A-06 active account role guard convergence", () => {
+  it("proves the live account layout uses AccountShell and the role guard", () => {
+    const layout = read("apps/web/app/(ui-redesign)/account/layout.tsx");
+    const shell = read("apps/web/src/features/account/AccountShell.tsx");
+
+    expect(layout).toContain("<AccountShell>");
+    expect(shell).toContain('useRoleRouteGuard({ requiredRole: "customer" })');
+  });
+
+  it("preserves pathname and query in the active unauthenticated customer branch", () => {
+    const guard = read("apps/web/lib/auth/useRoleRouteGuard.tsx");
+
+    expect(guard).toContain('state.status === "unauthenticated"');
+    expect(guard).toContain("window.location.search");
+    expect(guard).toContain("const requested =");
+    expect(guard).toContain('requiredRole === "customer"');
+    expect(guard).toContain("/auth/login?redirect=");
+    expect(guard).toContain("&intent=customer");
+  });
+
+  it("keeps non-customer role guards on their existing role-choice path", () => {
+    const guard = read("apps/web/lib/auth/useRoleRouteGuard.tsx");
+
+    expect(guard).toContain("scheduleAppRouterReplace(router, `/login?redirect=${next}`)");
+  });
+
+  it("does not use useSearchParams in the active shared role guard", () => {
+    const guard = read("apps/web/lib/auth/useRoleRouteGuard.tsx");
+
+    expect(guard).not.toContain("useSearchParams");
+  });
+});
