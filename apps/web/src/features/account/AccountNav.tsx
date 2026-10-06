@@ -259,9 +259,13 @@ export function AccountHeader() {
   const firstName = name.split(" ")[0] ?? "there";
 
   async function handleLogout() {
-    await signOut();
-    router.push("/");
-    router.refresh();
+    try {
+      await signOut();
+      router.push("/");
+      router.refresh();
+    } catch (e) {
+      reportSignOutFailure(e);
+    }
   }
 
   return (
