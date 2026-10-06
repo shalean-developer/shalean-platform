@@ -41,6 +41,14 @@ describe("MASTER-01B-01 production test-route isolation", () => {
     ).toBe(false);
   });
 
+  it("fails closed when the request origin cannot be parsed", () => {
+    expect(
+      isProductionTestRouteBlocked("not-a-valid-url", {
+        SHALEAN_APP_ENV: "staging",
+      }),
+    ).toBe(true);
+  });
+
   it("guards all real-write test routes before secrets or side effects", () => {
     const cases = [
       {
