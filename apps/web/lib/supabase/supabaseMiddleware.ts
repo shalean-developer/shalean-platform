@@ -130,8 +130,10 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
 
   if (pathname.startsWith("/account") && !user) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/login";
+    redirectUrl.pathname = "/auth/login";
+    redirectUrl.search = "";
     redirectUrl.searchParams.set("redirect", pathname + request.nextUrl.search);
+    redirectUrl.searchParams.set("intent", "customer");
     return NextResponse.redirect(redirectUrl);
   }
 
