@@ -1,55 +1,92 @@
+import "server-only";
+
+import { createHash } from "node:crypto";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveReferralClientIp } from "@/lib/referrals/clientIp";
 
-const WINDOW_MS = 60_000;
-const IP_LIMIT = 60;
-const SWEEP_AT_BUCKETS = 1_000;
-const MAX_BUCKETS = 5_000;
-
-const buckets = new Map<string, number[]>();
-
-function sweepExpiredBuckets(now: number): void {
-  for (const [key, timestamps] of buckets) {
-    const active = timestamps.filter((timestamp) => now - timestamp < WINDOW_MS);
-    if (active.length === 0) buckets.delete(key);
-    else buckets.set(key, active);
-  }
-
-  while (buckets.size >= MAX_BUCKETS) {
-    const oldestKey = buckets.keys().next().value as string | undefined;
-    if (!oldestKey) break;
-    buckets.delete(oldestKey);
-  }
-}
+const WINDOW_SECONDS = 60;
+const GLOBAL_LIMIT = 600;
+const CLIENT_LIMIT = 60;
 
 export type PromotionTelemetryRateLimitDecision =
   | { allowed: true }
-  | { allowed: false; retryAfterSeconds: number };
+  | {
+      allowed: false;
+      retryAfterSeconds: number;
+      reason: "global" | "client" | "unavailable";
+    };
 
-export function checkPromotionTelemetryRateLimit(
-  request: Request,
-): PromotionTelemetryRateLimitDecision {
+type RateLimitRow = {
+  allowed: boolean;
+  retry_after_seconds: number;
+  request_count: number;
+};
+
+function clientRateKey(request: Request): string {
   const ip = resolveReferralClientIp(request);
-  const key = `promotion-telemetry:${ip}`;
-  const now = Date.now();
+  const hash = createHash("sha256").update(ip).digest("hex");
+  return `client:${hash}`;
+}
 
-  if (!buckets.has(key) && buckets.size >= SWEEP_AT_BUCKETS) {
-    sweepExpiredBuckets(now);
+async function consume(
+  admin: SupabaseClient,
+  key: string,
+  limit: number,
+): Promise<RateLimitRow | null> {
+  const { data, error } = await admin.rpc("consume_promotion_telemetry_rate_limit", {
+    p_rate_key: key,
+    p_limit: limit,
+    p_window_seconds: WINDOW_SECONDS,
+  });
+  if (error) return null;
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || typeof row !== "object") return null;
+
+  const typed = row as Partial<RateLimitRow>;
+  if (
+    typeof typed.allowed !== "boolean" ||
+    typeof typed.retry_after_seconds !== "number" ||
+    typeof typed.request_count !== "number"
+  ) {
+    return null;
   }
 
-  const previous = buckets.get(key) ?? [];
-  const active = previous.filter((timestamp) => now - timestamp < WINDOW_MS);
+  return {
+    allowed: typed.allowed,
+    retry_after_seconds: typed.retry_after_seconds,
+    request_count: typed.request_count,
+  };
+}
 
-  if (active.length >= IP_LIMIT) {
-    buckets.set(key, active);
-    const oldest = active[0] ?? now;
+export async function checkPromotionTelemetryRateLimit(
+  admin: SupabaseClient,
+  request: Request,
+): Promise<PromotionTelemetryRateLimitDecision> {
+  const global = await consume(admin, "global", GLOBAL_LIMIT);
+  if (!global) {
+    return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
+  }
+  if (!global.allowed) {
     return {
       allowed: false,
-      retryAfterSeconds: Math.max(1, Math.ceil((WINDOW_MS - (now - oldest)) / 1000)),
+      retryAfterSeconds: Math.max(1, global.retry_after_seconds),
+      reason: "global",
     };
   }
 
-  active.push(now);
-  buckets.set(key, active);
+  const client = await consume(admin, clientRateKey(request), CLIENT_LIMIT);
+  if (!client) {
+    return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
+  }
+  if (!client.allowed) {
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(1, client.retry_after_seconds),
+      reason: "client",
+    };
+  }
+
   return { allowed: true };
 }
 
@@ -58,11 +95,14 @@ export function promotionTelemetryRateLimitResponse(
 ): Response {
   return new Response(
     JSON.stringify({
-      error: "Too many requests. Please try again shortly.",
+      error:
+        decision.reason === "unavailable"
+          ? "Telemetry is temporarily unavailable."
+          : "Too many requests. Please try again shortly.",
       retryAfterSeconds: decision.retryAfterSeconds,
     }),
     {
-      status: 429,
+      status: decision.reason === "unavailable" ? 503 : 429,
       headers: {
         "Content-Type": "application/json",
         "Retry-After": String(decision.retryAfterSeconds),
@@ -71,7 +111,8 @@ export function promotionTelemetryRateLimitResponse(
   );
 }
 
-/** Test-only. */
-export function __resetPromotionTelemetryRateLimit(): void {
-  buckets.clear();
-}
+export const PROMOTION_TELEMETRY_RATE_LIMITS = Object.freeze({
+  windowSeconds: WINDOW_SECONDS,
+  globalPerWindow: GLOBAL_LIMIT,
+  clientPerWindow: CLIENT_LIMIT,
+});
