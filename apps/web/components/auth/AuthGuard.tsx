@@ -8,7 +8,8 @@ import { scheduleAppRouterReplace } from "@/lib/navigation/scheduleAppRouterNavi
 type Props = { children: React.ReactNode };
 
 /**
- * Redirects unauthenticated users to `/login` with return URL.
+ * Redirects unauthenticated customer-account users to the canonical login route,
+ * preserving the current in-app pathname and query string.
  */
 export function AuthGuard({ children }: Props) {
   const { user, loading } = useAuth();
@@ -19,7 +20,13 @@ export function AuthGuard({ children }: Props) {
     if (loading) return;
     if (user) return;
 
-    scheduleAppRouterReplace(router, `/login?redirect=${encodeURIComponent(pathname)}`);
+    const query =
+      typeof window !== "undefined" ? window.location.search.replace(/^\?/, "") : "";
+    const requested = `${pathname}${query ? `?${query}` : ""}`;
+    scheduleAppRouterReplace(
+      router,
+      `/auth/login?redirect=${encodeURIComponent(requested)}&intent=customer`,
+    );
   }, [loading, user, router, pathname]);
 
   if (loading) {
