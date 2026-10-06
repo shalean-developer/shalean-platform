@@ -8,7 +8,8 @@ function configuredPublicHost(env: EnvLike): string | null {
     const value = raw?.trim();
     if (!value) continue;
     try {
-      return new URL(value).hostname.toLowerCase();
+      const normalized = /^[a-z][a-z0-9+.-]*:///i.test(value) ? value : `https://${value}`;
+      return new URL(normalized).hostname.toLowerCase();
     } catch {
       return null;
     }
@@ -32,7 +33,13 @@ export function isProductionTestRouteBlocked(
   env: EnvLike = process.env,
 ): boolean {
   const explicitIdentity = env.SHALEAN_APP_ENV?.trim().toLowerCase() ?? "";
+  const rawVercelEnv = env.VERCEL_ENV?.trim().toLowerCase() ?? "";
   const deployment = resolveDeploymentEnvironment(env);
+
+  // Platform-owned Vercel metadata outranks app-level staging overrides.
+  if (rawVercelEnv === "production" || rawVercelEnv === "preview") {
+    return true;
+  }
 
   // Self-hosted Next.js production builds run with NODE_ENV=production. If the
   // governed Shalean identity is missing, do not accept the resolver's local
