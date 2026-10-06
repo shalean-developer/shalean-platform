@@ -1,11 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { describe, expect, it, vi } from "vitest";
 
-import {
-  __resetPromotionTelemetryRateLimit,
-  checkPromotionTelemetryRateLimit,
-} from "@/lib/rateLimit/promotionTelemetryRateLimit";
+import { checkPromotionTelemetryRateLimit } from "@/lib/rateLimit/promotionTelemetryRateLimit";
 
 const root = resolve(process.cwd());
 
@@ -16,36 +14,77 @@ function request(ip: string): Request {
   });
 }
 
+function adminWithRpc(
+  impl: (args: Record<string, unknown>) => Promise<{
+    data: unknown;
+    error: unknown;
+  }>,
+): { admin: SupabaseClient; rpc: ReturnType<typeof vi.fn> } {
+  const rpc = vi.fn(async (_name: string, args: Record<string, unknown>) => impl(args));
+  return { admin: { rpc } as unknown as SupabaseClient, rpc };
+}
+
 describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => {
-  beforeEach(() => {
-    __resetPromotionTelemetryRateLimit();
-  });
+  it("consumes shared global and hashed-client buckets", async () => {
+    const { admin, rpc } = adminWithRpc(async () => ({
+      data: [{ allowed: true, retry_after_seconds: 0, request_count: 1 }],
+      error: null,
+    }));
 
-  it("rate-limits repeated anonymous telemetry from one IP", () => {
-    for (let i = 0; i < 60; i += 1) {
-      expect(checkPromotionTelemetryRateLimit(request("203.0.113.10"))).toEqual({
-        allowed: true,
-      });
-    }
+    await expect(
+      checkPromotionTelemetryRateLimit(admin, request("203.0.113.10")),
+    ).resolves.toEqual({ allowed: true });
 
-    const blocked = checkPromotionTelemetryRateLimit(request("203.0.113.10"));
-    expect(blocked.allowed).toBe(false);
-    if (!blocked.allowed) {
-      expect(blocked.retryAfterSeconds).toBeGreaterThan(0);
-    }
-  });
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc.mock.calls[0]?.[0]).toBe("consume_promotion_telemetry_rate_limit");
+    expect(rpc.mock.calls[0]?.[1]).toMatchObject({
+      p_rate_key: "global",
+      p_limit: 600,
+      p_window_seconds: 60,
+    });
 
-  it("isolates rate-limit buckets by client IP", () => {
-    for (let i = 0; i < 60; i += 1) {
-      checkPromotionTelemetryRateLimit(request("203.0.113.10"));
-    }
-
-    expect(checkPromotionTelemetryRateLimit(request("203.0.113.11"))).toEqual({
-      allowed: true,
+    const clientKey = String(rpc.mock.calls[1]?.[1]?.p_rate_key ?? "");
+    expect(clientKey).toMatch(/^client:[0-9a-f]{64}$/);
+    expect(clientKey).not.toContain("203.0.113.10");
+    expect(rpc.mock.calls[1]?.[1]).toMatchObject({
+      p_limit: 60,
+      p_window_seconds: 60,
     });
   });
 
-  it("runs abuse control and payload validation before service-role access", () => {
+  it("fails closed if shared rate-limit state is unavailable", async () => {
+    const { admin, rpc } = adminWithRpc(async () => ({
+      data: null,
+      error: { message: "db unavailable" },
+    }));
+
+    await expect(
+      checkPromotionTelemetryRateLimit(admin, request("203.0.113.10")),
+    ).resolves.toEqual({
+      allowed: false,
+      retryAfterSeconds: 60,
+      reason: "unavailable",
+    });
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops at the global bucket when the shared global ceiling is exhausted", async () => {
+    const { admin, rpc } = adminWithRpc(async () => ({
+      data: [{ allowed: false, retry_after_seconds: 17, request_count: 601 }],
+      error: null,
+    }));
+
+    await expect(
+      checkPromotionTelemetryRateLimit(admin, request("203.0.113.10")),
+    ).resolves.toEqual({
+      allowed: false,
+      retryAfterSeconds: 17,
+      reason: "global",
+    });
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("validates payload, consumes shared limits, then records telemetry", () => {
     const source = readFileSync(
       resolve(root, "app/api/promotions/route.ts"),
       "utf8",
@@ -54,14 +93,49 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     expect(postStart).toBeGreaterThanOrEqual(0);
 
     const postSource = source.slice(postStart);
-    const limiter = postSource.indexOf("checkPromotionTelemetryRateLimit(request)");
+    const validation = postSource.indexOf("UUID_PATTERN.test(body.promotionId)");
     const admin = postSource.indexOf("const admin = getSupabaseAdmin()");
-    expect(limiter).toBeGreaterThanOrEqual(0);
-    expect(admin).toBeGreaterThan(limiter);
+    const limiter = postSource.indexOf(
+      "await checkPromotionTelemetryRateLimit(admin, request)",
+    );
+    const write = postSource.indexOf("await recordPromotionEvent(admin");
 
-    expect(postSource).toContain("UUID_PATTERN.test(body.promotionId)");
+    expect(validation).toBeGreaterThanOrEqual(0);
+    expect(admin).toBeGreaterThan(validation);
+    expect(limiter).toBeGreaterThan(admin);
+    expect(write).toBeGreaterThan(limiter);
+
     expect(postSource).toContain("MAX_SESSION_ID_LENGTH");
-    expect(postSource).toContain('status: 400');
     expect(postSource).toContain("promotionTelemetryRateLimitResponse(limit)");
+  });
+
+  it("uses an atomic service-role-only database rate-limit contract", () => {
+    const sql = readFileSync(
+      resolve(
+        root,
+        "../../supabase/migrations/20261006144500_master_01c_01_promotion_telemetry_rate_limit.sql",
+      ),
+      "utf8",
+    ).toLowerCase();
+
+    expect(sql).toContain("promotion_telemetry_rate_limit_buckets");
+    expect(sql).toContain("on conflict (rate_key) do update");
+    expect(sql).toContain("consume_promotion_telemetry_rate_limit");
+    expect(sql).toContain(
+      "revoke all on function public.consume_promotion_telemetry_rate_limit",
+    );
+    expect(sql).toContain("from public, anon, authenticated");
+    expect(sql).toContain("grant execute on function public.consume_promotion_telemetry_rate_limit");
+    expect(sql).toContain("to service_role");
+  });
+
+  it("does not rely on process-local maps for the production boundary", () => {
+    const source = readFileSync(
+      resolve(root, "lib/rateLimit/promotionTelemetryRateLimit.ts"),
+      "utf8",
+    );
+    expect(source).not.toContain("new Map");
+    expect(source).not.toContain("sweepExpiredBuckets");
+    expect(source).toContain('admin.rpc("consume_promotion_telemetry_rate_limit"');
   });
 });
