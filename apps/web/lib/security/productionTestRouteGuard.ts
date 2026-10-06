@@ -34,10 +34,17 @@ export function isProductionTestRouteBlocked(
 ): boolean {
   const explicitIdentity = env.SHALEAN_APP_ENV?.trim().toLowerCase() ?? "";
   const rawVercelEnv = env.VERCEL_ENV?.trim().toLowerCase() ?? "";
+  const rawVercelRef = env.VERCEL_GIT_COMMIT_REF?.trim().toLowerCase() ?? "";
   const deployment = resolveDeploymentEnvironment(env);
 
   // Platform-owned Vercel metadata outranks app-level staging overrides.
-  if (rawVercelEnv === "production" || rawVercelEnv === "preview") {
+  if (
+    rawVercelEnv === "production" ||
+    rawVercelEnv === "preview" ||
+    rawVercelRef === "main" ||
+    rawVercelRef === "master" ||
+    (env.VERCEL === "1" && env.NODE_ENV === "production" && !rawVercelEnv)
+  ) {
     return true;
   }
 
