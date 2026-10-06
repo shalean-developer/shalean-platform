@@ -233,7 +233,10 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
       "rolling-deploy compatibility: old runtimes call the legacy rpc twice",
     );
     expect(atomicSql).toContain(
-      "keep it read-only so a later client rejection cannot consume global quota",
+      "making the global call read-only and delegating the client call to the new",
+    );
+    expect(atomicSql).toContain(
+      "client rejection cannot consume global quota",
     );
     expect(atomicSql).toContain(
       "delegate to the new combined limiter so client and global quotas are consumed atomically",
