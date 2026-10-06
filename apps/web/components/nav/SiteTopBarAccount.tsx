@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
-import { signOut } from "@/lib/auth/authClient";
+import { reportSignOutFailure, signOut } from "@/lib/auth/authClient";
 import { useAuth } from "@/lib/auth/useAuth";
 import { readCachedUserRole } from "@/lib/auth/userRole";
 import {
@@ -76,9 +76,13 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
   }, [accountHref, router, showCustomerBookings]);
 
   async function handleLogout() {
-    if (user) await signOut();
-    router.push("/");
-    router.refresh();
+    try {
+      if (user) await signOut();
+      router.push("/");
+      router.refresh();
+    } catch (e) {
+      reportSignOutFailure(e);
+    }
   }
 
   if (loading) {
