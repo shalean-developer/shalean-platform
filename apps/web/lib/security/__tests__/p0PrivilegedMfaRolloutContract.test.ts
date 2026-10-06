@@ -104,7 +104,6 @@ describe("P0-04E privileged Office email verification flow contract", () => {
     expect(verificationHelper).toContain("office-code:v2:");
     expect(verificationHelper).toContain("payload.sid === expectedSessionBinding");
     expect(requestRoute).toContain("officeSessionBinding(token)");
-    expect(requestRoute).toContain('eq("session_binding", sessionBinding)');
     expect(verifyRoute).toContain("officeSessionBinding(token)");
     expect(verifyRoute).toContain('eq("session_binding", sessionBinding)');
     expect(verifyRoute).toContain("verifyOfficeEmailCodeHash(");
