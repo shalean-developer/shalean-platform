@@ -5,7 +5,7 @@ import { Suspense, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CalendarDays, ChevronDown, LogIn, LogOut, UserPlus, UserRound } from "lucide-react";
 import { useAuth } from "@/lib/auth/useAuth";
-import { signOut } from "@/lib/auth/authClient";
+import { reportSignOutFailure, signOut } from "@/lib/auth/authClient";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -106,9 +106,11 @@ function HeaderLoginButtonInner({ className, showLabel = false, avatarOnly = fal
                 className="gap-2 rounded-xl text-red-600 focus:text-red-600"
                 onSelect={(event) => {
                   event.preventDefault();
-                  void signOut().then(() => {
-                    router.refresh();
-                  });
+                  void signOut()
+                    .then(() => {
+                      router.refresh();
+                    })
+                    .catch(reportSignOutFailure);
                 }}
               >
                 <LogOut className="h-4 w-4" aria-hidden />
