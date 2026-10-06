@@ -6,28 +6,31 @@ import {
   resendApiKeyFingerprint,
 } from "@/lib/email/resendFrom";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { isProductionTestRouteBlocked } from "@/lib/security/productionTestRouteGuard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function authorize(request: Request): boolean {
-  const cron = process.env.CRON_SECRET?.trim();
   const test = process.env.EMAIL_TEST_SECRET?.trim();
   const auth = request.headers.get("authorization");
-  if (cron && auth === `Bearer ${cron}`) return true;
   if (test && auth === `Bearer ${test}`) return true;
   return false;
 }
 
 /**
- * POST /api/test-email — send a one-off test message via Resend.
- * Requires `Authorization: Bearer` with `CRON_SECRET` or `EMAIL_TEST_SECRET`.
+ * Non-production only. POST /api/test-email sends a one-off test message via Resend.
+ * Requires `Authorization: Bearer` with the dedicated `EMAIL_TEST_SECRET`.
  * Body (optional): `{ "to": "you@example.com" }` — defaults to first ADMIN_EMAILS entry or RESEND_FROM.
  */
 export async function POST(request: Request) {
+  if (isProductionTestRouteBlocked(request.url)) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
   if (!authorize(request)) {
     return NextResponse.json(
-      { ok: false, error: "Unauthorized. Set CRON_SECRET or EMAIL_TEST_SECRET and send Bearer token." },
+      { ok: false, error: "Unauthorized. Set EMAIL_TEST_SECRET and send Bearer token." },
       { status: 401 },
     );
   }

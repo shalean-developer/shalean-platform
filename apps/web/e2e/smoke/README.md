@@ -25,7 +25,7 @@ All variables from [`e2e/dispatch/README.md`](../dispatch/README.md), plus:
 | `E2E_DISPATCH_LOAD_TEST_SECRET` | Server `DISPATCH_LOAD_TEST_SECRET`. |
 | `E2E_CUSTOMER_SUPABASE_JWT` | Customer session JWT (`sub` linked via harness). |
 | `E2E_CLEANER_SUPABASE_JWT` | Must match the cleaner dispatch assigns (same note as dispatch specs). |
-| `PLAYWRIGHT_BASE_URL` | Staging / preview URL. |
+| `PLAYWRIGHT_BASE_URL` | Local or canonical staging URL. |
 
 ## Run
 
@@ -48,7 +48,7 @@ Or put the same keys in `.env.local` (Playwright loads it automatically — no `
 **One-time `.env.local` for live/staging:**
 
 ```env
-PLAYWRIGHT_BASE_URL=https://your-preview.vercel.app
+PLAYWRIGHT_BASE_URL=https://pricing-test.shalean.co.za
 E2E_REVENUE_PATH=1
 E2E_DISPATCH=1
 DISPATCH_LOAD_TEST_SECRET=same-value-as-on-the-server
@@ -70,7 +70,7 @@ From repo root (no `cd`):
 npm run test:e2e:revenue --prefix apps/web
 ```
 
-On **production**, the server must also have `ENABLE_DISPATCH_LOAD_TEST=true` or the load-test route returns 404.
+The load-test route is intentionally unavailable on **production** and **preview** deployments and always returns 404 there. Run this smoke suite only against local or staging environments.
 
 **cmd.exe:**
 

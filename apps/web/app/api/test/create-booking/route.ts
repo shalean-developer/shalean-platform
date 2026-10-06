@@ -6,6 +6,7 @@ import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { createDispatchOfferRow } from "@/lib/dispatch/dispatchOffers";
 import { resolveDispatchOfferAcceptTtlSeconds } from "@/lib/dispatch/dispatchOfferAcceptTtl";
 import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
+import { isProductionTestRouteBlocked } from "@/lib/security/productionTestRouteGuard";
 import { timingSafeEqualString } from "@/lib/security/timingSafeEqualString";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -38,13 +39,12 @@ const UUID_RE =
  * Creates a real `bookings` row (standard service, paid-ish pending) and runs the same
  * auto-dispatch path as admin/cron (`ensureBookingAssignment`).
  *
- * Guarded by `DISPATCH_LOAD_TEST_SECRET` (header `x-dispatch-load-test-secret`).
- * Disabled on production deploys unless `ENABLE_DISPATCH_LOAD_TEST=true`.
+ * Non-production only. Guarded by `DISPATCH_LOAD_TEST_SECRET`
+ * (header `x-dispatch-load-test-secret`) after the environment boundary.
  */
 export async function POST(request: Request) {
-  const isProd =
-    process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";
-  if (isProd && process.env.ENABLE_DISPATCH_LOAD_TEST !== "true") {
+  const isProd = isProductionTestRouteBlocked(request.url);
+  if (isProd) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 

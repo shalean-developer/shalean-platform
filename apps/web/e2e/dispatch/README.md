@@ -6,7 +6,7 @@ Opt-in Playwright coverage for **auto-assign**, **selected-cleaner offers**, and
 
 - `E2E_DISPATCH=1`
 - Server configured like local dev / staging: Supabase admin, locations with coordinates, dispatch secrets.
-- `POST /api/test/create-booking` enabled (non-production or `ENABLE_DISPATCH_LOAD_TEST=true` on production).
+- `POST /api/test/create-booking` is available only on non-production deployments. Production always returns 404.
 
 ## Environment
 
