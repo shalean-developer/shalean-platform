@@ -63,18 +63,6 @@ export async function checkPromotionTelemetryRateLimit(
   admin: SupabaseClient,
   request: Request,
 ): Promise<PromotionTelemetryRateLimitDecision> {
-  const global = await consume(admin, "global", GLOBAL_LIMIT);
-  if (!global) {
-    return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
-  }
-  if (!global.allowed) {
-    return {
-      allowed: false,
-      retryAfterSeconds: Math.max(1, global.retry_after_seconds),
-      reason: "global",
-    };
-  }
-
   const client = await consume(admin, clientRateKey(request), CLIENT_LIMIT);
   if (!client) {
     return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
@@ -84,6 +72,18 @@ export async function checkPromotionTelemetryRateLimit(
       allowed: false,
       retryAfterSeconds: Math.max(1, client.retry_after_seconds),
       reason: "client",
+    };
+  }
+
+  const global = await consume(admin, "global", GLOBAL_LIMIT);
+  if (!global) {
+    return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
+  }
+  if (!global.allowed) {
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(1, global.retry_after_seconds),
+      reason: "global",
     };
   }
 
