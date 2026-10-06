@@ -207,3 +207,25 @@ describe("MASTER-01A-04A complete-profile session lookup", () => {
     expect(page).not.toContain("sb.auth.getSession()");
   });
 });
+
+
+describe("MASTER-01A-04A complete-profile session failure handling", () => {
+  it("keeps session lookup inside the repair error boundary", () => {
+    const page = read("apps/web/app/complete-profile/page.tsx");
+
+    const tryIdx = page.indexOf("try {");
+    const sessionIdx = page.indexOf("sb.auth.getSession()", tryIdx);
+    const catchIdx = page.indexOf("} catch (e) {", sessionIdx);
+
+    expect(tryIdx).toBeGreaterThanOrEqual(0);
+    expect(sessionIdx).toBeGreaterThan(tryIdx);
+    expect(catchIdx).toBeGreaterThan(sessionIdx);
+  });
+
+  it("leaves repairing state on session lookup failure", () => {
+    const page = read("apps/web/app/complete-profile/page.tsx");
+
+    expect(page).toContain("setRepairing(false)");
+    expect(page).toContain("Could not restore your sign-in session");
+  });
+});
