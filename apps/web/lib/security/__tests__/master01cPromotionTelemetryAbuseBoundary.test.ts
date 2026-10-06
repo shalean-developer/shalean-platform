@@ -19,9 +19,26 @@ function adminWithRpc(
     data: unknown;
     error: unknown;
   }>,
-): { admin: SupabaseClient; rpc: ReturnType<typeof vi.fn> } {
+  globalPrecheck: { data: unknown; error: unknown } = {
+    data: null,
+    error: null,
+  },
+): {
+  admin: SupabaseClient;
+  rpc: ReturnType<typeof vi.fn>;
+  from: ReturnType<typeof vi.fn>;
+} {
   const rpc = vi.fn(async (_name: string, args: Record<string, unknown>) => impl(args));
-  return { admin: { rpc } as unknown as SupabaseClient, rpc };
+  const maybeSingle = vi.fn(async () => globalPrecheck);
+  const eq = vi.fn(() => ({ maybeSingle }));
+  const select = vi.fn(() => ({ eq }));
+  const from = vi.fn(() => ({ select }));
+
+  return {
+    admin: { rpc, from } as unknown as SupabaseClient,
+    rpc,
+    from,
+  };
 }
 
 describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => {
@@ -66,6 +83,38 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
       reason: "unavailable",
     });
     expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects saturated global traffic before creating a client bucket", async () => {
+    const { admin, rpc, from } = adminWithRpc(
+      async () => ({
+        data: [{ allowed: true, retry_after_seconds: 0, request_count: 1 }],
+        error: null,
+      }),
+      {
+        data: {
+          window_started_at: new Date(Date.now() - 10_000).toISOString(),
+          request_count: 600,
+        },
+        error: null,
+      },
+    );
+
+    const decision = await checkPromotionTelemetryRateLimit(
+      admin,
+      request("203.0.113.10"),
+    );
+
+    expect(decision).toMatchObject({
+      allowed: false,
+      reason: "global",
+    });
+    if (!decision.allowed) {
+      expect(decision.retryAfterSeconds).toBeGreaterThan(0);
+    }
+
+    expect(from).toHaveBeenCalledWith("promotion_telemetry_rate_limit_buckets");
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it("stops at the client bucket without consuming global quota", async () => {
