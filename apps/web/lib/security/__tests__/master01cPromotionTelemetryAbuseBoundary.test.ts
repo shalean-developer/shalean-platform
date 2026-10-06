@@ -119,7 +119,13 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     ).toLowerCase();
 
     expect(sql).toContain("promotion_telemetry_rate_limit_buckets");
+    expect(sql).toContain(
+      "insert into public.promotion_telemetry_rate_limit_buckets as bucket",
+    );
     expect(sql).toContain("on conflict (rate_key) do nothing");
+    expect(sql).toContain(
+      "returning bucket.window_started_at, bucket.request_count",
+    );
     expect(sql).toContain("bucket.request_count < p_limit");
     expect(sql).toContain("and v_count >= p_limit then");
     expect(sql).toContain("fast reject path");
