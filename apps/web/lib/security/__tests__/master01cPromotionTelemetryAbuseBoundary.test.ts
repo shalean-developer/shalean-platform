@@ -287,7 +287,7 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
 
     const sqlHistory = migrations.map(({ sql }) => sql).join("\n");
     const eventPattern =
-      /create\s+or\s+replace\s+function\s+public\.(consume_promotion_telemetry_limits|consume_promotion_telemetry_rate_limit)\s*\(|(grant|revoke)\s+(execute|all(?:\s+privileges)?)\s+on\s+(function\s+public\.(consume_promotion_telemetry_limits|consume_promotion_telemetry_rate_limit)\s*\([^;]*?\)|all\s+functions\s+in\s+schema\s+public)\s+(to|from)\s+([^;]+);/gis;
+      /create\s+or\s+replace\s+function\s+public\.(consume_promotion_telemetry_limits|consume_promotion_telemetry_rate_limit)\s*\(|(grant|revoke)\s+(execute|all(?:\s+privileges)?)\s+on\s+(function\s+public\.(consume_promotion_telemetry_limits|consume_promotion_telemetry_rate_limit)\s*\([\s\S]*?\)|all\s+functions\s+in\s+schema\s+public)\s+(to|from)\s+([^;]+);/gi;
 
     for (const match of sqlHistory.matchAll(eventPattern)) {
       const created = match[1]?.toLowerCase() as FunctionName | undefined;
