@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { metaWhatsAppToDigits } from "@/lib/dispatch/metaWhatsAppSend";
+import { isProductionTestRouteBlocked } from "@/lib/security/productionTestRouteGuard";
 import { timingSafeEqualString } from "@/lib/security/timingSafeEqualString";
 import { sendTestWhatsApp } from "@/lib/whatsapp/sendTestWhatsApp";
 
@@ -7,10 +8,15 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Direct Meta WhatsApp text (bypasses queue). Guard with `Authorization: Bearer WHATSAPP_TEST_SEND_SECRET`.
+ * Non-production only. Direct Meta WhatsApp text (bypasses queue).
+ * Guard with `Authorization: Bearer WHATSAPP_TEST_SEND_SECRET` after the environment boundary.
  * POST JSON: `{ "phone": "+27…", "message"?: "optional body" }`
  */
 export async function POST(request: Request) {
+  if (isProductionTestRouteBlocked(request.url)) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
   const secret = process.env.WHATSAPP_TEST_SEND_SECRET?.trim();
   if (!secret) {
     return NextResponse.json(
@@ -29,7 +35,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Missing WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN (production sends require both).",
+        error: "Missing WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN.",
         config: { hasToken: tokenPresent, hasPhoneNumberId: Boolean(phoneNumberId) },
       },
       { status: 503 },
