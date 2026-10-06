@@ -22,6 +22,11 @@ type RateLimitRow = {
   request_count: number;
 };
 
+type GlobalBucketRow = {
+  window_started_at: string;
+  request_count: number;
+};
+
 function clientRateKey(request: Request): string {
   const ip = resolveReferralClientIp(request);
   const hash = createHash("sha256").update(ip).digest("hex");
@@ -59,10 +64,51 @@ async function consume(
   };
 }
 
+async function precheckGlobalBucket(
+  admin: SupabaseClient,
+): Promise<PromotionTelemetryRateLimitDecision | null> {
+  const { data, error } = await admin
+    .from("promotion_telemetry_rate_limit_buckets")
+    .select("window_started_at, request_count")
+    .eq("rate_key", "global")
+    .maybeSingle();
+
+  if (error) {
+    return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
+  }
+  if (!data) return null;
+
+  const row = data as Partial<GlobalBucketRow>;
+  if (
+    typeof row.window_started_at !== "string" ||
+    typeof row.request_count !== "number"
+  ) {
+    return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
+  }
+
+  const startedAt = Date.parse(row.window_started_at);
+  if (!Number.isFinite(startedAt)) {
+    return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
+  }
+
+  const windowEndsAt = startedAt + WINDOW_SECONDS * 1000;
+  const now = Date.now();
+  if (windowEndsAt <= now || row.request_count < GLOBAL_LIMIT) return null;
+
+  return {
+    allowed: false,
+    retryAfterSeconds: Math.max(1, Math.ceil((windowEndsAt - now) / 1000)),
+    reason: "global",
+  };
+}
+
 export async function checkPromotionTelemetryRateLimit(
   admin: SupabaseClient,
   request: Request,
 ): Promise<PromotionTelemetryRateLimitDecision> {
+  const globalPrecheck = await precheckGlobalBucket(admin);
+  if (globalPrecheck) return globalPrecheck;
+
   const client = await consume(admin, clientRateKey(request), CLIENT_LIMIT);
   if (!client) {
     return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
