@@ -1,15 +1,15 @@
-import {
-  isCustomerProductionHost,
-  resolveDeploymentEnvironment,
-  type EnvLike,
-} from "@/lib/env/deploymentEnvironment";
+import { resolveDeploymentEnvironment, type EnvLike } from "@/lib/env/deploymentEnvironment";
+
+const STAGING_TEST_HOSTS = new Set(["pricing-test.shalean.co.za"]);
+const LOCAL_TEST_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 /**
- * Test/diagnostic API routes are never executable on customer production.
+ * Test/diagnostic API routes are executable only on explicitly known
+ * non-production origins.
  *
- * We intentionally check both the governed deployment identity and the request
- * hostname. The host check fails closed if deployment metadata drifts, while
- * the deployment check keeps production disabled even behind an alternate host.
+ * Production is always blocked. Staging is allowlisted to the canonical
+ * pricing-test host. Local/development is restricted to loopback hosts.
+ * Preview and unknown deployment identities fail closed.
  *
  * Compiled staging runtimes commonly use NODE_ENV=production, so NODE_ENV must
  * not be used to distinguish Shalean staging from customer production.
@@ -18,13 +18,23 @@ export function isProductionTestRouteBlocked(
   requestUrl: string,
   env: EnvLike = process.env,
 ): boolean {
-  if (resolveDeploymentEnvironment(env) === "production") return true;
+  const deployment = resolveDeploymentEnvironment(env);
+  if (deployment === "production" || deployment === "preview") return true;
 
+  let host: string;
   try {
-    return isCustomerProductionHost(new URL(requestUrl).host);
+    host = new URL(requestUrl).hostname.toLowerCase();
   } catch {
-    // A malformed/unknown request origin cannot prove that this is a safe
-    // non-production host, so test tooling fails closed.
     return true;
   }
+
+  if (deployment === "staging") {
+    return !STAGING_TEST_HOSTS.has(host);
+  }
+
+  if (deployment === "development" || deployment === "local") {
+    return !LOCAL_TEST_HOSTS.has(host);
+  }
+
+  return true;
 }
