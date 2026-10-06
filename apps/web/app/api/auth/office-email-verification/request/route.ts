@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Invalid or expired session." }, { status: 401 });
   }
 
-  const sessionBinding = officeSessionBinding(user.last_sign_in_at);
+  const sessionBinding = officeSessionBinding(token);
   if (!sessionBinding) {
     return NextResponse.json({ ok: false, error: "Could not bind verification to this login session." }, { status: 401 });
   }
@@ -76,7 +76,6 @@ export async function POST(request: Request) {
     .from("office_email_verification_challenges")
     .select("id, sent_at")
     .eq("user_id", user.id)
-    .eq("session_binding", sessionBinding)
     .order("sent_at", { ascending: false })
     .limit(1)
     .maybeSingle();
