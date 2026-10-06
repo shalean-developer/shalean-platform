@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AuthCard } from "@/components/auth/AuthShell";
-import { signOut } from "@/lib/auth/authClient";
+import { reportSignOutFailure, signOut } from "@/lib/auth/authClient";
 import { getSupabaseBrowser, getSupabaseSession } from "@/lib/supabase/browser";
 
 type RepairResponse = {
@@ -99,8 +99,12 @@ export default function CompleteProfilePage() {
   }, []);
 
   async function handleSignOut() {
-    await signOut();
-    window.location.replace("/auth/login");
+    try {
+      await signOut();
+      window.location.replace("/auth/login");
+    } catch (e) {
+      reportSignOutFailure(e);
+    }
   }
 
   return (
