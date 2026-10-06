@@ -9,6 +9,7 @@ import {
   OFFICE_CODE_MAX_ATTEMPTS,
   OFFICE_CODE_RESEND_COOLDOWN_MS,
   OFFICE_CODE_TTL_MS,
+  officeSessionBinding,
 } from "@/lib/auth/officeEmailVerification";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
 import { assertNotSeedEmail } from "@/lib/seed/devSeedGuard";
@@ -45,6 +46,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Invalid or expired session." }, { status: 401 });
   }
 
+  const sessionBinding = officeSessionBinding(user.last_sign_in_at);
+  if (!sessionBinding) {
+    return NextResponse.json({ ok: false, error: "Could not bind verification to this login session." }, { status: 401 });
+  }
+
   const resolved = await resolveUserRoleServer(admin, { userId: user.id, email: user.email });
   if (resolved.kind !== "ok" || resolved.role !== "admin") {
     return NextResponse.json({ ok: false, error: "Forbidden." }, { status: 403 });
@@ -70,6 +76,7 @@ export async function POST(request: Request) {
     .from("office_email_verification_challenges")
     .select("id, sent_at")
     .eq("user_id", user.id)
+    .eq("session_binding", sessionBinding)
     .order("sent_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -93,7 +100,7 @@ export async function POST(request: Request) {
   const challengeId = crypto.randomUUID();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + OFFICE_CODE_TTL_MS);
-  const codeHash = hashOfficeEmailCode(user.id, challengeId, code);
+  const codeHash = hashOfficeEmailCode(user.id, challengeId, sessionBinding, code);
 
   await admin
     .from("office_email_verification_challenges")
@@ -104,6 +111,7 @@ export async function POST(request: Request) {
   const { error: insertError } = await admin.from("office_email_verification_challenges").insert({
     id: challengeId,
     user_id: user.id,
+    session_binding: sessionBinding,
     code_hash: codeHash,
     expires_at: expiresAt.toISOString(),
     attempt_count: 0,
