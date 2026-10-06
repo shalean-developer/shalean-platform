@@ -31,17 +31,24 @@ export function generateOfficeEmailCode(): string {
   return String(randomInt(100000, 1000000));
 }
 
-export function hashOfficeEmailCode(userId: string, challengeId: string, code: string): string {
-  return hmac(`office-code:v1:${userId}:${challengeId}:${code}`);
+export function hashOfficeEmailCode(
+  userId: string,
+  challengeId: string,
+  sessionBinding: string,
+  code: string,
+): string {
+  if (!sessionBinding) throw new Error("Office verification session binding is required.");
+  return hmac(`office-code:v2:${userId}:${challengeId}:${sessionBinding}:${code}`);
 }
 
 export function verifyOfficeEmailCodeHash(
   userId: string,
   challengeId: string,
+  sessionBinding: string,
   code: string,
   expectedHash: string,
 ): boolean {
-  return safeEqualHex(hashOfficeEmailCode(userId, challengeId, code), expectedHash);
+  return safeEqualHex(hashOfficeEmailCode(userId, challengeId, sessionBinding, code), expectedHash);
 }
 
 type VerificationPayload = {
