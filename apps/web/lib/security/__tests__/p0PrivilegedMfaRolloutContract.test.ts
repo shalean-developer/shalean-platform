@@ -61,9 +61,14 @@ describe("P0-04E privileged Office email verification flow contract", () => {
     expect(requestRoute).toContain("OFFICE_CODE_RESEND_COOLDOWN_MS");
     expect(requestRoute).toContain("status: 429");
     expect(requestRoute).toContain('"Retry-After"');
-    expect(requestRoute).toContain("officeSessionBinding(user.last_sign_in_at)");
+    expect(requestRoute).toContain("officeSessionBinding(token)");
     expect(requestRoute).toContain("hashOfficeEmailCode(user.id, challengeId, sessionBinding, code)");
     expect(requestRoute).toContain("session_binding: sessionBinding");
+    const cooldownStart = requestRoute.indexOf('.select("id, sent_at")');
+    const cooldownEnd = requestRoute.indexOf("if (latestError)", cooldownStart);
+    const cooldownLookup = requestRoute.slice(cooldownStart, cooldownEnd);
+    expect(cooldownLookup).toContain('.eq("user_id", user.id)');
+    expect(cooldownLookup).not.toContain('.eq("session_binding", sessionBinding)');
   });
 
   it("guards seed recipients before calling the email provider", () => {
@@ -94,12 +99,13 @@ describe("P0-04E privileged Office email verification flow contract", () => {
   });
 
   it("binds both the email challenge and verification cookie to the current Supabase sign-in session", () => {
-    expect(verificationHelper).toContain("officeSessionBinding(lastSignInAt");
+    expect(verificationHelper).toContain('claims.session_id === "string"');
+    expect(verificationHelper).toContain("office-auth-session:v2:");
     expect(verificationHelper).toContain("office-code:v2:");
     expect(verificationHelper).toContain("payload.sid === expectedSessionBinding");
-    expect(requestRoute).toContain("officeSessionBinding(user.last_sign_in_at)");
+    expect(requestRoute).toContain("officeSessionBinding(token)");
     expect(requestRoute).toContain('eq("session_binding", sessionBinding)');
-    expect(verifyRoute).toContain("officeSessionBinding(user.last_sign_in_at)");
+    expect(verifyRoute).toContain("officeSessionBinding(token)");
     expect(verifyRoute).toContain('eq("session_binding", sessionBinding)');
     expect(verifyRoute).toContain("verifyOfficeEmailCodeHash(");
     expect(verifyRoute).toContain("sessionBinding,");
