@@ -16,15 +16,12 @@ export type PromotionTelemetryRateLimitDecision =
       reason: "global" | "client" | "unavailable";
     };
 
-type RateLimitRow = {
+type CombinedRateLimitRow = {
   allowed: boolean;
+  reason: "global" | "client" | null;
   retry_after_seconds: number;
-  request_count: number;
-};
-
-type GlobalBucketRow = {
-  window_started_at: string;
-  request_count: number;
+  client_request_count: number | null;
+  global_request_count: number | null;
 };
 
 function clientRateKey(request: Request): string {
@@ -33,107 +30,48 @@ function clientRateKey(request: Request): string {
   return `client:${hash}`;
 }
 
-async function consume(
-  admin: SupabaseClient,
-  key: string,
-  limit: number,
-): Promise<RateLimitRow | null> {
-  const { data, error } = await admin.rpc("consume_promotion_telemetry_rate_limit", {
-    p_rate_key: key,
-    p_limit: limit,
-    p_window_seconds: WINDOW_SECONDS,
-  });
-  if (error) return null;
-
-  const row = Array.isArray(data) ? data[0] : data;
-  if (!row || typeof row !== "object") return null;
-
-  const typed = row as Partial<RateLimitRow>;
-  if (
-    typeof typed.allowed !== "boolean" ||
-    typeof typed.retry_after_seconds !== "number" ||
-    typeof typed.request_count !== "number"
-  ) {
-    return null;
-  }
-
-  return {
-    allowed: typed.allowed,
-    retry_after_seconds: typed.retry_after_seconds,
-    request_count: typed.request_count,
-  };
-}
-
-async function precheckGlobalBucket(
-  admin: SupabaseClient,
-): Promise<PromotionTelemetryRateLimitDecision | null> {
-  const { data, error } = await admin
-    .from("promotion_telemetry_rate_limit_buckets")
-    .select("window_started_at, request_count")
-    .eq("rate_key", "global")
-    .maybeSingle();
-
-  if (error) {
-    return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
-  }
-  if (!data) return null;
-
-  const row = data as Partial<GlobalBucketRow>;
-  if (
-    typeof row.window_started_at !== "string" ||
-    typeof row.request_count !== "number"
-  ) {
-    return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
-  }
-
-  const startedAt = Date.parse(row.window_started_at);
-  if (!Number.isFinite(startedAt)) {
-    return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
-  }
-
-  const windowEndsAt = startedAt + WINDOW_SECONDS * 1000;
-  const now = Date.now();
-  if (windowEndsAt <= now || row.request_count < GLOBAL_LIMIT) return null;
-
-  return {
-    allowed: false,
-    retryAfterSeconds: Math.max(1, Math.ceil((windowEndsAt - now) / 1000)),
-    reason: "global",
-  };
-}
-
 export async function checkPromotionTelemetryRateLimit(
   admin: SupabaseClient,
   request: Request,
 ): Promise<PromotionTelemetryRateLimitDecision> {
-  const globalPrecheck = await precheckGlobalBucket(admin);
-  if (globalPrecheck) return globalPrecheck;
+  const { data, error } = await admin.rpc("consume_promotion_telemetry_limits", {
+    p_client_rate_key: clientRateKey(request),
+    p_client_limit: CLIENT_LIMIT,
+    p_global_limit: GLOBAL_LIMIT,
+    p_window_seconds: WINDOW_SECONDS,
+  });
 
-  const client = await consume(admin, clientRateKey(request), CLIENT_LIMIT);
-  if (!client) {
+  if (error) {
     return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
   }
-  if (!client.allowed) {
-    return {
-      allowed: false,
-      retryAfterSeconds: Math.max(1, client.retry_after_seconds),
-      reason: "client",
-    };
-  }
 
-  const global = await consume(admin, "global", GLOBAL_LIMIT);
-  if (!global) {
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || typeof row !== "object") {
     return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
   }
-  if (!global.allowed) {
-    return {
-      allowed: false,
-      retryAfterSeconds: Math.max(1, global.retry_after_seconds),
-      reason: "global",
-    };
+
+  const typed = row as Partial<CombinedRateLimitRow>;
+  if (
+    typeof typed.allowed !== "boolean" ||
+    typeof typed.retry_after_seconds !== "number" ||
+    (typed.reason !== null &&
+      typed.reason !== "global" &&
+      typed.reason !== "client")
+  ) {
+    return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
   }
 
-  return { allowed: true };
+  if (typed.allowed) return { allowed: true };
+
+  if (typed.reason !== "global" && typed.reason !== "client") {
+    return { allowed: false, retryAfterSeconds: 60, reason: "unavailable" };
+  }
+
+  return {
+    allowed: false,
+    retryAfterSeconds: Math.max(1, typed.retry_after_seconds),
+    reason: typed.reason,
+  };
 }
 
 export function promotionTelemetryRateLimitResponse(
