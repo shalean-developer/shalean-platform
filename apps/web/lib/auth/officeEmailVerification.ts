@@ -62,9 +62,22 @@ function encodePayload(payload: VerificationPayload): string {
   return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
 }
 
-export function officeSessionBinding(lastSignInAt: string | null | undefined): string | null {
-  const value = lastSignInAt?.trim();
-  return value ? hmac(`office-auth-session:v1:${value}`) : null;
+export function officeSessionBinding(accessToken: string | null | undefined): string | null {
+  const token = accessToken?.trim();
+  if (!token) return null;
+
+  const parts = token.split(".");
+  if (parts.length !== 3 || !parts[1]) return null;
+
+  try {
+    const claims = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as {
+      session_id?: unknown;
+    };
+    const sessionId = typeof claims.session_id === "string" ? claims.session_id.trim() : "";
+    return sessionId ? hmac(`office-auth-session:v2:${sessionId}`) : null;
+  } catch {
+    return null;
+  }
 }
 
 export function createOfficeVerificationToken(
