@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { signOut } from "@/lib/auth/authClient";
+import { reportSignOutFailure, signOut } from "@/lib/auth/authClient";
 import { RoleGuardRetryBanner, useRoleRouteGuard } from "@/lib/auth/useRoleRouteGuard";
 import { getSupabaseBrowser, getSupabaseSession } from "@/lib/supabase/browser";
 import { scheduleAppRouterPush, scheduleAppRouterRefresh } from "@/lib/navigation/scheduleAppRouterNavigation";
@@ -194,9 +194,13 @@ export function OfficeShell({ children }: { children: ReactNode }) {
   }, []);
 
   async function handleLogout() {
-    await signOut();
-    scheduleAppRouterPush(router, "/");
-    scheduleAppRouterRefresh(router);
+    try {
+      await signOut();
+      scheduleAppRouterPush(router, "/");
+      scheduleAppRouterRefresh(router);
+    } catch (e) {
+      reportSignOutFailure(e);
+    }
   }
 
   if (roleState.status === "unauthenticated" || roleState.status === "missing_profile" || roleState.status === "wrong_role") {
