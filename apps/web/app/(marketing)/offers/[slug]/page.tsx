@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { PublicPageContainer } from "@/components/nav/PublicPageContainer";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
@@ -10,6 +11,7 @@ import {
 import { formatOfferLabel } from "@/lib/promotions/offerCopy";
 import { sanitizeCampaignTermsHtml } from "@/lib/promotions/campaignTermsHtml";
 import { recordPromotionEvent } from "@/lib/promotions/server";
+import { checkPromotionTelemetryRateLimit } from "@/lib/rateLimit/promotionTelemetryRateLimit";
 import { CampaignLandingClient } from "@/components/promotions/CampaignLandingClient";
 import type { PromotionRow } from "@/lib/promotions/types";
 
@@ -154,12 +156,22 @@ export default async function OfferLandingPage({ params }: Props) {
     }
 
     try {
-      await recordPromotionEvent(admin, {
-        promotionId: promo.id,
-        eventType: "landing_visit",
-      });
+      const requestHeaders = await headers();
+      const limit = await checkPromotionTelemetryRateLimit(
+        admin,
+        new Request(`https://shalean.co.za/offers/${encodeURIComponent(slug)}`, {
+          headers: new Headers(requestHeaders),
+        }),
+      );
+
+      if (limit.allowed) {
+        await recordPromotionEvent(admin, {
+          promotionId: promo.id,
+          eventType: "landing_visit",
+        });
+      }
     } catch {
-      // best-effort
+      // best-effort telemetry must never block the landing page
     }
   }
 
