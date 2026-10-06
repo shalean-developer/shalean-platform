@@ -96,13 +96,19 @@ export async function signUp(email: string, password: string, fullName: string, 
   return { user: data.user, session: data.session, error: null };
 }
 
-export async function signOut(): Promise<{ error: Error | null }> {
+export async function signOut(): Promise<void> {
   const sb = getSupabaseBrowser();
-  if (!sb) return { error: new Error("Supabase is not configured.") };
+  if (!sb) throw new Error("Supabase is not configured.");
+
+  const { error } = await sb.auth.signOut();
+  if (error) throw new Error(error.message);
+
+  clearSupabaseSessionCache();
   clearAuthIntent();
   clearCachedUserRole();
-  const { error } = await sb.auth.signOut();
-  return { error: error ? new Error(error.message) : null };
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem("cleaner_id");
+  }
 }
 
 export type MfaStatus = {
