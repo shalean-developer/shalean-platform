@@ -410,7 +410,8 @@ describe("MASTER-01A-06 protected customer auth redirect convergence", () => {
 
     expect(guard).toContain("/auth/login?redirect=");
     expect(guard).toContain("&intent=customer");
-    expect(guard).not.toContain("/login?redirect=");
+    expect(guard).not.toContain("router, `/login?redirect=");
+    expect(guard).not.toContain("scheduleAppRouterReplace(router, `/login?redirect=");
   });
 
   it("preserves pathname and query through the account auth redirect", () => {
