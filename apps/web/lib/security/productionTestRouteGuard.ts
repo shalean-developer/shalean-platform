@@ -31,7 +31,20 @@ export function isProductionTestRouteBlocked(
   requestUrl: string,
   env: EnvLike = process.env,
 ): boolean {
+  const explicitIdentity = env.SHALEAN_APP_ENV?.trim().toLowerCase() ?? "";
   const deployment = resolveDeploymentEnvironment(env);
+
+  // Self-hosted Next.js production builds run with NODE_ENV=production. If the
+  // governed Shalean identity is missing, do not accept the resolver's local
+  // fallback as evidence that real-write test tooling is safe.
+  if (
+    env.NODE_ENV === "production" &&
+    explicitIdentity !== "staging" &&
+    explicitIdentity !== "development"
+  ) {
+    return true;
+  }
+
   if (deployment === "production" || deployment === "preview") return true;
 
   if (deployment === "staging") {
