@@ -228,3 +228,24 @@ describe("MASTER-01A-04A complete-profile session failure handling", () => {
     expect(page).toContain('window.location.replace("/auth/login")');
   });
 });
+
+
+describe("MASTER-01A-04B complete-profile repair timeout", () => {
+  it("bounds the profile-repair request with AbortController", () => {
+    const page = read("apps/web/app/complete-profile/page.tsx");
+
+    expect(page).toContain("PROFILE_REPAIR_TIMEOUT_MS = 8_000");
+    expect(page).toContain("new AbortController()");
+    expect(page).toContain("controller.abort()");
+    expect(page).toContain("signal: controller.signal");
+    expect(page).toContain("window.clearTimeout(timer)");
+  });
+
+  it("routes repair timeout into the recoverable error state", () => {
+    const page = read("apps/web/app/complete-profile/page.tsx");
+
+    expect(page).toContain('e instanceof DOMException && e.name === "AbortError"');
+    expect(page).toContain("Profile repair timed out. Check your connection and try again.");
+    expect(page).toContain("setRepairing(false)");
+  });
+});
