@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Invalid or expired session." }, { status: 401 });
   }
 
-  const sessionBinding = officeSessionBinding(user.last_sign_in_at);
+  const sessionBinding = officeSessionBinding(token);
   if (!sessionBinding) {
     return NextResponse.json({ ok: false, error: "Could not bind verification to this login session." }, { status: 401 });
   }
