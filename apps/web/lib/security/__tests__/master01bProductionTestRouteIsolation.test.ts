@@ -32,16 +32,26 @@ describe("MASTER-01B-01 production test-route isolation", () => {
     ).toBe(true);
   });
 
-  it("keeps compiled staging test tooling available only on the canonical staging host", () => {
+  it("keeps compiled staging test tooling available only when deployment config points to pricing-test", () => {
     expect(
-      isProductionTestRouteBlocked("https://pricing-test.shalean.co.za/api/test", {
+      isProductionTestRouteBlocked("http://127.0.0.1:3000/api/test", {
         SHALEAN_APP_ENV: "staging",
         NODE_ENV: "production",
+        NEXT_PUBLIC_SITE_URL: "https://pricing-test.shalean.co.za",
+        NEXT_PUBLIC_APP_URL: "https://pricing-test.shalean.co.za",
       }),
     ).toBe(false);
 
     expect(
-      isProductionTestRouteBlocked("https://staging-alias.example.com/api/test", {
+      isProductionTestRouteBlocked("http://127.0.0.1:3000/api/test", {
+        SHALEAN_APP_ENV: "staging",
+        NODE_ENV: "production",
+        NEXT_PUBLIC_SITE_URL: "https://shalean.co.za",
+      }),
+    ).toBe(true);
+
+    expect(
+      isProductionTestRouteBlocked("http://127.0.0.1:3000/api/test", {
         SHALEAN_APP_ENV: "staging",
         NODE_ENV: "production",
       }),
@@ -68,7 +78,7 @@ describe("MASTER-01B-01 production test-route isolation", () => {
     ).toBe(true);
   });
 
-  it("blocks preview, unknown, malformed, and alternate production origins", () => {
+  it("blocks preview, malformed local origins, and staging config drift", () => {
     expect(
       isProductionTestRouteBlocked("https://preview.example.com/api/test", {
         SHALEAN_APP_ENV: "preview",
@@ -77,13 +87,14 @@ describe("MASTER-01B-01 production test-route isolation", () => {
 
     expect(
       isProductionTestRouteBlocked("not-a-valid-url", {
-        SHALEAN_APP_ENV: "staging",
+        SHALEAN_APP_ENV: "development",
       }),
     ).toBe(true);
 
     expect(
       isProductionTestRouteBlocked("https://203.0.113.10/api/test", {
         SHALEAN_APP_ENV: "staging",
+        NEXT_PUBLIC_APP_URL: "https://shalean.co.za",
       }),
     ).toBe(true);
   });
