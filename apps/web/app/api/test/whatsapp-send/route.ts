@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { isProductionTestRouteBlocked } from "@/lib/security/productionTestRouteGuard";
 import { timingSafeEqualString } from "@/lib/security/timingSafeEqualString";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { enqueueWhatsApp, flushWhatsAppJobById } from "@/lib/whatsapp/queue";
@@ -9,10 +10,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Smoke-test Meta WhatsApp via the real queue + flush path.
- * Requires `Authorization: Bearer WHATSAPP_TEST_SEND_SECRET` (never ship without this secret in env).
+ * Non-production only. Smoke-test Meta WhatsApp via the real queue + flush path.
+ * Requires `Authorization: Bearer WHATSAPP_TEST_SEND_SECRET` after the environment boundary.
  */
 export async function POST(request: Request) {
+  if (isProductionTestRouteBlocked(request.url)) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
   const secret = process.env.WHATSAPP_TEST_SEND_SECRET?.trim();
   if (!secret) {
     return NextResponse.json(
