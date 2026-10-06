@@ -43,6 +43,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   if (!url || !anon) return supabaseResponse;
 
   let user: User | null = null;
+  let browserAccessToken: string | null = null;
 
   try {
     const supabase = createServerClient(url, anon, {
@@ -66,6 +67,10 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     try {
       const { data } = await supabase.auth.getUser();
       user = data.user ?? null;
+      if (user) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        browserAccessToken = sessionData.session?.access_token ?? null;
+      }
     } catch (authErr) {
       console.error("[middleware] supabase.auth.getUser failed — continuing without session", authErr);
     }
@@ -88,7 +93,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
           error: bearerError,
         } = await publicClient.auth.getUser(token);
 
-        const bearerSessionBinding = officeSessionBinding(bearerUser?.last_sign_in_at);
+        const bearerSessionBinding = officeSessionBinding(token);
         if (
           !bearerError &&
           bearerUser?.id &&
@@ -102,7 +107,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
       }
     } else if (
       user?.id &&
-      !verifyOfficeVerificationToken(officeVerificationToken, user.id, officeSessionBinding(user.last_sign_in_at))
+      !verifyOfficeVerificationToken(officeVerificationToken, user.id, officeSessionBinding(browserAccessToken))
     ) {
       return officeVerificationRequiredResponse();
     }
@@ -157,7 +162,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     !verifyOfficeVerificationToken(
       officeVerificationToken,
       user.id,
-      officeSessionBinding(user.last_sign_in_at),
+      officeSessionBinding(browserAccessToken),
     )
   ) {
     const redirectUrl = request.nextUrl.clone();
