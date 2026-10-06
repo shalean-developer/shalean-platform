@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AuthCard } from "@/components/auth/AuthShell";
 import { signOut } from "@/lib/auth/authClient";
-import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseBrowser, getSupabaseSession } from "@/lib/supabase/browser";
 
 type RepairResponse = {
   ok?: boolean;
@@ -27,8 +27,7 @@ export default function CompleteProfilePage() {
     let active = true;
 
     void (async () => {
-      const { data } = await sb.auth.getSession();
-      const session = data.session;
+      const session = await getSupabaseSession();
       if (!active) return;
 
       if (!session?.access_token) {
