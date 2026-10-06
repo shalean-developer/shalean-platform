@@ -8,7 +8,7 @@ function configuredPublicHost(env: EnvLike): string | null {
     const value = raw?.trim();
     if (!value) continue;
     try {
-      const normalized = /^[a-z][a-z0-9+.-]*:///i.test(value) ? value : `https://${value}`;
+      const normalized = value.includes("://") ? value : `https://${value}`;
       return new URL(normalized).hostname.toLowerCase();
     } catch {
       return null;
