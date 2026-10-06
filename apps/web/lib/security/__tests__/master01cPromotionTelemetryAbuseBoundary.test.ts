@@ -37,17 +37,17 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
 
     expect(rpc).toHaveBeenCalledTimes(2);
     expect(rpc.mock.calls[0]?.[0]).toBe("consume_promotion_telemetry_rate_limit");
+    const clientKey = String(rpc.mock.calls[0]?.[1]?.p_rate_key ?? "");
+    expect(clientKey).toMatch(/^client:[0-9a-f]{64}$/);
+    expect(clientKey).not.toContain("203.0.113.10");
     expect(rpc.mock.calls[0]?.[1]).toMatchObject({
-      p_rate_key: "global",
-      p_limit: 600,
+      p_limit: 60,
       p_window_seconds: 60,
     });
 
-    const clientKey = String(rpc.mock.calls[1]?.[1]?.p_rate_key ?? "");
-    expect(clientKey).toMatch(/^client:[0-9a-f]{64}$/);
-    expect(clientKey).not.toContain("203.0.113.10");
     expect(rpc.mock.calls[1]?.[1]).toMatchObject({
-      p_limit: 60,
+      p_rate_key: "global",
+      p_limit: 600,
       p_window_seconds: 60,
     });
   });
@@ -68,11 +68,41 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     expect(rpc).toHaveBeenCalledTimes(1);
   });
 
-  it("stops at the global bucket when the shared global ceiling is exhausted", async () => {
+  it("stops at the client bucket without consuming global quota", async () => {
     const { admin, rpc } = adminWithRpc(async () => ({
-      data: [{ allowed: false, retry_after_seconds: 17, request_count: 601 }],
+      data: [{ allowed: false, retry_after_seconds: 11, request_count: 61 }],
       error: null,
     }));
+
+    await expect(
+      checkPromotionTelemetryRateLimit(admin, request("203.0.113.10")),
+    ).resolves.toEqual({
+      allowed: false,
+      retryAfterSeconds: 11,
+      reason: "client",
+    });
+
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(String(rpc.mock.calls[0]?.[1]?.p_rate_key ?? "")).toMatch(
+      /^client:[0-9a-f]{64}$/,
+    );
+  });
+
+  it("checks global quota only after the client bucket is allowed", async () => {
+    let call = 0;
+    const { admin, rpc } = adminWithRpc(async () => {
+      call += 1;
+      if (call === 1) {
+        return {
+          data: [{ allowed: true, retry_after_seconds: 0, request_count: 1 }],
+          error: null,
+        };
+      }
+      return {
+        data: [{ allowed: false, retry_after_seconds: 17, request_count: 601 }],
+        error: null,
+      };
+    });
 
     await expect(
       checkPromotionTelemetryRateLimit(admin, request("203.0.113.10")),
@@ -81,7 +111,16 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
       retryAfterSeconds: 17,
       reason: "global",
     });
-    expect(rpc).toHaveBeenCalledTimes(1);
+
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(String(rpc.mock.calls[0]?.[1]?.p_rate_key ?? "")).toMatch(
+      /^client:[0-9a-f]{64}$/,
+    );
+    expect(rpc.mock.calls[1]?.[1]).toMatchObject({
+      p_rate_key: "global",
+      p_limit: 600,
+      p_window_seconds: 60,
+    });
   });
 
   it("validates payload, consumes shared limits, then records telemetry", () => {
