@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
+  checkPromotionTelemetryRateLimit,
+  promotionTelemetryRateLimitResponse,
+} from "@/lib/rateLimit/promotionTelemetryRateLimit";
+import {
   getActiveDisplayPromotions,
   recordPromotionEvent,
   type PromotionDisplaySurface,
@@ -10,6 +14,9 @@ import { formatOfferLabel } from "@/lib/promotions/offerCopy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MAX_SESSION_ID_LENGTH = 128;
 
 const SURFACES = new Set<PromotionDisplaySurface>([
   "homepage",
@@ -70,8 +77,8 @@ export async function GET(request: Request) {
 
 /** Track view/click/landing/qr/popup events (public, best-effort). */
 export async function POST(request: Request) {
-  const admin = getSupabaseAdmin();
-  if (!admin) return NextResponse.json({ ok: true });
+  const limit = checkPromotionTelemetryRateLimit(request);
+  if (!limit.allowed) return promotionTelemetryRateLimitResponse(limit);
 
   let body: {
     promotionId?: string;
@@ -100,15 +107,35 @@ export async function POST(request: Request) {
     "popup_dismiss",
     "booking_started",
   ]);
-  if (!body.promotionId || !body.eventType || !allowed.has(body.eventType)) {
-    return NextResponse.json({ error: "promotionId and eventType required." }, { status: 400 });
+  if (
+    !body.promotionId ||
+    !UUID_PATTERN.test(body.promotionId) ||
+    !body.eventType ||
+    !allowed.has(body.eventType)
+  ) {
+    return NextResponse.json({ error: "Valid promotionId and eventType required." }, { status: 400 });
   }
+
+  const sessionId =
+    body.sessionId == null
+      ? null
+      : typeof body.sessionId === "string" &&
+          body.sessionId.length > 0 &&
+          body.sessionId.length <= MAX_SESSION_ID_LENGTH
+        ? body.sessionId
+        : undefined;
+  if (body.sessionId != null && sessionId === undefined) {
+    return NextResponse.json({ error: "Invalid sessionId." }, { status: 400 });
+  }
+
+  const admin = getSupabaseAdmin();
+  if (!admin) return NextResponse.json({ ok: true });
 
   try {
     await recordPromotionEvent(admin, {
       promotionId: body.promotionId,
       eventType: body.eventType,
-      sessionId: body.sessionId ?? null,
+      sessionId,
     });
   } catch {
     // best-effort
