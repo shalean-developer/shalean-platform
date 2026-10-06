@@ -3,12 +3,9 @@
  * Usage: npx tsx --env-file=.env.local scripts/callTestEmailApi.ts
  */
 async function main() {
-  const secret =
-    process.env.EMAIL_TEST_SECRET?.trim() ||
-    process.env.CRON_SECRET?.trim() ||
-    "";
+  const secret = process.env.EMAIL_TEST_SECRET?.trim() || "";
   if (!secret) {
-    console.error("Set EMAIL_TEST_SECRET or CRON_SECRET in .env.local");
+    console.error("Set EMAIL_TEST_SECRET in .env.local");
     process.exit(1);
   }
 
