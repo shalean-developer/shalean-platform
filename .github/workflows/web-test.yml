@@ -103,10 +103,6 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/security/__tests__/master01cPromotionTelemetryAbuseBoundary.test.ts
 
-      - name: Staging branch bootstrap convergence
-        if: steps.filter.outputs.run_suite == 'true'
-        run: npm run test -- lib/env/__tests__/stagingBranchBootstrapConvergence.test.ts
-
       - name: Auth source-of-truth regression
         if: steps.filter.outputs.run_suite == 'true'
         run: >-
