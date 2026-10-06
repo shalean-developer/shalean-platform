@@ -30,6 +30,13 @@ const postAuthResolver = fs.readFileSync(
   path.resolve(process.cwd(), "lib/auth/resolvePostAuthDestination.ts"),
   "utf8",
 );
+const sessionBindingMigration = fs.readFileSync(
+  path.resolve(
+    process.cwd(),
+    "../../supabase/migrations/20261006103000_master_01a_07_office_verification_session_binding.sql",
+  ),
+  "utf8",
+);
 
 describe("P0-04E privileged Office email verification flow contract", () => {
   it("routes only authoritatively resolved admin Office logins into verification", () => {
@@ -54,7 +61,14 @@ describe("P0-04E privileged Office email verification flow contract", () => {
     expect(requestRoute).toContain("OFFICE_CODE_RESEND_COOLDOWN_MS");
     expect(requestRoute).toContain("status: 429");
     expect(requestRoute).toContain('"Retry-After"');
-    expect(requestRoute).toContain("hashOfficeEmailCode(user.id, challengeId, code)");
+    expect(requestRoute).toContain("officeSessionBinding(token)");
+    expect(requestRoute).toContain("hashOfficeEmailCode(user.id, challengeId, sessionBinding, code)");
+    expect(requestRoute).toContain("session_binding: sessionBinding");
+    const cooldownStart = requestRoute.indexOf('.select("id, sent_at")');
+    const cooldownEnd = requestRoute.indexOf("if (latestError)", cooldownStart);
+    const cooldownLookup = requestRoute.slice(cooldownStart, cooldownEnd);
+    expect(cooldownLookup).toContain('.eq("user_id", user.id)');
+    expect(cooldownLookup).not.toContain('.eq("session_binding", sessionBinding)');
   });
 
   it("guards seed recipients before calling the email provider", () => {
@@ -77,22 +91,30 @@ describe("P0-04E privileged Office email verification flow contract", () => {
 
   it("serializes verification attempts before evaluating a code", () => {
     const claimIndex = verifyRoute.indexOf(".eq(\"attempt_count\", attempts)");
-    const compareIndex = verifyRoute.indexOf("verifyOfficeEmailCodeHash(user.id", claimIndex);
+    const compareIndex = verifyRoute.indexOf("verifyOfficeEmailCodeHash(", claimIndex);
     expect(claimIndex).toBeGreaterThan(-1);
     expect(compareIndex).toBeGreaterThan(claimIndex);
     expect(verifyRoute).toContain("if (!claimedAttempt)");
     expect(verifyRoute).toContain("Another verification attempt was processed. Try again.");
   });
 
-  it("binds the verification cookie to the current Supabase sign-in session", () => {
-    expect(verificationHelper).toContain("officeSessionBinding(lastSignInAt");
+  it("binds both the email challenge and verification cookie to the current Supabase sign-in session", () => {
+    expect(verificationHelper).toContain('claims.session_id === "string"');
+    expect(verificationHelper).toContain("office-auth-session:v2:");
+    expect(verificationHelper).toContain("office-code:v2:");
     expect(verificationHelper).toContain("payload.sid === expectedSessionBinding");
-    expect(verifyRoute).toContain("officeSessionBinding(user.last_sign_in_at)");
+    expect(requestRoute).toContain("officeSessionBinding(token)");
+    expect(verifyRoute).toContain("officeSessionBinding(token)");
+    expect(verifyRoute).toContain('eq("session_binding", sessionBinding)');
+    expect(verifyRoute).toContain("verifyOfficeEmailCodeHash(");
+    expect(verifyRoute).toContain("sessionBinding,");
     expect(verifyRoute).toContain("createOfficeVerificationToken(user.id, sessionBinding)");
+    expect(sessionBindingMigration).toContain("add column if not exists session_binding text null");
+    expect(sessionBindingMigration).toContain("idx_office_email_verification_user_session_sent");
   });
 
   it("issues the signed Office verification cookie only after successful code verification", () => {
-    const verifyIndex = verifyRoute.indexOf("verifyOfficeEmailCodeHash(user.id");
+    const verifyIndex = verifyRoute.indexOf("verifyOfficeEmailCodeHash(");
     const cookieIndex = verifyRoute.indexOf("response.cookies.set", verifyIndex);
     expect(verifyIndex).toBeGreaterThan(-1);
     expect(cookieIndex).toBeGreaterThan(verifyIndex);
