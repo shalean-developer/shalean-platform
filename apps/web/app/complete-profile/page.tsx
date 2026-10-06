@@ -15,12 +15,17 @@ const PROFILE_REPAIR_TIMEOUT_MS = 8_000;
 const PROFILE_SESSION_TIMEOUT_MS = 8_000;
 
 async function getBoundedProfileSession() {
-  return await Promise.race([
-    getSupabaseSession(),
-    new Promise<null>((resolve) => {
-      window.setTimeout(() => resolve(null), PROFILE_SESSION_TIMEOUT_MS);
-    }),
-  ]);
+  let timer: number | null = null;
+  try {
+    return await Promise.race([
+      getSupabaseSession(),
+      new Promise<null>((resolve) => {
+        timer = window.setTimeout(() => resolve(null), PROFILE_SESSION_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer !== null) window.clearTimeout(timer);
+  }
 }
 
 export default function CompleteProfilePage() {
