@@ -128,9 +128,6 @@ export default function JobsProfilePage() {
   useEffect(() => { void load(); }, [load]);
 
   const handleLogout = useCallback(async () => {
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem("cleaner_id");
-    }
     await signOut();
     router.replace("/auth/login");
     router.refresh();
