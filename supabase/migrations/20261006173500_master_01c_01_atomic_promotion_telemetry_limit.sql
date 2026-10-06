@@ -89,14 +89,23 @@ begin
     return;
   end if;
 
-  -- Serialize the mutation boundary so the authoritative global recheck,
-  -- client recheck, and both conditional increments are one atomic unit.
-  perform pg_advisory_xact_lock(
+  -- Admit at most one mutation transaction without queueing burst traffic.
+  -- Requests that lose this race fail fast instead of occupying a database
+  -- connection while waiting for the serialized limiter boundary.
+  if not pg_try_advisory_xact_lock(
     hashtext('promotion_telemetry_rate_limit'),
     0
-  );
+  ) then
+    allowed := false;
+    reason := 'global';
+    retry_after_seconds := 1;
+    client_request_count := coalesce(v_client_count, 0);
+    global_request_count := coalesce(v_global_count, 0);
+    return next;
+    return;
+  end if;
 
-  -- The fast precheck is only an optimization. Refresh time and recheck global
+  -- The fast prechecks are optimizations. Refresh time and recheck global
   -- saturation under the lock before touching any client bucket.
   v_now := clock_timestamp();
   v_global_started := null;
