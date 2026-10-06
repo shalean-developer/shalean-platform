@@ -103,6 +103,10 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/security/__tests__/master01cPromotionTelemetryAbuseBoundary.test.ts
 
+      - name: AUDIT-01C02 cleanup logs granular RBAC contract
+        if: steps.filter.outputs.run_suite == 'true'
+        run: npm run test -- lib/security/__tests__/audit01c02CleanupLogsRbac.test.ts
+
       - name: Auth source-of-truth regression
         if: steps.filter.outputs.run_suite == 'true'
         run: >-
