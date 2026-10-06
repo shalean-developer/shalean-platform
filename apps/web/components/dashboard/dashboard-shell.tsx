@@ -24,7 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { signOut } from "@/lib/auth/authClient";
+import { reportSignOutFailure, signOut } from "@/lib/auth/authClient";
 import { CUSTOMER_ACCOUNT_REVIEWS_PATH } from "@/lib/customer/customerAccountPaths";
 import { useUser } from "@/hooks/useUser";
 import { cn } from "@/lib/utils";
@@ -62,9 +62,13 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const shortName = displayName(user?.email, meta?.full_name).split(" ")[0] ?? "Account";
 
   async function handleLogout() {
-    await signOut();
-    router.push("/");
-    router.refresh();
+    try {
+      await signOut();
+      router.push("/");
+      router.refresh();
+    } catch (e) {
+      reportSignOutFailure(e);
+    }
   }
 
   return (

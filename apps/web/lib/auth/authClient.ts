@@ -96,13 +96,45 @@ export async function signUp(email: string, password: string, fullName: string, 
   return { user: data.user, session: data.session, error: null };
 }
 
-export async function signOut(): Promise<{ error: Error | null }> {
+export const SIGN_OUT_FAILED_MESSAGE =
+  "Could not sign out. Check your connection and try again.";
+
+export function reportSignOutFailure(error: unknown): void {
+  console.error("[auth/signOut] failed", error);
+  if (typeof window !== "undefined") {
+    window.alert(SIGN_OUT_FAILED_MESSAGE);
+  }
+}
+
+export async function signOut(): Promise<void> {
   const sb = getSupabaseBrowser();
-  if (!sb) return { error: new Error("Supabase is not configured.") };
-  clearAuthIntent();
-  clearCachedUserRole();
+  if (!sb) throw new Error("Supabase is not configured.");
+
   const { error } = await sb.auth.signOut();
-  return { error: error ? new Error(error.message) : null };
+  if (error) throw new Error(error.message);
+
+  try {
+    clearSupabaseSessionCache();
+  } catch {
+    /** best effort after remote sign-out succeeded */
+  }
+  try {
+    clearAuthIntent();
+  } catch {
+    /** best effort after remote sign-out succeeded */
+  }
+  try {
+    clearCachedUserRole();
+  } catch {
+    /** best effort after remote sign-out succeeded */
+  }
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.removeItem("cleaner_id");
+    } catch {
+      /** best effort after remote sign-out succeeded */
+    }
+  }
 }
 
 export type MfaStatus = {

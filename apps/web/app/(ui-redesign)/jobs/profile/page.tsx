@@ -16,7 +16,7 @@ import {
   Shield,
   Star,
 } from "lucide-react";
-import { signOut } from "@/lib/auth/authClient";
+import { reportSignOutFailure, signOut } from "@/lib/auth/authClient";
 import { useRouter } from "next/navigation";
 import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
@@ -128,12 +128,13 @@ export default function JobsProfilePage() {
   useEffect(() => { void load(); }, [load]);
 
   const handleLogout = useCallback(async () => {
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem("cleaner_id");
+    try {
+      await signOut();
+      router.replace("/auth/login");
+      router.refresh();
+    } catch (e) {
+      reportSignOutFailure(e);
     }
-    await signOut();
-    router.replace("/auth/login");
-    router.refresh();
   }, [router]);
 
   if (loading) {
