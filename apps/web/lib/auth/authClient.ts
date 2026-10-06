@@ -96,6 +96,16 @@ export async function signUp(email: string, password: string, fullName: string, 
   return { user: data.user, session: data.session, error: null };
 }
 
+export const SIGN_OUT_FAILED_MESSAGE =
+  "Could not sign out. Check your connection and try again.";
+
+export function reportSignOutFailure(error: unknown): void {
+  console.error("[auth/signOut] failed", error);
+  if (typeof window !== "undefined") {
+    window.alert(SIGN_OUT_FAILED_MESSAGE);
+  }
+}
+
 export async function signOut(): Promise<void> {
   const sb = getSupabaseBrowser();
   if (!sb) throw new Error("Supabase is not configured.");
