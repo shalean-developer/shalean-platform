@@ -392,6 +392,7 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
         service_role: true,
       });
     }
+  });
 
   it("runs web-test for every forward migration change", () => {
     const workflow = readFileSync(
