@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { isAdmin } from "@/lib/auth/admin";
 import type { AppUserRole } from "@/lib/auth/userRole";
+import { fetchCleanerRowForSupabaseAuthUser } from "@/lib/cleaner/resolveCleanerFromRequest";
 
 /** Infer app role for a new or unset user_profiles row. */
 export async function inferUserProfileRole(
@@ -14,11 +15,7 @@ export async function inferUserProfileRole(
   const email = String(loginEmail ?? "").trim().toLowerCase();
   if (email && isAdmin(email)) return "admin";
 
-  const { data: cleaner } = await admin
-    .from("cleaners")
-    .select("id")
-    .eq("auth_user_id", userId)
-    .maybeSingle();
+  const cleaner = await fetchCleanerRowForSupabaseAuthUser(admin, userId);
   if (cleaner?.id) return "cleaner";
 
   return "customer";

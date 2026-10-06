@@ -35,23 +35,6 @@ export async function signIn(email: string, password: string) {
 
   clearSupabaseSessionCache();
 
-  const u = data.user;
-  if (u?.id) {
-    const { data: row } = await sb.from("user_profiles").select("id").eq("id", u.id).maybeSingle();
-    if (!row) {
-      /** Omit `full_name`: older DBs (pre-20260423) only have id, counts, tier, updated_at. */
-      const { error: insErr } = await sb.from("user_profiles").insert({
-        id: u.id,
-        tier: "regular",
-        role: "customer",
-        booking_count: 0,
-        total_spent_cents: 0,
-        updated_at: new Date().toISOString(),
-      });
-      if (insErr) console.warn("[signIn] user_profiles insert:", insErr.message);
-    }
-  }
-
   if (data.session?.access_token && data.user) {
     // Fire-and-forget: booking link must not block post-login role resolve / redirect.
     void linkBookingsToUserAfterAuth(data.session.access_token, data.user);

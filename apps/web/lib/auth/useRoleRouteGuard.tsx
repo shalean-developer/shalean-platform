@@ -182,7 +182,13 @@ export function useRoleRouteGuard({
       return;
     }
     if (state.status === "missing_profile") {
-      scheduleAppRouterReplace(router, "/complete-profile");
+      const query =
+        typeof window !== "undefined" ? window.location.search.replace(/^\?/, "") : "";
+      const requested = `${pathname}${query ? `?${query}` : ""}`;
+      scheduleAppRouterReplace(
+        router,
+        `/complete-profile?redirect=${encodeURIComponent(requested)}`,
+      );
       return;
     }
     if (state.status === "wrong_role") {
