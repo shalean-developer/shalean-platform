@@ -11,6 +11,8 @@ type RepairResponse = {
   error?: string;
 };
 
+const PROFILE_REPAIR_TIMEOUT_MS = 8_000;
+
 export default function CompleteProfilePage() {
   const [email, setEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +40,9 @@ export default function CompleteProfilePage() {
       setEmail(session.user.email ?? null);
       const redirect = new URL(window.location.href).searchParams.get("redirect");
 
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), PROFILE_REPAIR_TIMEOUT_MS);
+
       try {
         const res = await fetch("/api/auth/complete-profile", {
           method: "POST",
@@ -46,6 +51,7 @@ export default function CompleteProfilePage() {
             access_token: session.access_token,
             redirect,
           }),
+          signal: controller.signal,
         });
         const json = (await res.json().catch(() => ({}))) as RepairResponse;
         if (!active) return;
@@ -60,11 +66,15 @@ export default function CompleteProfilePage() {
       } catch (e) {
         if (!active) return;
         setError(
-          e instanceof Error
-            ? e.message
-            : "Could not restore your sign-in session. Sign out and try again.",
+          e instanceof DOMException && e.name === "AbortError"
+            ? "Profile repair timed out. Check your connection and try again."
+            : e instanceof Error
+              ? e.message
+              : "Could not restore your sign-in session. Sign out and try again.",
         );
         setRepairing(false);
+      } finally {
+        window.clearTimeout(timer);
       }
     })();
 
