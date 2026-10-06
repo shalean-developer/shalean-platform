@@ -281,7 +281,8 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     ];
     const sensitivePrivilegePatterns = [
       /\b(?:grant|revoke)\b[\s\S]*?\bon\s+all\s+(?:functions|routines)\s+in\s+schema\s+"?public"?\b/i,
-      /\balter\s+default\s+privileges\b[\s\S]*?\bfunctions\b/i,
+      /\b(?:grant|revoke)\b[\s\S]*?\bon\s+all\s+tables\s+in\s+schema\s+"?public"?\b/i,
+      /\balter\s+default\s+privileges\b[\s\S]*?\b(?:functions|routines|tables)\b/i,
       /\bgrant\s+["a-z0-9_]+["]?\s+to\s+(?:"?(?:anon|authenticated|service_role)"?)\b/i,
       /\brevoke\s+["a-z0-9_]+["]?\s+from\s+(?:"?(?:anon|authenticated|service_role)"?)\b/i,
     ];
