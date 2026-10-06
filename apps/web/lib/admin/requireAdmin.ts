@@ -49,6 +49,9 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
   const method = request.method.toUpperCase();
   const read = method === "GET" || method === "HEAD";
 
+  if (path.includes("/api/admin/cleanup-logs")) {
+    return ["system.logs.manage"];
+  }
   if (path.includes("/api/admin/security/") || path.includes("/api/admin/roles") || path.includes("/api/admin/admin-users")) {
     return ["role.manage"];
   }
