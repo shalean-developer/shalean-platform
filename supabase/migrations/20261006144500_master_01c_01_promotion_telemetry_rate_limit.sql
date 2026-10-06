@@ -10,6 +10,10 @@ create table if not exists public.promotion_telemetry_rate_limit_buckets (
 
 alter table public.promotion_telemetry_rate_limit_buckets enable row level security;
 
+create index if not exists promotion_telemetry_rate_limit_client_updated_idx
+  on public.promotion_telemetry_rate_limit_buckets (updated_at)
+  where rate_key like 'client:%';
+
 revoke all on table public.promotion_telemetry_rate_limit_buckets from public, anon, authenticated;
 grant select, insert, update, delete on table public.promotion_telemetry_rate_limit_buckets to service_role;
 
