@@ -144,6 +144,17 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     expect(sql).toContain("to service_role");
   });
 
+  it("runs web-test when the governed telemetry migration changes", () => {
+    const workflow = readFileSync(
+      resolve(root, "../../.github/workflows/web-test.yml"),
+      "utf8",
+    );
+
+    expect(workflow).toContain(
+      "supabase/migrations/20261006144500_master_01c_01_promotion_telemetry_rate_limit\\.sql$",
+    );
+  });
+
   it("does not rely on process-local maps for the production boundary", () => {
     const source = readFileSync(
       resolve(root, "lib/rateLimit/promotionTelemetryRateLimit.ts"),
