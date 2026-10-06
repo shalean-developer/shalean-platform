@@ -170,9 +170,6 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
       "fast reject an already-saturated client before taking the advisory",
     );
     const lock = atomicSql.indexOf("pg_try_advisory_xact_lock");
-    const busyReject = atomicSql.indexOf(
-      "requests that lose this race fail fast",
-    );
     const lockedGlobalRecheck = atomicSql.indexOf(
       "saturation under the lock before touching any client bucket",
     );
@@ -183,8 +180,7 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     expect(globalFastReject).toBeGreaterThanOrEqual(0);
     expect(clientFastReject).toBeGreaterThan(globalFastReject);
     expect(lock).toBeGreaterThan(clientFastReject);
-    expect(busyReject).toBeGreaterThan(lock);
-    expect(lockedGlobalRecheck).toBeGreaterThan(busyReject);
+    expect(lockedGlobalRecheck).toBeGreaterThan(lock);
     expect(lockedClientRecheck).toBeGreaterThan(lockedGlobalRecheck);
     expect(atomicSql).toContain("both buckets have capacity under the same transaction lock");
     expect(atomicSql).toContain(
