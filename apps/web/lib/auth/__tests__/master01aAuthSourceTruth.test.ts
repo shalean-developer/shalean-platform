@@ -485,3 +485,31 @@ describe("MASTER-01A-06A account middleware redirect convergence", () => {
     expect(middleware).toContain('if (isOfficePortalPath(pathname) && !user)');
   });
 });
+
+
+describe("MASTER-01A-07 Office challenge session binding", () => {
+  it("persists the current session binding when issuing a code", () => {
+    const requestRoute = read("apps/web/app/api/auth/office-email-verification/request/route.ts");
+
+    expect(requestRoute).toContain("officeSessionBinding(user.last_sign_in_at)");
+    expect(requestRoute).toContain("session_binding: sessionBinding");
+    expect(requestRoute).toContain("hashOfficeEmailCode(user.id, challengeId, sessionBinding, code)");
+  });
+
+  it("requires the current session binding when verifying a code", () => {
+    const verifyRoute = read("apps/web/app/api/auth/office-email-verification/verify/route.ts");
+
+    expect(verifyRoute).toContain('select("id, code_hash, session_binding');
+    expect(verifyRoute).toContain('.eq("session_binding", sessionBinding)');
+    expect(verifyRoute).toContain("challenge.session_binding !== sessionBinding");
+    expect(verifyRoute).toContain("Request a new security code for this login session.");
+  });
+
+  it("cryptographically includes the session binding in the challenge hash", () => {
+    const helper = read("apps/web/lib/auth/officeEmailVerification.ts");
+
+    expect(helper).toContain("office-code:v2:");
+    expect(helper).toContain("sessionBinding");
+    expect(helper).toContain("Office verification session binding is required.");
+  });
+});
