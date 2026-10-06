@@ -227,15 +227,6 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
       "create or replace function public.consume_promotion_telemetry_rate_limit(",
     );
 
-    const combinedTail = migrations
-      .slice(combined.index)
-      .map(({ sql }) => sql)
-      .join("\n");
-    const legacyTail = migrations
-      .slice(legacy.index)
-      .map(({ sql }) => sql)
-      .join("\n");
-
     expect(combined.sql).toContain("pg_try_advisory_xact_lock");
     expect(combined.sql).not.toContain("perform pg_advisory_xact_lock");
     expect(combined.sql).toContain(
@@ -266,20 +257,80 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     expect(legacy.sql).toContain("for v_count in 0..3 loop");
     expect(legacy.sql).toContain("perform pg_sleep(");
 
-    for (const [tail, signature] of [
-      [combinedTail, "consume_promotion_telemetry_limits"],
-      [legacyTail, "consume_promotion_telemetry_rate_limit"],
-    ] as const) {
-      expect(tail).toContain(
-        `grant execute on function public.${signature}`,
-      );
-      expect(tail).toContain("to service_role");
-      expect(tail).not.toMatch(
-        new RegExp(
-          `grant\\s+execute\\s+on\\s+function\\s+public\\.${signature}[^;]*\\bto\\s+(public|anon|authenticated)\\b`,
-          "i",
+    type Role = "public" | "anon" | "authenticated" | "service_role";
+    type FunctionName =
+      | "consume_promotion_telemetry_limits"
+      | "consume_promotion_telemetry_rate_limit";
+
+    const roles: Role[] = [
+      "public",
+      "anon",
+      "authenticated",
+      "service_role",
+    ];
+    const functionNames: FunctionName[] = [
+      "consume_promotion_telemetry_limits",
+      "consume_promotion_telemetry_rate_limit",
+    ];
+    const privilegeState = Object.fromEntries(
+      functionNames.map((name) => [
+        name,
+        Object.fromEntries(roles.map((role) => [role, false])) as Record<
+          Role,
+          boolean
+        >,
+      ]),
+    ) as Record<FunctionName, Record<Role, boolean>>;
+    const exists = Object.fromEntries(
+      functionNames.map((name) => [name, false]),
+    ) as Record<FunctionName, boolean>;
+
+    const sqlHistory = migrations.map(({ sql }) => sql).join("\n");
+    const eventPattern =
+      /create\s+or\s+replace\s+function\s+public\.(consume_promotion_telemetry_limits|consume_promotion_telemetry_rate_limit)\s*\(|(grant|revoke)\s+(execute|all(?:\s+privileges)?)\s+on\s+(function\s+public\.(consume_promotion_telemetry_limits|consume_promotion_telemetry_rate_limit)\s*\([^;]*?\)|all\s+functions\s+in\s+schema\s+public)\s+(to|from)\s+([^;]+);/gis;
+
+    for (const match of sqlHistory.matchAll(eventPattern)) {
+      const created = match[1]?.toLowerCase() as FunctionName | undefined;
+      if (created) {
+        if (!exists[created]) {
+          exists[created] = true;
+          privilegeState[created].public = true;
+        }
+        continue;
+      }
+
+      const action = match[2]?.toLowerCase();
+      const target = match[4]?.toLowerCase() ?? "";
+      const directName = match[5]?.toLowerCase() as FunctionName | undefined;
+      const roleClause = (match[7] ?? "")
+        .toLowerCase()
+        .replace(/\bwith\s+grant\s+option\b/g, "");
+      const affectedRoles = roles.filter((role) =>
+        new RegExp(`(?:^|[,\\s])${role}(?:$|[,\\s])`, "i").test(
+          roleClause,
         ),
       );
+      const affectedFunctions = directName
+        ? [directName]
+        : functionNames.filter((name) => exists[name]);
+
+      for (const name of affectedFunctions) {
+        for (const role of affectedRoles) {
+          privilegeState[name][role] = action === "grant";
+        }
+      }
+
+      expect(target).not.toContain("alter default privileges");
+    }
+
+    for (const name of functionNames) {
+      expect(exists[name]).toBe(true);
+      expect(privilegeState[name]).toEqual({
+        public: false,
+        anon: false,
+        authenticated: false,
+        service_role: true,
+      });
     }
   });
 
