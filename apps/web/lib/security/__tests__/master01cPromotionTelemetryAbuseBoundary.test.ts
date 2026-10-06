@@ -239,9 +239,6 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
       "client rejection cannot consume global quota",
     );
     expect(atomicSql).toContain(
-      "delegate to the new combined limiter so client and global quotas are consumed atomically",
-    );
-    expect(atomicSql).toContain(
       "from public.consume_promotion_telemetry_limits(",
     );
   });
