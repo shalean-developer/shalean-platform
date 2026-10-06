@@ -197,3 +197,13 @@ describe("MASTER-01A-04 redirect control-character hardening", () => {
     expect(userRole).toContain("/[\\u0000-\\u001f\\u007f]/.test(t)");
   });
 });
+
+
+describe("MASTER-01A-04A complete-profile session lookup", () => {
+  it("uses the guarded shared Supabase session helper instead of direct auth.getSession", () => {
+    const page = read("apps/web/app/complete-profile/page.tsx");
+
+    expect(page).toContain("getSupabaseSession");
+    expect(page).not.toContain("sb.auth.getSession()");
+  });
+});
