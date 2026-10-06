@@ -230,9 +230,10 @@ grant execute on function public.consume_promotion_telemetry_limits(text, intege
   to service_role;
 
 
--- Rolling-deploy compatibility: legacy runtimes still call the original
--- single-bucket RPC. Make those mutations participate in the same non-blocking
--- advisory lock so old and new instances cannot race past a bucket ceiling.
+-- Rolling-deploy compatibility: old runtimes call the legacy RPC twice,
+-- first with 'global' and then with a client:* key. Preserve atomic semantics by
+-- making the global call read-only and delegating the client call to the new
+-- combined RPC, which consumes both quotas in one transaction.
 create or replace function public.consume_promotion_telemetry_rate_limit(
   p_rate_key text,
   p_limit integer,
@@ -252,6 +253,7 @@ declare
   v_window interval;
   v_started timestamptz;
   v_count integer;
+  v_combined record;
 begin
   if p_rate_key is null or length(p_rate_key) = 0 or length(p_rate_key) > 128 then
     raise exception 'invalid rate key';
@@ -265,103 +267,60 @@ begin
 
   v_window := make_interval(secs => p_window_seconds);
 
-  -- Preserve the historical read-only fast reject.
-  select bucket.window_started_at, bucket.request_count
-  into v_started, v_count
-  from public.promotion_telemetry_rate_limit_buckets as bucket
-  where bucket.rate_key = p_rate_key;
+  if p_rate_key = 'global' then
+    -- Old runtimes perform this call first. Keep it read-only so a later
+    -- client rejection cannot consume global quota.
+    select bucket.window_started_at, bucket.request_count
+    into v_started, v_count
+    from public.promotion_telemetry_rate_limit_buckets as bucket
+    where bucket.rate_key = 'global';
 
-  if found
-     and v_started > v_now - v_window
-     and v_count >= p_limit then
-    allowed := false;
-    retry_after_seconds := greatest(
-      1,
-      ceil(extract(epoch from ((v_started + v_window) - v_now)))::integer
-    );
-    request_count := v_count;
-    return next;
-    return;
-  end if;
+    if found
+       and v_started > v_now - v_window
+       and v_count >= p_limit then
+      allowed := false;
+      retry_after_seconds := greatest(
+        1,
+        ceil(extract(epoch from ((v_started + v_window) - v_now)))::integer
+      );
+      request_count := v_count;
+      return next;
+      return;
+    end if;
 
-  -- Coordinate with the combined RPC without queueing old runtime requests.
-  if not pg_try_advisory_xact_lock(
-    hashtext('promotion_telemetry_rate_limit'),
-    0
-  ) then
-    allowed := false;
-    retry_after_seconds := 1;
+    allowed := true;
+    retry_after_seconds := 0;
     request_count := coalesce(v_count, 0);
     return next;
     return;
   end if;
 
-  v_now := clock_timestamp();
-  v_started := null;
-  v_count := null;
-
-  select bucket.window_started_at, bucket.request_count
-  into v_started, v_count
-  from public.promotion_telemetry_rate_limit_buckets as bucket
-  where bucket.rate_key = p_rate_key;
-
-  if found
-     and v_started > v_now - v_window
-     and v_count >= p_limit then
-    allowed := false;
-    retry_after_seconds := greatest(
-      1,
-      ceil(extract(epoch from ((v_started + v_window) - v_now)))::integer
-    );
-    request_count := v_count;
-    return next;
-    return;
+  if p_rate_key not like 'client:%' then
+    raise exception 'invalid legacy rate key';
   end if;
 
-  insert into public.promotion_telemetry_rate_limit_buckets as bucket (
-    rate_key,
-    window_started_at,
-    request_count,
-    updated_at
-  )
-  values (
+  -- Old runtimes call this second with the client bucket. Delegate to the new
+  -- combined limiter so client and global quotas are consumed atomically.
+  select *
+  into v_combined
+  from public.consume_promotion_telemetry_limits(
     p_rate_key,
-    v_now,
-    1,
-    v_now
-  )
-  on conflict (rate_key) do update
-  set
-    window_started_at = case
-      when bucket.window_started_at <= v_now - v_window then v_now
-      else bucket.window_started_at
-    end,
-    request_count = case
-      when bucket.window_started_at <= v_now - v_window then 1
-      else bucket.request_count + 1
-    end,
-    updated_at = v_now
-  where bucket.window_started_at <= v_now - v_window
-     or bucket.request_count < p_limit
-  returning bucket.request_count
-  into v_count;
+    p_limit,
+    600,
+    p_window_seconds
+  );
 
-  if not found then
-    select bucket.request_count
-    into v_count
-    from public.promotion_telemetry_rate_limit_buckets as bucket
-    where bucket.rate_key = p_rate_key;
-
+  if v_combined.reason = 'busy' then
     allowed := false;
     retry_after_seconds := 1;
-    request_count := coalesce(v_count, p_limit);
+    request_count := coalesce(v_combined.client_request_count, 0);
     return next;
     return;
   end if;
 
-  allowed := true;
-  retry_after_seconds := 0;
-  request_count := v_count;
+  allowed := v_combined.allowed;
+  retry_after_seconds := v_combined.retry_after_seconds;
+  request_count := coalesce(v_combined.client_request_count, 0);
   return next;
 end;
 $legacy$;
