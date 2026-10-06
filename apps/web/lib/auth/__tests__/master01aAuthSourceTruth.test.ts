@@ -249,3 +249,25 @@ describe("MASTER-01A-04B complete-profile repair timeout", () => {
     expect(page).toContain("setRepairing(false)");
   });
 });
+
+
+describe("MASTER-01A-04C complete-profile session timeout", () => {
+  it("bounds the profile session lookup before repair starts", () => {
+    const page = read("apps/web/app/complete-profile/page.tsx");
+
+    expect(page).toContain("PROFILE_SESSION_TIMEOUT_MS = 8_000");
+    expect(page).toContain("getBoundedProfileSession()");
+    expect(page).toContain("Promise.race");
+    expect(page).toContain("getSupabaseSession()");
+    expect(page).toContain("window.setTimeout");
+    expect(page).toContain("window.clearTimeout(timer)");
+  });
+
+  it("fails closed to login when the bounded session lookup times out", () => {
+    const page = read("apps/web/app/complete-profile/page.tsx");
+
+    expect(page).toContain("const session = await getBoundedProfileSession()");
+    expect(page).toContain('if (!session?.access_token)');
+    expect(page).toContain('window.location.replace("/auth/login")');
+  });
+});
