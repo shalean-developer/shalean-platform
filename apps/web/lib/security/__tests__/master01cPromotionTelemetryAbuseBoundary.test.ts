@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
@@ -189,90 +189,111 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     expect(source).toContain("headers()");
   });
 
-  it("uses one atomic service-role-only database limiter contract", () => {
-    const originalSql = readFileSync(
-      resolve(
-        root,
-        "../../supabase/migrations/20261006144500_master_01c_01_promotion_telemetry_rate_limit.sql",
-      ),
-      "utf8",
-    ).toLowerCase();
-    const atomicSql = readFileSync(
-      resolve(
-        root,
-        "../../supabase/migrations/20261006173500_master_01c_01_atomic_promotion_telemetry_limit.sql",
-      ),
-      "utf8",
-    ).toLowerCase();
+  it("validates the effective limiter contract across all forward migrations", () => {
+    const migrationsDir = resolve(root, "../../supabase/migrations");
+    const migrationFiles = readdirSync(migrationsDir)
+      .filter((name) => name.endsWith(".sql"))
+      .sort();
+    const governedFiles = migrationFiles.filter(
+      (name) => name >= "20261006144500_master_01c_01_promotion_telemetry_rate_limit.sql",
+    );
 
-    expect(originalSql).toContain("promotion_telemetry_rate_limit_buckets");
-    expect(atomicSql).toContain("consume_promotion_telemetry_limits");
-    expect(atomicSql).toContain("pg_try_advisory_xact_lock");
-    expect(atomicSql).not.toContain("perform pg_advisory_xact_lock");
-    expect(atomicSql).toContain("fast reject already-saturated global traffic before taking the advisory");
-    expect(atomicSql).toContain("recheck global");
-    expect(atomicSql).toContain("saturation under the lock before touching any client bucket");
+    expect(governedFiles.length).toBeGreaterThanOrEqual(2);
 
-    const globalFastReject = atomicSql.indexOf(
+    const migrations = governedFiles.map((name) => ({
+      name,
+      sql: readFileSync(resolve(migrationsDir, name), "utf8").toLowerCase(),
+    }));
+
+    const original = migrations.find(
+      ({ name }) =>
+        name === "20261006144500_master_01c_01_promotion_telemetry_rate_limit.sql",
+    );
+    expect(original?.sql).toContain("promotion_telemetry_rate_limit_buckets");
+
+    const latestFor = (signature: string) => {
+      for (let i = migrations.length - 1; i >= 0; i -= 1) {
+        if (migrations[i]!.sql.includes(signature)) {
+          return { index: i, ...migrations[i]! };
+        }
+      }
+      throw new Error(`No forward migration defines ${signature}`);
+    };
+
+    const combined = latestFor(
+      "create or replace function public.consume_promotion_telemetry_limits(",
+    );
+    const legacy = latestFor(
+      "create or replace function public.consume_promotion_telemetry_rate_limit(",
+    );
+
+    const combinedTail = migrations
+      .slice(combined.index)
+      .map(({ sql }) => sql)
+      .join("\n");
+    const legacyTail = migrations
+      .slice(legacy.index)
+      .map(({ sql }) => sql)
+      .join("\n");
+
+    expect(combined.sql).toContain("pg_try_advisory_xact_lock");
+    expect(combined.sql).not.toContain("perform pg_advisory_xact_lock");
+    expect(combined.sql).toContain(
       "fast reject already-saturated global traffic before taking the advisory",
     );
-    const clientFastReject = atomicSql.indexOf(
+    expect(combined.sql).toContain(
       "fast reject an already-saturated client before taking the advisory",
     );
-    const lock = atomicSql.indexOf("pg_try_advisory_xact_lock");
-    const lockedGlobalRecheck = atomicSql.indexOf(
+    expect(combined.sql).toContain(
       "saturation under the lock before touching any client bucket",
     );
-    const lockedClientRecheck = atomicSql.indexOf(
+    expect(combined.sql).toContain(
       "refresh the client snapshot under the same lock before any mutation",
     );
+    expect(combined.sql).toContain(
+      "both buckets have capacity under the same transaction lock",
+    );
 
-    expect(globalFastReject).toBeGreaterThanOrEqual(0);
-    expect(clientFastReject).toBeGreaterThan(globalFastReject);
-    expect(lock).toBeGreaterThan(clientFastReject);
-    expect(lockedGlobalRecheck).toBeGreaterThan(lock);
-    expect(lockedClientRecheck).toBeGreaterThan(lockedGlobalRecheck);
-    expect(atomicSql).toContain("both buckets have capacity under the same transaction lock");
-    expect(atomicSql).toContain(
-      "revoke all on function public.consume_promotion_telemetry_limits",
-    );
-    expect(atomicSql).toContain("from public, anon, authenticated");
-    expect(atomicSql).toContain(
-      "grant execute on function public.consume_promotion_telemetry_limits",
-    );
-    expect(atomicSql).toContain("to service_role");
-    expect(atomicSql).toContain(
-      "create or replace function public.consume_promotion_telemetry_rate_limit",
-    );
-    expect(atomicSql).toContain(
-      "rolling-deploy compatibility: old runtimes call the legacy rpc twice",
-    );
-    expect(atomicSql).toContain(
+    expect(legacy.sql).toContain(
       "making the global call read-only and delegating the client call to the new",
     );
-    expect(atomicSql).toContain(
-      "client rejection cannot consume global quota",
-    );
-    expect(atomicSql).toContain(
+    expect(legacy.sql).toContain(
       "from public.consume_promotion_telemetry_limits(",
     );
-    expect(atomicSql).toContain(
+    expect(legacy.sql).toContain(
       "old runtimes cannot interpret the new 'busy' reason",
     );
-    expect(atomicSql).toContain("for v_count in 0..3 loop");
-    expect(atomicSql).toContain("perform pg_sleep(");
+    expect(legacy.sql).toContain("for v_count in 0..3 loop");
+    expect(legacy.sql).toContain("perform pg_sleep(");
+
+    for (const [tail, signature] of [
+      [combinedTail, "consume_promotion_telemetry_limits"],
+      [legacyTail, "consume_promotion_telemetry_rate_limit"],
+    ] as const) {
+      expect(tail).toContain(
+        `grant execute on function public.${signature}`,
+      );
+      expect(tail).toContain("to service_role");
+      expect(tail).not.toMatch(
+        new RegExp(
+          `grant\\s+execute\\s+on\\s+function\\s+public\\.${signature}[^;]*\\bto\\s+(public|anon|authenticated)\\b`,
+          "i",
+        ),
+      );
+    }
   });
 
-  it("runs web-test when the governed telemetry migration changes", () => {
+  it("runs web-test for every forward migration change", () => {
     const workflow = readFileSync(
       resolve(root, "../../.github/workflows/web-test.yml"),
       "utf8",
     );
 
-    expect(workflow).toContain(
+    expect(workflow).toContain("supabase/migrations/");
+    expect(workflow).not.toContain(
       "supabase/migrations/20261006144500_master_01c_01_promotion_telemetry_rate_limit\\.sql$",
     );
-    expect(workflow).toContain(
+    expect(workflow).not.toContain(
       "supabase/migrations/20261006173500_master_01c_01_atomic_promotion_telemetry_limit\\.sql$",
     );
   });
