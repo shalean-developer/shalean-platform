@@ -174,6 +174,21 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     expect(postSource).toContain("promotionTelemetryRateLimitResponse(limit)");
   });
 
+  it("rate-limits public offer landing telemetry before recording", () => {
+    const source = readFileSync(
+      resolve(root, "app/(marketing)/offers/[slug]/page.tsx"),
+      "utf8",
+    );
+
+    const limiter = source.indexOf("await checkPromotionTelemetryRateLimit(");
+    const write = source.indexOf("await recordPromotionEvent(admin");
+
+    expect(limiter).toBeGreaterThanOrEqual(0);
+    expect(write).toBeGreaterThan(limiter);
+    expect(source).toContain("if (limit.allowed)");
+    expect(source).toContain("headers()");
+  });
+
   it("uses one atomic service-role-only database limiter contract", () => {
     const originalSql = readFileSync(
       resolve(
