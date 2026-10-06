@@ -31,17 +31,24 @@ export function generateOfficeEmailCode(): string {
   return String(randomInt(100000, 1000000));
 }
 
-export function hashOfficeEmailCode(userId: string, challengeId: string, code: string): string {
-  return hmac(`office-code:v1:${userId}:${challengeId}:${code}`);
+export function hashOfficeEmailCode(
+  userId: string,
+  challengeId: string,
+  sessionBinding: string,
+  code: string,
+): string {
+  if (!sessionBinding) throw new Error("Office verification session binding is required.");
+  return hmac(`office-code:v2:${userId}:${challengeId}:${sessionBinding}:${code}`);
 }
 
 export function verifyOfficeEmailCodeHash(
   userId: string,
   challengeId: string,
+  sessionBinding: string,
   code: string,
   expectedHash: string,
 ): boolean {
-  return safeEqualHex(hashOfficeEmailCode(userId, challengeId, code), expectedHash);
+  return safeEqualHex(hashOfficeEmailCode(userId, challengeId, sessionBinding, code), expectedHash);
 }
 
 type VerificationPayload = {
@@ -55,9 +62,22 @@ function encodePayload(payload: VerificationPayload): string {
   return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
 }
 
-export function officeSessionBinding(lastSignInAt: string | null | undefined): string | null {
-  const value = lastSignInAt?.trim();
-  return value ? hmac(`office-auth-session:v1:${value}`) : null;
+export function officeSessionBinding(accessToken: string | null | undefined): string | null {
+  const token = accessToken?.trim();
+  if (!token) return null;
+
+  const parts = token.split(".");
+  if (parts.length !== 3 || !parts[1]) return null;
+
+  try {
+    const claims = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as {
+      session_id?: unknown;
+    };
+    const sessionId = typeof claims.session_id === "string" ? claims.session_id.trim() : "";
+    return sessionId ? hmac(`office-auth-session:v2:${sessionId}`) : null;
+  } catch {
+    return null;
+  }
 }
 
 export function createOfficeVerificationToken(
