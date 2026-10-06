@@ -45,7 +45,28 @@ begin
 
   v_window := make_interval(secs => p_window_seconds);
 
-  insert into public.promotion_telemetry_rate_limit_buckets as bucket (
+  -- Fast reject path: once an active bucket is exhausted, do not mutate it.
+  -- This keeps rejected attack traffic from translating one-for-one into writes.
+  select bucket.window_started_at, bucket.request_count
+  into v_started, v_count
+  from public.promotion_telemetry_rate_limit_buckets as bucket
+  where bucket.rate_key = p_rate_key;
+
+  if found
+     and v_started > v_now - v_window
+     and v_count >= p_limit then
+    allowed := false;
+    retry_after_seconds := greatest(
+      1,
+      ceil(extract(epoch from ((v_started + v_window) - v_now)))::integer
+    );
+    request_count := v_count;
+    return next;
+    return;
+  end if;
+
+  -- Create a missing bucket without overwriting a concurrent creator.
+  insert into public.promotion_telemetry_rate_limit_buckets (
     rate_key,
     window_started_at,
     request_count,
@@ -57,7 +78,28 @@ begin
     1,
     v_now
   )
-  on conflict (rate_key) do update
+  on conflict (rate_key) do nothing
+  returning window_started_at, request_count
+  into v_started, v_count;
+
+  if found then
+    allowed := true;
+    retry_after_seconds := 0;
+    request_count := v_count;
+
+    if p_rate_key = 'global' then
+      delete from public.promotion_telemetry_rate_limit_buckets
+      where rate_key like 'client:%'
+        and updated_at < v_now - interval '1 day';
+    end if;
+
+    return next;
+    return;
+  end if;
+
+  -- Existing bucket: reset an expired window or atomically increment only while
+  -- the active bucket remains below its ceiling.
+  update public.promotion_telemetry_rate_limit_buckets as bucket
   set
     window_started_at = case
       when bucket.window_started_at <= v_now - v_window then v_now
@@ -68,10 +110,34 @@ begin
       else bucket.request_count + 1
     end,
     updated_at = v_now
-  returning
-    bucket.window_started_at,
-    bucket.request_count
+  where bucket.rate_key = p_rate_key
+    and (
+      bucket.window_started_at <= v_now - v_window
+      or bucket.request_count < p_limit
+    )
+  returning bucket.window_started_at, bucket.request_count
   into v_started, v_count;
+
+  if not found then
+    -- A concurrent request reached the ceiling after our initial read.
+    select bucket.window_started_at, bucket.request_count
+    into v_started, v_count
+    from public.promotion_telemetry_rate_limit_buckets as bucket
+    where bucket.rate_key = p_rate_key;
+
+    allowed := false;
+    retry_after_seconds := greatest(
+      1,
+      ceil(extract(epoch from ((v_started + v_window) - v_now)))::integer
+    );
+    request_count := coalesce(v_count, p_limit);
+    return next;
+    return;
+  end if;
+
+  allowed := true;
+  retry_after_seconds := 0;
+  request_count := v_count;
 
   -- The fixed global bucket resets once per window; use that moment to prune
   -- stale client buckets without scanning the table on every request.
@@ -80,16 +146,6 @@ begin
     where rate_key like 'client:%'
       and updated_at < v_now - interval '1 day';
   end if;
-
-  allowed := v_count <= p_limit;
-  retry_after_seconds := case
-    when allowed then 0
-    else greatest(
-      1,
-      ceil(extract(epoch from ((v_started + v_window) - v_now)))::integer
-    )
-  end;
-  request_count := v_count;
 
   return next;
 end;
