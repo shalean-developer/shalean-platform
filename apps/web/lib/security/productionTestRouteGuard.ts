@@ -23,9 +23,8 @@ export function isProductionTestRouteBlocked(
   try {
     return isCustomerProductionHost(new URL(requestUrl).host);
   } catch {
-    // If a route cannot establish its request host, do not turn an explicitly
-    // non-production deployment into production. Remote environments are
-    // governed by SHALEAN_APP_ENV / platform deployment metadata above.
-    return false;
+    // A malformed/unknown request origin cannot prove that this is a safe
+    // non-production host, so test tooling fails closed.
+    return true;
   }
 }
