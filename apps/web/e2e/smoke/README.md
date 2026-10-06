@@ -70,7 +70,7 @@ From repo root (no `cd`):
 npm run test:e2e:revenue --prefix apps/web
 ```
 
-The load-test route is intentionally unavailable on **production** and always returns 404 there. Run this smoke suite only against local, staging, or preview environments.
+The load-test route is intentionally unavailable on **production** and **preview** deployments and always returns 404 there. Run this smoke suite only against local or staging environments.
 
 **cmd.exe:**
 
