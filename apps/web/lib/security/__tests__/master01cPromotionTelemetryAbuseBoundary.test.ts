@@ -380,8 +380,8 @@ describe("MASTER-01C-01 promotion telemetry service-role abuse boundary", () => 
     expect(
       liveLimiterRoutines.map((routine) => routine.signature).sort(),
     ).toEqual([
-      "consume_promotion_telemetry_rate_limit(text,integer,integer)",
       "consume_promotion_telemetry_limits(text,integer,integer,integer)",
+      "consume_promotion_telemetry_rate_limit(text,integer,integer)",
     ]);
 
     for (const routine of liveLimiterRoutines) {
