@@ -321,3 +321,53 @@ describe("MASTER-01A-05 logout/session invalidation source of truth", () => {
     }
   });
 });
+
+
+describe("MASTER-01A-05 logout caller rejection handling", () => {
+  it("handles shared sign-out rejection at every web logout entry point", () => {
+    const callers = [
+      "apps/web/app/complete-profile/page.tsx",
+      "apps/web/components/account/AccountRouteLayout.tsx",
+      "apps/web/components/nav/HeaderLoginButton.tsx",
+      "apps/web/src/features/account/AccountNav.tsx",
+      "apps/web/components/nav/SiteTopBarAccount.tsx",
+      "apps/web/app/cleaner/profile/page.tsx",
+      "apps/web/src/features/office/OfficeShell.tsx",
+      "apps/web/components/dashboard/dashboard-shell.tsx",
+      "apps/web/app/(ui-redesign)/jobs/profile/page.tsx",
+      "apps/web/components/cleaner-dashboard/CleanerRouteShell.tsx",
+      "apps/web/components/booking/checkout/BookingCheckoutHeader.tsx",
+    ];
+
+    for (const path of callers) {
+      const source = read(path);
+      expect(source).toContain("signOut");
+      expect(source).toContain("reportSignOutFailure");
+    }
+  });
+
+  it("restores busy state when account or cleaner logout fails", () => {
+    const accountNav = read("apps/web/src/features/account/AccountNav.tsx");
+    const cleanerProfile = read("apps/web/app/cleaner/profile/page.tsx");
+
+    expect(accountNav).toContain("finally {");
+    expect(accountNav).toContain("setBusy(false)");
+    expect(cleanerProfile).toContain("finally {");
+    expect(cleanerProfile).toContain("setLogoutBusy(false)");
+  });
+
+  it("keeps navigation after successful sign-out, not in the failure branch", () => {
+    for (const path of [
+      "apps/web/components/account/AccountRouteLayout.tsx",
+      "apps/web/src/features/office/OfficeShell.tsx",
+      "apps/web/app/(ui-redesign)/jobs/profile/page.tsx",
+      "apps/web/components/cleaner-dashboard/CleanerRouteShell.tsx",
+    ]) {
+      const source = read(path);
+      const signOutIdx = source.indexOf("await signOut()");
+      const failureIdx = source.indexOf("reportSignOutFailure", signOutIdx);
+      expect(signOutIdx).toBeGreaterThanOrEqual(0);
+      expect(failureIdx).toBeGreaterThan(signOutIdx);
+    }
+  });
+});
