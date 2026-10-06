@@ -32,18 +32,57 @@ describe("MASTER-01B-01 production test-route isolation", () => {
     ).toBe(true);
   });
 
-  it("keeps compiled staging test tooling available without trusting NODE_ENV", () => {
+  it("keeps compiled staging test tooling available only on the canonical staging host", () => {
     expect(
       isProductionTestRouteBlocked("https://pricing-test.shalean.co.za/api/test", {
         SHALEAN_APP_ENV: "staging",
         NODE_ENV: "production",
       }),
     ).toBe(false);
+
+    expect(
+      isProductionTestRouteBlocked("https://staging-alias.example.com/api/test", {
+        SHALEAN_APP_ENV: "staging",
+        NODE_ENV: "production",
+      }),
+    ).toBe(true);
   });
 
-  it("fails closed when the request origin cannot be parsed", () => {
+  it("allows only loopback hosts for local/development test tooling", () => {
+    expect(
+      isProductionTestRouteBlocked("http://localhost:3000/api/test", {
+        SHALEAN_APP_ENV: "development",
+      }),
+    ).toBe(false);
+
+    expect(
+      isProductionTestRouteBlocked("http://127.0.0.1:3000/api/test", {
+        SHALEAN_APP_ENV: "local",
+      }),
+    ).toBe(false);
+
+    expect(
+      isProductionTestRouteBlocked("https://dev.example.com/api/test", {
+        SHALEAN_APP_ENV: "development",
+      }),
+    ).toBe(true);
+  });
+
+  it("blocks preview, unknown, malformed, and alternate production origins", () => {
+    expect(
+      isProductionTestRouteBlocked("https://preview.example.com/api/test", {
+        SHALEAN_APP_ENV: "preview",
+      }),
+    ).toBe(true);
+
     expect(
       isProductionTestRouteBlocked("not-a-valid-url", {
+        SHALEAN_APP_ENV: "staging",
+      }),
+    ).toBe(true);
+
+    expect(
+      isProductionTestRouteBlocked("https://203.0.113.10/api/test", {
         SHALEAN_APP_ENV: "staging",
       }),
     ).toBe(true);
