@@ -70,21 +70,24 @@ export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, boo
     return false;
   }
 
-  const init = await processPaystackInitializeBody({
-    bookingId,
-    email,
-    locked,
-    tip: 0,
-    promoCode: "",
-    customer: {
-      type: "guest",
-      name,
+  const init = await processPaystackInitializeBody(
+    {
+      bookingId,
       email,
-      phone,
-      userId: "",
+      locked,
+      tip: 0,
+      promoCode: "",
+      customer: {
+        type: "guest",
+        name,
+        email,
+        phone,
+        userId: "",
+      },
+      relaxedLockValidation: true,
     },
-    relaxedLockValidation: true,
-  });
+    { preserveExistingPendingPayable: true },
+  );
 
   if (!init.ok) {
     await reportOperationalIssue("error", "recurring/fallback", init.error, { bookingId });
