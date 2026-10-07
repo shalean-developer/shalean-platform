@@ -131,3 +131,93 @@ begin
    where b.id = p_booking_id;
 end;
 $function$;
+
+-- Committed solo direct-assignment reconciliation.
+-- If a committed header cleaner differs from the current roster lead, the header is authoritative.
+-- Roster removal + payout-owner/count convergence happen in one transaction.
+create or replace function public.reconcile_committed_recurring_solo_assignment_atomic(
+  p_booking_id uuid,
+  p_cleaner_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path to 'public'
+as $function$
+declare
+  v_booking public.bookings%rowtype;
+  v_roster_count int := 0;
+  v_lead_count int := 0;
+  v_roster_lead uuid;
+begin
+  if p_booking_id is null or p_cleaner_id is null then
+    raise exception 'reconcile_committed_recurring_solo_assignment_atomic: booking and cleaner required';
+  end if;
+
+  select *
+    into v_booking
+    from public.bookings b
+   where b.id = p_booking_id
+   for update;
+
+  if not found then
+    raise exception 'reconcile_committed_recurring_solo_assignment_atomic: booking not found';
+  end if;
+
+  if v_booking.cleaner_line_earnings_finalized_at is not null then
+    raise exception 'reconcile_committed_recurring_solo_assignment_atomic: roster locked';
+  end if;
+
+  if coalesce(v_booking.is_team_job, false) or v_booking.team_id is not null then
+    raise exception 'reconcile_committed_recurring_solo_assignment_atomic: team booking not allowed';
+  end if;
+
+  if v_booking.cleaner_id is distinct from p_cleaner_id then
+    raise exception 'reconcile_committed_recurring_solo_assignment_atomic: committed cleaner changed';
+  end if;
+
+  if not (
+    lower(trim(coalesce(v_booking.status, ''))) = 'in_progress'
+    or lower(trim(coalesce(v_booking.cleaner_response_status, ''))) in ('accepted', 'on_my_way', 'started', 'completed')
+    or v_booking.accepted_at is not null
+    or v_booking.en_route_at is not null
+    or v_booking.started_at is not null
+  ) then
+    raise exception 'reconcile_committed_recurring_solo_assignment_atomic: booking is not committed';
+  end if;
+
+  select
+    count(*)::int,
+    count(*) filter (where lower(trim(coalesce(bc.role, ''))) = 'lead')::int,
+    min(bc.cleaner_id) filter (where lower(trim(coalesce(bc.role, ''))) = 'lead')
+    into v_roster_count, v_lead_count, v_roster_lead
+    from public.booking_cleaners bc
+   where bc.booking_id = p_booking_id;
+
+  -- Legitimate paired/multi-cleaner acceptance: header and roster lead already agree.
+  if v_roster_count > 0 and v_lead_count = 1 and v_roster_lead = p_cleaner_id then
+    return false;
+  end if;
+
+  if v_roster_count > 0 then
+    delete from public.booking_cleaners
+     where booking_id = p_booking_id;
+  end if;
+
+  update public.bookings b
+     set payout_owner_cleaner_id = p_cleaner_id,
+         cleaner_count = 1,
+         cleaner_mode = 'individual_cleaners',
+         is_team_job = false,
+         team_id = null
+   where b.id = p_booking_id;
+
+  return v_roster_count > 0;
+end;
+$function$;
+
+revoke all on function public.reconcile_committed_recurring_solo_assignment_atomic(uuid, uuid) from public;
+revoke all on function public.reconcile_committed_recurring_solo_assignment_atomic(uuid, uuid) from anon;
+revoke all on function public.reconcile_committed_recurring_solo_assignment_atomic(uuid, uuid) from authenticated;
+grant execute on function public.reconcile_committed_recurring_solo_assignment_atomic(uuid, uuid) to service_role;
+
