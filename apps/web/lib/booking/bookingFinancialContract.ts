@@ -28,6 +28,12 @@ export type BookingFinancialContractRow = {
   amount_paid_cents?: number | null;
   total_paid_cents?: number | null;
   total_paid_zar?: number | null;
+  payment_completed_at?: string | null;
+  /**
+   * True only when the caller has verified that payment_transaction_id links the
+   * qualifying zero-amount promo_credit_cover ledger row for this booking.
+   */
+  zero_cash_r0_verified?: boolean | null;
 };
 
 export const BOOKING_FINANCIAL_FIELD_AUTHORITY = {
@@ -94,8 +100,17 @@ export function classifyBookingFinancialMode(
     paymentStatus === "succeeded" ||
     paymentStatus === "completed"
   ) {
-    const cash = Number(row.amount_paid_cents ?? 0);
-    return Number.isFinite(cash) && cash === 0 ? "covered_zero" : "checkout_settled";
+    const cashRaw = row.amount_paid_cents;
+    if (cashRaw === null || cashRaw === undefined) return "legacy_unknown";
+
+    const cash = Number(cashRaw);
+    if (!Number.isFinite(cash) || cash < 0) return "legacy_unknown";
+    if (cash > 0) return "checkout_settled";
+
+    const paymentCompleted = Boolean(String(row.payment_completed_at ?? "").trim());
+    return row.zero_cash_r0_verified === true && paymentCompleted
+      ? "covered_zero"
+      : "legacy_unknown";
   }
 
   if (norm(row.status) === "pending_payment" || norm(row.status) === "payment_expired") {
