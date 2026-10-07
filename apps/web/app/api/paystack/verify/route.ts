@@ -954,55 +954,55 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
           snapshot: snapShort,
           customerEmailHint: emailNorm || emailFromCustomerPost || undefined,
         });
-
-        const replaySettlement = await recordPaystackBookingPayment(adminPost, {
-          reference: ref,
-          amountCents: txAmount,
-          bookingId: existingPost.bookingId,
-          currency: txCurrency,
-          paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
-          chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
-        });
-
-        if (!replaySettlement.ok) {
-          const customerBlock =
-            tx.customer && typeof tx.customer === "object"
-              ? (tx.customer as { customer_code?: string; email?: string })
-              : null;
-          const authorizationBlock =
-            (tx as { authorization?: { authorization_code?: string } | null }).authorization ?? null;
-          await enqueuePaystackRecoveryFailedJobs({
-            reference: ref,
-            result: {
-              ok: false,
-              skipped: true,
-              bookingId: existingPost.bookingId,
-              bookingInDatabase: true,
-              error: `settlement_persistence_failed:${replaySettlement.error}`,
-              reason: "finalization_failed",
-              recoveryEnqueue: true,
-            },
-            basePayload: {
-              paystackReference: ref,
-              amountCents: txAmount,
-              currency: txCurrency,
-              customerEmail: emailNorm,
-              snapshot: snapShort,
-              paystackMetadata: metadataShort,
-              paystackAuthorizationCode:
-                typeof authorizationBlock?.authorization_code === "string"
-                  ? authorizationBlock.authorization_code
-                  : null,
-              paystackCustomerCode:
-                typeof customerBlock?.customer_code === "string"
-                  ? customerBlock.customer_code
-                  : null,
-              paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
-              paystackChargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
-            },
-          });
-        }
       });
+
+      const replaySettlement = await recordPaystackBookingPayment(adminPost, {
+        reference: ref,
+        amountCents: txAmount,
+        bookingId: existingPost.bookingId,
+        currency: txCurrency,
+        paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+        chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
+      });
+
+      if (!replaySettlement.ok) {
+        const customerBlock =
+          tx.customer && typeof tx.customer === "object"
+            ? (tx.customer as { customer_code?: string; email?: string })
+            : null;
+        const authorizationBlock =
+          (tx as { authorization?: { authorization_code?: string } | null }).authorization ?? null;
+        await enqueuePaystackRecoveryFailedJobs({
+          reference: ref,
+          result: {
+            ok: false,
+            skipped: true,
+            bookingId: existingPost.bookingId,
+            bookingInDatabase: true,
+            error: `settlement_persistence_failed:${replaySettlement.error}`,
+            reason: "finalization_failed",
+            recoveryEnqueue: true,
+          },
+          basePayload: {
+            paystackReference: ref,
+            amountCents: txAmount,
+            currency: txCurrency,
+            customerEmail: emailNorm,
+            snapshot: snapShort,
+            paystackMetadata: metadataShort,
+            paystackAuthorizationCode:
+              typeof authorizationBlock?.authorization_code === "string"
+                ? authorizationBlock.authorization_code
+                : null,
+            paystackCustomerCode:
+              typeof customerBlock?.customer_code === "string"
+                ? customerBlock.customer_code
+                : null,
+            paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+            paystackChargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
+          },
+        });
+      }
       const bookingReference = await loadBookingReferenceForId(adminPost, existingPost.bookingId);
       return NextResponse.json({
         success: true,
