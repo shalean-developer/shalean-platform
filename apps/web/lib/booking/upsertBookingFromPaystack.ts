@@ -1227,32 +1227,8 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       ? bookingCustomerKey(inserted as { customer_id?: string | null; user_id?: string | null }) || userIdResolved
       : userIdResolved;
 
-  const runPostPersistSideEffects = async (): Promise<void> => {
-  if (id) {
-    const authCode = input.paystackAuthorizationCode?.trim() ?? "";
-    if (authCode) {
-      const { data: recurringHead } = await supabase
-        .from("bookings")
-        .select("recurring_id")
-        .eq("id", id)
-        .maybeSingle();
-      const recurringId =
-        recurringHead && typeof recurringHead === "object" && "recurring_id" in recurringHead
-          ? (recurringHead as { recurring_id: string | null }).recurring_id
-          : null;
-      if (recurringId) {
-        const { error: recAuthErr } = await supabase
-          .from("recurring_bookings")
-          .update({ paystack_authorization_code: authCode, updated_at: new Date().toISOString() })
-          .eq("id", recurringId);
-        if (recAuthErr) {
-          await reportOperationalIssue("warn", "upsertBookingFromPaystack", `recurring auth save: ${recAuthErr.message}`, {
-            bookingId: id,
-            recurringId,
-          });
-        }
-      }
-    }
+  const runRequiredPostPersistRecovery = async (): Promise<void> => {
+    if (!id) return;
 
     await refreshRecurringPaymentStateForBooking(supabase, id);
 
@@ -1283,13 +1259,12 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
           "warn",
           "upsertBookingFromPaystack",
           "recurring roster head load failed without sufficient repair context",
-          {
-            bookingId: id,
-            error: recurringRosterHeadErr.message,
-          },
+          { bookingId: id, error: recurringRosterHeadErr.message },
         );
       }
+      return;
     }
+
     const recurringRosterId =
       recurringRosterHead && typeof recurringRosterHead === "object" && "recurring_id" in recurringRosterHead
         ? String((recurringRosterHead as { recurring_id?: string | null }).recurring_id ?? "").trim() || null
@@ -1304,6 +1279,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       recurringRosterHead && typeof recurringRosterHead === "object" && "is_recurring_generated" in recurringRosterHead
         ? Boolean((recurringRosterHead as { is_recurring_generated?: boolean | null }).is_recurring_generated)
         : false;
+
     if (recurringRosterGenerated && recurringRosterId && recurringRosterCleanerId) {
       const rosterContinuity = await applyRecurringOccurrenceRosterContinuity(supabase, {
         bookingId: id,
@@ -1319,6 +1295,36 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         });
         if (!rosterRecoveryQueued) {
           throw new Error("recurring_roster_reconciliation_enqueue_failed");
+        }
+      }
+    }
+  };
+
+  await runRequiredPostPersistRecovery();
+
+  const runPostPersistSideEffects = async (): Promise<void> => {
+  if (id) {
+    const authCode = input.paystackAuthorizationCode?.trim() ?? "";
+    if (authCode) {
+      const { data: recurringHead } = await supabase
+        .from("bookings")
+        .select("recurring_id")
+        .eq("id", id)
+        .maybeSingle();
+      const recurringId =
+        recurringHead && typeof recurringHead === "object" && "recurring_id" in recurringHead
+          ? (recurringHead as { recurring_id: string | null }).recurring_id
+          : null;
+      if (recurringId) {
+        const { error: recAuthErr } = await supabase
+          .from("recurring_bookings")
+          .update({ paystack_authorization_code: authCode, updated_at: new Date().toISOString() })
+          .eq("id", recurringId);
+        if (recAuthErr) {
+          await reportOperationalIssue("warn", "upsertBookingFromPaystack", `recurring auth save: ${recAuthErr.message}`, {
+            bookingId: id,
+            recurringId,
+          });
         }
       }
     }
