@@ -796,7 +796,6 @@ export async function processPaystackInitializeBody(
       durationMinutes: selectLockedBookingDurationMinutesForPersistence(locked),
       priceBreakdown,
       totalPriceZar: checkout.visitTotalZar,
-      totalPaidZar: totalZar,
       customerName: customer.name.trim() || null,
       customerPhone: customer.phone.trim() || null,
       userId: customer.user_id,
