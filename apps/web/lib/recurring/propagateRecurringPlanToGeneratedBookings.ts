@@ -69,6 +69,7 @@ type GeneratedBookingRow = {
   payout_owner_cleaner_id: string | null;
   is_team_job: boolean | null;
   invoice_status: string | null;
+  invoice_finalization_started: boolean;
 };
 
 function buildOccurrenceSnapshot(
@@ -157,7 +158,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
   const { data: rows, error } = await admin
     .from("bookings")
     .select(
-      "id, date, status, payment_status, payment_completed_at, paid_at, payment_transaction_id, marked_paid_by_admin_id, total_price, booking_snapshot, price_snapshot, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status)",
+      "id, date, status, payment_status, payment_completed_at, paid_at, payment_transaction_id, marked_paid_by_admin_id, total_price, booking_snapshot, price_snapshot, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status, snapshot_at_finalize, snapshot_current, finalized_at, paystack_reference, payment_link, sent_at, zoho_invoice_id, initial_invoice_email_dispatch_claimed)",
     )
     .eq("recurring_id", plan.id)
     .neq("status", "cancelled");
@@ -199,11 +200,32 @@ export async function propagateRecurringPlanToGeneratedBookings(
         row.payout_owner_cleaner_id != null ? String(row.payout_owner_cleaner_id) : null,
       is_team_job: row.is_team_job === true,
       invoice_status: null,
+      invoice_finalization_started: false,
     };
 
     const invJoin = row.monthly_invoices;
     if (invJoin && typeof invJoin === "object" && !Array.isArray(invJoin)) {
-      booking.invoice_status = String((invJoin as { status?: unknown }).status ?? "") || null;
+      const invoice = invJoin as {
+        status?: unknown;
+        snapshot_at_finalize?: unknown;
+        snapshot_current?: unknown;
+        finalized_at?: unknown;
+        paystack_reference?: unknown;
+        payment_link?: unknown;
+        sent_at?: unknown;
+        zoho_invoice_id?: unknown;
+        initial_invoice_email_dispatch_claimed?: unknown;
+      };
+      booking.invoice_status = String(invoice.status ?? "") || null;
+      booking.invoice_finalization_started =
+        invoice.snapshot_at_finalize != null ||
+        invoice.snapshot_current != null ||
+        invoice.finalized_at != null ||
+        Boolean(String(invoice.paystack_reference ?? "").trim()) ||
+        Boolean(String(invoice.payment_link ?? "").trim()) ||
+        invoice.sent_at != null ||
+        Boolean(String(invoice.zoho_invoice_id ?? "").trim()) ||
+        invoice.initial_invoice_email_dispatch_claimed === true;
     }
 
     if (booking.monthly_invoice_id && isLockedInvoiceStatus(booking.invoice_status)) {
@@ -250,6 +272,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
       paymentStatus === "pending_monthly" &&
       Boolean(booking.monthly_invoice_id) &&
       (booking.invoice_status ?? "").trim().toLowerCase() === "draft" &&
+      !booking.invoice_finalization_started &&
       ["pending", "assigned", "pending_payment"].includes(lifecycleStatus);
     const mutablePricingCandidate =
       (ordinaryUnpaidPending || draftMonthlyUnsettled) && !settlementMarkerPresent;
