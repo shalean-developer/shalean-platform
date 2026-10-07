@@ -87,6 +87,40 @@ describe("enqueuePaystackRecoveryFailedJobs", () => {
     expect(enqueueFailedJob).toHaveBeenCalledWith("payment_reconciliation", basePayload);
   });
 
+  it("throws when payment reconciliation recovery cannot be durably enqueued", async () => {
+    vi.mocked(enqueueFailedJob).mockResolvedValueOnce(false);
+    const result: UpsertBookingFromPaystackResult = {
+      ok: false,
+      skipped: true,
+      bookingId: "bid-conflict",
+      error: "Pending booking changed during payment finalization.",
+      code: "PAYMENT_FINALIZATION_CONFLICT",
+      reason: "finalization_failed",
+      bookingInDatabase: true,
+      recoveryEnqueue: true,
+    };
+
+    await expect(
+      enqueuePaystackRecoveryFailedJobs({ reference: "ref-x", result, basePayload }),
+    ).rejects.toThrow("recovery_payment_reconciliation_enqueue_failed");
+  });
+
+  it("enqueues payment_reconciliation for a retryable finalization conflict", async () => {
+    const result: UpsertBookingFromPaystackResult = {
+      ok: false,
+      skipped: true,
+      bookingId: "bid-conflict",
+      error: "Pending booking changed during payment finalization.",
+      code: "PAYMENT_FINALIZATION_CONFLICT",
+      reason: "finalization_failed",
+      bookingInDatabase: true,
+      recoveryEnqueue: true,
+    };
+    await enqueuePaystackRecoveryFailedJobs({ reference: "ref-x", result, basePayload });
+    expect(enqueueFailedJob).toHaveBeenCalledWith("payment_reconciliation", basePayload);
+    expect(enqueueFailedJob).not.toHaveBeenCalledWith("booking_insert", expect.anything());
+  });
+
   it("does not enqueue recovery jobs on idempotent terminal replay (no recoveryEnqueue)", async () => {
     const result: UpsertBookingFromPaystackResult = {
       ok: false,

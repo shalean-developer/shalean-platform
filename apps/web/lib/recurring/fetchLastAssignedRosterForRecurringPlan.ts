@@ -40,7 +40,10 @@ export async function fetchLastAssignedRosterForRecurringPlan(
     .order("created_at", { ascending: false })
     .limit(30);
 
-  if (error || !data?.length) return null;
+  if (error) {
+    throw new Error(`recurring_roster_lookup_failed:${error.message}`);
+  }
+  if (!data?.length) return null;
 
   for (const raw of data) {
     const row = raw as {

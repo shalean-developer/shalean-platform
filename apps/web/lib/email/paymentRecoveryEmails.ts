@@ -7,6 +7,7 @@ import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
 import { trustPayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import type { PaymentRecoveryJobType } from "@/lib/booking/paymentRecoverySkipReasons";
 import { safeResendSend } from "@/lib/email/safeResendSend";
+import { trustedBookingPayableZar } from "@/lib/booking/ensureBookingPaymentSession";
 
 function getResend(): Resend | null {
   const key = process.env.RESEND_API_KEY;
@@ -244,15 +245,16 @@ export function buildPaymentRecoveryEmailContext(booking: Record<string, unknown
   const timeHm = (typeof booking.time === "string" ? booking.time : locked?.time) ?? "";
   if (timeHm) timeLabel = timeHm;
 
-  const totalRaw = booking.total_paid_zar;
-  const amountZar =
-    typeof totalRaw === "number" && Number.isFinite(totalRaw)
-      ? Math.round(totalRaw)
-      : typeof totalRaw === "string" && /^\d+(\.\d+)?$/.test(totalRaw.trim())
-        ? Math.round(Number(totalRaw))
-        : typeof booking.total_price === "number" && Number.isFinite(booking.total_price)
-          ? Math.round(booking.total_price)
-          : null;
+  const amountZar = trustedBookingPayableZar({
+    total_price:
+      typeof booking.total_price === "number" || typeof booking.total_price === "string"
+        ? booking.total_price
+        : null,
+    total_paid_zar:
+      typeof booking.total_paid_zar === "number" || typeof booking.total_paid_zar === "string"
+        ? booking.total_paid_zar
+        : null,
+  });
 
   const paystackReference = String(booking.paystack_reference ?? "").trim();
   const paymentLink = typeof booking.payment_link === "string" ? booking.payment_link.trim() : "";

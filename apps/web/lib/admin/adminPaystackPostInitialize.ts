@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getServiceLabel, type BookingServiceId } from "@/components/booking/serviceCategories";
 import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
 import { adminPaymentLinkTtlMs } from "@/lib/booking/adminPaymentLinkState";
+import { trustedBookingPayableZar } from "@/lib/booking/ensureBookingPaymentSession";
 import type { PaystackInitializeSuccess } from "@/lib/booking/paystackInitializeCore";
 import { deliverAdminPaymentLink } from "@/lib/admin/adminPaymentLinkDelivery";
 import { persistPaymentLinkDelivery } from "@/lib/admin/persistPaymentLinkDelivery";
@@ -26,6 +27,7 @@ export type AdminPaystackBookingHead = {
   service: string | null;
   date: string | null;
   time: string | null;
+  total_price: number | string | null;
   total_paid_zar: number | string | null;
   payment_link_send_count: number | null;
   payment_link_first_sent_at: string | null;
@@ -35,7 +37,7 @@ export type AdminPaystackBookingHead = {
 };
 
 const HEAD_SELECT =
-  "id, user_id, payment_status, status, payment_link, payment_link_expires_at, payment_link_last_sent_at, paystack_reference, customer_name, customer_phone, customer_email, service, date, time, total_paid_zar, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel";
+  "id, user_id, payment_status, status, payment_link, payment_link_expires_at, payment_link_last_sent_at, paystack_reference, customer_name, customer_phone, customer_email, service, date, time, total_price, total_paid_zar, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel";
 
 /**
  * Tags admin-created Paystack bookings and sends the payment link (same behavior as `with-payment` route).
@@ -176,13 +178,10 @@ export async function sendAdminPaystackDeliveryForRow(
   const dateLabel = row.date != null ? String(row.date) : "—";
   const timeLabel = row.time != null ? String(row.time) : "—";
 
-  const totalZarRaw = row.total_paid_zar;
-  const amountZar =
-    typeof totalZarRaw === "number" && Number.isFinite(totalZarRaw)
-      ? Math.round(totalZarRaw)
-      : typeof totalZarRaw === "string" && /^\d+(\.\d+)?$/.test(totalZarRaw.trim())
-        ? Math.round(Number(totalZarRaw))
-        : null;
+  const amountZar = trustedBookingPayableZar({
+    total_price: row.total_price,
+    total_paid_zar: row.total_paid_zar,
+  });
 
   try {
     const intent = passType === "admin_resend" ? "admin_resend" : "initial_send";

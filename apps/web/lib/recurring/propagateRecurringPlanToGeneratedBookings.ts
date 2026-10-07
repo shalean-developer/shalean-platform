@@ -6,6 +6,7 @@ import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerpri
 import { assertBookingCleanerEarningsResetSafe } from "@/lib/admin/adminBookingEarningsResetSafety";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { lockedDurationMinutesPatch } from "@/lib/booking/durationMinutesIntegrity";
+import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { provisionalPriceSnapshotJson } from "@/lib/booking/provisionalPriceSnapshotFromLocked";
 import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
@@ -53,6 +54,14 @@ type GeneratedBookingRow = {
   id: string;
   date: string | null;
   status: string | null;
+  payment_status: string | null;
+  payment_completed_at: string | null;
+  paid_at: string | null;
+  payment_transaction_id: string | null;
+  marked_paid_by_admin_id: string | null;
+  total_price: number | null;
+  booking_snapshot: Record<string, unknown> | null;
+  price_snapshot: Record<string, unknown> | null;
   completed_at: string | null;
   cleaner_line_earnings_finalized_at: string | null;
   monthly_invoice_id: string | null;
@@ -148,7 +157,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
   const { data: rows, error } = await admin
     .from("bookings")
     .select(
-      "id, date, status, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status)",
+      "id, date, status, payment_status, payment_completed_at, paid_at, payment_transaction_id, marked_paid_by_admin_id, total_price, booking_snapshot, price_snapshot, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status)",
     )
     .eq("recurring_id", plan.id)
     .neq("status", "cancelled");
@@ -164,6 +173,23 @@ export async function propagateRecurringPlanToGeneratedBookings(
       id: String(row.id ?? ""),
       date: row.date != null ? String(row.date) : null,
       status: row.status != null ? String(row.status) : null,
+      payment_status: row.payment_status != null ? String(row.payment_status) : null,
+      payment_completed_at: row.payment_completed_at != null ? String(row.payment_completed_at) : null,
+      paid_at: row.paid_at != null ? String(row.paid_at) : null,
+      payment_transaction_id:
+        row.payment_transaction_id != null ? String(row.payment_transaction_id) : null,
+      marked_paid_by_admin_id:
+        row.marked_paid_by_admin_id != null ? String(row.marked_paid_by_admin_id) : null,
+      total_price:
+        row.total_price != null && Number.isFinite(Number(row.total_price)) ? Number(row.total_price) : null,
+      booking_snapshot:
+        row.booking_snapshot && typeof row.booking_snapshot === "object" && !Array.isArray(row.booking_snapshot)
+          ? (row.booking_snapshot as Record<string, unknown>)
+          : null,
+      price_snapshot:
+        row.price_snapshot && typeof row.price_snapshot === "object" && !Array.isArray(row.price_snapshot)
+          ? (row.price_snapshot as Record<string, unknown>)
+          : null,
       completed_at: row.completed_at != null ? String(row.completed_at) : null,
       cleaner_line_earnings_finalized_at:
         row.cleaner_line_earnings_finalized_at != null ? String(row.cleaner_line_earnings_finalized_at) : null,
@@ -209,10 +235,40 @@ export async function propagateRecurringPlanToGeneratedBookings(
         ? adminBookingServiceSlug(String(locked.service))
         : "standard";
 
-    const bookingUpdate: Record<string, unknown> = {
-      booking_snapshot: snapshot,
-      total_paid_zar: priceZar,
-      price_snapshot: provisionalPriceSnapshotJson(locked),
+    const lifecycleStatus = (booking.status ?? "").trim().toLowerCase();
+    const paymentStatus = (booking.payment_status ?? "").trim().toLowerCase();
+    const ordinaryUnpaidPending =
+      lifecycleStatus === "pending_payment" &&
+      !["success", "paid", "succeeded", "completed", "pending_monthly"].includes(paymentStatus);
+    const settlementMarkerPresent =
+      Boolean(booking.payment_completed_at) ||
+      Boolean(booking.paid_at) ||
+      Boolean(booking.payment_transaction_id) ||
+      Boolean(booking.marked_paid_by_admin_id);
+
+    const mutableUnpaidCandidate = ordinaryUnpaidPending && !settlementMarkerPresent;
+    const preserveRecurringPackagePayable =
+      mutableUnpaidCandidate &&
+      booking.price_snapshot?.payment_scope === "recurring_first_30_days" &&
+      booking.total_price != null &&
+      booking.total_price > 0;
+
+    const preservedPackageSnapshot = booking.booking_snapshot;
+    const bookingSnapshotForMutableUpdate =
+      preserveRecurringPackagePayable && preservedPackageSnapshot
+        ? {
+            ...snapshot,
+            total_zar:
+              typeof preservedPackageSnapshot.total_zar === "number"
+                ? preservedPackageSnapshot.total_zar
+                : booking.total_price,
+            ...("recurringPrepayment" in preservedPackageSnapshot
+              ? { recurringPrepayment: preservedPackageSnapshot.recurringPrepayment }
+              : {}),
+          }
+        : snapshot;
+
+    const nonPricingPatch: Record<string, unknown> = {
       location: locked.location?.trim() || null,
       time: locked.time ?? null,
       service: locked.service != null ? getServiceLabel(locked.service) : null,
@@ -222,7 +278,42 @@ export async function propagateRecurringPlanToGeneratedBookings(
       ...lockedDurationMinutesPatch(locked),
     };
 
-    if (preferredCleanerId) {
+    const mutablePricingPatch: Record<string, unknown> = {
+      ...nonPricingPatch,
+      booking_snapshot: bookingSnapshotForMutableUpdate,
+      total_price: preserveRecurringPackagePayable ? booking.total_price : priceZar,
+      ...bookingUncollectedCashColumns(),
+      price_snapshot: preserveRecurringPackagePayable
+        ? booking.price_snapshot
+        : provisionalPriceSnapshotJson(locked),
+      ...(preferredCleanerId
+        ? recurringOccurrenceCleanerPatch(preferredCleanerId, {
+            operationalStatus: "pending_payment",
+          })
+        : {}),
+    };
+
+    let bookingUpdate: Record<string, unknown> = nonPricingPatch;
+    let cleanerMutationSucceeded = false;
+    if (mutableUnpaidCandidate) {
+      const { data: repriced, error: repriceErr } = await admin.rpc(
+        "apply_recurring_occurrence_unpaid_patch",
+        {
+          p_booking_id: booking.id,
+          p_patch: mutablePricingPatch,
+        },
+      );
+      if (repriceErr) {
+        result.errors.push(`Booking ${booking.id}: atomic recurring repricing failed: ${repriceErr.message}`);
+        continue;
+      }
+      if (repriced === true) {
+        bookingUpdate = {};
+        cleanerMutationSucceeded = Boolean(preferredCleanerId);
+      }
+    }
+
+    if (preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent) {
       Object.assign(
         bookingUpdate,
         preserveLifecycle
@@ -233,20 +324,25 @@ export async function propagateRecurringPlanToGeneratedBookings(
       );
     }
 
-    const { error: upErr } = await admin
-      .from("bookings")
-      .update(bookingUpdate)
-      .eq("id", booking.id);
+    if (Object.keys(bookingUpdate).length > 0) {
+      const { error: upErr } = await admin
+        .from("bookings")
+        .update(bookingUpdate)
+        .eq("id", booking.id);
 
-    if (upErr) {
-      result.errors.push(`Booking ${booking.id}: ${upErr.message}`);
-      continue;
+      if (upErr) {
+        result.errors.push(`Booking ${booking.id}: ${upErr.message}`);
+        continue;
+      }
+      if (preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent) {
+        cleanerMutationSucceeded = true;
+      }
     }
 
     result.bookings_updated++;
-    if (preferredCleanerId) {
+    if (preferredCleanerId && cleanerMutationSucceeded) {
       result.bookings_cleaner_updated++;
-      if (!bookingCompleted) {
+      if (!bookingCompleted && !mutableUnpaidCandidate) {
         await applyRecurringOccurrenceRosterContinuity(admin, {
           bookingId: booking.id,
           recurringId: plan.id,

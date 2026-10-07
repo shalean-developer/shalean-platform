@@ -2,7 +2,11 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PaystackChargePayload } from "@/lib/payments/paymentTransactionTypes";
-import { recordGatewayPayment } from "@/lib/payments/recordGatewayPayment";
+import { enqueueFailedJob } from "@/lib/booking/failedJobs";
+import {
+  recordGatewayPayment,
+  type RecordGatewayPaymentResult,
+} from "@/lib/payments/recordGatewayPayment";
 
 /** Record Paystack charge settlement after booking finalize (idempotent). */
 export async function recordPaystackBookingPayment(
@@ -15,8 +19,8 @@ export async function recordPaystackBookingPayment(
     paidAtIso?: string | null;
     chargeData?: PaystackChargePayload;
   },
-): Promise<void> {
-  await recordGatewayPayment(admin, {
+): Promise<RecordGatewayPaymentResult> {
+  return recordGatewayPayment(admin, {
     gateway: "paystack",
     gatewayReference: opts.reference,
     entityType: "booking",
@@ -38,8 +42,8 @@ export async function recordPaystackMonthlyInvoicePayment(
     paidAtIso?: string | null;
     chargeData?: PaystackChargePayload;
   },
-): Promise<void> {
-  await recordGatewayPayment(admin, {
+): Promise<RecordGatewayPaymentResult> {
+  return recordGatewayPayment(admin, {
     gateway: "paystack",
     gatewayReference: opts.reference,
     entityType: "monthly_invoice",
@@ -60,8 +64,8 @@ export async function recordPaystackSalesDocumentPayment(
     paidAtIso?: string | null;
     chargeData?: PaystackChargePayload;
   },
-): Promise<void> {
-  await recordGatewayPayment(admin, {
+): Promise<RecordGatewayPaymentResult> {
+  return recordGatewayPayment(admin, {
     gateway: "paystack",
     gatewayReference: opts.reference,
     entityType: "sales_document",
@@ -71,6 +75,56 @@ export async function recordPaystackSalesDocumentPayment(
     paystackChargeData: opts.chargeData,
     bookingId: opts.bookingId ?? null,
   });
+}
+
+export type RecoverablePaystackEntitySettlement = {
+  entityType: "monthly_invoice" | "sales_document";
+  entityId: string;
+  bookingId?: string | null;
+  reference: string;
+  amountCents: number;
+  currency?: string;
+  paidAtIso?: string | null;
+  chargeData?: PaystackChargePayload;
+};
+
+export async function recordPaystackEntitySettlementWithRecovery(
+  admin: SupabaseClient,
+  opts: RecoverablePaystackEntitySettlement,
+): Promise<RecordGatewayPaymentResult> {
+  const result =
+    opts.entityType === "monthly_invoice"
+      ? await recordPaystackMonthlyInvoicePayment(admin, {
+          reference: opts.reference,
+          amountCents: opts.amountCents,
+          invoiceId: opts.entityId,
+          paidAtIso: opts.paidAtIso,
+          chargeData: opts.chargeData,
+        })
+      : await recordPaystackSalesDocumentPayment(admin, {
+          reference: opts.reference,
+          amountCents: opts.amountCents,
+          documentId: opts.entityId,
+          bookingId: opts.bookingId ?? null,
+          paidAtIso: opts.paidAtIso,
+          chargeData: opts.chargeData,
+        });
+
+  if (!result.ok) {
+    const recoveryQueued = await enqueueFailedJob("gateway_settlement_reconciliation", {
+      ...opts,
+      currency: opts.currency ?? "ZAR",
+      chargeData: opts.chargeData ?? null,
+      lastError: result.error,
+    });
+    if (!recoveryQueued) {
+      throw new Error(
+        `gateway_settlement_reconciliation_enqueue_failed:${result.error}`,
+      );
+    }
+  }
+
+  return result;
 }
 
 export function paystackChargeDataFromRecord(data: Record<string, unknown>): PaystackChargePayload {
