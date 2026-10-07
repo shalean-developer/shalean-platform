@@ -343,8 +343,13 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterHeaderSql).toContain(
       "create or replace function public.replace_booking_cleaners_admin_atomic",
     );
-    expect(rosterHeaderSql).toContain("cleaner_id = lead_id");
-    expect(rosterHeaderSql).toContain("payout_owner_cleaner_id = lead_id");
+    expect(rosterHeaderSql).toContain("lead_source text");
+    expect(rosterHeaderSql).toContain("checkout_preferred");
+    expect(rosterHeaderSql).toContain("customer_preferred");
+    expect(rosterHeaderSql).toContain("recurring_preferred");
+    expect(rosterHeaderSql).toContain("then b.cleaner_id");
+    expect(rosterHeaderSql).toContain("then b.payout_owner_cleaner_id");
+    expect(rosterHeaderSql).toContain("else lead_id");
     expect(rosterHeaderSql).toContain("cleaner_count = n_total");
     expect(rosterHeaderSql).not.toContain("selected_cleaner_id = lead_id");
 
@@ -376,6 +381,9 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterContinuity).toContain("lifecyclePromoted?: boolean");
     expect(rosterContinuity).toContain("assignmentCommitted?: boolean");
     expect(rosterContinuity).toContain("assignmentCommitted: committedAssignment");
+    expect(rosterContinuity).toContain("params.leadCleanerId?.trim()");
+    expect(rosterContinuity).toContain("identityRepairErr");
+    expect(rosterContinuity).toContain("payout_owner_cleaner_id: committedLeadId");
     expect(rosterContinuity).toContain("lifecyclePromoted: shouldReplaceRoster");
     expect(rosterContinuity).toContain('kind: "locked"');
 
