@@ -24,6 +24,7 @@ import { postDispatchControlAlert } from "@/lib/ops/dispatchControlWebhook";
 import { syncCleanerQualityFlags } from "@/lib/ops/enforceCleanerQualityReview";
 import { processReviewSmsPromptQueue } from "@/lib/reviews/reviewPromptSms";
 import { repairPaidMonthlyInvoiceChildSettlementDrift } from "@/lib/monthlyInvoice/repairPaidMonthlyInvoiceChildSettlementDrift";
+import { recordPaystackBookingPayment } from "@/lib/payments/recordPaystackSettlement";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -286,9 +287,15 @@ export async function POST(request: Request) {
           customerEmail: emRetry,
           snapshot,
           paystackMetadata: metaFlat,
-          paystackAuthorizationCode: null,
-          paystackCustomerCode: null,
-          paidAtIso: null,
+          paystackAuthorizationCode:
+            typeof payload.paystackAuthorizationCode === "string"
+              ? payload.paystackAuthorizationCode
+              : null,
+          paystackCustomerCode:
+            typeof payload.paystackCustomerCode === "string"
+              ? payload.paystackCustomerCode
+              : null,
+          paidAtIso: typeof payload.paidAtIso === "string" ? payload.paidAtIso : null,
         });
         result = upsertResultFromFinalizePaidBookingOp(finalizeOp);
       } catch (e) {
@@ -301,6 +308,19 @@ export async function POST(request: Request) {
       }
 
       if (result.bookingId && !result.error) {
+        if (jobType === FAILED_JOB_TYPE_PAYMENT_RECONCILIATION) {
+          await recordPaystackBookingPayment(supabase, {
+            reference: payload.paystackReference,
+            amountCents: payload.amountCents,
+            bookingId: result.bookingId,
+            currency: typeof payload.currency === "string" ? payload.currency : "ZAR",
+            paidAtIso: typeof payload.paidAtIso === "string" ? payload.paidAtIso : null,
+            chargeData:
+              payload.paystackChargeData && typeof payload.paystackChargeData === "object"
+                ? payload.paystackChargeData
+                : undefined,
+          });
+        }
         const { error: delErr } = await supabase.from("failed_jobs").delete().eq("id", id);
         if (delErr) {
           await reportOperationalIssue(
