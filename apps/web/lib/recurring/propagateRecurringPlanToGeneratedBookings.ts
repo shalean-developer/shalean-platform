@@ -268,8 +268,23 @@ export async function propagateRecurringPlanToGeneratedBookings(
       booking.total_price != null &&
       booking.total_price > 0;
 
+    const preservedPackageSnapshot = booking.booking_snapshot;
+    const bookingSnapshotForUpdate =
+      preserveRecurringPackagePayable && preservedPackageSnapshot
+        ? {
+            ...snapshot,
+            total_zar:
+              typeof preservedPackageSnapshot.total_zar === "number"
+                ? preservedPackageSnapshot.total_zar
+                : booking.total_price,
+            ...("recurringPrepayment" in preservedPackageSnapshot
+              ? { recurringPrepayment: preservedPackageSnapshot.recurringPrepayment }
+              : {}),
+          }
+        : snapshot;
+
     const bookingUpdate: Record<string, unknown> = {
-      booking_snapshot: preserveRecurringPackagePayable ? booking.booking_snapshot : snapshot,
+      booking_snapshot: bookingSnapshotForUpdate,
       total_price: preserveRecurringPackagePayable ? booking.total_price : priceZar,
       ...(safelyUnpaidPending ? bookingUncollectedCashColumns() : {}),
       price_snapshot: preserveRecurringPackagePayable
