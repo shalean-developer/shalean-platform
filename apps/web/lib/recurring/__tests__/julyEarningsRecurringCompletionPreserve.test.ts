@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  recurringOccurrenceAssignmentIsCommitted,
   recurringOccurrenceCleanerIdentityOnlyPatch,
   recurringOccurrenceCleanerPatch,
   recurringOccurrenceMustPreserveLifecycle,
@@ -28,6 +29,31 @@ describe("recurring propagate — completed visit lifecycle preservation", () =>
       recurringOccurrenceMustPreserveLifecycle({
         status: "assigned",
         completed_at: null,
+      }),
+    ).toBe(false);
+  });
+
+
+  it("treats accepted and travelling assignments as committed", () => {
+    expect(
+      recurringOccurrenceAssignmentIsCommitted({
+        cleaner_response_status: "accepted",
+      }),
+    ).toBe(true);
+    expect(
+      recurringOccurrenceAssignmentIsCommitted({
+        cleaner_response_status: "on_my_way",
+      }),
+    ).toBe(true);
+    expect(
+      recurringOccurrenceAssignmentIsCommitted({
+        cleaner_response_status: "pending",
+        accepted_at: "2026-07-02T10:00:00.000Z",
+      }),
+    ).toBe(true);
+    expect(
+      recurringOccurrenceAssignmentIsCommitted({
+        cleaner_response_status: "pending",
       }),
     ).toBe(false);
   });
