@@ -7,6 +7,7 @@ import { assertBookingCleanerEarningsResetSafe } from "@/lib/admin/adminBookingE
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { lockedDurationMinutesPatch } from "@/lib/booking/durationMinutesIntegrity";
 import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
+import { buildExactSourceLineItems } from "@/lib/booking/buildBookingLineItems";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { provisionalPriceSnapshotJson } from "@/lib/booking/provisionalPriceSnapshotFromLocked";
 import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
@@ -333,14 +334,29 @@ export async function propagateRecurringPlanToGeneratedBookings(
         : {}),
     };
 
+    const monthlyRepriceLineItems = draftMonthlyUnsettled
+      ? buildExactSourceLineItems({
+          declaredTotalCents: priceZar * 100,
+          source: "monthly_recurring_occurrence",
+          lines: [
+            {
+              name: "Monthly recurring service",
+              quantity: 1,
+              unitPriceCents: priceZar * 100,
+            },
+          ],
+        })
+      : null;
+
     let bookingUpdate: Record<string, unknown> = nonPricingPatch;
     let cleanerMutationSucceeded = false;
     if (mutablePricingCandidate) {
       const { data: repriced, error: repriceErr } = await admin.rpc(
-        "apply_recurring_occurrence_unpaid_patch",
+        "apply_recurring_occurrence_unpaid_patch_v2",
         {
           p_booking_id: booking.id,
           p_patch: mutablePricingPatch,
+          p_line_items: monthlyRepriceLineItems,
         },
       );
       if (repriceErr) {
