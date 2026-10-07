@@ -9,6 +9,77 @@ import {
 import { rosterHasCustomProvenance } from "@/lib/recurring/recurringRosterProvenance";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PREFERENCE_ROSTER_SOURCES = new Set([
+  "checkout_preferred",
+  "customer_preferred",
+  "booking_v2_r0",
+]);
+
+function rosterIsPreferenceOnly(rows: Array<{ source?: string | null }>): boolean {
+  return rows.length === 0 || rows.every((row) =>
+    PREFERENCE_ROSTER_SOURCES.has(String(row.source ?? "").trim().toLowerCase()),
+  );
+}
+
+async function syncPreferredCleanerOfferRoster(
+  admin: SupabaseClient,
+  bookingId: string,
+  selectedCleanerIds: readonly string[],
+  source: string,
+): Promise<SyncPreferredCleanerRosterResult> {
+  const ids = normalizePreferredCleanerIds(selectedCleanerIds);
+  if (ids.length < 2) {
+    return { ok: true, kind: "skipped_single_or_empty", cleanerCount: ids.length };
+  }
+  if (!PREFERENCE_ROSTER_SOURCES.has(source.trim().toLowerCase())) {
+    return {
+      ok: false,
+      kind: "validation_failed",
+      error: "Invalid preference roster source.",
+      cleanerCount: ids.length,
+    };
+  }
+
+  const rosterValidated = validateMembersToReplaceBookingCleanersRpcRows(
+    ids.map((id, i) => ({ cleanerId: id, role: i === 0 ? "lead" : "member" })),
+    { defaultSource: source },
+  );
+  if (!rosterValidated.ok) {
+    return {
+      ok: false,
+      kind: "validation_failed",
+      error: rosterValidated.error,
+      cleanerCount: ids.length,
+    };
+  }
+
+  const { data, error } = await admin.rpc("replace_booking_cleaners_preference_atomic", {
+    p_booking_id: bookingId,
+    p_rows: rosterValidated.rows,
+  });
+  if (error) {
+    return {
+      ok: false,
+      kind: "rpc_failed",
+      error: error.message ?? String(error),
+      cleanerCount: ids.length,
+    };
+  }
+  if (data === "skipped_authoritative_existing_roster") {
+    return {
+      ok: true,
+      kind: "skipped_custom_existing_roster",
+      cleanerCount: ids.length,
+    };
+  }
+  return {
+    ok: true,
+    kind: "synced",
+    cleanerCount: ids.length,
+    rows: rosterValidated.rows,
+  };
+}
+
 
 /** Normalize, dedupe, and cap preferred cleaner UUIDs. */
 export function normalizePreferredCleanerIds(raw: readonly string[] | null | undefined): string[] {
@@ -177,7 +248,10 @@ export async function syncPreferredCleanerRosterFromBookingRow(
     }
 
     const existing = Array.isArray(existingRows) ? existingRows : [];
-    if (rosterHasCustomProvenance(existing as Array<{ source?: string | null }>)) {
+    if (
+      rosterHasCustomProvenance(existing as Array<{ source?: string | null }>) ||
+      !rosterIsPreferenceOnly(existing as Array<{ source?: string | null }>)
+    ) {
       return {
         ok: true,
         kind: "skipped_custom_existing_roster",
@@ -186,5 +260,5 @@ export async function syncPreferredCleanerRosterFromBookingRow(
     }
   }
 
-  return syncPreferredCleanerRoster(admin, bookingId, ids, source);
+  return syncPreferredCleanerOfferRoster(admin, bookingId, ids, source);
 }
