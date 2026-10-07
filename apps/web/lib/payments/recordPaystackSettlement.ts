@@ -2,7 +2,10 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PaystackChargePayload } from "@/lib/payments/paymentTransactionTypes";
-import { recordGatewayPayment } from "@/lib/payments/recordGatewayPayment";
+import {
+  recordGatewayPayment,
+  type RecordGatewayPaymentResult,
+} from "@/lib/payments/recordGatewayPayment";
 
 /** Record Paystack charge settlement after booking finalize (idempotent). */
 export async function recordPaystackBookingPayment(
@@ -15,8 +18,8 @@ export async function recordPaystackBookingPayment(
     paidAtIso?: string | null;
     chargeData?: PaystackChargePayload;
   },
-): Promise<void> {
-  await recordGatewayPayment(admin, {
+): Promise<RecordGatewayPaymentResult> {
+  return recordGatewayPayment(admin, {
     gateway: "paystack",
     gatewayReference: opts.reference,
     entityType: "booking",
