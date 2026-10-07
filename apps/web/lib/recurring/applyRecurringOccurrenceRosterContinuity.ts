@@ -8,32 +8,40 @@ import { recurringOccurrenceAssignmentIsCommitted } from "@/lib/recurring/resolv
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 
-async function convergeCommittedRecurringHeaderOverGeneratedRoster(
+export function resolveCommittedRecurringRosterAction(input: {
+  committedLeadId: string | null;
+  rosterLeadId: string | null;
+  rosterCount: number;
+}):
+  | "manual_reconciliation"
+  | "repair_header_from_roster"
+  | "preserve_existing_roster"
+  | "collapse_to_committed_header"
+  | "no_roster" {
+  const committedLeadId = String(input.committedLeadId ?? "").trim();
+  const rosterLeadId = String(input.rosterLeadId ?? "").trim();
+  const rosterCount = Math.max(0, Math.floor(Number(input.rosterCount) || 0));
+
+  if (!committedLeadId) {
+    return rosterCount > 0 && rosterLeadId
+      ? "repair_header_from_roster"
+      : "manual_reconciliation";
+  }
+  if (rosterCount <= 0) return "no_roster";
+  if (rosterLeadId === committedLeadId) return "preserve_existing_roster";
+  return "collapse_to_committed_header";
+}
+
+async function reconcileCommittedRecurringSoloAssignment(
   admin: SupabaseClient,
-  params: { bookingId: string; committedLeadId: string; staleRosterCount: number },
-): Promise<{ ok: true } | { ok: false; reason: string }> {
-  if (params.staleRosterCount <= 0) return { ok: true };
-
-  const { error: staleRosterDeleteErr } = await admin
-    .from("booking_cleaners")
-    .delete()
-    .eq("booking_id", params.bookingId);
-  if (staleRosterDeleteErr) {
-    return { ok: false, reason: staleRosterDeleteErr.message };
-  }
-
-  const { error: committedHeaderErr } = await admin
-    .from("bookings")
-    .update({
-      payout_owner_cleaner_id: params.committedLeadId,
-      cleaner_count: 1,
-    })
-    .eq("id", params.bookingId);
-  if (committedHeaderErr) {
-    return { ok: false, reason: committedHeaderErr.message };
-  }
-
-  return { ok: true };
+  params: { bookingId: string; committedLeadId: string },
+): Promise<{ ok: true; collapsed: boolean } | { ok: false; reason: string }> {
+  const { data, error } = await admin.rpc("reconcile_committed_recurring_solo_assignment_atomic", {
+    p_booking_id: params.bookingId,
+    p_cleaner_id: params.committedLeadId,
+  });
+  if (error) return { ok: false, reason: error.message };
+  return { ok: true, collapsed: data === true };
 }
 
 /**
@@ -114,13 +122,108 @@ export async function applyRecurringOccurrenceRosterContinuity(
   const existingRoster = Array.isArray(row.booking_cleaners) ? row.booking_cleaners : [];
   const customExistingRoster = rosterHasCustomProvenance(existingRoster);
   const committedAssignment = recurringOccurrenceAssignmentIsCommitted(row);
+  const existingLeads = existingRoster.filter(
+    (member) => String(member.role ?? "").trim().toLowerCase() === "lead",
+  );
+  const existingLeadId =
+    existingLeads.length === 1 ? String(existingLeads[0]?.cleaner_id ?? "").trim() : "";
+  const committedLeadId = String(row.cleaner_id ?? "").trim();
+
+  if (committedAssignment) {
+    const action = resolveCommittedRecurringRosterAction({
+      committedLeadId: committedLeadId || null,
+      rosterLeadId: existingLeadId || null,
+      rosterCount: existingRoster.length,
+    });
+
+    if (action === "manual_reconciliation") {
+      return {
+        ok: true,
+        applied: false,
+        cleanerCount: Number(row.cleaner_count ?? 1) || 1,
+        reason: "committed_recurring_identity_requires_manual_reconciliation",
+        kind: "committed_existing",
+        lifecyclePromoted: false,
+        assignmentCommitted: true,
+      };
+    }
+
+    if (action === "repair_header_from_roster") {
+      const { error: authoritativePatchErr } = await admin
+        .from("bookings")
+        .update({
+          cleaner_id: existingLeadId,
+          payout_owner_cleaner_id: existingLeadId,
+          cleaner_count: existingRoster.length,
+        })
+        .eq("id", bookingId);
+      if (authoritativePatchErr) {
+        return {
+          ok: false,
+          applied: false,
+          cleanerCount: existingRoster.length,
+          reason: authoritativePatchErr.message,
+        };
+      }
+      return {
+        ok: true,
+        applied: true,
+        cleanerCount: existingRoster.length,
+        leadCleanerId: existingLeadId,
+        kind: customExistingRoster ? "custom_existing" : "committed_existing",
+        lifecyclePromoted: false,
+        assignmentCommitted: true,
+      };
+    }
+
+    if (action === "preserve_existing_roster") {
+      return {
+        ok: true,
+        applied: false,
+        cleanerCount: existingRoster.length,
+        leadCleanerId: committedLeadId,
+        kind: customExistingRoster ? "custom_existing" : "committed_existing",
+        lifecyclePromoted: false,
+        assignmentCommitted: true,
+      };
+    }
+
+    if (action === "collapse_to_committed_header") {
+      const reconciled = await reconcileCommittedRecurringSoloAssignment(admin, {
+        bookingId,
+        committedLeadId,
+      });
+      if (!reconciled.ok) {
+        return {
+          ok: false,
+          applied: false,
+          cleanerCount: existingRoster.length,
+          reason: reconciled.reason,
+        };
+      }
+      return {
+        ok: true,
+        applied: reconciled.collapsed,
+        cleanerCount: 1,
+        leadCleanerId: committedLeadId,
+        kind: "committed_existing",
+        lifecyclePromoted: false,
+        assignmentCommitted: true,
+      };
+    }
+
+    return {
+      ok: true,
+      applied: false,
+      cleanerCount: Number(row.cleaner_count ?? 1) || 1,
+      leadCleanerId: committedLeadId,
+      kind: "committed_existing",
+      lifecyclePromoted: false,
+      assignmentCommitted: true,
+    };
+  }
 
   if (customExistingRoster) {
-    const leads = existingRoster.filter(
-      (member) => String(member.role ?? "").trim().toLowerCase() === "lead",
-    );
-    const existingLeadId =
-      leads.length === 1 ? String(leads[0]?.cleaner_id ?? "").trim() : "";
     if (!existingLeadId) {
       return {
         ok: false,
@@ -153,51 +256,9 @@ export async function applyRecurringOccurrenceRosterContinuity(
       applied: true,
       cleanerCount: existingRoster.length,
       leadCleanerId: existingLeadId,
-      kind: customExistingRoster ? "custom_existing" : "committed_existing",
+      kind: "custom_existing",
       lifecyclePromoted: false,
-      assignmentCommitted: committedAssignment,
-    };
-  }
-
-  if (committedAssignment) {
-    const committedLeadId = String(row.cleaner_id ?? "").trim();
-    if (!committedLeadId) {
-      return {
-        ok: true,
-        applied: false,
-        cleanerCount: Number(row.cleaner_count ?? 1) || 1,
-        reason: "committed_recurring_identity_requires_manual_reconciliation",
-        kind: "committed_existing",
-        lifecyclePromoted: false,
-        assignmentCommitted: true,
-      };
-    }
-
-    // Generated continuity/preference rows are not authoritative once a cleaner has
-    // actually accepted / been directly assigned. Converge stale generated roster state
-    // through the helper while preserving the committed lifecycle in this branch.
-    const committedConvergence = await convergeCommittedRecurringHeaderOverGeneratedRoster(admin, {
-      bookingId,
-      committedLeadId,
-      staleRosterCount: existingRoster.length,
-    });
-    if (!committedConvergence.ok) {
-      return {
-        ok: false,
-        applied: false,
-        cleanerCount: existingRoster.length > 0 ? 1 : Number(row.cleaner_count ?? 1) || 1,
-        reason: committedConvergence.reason,
-      };
-    }
-
-    return {
-      ok: true,
-      applied: existingRoster.length > 0,
-      cleanerCount: existingRoster.length > 0 ? 1 : Number(row.cleaner_count ?? 1) || 1,
-      leadCleanerId: committedLeadId,
-      kind: "committed_existing",
-      lifecyclePromoted: false,
-      assignmentCommitted: true,
+      assignmentCommitted: false,
     };
   }
 
