@@ -263,31 +263,35 @@ export async function propagateRecurringPlanToGeneratedBookings(
     const safelyUnpaidPending =
       ordinaryUnpaidPending && !settlementMarkerPresent && !hasPaymentLedger;
     const preserveRecurringPackagePayable =
-      ordinaryUnpaidPending &&
+      safelyUnpaidPending &&
       booking.price_snapshot?.payment_scope === "recurring_first_30_days" &&
       booking.total_price != null &&
       booking.total_price > 0;
+    const preserveHistoricalPricing = !safelyUnpaidPending;
+    const preserveExistingPricing = preserveHistoricalPricing || preserveRecurringPackagePayable;
 
     const preservedPackageSnapshot = booking.booking_snapshot;
     const bookingSnapshotForUpdate =
-      preserveRecurringPackagePayable && preservedPackageSnapshot
-        ? {
-            ...snapshot,
-            total_zar:
-              typeof preservedPackageSnapshot.total_zar === "number"
-                ? preservedPackageSnapshot.total_zar
-                : booking.total_price,
-            ...("recurringPrepayment" in preservedPackageSnapshot
-              ? { recurringPrepayment: preservedPackageSnapshot.recurringPrepayment }
-              : {}),
-          }
-        : snapshot;
+      preserveHistoricalPricing
+        ? booking.booking_snapshot ?? snapshot
+        : preserveRecurringPackagePayable && preservedPackageSnapshot
+          ? {
+              ...snapshot,
+              total_zar:
+                typeof preservedPackageSnapshot.total_zar === "number"
+                  ? preservedPackageSnapshot.total_zar
+                  : booking.total_price,
+              ...("recurringPrepayment" in preservedPackageSnapshot
+                ? { recurringPrepayment: preservedPackageSnapshot.recurringPrepayment }
+                : {}),
+            }
+          : snapshot;
 
     const bookingUpdate: Record<string, unknown> = {
       booking_snapshot: bookingSnapshotForUpdate,
-      total_price: preserveRecurringPackagePayable ? booking.total_price : priceZar,
+      total_price: preserveExistingPricing ? booking.total_price : priceZar,
       ...(safelyUnpaidPending ? bookingUncollectedCashColumns() : {}),
-      price_snapshot: preserveRecurringPackagePayable
+      price_snapshot: preserveExistingPricing
         ? booking.price_snapshot
         : provisionalPriceSnapshotJson(locked),
       location: locked.location?.trim() || null,
