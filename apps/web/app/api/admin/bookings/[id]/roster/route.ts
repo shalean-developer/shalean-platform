@@ -181,7 +181,7 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
   // Any explicit admin roster edit is authoritative customization.
   // Preserve payout weights/bonuses, but stamp provenance as admin so later
   // recurring continuity does not treat the edited roster as generated.
-  const rpcRows = built.rows.map((row) => ({ ...row, source: "admin" }));
+  const rpcRows = built.rows.map((row) => ({ ...row, source: "admin_roster_edit" }));
 
   const { error: rpcErr } = await admin.rpc("replace_booking_cleaners_admin_atomic", {
     p_booking_id: bookingId,
@@ -190,9 +190,19 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
   if (rpcErr) {
     const msg = rpcErr.message ?? "";
     const locked = /finalized|roster locked|cleaner_line_earnings_finalized/i.test(msg);
+    const committedLead = /committed lead replacement requires canonical direct assignment/i.test(msg);
     return NextResponse.json(
-      { error: msg, ...(locked ? { hint: BOOKING_ROSTER_LOCKED_HINT, code: "roster_finalized" } : {}) },
-      { status: locked ? 409 : 400 },
+      {
+        error: msg,
+        ...(locked ? { hint: BOOKING_ROSTER_LOCKED_HINT, code: "roster_finalized" } : {}),
+        ...(committedLead
+          ? {
+              hint: "Use the Direct Assign action to replace an accepted/in-progress lead cleaner.",
+              code: "roster_lead_committed",
+            }
+          : {}),
+      },
+      { status: locked || committedLead ? 409 : 400 },
     );
   }
 
