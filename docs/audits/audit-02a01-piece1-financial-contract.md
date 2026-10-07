@@ -42,7 +42,10 @@ The forward contract separates five concepts:
 
 ### R0 / cleaning-credit covered
 
-- settlement may be successful with zero collected cash;
+- settlement may be successful with zero collected cash only when R0 evidence is complete;
+- `payment_completed_at` must be present;
+- the caller must verify that the linked payment transaction is the qualifying zero-amount `promo_credit_cover` ledger row;
+- zero cash or `payment_status=success` alone must never classify a booking as R0;
 - service value and customer settlement are separate concepts.
 
 ### Monthly draft
