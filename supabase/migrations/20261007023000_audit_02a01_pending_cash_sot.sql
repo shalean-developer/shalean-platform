@@ -35,6 +35,46 @@ begin
 end
 $audit02a01$;
 
+-- Reject anomalous rows whose cash mirrors do not provide one trustworthy ZAR payable.
+do $audit02a01_cashshape$
+begin
+  if exists (
+    select 1
+    from public.bookings b
+    where lower(trim(coalesce(b.status, ''))) in ('pending_payment', 'payment_expired')
+      and lower(trim(coalesce(b.payment_status, 'pending')))
+        not in ('success', 'paid', 'succeeded', 'completed', 'pending_monthly')
+      and b.payment_completed_at is null
+      and b.paid_at is null
+      and b.payment_transaction_id is null
+      and b.marked_paid_by_admin_id is null
+      and greatest(
+        coalesce(b.amount_paid_cents, 0),
+        coalesce(b.total_paid_cents, 0),
+        coalesce(b.total_paid_zar, 0) * 100
+      ) > 0
+      and not exists (
+        select 1
+        from public.payment_transactions pt
+        where pt.booking_id = b.id
+      )
+      and (
+        coalesce(b.total_paid_zar, 0) <= 0
+        or (
+          coalesce(b.amount_paid_cents, 0) > 0
+          and b.amount_paid_cents <> round(b.total_paid_zar * 100)
+        )
+        or (
+          coalesce(b.total_paid_cents, 0) > 0
+          and b.total_paid_cents <> round(b.total_paid_zar * 100)
+        )
+      )
+  ) then
+    raise exception 'audit_02a01_divergent_cash_mirrors_require_manual_reconciliation';
+  end if;
+end
+$audit02a01_cashshape$;
+
 -- Historical pre-change rows stored the actual checkout payable in total_paid_zar
 -- while total_price could remain at the unadjusted visit amount. Require two
 -- independent persisted pricing sources to corroborate the legacy payable before
@@ -121,6 +161,124 @@ where lower(trim(coalesce(b.status, ''))) in ('pending_payment', 'payment_expire
     from public.payment_transactions pt
     where pt.booking_id = b.id
   );
+
+-- Atomic pending-payment repricing boundary used by Paystack initialization.
+-- The booking row is locked, settlement evidence is checked in the same transaction,
+-- and the mutation only succeeds while the booking is still safely unpaid.
+create or replace function public.apply_pending_booking_init_patch(
+  p_booking_id uuid,
+  p_patch jsonb
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $audit02a01_rpc$
+declare
+  v_row public.bookings%rowtype;
+  v_updated_id uuid;
+begin
+  select *
+    into v_row
+  from public.bookings
+  where id = p_booking_id
+  for update;
+
+  if not found then
+    return null;
+  end if;
+
+  if lower(trim(coalesce(v_row.status, ''))) <> 'pending_payment'
+     or lower(trim(coalesce(v_row.payment_status, '')))
+        in ('success', 'paid', 'succeeded', 'completed', 'pending_monthly')
+     or v_row.payment_completed_at is not null
+     or v_row.paid_at is not null
+     or v_row.payment_transaction_id is not null
+     or v_row.marked_paid_by_admin_id is not null
+     or exists (
+       select 1
+       from public.payment_transactions pt
+       where pt.booking_id = p_booking_id
+     )
+  then
+    return null;
+  end if;
+
+  update public.bookings b
+  set (
+    booking_snapshot,
+    duration_minutes,
+    price_breakdown,
+    total_price,
+    price_snapshot,
+    amount_paid_cents,
+    total_paid_cents,
+    total_paid_zar,
+    customer_name,
+    customer_phone,
+    customer_id,
+    user_id,
+    location_id,
+    city_id,
+    surge_multiplier,
+    surge_reason,
+    extras,
+    slot_duplicate_exempt,
+    admin_force_slot_override,
+    selected_cleaner_id,
+    assignment_type,
+    cleaner_count,
+    cleaner_share_percentage
+  ) = (
+    select
+      x.booking_snapshot,
+      x.duration_minutes,
+      x.price_breakdown,
+      x.total_price,
+      x.price_snapshot,
+      x.amount_paid_cents,
+      x.total_paid_cents,
+      x.total_paid_zar,
+      x.customer_name,
+      x.customer_phone,
+      x.customer_id,
+      x.user_id,
+      x.location_id,
+      x.city_id,
+      x.surge_multiplier,
+      x.surge_reason,
+      x.extras,
+      x.slot_duplicate_exempt,
+      x.admin_force_slot_override,
+      x.selected_cleaner_id,
+      x.assignment_type,
+      x.cleaner_count,
+      x.cleaner_share_percentage
+    from jsonb_populate_record(b, p_patch) as x
+  )
+  where b.id = p_booking_id
+    and lower(trim(coalesce(b.status, ''))) = 'pending_payment'
+    and lower(trim(coalesce(b.payment_status, '')))
+      not in ('success', 'paid', 'succeeded', 'completed', 'pending_monthly')
+    and b.payment_completed_at is null
+    and b.paid_at is null
+    and b.payment_transaction_id is null
+    and b.marked_paid_by_admin_id is null
+    and not exists (
+      select 1
+      from public.payment_transactions pt
+      where pt.booking_id = b.id
+    )
+  returning b.id into v_updated_id;
+
+  return v_updated_id;
+end
+$audit02a01_rpc$;
+
+revoke all on function public.apply_pending_booking_init_patch(uuid, jsonb) from public;
+revoke all on function public.apply_pending_booking_init_patch(uuid, jsonb) from anon;
+revoke all on function public.apply_pending_booking_init_patch(uuid, jsonb) from authenticated;
+grant execute on function public.apply_pending_booking_init_patch(uuid, jsonb) to service_role;
 
 alter table public.bookings
   drop constraint if exists bookings_pending_unpaid_cash_zero;
