@@ -401,15 +401,22 @@ export async function propagateRecurringPlanToGeneratedBookings(
 
     result.bookings_updated++;
     if (preferredCleanerId && cleanerMutationSucceeded) {
-      result.bookings_cleaner_updated++;
       if (!bookingCompleted && (!mutablePricingCandidate || draftMonthlyUnsettled)) {
-        await applyRecurringOccurrenceRosterContinuity(admin, {
+        const rosterContinuity = await applyRecurringOccurrenceRosterContinuity(admin, {
           bookingId: booking.id,
           recurringId: plan.id,
           leadCleanerId: preferredCleanerId,
           preserveLifecycle: draftMonthlyUnsettled,
         });
+        if (!rosterContinuity.ok) {
+          result.errors.push(
+            `Booking ${booking.id}: recurring roster continuity failed: ${rosterContinuity.reason ?? "unknown_error"}`,
+          );
+          result.earnings_skipped++;
+          continue;
+        }
       }
+      result.bookings_cleaner_updated++;
     }
 
     if (booking.monthly_invoice_id) {
