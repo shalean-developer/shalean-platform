@@ -134,8 +134,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
       ([cleanerId, role]) => existingRoleByCleanerId.get(cleanerId) === role,
     ) &&
     desiredRoleByCleanerId.get(leadId) === "lead";
-  const shouldReplaceRoster =
-    !(rosterAlreadyMatches && leadId === continuity.leadCleanerId);
+  const shouldReplaceRoster = !rosterAlreadyMatches;
 
   if (shouldReplaceRoster) {
     const { error: rpcErr } = await admin.rpc("replace_booking_cleaners_admin_atomic", {
@@ -152,22 +151,27 @@ export async function applyRecurringOccurrenceRosterContinuity(
     }
   }
 
-  const now = new Date().toISOString();
+  const bookingPatch = {
+    cleaner_id: leadId,
+    selected_cleaner_id: leadId,
+    payout_owner_cleaner_id: leadId,
+    cleaner_mode: "individual_cleaners",
+    cleaner_count: rosterRows.length,
+    is_team_job: false,
+    team_id: null,
+    ...(shouldReplaceRoster
+      ? {
+          assigned_at: new Date().toISOString(),
+          cleaner_response_status: "pending",
+          dispatch_status: "assigned",
+          status: "assigned",
+        }
+      : {}),
+  };
+
   const { error: patchErr } = await admin
     .from("bookings")
-    .update({
-      cleaner_id: leadId,
-      selected_cleaner_id: leadId,
-      payout_owner_cleaner_id: leadId,
-      cleaner_mode: "individual_cleaners",
-      cleaner_count: rosterRows.length,
-      is_team_job: false,
-      team_id: null,
-      assigned_at: now,
-      cleaner_response_status: "pending",
-      dispatch_status: "assigned",
-      status: "assigned",
-    })
+    .update(bookingPatch)
     .eq("id", bookingId);
 
   if (patchErr) {
