@@ -142,20 +142,20 @@ export async function applyRecurringOccurrenceRosterContinuity(
     source: "recurring_continuity",
   }));
   if (requestedLeadId && requestedLeadId !== continuity.leadCleanerId) {
-    const existingRequestedLead = continuity.rosterRows.find(
+    const existingRequestedLead = rosterRows.find(
       (member) => member.cleaner_id === requestedLeadId,
     );
-    const originalLead = continuity.rosterRows.find((member) => member.role === "lead");
+    const originalLead = rosterRows.find((member) => member.role === "lead");
     if (existingRequestedLead) {
       const transferredLeadBonus = originalLead?.lead_bonus_cents ?? 0;
-      rosterRows = continuity.rosterRows.map((member) => ({
+      rosterRows = rosterRows.map((member) => ({
         ...member,
         role: member.cleaner_id === requestedLeadId ? "lead" : "member",
         lead_bonus_cents:
           member.cleaner_id === requestedLeadId ? transferredLeadBonus : 0,
       }));
     } else if (originalLead) {
-      rosterRows = continuity.rosterRows.map((member) =>
+      rosterRows = rosterRows.map((member) =>
         member.role === "lead"
           ? { ...member, cleaner_id: requestedLeadId }
           : member,
