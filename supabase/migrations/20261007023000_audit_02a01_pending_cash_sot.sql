@@ -7,7 +7,7 @@
 -- Fail closed if settlement evidence exists only in the normalized ledger.
 -- A CHECK constraint cannot safely query payment_transactions, so such rows must be
 -- reconciled explicitly instead of being zeroed or blocking validation later.
-do $
+do $audit02a01$
 begin
   if exists (
     select 1
@@ -33,7 +33,7 @@ begin
     raise exception 'audit_02a01_ledger_only_settlement_requires_manual_reconciliation';
   end if;
 end
-$;
+$audit02a01$;
 
 -- Repair only rows that are provably unpaid and have no settlement evidence.
 update public.bookings b
