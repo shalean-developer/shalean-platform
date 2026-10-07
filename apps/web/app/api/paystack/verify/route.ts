@@ -45,8 +45,7 @@ import { loadBookingReferenceForId } from "@/lib/booking/loadBookingReference";
 import {
   paystackChargeDataFromRecord,
   recordPaystackBookingPayment,
-  recordPaystackMonthlyInvoicePayment,
-  recordPaystackSalesDocumentPayment,
+  recordPaystackEntitySettlementWithRecovery,
 } from "@/lib/payments/recordPaystackSettlement";
 
 export const runtime = "nodejs";
@@ -304,10 +303,12 @@ export async function GET(request: Request) {
             ? monthlyRoutingGet.invoiceId
             : monthlyInvoiceIdHintGet;
         if (invoiceId && !skipLedger) {
-          await recordPaystackMonthlyInvoicePayment(adminGet, {
+          await recordPaystackEntitySettlementWithRecovery(adminGet, {
+            entityType: "monthly_invoice",
+            entityId: invoiceId,
             reference: ref,
             amountCents: monthlyAmountGet,
-            invoiceId,
+            currency: typeof tx.currency === "string" ? tx.currency : "ZAR",
             paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
             chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
           });
@@ -360,10 +361,12 @@ export async function GET(request: Request) {
             ? salesRoutingGet.documentId
             : salesDocIdHintGet;
         if (documentId) {
-          await recordPaystackSalesDocumentPayment(adminGet, {
+          await recordPaystackEntitySettlementWithRecovery(adminGet, {
+            entityType: "sales_document",
+            entityId: documentId,
             reference: ref,
             amountCents: monthlyAmountGet,
-            documentId,
+            currency: typeof tx.currency === "string" ? tx.currency : "ZAR",
             paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
             chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
           });
@@ -780,10 +783,12 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
                 normalizePaystackMetadata(tx.metadata) as unknown as Record<string, unknown>,
               );
         if (invoiceId && !skipLedger) {
-          await recordPaystackMonthlyInvoicePayment(adminPost, {
+          await recordPaystackEntitySettlementWithRecovery(adminPost, {
+            entityType: "monthly_invoice",
+            entityId: invoiceId,
             reference: ref,
             amountCents: txAmount,
-            invoiceId,
+            currency: txCurrency,
             paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
             chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
           });
@@ -853,10 +858,12 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
             ? salesRoutingPost.documentId
             : salesDocIdHintPost;
         if (documentId) {
-          await recordPaystackSalesDocumentPayment(adminPost, {
+          await recordPaystackEntitySettlementWithRecovery(adminPost, {
+            entityType: "sales_document",
+            entityId: documentId,
             reference: ref,
             amountCents: txAmount,
-            documentId,
+            currency: txCurrency,
             paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
             chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
           });
