@@ -6,6 +6,7 @@ import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerpri
 import { assertBookingCleanerEarningsResetSafe } from "@/lib/admin/adminBookingEarningsResetSafety";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { lockedDurationMinutesPatch } from "@/lib/booking/durationMinutesIntegrity";
+import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { provisionalPriceSnapshotJson } from "@/lib/booking/provisionalPriceSnapshotFromLocked";
 import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
@@ -53,6 +54,7 @@ type GeneratedBookingRow = {
   id: string;
   date: string | null;
   status: string | null;
+  payment_status: string | null;
   completed_at: string | null;
   cleaner_line_earnings_finalized_at: string | null;
   monthly_invoice_id: string | null;
@@ -148,7 +150,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
   const { data: rows, error } = await admin
     .from("bookings")
     .select(
-      "id, date, status, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status)",
+      "id, date, status, payment_status, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status)",
     )
     .eq("recurring_id", plan.id)
     .neq("status", "cancelled");
@@ -164,6 +166,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
       id: String(row.id ?? ""),
       date: row.date != null ? String(row.date) : null,
       status: row.status != null ? String(row.status) : null,
+      payment_status: row.payment_status != null ? String(row.payment_status) : null,
       completed_at: row.completed_at != null ? String(row.completed_at) : null,
       cleaner_line_earnings_finalized_at:
         row.cleaner_line_earnings_finalized_at != null ? String(row.cleaner_line_earnings_finalized_at) : null,
@@ -209,9 +212,16 @@ export async function propagateRecurringPlanToGeneratedBookings(
         ? adminBookingServiceSlug(String(locked.service))
         : "standard";
 
+    const lifecycleStatus = (booking.status ?? "").trim().toLowerCase();
+    const paymentStatus = (booking.payment_status ?? "").trim().toLowerCase();
+    const ordinaryUnpaidPending =
+      lifecycleStatus === "pending_payment" &&
+      !["success", "paid", "succeeded", "completed", "pending_monthly"].includes(paymentStatus);
+
     const bookingUpdate: Record<string, unknown> = {
       booking_snapshot: snapshot,
-      total_paid_zar: priceZar,
+      total_price: priceZar,
+      ...(ordinaryUnpaidPending ? bookingUncollectedCashColumns() : {}),
       price_snapshot: provisionalPriceSnapshotJson(locked),
       location: locked.location?.trim() || null,
       time: locked.time ?? null,
