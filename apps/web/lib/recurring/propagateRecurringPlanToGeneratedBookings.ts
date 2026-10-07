@@ -246,54 +246,29 @@ export async function propagateRecurringPlanToGeneratedBookings(
       Boolean(booking.payment_transaction_id) ||
       Boolean(booking.marked_paid_by_admin_id);
 
-    let hasPaymentLedger = false;
-    if (ordinaryUnpaidPending && !settlementMarkerPresent) {
-      const { data: ledgerRows, error: ledgerErr } = await admin
-        .from("payment_transactions")
-        .select("id")
-        .eq("booking_id", booking.id)
-        .limit(1);
-      if (ledgerErr) {
-        result.errors.push(`Booking ${booking.id}: settlement evidence check failed: ${ledgerErr.message}`);
-        continue;
-      }
-      hasPaymentLedger = (ledgerRows?.length ?? 0) > 0;
-    }
-
-    const safelyUnpaidPending =
-      ordinaryUnpaidPending && !settlementMarkerPresent && !hasPaymentLedger;
+    const mutableUnpaidCandidate = ordinaryUnpaidPending && !settlementMarkerPresent;
     const preserveRecurringPackagePayable =
-      safelyUnpaidPending &&
+      mutableUnpaidCandidate &&
       booking.price_snapshot?.payment_scope === "recurring_first_30_days" &&
       booking.total_price != null &&
       booking.total_price > 0;
-    const preserveHistoricalPricing = !safelyUnpaidPending;
-    const preserveExistingPricing = preserveHistoricalPricing || preserveRecurringPackagePayable;
 
     const preservedPackageSnapshot = booking.booking_snapshot;
-    const bookingSnapshotForUpdate =
-      preserveHistoricalPricing
-        ? booking.booking_snapshot ?? snapshot
-        : preserveRecurringPackagePayable && preservedPackageSnapshot
-          ? {
-              ...snapshot,
-              total_zar:
-                typeof preservedPackageSnapshot.total_zar === "number"
-                  ? preservedPackageSnapshot.total_zar
-                  : booking.total_price,
-              ...("recurringPrepayment" in preservedPackageSnapshot
-                ? { recurringPrepayment: preservedPackageSnapshot.recurringPrepayment }
-                : {}),
-            }
-          : snapshot;
+    const bookingSnapshotForMutableUpdate =
+      preserveRecurringPackagePayable && preservedPackageSnapshot
+        ? {
+            ...snapshot,
+            total_zar:
+              typeof preservedPackageSnapshot.total_zar === "number"
+                ? preservedPackageSnapshot.total_zar
+                : booking.total_price,
+            ...("recurringPrepayment" in preservedPackageSnapshot
+              ? { recurringPrepayment: preservedPackageSnapshot.recurringPrepayment }
+              : {}),
+          }
+        : snapshot;
 
-    const bookingUpdate: Record<string, unknown> = {
-      booking_snapshot: bookingSnapshotForUpdate,
-      total_price: preserveExistingPricing ? booking.total_price : priceZar,
-      ...(safelyUnpaidPending ? bookingUncollectedCashColumns() : {}),
-      price_snapshot: preserveExistingPricing
-        ? booking.price_snapshot
-        : provisionalPriceSnapshotJson(locked),
+    const nonPricingPatch: Record<string, unknown> = {
       location: locked.location?.trim() || null,
       time: locked.time ?? null,
       service: locked.service != null ? getServiceLabel(locked.service) : null,
@@ -302,6 +277,34 @@ export async function propagateRecurringPlanToGeneratedBookings(
       bathrooms: locked.bathrooms ?? null,
       ...lockedDurationMinutesPatch(locked),
     };
+
+    const mutablePricingPatch: Record<string, unknown> = {
+      ...nonPricingPatch,
+      booking_snapshot: bookingSnapshotForMutableUpdate,
+      total_price: preserveRecurringPackagePayable ? booking.total_price : priceZar,
+      ...bookingUncollectedCashColumns(),
+      price_snapshot: preserveRecurringPackagePayable
+        ? booking.price_snapshot
+        : provisionalPriceSnapshotJson(locked),
+    };
+
+    let bookingUpdate: Record<string, unknown> = nonPricingPatch;
+    if (mutableUnpaidCandidate) {
+      const { data: repriced, error: repriceErr } = await admin.rpc(
+        "apply_recurring_occurrence_unpaid_patch",
+        {
+          p_booking_id: booking.id,
+          p_patch: mutablePricingPatch,
+        },
+      );
+      if (repriceErr) {
+        result.errors.push(`Booking ${booking.id}: atomic recurring repricing failed: ${repriceErr.message}`);
+        continue;
+      }
+      if (repriced === true) {
+        bookingUpdate = {};
+      }
+    }
 
     if (preferredCleanerId) {
       Object.assign(
@@ -314,14 +317,16 @@ export async function propagateRecurringPlanToGeneratedBookings(
       );
     }
 
-    const { error: upErr } = await admin
-      .from("bookings")
-      .update(bookingUpdate)
-      .eq("id", booking.id);
+    if (Object.keys(bookingUpdate).length > 0) {
+      const { error: upErr } = await admin
+        .from("bookings")
+        .update(bookingUpdate)
+        .eq("id", booking.id);
 
-    if (upErr) {
-      result.errors.push(`Booking ${booking.id}: ${upErr.message}`);
-      continue;
+      if (upErr) {
+        result.errors.push(`Booking ${booking.id}: ${upErr.message}`);
+        continue;
+      }
     }
 
     result.bookings_updated++;
