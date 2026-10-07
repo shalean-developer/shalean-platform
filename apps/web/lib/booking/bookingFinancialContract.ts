@@ -117,9 +117,12 @@ export function canonicalServiceValueCents(params: {
     }
   }
 
-  const totalPrice = Number(params.booking.total_price);
-  if (Number.isFinite(totalPrice) && totalPrice >= 0) {
-    return Math.round(totalPrice * 100);
+  const totalPriceRaw = params.booking.total_price;
+  if (totalPriceRaw !== null && totalPriceRaw !== undefined) {
+    const totalPrice = Number(totalPriceRaw);
+    if (Number.isFinite(totalPrice) && totalPrice >= 0) {
+      return Math.round(totalPrice * 100);
+    }
   }
 
   return null;
