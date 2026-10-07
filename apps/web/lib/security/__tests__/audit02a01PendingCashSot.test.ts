@@ -213,6 +213,11 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterContinuity).toContain("const existingRequestedLead = rosterRows.find");
     expect(rosterContinuity).toContain("const originalLead = rosterRows.find");
     expect(rosterContinuity).toContain("rosterRows = rosterRows.map");
+
+    const adminRosterRoute = read("app/api/admin/bookings/[id]/roster/route.ts");
+    expect(adminRosterRoute).toContain(
+      'const rpcRows = built.rows.map((row) => ({ ...row, source: "admin" }))',
+    );
     expect(rosterContinuity.indexOf("customExistingRoster")).toBeLessThan(
       rosterContinuity.indexOf("let continuity = params.roster ?? null"),
     );
