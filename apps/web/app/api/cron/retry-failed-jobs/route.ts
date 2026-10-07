@@ -332,10 +332,42 @@ export async function POST(request: Request) {
                 paystackReference: payload.paystackReference,
               },
             );
-            await supabase
-              .from("failed_jobs")
-              .update({ attempts: nextAttempts })
-              .eq("id", id);
+            if (nextAttempts >= BOOKING_INSERT_MAX_ATTEMPTS) {
+              const terminalPayload = {
+                ...payload,
+                _bookingInsertExhausted: {
+                  last_error: String(paymentPersisted.error).slice(0, 4000),
+                  paystack_reference: payload.paystackReference,
+                  attempts: nextAttempts,
+                  at: new Date().toISOString(),
+                },
+              };
+              await supabase
+                .from("failed_jobs")
+                .update({
+                  type: FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED,
+                  attempts: nextAttempts,
+                  payload: terminalPayload,
+                })
+                .eq("id", id);
+              await reportOperationalIssue(
+                "critical",
+                "cron/retry-failed-jobs",
+                "payment_reconciliation settlement persistence attempts exhausted",
+                {
+                  errorType: FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED,
+                  failedJobId: id,
+                  bookingId: result.bookingId,
+                  paystackReference: payload.paystackReference,
+                  attempts: nextAttempts,
+                },
+              );
+            } else {
+              await supabase
+                .from("failed_jobs")
+                .update({ attempts: nextAttempts })
+                .eq("id", id);
+            }
             continue;
           }
         }
