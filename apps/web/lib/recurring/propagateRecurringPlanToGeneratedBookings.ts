@@ -158,7 +158,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
   const { data: rows, error } = await admin
     .from("bookings")
     .select(
-      "id, date, status, payment_status, payment_completed_at, paid_at, payment_transaction_id, marked_paid_by_admin_id, total_price, booking_snapshot, price_snapshot, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status, snapshot_at_finalize, snapshot_current, finalized_at, paystack_reference, payment_link, sent_at, zoho_invoice_id, initial_invoice_email_dispatch_claimed)",
+      "id, date, status, payment_status, payment_completed_at, paid_at, payment_transaction_id, marked_paid_by_admin_id, total_price, booking_snapshot, price_snapshot, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status, snapshot_at_finalize, snapshot_current, finalized_at, paystack_reference, payment_link, sent_at, zoho_invoice_id, initial_invoice_email_dispatch_claimed, finalization_claim_token, finalization_claimed_at)",
     )
     .eq("recurring_id", plan.id)
     .neq("status", "cancelled");
@@ -215,6 +215,8 @@ export async function propagateRecurringPlanToGeneratedBookings(
         sent_at?: unknown;
         zoho_invoice_id?: unknown;
         initial_invoice_email_dispatch_claimed?: unknown;
+        finalization_claim_token?: unknown;
+        finalization_claimed_at?: unknown;
       };
       booking.invoice_status = String(invoice.status ?? "") || null;
       booking.invoice_finalization_started =
@@ -225,7 +227,9 @@ export async function propagateRecurringPlanToGeneratedBookings(
         Boolean(String(invoice.payment_link ?? "").trim()) ||
         invoice.sent_at != null ||
         Boolean(String(invoice.zoho_invoice_id ?? "").trim()) ||
-        invoice.initial_invoice_email_dispatch_claimed === true;
+        invoice.initial_invoice_email_dispatch_claimed === true ||
+        invoice.finalization_claim_token != null ||
+        invoice.finalization_claimed_at != null;
     }
 
     if (booking.monthly_invoice_id && isLockedInvoiceStatus(booking.invoice_status)) {
@@ -312,7 +316,13 @@ export async function propagateRecurringPlanToGeneratedBookings(
       ...nonPricingPatch,
       booking_snapshot: bookingSnapshotForMutableUpdate,
       total_price: preserveRecurringPackagePayable ? booking.total_price : priceZar,
-      ...bookingUncollectedCashColumns(),
+      ...(draftMonthlyUnsettled
+        ? {
+            amount_paid_cents: 0,
+            total_paid_cents: 0,
+            total_paid_zar: priceZar,
+          }
+        : bookingUncollectedCashColumns()),
       price_snapshot: preserveRecurringPackagePayable
         ? booking.price_snapshot
         : provisionalPriceSnapshotJson(locked),
