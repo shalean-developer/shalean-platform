@@ -210,6 +210,9 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterContinuity).toContain("cleaner_id: existingLeadId");
     expect(rosterContinuity).toContain("payout_owner_cleaner_id: existingLeadId");
     expect(rosterContinuity).toContain('source: "recurring_continuity"');
+    expect(rosterContinuity).toContain("const existingRequestedLead = rosterRows.find");
+    expect(rosterContinuity).toContain("const originalLead = rosterRows.find");
+    expect(rosterContinuity).toContain("rosterRows = rosterRows.map");
     expect(rosterContinuity.indexOf("customExistingRoster")).toBeLessThan(
       rosterContinuity.indexOf("let continuity = params.roster ?? null"),
     );
