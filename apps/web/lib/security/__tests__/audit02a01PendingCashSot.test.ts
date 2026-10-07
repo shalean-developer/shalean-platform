@@ -154,6 +154,7 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(sql).toContain("price_snapshot->>'total_price'");
     expect(sql).toContain("sum(coalesce(bli.total_price_cents, 0))");
     expect(sql).toContain("fail closed when neither shape corroborates total_paid_zar");
+    expect(sql).toContain(") is not true");
     expect(sql).toContain("total_price = b.total_paid_zar");
     expect(sql).toContain("'{pay_total_zar}'");
     expect(sql.indexOf("total_price = b.total_paid_zar")).toBeLessThan(
