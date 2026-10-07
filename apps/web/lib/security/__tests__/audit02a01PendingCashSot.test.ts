@@ -189,6 +189,12 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(paystackFinalize).toContain('error.code === "PAYMENT_FINALIZATION_CONFLICT"');
     expect(paystackFinalize).toContain('reason: "finalization_failed" as const');
     expect(paystackFinalize).toContain("recoveryEnqueue: true");
+    const settlementRecorder = read("lib/payments/recordGatewayPayment.ts");
+    expect(settlementRecorder).toContain("completeSideEffects");
+    expect(settlementRecorder).toContain("payment_transaction_reconciled");
+    expect(settlementRecorder).toContain('"expenses"');
+    expect(settlementRecorder).toContain('"accounting_sync_records"');
+    expect(settlementRecorder).toContain("payment_transaction_id: paymentTransactionId");
     expect(paystackFinalize).toContain('input.paystackPersistSource === "retry"');
     expect(paystackFinalize).toContain("normalizeUuidCandidate(existingPersistedSelectedCleanerId)");
     expect(paystackFinalize).toContain("applyRecurringOccurrenceRosterContinuity");
@@ -198,6 +204,9 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterContinuity).toContain("requestedLeadId !== continuity.leadCleanerId");
     expect(rosterContinuity).toContain('role: member.cleaner_id === requestedLeadId ? "lead" : "member"');
     expect(rosterContinuity).toContain("cleaner_id: requestedLeadId");
+    expect(rosterContinuity).toContain("ok: boolean");
+    expect(paystackFinalize).toContain('"recurring_roster_reconciliation"');
+    expect(paystackFinalize).toContain("if (!rosterContinuity.ok)");
 
     const recurringCleanerAtomicSql = read(
       "../../supabase/migrations/20261007073500_audit_02a01_recurring_cleaner_atomic.sql",
