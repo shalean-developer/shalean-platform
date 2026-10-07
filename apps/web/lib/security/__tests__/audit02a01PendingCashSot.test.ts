@@ -225,6 +225,9 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     const settlementWrappers = read("lib/payments/recordPaystackSettlement.ts");
     expect(settlementWrappers).toContain("recordPaystackEntitySettlementWithRecovery");
     expect(settlementWrappers).toContain('"gateway_settlement_reconciliation"');
+    expect(settlementWrappers).toContain("const recoveryQueued = await enqueueFailedJob");
+    expect(settlementWrappers).toContain("if (!recoveryQueued)");
+    expect(settlementWrappers).toContain("gateway_settlement_reconciliation_enqueue_failed");
     expect(settlementWrappers).toContain('entityType: "monthly_invoice"');
     expect(settlementWrappers).toContain('entityType: "sales_document"');
 
