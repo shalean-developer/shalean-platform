@@ -340,14 +340,26 @@ export async function propagateRecurringPlanToGeneratedBookings(
     }
 
     result.bookings_updated++;
+    let reconciledCleanerId: string | null =
+      preferredCleanerId && cleanerMutationSucceeded ? preferredCleanerId : null;
     if (preferredCleanerId && cleanerMutationSucceeded) {
       result.bookings_cleaner_updated++;
       if (!bookingCompleted && !mutableUnpaidCandidate) {
-        await applyRecurringOccurrenceRosterContinuity(admin, {
+        const rosterContinuity = await applyRecurringOccurrenceRosterContinuity(admin, {
           bookingId: booking.id,
           recurringId: plan.id,
           leadCleanerId: preferredCleanerId,
         });
+        if (!rosterContinuity.ok) {
+          result.errors.push(
+            `Booking ${booking.id}: recurring roster reconciliation failed: ${rosterContinuity.reason ?? "failed"}`,
+          );
+          result.earnings_skipped++;
+          continue;
+        }
+        if (rosterContinuity.leadCleanerId) {
+          reconciledCleanerId = rosterContinuity.leadCleanerId;
+        }
       }
     }
 
@@ -355,11 +367,13 @@ export async function propagateRecurringPlanToGeneratedBookings(
       invoiceIds.add(booking.monthly_invoice_id);
     }
 
-    const cleanerId = resolvePersistCleanerIdForBooking({
-      cleaner_id: booking.cleaner_id,
-      payout_owner_cleaner_id: booking.payout_owner_cleaner_id,
-      is_team_job: booking.is_team_job,
-    });
+    const cleanerId =
+      reconciledCleanerId ??
+      resolvePersistCleanerIdForBooking({
+        cleaner_id: booking.cleaner_id,
+        payout_owner_cleaner_id: booking.payout_owner_cleaner_id,
+        is_team_job: booking.is_team_job,
+      });
 
     if (!cleanerId) continue;
 
