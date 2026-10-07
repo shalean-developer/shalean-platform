@@ -1,5 +1,6 @@
 import "server-only";
 import { bookingCreationLifecyclePatch } from "@/lib/booking/bookingCreationProfiles";
+import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
 
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
@@ -189,7 +190,6 @@ export async function updatePendingPaymentBookingForInit(
     bookingSnapshot: BookingSnapshotV1 | Record<string, unknown>;
     priceBreakdown: Record<string, unknown> | null;
     totalPriceZar: number | null;
-    totalPaidZar: number;
     customerName: string | null;
     customerPhone: string | null;
     userId: string | null;
@@ -272,7 +272,7 @@ export async function updatePendingPaymentBookingForInit(
       ...(params.price_snapshot && typeof params.price_snapshot === "object"
         ? { price_snapshot: params.price_snapshot }
         : {}),
-      total_paid_zar: params.totalPaidZar,
+      ...bookingUncollectedCashColumns(),
       customer_name: params.customerName,
       customer_phone: params.customerPhone,
       /** Guest checkout passes `userId: null` — do not overwrite ownership already set by insert trigger. */
