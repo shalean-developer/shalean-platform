@@ -85,8 +85,9 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(initialize).toContain("if (lineSumCents !== payableCents)");
   });
 
-  it("fails closed instead of silently repricing an already-complete pending checkout", () => {
+  it("fails closed instead of silently repricing an existing line-item checkout", () => {
     const initialize = read("lib/booking/paystackInitializeCore.ts");
+    expect(initialize).toContain("if (hasLi)");
     expect(initialize).toContain("pricingComplete: true");
     expect(initialize).toContain("existingPayableZar");
     expect(initialize).toContain("existing pending payable differs from reinitialized charge");
@@ -105,6 +106,11 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
 
     const recurringFallback = read("lib/recurring/recurringPaymentLinkFallback.ts");
     expect(recurringFallback).toContain("{ preserveExistingPendingPayable: true }");
+
+    const recurringPropagation = read("lib/recurring/propagateRecurringPlanToGeneratedBookings.ts");
+    expect(recurringPropagation).toContain("total_price: priceZar");
+    expect(recurringPropagation).toContain("bookingUncollectedCashColumns()");
+    expect(recurringPropagation).not.toContain("total_paid_zar: priceZar");
   });
 
   it("repairs only evidence-free anomalies and adds a validated DB guard", () => {
