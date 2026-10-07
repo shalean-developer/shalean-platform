@@ -783,7 +783,7 @@ export async function processPaystackInitializeBody(
         name: typeof x.name === "string" ? x.name : String(x.slug ?? "Extra"),
         price: Math.round(Number(x.price) || 0),
       })),
-      total_price: visitRounded,
+      total_price: totalZar,
     });
     const priceBreakdown = { ...checkout.serverQuote, job: checkout.jobSubtotalSplit };
     const slotF = initOptions?.adminSlotFlags;
@@ -795,7 +795,7 @@ export async function processPaystackInitializeBody(
       bookingSnapshot: bookingSnapshotMerged,
       durationMinutes: selectLockedBookingDurationMinutesForPersistence(locked),
       priceBreakdown,
-      totalPriceZar: checkout.visitTotalZar,
+      totalPriceZar: totalZar,
       customerName: customer.name.trim() || null,
       customerPhone: customer.phone.trim() || null,
       userId: customer.user_id,
