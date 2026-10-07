@@ -296,10 +296,12 @@ export async function POST(request: Request) {
     }
     if (monthlyRouting.kind === "monthly_already_processed") {
       if (monthlyInvoiceIdHint && monthlyRouting.reason !== "amount_mismatch_quarantined") {
-        await recordPaystackMonthlyInvoicePayment(supabase, {
+        await recordPaystackEntitySettlementWithRecovery(supabase, {
+          entityType: "monthly_invoice",
+          entityId: monthlyInvoiceIdHint,
           reference,
           amountCents: typeof data.amount === "number" ? data.amount : 0,
-          invoiceId: monthlyInvoiceIdHint,
+          currency: typeof data.currency === "string" ? data.currency : "ZAR",
           paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
           chargeData: paystackChargeDataFromRecord(data),
         });
@@ -341,10 +343,12 @@ export async function POST(request: Request) {
     }
     if (salesRouting.kind === "sales_doc_already_processed") {
       if (salesDocIdHint) {
-        await recordPaystackSalesDocumentPayment(supabase, {
+        await recordPaystackEntitySettlementWithRecovery(supabase, {
+          entityType: "sales_document",
+          entityId: salesDocIdHint,
           reference,
           amountCents: typeof data.amount === "number" ? data.amount : 0,
-          documentId: salesDocIdHint,
+          currency: typeof data.currency === "string" ? data.currency : "ZAR",
           paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
           chargeData: paystackChargeDataFromRecord(data),
         });
