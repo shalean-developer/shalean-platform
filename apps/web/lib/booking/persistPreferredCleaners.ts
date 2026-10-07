@@ -13,6 +13,7 @@ const PREFERENCE_ROSTER_SOURCES = new Set([
   "checkout_preferred",
   "customer_preferred",
   "booking_v2_r0",
+  "recurring_preferred",
 ]);
 
 function rosterIsPreferenceOnly(rows: Array<{ source?: string | null }>): boolean {
@@ -21,7 +22,7 @@ function rosterIsPreferenceOnly(rows: Array<{ source?: string | null }>): boolea
   );
 }
 
-async function syncPreferredCleanerOfferRoster(
+export async function syncPreferredCleanerOfferRoster(
   admin: SupabaseClient,
   bookingId: string,
   selectedCleanerIds: readonly string[],
