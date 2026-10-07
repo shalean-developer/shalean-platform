@@ -23,7 +23,7 @@ import {
 } from "@/lib/recurring/resolveRecurringPreferredCleanerId";
 import { fetchLastAssignedCleanerForRecurringPlan } from "@/lib/recurring/fetchLastAssignedCleanerForRecurringPlan";
 import { applyRecurringOccurrenceRosterContinuity } from "@/lib/recurring/applyRecurringOccurrenceRosterContinuity";
-import { syncPreferredCleanerRoster } from "@/lib/booking/persistPreferredCleaners";
+import { syncPreferredCleanerOfferRoster } from "@/lib/booking/persistPreferredCleaners";
 import { resolveRecurringPreferredCleanerIds } from "@/lib/recurring/parsePreferredCleanerIdFromBody";
 import { buildExactSourceLineItems } from "@/lib/booking/buildBookingLineItems";
 import { persistBookingLineItems } from "@/lib/booking/persistBookingLineItems";
@@ -351,7 +351,7 @@ export async function insertRecurringOccurrenceBooking(
       leadCleanerId: preferredCleanerId,
     });
     if (!continuity.applied) {
-      await syncPreferredCleanerRoster(admin, id, preferredCleanerIds, "recurring_preferred");
+      await syncPreferredCleanerOfferRoster(admin, id, preferredCleanerIds, "recurring_preferred");
     }
   } else if (preferredCleanerId) {
     await applyRecurringOccurrenceRosterContinuity(admin, {
