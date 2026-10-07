@@ -165,6 +165,27 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringAtomicSql).toContain(
       "revoke all on function public.apply_recurring_occurrence_unpaid_patch(uuid, jsonb) from authenticated",
     );
+    expect(recurringPropagation).toContain(
+      'operationalStatus: "pending_payment"',
+    );
+    expect(recurringPropagation).toContain(
+      "preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent",
+    );
+    expect(recurringPropagation).toContain(
+      "...(preferredCleanerId",
+    );
+
+    const recurringCleanerAtomicSql = read(
+      "../../supabase/migrations/20261007073500_audit_02a01_recurring_cleaner_atomic.sql",
+    ).toLowerCase();
+    expect(recurringCleanerAtomicSql).toContain("selected_cleaner_id");
+    expect(recurringCleanerAtomicSql).toContain("assignment_type");
+    expect(recurringCleanerAtomicSql).toContain("cleaner_id");
+    expect(recurringCleanerAtomicSql).toContain("for update");
+    expect(recurringCleanerAtomicSql).toContain(
+      "create or replace function public.apply_recurring_occurrence_unpaid_patch",
+    );
+
   });
 
   it("repairs only evidence-free anomalies and adds a validated DB guard", () => {
