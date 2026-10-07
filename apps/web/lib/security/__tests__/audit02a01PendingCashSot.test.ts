@@ -181,6 +181,9 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringPropagation).toContain(
       "preferredCleanerId && cleanerMutationSucceeded",
     );
+    expect(recurringPropagation).toContain(
+      "!bookingCompleted && !mutableUnpaidCandidate",
+    );
 
     const paystackFinalize = read("lib/booking/upsertBookingFromPaystack.ts");
     expect(paystackFinalize).toContain('error.code === "PAYMENT_FINALIZATION_CONFLICT"');
