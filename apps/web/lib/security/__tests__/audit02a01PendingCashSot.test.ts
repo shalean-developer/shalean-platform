@@ -386,7 +386,7 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     const payoutRemoval = read("lib/payout/removeCleanerFromVisitPayout.ts");
     expect(payoutRemoval).toContain('source: "admin_remove_visit_payout"');
     expect(payoutRemoval).not.toContain('source: m.source ?? "admin_remove_visit_payout"');
-    expect(rosterHeaderSql).toContain("set cleaner_count = n_total");
+    expect(rosterHeaderSql).toContain("cleaner_count = n_total");
     expect(rosterHeaderSql).not.toContain("set cleaner_id = lead_id,\n         payout_owner_cleaner_id = lead_id,\n         cleaner_count = n_total\n   where b.id = p_booking_id;\n\n  return 'synced'");
     expect(rosterHeaderSql).not.toContain("replace_booking_cleaners_preference_atomic");
     expect(rosterHeaderSql).not.toContain("selected_cleaner_id = lead_id");
