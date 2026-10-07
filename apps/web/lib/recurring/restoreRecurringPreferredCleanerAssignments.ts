@@ -110,15 +110,8 @@ export async function restoreRecurringPreferredCleanerAssignments(
       continue;
     }
 
-    const patch = recurringOccurrenceCleanerPatch(cleanerId, {
-      operationalStatus: recurringPropagateCleanerOperationalStatus(row.status),
-    });
-    const { error: updateErr } = await admin.from("bookings").update(patch).eq("id", row.id);
-    if (updateErr) {
-      skipped++;
-      continue;
-    }
-    updated++;
+    let effectiveCleanerId = cleanerId;
+    let rosterKind: "custom_existing" | "committed_existing" | "continuity_applied" | "noop" | undefined;
 
     if (row.recurring_id) {
       const rosterResult = await applyRecurringOccurrenceRosterContinuity(admin, {
@@ -126,11 +119,40 @@ export async function restoreRecurringPreferredCleanerAssignments(
         recurringId: row.recurring_id,
         leadCleanerId: cleanerId,
       });
-      if (rosterResult.applied) rostersApplied++;
+      if (!rosterResult.ok) {
+        skipped++;
+        continue;
+      }
+      rosterKind = rosterResult.kind;
+      if (rosterResult.leadCleanerId) effectiveCleanerId = rosterResult.leadCleanerId;
+      if (rosterResult.applied) {
+        updated++;
+        rostersApplied++;
+      }
+      if (rosterResult.kind === "committed_existing") {
+        continue;
+      }
     }
 
-    if (row.recurring_id && !planCleaner.has(row.recurring_id)) {
-      planCleaner.set(row.recurring_id, cleanerId);
+    if (rosterKind !== "custom_existing" && rosterKind !== "continuity_applied") {
+      const patch = recurringOccurrenceCleanerPatch(effectiveCleanerId, {
+        operationalStatus: recurringPropagateCleanerOperationalStatus(row.status),
+      });
+      const { error: updateErr } = await admin.from("bookings").update(patch).eq("id", row.id);
+      if (updateErr) {
+        skipped++;
+        continue;
+      }
+      updated++;
+    }
+
+    if (
+      row.recurring_id &&
+      rosterKind !== "custom_existing" &&
+      rosterKind !== "committed_existing" &&
+      !planCleaner.has(row.recurring_id)
+    ) {
+      planCleaner.set(row.recurring_id, effectiveCleanerId);
     }
   }
 
