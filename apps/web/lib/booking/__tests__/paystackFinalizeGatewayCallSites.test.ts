@@ -47,8 +47,13 @@ describe("Paystack finalize gateway call sites", () => {
     expect(retry).toContain("payload.paidAtIso");
     expect(retry).toContain('jobType === FAILED_JOB_TYPE_PAYMENT_RECONCILIATION');
     expect(retry).toContain("await recordPaystackBookingPayment");
-    expect(retry.indexOf("await recordPaystackBookingPayment")).toBeLessThan(
-      retry.indexOf('from("failed_jobs").delete().eq("id", id)'),
+    const reconciliationBlock = retry.slice(
+      retry.indexOf("if (result.bookingId && !result.error)"),
+      retry.indexOf("} else {", retry.indexOf("if (result.bookingId && !result.error)")),
+    );
+    expect(reconciliationBlock.indexOf("await recordPaystackBookingPayment")).toBeGreaterThan(-1);
+    expect(reconciliationBlock.indexOf("await recordPaystackBookingPayment")).toBeLessThan(
+      reconciliationBlock.indexOf('from("failed_jobs").delete().eq("id", id)'),
     );
   });
 
