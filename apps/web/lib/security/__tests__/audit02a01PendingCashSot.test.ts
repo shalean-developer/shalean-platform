@@ -142,6 +142,13 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringAtomicSql).toContain(
       "create or replace function public.apply_recurring_occurrence_unpaid_patch",
     );
+    expect(recurringAtomicSql).toContain("v_row public.bookings%rowtype");
+    expect(recurringAtomicSql).toContain("select *");
+    expect(recurringAtomicSql).toContain("into v_row");
+    expect(recurringAtomicSql).toContain("for update");
+    expect(recurringAtomicSql).toContain(
+      "if exists (\n    select 1\n    from public.payment_transactions pt\n    where pt.booking_id = p_booking_id",
+    );
     expect(recurringAtomicSql).toContain("lower(trim(coalesce(b.status, ''))) = 'pending_payment'");
     expect(recurringAtomicSql).toContain(
       "not in ('success', 'paid', 'succeeded', 'completed', 'pending_monthly')",
