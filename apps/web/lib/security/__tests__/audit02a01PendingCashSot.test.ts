@@ -418,7 +418,8 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringRestore).toContain("if (repaired) updated++");
     expect(rosterContinuity).toContain("lifecyclePromoted?: boolean");
     expect(rosterContinuity).toContain("assignmentCommitted?: boolean");
-    expect(rosterContinuity).toContain("assignmentCommitted: committedAssignment");
+    expect(rosterContinuity).toContain("assignmentCommitted: true");
+    expect(rosterContinuity).toContain("assignmentCommitted: false");
     expect(rosterContinuity).toContain(
       "committed_recurring_identity_requires_manual_reconciliation",
     );
