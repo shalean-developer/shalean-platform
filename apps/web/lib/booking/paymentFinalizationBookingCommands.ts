@@ -50,7 +50,7 @@ export async function updateObservedPendingPaymentBooking(params: {
   const { supabase, row, observed, ownershipColumn } = params;
   if (
     !observed.id ||
-    !["pending_payment", "payment_expired"].includes(observed.status) ||
+    !["pending_payment", "payment_expired", "payment_reconciliation_required"].includes(observed.status) ||
     [
       observed.customerEmail,
       observed.customerAuthId,
