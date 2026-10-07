@@ -219,7 +219,7 @@ export async function runPaystackVerifyFinalizePipeline(
         paystackAuthorizationCode: authorizationCode || null,
         paystackCustomerCode: customerCode || null,
         paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
-        paystackChargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>) as unknown as Record<string, unknown>,
+        paystackChargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
       },
     });
 
