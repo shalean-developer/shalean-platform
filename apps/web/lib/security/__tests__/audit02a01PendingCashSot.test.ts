@@ -357,9 +357,20 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringRestore).toContain("rosterAssignmentCommitted");
     expect(recurringRestore).toContain("!rosterLifecyclePromoted");
     expect(recurringRestore).toContain("!rosterAssignmentCommitted");
-    expect(recurringRestore).not.toContain('rosterKind !== "custom_existing"');
     expect(recurringRestore).toContain('rosterKind !== "committed_existing"');
     expect(recurringRestore).toContain('rosterKind !== "locked"');
+    const lifecycleRepairStart = recurringRestore.indexOf(
+      'if (\n      rosterKind !== "committed_existing"',
+    );
+    const lifecycleRepairEnd = recurringRestore.indexOf(
+      "const patch = recurringOccurrenceCleanerPatch",
+      lifecycleRepairStart,
+    );
+    expect(lifecycleRepairStart).toBeGreaterThan(-1);
+    expect(lifecycleRepairEnd).toBeGreaterThan(lifecycleRepairStart);
+    expect(
+      recurringRestore.slice(lifecycleRepairStart, lifecycleRepairEnd),
+    ).not.toContain('rosterKind !== "custom_existing"');
     expect(recurringRestore).toContain("let repaired = false");
     expect(recurringRestore).toContain("if (repaired) updated++");
     expect(rosterContinuity).toContain("lifecyclePromoted?: boolean");
