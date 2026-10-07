@@ -95,6 +95,16 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(initialize).toContain('errorCode: "PRICE_MISMATCH"');
   });
 
+  it("preserves the stored recurring package payable during fallback only", () => {
+    const initialize = read("lib/booking/paystackInitializeCore.ts");
+    expect(initialize).toContain("preserveExistingPendingPayable?: boolean");
+    expect(initialize).toContain("preservedExistingPayableZar");
+    expect(initialize).toContain("const totalZar = preservedExistingPayableZar ?? recomputedTotalZar");
+
+    const recurringFallback = read("lib/recurring/recurringPaymentLinkFallback.ts");
+    expect(recurringFallback).toContain("{ preserveExistingPendingPayable: true }");
+  });
+
   it("repairs only evidence-free anomalies and adds a validated DB guard", () => {
     const sql = read(
       "../../supabase/migrations/20261007023000_audit_02a01_pending_cash_sot.sql",
