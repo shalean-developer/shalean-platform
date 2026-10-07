@@ -130,7 +130,7 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringPropagation).toContain('"recurringPrepayment" in preservedPackageSnapshot');
     expect(recurringPropagation).toContain('payment_scope === "recurring_first_30_days"');
     expect(recurringPropagation).toContain("mutablePricingCandidate");
-    expect(recurringPropagation).toContain('admin.rpc(\n        "apply_recurring_occurrence_unpaid_patch"');
+    expect(recurringPropagation).toContain('admin.rpc(\n        "apply_recurring_occurrence_unpaid_patch_v2"');
     expect(recurringPropagation).toContain("p_booking_id: booking.id");
     expect(recurringPropagation).toContain("p_patch: mutablePricingPatch");
     expect(recurringPropagation).toContain("bookingUncollectedCashColumns()");
@@ -141,6 +141,10 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringPropagation).toContain("total_paid_zar: priceZar");
     expect(recurringPropagation).toContain("amount_paid_cents: 0");
     expect(recurringPropagation).toContain("total_paid_cents: 0");
+    expect(recurringPropagation).toContain("buildExactSourceLineItems");
+    expect(recurringPropagation).toContain('source: "monthly_recurring_occurrence"');
+    expect(recurringPropagation).toContain('name: "Monthly recurring service"');
+    expect(recurringPropagation).toContain("p_line_items: monthlyRepriceLineItems");
 
     expect(recurringAtomicSql).toContain(
       "create or replace function public.apply_recurring_occurrence_unpaid_patch",
@@ -311,6 +315,14 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringCleanerAtomicSql).toContain("finalization_claimed_at");
     expect(recurringCleanerAtomicSql).toContain("claim_monthly_invoice_finalization");
     expect(recurringCleanerAtomicSql).toContain("release_monthly_invoice_finalization_claim");
+    expect(recurringCleanerAtomicSql).toContain(
+      "create or replace function public.apply_recurring_occurrence_unpaid_patch_v2",
+    );
+    expect(recurringCleanerAtomicSql).toContain("p_line_items jsonb");
+    expect(recurringCleanerAtomicSql).toContain("delete from public.booking_line_items");
+    expect(recurringCleanerAtomicSql).toContain("insert into public.booking_line_items");
+    expect(recurringCleanerAtomicSql).toContain("jsonb_array_elements(p_line_items)");
+    expect(recurringCleanerAtomicSql).toContain("v_inserted_line_items");
     expect(recurringCleanerAtomicSql).toContain("selected_cleaner_id");
     expect(recurringCleanerAtomicSql).toContain("assignment_type");
     expect(recurringCleanerAtomicSql).toContain("cleaner_id");
