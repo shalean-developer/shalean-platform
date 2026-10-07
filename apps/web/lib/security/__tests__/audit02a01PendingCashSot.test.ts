@@ -187,6 +187,10 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringPropagation).toContain('=== "draft"');
     expect(recurringPropagation).toContain("invoice_finalization_started");
     expect(recurringPropagation).toContain("!booking.invoice_finalization_started");
+    expect(recurringPropagation).toContain("finalization_claim_token");
+    expect(recurringPropagation).toContain("finalization_claimed_at");
+    expect(recurringPropagation).toContain("draftMonthlyUnsettled");
+    expect(recurringPropagation).toContain("total_paid_zar: priceZar");
     expect(recurringPropagation).toContain("const mutablePricingCandidate");
     expect(recurringPropagation).toContain(
       "!bookingCompleted && !mutablePricingCandidate",
@@ -300,6 +304,10 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringCleanerAtomicSql).toContain("paystack_reference");
     expect(recurringCleanerAtomicSql).toContain("payment_link");
     expect(recurringCleanerAtomicSql).toContain("initial_invoice_email_dispatch_claimed");
+    expect(recurringCleanerAtomicSql).toContain("finalization_claim_token");
+    expect(recurringCleanerAtomicSql).toContain("finalization_claimed_at");
+    expect(recurringCleanerAtomicSql).toContain("claim_monthly_invoice_finalization");
+    expect(recurringCleanerAtomicSql).toContain("release_monthly_invoice_finalization_claim");
     expect(recurringCleanerAtomicSql).toContain("selected_cleaner_id");
     expect(recurringCleanerAtomicSql).toContain("assignment_type");
     expect(recurringCleanerAtomicSql).toContain("cleaner_id");
@@ -395,5 +403,19 @@ describe("AUDIT-02A01 release ordering", () => {
     expect(postdeploy).toContain("commit;");
     expect(postdeploy).toContain("add constraint bookings_pending_unpaid_cash_zero");
     expect(postdeploy).toContain("validate constraint bookings_pending_unpaid_cash_zero");
+  });
+});
+
+
+describe("AUDIT-02A01 monthly finalization/repricing exclusion", () => {
+  it("claims invoice finalization before recompute and always releases the claim", () => {
+    const finalize = read("lib/monthlyInvoice/finalizeAndSendMonthlyInvoice.ts");
+    expect(finalize).toContain("claim_monthly_invoice_finalization");
+    expect(finalize).toContain("crypto.randomUUID()");
+    expect(finalize.indexOf("claim_monthly_invoice_finalization")).toBeLessThan(
+      finalize.indexOf("recompute_monthly_invoice_totals"),
+    );
+    expect(finalize).toContain("finally {");
+    expect(finalize).toContain("release_monthly_invoice_finalization_claim");
   });
 });
