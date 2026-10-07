@@ -65,6 +65,22 @@ describe("AUDIT-02A01 Piece 1 financial contract", () => {
     ).toBe(72_500);
   });
 
+  it("preserves unknown service value when total_price is unavailable", () => {
+    expect(
+      canonicalServiceValueCents({
+        booking: { total_price: null },
+        eligibleLineItemsSubtotalCents: null,
+      }),
+    ).toBeNull();
+
+    expect(
+      canonicalServiceValueCents({
+        booking: { total_price: undefined },
+        eligibleLineItemsSubtotalCents: undefined,
+      }),
+    ).toBeNull();
+  });
+
   it("keeps checkout payable and collected cash separate", () => {
     const row = {
       status: "pending_payment",
@@ -94,6 +110,20 @@ describe("AUDIT-02A01 Piece 1 financial contract", () => {
     expect(canonicalCollectedCashCents(row)).toBe(0);
   });
 
+  it("treats pay_later as deferred accrual context", () => {
+    const row = {
+      billing_type: "pay_later",
+      payment_status: "pending",
+      status: "assigned",
+      amount_paid_cents: 0,
+      total_price: 900,
+    };
+
+    expect(isMonthlyBillingContext(row)).toBe(true);
+    expect(classifyBookingFinancialMode(row)).toBe("monthly_draft");
+    expect(canonicalCollectedCashCents(row)).toBe(0);
+  });
+
   it("uses invoice state for monthly obligation state", () => {
     expect(
       classifyBookingFinancialMode({
@@ -118,5 +148,21 @@ describe("AUDIT-02A01 Piece 1 financial contract", () => {
         monthly_invoice_status: "refunded",
       }),
     ).toBe("monthly_refunded");
+
+    expect(
+      classifyBookingFinancialMode({
+        payment_status: "pending_monthly",
+        monthly_invoice_id: "invoice-id",
+        monthly_invoice_status: null,
+      }),
+    ).toBe("monthly_unknown");
+
+    expect(
+      classifyBookingFinancialMode({
+        payment_status: "pending_monthly",
+        monthly_invoice_id: "invoice-id",
+        monthly_invoice_status: "unexpected_status",
+      }),
+    ).toBe("monthly_unknown");
   });
 });
