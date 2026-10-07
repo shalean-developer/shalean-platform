@@ -3,6 +3,8 @@ import "server-only";
 import type { ReplaceBookingCleanersRpcRow } from "@/lib/admin/bookingRosterReplacePayload";
 import { isAuthoritativeBookingCompleted } from "@/lib/booking/deriveBookingOperationalPhase";
 import { fetchLastAssignedRosterForRecurringPlan } from "@/lib/recurring/fetchLastAssignedRosterForRecurringPlan";
+import { rosterHasCustomProvenance } from "@/lib/recurring/recurringRosterProvenance";
+import { recurringOccurrenceAssignmentIsCommitted } from "@/lib/recurring/resolveRecurringPreferredCleanerId";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -29,6 +31,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
   cleanerCount: number;
   reason?: string;
   leadCleanerId?: string;
+  kind?: "custom_existing" | "committed_existing" | "continuity_applied" | "noop";
 }> {
   const bookingId = params.bookingId.trim();
   const recurringId = params.recurringId.trim();
@@ -37,7 +40,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
   const { data: booking, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, completed_at, team_id, is_team_job, cleaner_line_earnings_finalized_at, cleaner_count, booking_cleaners(cleaner_id, role, source)",
+      "id, status, completed_at, cleaner_id, cleaner_response_status, accepted_at, en_route_at, started_at, team_id, is_team_job, cleaner_line_earnings_finalized_at, cleaner_count, booking_cleaners(cleaner_id, role, source)",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -54,6 +57,11 @@ export async function applyRecurringOccurrenceRosterContinuity(
   const row = booking as {
     status?: string | null;
     completed_at?: string | null;
+    cleaner_id?: string | null;
+    cleaner_response_status?: string | null;
+    accepted_at?: string | null;
+    en_route_at?: string | null;
+    started_at?: string | null;
     team_id?: string | null;
     is_team_job?: boolean | null;
     cleaner_line_earnings_finalized_at?: string | null;
@@ -69,15 +77,10 @@ export async function applyRecurringOccurrenceRosterContinuity(
   if (row.cleaner_line_earnings_finalized_at) return { ok: true, applied: false, cleanerCount: 0 };
 
   const existingRoster = Array.isArray(row.booking_cleaners) ? row.booking_cleaners : [];
-  const generatedRecurringSources = new Set(["recurring_preferred", "recurring_continuity"]);
-  const customExistingRoster =
-    existingRoster.length > 0 &&
-    existingRoster.some(
-      (member) =>
-        !generatedRecurringSources.has(String(member.source ?? "").trim().toLowerCase()),
-    );
+  const customExistingRoster = rosterHasCustomProvenance(existingRoster);
+  const committedAssignment = recurringOccurrenceAssignmentIsCommitted(row);
 
-  if (customExistingRoster) {
+  if (customExistingRoster || (committedAssignment && existingRoster.length > 0)) {
     const leads = existingRoster.filter(
       (member) => String(member.role ?? "").trim().toLowerCase() === "lead",
     );
@@ -88,29 +91,25 @@ export async function applyRecurringOccurrenceRosterContinuity(
         ok: false,
         applied: false,
         cleanerCount: existingRoster.length,
-        reason: "custom_recurring_roster_missing_unique_lead",
+        reason: "authoritative_recurring_roster_missing_unique_lead",
       };
     }
 
-    const { error: customPatchErr } = await admin
+    const { error: authoritativePatchErr } = await admin
       .from("bookings")
       .update({
         cleaner_id: existingLeadId,
-        selected_cleaner_id: existingLeadId,
         payout_owner_cleaner_id: existingLeadId,
-        cleaner_mode: "individual_cleaners",
         cleaner_count: existingRoster.length,
-        is_team_job: false,
-        team_id: null,
       })
       .eq("id", bookingId);
 
-    if (customPatchErr) {
+    if (authoritativePatchErr) {
       return {
         ok: false,
         applied: false,
         cleanerCount: existingRoster.length,
-        reason: customPatchErr.message,
+        reason: authoritativePatchErr.message,
       };
     }
 
@@ -119,6 +118,18 @@ export async function applyRecurringOccurrenceRosterContinuity(
       applied: true,
       cleanerCount: existingRoster.length,
       leadCleanerId: existingLeadId,
+      kind: customExistingRoster ? "custom_existing" : "committed_existing",
+    };
+  }
+
+  if (committedAssignment) {
+    const committedLeadId = String(row.cleaner_id ?? "").trim();
+    return {
+      ok: true,
+      applied: false,
+      cleanerCount: Number(row.cleaner_count ?? 1) || 1,
+      ...(committedLeadId ? { leadCleanerId: committedLeadId } : {}),
+      kind: "noop",
     };
   }
 
@@ -136,7 +147,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
     }
   }
   if (!continuity || continuity.rosterRows.length < 2) {
-    return { ok: true, applied: false, cleanerCount: Number(row.cleaner_count ?? 1) || 1 };
+    return { ok: true, applied: false, cleanerCount: Number(row.cleaner_count ?? 1) || 1, kind: "noop" };
   }
 
   const requestedLeadId = params.leadCleanerId?.trim() || null;
@@ -209,7 +220,6 @@ export async function applyRecurringOccurrenceRosterContinuity(
 
   const bookingPatch = {
     cleaner_id: leadId,
-    selected_cleaner_id: leadId,
     payout_owner_cleaner_id: leadId,
     cleaner_mode: "individual_cleaners",
     cleaner_count: rosterRows.length,
@@ -244,5 +254,6 @@ export async function applyRecurringOccurrenceRosterContinuity(
     applied: true,
     cleanerCount: rosterRows.length,
     leadCleanerId: leadId,
+    kind: "continuity_applied",
   };
 }
