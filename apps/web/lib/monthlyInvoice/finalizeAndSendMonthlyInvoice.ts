@@ -87,6 +87,20 @@ export async function finalizeAndSendMonthlyInvoice(
     paymentDueDate = readiness.paymentDueDateYmd ?? params.todayYmd;
   }
 
+  const finalizationClaimToken = crypto.randomUUID();
+  const { data: finalizationClaimed, error: finalizationClaimErr } = await admin.rpc(
+    "claim_monthly_invoice_finalization",
+    {
+      p_invoice_id: params.invoiceId,
+      p_token: finalizationClaimToken,
+    },
+  );
+  if (finalizationClaimErr) return { ok: false, error: finalizationClaimErr.message };
+  if (finalizationClaimed !== true) {
+    return { ok: false, error: "invoice_finalization_claim_failed" };
+  }
+
+  try {
   const { error: rpcErr } = await admin.rpc("recompute_monthly_invoice_totals", { p_invoice_id: params.invoiceId });
   if (rpcErr) return { ok: false, error: rpcErr.message };
 
@@ -371,4 +385,10 @@ export async function finalizeAndSendMonthlyInvoice(
   }
 
   return { ok: true, outcome: "sent", paymentUrl: brandedPayUrl, sentAt, alreadyEmailed: false };
+  } finally {
+    await admin.rpc("release_monthly_invoice_finalization_claim", {
+      p_invoice_id: params.invoiceId,
+      p_token: finalizationClaimToken,
+    });
+  }
 }
