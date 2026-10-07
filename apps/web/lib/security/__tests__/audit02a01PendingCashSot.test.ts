@@ -127,6 +127,19 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringPropagation).toContain("booking_snapshot: bookingSnapshotForUpdate");
     expect(recurringPropagation).toContain('payment_scope === "recurring_first_30_days"');
     expect(recurringPropagation).toContain("safelyUnpaidPending");
+    expect(recurringPropagation).toContain("const preserveHistoricalPricing = !safelyUnpaidPending");
+    expect(recurringPropagation).toContain(
+      "const preserveExistingPricing = preserveHistoricalPricing || preserveRecurringPackagePayable",
+    );
+    expect(recurringPropagation).toContain(
+      "booking_snapshot: bookingSnapshotForUpdate",
+    );
+    expect(recurringPropagation).toContain(
+      "total_price: preserveExistingPricing ? booking.total_price : priceZar",
+    );
+    expect(recurringPropagation).toContain(
+      "price_snapshot: preserveExistingPricing",
+    );
     expect(recurringPropagation).toContain('from("payment_transactions")');
     expect(recurringPropagation).toContain("settlementMarkerPresent");
     expect(recurringPropagation).toContain("bookingUncollectedCashColumns()");
