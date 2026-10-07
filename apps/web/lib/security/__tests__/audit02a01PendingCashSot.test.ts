@@ -189,6 +189,10 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(paystackFinalize).toContain('error.code === "PAYMENT_FINALIZATION_CONFLICT"');
     expect(paystackFinalize).toContain('reason: "finalization_failed" as const');
     expect(paystackFinalize).toContain("recoveryEnqueue: true");
+    expect(paystackFinalize).toContain('input.paystackPersistSource === "retry"');
+    expect(paystackFinalize).toContain("normalizeUuidCandidate(existingPersistedSelectedCleanerId)");
+    expect(paystackFinalize).toContain("applyRecurringOccurrenceRosterContinuity");
+    expect(paystackFinalize).toContain("recurringRosterGenerated && recurringRosterId && recurringRosterCleanerId");
 
     const recurringCleanerAtomicSql = read(
       "../../supabase/migrations/20261007073500_audit_02a01_recurring_cleaner_atomic.sql",
