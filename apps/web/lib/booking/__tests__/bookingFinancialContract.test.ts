@@ -49,6 +49,22 @@ describe("AUDIT-02A01 Piece 1 financial contract", () => {
     ).toBe(100_000);
   });
 
+  it("falls back to total_price when the line-item subtotal is unavailable", () => {
+    expect(
+      canonicalServiceValueCents({
+        booking: { total_price: 725 },
+        eligibleLineItemsSubtotalCents: null,
+      }),
+    ).toBe(72_500);
+
+    expect(
+      canonicalServiceValueCents({
+        booking: { total_price: 725 },
+        eligibleLineItemsSubtotalCents: undefined,
+      }),
+    ).toBe(72_500);
+  });
+
   it("keeps checkout payable and collected cash separate", () => {
     const row = {
       status: "pending_payment",
@@ -94,5 +110,13 @@ describe("AUDIT-02A01 Piece 1 financial contract", () => {
         monthly_invoice_status: "paid",
       }),
     ).toBe("monthly_paid");
+
+    expect(
+      classifyBookingFinancialMode({
+        payment_status: "pending_monthly",
+        monthly_invoice_id: "invoice-id",
+        monthly_invoice_status: "refunded",
+      }),
+    ).toBe("monthly_refunded");
   });
 });
