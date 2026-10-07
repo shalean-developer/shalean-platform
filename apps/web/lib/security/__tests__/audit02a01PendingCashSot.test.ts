@@ -358,6 +358,13 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
       "create or replace function public.replace_booking_cleaners_preference_atomic",
     );
     expect(rosterHeaderSql).toContain("skipped_authoritative_existing_roster");
+    expect(rosterHeaderSql).toContain("skipped_authoritative_assignment");
+    expect(rosterHeaderSql).toContain("v_cleaner_id is not null");
+    expect(rosterHeaderSql).toContain("v_status = 'in_progress'");
+    expect(rosterHeaderSql).toContain("v_response in ('accepted', 'on_my_way', 'started', 'completed')");
+    expect(rosterHeaderSql).toContain("v_accepted_at is not null");
+    expect(rosterHeaderSql).toContain("v_en_route_at is not null");
+    expect(rosterHeaderSql).toContain("v_started_at is not null");
     expect(rosterHeaderSql).toContain("booking_v2_r0");
     expect(rosterHeaderSql).toContain("set cleaner_count = n_total");
     expect(rosterHeaderSql).not.toContain("set cleaner_id = lead_id,\n         payout_owner_cleaner_id = lead_id,\n         cleaner_count = n_total\n   where b.id = p_booking_id;\n\n  return 'synced'");
