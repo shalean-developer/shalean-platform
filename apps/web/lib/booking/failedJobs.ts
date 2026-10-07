@@ -10,6 +10,10 @@ export type BookingInsertFailedPayload = {
   customerEmail: string;
   snapshot: unknown;
   paystackMetadata?: Record<string, string | undefined> | null;
+  paystackAuthorizationCode?: string | null;
+  paystackCustomerCode?: string | null;
+  paidAtIso?: string | null;
+  paystackChargeData?: Record<string, unknown> | null;
 };
 
 export type PaymentMismatchFailedPayload = {
