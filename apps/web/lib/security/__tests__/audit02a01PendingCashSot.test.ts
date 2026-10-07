@@ -119,31 +119,45 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringFallback).toContain("{ preserveExistingPendingPayable: true }");
 
     const recurringPropagation = read("lib/recurring/propagateRecurringPlanToGeneratedBookings.ts");
+    const recurringAtomicSql = read(
+      "../../supabase/migrations/20261007061000_audit_02a01_recurring_reprice_atomic.sql",
+    ).toLowerCase();
+
     expect(recurringPropagation).toContain("preserveRecurringPackagePayable");
-    expect(recurringPropagation).toContain("const bookingSnapshotForUpdate =");
+    expect(recurringPropagation).toContain("const bookingSnapshotForMutableUpdate =");
     expect(recurringPropagation).toContain('...snapshot');
     expect(recurringPropagation).toContain("preservedPackageSnapshot.total_zar");
     expect(recurringPropagation).toContain('"recurringPrepayment" in preservedPackageSnapshot');
-    expect(recurringPropagation).toContain("booking_snapshot: bookingSnapshotForUpdate");
     expect(recurringPropagation).toContain('payment_scope === "recurring_first_30_days"');
-    expect(recurringPropagation).toContain("safelyUnpaidPending");
-    expect(recurringPropagation).toContain("const preserveHistoricalPricing = !safelyUnpaidPending");
-    expect(recurringPropagation).toContain(
-      "const preserveExistingPricing = preserveHistoricalPricing || preserveRecurringPackagePayable",
-    );
-    expect(recurringPropagation).toContain(
-      "booking_snapshot: bookingSnapshotForUpdate",
-    );
-    expect(recurringPropagation).toContain(
-      "total_price: preserveExistingPricing ? booking.total_price : priceZar",
-    );
-    expect(recurringPropagation).toContain(
-      "price_snapshot: preserveExistingPricing",
-    );
-    expect(recurringPropagation).toContain('from("payment_transactions")');
-    expect(recurringPropagation).toContain("settlementMarkerPresent");
+    expect(recurringPropagation).toContain("mutableUnpaidCandidate");
+    expect(recurringPropagation).toContain('admin.rpc(\n        "apply_recurring_occurrence_unpaid_patch"');
+    expect(recurringPropagation).toContain("p_booking_id: booking.id");
+    expect(recurringPropagation).toContain("p_patch: mutablePricingPatch");
     expect(recurringPropagation).toContain("bookingUncollectedCashColumns()");
+    expect(recurringPropagation).toContain("const nonPricingPatch");
+    expect(recurringPropagation).toContain("let bookingUpdate: Record<string, unknown> = nonPricingPatch");
+    expect(recurringPropagation).not.toContain("booking_snapshot: booking.booking_snapshot ?? snapshot");
     expect(recurringPropagation).not.toContain("total_paid_zar: priceZar");
+
+    expect(recurringAtomicSql).toContain(
+      "create or replace function public.apply_recurring_occurrence_unpaid_patch",
+    );
+    expect(recurringAtomicSql).toContain("lower(trim(coalesce(b.status, ''))) = 'pending_payment'");
+    expect(recurringAtomicSql).toContain(
+      "not in ('success', 'paid', 'succeeded', 'completed', 'pending_monthly')",
+    );
+    expect(recurringAtomicSql).toContain("b.payment_completed_at is null");
+    expect(recurringAtomicSql).toContain("b.paid_at is null");
+    expect(recurringAtomicSql).toContain("b.payment_transaction_id is null");
+    expect(recurringAtomicSql).toContain("b.marked_paid_by_admin_id is null");
+    expect(recurringAtomicSql).toContain("not exists");
+    expect(recurringAtomicSql).toContain("from public.payment_transactions pt");
+    expect(recurringAtomicSql).toContain(
+      "grant execute on function public.apply_recurring_occurrence_unpaid_patch(uuid, jsonb) to service_role",
+    );
+    expect(recurringAtomicSql).toContain(
+      "revoke all on function public.apply_recurring_occurrence_unpaid_patch(uuid, jsonb) from authenticated",
+    );
   });
 
   it("repairs only evidence-free anomalies and adds a validated DB guard", () => {
