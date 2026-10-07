@@ -2,7 +2,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import crypto from "crypto";
 const m = vi.hoisted(() => ({
   admin: vi.fn(), replay: vi.fn(), record: vi.fn(), sync: vi.fn(), pipeline: vi.fn(), finalize: vi.fn(),
-  monthly: vi.fn(), sales: vi.fn(), monthlyRecord: vi.fn(), salesRecord: vi.fn(),
+  monthly: vi.fn(), sales: vi.fn(), monthlyRecord: vi.fn(), salesRecord: vi.fn(), entityRecord: vi.fn(),
 }));
 vi.mock("next/server", async (importOriginal) => {
   const actual = await importOriginal<typeof import("next/server")>();
@@ -19,6 +19,7 @@ vi.mock("@/lib/booking/syncPaidBookingSideEffects", () => ({ syncPaidBookingSide
 vi.mock("@/lib/payments/recordPaystackSettlement", () => ({
   paystackChargeDataFromRecord: (x: unknown) => x, recordPaystackBookingPayment: m.record,
   recordPaystackMonthlyInvoicePayment: m.monthlyRecord, recordPaystackSalesDocumentPayment: m.salesRecord,
+  recordPaystackEntitySettlementWithRecovery: m.entityRecord,
 }));
 vi.mock("@/lib/booking/runPaystackVerifyFinalizePipeline", () => ({ runPaystackVerifyFinalizePipeline: m.pipeline }));
 vi.mock("@/lib/booking/bookingOperations", () => ({ finalizePaidBooking: m.finalize, upsertResultFromFinalizePaidBookingOp: (x: unknown) => x }));
@@ -59,6 +60,12 @@ beforeEach(() => {
     ok: true,
     created: true,
     paymentTransactionId: "paytx-test",
+    expenseId: null,
+  });
+  m.entityRecord.mockResolvedValue({
+    ok: true,
+    created: true,
+    paymentTransactionId: "paytx-entity-test",
     expenseId: null,
   });
   resetBookingOwnershipColumnCacheForTests();
