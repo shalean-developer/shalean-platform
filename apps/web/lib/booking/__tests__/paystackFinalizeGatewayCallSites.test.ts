@@ -49,6 +49,9 @@ describe("Paystack finalize gateway call sites", () => {
     expect(retry).toContain("const paymentPersisted = await recordPaystackBookingPayment");
     expect(retry).toContain("if (!paymentPersisted.ok)");
     expect(retry).toContain("continue;");
+    expect(retry).toContain("FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED");
+    expect(retry).toContain("nextAttempts >= BOOKING_INSERT_MAX_ATTEMPTS");
+    expect(retry).toContain("payment_reconciliation settlement persistence attempts exhausted");
     expect(retry).toContain("await recordPaystackBookingPayment");
     const reconciliationBlock = retry.slice(
       retry.indexOf("if (result.bookingId && !result.error)"),
