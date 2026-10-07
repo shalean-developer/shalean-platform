@@ -1250,11 +1250,24 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
 
     await refreshRecurringPaymentStateForBooking(supabase, id);
 
-    const { data: recurringRosterHead } = await supabase
+    const { data: recurringRosterHead, error: recurringRosterHeadErr } = await supabase
       .from("bookings")
       .select("recurring_id, selected_cleaner_id, is_recurring_generated")
       .eq("id", id)
       .maybeSingle();
+
+    if (recurringRosterHeadErr) {
+      await enqueueFailedJob("recurring_roster_reconciliation", {
+        bookingId: id,
+        recurringId:
+          typeof pendingExisting?.recurring_id === "string" ? pendingExisting.recurring_id : null,
+        leadCleanerId:
+          typeof existingPersistedSelectedCleanerId === "string"
+            ? existingPersistedSelectedCleanerId
+            : null,
+        reason: `recurring_roster_head_load_failed:${recurringRosterHeadErr.message}`,
+      });
+    }
     const recurringRosterId =
       recurringRosterHead && typeof recurringRosterHead === "object" && "recurring_id" in recurringRosterHead
         ? String((recurringRosterHead as { recurring_id?: string | null }).recurring_id ?? "").trim() || null
