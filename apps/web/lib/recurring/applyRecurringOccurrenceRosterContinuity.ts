@@ -32,6 +32,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
   reason?: string;
   leadCleanerId?: string;
   kind?: "custom_existing" | "committed_existing" | "continuity_applied" | "noop" | "locked";
+  lifecyclePromoted?: boolean;
 }> {
   const bookingId = params.bookingId.trim();
   const recurringId = params.recurringId.trim();
@@ -123,6 +124,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
       cleanerCount: existingRoster.length,
       leadCleanerId: existingLeadId,
       kind: customExistingRoster ? "custom_existing" : "committed_existing",
+      lifecyclePromoted: false,
     };
   }
 
@@ -134,6 +136,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
       cleanerCount: Number(row.cleaner_count ?? 1) || 1,
       ...(committedLeadId ? { leadCleanerId: committedLeadId } : {}),
       kind: "committed_existing",
+      lifecyclePromoted: false,
     };
   }
 
@@ -151,7 +154,13 @@ export async function applyRecurringOccurrenceRosterContinuity(
     }
   }
   if (!continuity || continuity.rosterRows.length < 2) {
-    return { ok: true, applied: false, cleanerCount: Number(row.cleaner_count ?? 1) || 1, kind: "noop" };
+    return {
+      ok: true,
+      applied: false,
+      cleanerCount: Number(row.cleaner_count ?? 1) || 1,
+      kind: "noop",
+      lifecyclePromoted: false,
+    };
   }
 
   const requestedLeadId = params.leadCleanerId?.trim() || null;
@@ -259,5 +268,6 @@ export async function applyRecurringOccurrenceRosterContinuity(
     cleanerCount: rosterRows.length,
     leadCleanerId: leadId,
     kind: "continuity_applied",
+    lifecyclePromoted: shouldReplaceRoster,
   };
 }
