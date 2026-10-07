@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   preferredCleanerIdsFromSnapshot,
   syncPreferredCleanerRoster,
+  syncPreferredCleanerOfferRoster,
   syncPreferredCleanerRosterFromBookingRow,
 } from "@/lib/booking/persistPreferredCleaners";
 
@@ -185,6 +186,21 @@ describe("syncPreferredCleanerRoster (payment-already-received / monthly parity)
       cleanerCount: 2,
     });
     expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("unpaid recurring preferred roster uses roster-only atomic RPC", async () => {
+    const { admin, rpc } = makeAdmin();
+    const result = await syncPreferredCleanerOfferRoster(
+      admin,
+      "b1",
+      [LEAD, MEMBER_A],
+      "recurring_preferred",
+    );
+    expect(result.ok).toBe(true);
+    expect(rpc).toHaveBeenCalledWith("replace_booking_cleaners_preference_atomic", {
+      p_booking_id: "b1",
+      p_rows: expect.any(Array),
+    });
   });
 
   it("R0 post-payment preference roster uses roster-only atomic RPC", async () => {
