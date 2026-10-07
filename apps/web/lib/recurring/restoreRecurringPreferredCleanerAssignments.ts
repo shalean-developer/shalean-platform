@@ -112,6 +112,7 @@ export async function restoreRecurringPreferredCleanerAssignments(
 
     let effectiveCleanerId = cleanerId;
     let rosterKind: "custom_existing" | "committed_existing" | "continuity_applied" | "noop" | "locked" | undefined;
+    let rosterLifecyclePromoted = false;
 
     if (row.recurring_id) {
       const rosterResult = await applyRecurringOccurrenceRosterContinuity(admin, {
@@ -124,6 +125,7 @@ export async function restoreRecurringPreferredCleanerAssignments(
         continue;
       }
       rosterKind = rosterResult.kind;
+      rosterLifecyclePromoted = rosterResult.lifecyclePromoted === true;
       if (rosterResult.leadCleanerId) effectiveCleanerId = rosterResult.leadCleanerId;
       if (rosterResult.applied) {
         updated++;
@@ -134,7 +136,12 @@ export async function restoreRecurringPreferredCleanerAssignments(
       }
     }
 
-    if (rosterKind !== "custom_existing" && rosterKind !== "continuity_applied") {
+    if (
+      rosterKind !== "custom_existing" &&
+      rosterKind !== "committed_existing" &&
+      rosterKind !== "locked" &&
+      !rosterLifecyclePromoted
+    ) {
       const patch = recurringOccurrenceCleanerPatch(effectiveCleanerId, {
         operationalStatus: recurringPropagateCleanerOperationalStatus(row.status),
       });
