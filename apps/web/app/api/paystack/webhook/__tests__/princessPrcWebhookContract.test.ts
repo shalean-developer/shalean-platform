@@ -223,7 +223,12 @@ describe("Princess PR C — Paystack webhook contract", () => {
       },
     });
     mocks.enqueuePaystackRecoveryFailedJobs.mockResolvedValue(undefined);
-    mocks.recordPaystackBookingPayment.mockResolvedValue(undefined);
+    mocks.recordPaystackBookingPayment.mockResolvedValue({
+      ok: true,
+      created: true,
+      paymentTransactionId: "paytx-test",
+      expenseId: null,
+    });
     mocks.syncPaidBookingSideEffects.mockResolvedValue(undefined);
     mocks.replayPaymentConfirmedNotifyForPersistedBooking.mockResolvedValue(undefined);
     mocks.logSystemEvent.mockResolvedValue(undefined);
