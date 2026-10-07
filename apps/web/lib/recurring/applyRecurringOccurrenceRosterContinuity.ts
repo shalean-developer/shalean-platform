@@ -36,7 +36,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
   const { data: booking, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, completed_at, team_id, is_team_job, cleaner_line_earnings_finalized_at, cleaner_count, booking_cleaners(cleaner_id)",
+      "id, status, completed_at, team_id, is_team_job, cleaner_line_earnings_finalized_at, cleaner_count, booking_cleaners(cleaner_id, role)",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -57,7 +57,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
     is_team_job?: boolean | null;
     cleaner_line_earnings_finalized_at?: string | null;
     cleaner_count?: number | null;
-    booking_cleaners?: { cleaner_id?: string | null }[] | null;
+    booking_cleaners?: { cleaner_id?: string | null; role?: string | null }[] | null;
   };
 
   if (isAuthoritativeBookingCompleted({ status: row.status, completed_at: row.completed_at })) {
@@ -113,17 +113,27 @@ export async function applyRecurringOccurrenceRosterContinuity(
     }
   }
 
-  const existingIds = new Set(
+  const existingRoleByCleanerId = new Map(
     existingRoster
-      .map((member) => String(member.cleaner_id ?? "").trim())
-      .filter(Boolean),
+      .map((member) => [
+        String(member.cleaner_id ?? "").trim(),
+        String(member.role ?? "").trim().toLowerCase(),
+      ] as const)
+      .filter(([cleanerId]) => Boolean(cleanerId)),
   );
-  const desiredIds = new Set(rosterRows.map((member) => member.cleaner_id));
+  const desiredRoleByCleanerId = new Map(
+    rosterRows.map((member) => [
+      member.cleaner_id,
+      String(member.role ?? "").trim().toLowerCase(),
+    ] as const),
+  );
   const rosterAlreadyMatches =
     existingRoster.length >= 2 &&
-    existingIds.size === desiredIds.size &&
-    [...desiredIds].every((cleanerId) => existingIds.has(cleanerId)) &&
-    desiredIds.has(leadId);
+    existingRoleByCleanerId.size === desiredRoleByCleanerId.size &&
+    [...desiredRoleByCleanerId.entries()].every(
+      ([cleanerId, role]) => existingRoleByCleanerId.get(cleanerId) === role,
+    ) &&
+    desiredRoleByCleanerId.get(leadId) === "lead";
   const shouldReplaceRoster =
     !(rosterAlreadyMatches && leadId === continuity.leadCleanerId);
 
