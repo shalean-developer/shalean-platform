@@ -53,6 +53,13 @@ describe("recurring propagate — completed visit lifecycle preservation", () =>
     ).toBe(true);
     expect(
       recurringOccurrenceAssignmentIsCommitted({
+        status: "in_progress",
+        cleaner_response_status: "pending",
+      }),
+    ).toBe(true);
+    expect(
+      recurringOccurrenceAssignmentIsCommitted({
+        status: "assigned",
         cleaner_response_status: "pending",
       }),
     ).toBe(false);
