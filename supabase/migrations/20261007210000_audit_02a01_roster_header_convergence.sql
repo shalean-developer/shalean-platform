@@ -124,14 +124,40 @@ declare
   n_distinct int;
   elem jsonb;
   v_fin timestamptz;
+  v_cleaner_id uuid;
+  v_team_id uuid;
+  v_is_team_job boolean;
+  v_status text;
+  v_response text;
+  v_accepted_at timestamptz;
+  v_en_route_at timestamptz;
+  v_started_at timestamptz;
   v_source text;
 begin
   if p_booking_id is null then
     raise exception 'replace_booking_cleaners_preference_atomic: p_booking_id required';
   end if;
 
-  select b.cleaner_line_earnings_finalized_at
-    into v_fin
+  select
+    b.cleaner_line_earnings_finalized_at,
+    b.cleaner_id,
+    b.team_id,
+    b.is_team_job,
+    lower(trim(coalesce(b.status, ''))),
+    lower(trim(coalesce(b.cleaner_response_status, ''))),
+    b.accepted_at,
+    b.en_route_at,
+    b.started_at
+    into
+      v_fin,
+      v_cleaner_id,
+      v_team_id,
+      v_is_team_job,
+      v_status,
+      v_response,
+      v_accepted_at,
+      v_en_route_at,
+      v_started_at
     from public.bookings b
    where b.id = p_booking_id
    for update;
@@ -140,6 +166,19 @@ begin
   end if;
   if v_fin is not null then
     raise exception 'replace_booking_cleaners_preference_atomic: roster locked (cleaner_line_earnings_finalized_at is set)';
+  end if;
+
+  if
+    v_cleaner_id is not null
+    or v_team_id is not null
+    or coalesce(v_is_team_job, false)
+    or v_status = 'in_progress'
+    or v_response in ('accepted', 'on_my_way', 'started', 'completed')
+    or v_accepted_at is not null
+    or v_en_route_at is not null
+    or v_started_at is not null
+  then
+    return 'skipped_authoritative_assignment';
   end if;
 
   if p_rows is null or jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) < 1 then
