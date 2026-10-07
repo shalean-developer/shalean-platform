@@ -9,8 +9,42 @@ security invoker
 set search_path = public, pg_temp
 as $audit02a01_recurring_rpc$
 declare
+  v_row public.bookings%rowtype;
   v_updated_id uuid;
 begin
+  -- Serialize against payment_transactions FK inserts and booking settlement updates.
+  select *
+    into v_row
+  from public.bookings
+  where id = p_booking_id
+  for update;
+
+  if not found then
+    return false;
+  end if;
+
+  if lower(trim(coalesce(v_row.status, ''))) <> 'pending_payment'
+     or lower(trim(coalesce(v_row.payment_status, '')))
+       in ('success', 'paid', 'succeeded', 'completed', 'pending_monthly')
+     or v_row.payment_completed_at is not null
+     or v_row.paid_at is not null
+     or v_row.payment_transaction_id is not null
+     or v_row.marked_paid_by_admin_id is not null
+  then
+    return false;
+  end if;
+
+  -- This query runs after the conflicting row lock has been acquired. If a
+  -- concurrent gateway ledger insert started first, FOR UPDATE waits for it
+  -- and this recheck sees the committed payment row before repricing.
+  if exists (
+    select 1
+    from public.payment_transactions pt
+    where pt.booking_id = p_booking_id
+  ) then
+    return false;
+  end if;
+
   update public.bookings b
   set (
     booking_snapshot,
