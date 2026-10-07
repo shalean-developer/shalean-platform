@@ -296,16 +296,10 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     const predeploySql = read(
       "../../supabase/migrations/20261007023000_audit_02a01_pending_cash_sot.sql",
     ).toLowerCase();
-    const tombstoneSql = read(
+    const postdeploySql = read(
       "../../supabase/migrations/20261007024500_audit_02a01_postdeploy_cash_guard.sql",
     ).toLowerCase();
-    const postdeploySql = read(
-      "../../supabase/postdeploy/audit-02a01-postdeploy-cash-guard.sql",
-    ).toLowerCase();
     const sql = `${predeploySql}\n${postdeploySql}`;
-
-    expect(tombstoneSql).toContain("migration tombstone");
-    expect(tombstoneSql).not.toContain("add constraint bookings_pending_unpaid_cash_zero");
 
     expect(sql).toContain("payment_completed_at is null");
     expect(sql).toContain("paid_at is null");
@@ -361,21 +355,5 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
       postdeploySql.indexOf("amount_paid_cents = 0"),
     );
     expect(sql).toContain("validate constraint bookings_pending_unpaid_cash_zero");
-  });
-
-  it("keeps the pending-cash invariant outside the ordinary predeploy migration chain", () => {
-    const migration = read(
-      "../../supabase/migrations/20261007024500_audit_02a01_postdeploy_cash_guard.sql",
-    ).toLowerCase();
-    const postdeploy = read(
-      "../../supabase/postdeploy/audit-02a01-postdeploy-cash-guard.sql",
-    ).toLowerCase();
-
-    expect(migration).toContain("migration tombstone");
-    expect(migration).not.toContain("bookings_pending_unpaid_cash_zero");
-    expect(postdeploy).toContain("explicit post-deploy script");
-    expect(postdeploy).toContain("begin;");
-    expect(postdeploy).toContain("commit;");
-    expect(postdeploy).toContain("bookings_pending_unpaid_cash_zero");
   });
 });
