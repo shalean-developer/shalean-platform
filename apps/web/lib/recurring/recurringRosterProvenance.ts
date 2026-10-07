@@ -3,6 +3,7 @@ export const GENERATED_PREFERRED_ROSTER_SOURCES = new Set([
   "customer_preferred",
   "recurring_preferred",
   "recurring_continuity",
+  "booking_v2_r0",
 ]);
 
 export function isGeneratedPreferredRosterSource(source: unknown): boolean {
