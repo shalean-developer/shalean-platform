@@ -240,6 +240,11 @@ export type ProcessPaystackInitializeBodyOptions = {
   adminSlotFlags?: { slotDuplicateExempt: boolean; adminForceSlotOverride: boolean };
   /** Optional IP + User-Agent for referral checkout fingerprint (customer `/api/paystack/initialize` only). */
   checkoutTrustSignals?: CheckoutTrustSignals;
+  /**
+   * Server-only recurring fallback: preserve the already-persisted pending booking payable
+   * (for example the 30-day recurring package total) instead of recomputing from the per-visit lock.
+   */
+  preserveExistingPendingPayable?: boolean;
 };
 
 /**
@@ -302,9 +307,19 @@ export async function processPaystackInitializeBody(
         ? b.booking_id.trim()
         : null;
 
+  let preservedExistingPayableZar: number | null = null;
   if (bookingIdFromBody) {
-    const { data: payRow } = await admin.from("bookings").select("payment_status").eq("id", bookingIdFromBody).maybeSingle();
-    const ps = String((payRow as { payment_status?: string } | null)?.payment_status ?? "");
+    const { data: payRow } = await admin
+      .from("bookings")
+      .select("status, payment_status, total_price")
+      .eq("id", bookingIdFromBody)
+      .maybeSingle();
+    const pay = payRow as {
+      status?: string | null;
+      payment_status?: string | null;
+      total_price?: number | string | null;
+    } | null;
+    const ps = String(pay?.payment_status ?? "").trim().toLowerCase();
     if (ps === "pending_monthly") {
       return {
         ok: false,
@@ -312,6 +327,24 @@ export async function processPaystackInitializeBody(
         errorCode: "MONTHLY_INVOICE_BOOKING",
         error: "This booking is on monthly consolidated billing. Pay the invoice link from your email instead.",
       };
+    }
+    if (initOptions?.preserveExistingPendingPayable) {
+      const lifecycle = String(pay?.status ?? "").trim().toLowerCase();
+      const storedPayable = Number(pay?.total_price);
+      if (
+        lifecycle !== "pending_payment" ||
+        ["success", "paid", "succeeded", "completed", "pending_monthly"].includes(ps) ||
+        !Number.isFinite(storedPayable) ||
+        storedPayable <= 0
+      ) {
+        return {
+          ok: false,
+          status: 409,
+          errorCode: "PRICE_MISMATCH",
+          error: "The saved recurring payment amount is unavailable. Refresh this booking before retrying payment.",
+        };
+      }
+      preservedExistingPayableZar = Math.round(storedPayable);
     }
   }
 
@@ -657,7 +690,8 @@ export async function processPaystackInitializeBody(
   const discountZar = promoDiscountZar + referralDiscountZar + planDiscountZar;
 
   /** Server-only — never trust a client-supplied `amount` or `locked.finalPrice` for Paystack. */
-  const totalZar = computeCheckoutTotalZar(visitZar, tip, discountZar);
+  const recomputedTotalZar = computeCheckoutTotalZar(visitZar, tip, discountZar);
+  const totalZar = preservedExistingPayableZar ?? recomputedTotalZar;
   const amountCents = totalZar * 100;
 
   const checkoutForSnap = checkout as OkCheckoutForPricing;
