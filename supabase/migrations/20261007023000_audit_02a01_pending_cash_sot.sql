@@ -11,7 +11,7 @@ set
   total_paid_cents = 0,
   total_paid_zar = 0
 where lower(trim(coalesce(b.status, ''))) in ('pending_payment', 'payment_expired')
-  and lower(trim(coalesce(b.payment_status, 'pending'))) <> 'pending_monthly'
+  and lower(trim(coalesce(b.payment_status, 'pending'))) not in ('success', 'paid', 'succeeded', 'completed', 'pending_monthly')
   and b.payment_completed_at is null
   and b.paid_at is null
   and b.payment_transaction_id is null
@@ -34,7 +34,7 @@ alter table public.bookings
   add constraint bookings_pending_unpaid_cash_zero
   check (
     lower(trim(coalesce(status, ''))) not in ('pending_payment', 'payment_expired')
-    or lower(trim(coalesce(payment_status, ''))) = 'pending_monthly'
+    or lower(trim(coalesce(payment_status, ''))) in ('success', 'paid', 'succeeded', 'completed', 'pending_monthly')
     or (
       coalesce(amount_paid_cents, 0) = 0
       and coalesce(total_paid_cents, 0) = 0
@@ -46,4 +46,4 @@ alter table public.bookings
   validate constraint bookings_pending_unpaid_cash_zero;
 
 comment on constraint bookings_pending_unpaid_cash_zero on public.bookings is
-  'AUDIT-02A01: ordinary pending/expired payment rows must not carry collected cash; pending_monthly remains governed by monthly billing semantics.';
+  'AUDIT-02A01: ordinary unpaid pending/expired rows must not carry collected cash; settled and pending_monthly states are preserved for separate reconciliation.';
