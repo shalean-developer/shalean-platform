@@ -28,6 +28,86 @@ describe("Paystack finalize gateway call sites", () => {
     expect(src).not.toMatch(/\bfinalizePaystackChargeSuccess\s*\(/);
   });
 
+  it("monthly and sales Paystack settlements use durable reconciliation", () => {
+    const webhook = readFileSync(join(root, "app/api/paystack/webhook/route.ts"), "utf8");
+    const verify = readFileSync(join(root, "app/api/paystack/verify/route.ts"), "utf8");
+    const settlement = readFileSync(join(root, "lib/payments/recordPaystackSettlement.ts"), "utf8");
+    const retry = readFileSync(join(root, "app/api/cron/retry-failed-jobs/route.ts"), "utf8");
+
+    expect(webhook).toContain("recordPaystackEntitySettlementWithRecovery");
+    expect(verify).toContain("recordPaystackEntitySettlementWithRecovery");
+    expect(settlement).toContain('"gateway_settlement_reconciliation"');
+    expect(retry).toContain("FAILED_JOB_TYPE_GATEWAY_SETTLEMENT_RECONCILIATION");
+    expect(retry).toContain("recordPaystackMonthlyInvoicePayment");
+    expect(retry).toContain("recordPaystackSalesDocumentPayment");
+  });
+
+  it("verify replay branches reconcile incomplete settlement before reporting success", () => {
+    const verify = readFileSync(join(root, "app/api/paystack/verify/route.ts"), "utf8");
+
+    expect(verify).toContain("enqueuePaystackRecoveryFailedJobs");
+    expect(verify).toContain("const replaySettlement = await recordPaystackBookingPayment");
+    expect(verify).toContain("settlement_persistence_failed:");
+    expect(verify).toContain('reason: "finalization_failed"');
+    expect(verify).toContain("recoveryEnqueue: true");
+    expect(verify).not.toMatch(/Promise\.allSettled\(\[[\s\S]*recordPaystackBookingPayment/);
+  });
+
+  it("primary Paystack callbacks durably reconcile settlement side-effect failures", () => {
+    const retryPipeline = readFileSync(join(root, "lib/booking/runPaystackVerifyFinalizePipeline.ts"), "utf8");
+    const webhook = readFileSync(join(root, "app/api/paystack/webhook/route.ts"), "utf8");
+
+    expect(retryPipeline).toContain("const settlementPersisted = await recordPaystackBookingPayment");
+    expect(retryPipeline).toContain("let recoveryResult = result");
+    expect(retryPipeline).toContain("settlement_persistence_failed:");
+    expect(retryPipeline).toContain("result: recoveryResult");
+
+    expect(webhook).toContain("const settlementPersisted = await recordPaystackBookingPayment");
+    expect(webhook).toContain("settlement_persistence_failed:");
+    expect(webhook).toContain('reason: "finalization_failed"');
+    expect(webhook).toContain("recoveryEnqueue: true");
+  });
+
+  it("payment reconciliation retries preserve gateway data and record settlement before deletion", () => {
+    const retry = readFileSync(join(root, "app/api/cron/retry-failed-jobs/route.ts"), "utf8");
+    const verifyPipeline = readFileSync(join(root, "lib/booking/runPaystackVerifyFinalizePipeline.ts"), "utf8");
+    const webhook = readFileSync(join(root, "app/api/paystack/webhook/route.ts"), "utf8");
+
+    expect(verifyPipeline).toContain("paystackAuthorizationCode: authorizationCode || null");
+    expect(verifyPipeline).toContain("paystackCustomerCode: customerCode || null");
+    expect(verifyPipeline).toContain('paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null');
+    expect(verifyPipeline).toContain("paystackChargeData: paystackChargeDataFromRecord");
+
+    expect(webhook).toContain("paystackAuthorizationCode:");
+    expect(webhook).toContain("paystackCustomerCode:");
+    expect(webhook).toContain("paystackChargeData: paystackChargeDataFromRecord");
+
+    expect(retry).toContain("payload.paystackAuthorizationCode");
+    expect(retry).toContain("payload.paystackCustomerCode");
+    expect(retry).toContain("payload.paidAtIso");
+    expect(retry).toContain('jobType === FAILED_JOB_TYPE_PAYMENT_RECONCILIATION');
+    expect(retry).toContain("const paymentPersisted = await recordPaystackBookingPayment");
+    expect(retry).toContain("if (!paymentPersisted.ok)");
+    expect(retry).toContain("continue;");
+    expect(retry).toContain("FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED");
+    expect(retry).toContain("nextAttempts >= BOOKING_INSERT_MAX_ATTEMPTS");
+    expect(retry).toContain("payment_reconciliation settlement persistence attempts exhausted");
+    expect(retry).toContain("FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION");
+    expect(retry).toContain("applyRecurringOccurrenceRosterContinuity");
+    expect(retry).toContain("recurring roster reconciliation attempts exhausted");
+    expect(retry).toContain("catch (settlementErr)");
+    expect(retry).toContain("settlementErr instanceof Error");
+    expect(retry).toContain("await recordPaystackBookingPayment");
+    const reconciliationBlock = retry.slice(
+      retry.indexOf("if (result.bookingId && !result.error)"),
+      retry.indexOf("} else {", retry.indexOf("if (result.bookingId && !result.error)")),
+    );
+    expect(reconciliationBlock.indexOf("await recordPaystackBookingPayment")).toBeGreaterThan(-1);
+    expect(reconciliationBlock.indexOf("await recordPaystackBookingPayment")).toBeLessThan(
+      reconciliationBlock.indexOf('from("failed_jobs").delete().eq("id", id)'),
+    );
+  });
+
   it("legacy payments/verify is a 410 tombstone and cannot finalize bookings", () => {
     const src = readFileSync(join(root, "app/api/payments/verify/route.ts"), "utf8");
     expect(src).toContain("LEGACY_PAYMENTS_VERIFY_RETIRED");

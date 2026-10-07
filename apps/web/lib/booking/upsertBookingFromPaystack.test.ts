@@ -323,6 +323,7 @@ describe("observed pending upsert conflict propagation", () => {
     const initial: Record<string, unknown> = {
       id: bookingId, status: "pending_payment", customer_email: " Payer@Example.com ",
       customer_id: "owner-a", paystack_reference: mode === "id" ? bookingId : "pay_verified",
+      selected_cleaner_id: null, cleaner_id: null, assignment_type: null,
       is_recurring_generated: false, price_snapshot: null,
     };
     const current = { ...initial };
@@ -385,6 +386,7 @@ describe("observed pending upsert conflict propagation", () => {
         ["id", bookingId], ["status", "pending_payment"],
         ["customer_email", db.initial.customer_email], ["customer_id", "owner-a"],
         ["paystack_reference", db.initial.paystack_reference],
+        ["selected_cleaner_id", null], ["cleaner_id", null], ["assignment_type", null],
       ]);
       expect(db.reads).not.toContain("id, status");
     });

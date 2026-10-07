@@ -40,12 +40,12 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { allowPaystackVerifyRequest, paystackVerifyRateLimitKey } from "@/lib/rateLimit/paystackVerifyIpLimit";
 import { replayPaymentConfirmedNotifyForPersistedBooking } from "@/lib/booking/paystackReplayPaymentConfirmedNotify";
+import { enqueuePaystackRecoveryFailedJobs } from "@/lib/booking/enqueuePaystackRecoveryFailedJobs";
 import { loadBookingReferenceForId } from "@/lib/booking/loadBookingReference";
 import {
   paystackChargeDataFromRecord,
   recordPaystackBookingPayment,
-  recordPaystackMonthlyInvoicePayment,
-  recordPaystackSalesDocumentPayment,
+  recordPaystackEntitySettlementWithRecovery,
 } from "@/lib/payments/recordPaystackSettlement";
 
 export const runtime = "nodejs";
@@ -303,10 +303,12 @@ export async function GET(request: Request) {
             ? monthlyRoutingGet.invoiceId
             : monthlyInvoiceIdHintGet;
         if (invoiceId && !skipLedger) {
-          await recordPaystackMonthlyInvoicePayment(adminGet, {
+          await recordPaystackEntitySettlementWithRecovery(adminGet, {
+            entityType: "monthly_invoice",
+            entityId: invoiceId,
             reference: ref,
             amountCents: monthlyAmountGet,
-            invoiceId,
+            currency: typeof tx.currency === "string" ? tx.currency : "ZAR",
             paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
             chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
           });
@@ -359,10 +361,12 @@ export async function GET(request: Request) {
             ? salesRoutingGet.documentId
             : salesDocIdHintGet;
         if (documentId) {
-          await recordPaystackSalesDocumentPayment(adminGet, {
+          await recordPaystackEntitySettlementWithRecovery(adminGet, {
+            entityType: "sales_document",
+            entityId: documentId,
             reference: ref,
             amountCents: monthlyAmountGet,
-            documentId,
+            currency: typeof tx.currency === "string" ? tx.currency : "ZAR",
             paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
             chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
           });
@@ -434,7 +438,7 @@ export async function GET(request: Request) {
         metadata: tx.metadata,
         customerEmailHint: emailFromCustomer || undefined,
       });
-      await recordPaystackBookingPayment(adminGet, {
+      const replaySettlement = await recordPaystackBookingPayment(adminGet, {
         reference: ref,
         amountCents: amountCentsGet,
         bookingId: existing.bookingId,
@@ -442,6 +446,46 @@ export async function GET(request: Request) {
         paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
         chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
       });
+      if (!replaySettlement.ok) {
+        const metadataReplay = normalizePaystackMetadata(tx.metadata);
+        const { snapshot: replaySnapshot } = parseBookingSnapshot(metadataReplay, { amountCents: amountCentsGet });
+        const customerBlock =
+          tx.customer && typeof tx.customer === "object"
+            ? (tx.customer as { customer_code?: string; email?: string })
+            : null;
+        const authorizationBlock =
+          (tx as { authorization?: { authorization_code?: string } | null }).authorization ?? null;
+        await enqueuePaystackRecoveryFailedJobs({
+          reference: ref,
+          result: {
+            ok: false,
+            skipped: true,
+            bookingId: existing.bookingId,
+            bookingInDatabase: true,
+            error: `settlement_persistence_failed:${replaySettlement.error}`,
+            reason: "finalization_failed",
+            recoveryEnqueue: true,
+          },
+          basePayload: {
+            paystackReference: ref,
+            amountCents: amountCentsGet,
+            currency: typeof tx.currency === "string" ? tx.currency : "ZAR",
+            customerEmail: emailFromCustomer,
+            snapshot: replaySnapshot,
+            paystackMetadata: metadataReplay,
+            paystackAuthorizationCode:
+              typeof authorizationBlock?.authorization_code === "string"
+                ? authorizationBlock.authorization_code
+                : null,
+            paystackCustomerCode:
+              typeof customerBlock?.customer_code === "string"
+                ? customerBlock.customer_code
+                : null,
+            paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+            paystackChargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
+          },
+        });
+      }
       return NextResponse.json({
         ok: true,
         success: true,
@@ -739,10 +783,12 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
                 normalizePaystackMetadata(tx.metadata) as unknown as Record<string, unknown>,
               );
         if (invoiceId && !skipLedger) {
-          await recordPaystackMonthlyInvoicePayment(adminPost, {
+          await recordPaystackEntitySettlementWithRecovery(adminPost, {
+            entityType: "monthly_invoice",
+            entityId: invoiceId,
             reference: ref,
             amountCents: txAmount,
-            invoiceId,
+            currency: txCurrency,
             paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
             chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
           });
@@ -812,10 +858,12 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
             ? salesRoutingPost.documentId
             : salesDocIdHintPost;
         if (documentId) {
-          await recordPaystackSalesDocumentPayment(adminPost, {
+          await recordPaystackEntitySettlementWithRecovery(adminPost, {
+            entityType: "sales_document",
+            entityId: documentId,
             reference: ref,
             amountCents: txAmount,
-            documentId,
+            currency: txCurrency,
             paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
             chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
           });
@@ -904,26 +952,64 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
           reference: ref, error: "PAYMENT_FINALIZATION_REPLAY_MISMATCH" }, { status: 409 });
       }
       after(async () => {
-        await Promise.allSettled([
-          replayPaymentConfirmedNotifyForPersistedBooking({
-            supabase: adminPost,
+        await replayPaymentConfirmedNotifyForPersistedBooking({
+          supabase: adminPost,
+          bookingId: existingPost.bookingId,
+          paystackReference: ref,
+          amountCents: txAmount,
+          metadata: tx.metadata,
+          snapshot: snapShort,
+          customerEmailHint: emailNorm || emailFromCustomerPost || undefined,
+        });
+      });
+
+      const replaySettlement = await recordPaystackBookingPayment(adminPost, {
+        reference: ref,
+        amountCents: txAmount,
+        bookingId: existingPost.bookingId,
+        currency: txCurrency,
+        paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+        chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
+      });
+
+      if (!replaySettlement.ok) {
+        const customerBlock =
+          tx.customer && typeof tx.customer === "object"
+            ? (tx.customer as { customer_code?: string; email?: string })
+            : null;
+        const authorizationBlock =
+          (tx as { authorization?: { authorization_code?: string } | null }).authorization ?? null;
+        await enqueuePaystackRecoveryFailedJobs({
+          reference: ref,
+          result: {
+            ok: false,
+            skipped: true,
             bookingId: existingPost.bookingId,
+            bookingInDatabase: true,
+            error: `settlement_persistence_failed:${replaySettlement.error}`,
+            reason: "finalization_failed",
+            recoveryEnqueue: true,
+          },
+          basePayload: {
             paystackReference: ref,
             amountCents: txAmount,
-            metadata: tx.metadata,
-            snapshot: snapShort,
-            customerEmailHint: emailNorm || emailFromCustomerPost || undefined,
-          }),
-          recordPaystackBookingPayment(adminPost, {
-            reference: ref,
-            amountCents: txAmount,
-            bookingId: existingPost.bookingId,
             currency: txCurrency,
+            customerEmail: emailNorm,
+            snapshot: snapShort,
+            paystackMetadata: metadataShort,
+            paystackAuthorizationCode:
+              typeof authorizationBlock?.authorization_code === "string"
+                ? authorizationBlock.authorization_code
+                : null,
+            paystackCustomerCode:
+              typeof customerBlock?.customer_code === "string"
+                ? customerBlock.customer_code
+                : null,
             paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
-            chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
-          }),
-        ]);
-      });
+            paystackChargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
+          },
+        });
+      }
       const bookingReference = await loadBookingReferenceForId(adminPost, existingPost.bookingId);
       return NextResponse.json({
         success: true,

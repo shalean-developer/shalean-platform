@@ -37,8 +37,7 @@ import { timingSafeEqualString } from "@/lib/security/timingSafeEqualString";
 import {
   paystackChargeDataFromRecord,
   recordPaystackBookingPayment,
-  recordPaystackMonthlyInvoicePayment,
-  recordPaystackSalesDocumentPayment,
+  recordPaystackEntitySettlementWithRecovery,
 } from "@/lib/payments/recordPaystackSettlement";
 import { routeSuccessfulPaystackRefund } from "@/lib/payments/routePaystackRefundEvent";
 import { isCheckoutCurrencyZar, maskPaystackReference } from "@/lib/payments/paymentAmountMismatch";
@@ -284,10 +283,12 @@ export async function POST(request: Request) {
         message: "monthly_invoice.charge.success",
         context: { reference, invoiceId: monthlyRouting.invoiceId, settled: monthlyRouting.settled, ...partialCtx },
       });
-      await recordPaystackMonthlyInvoicePayment(supabase, {
+      await recordPaystackEntitySettlementWithRecovery(supabase, {
+        entityType: "monthly_invoice",
+        entityId: monthlyRouting.invoiceId,
         reference,
         amountCents: typeof data.amount === "number" ? data.amount : 0,
-        invoiceId: monthlyRouting.invoiceId,
+        currency: typeof data.currency === "string" ? data.currency : "ZAR",
         paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
         chargeData: paystackChargeDataFromRecord(data),
       });
@@ -295,10 +296,12 @@ export async function POST(request: Request) {
     }
     if (monthlyRouting.kind === "monthly_already_processed") {
       if (monthlyInvoiceIdHint && monthlyRouting.reason !== "amount_mismatch_quarantined") {
-        await recordPaystackMonthlyInvoicePayment(supabase, {
+        await recordPaystackEntitySettlementWithRecovery(supabase, {
+          entityType: "monthly_invoice",
+          entityId: monthlyInvoiceIdHint,
           reference,
           amountCents: typeof data.amount === "number" ? data.amount : 0,
-          invoiceId: monthlyInvoiceIdHint,
+          currency: typeof data.currency === "string" ? data.currency : "ZAR",
           paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
           chargeData: paystackChargeDataFromRecord(data),
         });
@@ -327,10 +330,12 @@ export async function POST(request: Request) {
         message: "sales_document.charge.success",
         context: { reference, documentId: salesRouting.documentId },
       });
-      await recordPaystackSalesDocumentPayment(supabase, {
+      await recordPaystackEntitySettlementWithRecovery(supabase, {
+        entityType: "sales_document",
+        entityId: salesRouting.documentId,
         reference,
         amountCents: typeof data.amount === "number" ? data.amount : 0,
-        documentId: salesRouting.documentId,
+        currency: typeof data.currency === "string" ? data.currency : "ZAR",
         paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
         chargeData: paystackChargeDataFromRecord(data),
       });
@@ -338,10 +343,12 @@ export async function POST(request: Request) {
     }
     if (salesRouting.kind === "sales_doc_already_processed") {
       if (salesDocIdHint) {
-        await recordPaystackSalesDocumentPayment(supabase, {
+        await recordPaystackEntitySettlementWithRecovery(supabase, {
+          entityType: "sales_document",
+          entityId: salesDocIdHint,
           reference,
           amountCents: typeof data.amount === "number" ? data.amount : 0,
-          documentId: salesDocIdHint,
+          currency: typeof data.currency === "string" ? data.currency : "ZAR",
           paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
           chargeData: paystackChargeDataFromRecord(data),
         });
@@ -463,7 +470,7 @@ export async function POST(request: Request) {
         reference,
         amountCents: amount,
       });
-      await recordPaystackBookingPayment(supabase, {
+      const settlementPersisted = await recordPaystackBookingPayment(supabase, {
         reference,
         amountCents: amount,
         bookingId: persistedHead.bookingId,
@@ -471,6 +478,38 @@ export async function POST(request: Request) {
         paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
         chargeData: paystackChargeDataFromRecord(data),
       });
+      if (!settlementPersisted.ok) {
+        await enqueuePaystackRecoveryFailedJobs({
+          reference,
+          result: {
+            ok: false,
+            skipped: true,
+            bookingId: persistedHead.bookingId,
+            bookingInDatabase: true,
+            error: `settlement_persistence_failed:${settlementPersisted.error}`,
+            reason: "finalization_failed",
+            recoveryEnqueue: true,
+          },
+          basePayload: {
+            paystackReference: reference,
+            amountCents: amount,
+            currency,
+            customerEmail: email,
+            snapshot,
+            paystackMetadata: metadata,
+            paystackAuthorizationCode:
+              data.authorization && typeof data.authorization === "object"
+                ? String((data.authorization as { authorization_code?: string }).authorization_code ?? "") || null
+                : null,
+            paystackCustomerCode:
+              customerBlock && typeof customerBlock === "object"
+                ? String((customerBlock as { customer_code?: string }).customer_code ?? "") || null
+                : null,
+            paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
+            paystackChargeData: paystackChargeDataFromRecord(data),
+          },
+        });
+      }
       return NextResponse.json({ received: true });
     }
   }
@@ -507,6 +546,16 @@ export async function POST(request: Request) {
       customerEmail: email,
       snapshot,
       paystackMetadata: metadata,
+      paystackAuthorizationCode:
+        data.authorization && typeof data.authorization === "object"
+          ? String((data.authorization as { authorization_code?: string }).authorization_code ?? "") || null
+          : null,
+      paystackCustomerCode:
+        customerBlock && typeof customerBlock === "object"
+          ? String((customerBlock as { customer_code?: string }).customer_code ?? "") || null
+          : null,
+      paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
+      paystackChargeData: paystackChargeDataFromRecord(data as Record<string, unknown>),
     },
   });
 
@@ -533,7 +582,7 @@ export async function POST(request: Request) {
     });
     if (supabase) {
       void syncPaidBookingSideEffects(supabase, { bookingId: result.bookingId, reference, amountCents: amount });
-      await recordPaystackBookingPayment(supabase, {
+      const settlementPersisted = await recordPaystackBookingPayment(supabase, {
         reference,
         amountCents: amount,
         bookingId: result.bookingId,
@@ -541,6 +590,36 @@ export async function POST(request: Request) {
         paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
         chargeData: paystackChargeDataFromRecord(data),
       });
+      if (!settlementPersisted.ok) {
+        await enqueuePaystackRecoveryFailedJobs({
+          reference,
+          result: {
+            ...result,
+            ok: false,
+            error: `settlement_persistence_failed:${settlementPersisted.error}`,
+            reason: "finalization_failed",
+            recoveryEnqueue: true,
+          },
+          basePayload: {
+            paystackReference: reference,
+            amountCents: amount,
+            currency,
+            customerEmail: email,
+            snapshot,
+            paystackMetadata: metadata,
+            paystackAuthorizationCode:
+              data.authorization && typeof data.authorization === "object"
+                ? String((data.authorization as { authorization_code?: string }).authorization_code ?? "") || null
+                : null,
+            paystackCustomerCode:
+              customerBlock && typeof customerBlock === "object"
+                ? String((customerBlock as { customer_code?: string }).customer_code ?? "") || null
+                : null,
+            paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
+            paystackChargeData: paystackChargeDataFromRecord(data),
+          },
+        });
+      }
     }
   } else {
     logPaymentStructured("payment_webhook_outcome", {

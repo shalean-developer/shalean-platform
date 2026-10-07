@@ -286,9 +286,15 @@ export async function propagateRecurringPlanToGeneratedBookings(
       price_snapshot: preserveRecurringPackagePayable
         ? booking.price_snapshot
         : provisionalPriceSnapshotJson(locked),
+      ...(preferredCleanerId
+        ? recurringOccurrenceCleanerPatch(preferredCleanerId, {
+            operationalStatus: "pending_payment",
+          })
+        : {}),
     };
 
     let bookingUpdate: Record<string, unknown> = nonPricingPatch;
+    let cleanerMutationSucceeded = false;
     if (mutableUnpaidCandidate) {
       const { data: repriced, error: repriceErr } = await admin.rpc(
         "apply_recurring_occurrence_unpaid_patch",
@@ -303,10 +309,11 @@ export async function propagateRecurringPlanToGeneratedBookings(
       }
       if (repriced === true) {
         bookingUpdate = {};
+        cleanerMutationSucceeded = Boolean(preferredCleanerId);
       }
     }
 
-    if (preferredCleanerId) {
+    if (preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent) {
       Object.assign(
         bookingUpdate,
         preserveLifecycle
@@ -327,12 +334,15 @@ export async function propagateRecurringPlanToGeneratedBookings(
         result.errors.push(`Booking ${booking.id}: ${upErr.message}`);
         continue;
       }
+      if (preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent) {
+        cleanerMutationSucceeded = true;
+      }
     }
 
     result.bookings_updated++;
-    if (preferredCleanerId) {
+    if (preferredCleanerId && cleanerMutationSucceeded) {
       result.bookings_cleaner_updated++;
-      if (!bookingCompleted) {
+      if (!bookingCompleted && !mutableUnpaidCandidate) {
         await applyRecurringOccurrenceRosterContinuity(admin, {
           bookingId: booking.id,
           recurringId: plan.id,

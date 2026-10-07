@@ -165,6 +165,120 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringAtomicSql).toContain(
       "revoke all on function public.apply_recurring_occurrence_unpaid_patch(uuid, jsonb) from authenticated",
     );
+    expect(recurringPropagation).toContain(
+      'operationalStatus: "pending_payment"',
+    );
+    expect(recurringPropagation).toContain(
+      "preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent",
+    );
+    expect(recurringPropagation).toContain(
+      "...(preferredCleanerId",
+    );
+    expect(recurringPropagation).toContain("let cleanerMutationSucceeded = false");
+    expect(recurringPropagation).toContain(
+      "cleanerMutationSucceeded = Boolean(preferredCleanerId)",
+    );
+    expect(recurringPropagation).toContain(
+      "preferredCleanerId && cleanerMutationSucceeded",
+    );
+    expect(recurringPropagation).toContain(
+      "!bookingCompleted && !mutableUnpaidCandidate",
+    );
+
+    const paystackFinalize = read("lib/booking/upsertBookingFromPaystack.ts");
+    expect(paystackFinalize).toContain('error.code === "PAYMENT_FINALIZATION_CONFLICT"');
+    expect(paystackFinalize).toContain('reason: "finalization_failed" as const');
+    expect(paystackFinalize).toContain("recoveryEnqueue: true");
+    const settlementRecorder = read("lib/payments/recordGatewayPayment.ts");
+    expect(settlementRecorder).toContain("completeSideEffects");
+    expect(settlementRecorder).toContain("ensureExpenseAccountingQueue");
+    expect(settlementRecorder).toContain('"entity_type", "expense"');
+    expect(settlementRecorder).toContain("expense_accounting_queue_enrollment_failed");
+    expect(settlementRecorder).toContain("payment_transaction_reconciled");
+    expect(settlementRecorder).toContain('"expenses"');
+    expect(settlementRecorder).toContain('"accounting_sync_records"');
+    expect(settlementRecorder).toContain("payment_transaction_id: paymentTransactionId");
+    expect(paystackFinalize).toContain('input.paystackPersistSource === "retry"');
+    expect(paystackFinalize).toContain("normalizeUuidCandidate(existingPersistedSelectedCleanerId)");
+    expect(paystackFinalize).toContain("applyRecurringOccurrenceRosterContinuity");
+    expect(paystackFinalize).toContain("recurringRosterGenerated && recurringRosterId && recurringRosterCleanerId");
+    const rosterContinuity = read("lib/recurring/applyRecurringOccurrenceRosterContinuity.ts");
+    expect(rosterContinuity).toContain("requestedLeadId");
+    const rosterFetch = read("lib/recurring/fetchLastAssignedRosterForRecurringPlan.ts");
+    expect(rosterFetch).toContain("recurring_roster_lookup_failed");
+    expect(rosterContinuity).toContain("catch (error)");
+    expect(rosterContinuity).toContain("const shouldReplaceRoster");
+    expect(rosterContinuity).toContain('.from("bookings")');
+    expect(rosterContinuity).toContain("cleaner_id: leadId");
+    expect(rosterContinuity).toContain("requestedLeadId !== continuity.leadCleanerId");
+    expect(rosterContinuity).toContain('role: member.cleaner_id === requestedLeadId ? "lead" : "member"');
+    expect(rosterContinuity).toContain("cleaner_id: requestedLeadId");
+    expect(rosterContinuity).toContain("ok: boolean");
+    expect(paystackFinalize).toContain('"recurring_roster_reconciliation"');
+    expect(paystackFinalize).toContain("if (!rosterContinuity.ok)");
+    expect(paystackFinalize).toContain("const rosterRecoveryQueued = await enqueueFailedJob");
+    expect(paystackFinalize).toContain("if (!rosterRecoveryQueued)");
+    expect(paystackFinalize).toContain("recurring_roster_reconciliation_enqueue_failed");
+    expect(paystackFinalize).toMatch(
+      /st === "payment_reconciliation_required"[\s\S]*recoveryEnqueue: true/,
+    );
+    expect(paystackFinalize).toContain(
+      'st === "payment_reconciliation_required" && input.paystackPersistSource !== "retry"',
+    );
+    expect(paystackFinalize).toContain(
+      'st === "payment_reconciliation_required" && input.paystackPersistSource === "retry"',
+    );
+    expect(paystackFinalize).toContain("const runRequiredPostPersistRecovery = async");
+    expect(paystackFinalize.indexOf("await runRequiredPostPersistRecovery()")).toBeLessThan(
+      paystackFinalize.indexOf("if (input.deferPostPersistSideEffects)"),
+    );
+
+    const finalizeCommands = read("lib/booking/paymentFinalizationBookingCommands.ts");
+    expect(finalizeCommands).toContain(
+      '"payment_reconciliation_required"',
+    );
+
+    const bookingRecovery = read("lib/booking/enqueuePaystackRecoveryFailedJobs.ts");
+    expect(bookingRecovery).toContain("recovery_payment_reconciliation_enqueue_failed");
+    expect(bookingRecovery).toContain('throw new Error("recovery_payment_reconciliation_enqueue_failed")');
+
+    const verifyPipeline = read("lib/booking/runPaystackVerifyFinalizePipeline.ts");
+    expect(verifyPipeline.indexOf("await recordPaystackBookingPayment")).toBeLessThan(
+      verifyPipeline.indexOf("after(runPostFinalizeWork)"),
+    );
+    expect(verifyPipeline.indexOf("await enqueuePaystackRecoveryFailedJobs")).toBeLessThan(
+      verifyPipeline.indexOf("after(runPostFinalizeWork)"),
+    );
+    expect(paystackFinalize).toContain("is_recurring_generated, recurring_id, price_snapshot");
+    expect(paystackFinalize).toContain("recurringRosterHeadErr");
+    expect(paystackFinalize).toContain("recurring_roster_head_load_failed:");
+    expect(paystackFinalize).toContain("existingIsRecurringGenerated");
+    expect(paystackFinalize).toContain("fallbackRecurringId && fallbackLeadCleanerId");
+
+    const settlementWrappers = read("lib/payments/recordPaystackSettlement.ts");
+    expect(settlementWrappers).toContain("recordPaystackEntitySettlementWithRecovery");
+    expect(settlementWrappers).toContain('"gateway_settlement_reconciliation"');
+    expect(settlementWrappers).toContain("const recoveryQueued = await enqueueFailedJob");
+    expect(settlementWrappers).toContain("if (!recoveryQueued)");
+    expect(settlementWrappers).toContain("gateway_settlement_reconciliation_enqueue_failed");
+    expect(settlementWrappers).toContain('entityType: "monthly_invoice"');
+    expect(settlementWrappers).toContain('entityType: "sales_document"');
+
+    const retryWorker = read("app/api/cron/retry-failed-jobs/route.ts");
+    expect(retryWorker).toContain("FAILED_JOB_TYPE_GATEWAY_SETTLEMENT_RECONCILIATION");
+    expect(retryWorker).toContain("gateway settlement reconciliation attempts exhausted");
+
+    const recurringCleanerAtomicSql = read(
+      "../../supabase/migrations/20261007073500_audit_02a01_recurring_cleaner_atomic.sql",
+    ).toLowerCase();
+    expect(recurringCleanerAtomicSql).toContain("selected_cleaner_id");
+    expect(recurringCleanerAtomicSql).toContain("assignment_type");
+    expect(recurringCleanerAtomicSql).toContain("cleaner_id");
+    expect(recurringCleanerAtomicSql).toContain("for update");
+    expect(recurringCleanerAtomicSql).toContain(
+      "create or replace function public.apply_recurring_occurrence_unpaid_patch",
+    );
+
   });
 
   it("repairs only evidence-free anomalies and adds a validated DB guard", () => {

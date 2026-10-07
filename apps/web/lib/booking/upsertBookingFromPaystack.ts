@@ -43,6 +43,7 @@ import {
 import { buildSnapshotFlat, mergeSnapshotWithFlat } from "@/lib/booking/snapshotFlat";
 import { getDemandSupplySnapshotByCity, getSurgeLabel } from "@/lib/pricing/demandSupplySurge";
 import { refreshRecurringPaymentStateForBooking } from "@/lib/recurring/refreshRecurringPaymentStateForBooking";
+import { applyRecurringOccurrenceRosterContinuity } from "@/lib/recurring/applyRecurringOccurrenceRosterContinuity";
 import { recurringOccurrenceCleanerPatch } from "@/lib/recurring/resolveRecurringPreferredCleanerId";
 import { promoteV2TeamBookingAfterPayment } from "@/lib/booking/promoteV2TeamBookingAfterPayment";
 import { learnFromPaymentSuccess } from "@/lib/ai-autonomy/learningLoop";
@@ -313,7 +314,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
 
   const existingSelect =
-    `id, status, customer_email, ${ownershipColumn}, paystack_reference, is_recurring_generated, price_snapshot, selected_cleaner_id, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, location, date, time, service, service_slug, service_details, selected_extras, pricing_summary, booking_snapshot, rooms, bathrooms, extras, suburb, access_instructions, parking_instructions, gate_code, cleaner_mode, cleaner_count, assigned_team_id, booking_type, fulfillment_mode, base_amount_cents, service_fee_cents, extras_amount_cents`;
+    `id, status, customer_email, ${ownershipColumn}, paystack_reference, is_recurring_generated, recurring_id, price_snapshot, selected_cleaner_id, cleaner_id, assignment_type, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, location, date, time, service, service_slug, service_details, selected_extras, pricing_summary, booking_snapshot, rooms, bathrooms, extras, suburb, access_instructions, parking_instructions, gate_code, cleaner_mode, cleaner_count, assigned_team_id, booking_type, fulfillment_mode, base_amount_cents, service_fee_cents, extras_amount_cents`;
 
   const { data: existingByRef, error: selectErr } = await supabase
     .from("bookings")
@@ -377,7 +378,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         error: "amount_mismatch",
       };
     }
-    if (st === "payment_reconciliation_required") {
+    if (st === "payment_reconciliation_required" && input.paystackPersistSource !== "retry") {
       return {
         ok: false,
         skipped: true,
@@ -385,9 +386,14 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         reason: "finalization_failed",
         bookingInDatabase: true,
         error: "finalization_failed",
+        recoveryEnqueue: true,
       };
     }
-    if (st !== "pending_payment" && st !== "payment_expired") {
+    if (
+      st !== "pending_payment" &&
+      st !== "payment_expired" &&
+      !(st === "payment_reconciliation_required" && input.paystackPersistSource === "retry")
+    ) {
       const replayEmail = normalizeEmail(input.customerEmail);
       // Reads verified snapshot/metadata, then auth ID by email; never claims ownership.
       const replayOwner = await resolveBookingUserId(supabase, input.snapshot, input.paystackMetadata, replayEmail);
@@ -466,12 +472,25 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       customerEmail: existing.customer_email as string | null,
       customerAuthId: existing[ownershipColumn] as string | null,
       paystackReference: existing.paystack_reference as string | null,
+      selectedCleanerId: existing.selected_cleaner_id as string | null,
+      cleanerId: existing.cleaner_id as string | null,
+      assignmentType: existing.assignment_type as string | null,
     } : null;
-  const finalizationFailure = (error: { message: string; code?: string }): UpsertBookingFromPaystackResult => ({
-    ok: false, skipped: true, bookingId: existingPendingPaymentId,
-    bookingInDatabase: Boolean(existingPendingPaymentId),
-    error: error.message, code: error.code,
-  });
+  const finalizationFailure = (error: { message: string; code?: string }): UpsertBookingFromPaystackResult => {
+    const retryableConflict =
+      error.code === "PAYMENT_FINALIZATION_CONFLICT" && Boolean(existingPendingPaymentId);
+    return {
+      ok: false,
+      skipped: true,
+      bookingId: existingPendingPaymentId,
+      bookingInDatabase: Boolean(existingPendingPaymentId),
+      error: error.message,
+      code: error.code,
+      ...(retryableConflict
+        ? { reason: "finalization_failed" as const, recoveryEnqueue: true }
+        : {}),
+    };
+  };
 
   const locked = input.snapshot?.locked;
   const lockedRow = parseLockedBookingFromUnknown(locked ?? null);
@@ -642,10 +661,17 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
    * **DB `bookings.selected_cleaner_id`** (flow-intake / initialize) wins when the Paystack snapshot
    * lock omits `cleaner_id`; then snapshot / metadata picks; see {@link mergePickedCleanerWithPersistedBookingSelection}.
    */
-  const pickedCleanerUuid = mergePickedCleanerWithPersistedBookingSelection(
-    pickUserSelectedCleanerId(lockedRow, input.snapshot),
-    existingPersistedSelectedCleanerId,
-  );
+  const snapshotPickedCleanerId = pickUserSelectedCleanerId(lockedRow, input.snapshot);
+  const pickedCleanerUuid =
+    input.paystackPersistSource === "retry"
+      ? mergePickedCleanerWithPersistedBookingSelection(
+          normalizeUuidCandidate(existingPersistedSelectedCleanerId) ?? snapshotPickedCleanerId,
+          null,
+        )
+      : mergePickedCleanerWithPersistedBookingSelection(
+          snapshotPickedCleanerId,
+          existingPersistedSelectedCleanerId,
+        );
   const normalizedPickedCleaner = normalizeUuidCandidate(pickedCleanerUuid);
   const checkoutResolution = await resolveCheckoutCleanerSelection(supabase, {
     pickedCleanerUuid,
@@ -864,6 +890,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     assigned_team_id?: string | null;
     booking_type?: string | null;
     selected_cleaner_id?: string | null;
+    recurring_id?: string | null;
     base_amount_cents?: number | null;
     service_fee_cents?: number | null;
     extras_amount_cents?: number | null;
@@ -1200,6 +1227,81 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       ? bookingCustomerKey(inserted as { customer_id?: string | null; user_id?: string | null }) || userIdResolved
       : userIdResolved;
 
+  const runRequiredPostPersistRecovery = async (): Promise<void> => {
+    if (!id) return;
+
+    await refreshRecurringPaymentStateForBooking(supabase, id);
+
+    const { data: recurringRosterHead, error: recurringRosterHeadErr } = await supabase
+      .from("bookings")
+      .select("recurring_id, selected_cleaner_id, is_recurring_generated")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (recurringRosterHeadErr) {
+      const fallbackRecurringId =
+        existingIsRecurringGenerated && typeof pendingExisting?.recurring_id === "string"
+          ? pendingExisting.recurring_id.trim()
+          : "";
+      const fallbackLeadCleanerId = normalizeUuidCandidate(existingPersistedSelectedCleanerId ?? null);
+      if (fallbackRecurringId && fallbackLeadCleanerId) {
+        const rosterRecoveryQueued = await enqueueFailedJob("recurring_roster_reconciliation", {
+          bookingId: id,
+          recurringId: fallbackRecurringId,
+          leadCleanerId: fallbackLeadCleanerId,
+          reason: `recurring_roster_head_load_failed:${recurringRosterHeadErr.message}`,
+        });
+        if (!rosterRecoveryQueued) {
+          throw new Error("recurring_roster_reconciliation_enqueue_failed");
+        }
+      } else if (existingIsRecurringGenerated) {
+        await reportOperationalIssue(
+          "warn",
+          "upsertBookingFromPaystack",
+          "recurring roster head load failed without sufficient repair context",
+          { bookingId: id, error: recurringRosterHeadErr.message },
+        );
+      }
+      return;
+    }
+
+    const recurringRosterId =
+      recurringRosterHead && typeof recurringRosterHead === "object" && "recurring_id" in recurringRosterHead
+        ? String((recurringRosterHead as { recurring_id?: string | null }).recurring_id ?? "").trim() || null
+        : null;
+    const recurringRosterCleanerId =
+      recurringRosterHead && typeof recurringRosterHead === "object" && "selected_cleaner_id" in recurringRosterHead
+        ? normalizeUuidCandidate(
+            (recurringRosterHead as { selected_cleaner_id?: string | null }).selected_cleaner_id,
+          )
+        : null;
+    const recurringRosterGenerated =
+      recurringRosterHead && typeof recurringRosterHead === "object" && "is_recurring_generated" in recurringRosterHead
+        ? Boolean((recurringRosterHead as { is_recurring_generated?: boolean | null }).is_recurring_generated)
+        : false;
+
+    if (recurringRosterGenerated && recurringRosterId && recurringRosterCleanerId) {
+      const rosterContinuity = await applyRecurringOccurrenceRosterContinuity(supabase, {
+        bookingId: id,
+        recurringId: recurringRosterId,
+        leadCleanerId: recurringRosterCleanerId,
+      });
+      if (!rosterContinuity.ok) {
+        const rosterRecoveryQueued = await enqueueFailedJob("recurring_roster_reconciliation", {
+          bookingId: id,
+          recurringId: recurringRosterId,
+          leadCleanerId: recurringRosterCleanerId,
+          reason: rosterContinuity.reason ?? "roster_reconciliation_failed",
+        });
+        if (!rosterRecoveryQueued) {
+          throw new Error("recurring_roster_reconciliation_enqueue_failed");
+        }
+      }
+    }
+  };
+
+  await runRequiredPostPersistRecovery();
+
   const runPostPersistSideEffects = async (): Promise<void> => {
   if (id) {
     const authCode = input.paystackAuthorizationCode?.trim() ?? "";
@@ -1226,8 +1328,6 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         }
       }
     }
-
-    await refreshRecurringPaymentStateForBooking(supabase, id);
 
     const v2TeamPromote = await promoteV2TeamBookingAfterPayment(supabase, id);
     if (!v2TeamPromote.ok) {
