@@ -102,29 +102,31 @@ begin
         from public.payment_transactions pt
         where pt.booking_id = b.id
       )
-      and not (
+      and (
         (
-          jsonb_typeof(b.booking_snapshot) = 'object'
-          and jsonb_typeof(b.booking_snapshot->'total_zar') = 'number'
-          and abs((b.booking_snapshot->>'total_zar')::numeric - b.total_paid_zar) < 0.01
-        )
-        or (
-          jsonb_typeof(b.price_snapshot) = 'object'
-          and jsonb_typeof(b.price_snapshot->'total_price') = 'number'
-          and abs((b.price_snapshot->>'total_price')::numeric - b.total_paid_zar) < 0.01
-          and exists (
-            select 1
-            from (
-              select
-                bli.booking_id,
-                sum(coalesce(bli.total_price_cents, 0)) as line_total_cents
-              from public.booking_line_items bli
-              where bli.booking_id = b.id
-              group by bli.booking_id
-            ) x
-            where abs(x.line_total_cents - round(b.total_paid_zar * 100)) <= 1
+          (
+            jsonb_typeof(b.booking_snapshot) = 'object'
+            and jsonb_typeof(b.booking_snapshot->'total_zar') = 'number'
+            and abs((b.booking_snapshot->>'total_zar')::numeric - b.total_paid_zar) < 0.01
           )
-        )
+          or (
+            jsonb_typeof(b.price_snapshot) = 'object'
+            and jsonb_typeof(b.price_snapshot->'total_price') = 'number'
+            and abs((b.price_snapshot->>'total_price')::numeric - b.total_paid_zar) < 0.01
+            and exists (
+              select 1
+              from (
+                select
+                  bli.booking_id,
+                  sum(coalesce(bli.total_price_cents, 0)) as line_total_cents
+                from public.booking_line_items bli
+                where bli.booking_id = b.id
+                group by bli.booking_id
+              ) x
+              where abs(x.line_total_cents - round(b.total_paid_zar * 100)) <= 1
+            )
+          )
+        ) is not true
       )
   ) then
     raise exception 'audit_02a01_legacy_payable_corroboration_failed';
