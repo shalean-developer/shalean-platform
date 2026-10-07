@@ -85,11 +85,15 @@ export function recurringPropagateCleanerOperationalStatus(bookingStatus: string
 }
 
 export function recurringOccurrenceAssignmentIsCommitted(row: {
+  status?: string | null;
   cleaner_response_status?: string | null;
   accepted_at?: string | null;
   en_route_at?: string | null;
   started_at?: string | null;
 }): boolean {
+  const status = String(row.status ?? "").trim().toLowerCase();
+  if (status === "in_progress") return true;
+
   const response = String(row.cleaner_response_status ?? "").trim().toLowerCase();
   if (["accepted", "on_my_way", "started", "completed"].includes(response)) return true;
   return Boolean(
