@@ -142,9 +142,6 @@ export async function applyRecurringOccurrenceRosterContinuity(
     }
   }
 
-  {
-  }
-
   const now = new Date().toISOString();
   const { error: patchErr } = await admin
     .from("bookings")
@@ -174,7 +171,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
 
   return {
     ok: true,
-    applied: shouldReplaceRoster || Boolean(patchErr == null),
+    applied: true,
     cleanerCount: rosterRows.length,
   };
 }
