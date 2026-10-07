@@ -342,7 +342,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
     result.bookings_updated++;
     if (preferredCleanerId && cleanerMutationSucceeded) {
       result.bookings_cleaner_updated++;
-      if (!bookingCompleted) {
+      if (!bookingCompleted && !mutableUnpaidCandidate) {
         await applyRecurringOccurrenceRosterContinuity(admin, {
           bookingId: booking.id,
           recurringId: plan.id,
