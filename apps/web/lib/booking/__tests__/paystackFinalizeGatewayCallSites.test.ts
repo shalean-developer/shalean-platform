@@ -28,6 +28,30 @@ describe("Paystack finalize gateway call sites", () => {
     expect(src).not.toMatch(/\bfinalizePaystackChargeSuccess\s*\(/);
   });
 
+  it("payment reconciliation retries preserve gateway data and record settlement before deletion", () => {
+    const retry = readFileSync(join(root, "app/api/cron/retry-failed-jobs/route.ts"), "utf8");
+    const verifyPipeline = readFileSync(join(root, "lib/booking/runPaystackVerifyFinalizePipeline.ts"), "utf8");
+    const webhook = readFileSync(join(root, "app/api/paystack/webhook/route.ts"), "utf8");
+
+    expect(verifyPipeline).toContain("paystackAuthorizationCode: authorizationCode || null");
+    expect(verifyPipeline).toContain("paystackCustomerCode: customerCode || null");
+    expect(verifyPipeline).toContain('paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null');
+    expect(verifyPipeline).toContain("paystackChargeData: paystackChargeDataFromRecord");
+
+    expect(webhook).toContain("paystackAuthorizationCode:");
+    expect(webhook).toContain("paystackCustomerCode:");
+    expect(webhook).toContain("paystackChargeData: paystackChargeDataFromRecord");
+
+    expect(retry).toContain("payload.paystackAuthorizationCode");
+    expect(retry).toContain("payload.paystackCustomerCode");
+    expect(retry).toContain("payload.paidAtIso");
+    expect(retry).toContain('jobType === FAILED_JOB_TYPE_PAYMENT_RECONCILIATION');
+    expect(retry).toContain("await recordPaystackBookingPayment");
+    expect(retry.indexOf("await recordPaystackBookingPayment")).toBeLessThan(
+      retry.indexOf('from("failed_jobs").delete().eq("id", id)'),
+    );
+  });
+
   it("legacy payments/verify is a 410 tombstone and cannot finalize bookings", () => {
     const src = readFileSync(join(root, "app/api/payments/verify/route.ts"), "utf8");
     expect(src).toContain("LEGACY_PAYMENTS_VERIFY_RETIRED");
