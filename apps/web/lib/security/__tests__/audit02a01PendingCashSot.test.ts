@@ -212,6 +212,12 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterFetch).toContain("recurring_roster_lookup_failed");
     expect(rosterContinuity).toContain("catch (error)");
     expect(rosterContinuity).toContain("const shouldReplaceRoster");
+    expect(rosterContinuity).toContain("const bookingPatch");
+    expect(rosterContinuity).toContain("...(shouldReplaceRoster");
+    expect(rosterContinuity).toContain('cleaner_response_status: "pending"');
+    expect(rosterContinuity).toContain('dispatch_status: "assigned"');
+    expect(rosterContinuity).toContain('status: "assigned"');
+    expect(rosterContinuity).toContain(".update(bookingPatch)");
     expect(rosterContinuity).toContain('.from("bookings")');
     expect(rosterContinuity).toContain("cleaner_id: leadId");
     expect(rosterContinuity).toContain("requestedLeadId !== continuity.leadCleanerId");
