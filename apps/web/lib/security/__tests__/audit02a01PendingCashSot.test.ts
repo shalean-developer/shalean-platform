@@ -81,6 +81,14 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(initialize).toContain("if (lineSumCents !== payableCents)");
   });
 
+  it("fails closed instead of silently repricing an already-complete pending checkout", () => {
+    const initialize = read("lib/booking/paystackInitializeCore.ts");
+    expect(initialize).toContain("pricingComplete: true");
+    expect(initialize).toContain("existingPayableZar");
+    expect(initialize).toContain("existing pending payable differs from reinitialized charge");
+    expect(initialize).toContain('errorCode: "PRICE_MISMATCH"');
+  });
+
   it("repairs only evidence-free anomalies and adds a validated DB guard", () => {
     const sql = read(
       "../../supabase/migrations/20261007023000_audit_02a01_pending_cash_sot.sql",
@@ -96,6 +104,11 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(sql).toContain("payment_status, 'pending'");
     expect(sql).toContain("not in ('success', 'paid', 'succeeded', 'completed', 'pending_monthly')");
     expect(sql).toContain("in ('success', 'paid', 'succeeded', 'completed', 'pending_monthly')");
+    expect(sql).toContain("payment_completed_at is not null");
+    expect(sql).toContain("paid_at is not null");
+    expect(sql).toContain("payment_transaction_id is not null");
+    expect(sql).toContain("marked_paid_by_admin_id is not null");
+    expect(sql).toContain("audit_02a01_ledger_only_settlement_requires_manual_reconciliation");
     expect(sql).toContain("validate constraint bookings_pending_unpaid_cash_zero");
   });
 });
