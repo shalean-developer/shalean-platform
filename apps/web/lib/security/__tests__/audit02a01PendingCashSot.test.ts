@@ -154,8 +154,11 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(sql).toContain("audit_02a01_ledger_only_settlement_requires_manual_reconciliation");
     expect(sql).toContain("audit_02a01_divergent_cash_mirrors_require_manual_reconciliation");
     expect(sql).toContain("coalesce(b.total_paid_zar, 0) <= 0");
-    expect(sql).toContain("do $audit02a01$");
-    expect(sql).toContain("$audit02a01$;");
+    expect(postdeploySql).toContain("do $audit02a01_ledger$");
+    expect(postdeploySql).toContain("$audit02a01_ledger$;");
+    expect(postdeploySql).toContain("do $audit02a01_cashshape$");
+    expect(postdeploySql).toContain("do $audit02a01_payable$");
+    expect(postdeploySql).toContain("do $audit02a01_lines$");
     expect(sql).toContain("audit_02a01_legacy_payable_corroboration_failed");
     expect(sql).toContain("create or replace function public.apply_pending_booking_init_patch");
     expect(predeploySql).toContain("p_line_items jsonb default null");
