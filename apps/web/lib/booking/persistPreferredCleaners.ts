@@ -65,7 +65,10 @@ async function syncPreferredCleanerOfferRoster(
       cleanerCount: ids.length,
     };
   }
-  if (data === "skipped_authoritative_existing_roster") {
+  if (
+    data === "skipped_authoritative_existing_roster" ||
+    data === "skipped_authoritative_assignment"
+  ) {
     return {
       ok: true,
       kind: "skipped_custom_existing_roster",
