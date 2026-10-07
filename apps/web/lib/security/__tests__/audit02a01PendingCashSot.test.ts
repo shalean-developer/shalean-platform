@@ -222,6 +222,21 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(paystackFinalize).toMatch(
       /st === "payment_reconciliation_required"[\s\S]*recoveryEnqueue: true/,
     );
+    expect(paystackFinalize).toContain(
+      'st === "payment_reconciliation_required" && input.paystackPersistSource !== "retry"',
+    );
+    expect(paystackFinalize).toContain(
+      'st === "payment_reconciliation_required" && input.paystackPersistSource === "retry"',
+    );
+    expect(paystackFinalize).toContain("const runRequiredPostPersistRecovery = async");
+    expect(paystackFinalize.indexOf("await runRequiredPostPersistRecovery()")).toBeLessThan(
+      paystackFinalize.indexOf("if (input.deferPostPersistSideEffects)"),
+    );
+
+    const finalizeCommands = read("lib/booking/paymentFinalizationBookingCommands.ts");
+    expect(finalizeCommands).toContain(
+      '"payment_reconciliation_required"',
+    );
 
     const bookingRecovery = read("lib/booking/enqueuePaystackRecoveryFailedJobs.ts");
     expect(bookingRecovery).toContain("recovery_payment_reconciliation_enqueue_failed");
