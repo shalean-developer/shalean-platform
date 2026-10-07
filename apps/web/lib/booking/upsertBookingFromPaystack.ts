@@ -313,7 +313,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
 
   const existingSelect =
-    `id, status, customer_email, ${ownershipColumn}, paystack_reference, is_recurring_generated, price_snapshot, selected_cleaner_id, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, location, date, time, service, service_slug, service_details, selected_extras, pricing_summary, booking_snapshot, rooms, bathrooms, extras, suburb, access_instructions, parking_instructions, gate_code, cleaner_mode, cleaner_count, assigned_team_id, booking_type, fulfillment_mode, base_amount_cents, service_fee_cents, extras_amount_cents`;
+    `id, status, customer_email, ${ownershipColumn}, paystack_reference, is_recurring_generated, price_snapshot, selected_cleaner_id, cleaner_id, assignment_type, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, location, date, time, service, service_slug, service_details, selected_extras, pricing_summary, booking_snapshot, rooms, bathrooms, extras, suburb, access_instructions, parking_instructions, gate_code, cleaner_mode, cleaner_count, assigned_team_id, booking_type, fulfillment_mode, base_amount_cents, service_fee_cents, extras_amount_cents`;
 
   const { data: existingByRef, error: selectErr } = await supabase
     .from("bookings")
@@ -466,6 +466,9 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       customerEmail: existing.customer_email as string | null,
       customerAuthId: existing[ownershipColumn] as string | null,
       paystackReference: existing.paystack_reference as string | null,
+      selectedCleanerId: existing.selected_cleaner_id as string | null,
+      cleanerId: existing.cleaner_id as string | null,
+      assignmentType: existing.assignment_type as string | null,
     } : null;
   const finalizationFailure = (error: { message: string; code?: string }): UpsertBookingFromPaystackResult => ({
     ok: false, skipped: true, bookingId: existingPendingPaymentId,
