@@ -134,8 +134,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
       ([cleanerId, role]) => existingRoleByCleanerId.get(cleanerId) === role,
     ) &&
     desiredRoleByCleanerId.get(leadId) === "lead";
-  const shouldReplaceRoster =
-    !(rosterAlreadyMatches && leadId === continuity.leadCleanerId);
+  const shouldReplaceRoster = !rosterAlreadyMatches;
 
   if (shouldReplaceRoster) {
     const { error: rpcErr } = await admin.rpc("replace_booking_cleaners_admin_atomic", {
