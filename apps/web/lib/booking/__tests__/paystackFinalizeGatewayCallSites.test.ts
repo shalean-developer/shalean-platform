@@ -28,6 +28,17 @@ describe("Paystack finalize gateway call sites", () => {
     expect(src).not.toMatch(/\bfinalizePaystackChargeSuccess\s*\(/);
   });
 
+  it("verify replay branches reconcile incomplete settlement before reporting success", () => {
+    const verify = readFileSync(join(root, "app/api/paystack/verify/route.ts"), "utf8");
+
+    expect(verify).toContain("enqueuePaystackRecoveryFailedJobs");
+    expect(verify).toContain("const replaySettlement = await recordPaystackBookingPayment");
+    expect(verify).toContain("settlement_persistence_failed:");
+    expect(verify).toContain('reason: "finalization_failed"');
+    expect(verify).toContain("recoveryEnqueue: true");
+    expect(verify).not.toMatch(/Promise\.allSettled\(\[[\s\S]*recordPaystackBookingPayment/);
+  });
+
   it("primary Paystack callbacks durably reconcile settlement side-effect failures", () => {
     const retryPipeline = readFileSync(join(root, "lib/booking/runPaystackVerifyFinalizePipeline.ts"), "utf8");
     const webhook = readFileSync(join(root, "app/api/paystack/webhook/route.ts"), "utf8");
