@@ -28,6 +28,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
   applied: boolean;
   cleanerCount: number;
   reason?: string;
+  leadCleanerId?: string;
 }> {
   const bookingId = params.bookingId.trim();
   const recurringId = params.recurringId.trim();
@@ -113,7 +114,12 @@ export async function applyRecurringOccurrenceRosterContinuity(
       };
     }
 
-    return { ok: true, applied: true, cleanerCount: existingRoster.length };
+    return {
+      ok: true,
+      applied: true,
+      cleanerCount: existingRoster.length,
+      leadCleanerId: existingLeadId,
+    };
   }
 
   let continuity = params.roster ?? null;
@@ -237,5 +243,6 @@ export async function applyRecurringOccurrenceRosterContinuity(
     ok: true,
     applied: true,
     cleanerCount: rosterRows.length,
+    leadCleanerId: leadId,
   };
 }
