@@ -226,6 +226,7 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(preferredRosterSync).toContain('"skipped_custom_existing_roster"');
     expect(preferredRosterSync).toContain("rosterHasCustomProvenance");
     expect(preferredRosterSync).toContain("replace_booking_cleaners_preference_atomic");
+    expect(preferredRosterSync).toContain("syncPreferredCleanerOfferRoster");
     expect(preferredRosterSync).toContain("rosterIsPreferenceOnly");
     expect(preferredRosterSync).toContain("skipped_authoritative_existing_roster");
     expect(preferredRosterSync).toContain("skipped_authoritative_assignment");
@@ -237,8 +238,20 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterProvenance).toContain('"booking_v2_r0"');
 
     const cleanersRoute = read("app/api/admin/bookings/[id]/cleaners/route.ts");
-    expect(cleanersRoute).toContain('{ defaultSource: "admin" }');
-    expect(cleanersRoute).toContain('source: "admin"');
+    expect(cleanersRoute).toContain('{ defaultSource: "admin_roster_edit" }');
+    expect(cleanersRoute).toContain('source: "admin_roster_edit"');
+    expect(cleanersRoute).toContain("committedLead");
+
+    const rosterRoute = read("app/api/admin/bookings/[id]/roster/route.ts");
+    expect(rosterRoute).toContain('source: "admin_roster_edit"');
+    expect(rosterRoute).toContain("committedLead");
+
+    const recurringInsert = read("lib/recurring/insertRecurringOccurrenceBooking.ts");
+    expect(recurringInsert).toContain("syncPreferredCleanerOfferRoster");
+    expect(recurringInsert).toContain('"recurring_preferred"');
+    expect(recurringInsert).not.toContain(
+      'syncPreferredCleanerRoster(admin, id, preferredCleanerIds, "recurring_preferred")',
+    );
 
     expect(rosterContinuity).toContain("leadCleanerId?: string");
     expect(rosterContinuity).toContain("leadCleanerId: existingLeadId");
@@ -367,6 +380,15 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterHeaderSql).toContain("v_en_route_at is not null");
     expect(rosterHeaderSql).toContain("v_started_at is not null");
     expect(rosterHeaderSql).toContain("booking_v2_r0");
+    expect(rosterHeaderSql).toContain("recurring_preferred");
+    expect(rosterHeaderSql).toContain("lead_source = 'admin_roster_edit'");
+    expect(rosterHeaderSql).toContain("committed lead replacement requires canonical direct assignment");
+    expect(rosterHeaderSql).toContain("update public.dispatch_offers");
+    expect(rosterHeaderSql).toContain("status = 'assigned'");
+    expect(rosterHeaderSql).toContain("dispatch_status = 'assigned'");
+    expect(rosterHeaderSql).toContain("cleaner_response_status = 'accepted'");
+    expect(rosterHeaderSql).toContain("assignment_type = 'admin_assigned'");
+    expect(rosterHeaderSql).toContain("cleaner_payout_cents = null");
     expect(rosterHeaderSql).toContain("set cleaner_count = n_total");
     expect(rosterHeaderSql).not.toContain("set cleaner_id = lead_id,\n         payout_owner_cleaner_id = lead_id,\n         cleaner_count = n_total\n   where b.id = p_booking_id;\n\n  return 'synced'");
     expect(rosterHeaderSql).toContain(
