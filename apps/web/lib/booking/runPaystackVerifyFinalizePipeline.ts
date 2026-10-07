@@ -216,6 +216,10 @@ export async function runPaystackVerifyFinalizePipeline(
         customerEmail: email,
         snapshot,
         paystackMetadata: metadata,
+        paystackAuthorizationCode: authorizationCode || null,
+        paystackCustomerCode: customerCode || null,
+        paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+        paystackChargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>) as unknown as Record<string, unknown>,
       },
     });
 
