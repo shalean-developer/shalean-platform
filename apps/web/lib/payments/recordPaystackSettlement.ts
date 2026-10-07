@@ -111,12 +111,17 @@ export async function recordPaystackEntitySettlementWithRecovery(
         });
 
   if (!result.ok) {
-    await enqueueFailedJob("gateway_settlement_reconciliation", {
+    const recoveryQueued = await enqueueFailedJob("gateway_settlement_reconciliation", {
       ...opts,
       currency: opts.currency ?? "ZAR",
       chargeData: opts.chargeData ?? null,
       lastError: result.error,
     });
+    if (!recoveryQueued) {
+      throw new Error(
+        `gateway_settlement_reconciliation_enqueue_failed:${result.error}`,
+      );
+    }
   }
 
   return result;
