@@ -216,6 +216,9 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterContinuity).toContain("ok: boolean");
     expect(paystackFinalize).toContain('"recurring_roster_reconciliation"');
     expect(paystackFinalize).toContain("if (!rosterContinuity.ok)");
+    expect(paystackFinalize).toContain("is_recurring_generated, recurring_id, price_snapshot");
+    expect(paystackFinalize).toContain("recurringRosterHeadErr");
+    expect(paystackFinalize).toContain("recurring_roster_head_load_failed:");
 
     const recurringCleanerAtomicSql = read(
       "../../supabase/migrations/20261007073500_audit_02a01_recurring_cleaner_atomic.sql",
