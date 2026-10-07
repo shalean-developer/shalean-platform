@@ -28,6 +28,20 @@ describe("Paystack finalize gateway call sites", () => {
     expect(src).not.toMatch(/\bfinalizePaystackChargeSuccess\s*\(/);
   });
 
+  it("monthly and sales Paystack settlements use durable reconciliation", () => {
+    const webhook = readFileSync(join(root, "app/api/paystack/webhook/route.ts"), "utf8");
+    const verify = readFileSync(join(root, "app/api/paystack/verify/route.ts"), "utf8");
+    const settlement = readFileSync(join(root, "lib/payments/recordPaystackSettlement.ts"), "utf8");
+    const retry = readFileSync(join(root, "app/api/cron/retry-failed-jobs/route.ts"), "utf8");
+
+    expect(webhook).toContain("recordPaystackEntitySettlementWithRecovery");
+    expect(verify).toContain("recordPaystackEntitySettlementWithRecovery");
+    expect(settlement).toContain('"gateway_settlement_reconciliation"');
+    expect(retry).toContain("FAILED_JOB_TYPE_GATEWAY_SETTLEMENT_RECONCILIATION");
+    expect(retry).toContain("recordPaystackMonthlyInvoicePayment");
+    expect(retry).toContain("recordPaystackSalesDocumentPayment");
+  });
+
   it("verify replay branches reconcile incomplete settlement before reporting success", () => {
     const verify = readFileSync(join(root, "app/api/paystack/verify/route.ts"), "utf8");
 
