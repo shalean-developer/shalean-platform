@@ -13,6 +13,7 @@ export type BookingFinancialMode =
   | "monthly_sent"
   | "monthly_paid"
   | "monthly_refunded"
+  | "monthly_unknown"
   | "covered_zero"
   | "legacy_unknown";
 
@@ -69,6 +70,8 @@ export function classifyBookingFinancialMode(
 ): BookingFinancialMode {
   if (isMonthlyBillingContext(row)) {
     const invoiceStatus = norm(row.monthly_invoice_status);
+    const hasAttachedInvoice = Boolean(String(row.monthly_invoice_id ?? "").trim());
+
     if (invoiceStatus === "refunded") return "monthly_refunded";
     if (invoiceStatus === "paid" || invoiceStatus === "closed") return "monthly_paid";
     if (
@@ -78,6 +81,8 @@ export function classifyBookingFinancialMode(
     ) {
       return "monthly_sent";
     }
+    if (invoiceStatus === "draft") return "monthly_draft";
+    if (hasAttachedInvoice) return "monthly_unknown";
     return "monthly_draft";
   }
 
