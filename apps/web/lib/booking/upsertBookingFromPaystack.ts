@@ -1264,12 +1264,15 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
           : "";
       const fallbackLeadCleanerId = normalizeUuidCandidate(existingPersistedSelectedCleanerId ?? null);
       if (fallbackRecurringId && fallbackLeadCleanerId) {
-        await enqueueFailedJob("recurring_roster_reconciliation", {
+        const rosterRecoveryQueued = await enqueueFailedJob("recurring_roster_reconciliation", {
           bookingId: id,
           recurringId: fallbackRecurringId,
           leadCleanerId: fallbackLeadCleanerId,
           reason: `recurring_roster_head_load_failed:${recurringRosterHeadErr.message}`,
         });
+        if (!rosterRecoveryQueued) {
+          throw new Error("recurring_roster_reconciliation_enqueue_failed");
+        }
       } else if (existingIsRecurringGenerated) {
         await reportOperationalIssue(
           "warn",
@@ -1303,12 +1306,15 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         leadCleanerId: recurringRosterCleanerId,
       });
       if (!rosterContinuity.ok) {
-        await enqueueFailedJob("recurring_roster_reconciliation", {
+        const rosterRecoveryQueued = await enqueueFailedJob("recurring_roster_reconciliation", {
           bookingId: id,
           recurringId: recurringRosterId,
           leadCleanerId: recurringRosterCleanerId,
           reason: rosterContinuity.reason ?? "roster_reconciliation_failed",
         });
+        if (!rosterRecoveryQueued) {
+          throw new Error("recurring_roster_reconciliation_enqueue_failed");
+        }
       }
     }
 
