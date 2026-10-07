@@ -24,7 +24,11 @@ import { postDispatchControlAlert } from "@/lib/ops/dispatchControlWebhook";
 import { syncCleanerQualityFlags } from "@/lib/ops/enforceCleanerQualityReview";
 import { processReviewSmsPromptQueue } from "@/lib/reviews/reviewPromptSms";
 import { repairPaidMonthlyInvoiceChildSettlementDrift } from "@/lib/monthlyInvoice/repairPaidMonthlyInvoiceChildSettlementDrift";
-import { recordPaystackBookingPayment } from "@/lib/payments/recordPaystackSettlement";
+import {
+  recordPaystackBookingPayment,
+  recordPaystackMonthlyInvoicePayment,
+  recordPaystackSalesDocumentPayment,
+} from "@/lib/payments/recordPaystackSettlement";
 import { applyRecurringOccurrenceRosterContinuity } from "@/lib/recurring/applyRecurringOccurrenceRosterContinuity";
 
 export const runtime = "nodejs";
@@ -51,6 +55,10 @@ const FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED = "payment_reconciliation
 const FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION = "recurring_roster_reconciliation";
 const FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION_EXHAUSTED =
   "recurring_roster_reconciliation_exhausted";
+const FAILED_JOB_TYPE_GATEWAY_SETTLEMENT_RECONCILIATION =
+  "gateway_settlement_reconciliation";
+const FAILED_JOB_TYPE_GATEWAY_SETTLEMENT_RECONCILIATION_EXHAUSTED =
+  "gateway_settlement_reconciliation_exhausted";
 /** Max upsert failures before row stops being auto-selected; escalated via critical log. */
 const BOOKING_INSERT_MAX_ATTEMPTS = 25;
 
@@ -129,6 +137,8 @@ export async function POST(request: Request) {
       FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED,
       FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION,
       FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION_EXHAUSTED,
+      FAILED_JOB_TYPE_GATEWAY_SETTLEMENT_RECONCILIATION,
+      FAILED_JOB_TYPE_GATEWAY_SETTLEMENT_RECONCILIATION_EXHAUSTED,
       "notification_delivery",
       "booking_finalize",
     ]);
@@ -218,6 +228,130 @@ export async function POST(request: Request) {
         await reportOperationalIssue("error", "cron/retry-failed-jobs", `booking_finalize terminal delete failed: ${tfDelErr.message}`, {
           failedJobId: id,
         });
+      }
+    }
+  }
+
+  const { data: settlementJobs, error: settlementSelErr } = await supabase
+    .from("failed_jobs")
+    .select("id, payload, attempts")
+    .eq("type", FAILED_JOB_TYPE_GATEWAY_SETTLEMENT_RECONCILIATION)
+    .lt("attempts", BOOKING_INSERT_MAX_ATTEMPTS)
+    .order("created_at", { ascending: true })
+    .limit(MAX_BOOKING_INSERT_BATCH);
+
+  if (settlementSelErr) {
+    await reportOperationalIssue(
+      "warn",
+      "cron/retry-failed-jobs",
+      `gateway settlement reconciliation select: ${settlementSelErr.message}`,
+    );
+  } else {
+    for (const row of settlementJobs ?? []) {
+      const id = typeof row.id === "string" ? row.id : null;
+      if (!id) continue;
+      const attempts = typeof row.attempts === "number" ? row.attempts : 0;
+      const payload = row.payload as {
+        entityType?: unknown;
+        entityId?: unknown;
+        bookingId?: unknown;
+        reference?: unknown;
+        amountCents?: unknown;
+        currency?: unknown;
+        paidAtIso?: unknown;
+        chargeData?: unknown;
+      } | null;
+
+      const entityType =
+        payload?.entityType === "monthly_invoice" || payload?.entityType === "sales_document"
+          ? payload.entityType
+          : null;
+      const entityId = typeof payload?.entityId === "string" ? payload.entityId.trim() : "";
+      const reference = typeof payload?.reference === "string" ? payload.reference.trim() : "";
+      const amountCents =
+        typeof payload?.amountCents === "number" && Number.isFinite(payload.amountCents)
+          ? Math.round(payload.amountCents)
+          : 0;
+
+      if (!entityType || !entityId || !reference || amountCents <= 0) {
+        await supabase
+          .from("failed_jobs")
+          .update({ type: FAILED_JOB_TYPE_GATEWAY_SETTLEMENT_RECONCILIATION_EXHAUSTED })
+          .eq("id", id);
+        continue;
+      }
+
+      let settlementResult;
+      try {
+        settlementResult =
+          entityType === "monthly_invoice"
+            ? await recordPaystackMonthlyInvoicePayment(supabase, {
+                reference,
+                amountCents,
+                invoiceId: entityId,
+                paidAtIso:
+                  typeof payload?.paidAtIso === "string" ? payload.paidAtIso : null,
+                chargeData:
+                  payload?.chargeData && typeof payload.chargeData === "object"
+                    ? payload.chargeData as Parameters<typeof recordPaystackMonthlyInvoicePayment>[1]["chargeData"]
+                    : undefined,
+              })
+            : await recordPaystackSalesDocumentPayment(supabase, {
+                reference,
+                amountCents,
+                documentId: entityId,
+                bookingId:
+                  typeof payload?.bookingId === "string" ? payload.bookingId : null,
+                paidAtIso:
+                  typeof payload?.paidAtIso === "string" ? payload.paidAtIso : null,
+                chargeData:
+                  payload?.chargeData && typeof payload.chargeData === "object"
+                    ? payload.chargeData as Parameters<typeof recordPaystackSalesDocumentPayment>[1]["chargeData"]
+                    : undefined,
+              });
+      } catch (error) {
+        settlementResult = {
+          ok: false as const,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+
+      if (settlementResult.ok) {
+        await supabase.from("failed_jobs").delete().eq("id", id);
+        continue;
+      }
+
+      const nextAttempts = attempts + 1;
+      if (nextAttempts >= BOOKING_INSERT_MAX_ATTEMPTS) {
+        await supabase
+          .from("failed_jobs")
+          .update({
+            type: FAILED_JOB_TYPE_GATEWAY_SETTLEMENT_RECONCILIATION_EXHAUSTED,
+            attempts: nextAttempts,
+            payload: {
+              ...(payload ?? {}),
+              lastError: settlementResult.error,
+              exhaustedAt: new Date().toISOString(),
+            },
+          })
+          .eq("id", id);
+        await reportOperationalIssue(
+          "critical",
+          "cron/retry-failed-jobs",
+          "gateway settlement reconciliation attempts exhausted",
+          {
+            failedJobId: id,
+            entityType,
+            entityId,
+            reference,
+            attempts: nextAttempts,
+          },
+        );
+      } else {
+        await supabase
+          .from("failed_jobs")
+          .update({ attempts: nextAttempts })
+          .eq("id", id);
       }
     }
   }
@@ -629,6 +763,7 @@ export async function POST(request: Request) {
         FAILED_JOB_TYPE_BOOKING_INSERT_EXHAUSTED,
         FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED,
         FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION_EXHAUSTED,
+        FAILED_JOB_TYPE_GATEWAY_SETTLEMENT_RECONCILIATION_EXHAUSTED,
       ])
       .lt("created_at", cutoffIso)
       .select("id");
