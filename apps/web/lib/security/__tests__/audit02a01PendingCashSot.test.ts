@@ -185,6 +185,8 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringPropagation).toContain('paymentStatus === "pending_monthly"');
     expect(recurringPropagation).toContain('booking.invoice_status ?? ""');
     expect(recurringPropagation).toContain('=== "draft"');
+    expect(recurringPropagation).toContain("invoice_finalization_started");
+    expect(recurringPropagation).toContain("!booking.invoice_finalization_started");
     expect(recurringPropagation).toContain("const mutablePricingCandidate");
     expect(recurringPropagation).toContain(
       "!bookingCompleted && !mutablePricingCandidate",
@@ -285,13 +287,19 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(retryWorker).toContain("gateway settlement reconciliation attempts exhausted");
 
     const recurringCleanerAtomicSql = read(
-      "../../supabase/migrations/20261007073500_audit_02a01_recurring_cleaner_atomic.sql",
+      "../../supabase/migrations/20261007122500_audit_02a01_recurring_draft_monthly_atomic.sql",
     ).toLowerCase();
     expect(recurringCleanerAtomicSql).toContain("v_is_draft_monthly");
     expect(recurringCleanerAtomicSql).toContain("pending_monthly");
     expect(recurringCleanerAtomicSql).toContain("monthly_invoices");
-    expect(recurringCleanerAtomicSql).toContain("for key share");
+    expect(recurringCleanerAtomicSql).toContain("for update");
     expect(recurringCleanerAtomicSql).toContain("= 'draft'");
+    expect(recurringCleanerAtomicSql).toContain("snapshot_at_finalize");
+    expect(recurringCleanerAtomicSql).toContain("snapshot_current");
+    expect(recurringCleanerAtomicSql).toContain("finalized_at");
+    expect(recurringCleanerAtomicSql).toContain("paystack_reference");
+    expect(recurringCleanerAtomicSql).toContain("payment_link");
+    expect(recurringCleanerAtomicSql).toContain("initial_invoice_email_dispatch_claimed");
     expect(recurringCleanerAtomicSql).toContain("selected_cleaner_id");
     expect(recurringCleanerAtomicSql).toContain("assignment_type");
     expect(recurringCleanerAtomicSql).toContain("cleaner_id");
@@ -383,6 +391,8 @@ describe("AUDIT-02A01 release ordering", () => {
 
     const postdeploy = read("../../supabase/postdeploy/audit-02a01-postdeploy-cash-guard.sql");
     expect(postdeploy).toContain("explicit POST-DEPLOY script");
+    expect(postdeploy).toContain("begin;");
+    expect(postdeploy).toContain("commit;");
     expect(postdeploy).toContain("add constraint bookings_pending_unpaid_cash_zero");
     expect(postdeploy).toContain("validate constraint bookings_pending_unpaid_cash_zero");
   });
