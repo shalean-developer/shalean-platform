@@ -190,14 +190,14 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
   if (rpcErr) {
     const msg = rpcErr.message ?? "";
     const locked = /finalized|roster locked|cleaner_line_earnings_finalized/i.test(msg);
-    const committedLead = /committed lead replacement requires canonical direct assignment/i.test(msg);
+    const committedLead = /A01_ROSTER_LEAD_DIRECT_ASSIGN/i.test(msg);
     return NextResponse.json(
       {
         error: msg,
         ...(locked ? { hint: BOOKING_ROSTER_LOCKED_HINT, code: "roster_finalized" } : {}),
         ...(committedLead
           ? {
-              hint: "Use the Direct Assign action to replace an accepted/in-progress lead cleaner.",
+              hint: "Use the Direct Assign action to replace the solo booking lead cleaner.",
               code: "roster_lead_committed",
             }
           : {}),
