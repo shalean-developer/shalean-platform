@@ -219,8 +219,9 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
 
     const adminRosterRoute = read("app/api/admin/bookings/[id]/roster/route.ts");
     expect(adminRosterRoute).toContain(
-      'const rpcRows = built.rows.map((row) => ({ ...row, source: "admin" }))',
+      'const rpcRows = built.rows.map((row) => ({ ...row, source: "admin_roster_edit" }))',
     );
+    expect(adminRosterRoute).toContain("committedLead");
 
     const preferredRosterSync = read("lib/booking/persistPreferredCleaners.ts");
     expect(preferredRosterSync).toContain('"skipped_custom_existing_roster"');
