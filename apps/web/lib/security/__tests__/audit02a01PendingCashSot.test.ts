@@ -219,6 +219,9 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(paystackFinalize).toContain("const rosterRecoveryQueued = await enqueueFailedJob");
     expect(paystackFinalize).toContain("if (!rosterRecoveryQueued)");
     expect(paystackFinalize).toContain("recurring_roster_reconciliation_enqueue_failed");
+    expect(paystackFinalize).toMatch(
+      /st === "payment_reconciliation_required"[\s\S]*recoveryEnqueue: true/,
+    );
 
     const bookingRecovery = read("lib/booking/enqueuePaystackRecoveryFailedJobs.ts");
     expect(bookingRecovery).toContain("recovery_payment_reconciliation_enqueue_failed");
