@@ -470,11 +470,21 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       cleanerId: existing.cleaner_id as string | null,
       assignmentType: existing.assignment_type as string | null,
     } : null;
-  const finalizationFailure = (error: { message: string; code?: string }): UpsertBookingFromPaystackResult => ({
-    ok: false, skipped: true, bookingId: existingPendingPaymentId,
-    bookingInDatabase: Boolean(existingPendingPaymentId),
-    error: error.message, code: error.code,
-  });
+  const finalizationFailure = (error: { message: string; code?: string }): UpsertBookingFromPaystackResult => {
+    const retryableConflict =
+      error.code === "PAYMENT_FINALIZATION_CONFLICT" && Boolean(existingPendingPaymentId);
+    return {
+      ok: false,
+      skipped: true,
+      bookingId: existingPendingPaymentId,
+      bookingInDatabase: Boolean(existingPendingPaymentId),
+      error: error.message,
+      code: error.code,
+      ...(retryableConflict
+        ? { reason: "finalization_failed" as const, recoveryEnqueue: true }
+        : {}),
+    };
+  };
 
   const locked = input.snapshot?.locked;
   const lockedRow = parseLockedBookingFromUnknown(locked ?? null);
