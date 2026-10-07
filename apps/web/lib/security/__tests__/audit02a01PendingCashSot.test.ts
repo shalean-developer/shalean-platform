@@ -120,6 +120,11 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
 
     const recurringPropagation = read("lib/recurring/propagateRecurringPlanToGeneratedBookings.ts");
     expect(recurringPropagation).toContain("preserveRecurringPackagePayable");
+    expect(recurringPropagation).toContain("const bookingSnapshotForUpdate =");
+    expect(recurringPropagation).toContain('...snapshot');
+    expect(recurringPropagation).toContain("preservedPackageSnapshot.total_zar");
+    expect(recurringPropagation).toContain('"recurringPrepayment" in preservedPackageSnapshot');
+    expect(recurringPropagation).toContain("booking_snapshot: bookingSnapshotForUpdate");
     expect(recurringPropagation).toContain('payment_scope === "recurring_first_30_days"');
     expect(recurringPropagation).toContain("safelyUnpaidPending");
     expect(recurringPropagation).toContain('from("payment_transactions")');

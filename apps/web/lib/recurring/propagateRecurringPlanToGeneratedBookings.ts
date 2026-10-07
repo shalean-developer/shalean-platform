@@ -60,6 +60,7 @@ type GeneratedBookingRow = {
   payment_transaction_id: string | null;
   marked_paid_by_admin_id: string | null;
   total_price: number | null;
+  booking_snapshot: Record<string, unknown> | null;
   price_snapshot: Record<string, unknown> | null;
   completed_at: string | null;
   cleaner_line_earnings_finalized_at: string | null;
@@ -156,7 +157,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
   const { data: rows, error } = await admin
     .from("bookings")
     .select(
-      "id, date, status, payment_status, payment_completed_at, paid_at, payment_transaction_id, marked_paid_by_admin_id, total_price, price_snapshot, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status)",
+      "id, date, status, payment_status, payment_completed_at, paid_at, payment_transaction_id, marked_paid_by_admin_id, total_price, booking_snapshot, price_snapshot, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status)",
     )
     .eq("recurring_id", plan.id)
     .neq("status", "cancelled");
@@ -181,6 +182,10 @@ export async function propagateRecurringPlanToGeneratedBookings(
         row.marked_paid_by_admin_id != null ? String(row.marked_paid_by_admin_id) : null,
       total_price:
         row.total_price != null && Number.isFinite(Number(row.total_price)) ? Number(row.total_price) : null,
+      booking_snapshot:
+        row.booking_snapshot && typeof row.booking_snapshot === "object" && !Array.isArray(row.booking_snapshot)
+          ? (row.booking_snapshot as Record<string, unknown>)
+          : null,
       price_snapshot:
         row.price_snapshot && typeof row.price_snapshot === "object" && !Array.isArray(row.price_snapshot)
           ? (row.price_snapshot as Record<string, unknown>)
@@ -263,8 +268,23 @@ export async function propagateRecurringPlanToGeneratedBookings(
       booking.total_price != null &&
       booking.total_price > 0;
 
+    const preservedPackageSnapshot = booking.booking_snapshot;
+    const bookingSnapshotForUpdate =
+      preserveRecurringPackagePayable && preservedPackageSnapshot
+        ? {
+            ...snapshot,
+            total_zar:
+              typeof preservedPackageSnapshot.total_zar === "number"
+                ? preservedPackageSnapshot.total_zar
+                : booking.total_price,
+            ...("recurringPrepayment" in preservedPackageSnapshot
+              ? { recurringPrepayment: preservedPackageSnapshot.recurringPrepayment }
+              : {}),
+          }
+        : snapshot;
+
     const bookingUpdate: Record<string, unknown> = {
-      booking_snapshot: snapshot,
+      booking_snapshot: bookingSnapshotForUpdate,
       total_price: preserveRecurringPackagePayable ? booking.total_price : priceZar,
       ...(safelyUnpaidPending ? bookingUncollectedCashColumns() : {}),
       price_snapshot: preserveRecurringPackagePayable
