@@ -66,7 +66,7 @@ async function resolvePendingCheckoutPricingTarget(
     .eq("booking_id", bid);
   if (ctErr) return null;
   const hasLi = (count ?? 0) > 0;
-  if (hasLi) {
+  if (hasLi && hasSnap) {
     const existingPayableZar = Number((row as { total_price?: number | string | null }).total_price);
     return {
       bookingId: bid,
@@ -78,6 +78,9 @@ async function resolvePendingCheckoutPricingTarget(
           : 0,
     };
   }
+
+  // Partial pricing state is not immutable yet. Rebuild both the snapshot and
+  // line items so the persisted breakdown is reconciled to the exact payable.
   return { bookingId: bid, skipLineItemInsert: false, pricingComplete: false };
 }
 import { metrics } from "@/lib/metrics/counters";
