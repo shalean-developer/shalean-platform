@@ -55,6 +55,12 @@ type GeneratedBookingRow = {
   date: string | null;
   status: string | null;
   payment_status: string | null;
+  payment_completed_at: string | null;
+  paid_at: string | null;
+  payment_transaction_id: string | null;
+  marked_paid_by_admin_id: string | null;
+  total_price: number | null;
+  price_snapshot: Record<string, unknown> | null;
   completed_at: string | null;
   cleaner_line_earnings_finalized_at: string | null;
   monthly_invoice_id: string | null;
@@ -150,7 +156,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
   const { data: rows, error } = await admin
     .from("bookings")
     .select(
-      "id, date, status, payment_status, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status)",
+      "id, date, status, payment_status, payment_completed_at, paid_at, payment_transaction_id, marked_paid_by_admin_id, total_price, price_snapshot, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status)",
     )
     .eq("recurring_id", plan.id)
     .neq("status", "cancelled");
@@ -167,6 +173,18 @@ export async function propagateRecurringPlanToGeneratedBookings(
       date: row.date != null ? String(row.date) : null,
       status: row.status != null ? String(row.status) : null,
       payment_status: row.payment_status != null ? String(row.payment_status) : null,
+      payment_completed_at: row.payment_completed_at != null ? String(row.payment_completed_at) : null,
+      paid_at: row.paid_at != null ? String(row.paid_at) : null,
+      payment_transaction_id:
+        row.payment_transaction_id != null ? String(row.payment_transaction_id) : null,
+      marked_paid_by_admin_id:
+        row.marked_paid_by_admin_id != null ? String(row.marked_paid_by_admin_id) : null,
+      total_price:
+        row.total_price != null && Number.isFinite(Number(row.total_price)) ? Number(row.total_price) : null,
+      price_snapshot:
+        row.price_snapshot && typeof row.price_snapshot === "object" && !Array.isArray(row.price_snapshot)
+          ? (row.price_snapshot as Record<string, unknown>)
+          : null,
       completed_at: row.completed_at != null ? String(row.completed_at) : null,
       cleaner_line_earnings_finalized_at:
         row.cleaner_line_earnings_finalized_at != null ? String(row.cleaner_line_earnings_finalized_at) : null,
@@ -217,12 +235,41 @@ export async function propagateRecurringPlanToGeneratedBookings(
     const ordinaryUnpaidPending =
       lifecycleStatus === "pending_payment" &&
       !["success", "paid", "succeeded", "completed", "pending_monthly"].includes(paymentStatus);
+    const settlementMarkerPresent =
+      Boolean(booking.payment_completed_at) ||
+      Boolean(booking.paid_at) ||
+      Boolean(booking.payment_transaction_id) ||
+      Boolean(booking.marked_paid_by_admin_id);
+
+    let hasPaymentLedger = false;
+    if (ordinaryUnpaidPending && !settlementMarkerPresent) {
+      const { data: ledgerRows, error: ledgerErr } = await admin
+        .from("payment_transactions")
+        .select("id")
+        .eq("booking_id", booking.id)
+        .limit(1);
+      if (ledgerErr) {
+        result.errors.push(`Booking ${booking.id}: settlement evidence check failed: ${ledgerErr.message}`);
+        continue;
+      }
+      hasPaymentLedger = (ledgerRows?.length ?? 0) > 0;
+    }
+
+    const safelyUnpaidPending =
+      ordinaryUnpaidPending && !settlementMarkerPresent && !hasPaymentLedger;
+    const preserveRecurringPackagePayable =
+      ordinaryUnpaidPending &&
+      booking.price_snapshot?.payment_scope === "recurring_first_30_days" &&
+      booking.total_price != null &&
+      booking.total_price > 0;
 
     const bookingUpdate: Record<string, unknown> = {
       booking_snapshot: snapshot,
-      total_price: priceZar,
-      ...(ordinaryUnpaidPending ? bookingUncollectedCashColumns() : {}),
-      price_snapshot: provisionalPriceSnapshotJson(locked),
+      total_price: preserveRecurringPackagePayable ? booking.total_price : priceZar,
+      ...(safelyUnpaidPending ? bookingUncollectedCashColumns() : {}),
+      price_snapshot: preserveRecurringPackagePayable
+        ? booking.price_snapshot
+        : provisionalPriceSnapshotJson(locked),
       location: locked.location?.trim() || null,
       time: locked.time ?? null,
       service: locked.service != null ? getServiceLabel(locked.service) : null,
