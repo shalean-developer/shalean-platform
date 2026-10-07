@@ -181,6 +181,7 @@ export async function runPaystackVerifyFinalizePipeline(
   }
 
   const runPostFinalizeWork = async () => {
+    let recoveryResult = result;
     if (result.bookingId && !result.error) {
       await logSystemEvent({
         level: "info",
@@ -195,7 +196,7 @@ export async function runPaystackVerifyFinalizePipeline(
           reference: ref,
           amountCents: amount,
         });
-        await recordPaystackBookingPayment(adm, {
+        const settlementPersisted = await recordPaystackBookingPayment(adm, {
           reference: ref,
           amountCents: amount,
           bookingId: result.bookingId,
@@ -203,12 +204,27 @@ export async function runPaystackVerifyFinalizePipeline(
           paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
           chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
         });
+        if (!settlementPersisted.ok) {
+          recoveryResult = {
+            ...result,
+            ok: false,
+            error: `settlement_persistence_failed:${settlementPersisted.error}`,
+            reason: "finalization_failed",
+            recoveryEnqueue: true,
+          };
+          await reportOperationalIssue(
+            "critical",
+            opsLogSource,
+            `payment settled but settlement side effects are incomplete: ${settlementPersisted.error}`,
+            { reference: ref, bookingId: result.bookingId },
+          );
+        }
       }
     }
 
     await enqueuePaystackRecoveryFailedJobs({
       reference: ref,
-      result,
+      result: recoveryResult,
       basePayload: {
         paystackReference: ref,
         amountCents: amount,
