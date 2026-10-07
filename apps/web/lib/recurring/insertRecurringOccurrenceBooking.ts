@@ -23,7 +23,7 @@ import {
 } from "@/lib/recurring/resolveRecurringPreferredCleanerId";
 import { fetchLastAssignedCleanerForRecurringPlan } from "@/lib/recurring/fetchLastAssignedCleanerForRecurringPlan";
 import { applyRecurringOccurrenceRosterContinuity } from "@/lib/recurring/applyRecurringOccurrenceRosterContinuity";
-import { syncPreferredCleanerOfferRoster } from "@/lib/booking/persistPreferredCleaners";
+import { syncPreferredCleanerRoster } from "@/lib/booking/persistPreferredCleaners";
 import { resolveRecurringPreferredCleanerIds } from "@/lib/recurring/parsePreferredCleanerIdFromBody";
 import { buildExactSourceLineItems } from "@/lib/booking/buildBookingLineItems";
 import { persistBookingLineItems } from "@/lib/booking/persistBookingLineItems";
@@ -344,16 +344,19 @@ export async function insertRecurringOccurrenceBooking(
     }),
   );
 
-  if (preferredCleanerIds.length >= 2) {
+  // Unpaid per-booking recurring rows retain customer cleaner intent only.
+  // Operational roster continuity is materialized after payment. Prepaid allocations
+  // are already settled and may continue directly into authoritative assignment.
+  if (prepaidAllocation && preferredCleanerIds.length >= 2) {
     const continuity = await applyRecurringOccurrenceRosterContinuity(admin, {
       bookingId: id,
       recurringId: params.recurring.id,
       leadCleanerId: preferredCleanerId,
     });
     if (!continuity.applied) {
-      await syncPreferredCleanerOfferRoster(admin, id, preferredCleanerIds, "recurring_preferred");
+      await syncPreferredCleanerRoster(admin, id, preferredCleanerIds, "recurring_preferred");
     }
-  } else if (preferredCleanerId) {
+  } else if (prepaidAllocation && preferredCleanerId) {
     await applyRecurringOccurrenceRosterContinuity(admin, {
       bookingId: id,
       recurringId: params.recurring.id,
