@@ -19,6 +19,12 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(writer).toContain("...bookingUncollectedCashColumns()");
     expect(writer).not.toContain("total_paid_zar: params.totalPaidZar");
     expect(writer).not.toContain("totalPaidZar: number");
+    expect(writer).toContain("Pending checkout cannot be repriced after settlement evidence exists.");
+    expect(writer).toContain("Pending checkout cannot be repriced after payment ledger creation.");
+    expect(writer).toContain("payment_completed_at");
+    expect(writer).toContain("payment_transaction_id");
+    expect(writer).toContain("marked_paid_by_admin_id");
+    expect(writer).toContain('.from("payment_transactions")');
   });
 
   it("persists the actual Paystack charge as payable without writing collected cash", () => {
@@ -109,6 +115,8 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(sql).toContain("payment_transaction_id is not null");
     expect(sql).toContain("marked_paid_by_admin_id is not null");
     expect(sql).toContain("audit_02a01_ledger_only_settlement_requires_manual_reconciliation");
+    expect(sql).toContain("do $audit02a01$");
+    expect(sql).toContain("$audit02a01$;");
     expect(sql).toContain("validate constraint bookings_pending_unpaid_cash_zero");
   });
 });
