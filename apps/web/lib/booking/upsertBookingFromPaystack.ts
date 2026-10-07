@@ -378,7 +378,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         error: "amount_mismatch",
       };
     }
-    if (st === "payment_reconciliation_required") {
+    if (st === "payment_reconciliation_required" && input.paystackPersistSource !== "retry") {
       return {
         ok: false,
         skipped: true,
@@ -389,7 +389,11 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         recoveryEnqueue: true,
       };
     }
-    if (st !== "pending_payment" && st !== "payment_expired") {
+    if (
+      st !== "pending_payment" &&
+      st !== "payment_expired" &&
+      !(st === "payment_reconciliation_required" && input.paystackPersistSource === "retry")
+    ) {
       const replayEmail = normalizeEmail(input.customerEmail);
       // Reads verified snapshot/metadata, then auth ID by email; never claims ownership.
       const replayOwner = await resolveBookingUserId(supabase, input.snapshot, input.paystackMetadata, replayEmail);
