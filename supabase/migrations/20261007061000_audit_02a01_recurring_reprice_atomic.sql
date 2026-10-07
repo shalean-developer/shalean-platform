@@ -11,6 +11,9 @@ as $audit02a01_recurring_rpc$
 declare
   v_row public.bookings%rowtype;
   v_updated_id uuid;
+  v_invoice_status text;
+  v_is_ordinary_pending boolean := false;
+  v_is_draft_monthly boolean := false;
 begin
   -- Serialize against payment_transactions FK inserts and booking settlement updates.
   select *
@@ -23,9 +26,26 @@ begin
     return false;
   end if;
 
-  if lower(trim(coalesce(v_row.status, ''))) <> 'pending_payment'
-     or lower(trim(coalesce(v_row.payment_status, '')))
-       in ('success', 'paid', 'succeeded', 'completed', 'pending_monthly')
+  v_is_ordinary_pending :=
+    lower(trim(coalesce(v_row.status, ''))) = 'pending_payment'
+    and lower(trim(coalesce(v_row.payment_status, '')))
+      not in ('success', 'paid', 'succeeded', 'completed', 'pending_monthly');
+
+  if lower(trim(coalesce(v_row.payment_status, ''))) = 'pending_monthly'
+     and v_row.monthly_invoice_id is not null
+  then
+    select lower(trim(coalesce(mi.status, '')))
+      into v_invoice_status
+    from public.monthly_invoices mi
+    where mi.id = v_row.monthly_invoice_id
+    for key share;
+
+    v_is_draft_monthly :=
+      v_invoice_status = 'draft'
+      and lower(trim(coalesce(v_row.status, ''))) in ('pending', 'assigned', 'pending_payment');
+  end if;
+
+  if not (v_is_ordinary_pending or v_is_draft_monthly)
      or v_row.payment_completed_at is not null
      or v_row.paid_at is not null
      or v_row.payment_transaction_id is not null
@@ -78,9 +98,24 @@ begin
     from jsonb_populate_record(b, p_patch) as x
   )
   where b.id = p_booking_id
-    and lower(trim(coalesce(b.status, ''))) = 'pending_payment'
-    and lower(trim(coalesce(b.payment_status, '')))
-      not in ('success', 'paid', 'succeeded', 'completed', 'pending_monthly')
+    and (
+      (
+        lower(trim(coalesce(b.status, ''))) = 'pending_payment'
+        and lower(trim(coalesce(b.payment_status, '')))
+          not in ('success', 'paid', 'succeeded', 'completed', 'pending_monthly')
+      )
+      or (
+        lower(trim(coalesce(b.payment_status, ''))) = 'pending_monthly'
+        and b.monthly_invoice_id is not null
+        and lower(trim(coalesce(b.status, ''))) in ('pending', 'assigned', 'pending_payment')
+        and exists (
+          select 1
+          from public.monthly_invoices mi
+          where mi.id = b.monthly_invoice_id
+            and lower(trim(coalesce(mi.status, ''))) = 'draft'
+        )
+      )
+    )
     and b.payment_completed_at is null
     and b.paid_at is null
     and b.payment_transaction_id is null
@@ -102,4 +137,4 @@ revoke all on function public.apply_recurring_occurrence_unpaid_patch(uuid, json
 grant execute on function public.apply_recurring_occurrence_unpaid_patch(uuid, jsonb) to service_role;
 
 comment on function public.apply_recurring_occurrence_unpaid_patch(uuid, jsonb) is
-  'AUDIT-02A01 atomic boundary: reprices a recurring occurrence only while settlement evidence is absent.';
+  'AUDIT-02A01 atomic boundary: reprices an evidence-free pending checkout or draft monthly recurring occurrence while settlement evidence is absent.';
