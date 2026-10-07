@@ -62,6 +62,23 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recoveryEmail.indexOf("total_paid_zar:")).toBeGreaterThan(
       recoveryEmail.indexOf("total_price:"),
     );
+
+    const reminderCron = read("app/api/cron/payment-link-reminders/route.ts");
+    expect(reminderCron).toContain("trustedBookingPayableZar({");
+    expect(reminderCron).toContain("total_price: row.total_price");
+
+    const recurringFallback = read("lib/recurring/recurringPaymentLinkFallback.ts");
+    expect(recurringFallback).toContain("trustedBookingPayableZar({");
+    expect(recurringFallback).toContain("total_price: head.total_price");
+  });
+
+  it("reconciles persisted checkout line items to the exact Paystack payable", () => {
+    const initialize = read("lib/booking/paystackInitializeCore.ts");
+    expect(initialize).toContain("const payableCents = zarToCents(totalZar)");
+    expect(initialize).toContain("const payableDeltaCents = payableCents - sumLineItemsCents(visitLineItems)");
+    expect(initialize).toContain('name: "Tip, discounts & payment adjustment"');
+    expect(initialize).toContain("earns_cleaner: false");
+    expect(initialize).toContain("if (lineSumCents !== payableCents)");
   });
 
   it("repairs only evidence-free anomalies and adds a validated DB guard", () => {
@@ -77,7 +94,8 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(sql).toContain("from public.payment_transactions");
     expect(sql).toContain("bookings_pending_unpaid_cash_zero");
     expect(sql).toContain("payment_status, 'pending'");
-    expect(sql).toContain("<> 'pending_monthly'");
+    expect(sql).toContain("not in ('success', 'paid', 'succeeded', 'completed', 'pending_monthly')");
+    expect(sql).toContain("in ('success', 'paid', 'succeeded', 'completed', 'pending_monthly')");
     expect(sql).toContain("validate constraint bookings_pending_unpaid_cash_zero");
   });
 });
