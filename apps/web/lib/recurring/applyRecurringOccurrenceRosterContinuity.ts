@@ -31,7 +31,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
   cleanerCount: number;
   reason?: string;
   leadCleanerId?: string;
-  kind?: "custom_existing" | "committed_existing" | "continuity_applied" | "noop";
+  kind?: "custom_existing" | "committed_existing" | "continuity_applied" | "noop" | "locked";
 }> {
   const bookingId = params.bookingId.trim();
   const recurringId = params.recurringId.trim();
@@ -70,11 +70,15 @@ export async function applyRecurringOccurrenceRosterContinuity(
   };
 
   if (isAuthoritativeBookingCompleted({ status: row.status, completed_at: row.completed_at })) {
-    return { ok: true, applied: false, cleanerCount: 0 };
+    return { ok: true, applied: false, cleanerCount: 0, kind: "locked" };
   }
 
-  if (row.is_team_job === true || row.team_id) return { ok: true, applied: false, cleanerCount: 0 };
-  if (row.cleaner_line_earnings_finalized_at) return { ok: true, applied: false, cleanerCount: 0 };
+  if (row.is_team_job === true || row.team_id) {
+    return { ok: true, applied: false, cleanerCount: 0, kind: "locked" };
+  }
+  if (row.cleaner_line_earnings_finalized_at) {
+    return { ok: true, applied: false, cleanerCount: 0, kind: "locked" };
+  }
 
   const existingRoster = Array.isArray(row.booking_cleaners) ? row.booking_cleaners : [];
   const customExistingRoster = rosterHasCustomProvenance(existingRoster);
