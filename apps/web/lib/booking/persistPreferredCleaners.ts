@@ -6,6 +6,7 @@ import {
   validateMembersToReplaceBookingCleanersRpcRows,
   type ReplaceBookingCleanersRpcRow,
 } from "@/lib/admin/bookingRosterReplacePayload";
+import { rosterHasCustomProvenance } from "@/lib/recurring/recurringRosterProvenance";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -175,21 +176,8 @@ export async function syncPreferredCleanerRosterFromBookingRow(
       };
     }
 
-    const generatedSources = new Set([
-      "checkout_preferred",
-      "customer_preferred",
-      "recurring_preferred",
-      "recurring_continuity",
-    ]);
     const existing = Array.isArray(existingRows) ? existingRows : [];
-    const customExistingRoster =
-      existing.length > 0 &&
-      existing.some(
-        (member) =>
-          !generatedSources.has(String((member as { source?: string | null }).source ?? "").trim().toLowerCase()),
-      );
-
-    if (customExistingRoster) {
+    if (rosterHasCustomProvenance(existing as Array<{ source?: string | null }>)) {
       return {
         ok: true,
         kind: "skipped_custom_existing_roster",
