@@ -66,17 +66,19 @@ async function resolvePendingCheckoutPricingTarget(
     .eq("booking_id", bid);
   if (ctErr) return null;
   const hasLi = (count ?? 0) > 0;
-  if (hasSnap && hasLi) {
+  if (hasLi) {
     const existingPayableZar = Number((row as { total_price?: number | string | null }).total_price);
-    if (!Number.isFinite(existingPayableZar) || existingPayableZar <= 0) return null;
     return {
       bookingId: bid,
       skipLineItemInsert: true,
       pricingComplete: true,
-      existingPayableZar: Math.round(existingPayableZar),
+      existingPayableZar:
+        Number.isFinite(existingPayableZar) && existingPayableZar > 0
+          ? Math.round(existingPayableZar)
+          : 0,
     };
   }
-  return { bookingId: bid, skipLineItemInsert: hasLi, pricingComplete: false };
+  return { bookingId: bid, skipLineItemInsert: false, pricingComplete: false };
 }
 import { metrics } from "@/lib/metrics/counters";
 import { resolveRatesSnapshotForLockedBooking } from "@/lib/booking/resolveRatesSnapshot";
