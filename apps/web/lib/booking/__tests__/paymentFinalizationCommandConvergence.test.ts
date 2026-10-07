@@ -29,6 +29,9 @@ describe("payment finalization booking command convergence (Phase 1F)", () => {
     expect(src).toContain('row: normalizePaystackFinalizationPaidAmountRow(params.row)');
     expect(src).toContain('.eq("id", observed.id)');
     expect(src).toContain('.eq("status", observed.status)');
+    expect(src).toContain('["selected_cleaner_id", observed.selectedCleanerId]');
+    expect(src).toContain('["cleaner_id", observed.cleanerId]');
+    expect(src).toContain('["assignment_type", observed.assignmentType]');
 
   });
 
@@ -119,6 +122,9 @@ describe("Paystack finalization paid-amount normalization", () => {
           id: "booking-test", status: "pending_payment",
           customerEmail: "customer@example.com", customerAuthId: "owner-test",
           paystackReference: "test-reference",
+          selectedCleanerId: null,
+          cleanerId: null,
+          assignmentType: null,
         },
       });
     }
@@ -172,12 +178,20 @@ describe("observed-state payment writes", () => {
   const anchor: PaymentFinalizationObservedPendingBooking = {
     id: "booking-test", status: "pending_payment", customerEmail: " Customer@Example.com ",
     customerAuthId: "owner-a", paystackReference: "old-reference",
+    selectedCleanerId: "11111111-1111-4111-8111-111111111111",
+    cleanerId: null,
+    assignmentType: "user_selected",
   };
   // Simulates a database evaluating the complete WHERE clause after a competing write.
   function database(observed: typeof anchor, competing: Record<string, unknown> = {}, owner = "customer_id") {
     const current: Record<string, unknown> = {
       id: observed.id, status: observed.status, customer_email: observed.customerEmail,
-      [owner]: observed.customerAuthId, paystack_reference: observed.paystackReference, ...competing,
+      [owner]: observed.customerAuthId,
+      paystack_reference: observed.paystackReference,
+      selected_cleaner_id: observed.selectedCleanerId,
+      cleaner_id: observed.cleanerId,
+      assignment_type: observed.assignmentType,
+      ...competing,
     };
     const predicates: Array<[string, string, unknown]> = [];
     let payload: Record<string, unknown> = {};
@@ -214,6 +228,9 @@ describe("observed-state payment writes", () => {
           ["eq", "customer_email", observed.customerEmail],
           ["eq", ownershipColumn, observed.customerAuthId],
           ["eq", "paystack_reference", observed.paystackReference],
+          ["eq", "selected_cleaner_id", observed.selectedCleanerId],
+          ["is", "cleaner_id", null],
+          ["eq", "assignment_type", observed.assignmentType],
         ]);
         expect(db.current).toMatchObject({
           paystack_reference: "pay_verified", amount_paid_cents: 12550,
@@ -224,6 +241,9 @@ describe("observed-state payment writes", () => {
         { customer_email: "other@example.com" },
         { [ownershipColumn]: "owner-b" },
         { paystack_reference: "another-reference" },
+        { selected_cleaner_id: "22222222-2222-4222-8222-222222222222" },
+        { cleaner_id: "33333333-3333-4333-8333-333333333333" },
+        { assignment_type: "auto" },
         { status: "cancelled" },
         { id: "another-booking" },
       ])(mode + "/" + ownershipColumn + " rejects a competing mutation %j", async (competing) => {
@@ -237,13 +257,26 @@ describe("observed-state payment writes", () => {
         expect(db.current).toEqual(before);
       });
       it(mode + "/" + ownershipColumn + " uses explicit NULL predicates and permits legacy fill", async () => {
-        const missing = { ...observed, customerEmail: null, customerAuthId: null, paystackReference: null };
+        const missing = {
+          ...observed,
+          customerEmail: null,
+          customerAuthId: null,
+          paystackReference: null,
+          selectedCleanerId: null,
+          cleanerId: null,
+          assignmentType: null,
+        };
         const db = database(missing, {}, ownershipColumn);
         expect((await finalizePendingPaymentBookingFromPaystack({
           supabase: db.client, observed: missing, row, ownershipColumn,
         })).error).toBeNull();
         expect(db.query.is.mock.calls).toEqual([
-          ["customer_email", null], [ownershipColumn, null], ["paystack_reference", null],
+          ["customer_email", null],
+          [ownershipColumn, null],
+          ["paystack_reference", null],
+          ["selected_cleaner_id", null],
+          ["cleaner_id", null],
+          ["assignment_type", null],
         ]);
       });
       it(mode + "/" + ownershipColumn + " preserves missing incoming identity", async () => {
