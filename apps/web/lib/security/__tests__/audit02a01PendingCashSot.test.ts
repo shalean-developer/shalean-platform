@@ -193,6 +193,11 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(paystackFinalize).toContain("normalizeUuidCandidate(existingPersistedSelectedCleanerId)");
     expect(paystackFinalize).toContain("applyRecurringOccurrenceRosterContinuity");
     expect(paystackFinalize).toContain("recurringRosterGenerated && recurringRosterId && recurringRosterCleanerId");
+    const rosterContinuity = read("lib/recurring/applyRecurringOccurrenceRosterContinuity.ts");
+    expect(rosterContinuity).toContain("requestedLeadId");
+    expect(rosterContinuity).toContain("requestedLeadId !== continuity.leadCleanerId");
+    expect(rosterContinuity).toContain('role: member.cleaner_id === requestedLeadId ? "lead" : "member"');
+    expect(rosterContinuity).toContain("cleaner_id: requestedLeadId");
 
     const recurringCleanerAtomicSql = read(
       "../../supabase/migrations/20261007073500_audit_02a01_recurring_cleaner_atomic.sql",
