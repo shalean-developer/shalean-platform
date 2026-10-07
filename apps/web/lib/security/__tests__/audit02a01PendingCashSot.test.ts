@@ -181,8 +181,13 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringPropagation).toContain(
       "preferredCleanerId && cleanerMutationSucceeded",
     );
+    expect(recurringPropagation).toContain("const draftMonthlyUnsettled");
+    expect(recurringPropagation).toContain('paymentStatus === "pending_monthly"');
+    expect(recurringPropagation).toContain('booking.invoice_status ?? ""');
+    expect(recurringPropagation).toContain('=== "draft"');
+    expect(recurringPropagation).toContain("const mutablePricingCandidate");
     expect(recurringPropagation).toContain(
-      "!bookingCompleted && !mutableUnpaidCandidate",
+      "!bookingCompleted && !mutablePricingCandidate",
     );
 
     const paystackFinalize = read("lib/booking/upsertBookingFromPaystack.ts");
@@ -282,6 +287,11 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     const recurringCleanerAtomicSql = read(
       "../../supabase/migrations/20261007073500_audit_02a01_recurring_cleaner_atomic.sql",
     ).toLowerCase();
+    expect(recurringCleanerAtomicSql).toContain("v_is_draft_monthly");
+    expect(recurringCleanerAtomicSql).toContain("pending_monthly");
+    expect(recurringCleanerAtomicSql).toContain("monthly_invoices");
+    expect(recurringCleanerAtomicSql).toContain("for key share");
+    expect(recurringCleanerAtomicSql).toContain("= 'draft'");
     expect(recurringCleanerAtomicSql).toContain("selected_cleaner_id");
     expect(recurringCleanerAtomicSql).toContain("assignment_type");
     expect(recurringCleanerAtomicSql).toContain("cleaner_id");
@@ -355,5 +365,19 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
       postdeploySql.indexOf("amount_paid_cents = 0"),
     );
     expect(sql).toContain("validate constraint bookings_pending_unpaid_cash_zero");
+  });
+});
+
+
+describe("AUDIT-02A01 release ordering", () => {
+  it("keeps the cash invariant outside the ordinary predeploy migration chain", () => {
+    const migration = read("../../supabase/migrations/20261007024500_audit_02a01_postdeploy_cash_guard.sql");
+    expect(migration).toContain("migration tombstone");
+    expect(migration).not.toContain("add constraint bookings_pending_unpaid_cash_zero");
+
+    const postdeploy = read("../../supabase/postdeploy/audit-02a01-postdeploy-cash-guard.sql");
+    expect(postdeploy).toContain("explicit POST-DEPLOY script");
+    expect(postdeploy).toContain("add constraint bookings_pending_unpaid_cash_zero");
+    expect(postdeploy).toContain("validate constraint bookings_pending_unpaid_cash_zero");
   });
 });
