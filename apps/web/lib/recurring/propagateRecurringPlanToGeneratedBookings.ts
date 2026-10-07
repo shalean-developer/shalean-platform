@@ -246,9 +246,16 @@ export async function propagateRecurringPlanToGeneratedBookings(
       Boolean(booking.payment_transaction_id) ||
       Boolean(booking.marked_paid_by_admin_id);
 
-    const mutableUnpaidCandidate = ordinaryUnpaidPending && !settlementMarkerPresent;
+    const draftMonthlyUnsettled =
+      paymentStatus === "pending_monthly" &&
+      Boolean(booking.monthly_invoice_id) &&
+      (booking.invoice_status ?? "").trim().toLowerCase() === "draft" &&
+      ["pending", "assigned", "pending_payment"].includes(lifecycleStatus);
+    const mutablePricingCandidate =
+      (ordinaryUnpaidPending || draftMonthlyUnsettled) && !settlementMarkerPresent;
     const preserveRecurringPackagePayable =
-      mutableUnpaidCandidate &&
+      ordinaryUnpaidPending &&
+      !settlementMarkerPresent &&
       booking.price_snapshot?.payment_scope === "recurring_first_30_days" &&
       booking.total_price != null &&
       booking.total_price > 0;
@@ -286,7 +293,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
       price_snapshot: preserveRecurringPackagePayable
         ? booking.price_snapshot
         : provisionalPriceSnapshotJson(locked),
-      ...(preferredCleanerId
+      ...(preferredCleanerId && ordinaryUnpaidPending
         ? recurringOccurrenceCleanerPatch(preferredCleanerId, {
             operationalStatus: "pending_payment",
           })
@@ -295,7 +302,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
 
     let bookingUpdate: Record<string, unknown> = nonPricingPatch;
     let cleanerMutationSucceeded = false;
-    if (mutableUnpaidCandidate) {
+    if (mutablePricingCandidate) {
       const { data: repriced, error: repriceErr } = await admin.rpc(
         "apply_recurring_occurrence_unpaid_patch",
         {
@@ -309,11 +316,11 @@ export async function propagateRecurringPlanToGeneratedBookings(
       }
       if (repriced === true) {
         bookingUpdate = {};
-        cleanerMutationSucceeded = Boolean(preferredCleanerId);
+        cleanerMutationSucceeded = Boolean(preferredCleanerId && ordinaryUnpaidPending);
       }
     }
 
-    if (preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent) {
+    if (preferredCleanerId && !mutablePricingCandidate && !settlementMarkerPresent) {
       Object.assign(
         bookingUpdate,
         preserveLifecycle
@@ -334,7 +341,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
         result.errors.push(`Booking ${booking.id}: ${upErr.message}`);
         continue;
       }
-      if (preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent) {
+      if (preferredCleanerId && !mutablePricingCandidate && !settlementMarkerPresent) {
         cleanerMutationSucceeded = true;
       }
     }
@@ -342,7 +349,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
     result.bookings_updated++;
     if (preferredCleanerId && cleanerMutationSucceeded) {
       result.bookings_cleaner_updated++;
-      if (!bookingCompleted && !mutableUnpaidCandidate) {
+      if (!bookingCompleted && !mutablePricingCandidate) {
         await applyRecurringOccurrenceRosterContinuity(admin, {
           bookingId: booking.id,
           recurringId: plan.id,
