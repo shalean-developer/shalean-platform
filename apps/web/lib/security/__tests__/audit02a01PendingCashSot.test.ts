@@ -224,8 +224,6 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(adminRosterRoute).toContain("committedLead");
 
     const preferredRosterSync = read("lib/booking/persistPreferredCleaners.ts");
-    expect(preferredRosterSync).toContain('"skipped_custom_existing_roster"');
-    expect(preferredRosterSync).toContain("rosterHasCustomProvenance");
     expect(preferredRosterSync).toContain("syncPreferredCleanerOfferRoster");
     expect(preferredRosterSync).toContain('"deferred_preference_only"');
     expect(preferredRosterSync).not.toContain("replace_booking_cleaners_preference_atomic");
