@@ -52,6 +52,44 @@ begin
 end
 $audit02a01_release$;
 
+-- Explicit operator recovery for an abandoned claim.
+-- This is never called by the ordinary finalization path. It only clears a stale
+-- token when the caller proves the currently stored token and no finalization
+-- side effect has begun. This avoids both permanent deadlock and live-worker takeover.
+create or replace function public.recover_abandoned_monthly_invoice_finalization_claim(
+  p_invoice_id uuid,
+  p_expected_token uuid
+)
+returns boolean
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $audit02a01_recover$
+declare
+  v_id uuid;
+begin
+  update public.monthly_invoices mi
+  set finalization_claim_token = null,
+      finalization_claimed_at = null
+  where mi.id = p_invoice_id
+    and lower(trim(coalesce(mi.status, ''))) = 'draft'
+    and mi.finalization_claim_token = p_expected_token
+    and mi.finalization_claimed_at is not null
+    and mi.finalization_claimed_at < now() - interval '30 minutes'
+    and mi.snapshot_at_finalize is null
+    and mi.snapshot_current is null
+    and mi.finalized_at is null
+    and nullif(trim(coalesce(mi.paystack_reference, '')), '') is null
+    and nullif(trim(coalesce(mi.payment_link, '')), '') is null
+    and mi.sent_at is null
+    and nullif(trim(coalesce(mi.zoho_invoice_id, '')), '') is null
+    and coalesce(mi.initial_invoice_email_dispatch_claimed, false) = false
+  returning mi.id into v_id;
+
+  return v_id is not null;
+end
+$audit02a01_recover$;
+
 revoke all on function public.claim_monthly_invoice_finalization(uuid, uuid) from public;
 revoke all on function public.claim_monthly_invoice_finalization(uuid, uuid) from anon;
 revoke all on function public.claim_monthly_invoice_finalization(uuid, uuid) from authenticated;
@@ -61,6 +99,11 @@ revoke all on function public.release_monthly_invoice_finalization_claim(uuid, u
 revoke all on function public.release_monthly_invoice_finalization_claim(uuid, uuid) from anon;
 revoke all on function public.release_monthly_invoice_finalization_claim(uuid, uuid) from authenticated;
 grant execute on function public.release_monthly_invoice_finalization_claim(uuid, uuid) to service_role;
+
+revoke all on function public.recover_abandoned_monthly_invoice_finalization_claim(uuid, uuid) from public;
+revoke all on function public.recover_abandoned_monthly_invoice_finalization_claim(uuid, uuid) from anon;
+revoke all on function public.recover_abandoned_monthly_invoice_finalization_claim(uuid, uuid) from authenticated;
+grant execute on function public.recover_abandoned_monthly_invoice_finalization_claim(uuid, uuid) to service_role;
 
 -- AUDIT-02A01: forward-only extension for draft monthly recurring repricing.
 -- Prior recurring RPC migrations remain immutable. This definition adds a serialized
