@@ -68,6 +68,11 @@ export async function applyRecurringOccurrenceRosterContinuity(
   if (row.cleaner_line_earnings_finalized_at) return { ok: true, applied: false, cleanerCount: 0 };
 
   const existingRoster = Array.isArray(row.booking_cleaners) ? row.booking_cleaners : [];
+  // A booking-specific multi-cleaner roster is authoritative for this occurrence.
+  // Do not overwrite manual/customized membership or payout roles with plan continuity data.
+  if (existingRoster.length >= 2) {
+    return { ok: true, applied: false, cleanerCount: existingRoster.length };
+  }
 
   let continuity = params.roster ?? null;
   if (!continuity) {
