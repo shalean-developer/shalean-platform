@@ -180,10 +180,10 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(sql).toContain("sum(coalesce(bli.total_price_cents, 0))");
     expect(postdeploySql).toContain("require independent corroboration of the legacy payable");
     expect(sql).toContain(") is not true");
-    expect(sql).toContain("total_price = b.total_paid_zar");
-    expect(sql).toContain("'{pay_total_zar}'");
-    expect(sql.indexOf("total_price = b.total_paid_zar")).toBeLessThan(
-      sql.indexOf("amount_paid_cents = 0"),
+    expect(postdeploySql).toContain("total_price = r.legacy_payable_zar");
+    expect(postdeploySql).toContain("'{pay_total_zar}'");
+    expect(postdeploySql.indexOf("total_price = r.legacy_payable_zar")).toBeLessThan(
+      postdeploySql.indexOf("amount_paid_cents = 0"),
     );
     expect(sql).toContain("validate constraint bookings_pending_unpaid_cash_zero");
   });
