@@ -128,12 +128,12 @@ for (const mode of ["GET", "POST", "webhook"] as const) {
     });
     it("keeps monthly routing ahead of booking proof", async () => {
       m.monthly.mockResolvedValue({ kind: "monthly_settled", settled: "full", invoiceId: id });
-      await call(mode); expect(m.monthlyRecord).toHaveBeenCalled(); expect(m.sales).not.toHaveBeenCalled();
+      await call(mode); expect(m.entityRecord).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ entityType: "monthly_invoice" })); expect(m.sales).not.toHaveBeenCalled();
       expect(reads.some((x) => x.includes("customer_email"))).toBe(false); noSuccess();
     });
     it("keeps sales routing ahead of booking proof", async () => {
       m.sales.mockResolvedValue({ kind: "sales_doc_settled", documentId: id });
-      await call(mode); expect(m.salesRecord).toHaveBeenCalled(); expect(m.monthly).toHaveBeenCalled();
+      await call(mode); expect(m.entityRecord).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ entityType: "sales_document" })); expect(m.monthly).toHaveBeenCalled();
       expect(reads.some((x) => x.includes("customer_email"))).toBe(false); noSuccess();
     });
     it("passes pending payment to canonical finalization", async () => {
