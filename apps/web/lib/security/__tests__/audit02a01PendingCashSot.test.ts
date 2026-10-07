@@ -191,6 +191,9 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(paystackFinalize).toContain("recoveryEnqueue: true");
     const settlementRecorder = read("lib/payments/recordGatewayPayment.ts");
     expect(settlementRecorder).toContain("completeSideEffects");
+    expect(settlementRecorder).toContain("ensureExpenseAccountingQueue");
+    expect(settlementRecorder).toContain('"entity_type", "expense"');
+    expect(settlementRecorder).toContain("expense_accounting_queue_enrollment_failed");
     expect(settlementRecorder).toContain("payment_transaction_reconciled");
     expect(settlementRecorder).toContain('"expenses"');
     expect(settlementRecorder).toContain('"accounting_sync_records"');
@@ -201,6 +204,12 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(paystackFinalize).toContain("recurringRosterGenerated && recurringRosterId && recurringRosterCleanerId");
     const rosterContinuity = read("lib/recurring/applyRecurringOccurrenceRosterContinuity.ts");
     expect(rosterContinuity).toContain("requestedLeadId");
+    const rosterFetch = read("lib/recurring/fetchLastAssignedRosterForRecurringPlan.ts");
+    expect(rosterFetch).toContain("recurring_roster_lookup_failed");
+    expect(rosterContinuity).toContain("catch (error)");
+    expect(rosterContinuity).toContain("const shouldReplaceRoster");
+    expect(rosterContinuity).toContain('.from("bookings")');
+    expect(rosterContinuity).toContain("cleaner_id: leadId");
     expect(rosterContinuity).toContain("requestedLeadId !== continuity.leadCleanerId");
     expect(rosterContinuity).toContain('role: member.cleaner_id === requestedLeadId ? "lead" : "member"');
     expect(rosterContinuity).toContain("cleaner_id: requestedLeadId");
