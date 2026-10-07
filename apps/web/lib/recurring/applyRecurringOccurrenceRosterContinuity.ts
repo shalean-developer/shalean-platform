@@ -69,8 +69,19 @@ export async function applyRecurringOccurrenceRosterContinuity(
 
   const existingRoster = Array.isArray(row.booking_cleaners) ? row.booking_cleaners : [];
 
-  const continuity =
-    params.roster ?? (await fetchLastAssignedRosterForRecurringPlan(admin, recurringId));
+  let continuity = params.roster ?? null;
+  if (!continuity) {
+    try {
+      continuity = await fetchLastAssignedRosterForRecurringPlan(admin, recurringId);
+    } catch (error) {
+      return {
+        ok: false,
+        applied: false,
+        cleanerCount: 0,
+        reason: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
   if (!continuity || continuity.rosterRows.length < 2) {
     return { ok: true, applied: false, cleanerCount: Number(row.cleaner_count ?? 1) || 1 };
   }
@@ -113,21 +124,25 @@ export async function applyRecurringOccurrenceRosterContinuity(
     existingIds.size === desiredIds.size &&
     [...desiredIds].every((cleanerId) => existingIds.has(cleanerId)) &&
     desiredIds.has(leadId);
-  if (rosterAlreadyMatches && leadId === continuity.leadCleanerId) {
-    return { ok: true, applied: false, cleanerCount: existingRoster.length };
+  const shouldReplaceRoster =
+    !(rosterAlreadyMatches && leadId === continuity.leadCleanerId);
+
+  if (shouldReplaceRoster) {
+    const { error: rpcErr } = await admin.rpc("replace_booking_cleaners_admin_atomic", {
+      p_booking_id: bookingId,
+      p_rows: rosterRows,
+    });
+    if (rpcErr) {
+      return {
+        ok: false,
+        applied: false,
+        cleanerCount: 0,
+        reason: rpcErr.message,
+      };
+    }
   }
 
-  const { error: rpcErr } = await admin.rpc("replace_booking_cleaners_admin_atomic", {
-    p_booking_id: bookingId,
-    p_rows: rosterRows,
-  });
-  if (rpcErr) {
-    return {
-      ok: false,
-      applied: false,
-      cleanerCount: 0,
-      reason: rpcErr.message,
-    };
+  {
   }
 
   const now = new Date().toISOString();
@@ -157,5 +172,9 @@ export async function applyRecurringOccurrenceRosterContinuity(
     };
   }
 
-  return { ok: true, applied: true, cleanerCount: rosterRows.length };
+  return {
+    ok: true,
+    applied: shouldReplaceRoster || Boolean(patchErr == null),
+    cleanerCount: rosterRows.length,
+  };
 }
