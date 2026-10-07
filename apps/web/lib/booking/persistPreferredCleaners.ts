@@ -6,7 +6,6 @@ import {
   validateMembersToReplaceBookingCleanersRpcRows,
   type ReplaceBookingCleanersRpcRow,
 } from "@/lib/admin/bookingRosterReplacePayload";
-import { rosterHasCustomProvenance } from "@/lib/recurring/recurringRosterProvenance";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PREFERENCE_ROSTER_SOURCES = new Set([
@@ -16,15 +15,10 @@ const PREFERENCE_ROSTER_SOURCES = new Set([
   "recurring_preferred",
 ]);
 
-function rosterIsPreferenceOnly(rows: Array<{ source?: string | null }>): boolean {
-  return rows.length === 0 || rows.every((row) =>
-    PREFERENCE_ROSTER_SOURCES.has(String(row.source ?? "").trim().toLowerCase()),
-  );
-}
 
 export async function syncPreferredCleanerOfferRoster(
-  admin: SupabaseClient,
-  bookingId: string,
+  _admin: SupabaseClient,
+  _bookingId: string,
   selectedCleanerIds: readonly string[],
   source: string,
 ): Promise<SyncPreferredCleanerRosterResult> {
@@ -41,46 +35,12 @@ export async function syncPreferredCleanerOfferRoster(
     };
   }
 
-  const rosterValidated = validateMembersToReplaceBookingCleanersRpcRows(
-    ids.map((id, i) => ({ cleanerId: id, role: i === 0 ? "lead" : "member" })),
-    { defaultSource: source },
-  );
-  if (!rosterValidated.ok) {
-    return {
-      ok: false,
-      kind: "validation_failed",
-      error: rosterValidated.error,
-      cleanerCount: ids.length,
-    };
-  }
-
-  const { data, error } = await admin.rpc("replace_booking_cleaners_preference_atomic", {
-    p_booking_id: bookingId,
-    p_rows: rosterValidated.rows,
-  });
-  if (error) {
-    return {
-      ok: false,
-      kind: "rpc_failed",
-      error: error.message ?? String(error),
-      cleanerCount: ids.length,
-    };
-  }
-  if (
-    data === "skipped_authoritative_existing_roster" ||
-    data === "skipped_authoritative_assignment"
-  ) {
-    return {
-      ok: true,
-      kind: "skipped_custom_existing_roster",
-      cleanerCount: ids.length,
-    };
-  }
+  // Customer preference is intent, not assignment. Keep it in selected_cleaner_id /
+  // booking_snapshot and let dispatch materialize authoritative assignment only on accept.
   return {
     ok: true,
-    kind: "synced",
+    kind: "deferred_preference_only",
     cleanerCount: ids.length,
-    rows: rosterValidated.rows,
   };
 }
 
@@ -151,6 +111,7 @@ export type SyncPreferredCleanerRosterResult =
   | { ok: true; kind: "synced"; cleanerCount: number; rows: ReplaceBookingCleanersRpcRow[] }
   | { ok: true; kind: "skipped_single_or_empty"; cleanerCount: number }
   | { ok: true; kind: "skipped_custom_existing_roster"; cleanerCount: number }
+  | { ok: true; kind: "deferred_preference_only"; cleanerCount: number }
   | { ok: false; kind: "validation_failed"; error: string; cleanerCount: number }
   | { ok: false; kind: "rpc_failed"; error: string; cleanerCount: number };
 
@@ -236,33 +197,5 @@ export async function syncPreferredCleanerRosterFromBookingRow(
   source = "checkout_preferred",
 ): Promise<SyncPreferredCleanerRosterResult> {
   const ids = preferredCleanerIdsFromSnapshot(row.booking_snapshot, row.selected_cleaner_id);
-  if (ids.length >= 2) {
-    const { data: existingRows, error: existingErr } = await admin
-      .from("booking_cleaners")
-      .select("cleaner_id, source")
-      .eq("booking_id", bookingId);
-
-    if (existingErr) {
-      return {
-        ok: false,
-        kind: "rpc_failed",
-        error: existingErr.message ?? String(existingErr),
-        cleanerCount: ids.length,
-      };
-    }
-
-    const existing = Array.isArray(existingRows) ? existingRows : [];
-    if (
-      rosterHasCustomProvenance(existing as Array<{ source?: string | null }>) ||
-      !rosterIsPreferenceOnly(existing as Array<{ source?: string | null }>)
-    ) {
-      return {
-        ok: true,
-        kind: "skipped_custom_existing_roster",
-        cleanerCount: existing.length,
-      };
-    }
-  }
-
   return syncPreferredCleanerOfferRoster(admin, bookingId, ids, source);
 }
