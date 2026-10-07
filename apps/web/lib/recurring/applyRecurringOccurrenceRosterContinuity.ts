@@ -131,10 +131,28 @@ export async function applyRecurringOccurrenceRosterContinuity(
   }
 
   if (committedAssignment) {
-    const committedLeadId = String(row.cleaner_id ?? "").trim();
+    const committedLeadId =
+      String(row.cleaner_id ?? "").trim() || params.leadCleanerId?.trim() || "";
+    if (committedLeadId && !String(row.cleaner_id ?? "").trim()) {
+      const { error: identityRepairErr } = await admin
+        .from("bookings")
+        .update({
+          cleaner_id: committedLeadId,
+          payout_owner_cleaner_id: committedLeadId,
+        })
+        .eq("id", bookingId);
+      if (identityRepairErr) {
+        return {
+          ok: false,
+          applied: false,
+          cleanerCount: Number(row.cleaner_count ?? 1) || 1,
+          reason: identityRepairErr.message,
+        };
+      }
+    }
     return {
       ok: true,
-      applied: false,
+      applied: Boolean(committedLeadId && !String(row.cleaner_id ?? "").trim()),
       cleanerCount: Number(row.cleaner_count ?? 1) || 1,
       ...(committedLeadId ? { leadCleanerId: committedLeadId } : {}),
       kind: "committed_existing",
