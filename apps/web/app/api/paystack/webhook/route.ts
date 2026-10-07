@@ -516,7 +516,7 @@ export async function POST(request: Request) {
           ? String((customerBlock as { customer_code?: string }).customer_code ?? "") || null
           : null,
       paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
-      paystackChargeData: paystackChargeDataFromRecord(data as Record<string, unknown>) as unknown as Record<string, unknown>,
+      paystackChargeData: paystackChargeDataFromRecord(data as Record<string, unknown>),
     },
   });
 
