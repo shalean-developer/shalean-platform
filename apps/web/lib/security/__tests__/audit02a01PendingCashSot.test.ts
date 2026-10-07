@@ -85,13 +85,16 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(initialize).toContain("if (lineSumCents !== payableCents)");
   });
 
-  it("fails closed instead of silently repricing an existing line-item checkout", () => {
+  it("fails closed for complete pricing but rebuilds partial existing line items", () => {
     const initialize = read("lib/booking/paystackInitializeCore.ts");
-    expect(initialize).toContain("if (hasLi)");
+    expect(initialize).toContain("if (hasLi && hasSnap)");
     expect(initialize).toContain("pricingComplete: true");
     expect(initialize).toContain("existingPayableZar");
     expect(initialize).toContain("existing pending payable differs from reinitialized charge");
     expect(initialize).toContain('errorCode: "PRICE_MISMATCH"');
+    expect(initialize).toContain("Partial pricing state is not immutable yet");
+    expect(initialize).toContain("return { bookingId: bid, skipLineItemInsert: false, pricingComplete: false }");
+    expect(initialize).toContain("checkoutLineItems: pricingTarget.skipLineItemInsert ? null : checkoutLineItems");
   });
 
   it("preserves the stored recurring package payable during fallback only", () => {
