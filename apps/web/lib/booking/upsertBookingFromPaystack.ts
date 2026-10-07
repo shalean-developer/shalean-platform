@@ -1258,16 +1258,29 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       .maybeSingle();
 
     if (recurringRosterHeadErr) {
-      await enqueueFailedJob("recurring_roster_reconciliation", {
-        bookingId: id,
-        recurringId:
-          typeof pendingExisting?.recurring_id === "string" ? pendingExisting.recurring_id : null,
-        leadCleanerId:
-          typeof existingPersistedSelectedCleanerId === "string"
-            ? existingPersistedSelectedCleanerId
-            : null,
-        reason: `recurring_roster_head_load_failed:${recurringRosterHeadErr.message}`,
-      });
+      const fallbackRecurringId =
+        existingIsRecurringGenerated && typeof pendingExisting?.recurring_id === "string"
+          ? pendingExisting.recurring_id.trim()
+          : "";
+      const fallbackLeadCleanerId = normalizeUuidCandidate(existingPersistedSelectedCleanerId ?? null);
+      if (fallbackRecurringId && fallbackLeadCleanerId) {
+        await enqueueFailedJob("recurring_roster_reconciliation", {
+          bookingId: id,
+          recurringId: fallbackRecurringId,
+          leadCleanerId: fallbackLeadCleanerId,
+          reason: `recurring_roster_head_load_failed:${recurringRosterHeadErr.message}`,
+        });
+      } else if (existingIsRecurringGenerated) {
+        await reportOperationalIssue(
+          "warn",
+          "upsertBookingFromPaystack",
+          "recurring roster head load failed without sufficient repair context",
+          {
+            bookingId: id,
+            error: recurringRosterHeadErr.message,
+          },
+        );
+      }
     }
     const recurringRosterId =
       recurringRosterHead && typeof recurringRosterHead === "object" && "recurring_id" in recurringRosterHead
