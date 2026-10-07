@@ -225,11 +225,19 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     const preferredRosterSync = read("lib/booking/persistPreferredCleaners.ts");
     expect(preferredRosterSync).toContain('"skipped_custom_existing_roster"');
     expect(preferredRosterSync).toContain("rosterHasCustomProvenance");
+    expect(preferredRosterSync).toContain("replace_booking_cleaners_preference_atomic");
+    expect(preferredRosterSync).toContain("rosterIsPreferenceOnly");
+    expect(preferredRosterSync).toContain("skipped_authoritative_existing_roster");
     const rosterProvenance = read("lib/recurring/recurringRosterProvenance.ts");
     expect(rosterProvenance).toContain('"checkout_preferred"');
     expect(rosterProvenance).toContain('"customer_preferred"');
     expect(rosterProvenance).toContain('"recurring_preferred"');
     expect(rosterProvenance).toContain('"recurring_continuity"');
+    expect(rosterProvenance).toContain('"booking_v2_r0"');
+
+    const cleanersRoute = read("app/api/admin/bookings/[id]/cleaners/route.ts");
+    expect(cleanersRoute).toContain('{ defaultSource: "admin" }');
+    expect(cleanersRoute).toContain('source: "admin"');
 
     expect(rosterContinuity).toContain("leadCleanerId?: string");
     expect(rosterContinuity).toContain("leadCleanerId: existingLeadId");
@@ -343,14 +351,22 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterHeaderSql).toContain(
       "create or replace function public.replace_booking_cleaners_admin_atomic",
     );
-    expect(rosterHeaderSql).toContain("lead_source text");
-    expect(rosterHeaderSql).toContain("checkout_preferred");
-    expect(rosterHeaderSql).toContain("customer_preferred");
-    expect(rosterHeaderSql).toContain("recurring_preferred");
-    expect(rosterHeaderSql).toContain("then b.cleaner_id");
-    expect(rosterHeaderSql).toContain("then b.payout_owner_cleaner_id");
-    expect(rosterHeaderSql).toContain("else lead_id");
+    expect(rosterHeaderSql).toContain("cleaner_id = lead_id");
+    expect(rosterHeaderSql).toContain("payout_owner_cleaner_id = lead_id");
     expect(rosterHeaderSql).toContain("cleaner_count = n_total");
+    expect(rosterHeaderSql).toContain(
+      "create or replace function public.replace_booking_cleaners_preference_atomic",
+    );
+    expect(rosterHeaderSql).toContain("skipped_authoritative_existing_roster");
+    expect(rosterHeaderSql).toContain("booking_v2_r0");
+    expect(rosterHeaderSql).toContain("set cleaner_count = n_total");
+    expect(rosterHeaderSql).not.toContain("set cleaner_id = lead_id,\n         payout_owner_cleaner_id = lead_id,\n         cleaner_count = n_total\n   where b.id = p_booking_id;\n\n  return 'synced'");
+    expect(rosterHeaderSql).toContain(
+      "revoke all on function public.replace_booking_cleaners_preference_atomic(uuid, jsonb) from authenticated",
+    );
+    expect(rosterHeaderSql).toContain(
+      "grant execute on function public.replace_booking_cleaners_preference_atomic(uuid, jsonb) to service_role",
+    );
     expect(rosterHeaderSql).not.toContain("selected_cleaner_id = lead_id");
 
     const recurringRestore = read("lib/recurring/restoreRecurringPreferredCleanerAssignments.ts");
