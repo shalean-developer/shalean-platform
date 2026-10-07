@@ -331,7 +331,9 @@ export async function propagateRecurringPlanToGeneratedBookings(
         ? recurringOccurrenceCleanerPatch(preferredCleanerId, {
             operationalStatus: "pending_payment",
           })
-        : {}),
+        : preferredCleanerId && draftMonthlyUnsettled
+          ? recurringOccurrenceCleanerIdentityOnlyPatch(preferredCleanerId)
+          : {}),
     };
 
     const monthlyRepriceLineItems = draftMonthlyUnsettled
@@ -365,7 +367,9 @@ export async function propagateRecurringPlanToGeneratedBookings(
       }
       if (repriced === true) {
         bookingUpdate = {};
-        cleanerMutationSucceeded = Boolean(preferredCleanerId && ordinaryUnpaidPending);
+        cleanerMutationSucceeded = Boolean(
+          preferredCleanerId && (ordinaryUnpaidPending || draftMonthlyUnsettled),
+        );
       }
     }
 
@@ -398,11 +402,12 @@ export async function propagateRecurringPlanToGeneratedBookings(
     result.bookings_updated++;
     if (preferredCleanerId && cleanerMutationSucceeded) {
       result.bookings_cleaner_updated++;
-      if (!bookingCompleted && !mutablePricingCandidate) {
+      if (!bookingCompleted && (!mutablePricingCandidate || draftMonthlyUnsettled)) {
         await applyRecurringOccurrenceRosterContinuity(admin, {
           bookingId: booking.id,
           recurringId: plan.id,
           leadCleanerId: preferredCleanerId,
+          preserveLifecycle: draftMonthlyUnsettled,
         });
       }
     }
