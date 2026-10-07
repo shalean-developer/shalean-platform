@@ -76,9 +76,14 @@ end
 $audit02a01_cashshape$;
 
 -- Historical pre-change rows stored the actual checkout payable in total_paid_zar
--- while total_price could remain at the unadjusted visit amount. Require two
--- independent persisted pricing sources to corroborate the legacy payable before
--- promoting it into the canonical payable column.
+-- while total_price / price_snapshot / line items could remain at the unadjusted
+-- visit amount when tips or discounts changed the Paystack charge.
+--
+-- Cash-mirror agreement is validated above. Here require one independent persisted
+-- charged-total source:
+--   * booking_snapshot.total_zar for adjusted legacy checkout rows; or
+--   * price_snapshot.total_price + booking line-item sum for unadjusted legacy rows.
+-- Fail closed when neither shape corroborates total_paid_zar.
 do $audit02a01_payable$
 begin
   if exists (
@@ -97,23 +102,28 @@ begin
         from public.payment_transactions pt
         where pt.booking_id = b.id
       )
-      and (
-        not (
-          jsonb_typeof(b.price_snapshot) = 'object'
-          and nullif(b.price_snapshot->>'total_price', '') is not null
-          and abs((b.price_snapshot->>'total_price')::numeric - b.total_paid_zar) < 0.01
+      and not (
+        (
+          jsonb_typeof(b.booking_snapshot) = 'object'
+          and jsonb_typeof(b.booking_snapshot->'total_zar') = 'number'
+          and abs((b.booking_snapshot->>'total_zar')::numeric - b.total_paid_zar) < 0.01
         )
-        or not exists (
-          select 1
-          from (
-            select
-              bli.booking_id,
-              sum(coalesce(bli.total_price_cents, 0)) as line_total_cents
-            from public.booking_line_items bli
-            where bli.booking_id = b.id
-            group by bli.booking_id
-          ) x
-          where abs(x.line_total_cents - round(b.total_paid_zar * 100)) <= 1
+        or (
+          jsonb_typeof(b.price_snapshot) = 'object'
+          and jsonb_typeof(b.price_snapshot->'total_price') = 'number'
+          and abs((b.price_snapshot->>'total_price')::numeric - b.total_paid_zar) < 0.01
+          and exists (
+            select 1
+            from (
+              select
+                bli.booking_id,
+                sum(coalesce(bli.total_price_cents, 0)) as line_total_cents
+              from public.booking_line_items bli
+              where bli.booking_id = b.id
+              group by bli.booking_id
+            ) x
+            where abs(x.line_total_cents - round(b.total_paid_zar * 100)) <= 1
+          )
         )
       )
   ) then
