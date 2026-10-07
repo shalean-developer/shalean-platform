@@ -145,6 +145,15 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringPropagation).toContain('source: "monthly_recurring_occurrence"');
     expect(recurringPropagation).toContain('name: "Monthly recurring service"');
     expect(recurringPropagation).toContain("p_line_items: monthlyRepriceLineItems");
+    expect(recurringPropagation).toContain(
+      "preferredCleanerId && draftMonthlyUnsettled",
+    );
+    expect(recurringPropagation).toContain(
+      "recurringOccurrenceCleanerIdentityOnlyPatch(preferredCleanerId)",
+    );
+    expect(recurringPropagation).toContain(
+      "ordinaryUnpaidPending || draftMonthlyUnsettled",
+    );
 
     expect(recurringAtomicSql).toContain(
       "create or replace function public.apply_recurring_occurrence_unpaid_patch",
@@ -232,7 +241,8 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterContinuity).toContain("const shouldReplaceRoster = !rosterAlreadyMatches");
     expect(rosterContinuity).not.toContain("leadId === continuity.leadCleanerId");
     expect(rosterContinuity).toContain("const bookingPatch");
-    expect(rosterContinuity).toContain("...(shouldReplaceRoster");
+    expect(rosterContinuity).toContain("...(shouldReplaceRoster && !params.preserveLifecycle");
+    expect(rosterContinuity).toContain("preserveLifecycle?: boolean");
     expect(rosterContinuity).toContain('cleaner_response_status: "pending"');
     expect(rosterContinuity).toContain('dispatch_status: "assigned"');
     expect(rosterContinuity).toContain('status: "assigned"');
@@ -240,6 +250,12 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterContinuity).toContain('.from("bookings")');
     expect(rosterContinuity).toContain("cleaner_id: leadId");
     expect(rosterContinuity).toContain("requestedLeadId !== continuity.leadCleanerId");
+    expect(recurringPropagation).toContain(
+      "(!mutablePricingCandidate || draftMonthlyUnsettled)",
+    );
+    expect(recurringPropagation).toContain(
+      "preserveLifecycle: draftMonthlyUnsettled",
+    );
     expect(rosterContinuity).toContain('role: member.cleaner_id === requestedLeadId ? "lead" : "member"');
     expect(rosterContinuity).toContain("cleaner_id: requestedLeadId");
     expect(rosterContinuity).toContain("ok: boolean");
