@@ -238,6 +238,11 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringPropagation).toContain("reconciledCleanerId = rosterContinuity.leadCleanerId");
     expect(recurringPropagation).toContain("reconciledCleanerId ??");
     expect(recurringPropagation).toContain("recurring roster reconciliation failed");
+    expect(recurringPropagation).toContain("booking_cleaners(cleaner_id, role, source)");
+    expect(recurringPropagation).toContain("hasCustomExistingRoster");
+    expect(recurringPropagation).toContain("customRosterLeadId");
+    expect(recurringPropagation).toContain("preferredCleanerId && !hasCustomExistingRoster");
+    expect(recurringPropagation).toContain("recurring custom roster reconciliation failed");
     expect(rosterContinuity.indexOf("customExistingRoster")).toBeLessThan(
       rosterContinuity.indexOf("let continuity = params.roster ?? null"),
     );
