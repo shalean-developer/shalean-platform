@@ -127,6 +127,14 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(sql).toContain("audit_02a01_ledger_only_settlement_requires_manual_reconciliation");
     expect(sql).toContain("do $audit02a01$");
     expect(sql).toContain("$audit02a01$;");
+    expect(sql).toContain("audit_02a01_legacy_payable_corroboration_failed");
+    expect(sql).toContain("price_snapshot->>'total_price'");
+    expect(sql).toContain("sum(coalesce(bli.total_price_cents, 0))");
+    expect(sql).toContain("total_price = b.total_paid_zar");
+    expect(sql).toContain("'{pay_total_zar}'");
+    expect(sql.indexOf("total_price = b.total_paid_zar")).toBeLessThan(
+      sql.indexOf("amount_paid_cents = 0"),
+    );
     expect(sql).toContain("validate constraint bookings_pending_unpaid_cash_zero");
   });
 });
