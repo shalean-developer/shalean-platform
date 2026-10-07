@@ -54,7 +54,14 @@ let lookupError: boolean;
 let ownershipColumn: "customer_id" | "user_id";
 const secret = "test-only-paystack-signing-key";
 beforeEach(() => {
-  vi.clearAllMocks(); resetBookingOwnershipColumnCacheForTests();
+  vi.clearAllMocks();
+  m.record.mockResolvedValue({
+    ok: true,
+    created: true,
+    paymentTransactionId: "paytx-test",
+    expenseId: null,
+  });
+  resetBookingOwnershipColumnCacheForTests();
   ownershipColumn = "customer_id"; lookupError = false; rpcOwner = null; reads = [];
   row = { id, status: "pending", paystack_reference: "pay_current", customer_email: "payer@example.com", customer_id: owner, payment_status: "success", amount_paid_cents: 12550 };
   tx = { status: "success", reference: "pay_current", amount: 12550, currency: "ZAR", customer: { email: "payer@example.com" }, metadata: { booking_id: id, user_id: owner } };
