@@ -206,7 +206,7 @@ export async function removeCleanerFromVisitPayout(
       role: m.role,
       payout_weight: m.payout_weight,
       lead_bonus_cents: m.lead_bonus_cents,
-      source: m.source ?? "admin_remove_visit_payout",
+      source: "admin_remove_visit_payout",
     }));
 
     const { error: rpcErr } = await admin.rpc("replace_booking_cleaners_admin_atomic", {
