@@ -309,7 +309,7 @@ export async function POST(request: Request) {
 
       if (result.bookingId && !result.error) {
         if (jobType === FAILED_JOB_TYPE_PAYMENT_RECONCILIATION) {
-          await recordPaystackBookingPayment(supabase, {
+          const paymentPersisted = await recordPaystackBookingPayment(supabase, {
             reference: payload.paystackReference,
             amountCents: payload.amountCents,
             bookingId: result.bookingId,
@@ -320,6 +320,24 @@ export async function POST(request: Request) {
                 ? payload.paystackChargeData
                 : undefined,
           });
+          if (!paymentPersisted.ok) {
+            const nextAttempts = attempts + 1;
+            await reportOperationalIssue(
+              "error",
+              "cron/retry-failed-jobs",
+              `payment_reconciliation settlement persistence failed: ${paymentPersisted.error}`,
+              {
+                failedJobId: id,
+                bookingId: result.bookingId,
+                paystackReference: payload.paystackReference,
+              },
+            );
+            await supabase
+              .from("failed_jobs")
+              .update({ attempts: nextAttempts })
+              .eq("id", id);
+            continue;
+          }
         }
         const { error: delErr } = await supabase.from("failed_jobs").delete().eq("id", id);
         if (delErr) {
