@@ -169,8 +169,10 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
       'operationalStatus: "pending_payment"',
     );
     expect(recurringPropagation).toContain(
-      "preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent",
+      "preferredCleanerId && !hasCustomExistingRoster && !assignmentCommitted",
     );
+    expect(recurringPropagation).toContain("!mutableUnpaidCandidate");
+    expect(recurringPropagation).toContain("!settlementMarkerPresent");
     expect(recurringPropagation).toContain(
       "...(preferredCleanerId",
     );
