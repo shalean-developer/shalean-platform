@@ -24,6 +24,7 @@ import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { trustPayPageUrl } from "@/lib/pay/trustPayPageUrl";
+import { trustedBookingPayableZar } from "@/lib/booking/ensureBookingPaymentSession";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,6 +47,7 @@ type Row = {
   service: string | null;
   date: string | null;
   time: string | null;
+  total_price: number | string | null;
   total_paid_zar: number | string | null;
   payment_link: string | null;
   paystack_reference: string | null;
@@ -96,7 +98,7 @@ export async function POST(request: Request) {
   const { data: candidates, error } = await admin
     .from("bookings")
     .select(
-      `id, ${ownershipColumn}, customer_name, customer_phone, customer_email, service, date, time, total_paid_zar, payment_link, paystack_reference, payment_link_expires_at, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, booking_snapshot, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel`,
+      `id, ${ownershipColumn}, customer_name, customer_phone, customer_email, service, date, time, total_price, total_paid_zar, payment_link, paystack_reference, payment_link_expires_at, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, booking_snapshot, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel`,
     )
     .eq("status", "pending_payment")
     .not("payment_link_expires_at", "is", null)
@@ -193,13 +195,10 @@ export async function POST(request: Request) {
     const timeLabel = row.time != null ? String(row.time) : "—";
     const name = String(row.customer_name ?? "").trim();
 
-    const totalZarRaw = row.total_paid_zar;
-    const amountZar =
-      typeof totalZarRaw === "number" && Number.isFinite(totalZarRaw)
-        ? Math.round(totalZarRaw)
-        : typeof totalZarRaw === "string" && /^\d+(\.\d+)?$/.test(totalZarRaw.trim())
-          ? Math.round(Number(totalZarRaw))
-          : null;
+    const amountZar = trustedBookingPayableZar({
+      total_price: row.total_price,
+      total_paid_zar: row.total_paid_zar,
+    });
 
     try {
       const decision = await resolvePaymentLinkDispatchDecision(

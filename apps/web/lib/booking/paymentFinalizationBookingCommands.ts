@@ -28,6 +28,9 @@ export type PaymentFinalizationObservedPendingBooking = {
   customerEmail: string | null;
   customerAuthId: string | null;
   paystackReference: string | null;
+  selectedCleanerId: string | null;
+  cleanerId: string | null;
+  assignmentType: string | null;
 };
 
 export function paymentFinalizationConflict(): DbError {
@@ -47,9 +50,15 @@ export async function updateObservedPendingPaymentBooking(params: {
   const { supabase, row, observed, ownershipColumn } = params;
   if (
     !observed.id ||
-    !["pending_payment", "payment_expired"].includes(observed.status) ||
-    [observed.customerEmail, observed.customerAuthId, observed.paystackReference]
-      .some((value) => value !== null && typeof value !== "string")
+    !["pending_payment", "payment_expired", "payment_reconciliation_required"].includes(observed.status) ||
+    [
+      observed.customerEmail,
+      observed.customerAuthId,
+      observed.paystackReference,
+      observed.selectedCleanerId,
+      observed.cleanerId,
+      observed.assignmentType,
+    ].some((value) => value !== null && typeof value !== "string")
   ) {
     return { data: null, error: paymentFinalizationConflict() };
   }
@@ -70,6 +79,9 @@ export async function updateObservedPendingPaymentBooking(params: {
     ["customer_email", observed.customerEmail],
     [ownershipColumn, observed.customerAuthId],
     ["paystack_reference", observed.paystackReference],
+    ["selected_cleaner_id", observed.selectedCleanerId],
+    ["cleaner_id", observed.cleanerId],
+    ["assignment_type", observed.assignmentType],
   ] as const) {
     query = value === null ? query.is(column, null) : query.eq(column, value);
   }

@@ -1,5 +1,6 @@
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import type { PaystackChargePayload } from "@/lib/payments/paymentTransactionTypes";
 
 export const FAILED_JOBS_ENQUEUE_ERROR = "FAILED_JOBS_ENQUEUE_FAILED";
 
@@ -10,6 +11,10 @@ export type BookingInsertFailedPayload = {
   customerEmail: string;
   snapshot: unknown;
   paystackMetadata?: Record<string, string | undefined> | null;
+  paystackAuthorizationCode?: string | null;
+  paystackCustomerCode?: string | null;
+  paidAtIso?: string | null;
+  paystackChargeData?: PaystackChargePayload | null;
 };
 
 export type PaymentMismatchFailedPayload = {

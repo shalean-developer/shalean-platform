@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   recordPaystackBookingPayment: vi.fn(),
   recordPaystackMonthlyInvoicePayment: vi.fn(),
   recordPaystackSalesDocumentPayment: vi.fn(),
+  recordPaystackEntitySettlementWithRecovery: vi.fn(),
   routePaystackChargeForMonthlyInvoice: vi.fn(),
   routePaystackChargeForSalesDocument: vi.fn(),
   enqueuePaystackRecoveryFailedJobs: vi.fn(),
@@ -79,6 +80,7 @@ vi.mock("@/lib/payments/recordPaystackSettlement", () => ({
   recordPaystackBookingPayment: mocks.recordPaystackBookingPayment,
   recordPaystackMonthlyInvoicePayment: mocks.recordPaystackMonthlyInvoicePayment,
   recordPaystackSalesDocumentPayment: mocks.recordPaystackSalesDocumentPayment,
+  recordPaystackEntitySettlementWithRecovery: mocks.recordPaystackEntitySettlementWithRecovery,
 }));
 
 vi.mock("@/lib/booking/routePaystackChargeForMonthlyInvoice", () => ({
@@ -223,7 +225,18 @@ describe("Princess PR C — Paystack webhook contract", () => {
       },
     });
     mocks.enqueuePaystackRecoveryFailedJobs.mockResolvedValue(undefined);
-    mocks.recordPaystackBookingPayment.mockResolvedValue(undefined);
+    mocks.recordPaystackBookingPayment.mockResolvedValue({
+      ok: true,
+      created: true,
+      paymentTransactionId: "paytx-test",
+      expenseId: null,
+    });
+    mocks.recordPaystackEntitySettlementWithRecovery.mockResolvedValue({
+      ok: true,
+      created: true,
+      paymentTransactionId: "paytx-entity-test",
+      expenseId: null,
+    });
     mocks.syncPaidBookingSideEffects.mockResolvedValue(undefined);
     mocks.replayPaymentConfirmedNotifyForPersistedBooking.mockResolvedValue(undefined);
     mocks.logSystemEvent.mockResolvedValue(undefined);

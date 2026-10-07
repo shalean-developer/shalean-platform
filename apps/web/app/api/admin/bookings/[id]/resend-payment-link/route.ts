@@ -5,6 +5,7 @@ import { persistPaymentLinkDelivery } from "@/lib/admin/persistPaymentLinkDelive
 import { paymentLinkSendAllowed } from "@/lib/admin/paymentLinkSendGate";
 import { deliverAdminPaymentLink } from "@/lib/admin/adminPaymentLinkDelivery";
 import { deriveAdminClientPaymentStatus, isStoredPaymentLinkUsable } from "@/lib/booking/adminPaymentLinkState";
+import { trustedBookingPayableZar } from "@/lib/booking/ensureBookingPaymentSession";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getServiceLabel, type BookingServiceId } from "@/components/booking/serviceCategories";
@@ -35,6 +36,7 @@ type Row = {
   service: string | null;
   date: string | null;
   time: string | null;
+  total_price: number | string | null;
   total_paid_zar: number | string | null;
   booking_snapshot: unknown;
   payment_link_send_count: number | null;
@@ -102,7 +104,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const { data: row, error } = await admin
     .from("bookings")
     .select(
-      "id, user_id, status, payment_link, payment_link_expires_at, payment_link_last_sent_at, paystack_reference, customer_name, customer_phone, customer_email, service, date, time, total_paid_zar, booking_snapshot, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel",
+      "id, user_id, status, payment_link, payment_link_expires_at, payment_link_last_sent_at, paystack_reference, customer_name, customer_phone, customer_email, service, date, time, total_price, total_paid_zar, booking_snapshot, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel",
     )
     .eq("id", bookingId.trim())
     .maybeSingle();
@@ -152,13 +154,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const phone = String(r.customer_phone ?? "").trim();
   const email = String(r.customer_email ?? "").trim();
 
-  const totalZarRaw = r.total_paid_zar;
-  const amountZar =
-    typeof totalZarRaw === "number" && Number.isFinite(totalZarRaw)
-      ? Math.round(totalZarRaw)
-      : typeof totalZarRaw === "string" && /^\d+(\.\d+)?$/.test(totalZarRaw.trim())
-        ? Math.round(Number(totalZarRaw))
-        : null;
+  const amountZar = trustedBookingPayableZar({
+    total_price: r.total_price,
+    total_paid_zar: r.total_paid_zar,
+  });
 
   const gate = paymentLinkSendAllowed(r);
   if (!gate.allowed) {

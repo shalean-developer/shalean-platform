@@ -2,7 +2,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import crypto from "crypto";
 const m = vi.hoisted(() => ({
   admin: vi.fn(), replay: vi.fn(), record: vi.fn(), sync: vi.fn(), pipeline: vi.fn(), finalize: vi.fn(),
-  monthly: vi.fn(), sales: vi.fn(), monthlyRecord: vi.fn(), salesRecord: vi.fn(),
+  monthly: vi.fn(), sales: vi.fn(), monthlyRecord: vi.fn(), salesRecord: vi.fn(), entityRecord: vi.fn(),
 }));
 vi.mock("next/server", async (importOriginal) => {
   const actual = await importOriginal<typeof import("next/server")>();
@@ -19,6 +19,7 @@ vi.mock("@/lib/booking/syncPaidBookingSideEffects", () => ({ syncPaidBookingSide
 vi.mock("@/lib/payments/recordPaystackSettlement", () => ({
   paystackChargeDataFromRecord: (x: unknown) => x, recordPaystackBookingPayment: m.record,
   recordPaystackMonthlyInvoicePayment: m.monthlyRecord, recordPaystackSalesDocumentPayment: m.salesRecord,
+  recordPaystackEntitySettlementWithRecovery: m.entityRecord,
 }));
 vi.mock("@/lib/booking/runPaystackVerifyFinalizePipeline", () => ({ runPaystackVerifyFinalizePipeline: m.pipeline }));
 vi.mock("@/lib/booking/bookingOperations", () => ({ finalizePaidBooking: m.finalize, upsertResultFromFinalizePaidBookingOp: (x: unknown) => x }));
@@ -54,7 +55,20 @@ let lookupError: boolean;
 let ownershipColumn: "customer_id" | "user_id";
 const secret = "test-only-paystack-signing-key";
 beforeEach(() => {
-  vi.clearAllMocks(); resetBookingOwnershipColumnCacheForTests();
+  vi.clearAllMocks();
+  m.record.mockResolvedValue({
+    ok: true,
+    created: true,
+    paymentTransactionId: "paytx-test",
+    expenseId: null,
+  });
+  m.entityRecord.mockResolvedValue({
+    ok: true,
+    created: true,
+    paymentTransactionId: "paytx-entity-test",
+    expenseId: null,
+  });
+  resetBookingOwnershipColumnCacheForTests();
   ownershipColumn = "customer_id"; lookupError = false; rpcOwner = null; reads = [];
   row = { id, status: "pending", paystack_reference: "pay_current", customer_email: "payer@example.com", customer_id: owner, payment_status: "success", amount_paid_cents: 12550 };
   tx = { status: "success", reference: "pay_current", amount: 12550, currency: "ZAR", customer: { email: "payer@example.com" }, metadata: { booking_id: id, user_id: owner } };
@@ -114,12 +128,12 @@ for (const mode of ["GET", "POST", "webhook"] as const) {
     });
     it("keeps monthly routing ahead of booking proof", async () => {
       m.monthly.mockResolvedValue({ kind: "monthly_settled", settled: "full", invoiceId: id });
-      await call(mode); expect(m.monthlyRecord).toHaveBeenCalled(); expect(m.sales).not.toHaveBeenCalled();
+      await call(mode); expect(m.entityRecord).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ entityType: "monthly_invoice" })); expect(m.sales).not.toHaveBeenCalled();
       expect(reads.some((x) => x.includes("customer_email"))).toBe(false); noSuccess();
     });
     it("keeps sales routing ahead of booking proof", async () => {
       m.sales.mockResolvedValue({ kind: "sales_doc_settled", documentId: id });
-      await call(mode); expect(m.salesRecord).toHaveBeenCalled(); expect(m.monthly).toHaveBeenCalled();
+      await call(mode); expect(m.entityRecord).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ entityType: "sales_document" })); expect(m.monthly).toHaveBeenCalled();
       expect(reads.some((x) => x.includes("customer_email"))).toBe(false); noSuccess();
     });
     it("passes pending payment to canonical finalization", async () => {

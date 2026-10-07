@@ -2,6 +2,7 @@ import "server-only";
 
 import { getServiceLabel, type BookingServiceId } from "@/components/booking/serviceCategories";
 import { adminPaymentLinkTtlMs } from "@/lib/booking/adminPaymentLinkState";
+import { trustedBookingPayableZar } from "@/lib/booking/ensureBookingPaymentSession";
 import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { processPaystackInitializeBody } from "@/lib/booking/paystackInitializeCore";
@@ -21,6 +22,7 @@ type BookingHead = {
   service: string | null;
   date: string | null;
   time: string | null;
+  total_price: number | string | null;
   total_paid_zar: number | string | null;
   payment_link_send_count: number | null;
   payment_link_first_sent_at: string | null;
@@ -30,7 +32,7 @@ type BookingHead = {
 };
 
 const HEAD_SELECT =
-  "id, customer_name, customer_phone, customer_email, service, date, time, total_paid_zar, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel";
+  "id, customer_name, customer_phone, customer_email, service, date, time, total_price, total_paid_zar, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel";
 
 /**
  * Phase 1 payment-link + decision engine, invoked when recurring auto-charge fails.
@@ -39,7 +41,7 @@ export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, boo
   const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const { data: row, error } = await admin
     .from("bookings")
-    .select(`id, ${ownershipColumn}, customer_email, customer_name, customer_phone, booking_snapshot, date, time, total_paid_zar`)
+    .select(`id, ${ownershipColumn}, customer_email, customer_name, customer_phone, booking_snapshot, date, time, total_price, total_paid_zar`)
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -68,21 +70,24 @@ export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, boo
     return false;
   }
 
-  const init = await processPaystackInitializeBody({
-    bookingId,
-    email,
-    locked,
-    tip: 0,
-    promoCode: "",
-    customer: {
-      type: "guest",
-      name,
+  const init = await processPaystackInitializeBody(
+    {
+      bookingId,
       email,
-      phone,
-      userId: "",
+      locked,
+      tip: 0,
+      promoCode: "",
+      customer: {
+        type: "guest",
+        name,
+        email,
+        phone,
+        userId: "",
+      },
+      relaxedLockValidation: true,
     },
-    relaxedLockValidation: true,
-  });
+    { preserveExistingPendingPayable: true },
+  );
 
   if (!init.ok) {
     await reportOperationalIssue("error", "recurring/fallback", init.error, { bookingId });
@@ -142,13 +147,10 @@ export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, boo
   const dateLabel = head.date != null ? String(head.date) : "—";
   const timeLabel = head.time != null ? String(head.time) : "—";
 
-  const totalZarRaw = head.total_paid_zar;
-  const amountZar =
-    typeof totalZarRaw === "number" && Number.isFinite(totalZarRaw)
-      ? Math.round(totalZarRaw)
-      : typeof totalZarRaw === "string" && /^\d+(\.\d+)?$/.test(totalZarRaw.trim())
-        ? Math.round(Number(totalZarRaw))
-        : null;
+  const amountZar = trustedBookingPayableZar({
+    total_price: head.total_price,
+    total_paid_zar: head.total_paid_zar,
+  });
 
   try {
     const decision = await resolvePaymentLinkDispatchDecision(

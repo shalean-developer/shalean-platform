@@ -1,5 +1,6 @@
 import "server-only";
 import { bookingCreationLifecyclePatch } from "@/lib/booking/bookingCreationProfiles";
+import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
 
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
@@ -8,7 +9,6 @@ import { provisionalPriceSnapshotFromLocked } from "@/lib/booking/provisionalPri
 import type { BookingLineItemInsert } from "@/lib/booking/bookingLineItemTypes";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
-import { persistBookingLineItems } from "@/lib/booking/persistBookingLineItems";
 import {
   lockedDurationMinutesFromBookingSnapshot,
 } from "@/lib/booking/durationMinutesIntegrity";
@@ -189,7 +189,6 @@ export async function updatePendingPaymentBookingForInit(
     bookingSnapshot: BookingSnapshotV1 | Record<string, unknown>;
     priceBreakdown: Record<string, unknown> | null;
     totalPriceZar: number | null;
-    totalPaidZar: number;
     customerName: string | null;
     customerPhone: string | null;
     userId: string | null;
@@ -238,6 +237,7 @@ export async function updatePendingPaymentBookingForInit(
     cleaner_id?: string | null;
     selected_cleaner_id?: string | null;
   } | null;
+
   const cleanerForTenure =
     (params.selected_cleaner_id && /^[0-9a-f-]{36}$/i.test(params.selected_cleaner_id)
       ? params.selected_cleaner_id
@@ -262,69 +262,76 @@ export async function updatePendingPaymentBookingForInit(
   const ownershipPatch =
     params.userId != null ? bookingCustomerOwnershipPatch(params.userId, ownershipColumn) : {};
 
-  const { error } = await admin
-    .from("bookings")
-    .update({
-      booking_snapshot: params.bookingSnapshot,
-      ...durationMinutesPatch,
-      price_breakdown: params.priceBreakdown,
-      total_price: params.totalPriceZar,
-      ...(params.price_snapshot && typeof params.price_snapshot === "object"
-        ? { price_snapshot: params.price_snapshot }
-        : {}),
-      total_paid_zar: params.totalPaidZar,
-      customer_name: params.customerName,
-      customer_phone: params.customerPhone,
-      /** Guest checkout passes `userId: null` — do not overwrite ownership already set by insert trigger. */
-      ...ownershipPatch,
-      location_id: params.locationId,
-      city_id: params.cityId,
-      surge_multiplier: params.surgeMultiplier,
-      surge_reason: params.surgeReason,
-      extras: extrasPersist,
-      ...(params.slotDuplicateExempt === true ? { slot_duplicate_exempt: true } : {}),
-      ...(params.adminForceSlotOverride === true ? { admin_force_slot_override: true } : {}),
-      ...(params.selected_cleaner_id && /^[0-9a-f-]{36}$/i.test(params.selected_cleaner_id)
-        ? {
-            selected_cleaner_id: params.selected_cleaner_id,
-            assignment_type: params.assignment_type ?? "user_selected",
-          }
-        : {}),
-      ...(typeof params.cleaner_count === "number" &&
-      Number.isFinite(params.cleaner_count) &&
-      params.cleaner_count > 1
-        ? { cleaner_count: Math.round(params.cleaner_count) }
-        : {}),
-      ...(tenureShare != null ? { cleaner_share_percentage: tenureShare } : {}),
-    })
-    .eq("id", params.bookingId)
-    .eq("status", "pending_payment");
-
-  if (error) return { ok: false, error: error.message, pgCode: error.code };
-
-  const deleteOnFail = params.deleteRowOnLineItemPersistFail !== false;
-  const lineItems = params.checkoutLineItems;
-  if (lineItems && lineItems.length > 0) {
-    const { count, error: ctErr } = await admin
-      .from("booking_line_items")
-      .select("id", { count: "exact", head: true })
-      .eq("booking_id", params.bookingId);
-    const existing = typeof count === "number" ? count : 0;
-    if (ctErr) {
-      if (deleteOnFail) {
-        await admin.from("bookings").delete().eq("id", params.bookingId).eq("status", "pending_payment");
-      }
-      return { ok: false, error: ctErr.message || "Could not verify booking line items." };
-    }
-    if (existing === 0) {
-      const persisted = await persistBookingLineItems(admin, params.bookingId, lineItems);
-      if (!persisted.ok) {
-        if (deleteOnFail) {
-          await admin.from("bookings").delete().eq("id", params.bookingId).eq("status", "pending_payment");
+  const patch = {
+    booking_snapshot: params.bookingSnapshot,
+    ...durationMinutesPatch,
+    price_breakdown: params.priceBreakdown,
+    total_price: params.totalPriceZar,
+    ...(params.price_snapshot && typeof params.price_snapshot === "object"
+      ? { price_snapshot: params.price_snapshot }
+      : {}),
+    ...bookingUncollectedCashColumns(),
+    customer_name: params.customerName,
+    customer_phone: params.customerPhone,
+    /** Guest checkout passes `userId: null` — do not overwrite ownership already set by insert trigger. */
+    ...ownershipPatch,
+    location_id: params.locationId,
+    city_id: params.cityId,
+    surge_multiplier: params.surgeMultiplier,
+    surge_reason: params.surgeReason,
+    extras: extrasPersist,
+    ...(params.slotDuplicateExempt === true ? { slot_duplicate_exempt: true } : {}),
+    ...(params.adminForceSlotOverride === true ? { admin_force_slot_override: true } : {}),
+    ...(params.selected_cleaner_id && /^[0-9a-f-]{36}$/i.test(params.selected_cleaner_id)
+      ? {
+          selected_cleaner_id: params.selected_cleaner_id,
+          assignment_type: params.assignment_type ?? "user_selected",
         }
-        return { ok: false, error: persisted.error || "Could not save booking line items." };
-      }
+      : {}),
+    ...(typeof params.cleaner_count === "number" &&
+    Number.isFinite(params.cleaner_count) &&
+    params.cleaner_count > 1
+      ? { cleaner_count: Math.round(params.cleaner_count) }
+      : {}),
+    ...(tenureShare != null ? { cleaner_share_percentage: tenureShare } : {}),
+  };
+
+  const lineItems = params.checkoutLineItems;
+  const lineItemRows =
+    lineItems && lineItems.length > 0
+      ? lineItems.map((r) => ({
+          item_type: r.item_type,
+          slug: r.slug ?? null,
+          name: r.name,
+          quantity: r.quantity,
+          unit_price_cents: r.unit_price_cents,
+          total_price_cents: r.total_price_cents,
+          pricing_source: r.pricing_source ?? null,
+          metadata: r.metadata ?? {},
+          earns_cleaner: r.earns_cleaner ?? r.item_type !== "adjustment",
+        }))
+      : null;
+
+  // AUDIT-02A01: booking pricing + line-item replacement are one DB transaction.
+  const { data: updatedId, error } = await admin.rpc("apply_pending_booking_init_patch", {
+    p_booking_id: params.bookingId,
+    p_patch: patch,
+    p_line_items: lineItemRows,
+  });
+
+  if (error) {
+    const deleteOnFail = params.deleteRowOnLineItemPersistFail !== false;
+    if (deleteOnFail) {
+      await admin.from("bookings").delete().eq("id", params.bookingId).eq("status", "pending_payment");
     }
+    return { ok: false, error: error.message, pgCode: error.code };
+  }
+  if (!updatedId) {
+    return {
+      ok: false,
+      error: "Pending checkout changed or settlement evidence exists.",
+      pgCode: undefined,
+    };
   }
 
   return { ok: true };
