@@ -228,6 +228,7 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(preferredRosterSync).toContain("replace_booking_cleaners_preference_atomic");
     expect(preferredRosterSync).toContain("rosterIsPreferenceOnly");
     expect(preferredRosterSync).toContain("skipped_authoritative_existing_roster");
+    expect(preferredRosterSync).toContain("skipped_authoritative_assignment");
     const rosterProvenance = read("lib/recurring/recurringRosterProvenance.ts");
     expect(rosterProvenance).toContain('"checkout_preferred"');
     expect(rosterProvenance).toContain('"customer_preferred"');
