@@ -386,6 +386,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         reason: "finalization_failed",
         bookingInDatabase: true,
         error: "finalization_failed",
+        recoveryEnqueue: true,
       };
     }
     if (st !== "pending_payment" && st !== "payment_expired") {
