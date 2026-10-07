@@ -70,7 +70,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
   const existingRoster = Array.isArray(row.booking_cleaners) ? row.booking_cleaners : [];
   const generatedRecurringSources = new Set(["recurring_preferred", "recurring_continuity"]);
   const customExistingRoster =
-    existingRoster.length >= 2 &&
+    existingRoster.length > 0 &&
     existingRoster.some(
       (member) =>
         !generatedRecurringSources.has(String(member.source ?? "").trim().toLowerCase()),
