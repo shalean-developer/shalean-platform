@@ -178,7 +178,10 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
   if (!built.ok) {
     return NextResponse.json({ error: built.error }, { status: built.status });
   }
-  const rpcRows = built.rows;
+  // Any explicit admin roster edit is authoritative customization.
+  // Preserve payout weights/bonuses, but stamp provenance as admin so later
+  // recurring continuity does not treat the edited roster as generated.
+  const rpcRows = built.rows.map((row) => ({ ...row, source: "admin" }));
 
   const { error: rpcErr } = await admin.rpc("replace_booking_cleaners_admin_atomic", {
     p_booking_id: bookingId,
