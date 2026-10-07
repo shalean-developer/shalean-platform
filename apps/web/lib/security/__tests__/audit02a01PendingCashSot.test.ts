@@ -202,10 +202,15 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(paystackFinalize).toContain("normalizeUuidCandidate(existingPersistedSelectedCleanerId)");
     expect(paystackFinalize).toContain("applyRecurringOccurrenceRosterContinuity");
     const rosterContinuity = read("lib/recurring/applyRecurringOccurrenceRosterContinuity.ts");
-    expect(rosterContinuity).toContain("booking_cleaners(cleaner_id, role)");
-    expect(rosterContinuity).toContain("if (existingRoster.length >= 2)");
-    expect(rosterContinuity).toContain("cleanerCount: existingRoster.length");
-    expect(rosterContinuity.indexOf("if (existingRoster.length >= 2)")).toBeLessThan(
+    expect(rosterContinuity).toContain("booking_cleaners(cleaner_id, role, source)");
+    expect(rosterContinuity).toContain("generatedRecurringSources");
+    expect(rosterContinuity).toContain('"recurring_preferred", "recurring_continuity"');
+    expect(rosterContinuity).toContain("customExistingRoster");
+    expect(rosterContinuity).toContain("custom_recurring_roster_missing_unique_lead");
+    expect(rosterContinuity).toContain("cleaner_id: existingLeadId");
+    expect(rosterContinuity).toContain("payout_owner_cleaner_id: existingLeadId");
+    expect(rosterContinuity).toContain('source: "recurring_continuity"');
+    expect(rosterContinuity.indexOf("customExistingRoster")).toBeLessThan(
       rosterContinuity.indexOf("let continuity = params.roster ?? null"),
     );
     expect(rosterContinuity).toContain("existingRoleByCleanerId");
