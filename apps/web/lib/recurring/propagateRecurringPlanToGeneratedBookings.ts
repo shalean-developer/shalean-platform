@@ -423,11 +423,39 @@ export async function propagateRecurringPlanToGeneratedBookings(
       invoiceIds.add(booking.monthly_invoice_id);
     }
 
-    const cleanerId = resolvePersistCleanerIdForBooking({
+    let earningsIdentity = {
       cleaner_id: booking.cleaner_id,
       payout_owner_cleaner_id: booking.payout_owner_cleaner_id,
       is_team_job: booking.is_team_job,
-    });
+    };
+
+    if (preferredCleanerId && cleanerMutationSucceeded) {
+      const { data: refreshedIdentity, error: refreshedIdentityErr } = await admin
+        .from("bookings")
+        .select("cleaner_id, payout_owner_cleaner_id, is_team_job")
+        .eq("id", booking.id)
+        .maybeSingle();
+
+      if (refreshedIdentityErr || !refreshedIdentity) {
+        result.errors.push(
+          `Booking ${booking.id}: cleaner identity reload failed: ${refreshedIdentityErr?.message ?? "booking_not_found"}`,
+        );
+        result.earnings_skipped++;
+        continue;
+      }
+
+      earningsIdentity = {
+        cleaner_id:
+          refreshedIdentity.cleaner_id != null ? String(refreshedIdentity.cleaner_id) : null,
+        payout_owner_cleaner_id:
+          refreshedIdentity.payout_owner_cleaner_id != null
+            ? String(refreshedIdentity.payout_owner_cleaner_id)
+            : null,
+        is_team_job: refreshedIdentity.is_team_job === true,
+      };
+    }
+
+    const cleanerId = resolvePersistCleanerIdForBooking(earningsIdentity);
 
     if (!cleanerId) continue;
 
