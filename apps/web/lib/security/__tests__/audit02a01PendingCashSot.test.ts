@@ -203,6 +203,11 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(paystackFinalize).toContain("applyRecurringOccurrenceRosterContinuity");
     const rosterContinuity = read("lib/recurring/applyRecurringOccurrenceRosterContinuity.ts");
     expect(rosterContinuity).toContain("booking_cleaners(cleaner_id, role)");
+    expect(rosterContinuity).toContain("if (existingRoster.length >= 2)");
+    expect(rosterContinuity).toContain("cleanerCount: existingRoster.length");
+    expect(rosterContinuity.indexOf("if (existingRoster.length >= 2)")).toBeLessThan(
+      rosterContinuity.indexOf("let continuity = params.roster ?? null"),
+    );
     expect(rosterContinuity).toContain("existingRoleByCleanerId");
     expect(rosterContinuity).toContain("desiredRoleByCleanerId");
     expect(rosterContinuity).toContain('desiredRoleByCleanerId.get(leadId) === "lead"');
