@@ -108,7 +108,11 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringFallback).toContain("{ preserveExistingPendingPayable: true }");
 
     const recurringPropagation = read("lib/recurring/propagateRecurringPlanToGeneratedBookings.ts");
-    expect(recurringPropagation).toContain("total_price: priceZar");
+    expect(recurringPropagation).toContain("preserveRecurringPackagePayable");
+    expect(recurringPropagation).toContain('payment_scope === "recurring_first_30_days"');
+    expect(recurringPropagation).toContain("safelyUnpaidPending");
+    expect(recurringPropagation).toContain('from("payment_transactions")');
+    expect(recurringPropagation).toContain("settlementMarkerPresent");
     expect(recurringPropagation).toContain("bookingUncollectedCashColumns()");
     expect(recurringPropagation).not.toContain("total_paid_zar: priceZar");
   });
@@ -142,6 +146,8 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(sql).toContain("for update");
     expect(sql).toContain("from public.payment_transactions pt");
     expect(sql).toContain("grant execute on function public.apply_pending_booking_init_patch(uuid, jsonb) to service_role");
+    expect(sql).not.toContain("    user_id,");
+    expect(sql).not.toContain("      x.user_id,");
     expect(sql).toContain("price_snapshot->>'total_price'");
     expect(sql).toContain("sum(coalesce(bli.total_price_cents, 0))");
     expect(sql).toContain("total_price = b.total_paid_zar");
