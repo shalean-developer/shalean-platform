@@ -383,13 +383,11 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterHeaderSql).toContain("booking_v2_r0");
     expect(rosterHeaderSql).toContain("recurring_preferred");
     expect(rosterHeaderSql).toContain("lead_source = 'admin_roster_edit'");
-    expect(rosterHeaderSql).toContain("committed lead replacement requires canonical direct assignment");
-    expect(rosterHeaderSql).toContain("update public.dispatch_offers");
-    expect(rosterHeaderSql).toContain("status = 'assigned'");
-    expect(rosterHeaderSql).toContain("dispatch_status = 'assigned'");
-    expect(rosterHeaderSql).toContain("cleaner_response_status = 'accepted'");
-    expect(rosterHeaderSql).toContain("assignment_type = 'admin_assigned'");
-    expect(rosterHeaderSql).toContain("cleaner_payout_cents = null");
+    expect(rosterHeaderSql).toContain("lead replacement requires canonical direct assignment");
+    expect(rosterHeaderSql).toContain("v_old_cleaner_id is distinct from lead_id");
+    expect(rosterHeaderSql).not.toContain("committed lead replacement requires canonical direct assignment");
+    expect(rosterHeaderSql).not.toContain("update public.dispatch_offers");
+    expect(rosterHeaderSql).not.toContain("assignment_type = 'admin_assigned'");
 
     const payoutRemoval = read("lib/payout/removeCleanerFromVisitPayout.ts");
     expect(payoutRemoval).toContain('source: "admin_remove_visit_payout"');
@@ -432,9 +430,14 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterContinuity).toContain("lifecyclePromoted?: boolean");
     expect(rosterContinuity).toContain("assignmentCommitted?: boolean");
     expect(rosterContinuity).toContain("assignmentCommitted: committedAssignment");
-    expect(rosterContinuity).toContain("params.leadCleanerId?.trim()");
-    expect(rosterContinuity).toContain("identityRepairErr");
-    expect(rosterContinuity).toContain("payout_owner_cleaner_id: committedLeadId");
+    expect(rosterContinuity).toContain(
+      "committed_recurring_identity_requires_manual_reconciliation",
+    );
+    const committedBranchStart = rosterContinuity.indexOf("if (committedAssignment)");
+    const continuityLookupStart = rosterContinuity.indexOf("let continuity = params.roster ?? null");
+    const committedBranch = rosterContinuity.slice(committedBranchStart, continuityLookupStart);
+    expect(committedBranch).not.toContain("params.leadCleanerId");
+    expect(committedBranch).not.toContain(".update(");
     expect(rosterContinuity).toContain("lifecyclePromoted: shouldReplaceRoster");
     expect(rosterContinuity).toContain('kind: "locked"');
 
