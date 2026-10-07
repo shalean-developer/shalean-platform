@@ -35,6 +35,28 @@ describe("payment finalization booking command convergence (Phase 1F)", () => {
 
   });
 
+  it("allows guarded retry resume from payment_reconciliation_required", () => {
+    const commandSrc = readFileSync(command, "utf8");
+    const paystackSrc = readFileSync(paystack, "utf8");
+
+    expect(commandSrc).toContain('"payment_reconciliation_required"');
+    expect(paystackSrc).toContain(
+      'st === "payment_reconciliation_required" && input.paystackPersistSource === "retry"',
+    );
+    expect(paystackSrc).toContain(
+      'st === "payment_reconciliation_required" && input.paystackPersistSource !== "retry"',
+    );
+  });
+
+  it("runs required recurring roster recovery before deferred side effects", () => {
+    const paystackSrc = readFileSync(paystack, "utf8");
+
+    expect(paystackSrc).toContain("const runRequiredPostPersistRecovery = async");
+    expect(paystackSrc.indexOf("await runRequiredPostPersistRecovery()")).toBeLessThan(
+      paystackSrc.indexOf("if (input.deferPostPersistSideEffects)"),
+    );
+  });
+
   it("owns the Paystack finalized booking insert shape", () => {
     const src = readFileSync(command, "utf8");
 
