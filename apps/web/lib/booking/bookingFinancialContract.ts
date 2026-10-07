@@ -107,9 +107,12 @@ export function canonicalServiceValueCents(params: {
   booking: BookingFinancialContractRow;
   eligibleLineItemsSubtotalCents?: number | null;
 }): number | null {
-  const lineSubtotal = Number(params.eligibleLineItemsSubtotalCents);
-  if (Number.isFinite(lineSubtotal) && lineSubtotal >= 0) {
-    return Math.round(lineSubtotal);
+  const lineSubtotalRaw = params.eligibleLineItemsSubtotalCents;
+  if (lineSubtotalRaw !== null && lineSubtotalRaw !== undefined) {
+    const lineSubtotal = Number(lineSubtotalRaw);
+    if (Number.isFinite(lineSubtotal) && lineSubtotal >= 0) {
+      return Math.round(lineSubtotal);
+    }
   }
 
   const totalPrice = Number(params.booking.total_price);
