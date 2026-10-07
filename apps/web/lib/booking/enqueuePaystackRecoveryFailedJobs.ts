@@ -31,6 +31,7 @@ export async function enqueuePaystackRecoveryFailedJobs(input: {
         reference,
         errorType: "recovery_booking_insert_enqueue_failed",
       });
+      throw new Error("recovery_booking_insert_enqueue_failed");
     }
   }
 
@@ -51,6 +52,7 @@ export async function enqueuePaystackRecoveryFailedJobs(input: {
         bookingId: result.bookingId,
         reason: result.reason,
       });
+      throw new Error("recovery_payment_mismatch_enqueue_failed");
     }
   }
 
@@ -62,6 +64,7 @@ export async function enqueuePaystackRecoveryFailedJobs(input: {
         bookingId: result.bookingId ?? null,
         errorType: "recovery_payment_reconciliation_enqueue_failed",
       });
+      throw new Error("recovery_payment_reconciliation_enqueue_failed");
     }
   }
 }
