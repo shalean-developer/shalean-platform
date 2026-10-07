@@ -206,6 +206,7 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterContinuity).toContain("generatedRecurringSources");
     expect(rosterContinuity).toContain('"recurring_preferred", "recurring_continuity"');
     expect(rosterContinuity).toContain("customExistingRoster");
+    expect(rosterContinuity).toContain("existingRoster.length > 0");
     expect(rosterContinuity).toContain("custom_recurring_roster_missing_unique_lead");
     expect(rosterContinuity).toContain("cleaner_id: existingLeadId");
     expect(rosterContinuity).toContain("payout_owner_cleaner_id: existingLeadId");
