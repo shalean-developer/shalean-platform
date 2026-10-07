@@ -95,6 +95,12 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(initialize).toContain("Partial pricing state is not immutable yet");
     expect(initialize).toContain("return { bookingId: bid, skipLineItemInsert: false, pricingComplete: false }");
     expect(initialize).toContain("checkoutLineItems: pricingTarget.skipLineItemInsert ? null : checkoutLineItems");
+
+    const writer = read("lib/booking/insertPendingPaymentBooking.ts");
+    expect(writer).toContain('admin.rpc(\n      "replace_booking_line_items_atomic"');
+    expect(writer).toContain("p_booking_id: params.bookingId");
+    expect(writer).toContain("p_rows: rows");
+    expect(writer).not.toContain("persistBookingLineItems(admin, params.bookingId, lineItems)");
   });
 
   it("preserves the stored recurring package payable during fallback only", () => {
