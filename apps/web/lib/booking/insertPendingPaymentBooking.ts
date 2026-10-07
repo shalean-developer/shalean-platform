@@ -223,9 +223,7 @@ export async function updatePendingPaymentBookingForInit(
 
   const { data: row0, error: row0Err } = await admin
     .from("bookings")
-    .select(
-      "date, time, cleaner_id, selected_cleaner_id, status, payment_status, payment_completed_at, paid_at, payment_transaction_id, marked_paid_by_admin_id",
-    )
+    .select("date, time, cleaner_id, selected_cleaner_id")
     .eq("id", params.bookingId)
     .maybeSingle();
   if (row0Err) {
@@ -239,45 +237,7 @@ export async function updatePendingPaymentBookingForInit(
     time?: string | null;
     cleaner_id?: string | null;
     selected_cleaner_id?: string | null;
-    status?: string | null;
-    payment_status?: string | null;
-    payment_completed_at?: string | null;
-    paid_at?: string | null;
-    payment_transaction_id?: string | null;
-    marked_paid_by_admin_id?: string | null;
   } | null;
-
-  const lifecycleStatus = String(r0?.status ?? "").trim().toLowerCase();
-  const paymentStatus = String(r0?.payment_status ?? "").trim().toLowerCase();
-  const hasRowSettlementEvidence =
-    ["success", "paid", "succeeded", "completed", "pending_monthly"].includes(paymentStatus) ||
-    Boolean(r0?.payment_completed_at) ||
-    Boolean(r0?.paid_at) ||
-    Boolean(r0?.payment_transaction_id) ||
-    Boolean(r0?.marked_paid_by_admin_id);
-
-  if (lifecycleStatus !== "pending_payment" || hasRowSettlementEvidence) {
-    return {
-      ok: false,
-      error: "Pending checkout cannot be repriced after settlement evidence exists.",
-      pgCode: undefined,
-    };
-  }
-
-  const { count: linkedLedgerCount, error: ledgerCheckErr } = await admin
-    .from("payment_transactions")
-    .select("id", { count: "exact", head: true })
-    .eq("booking_id", params.bookingId);
-  if (ledgerCheckErr) {
-    return { ok: false, error: ledgerCheckErr.message, pgCode: ledgerCheckErr.code };
-  }
-  if ((linkedLedgerCount ?? 0) > 0) {
-    return {
-      ok: false,
-      error: "Pending checkout cannot be repriced after payment ledger creation.",
-      pgCode: undefined,
-    };
-  }
 
   const cleanerForTenure =
     (params.selected_cleaner_id && /^[0-9a-f-]{36}$/i.test(params.selected_cleaner_id)
@@ -303,45 +263,53 @@ export async function updatePendingPaymentBookingForInit(
   const ownershipPatch =
     params.userId != null ? bookingCustomerOwnershipPatch(params.userId, ownershipColumn) : {};
 
-  const { error } = await admin
-    .from("bookings")
-    .update({
-      booking_snapshot: params.bookingSnapshot,
-      ...durationMinutesPatch,
-      price_breakdown: params.priceBreakdown,
-      total_price: params.totalPriceZar,
-      ...(params.price_snapshot && typeof params.price_snapshot === "object"
-        ? { price_snapshot: params.price_snapshot }
-        : {}),
-      ...bookingUncollectedCashColumns(),
-      customer_name: params.customerName,
-      customer_phone: params.customerPhone,
-      /** Guest checkout passes `userId: null` — do not overwrite ownership already set by insert trigger. */
-      ...ownershipPatch,
-      location_id: params.locationId,
-      city_id: params.cityId,
-      surge_multiplier: params.surgeMultiplier,
-      surge_reason: params.surgeReason,
-      extras: extrasPersist,
-      ...(params.slotDuplicateExempt === true ? { slot_duplicate_exempt: true } : {}),
-      ...(params.adminForceSlotOverride === true ? { admin_force_slot_override: true } : {}),
-      ...(params.selected_cleaner_id && /^[0-9a-f-]{36}$/i.test(params.selected_cleaner_id)
-        ? {
-            selected_cleaner_id: params.selected_cleaner_id,
-            assignment_type: params.assignment_type ?? "user_selected",
-          }
-        : {}),
-      ...(typeof params.cleaner_count === "number" &&
-      Number.isFinite(params.cleaner_count) &&
-      params.cleaner_count > 1
-        ? { cleaner_count: Math.round(params.cleaner_count) }
-        : {}),
-      ...(tenureShare != null ? { cleaner_share_percentage: tenureShare } : {}),
-    })
-    .eq("id", params.bookingId)
-    .eq("status", "pending_payment");
+  const patch = {
+    booking_snapshot: params.bookingSnapshot,
+    ...durationMinutesPatch,
+    price_breakdown: params.priceBreakdown,
+    total_price: params.totalPriceZar,
+    ...(params.price_snapshot && typeof params.price_snapshot === "object"
+      ? { price_snapshot: params.price_snapshot }
+      : {}),
+    ...bookingUncollectedCashColumns(),
+    customer_name: params.customerName,
+    customer_phone: params.customerPhone,
+    /** Guest checkout passes `userId: null` — do not overwrite ownership already set by insert trigger. */
+    ...ownershipPatch,
+    location_id: params.locationId,
+    city_id: params.cityId,
+    surge_multiplier: params.surgeMultiplier,
+    surge_reason: params.surgeReason,
+    extras: extrasPersist,
+    ...(params.slotDuplicateExempt === true ? { slot_duplicate_exempt: true } : {}),
+    ...(params.adminForceSlotOverride === true ? { admin_force_slot_override: true } : {}),
+    ...(params.selected_cleaner_id && /^[0-9a-f-]{36}$/i.test(params.selected_cleaner_id)
+      ? {
+          selected_cleaner_id: params.selected_cleaner_id,
+          assignment_type: params.assignment_type ?? "user_selected",
+        }
+      : {}),
+    ...(typeof params.cleaner_count === "number" &&
+    Number.isFinite(params.cleaner_count) &&
+    params.cleaner_count > 1
+      ? { cleaner_count: Math.round(params.cleaner_count) }
+      : {}),
+    ...(tenureShare != null ? { cleaner_share_percentage: tenureShare } : {}),
+  };
+
+  const { data: updatedId, error } = await admin.rpc("apply_pending_booking_init_patch", {
+    p_booking_id: params.bookingId,
+    p_patch: patch,
+  });
 
   if (error) return { ok: false, error: error.message, pgCode: error.code };
+  if (!updatedId) {
+    return {
+      ok: false,
+      error: "Pending checkout changed or settlement evidence exists.",
+      pgCode: undefined,
+    };
+  }
 
   const deleteOnFail = params.deleteRowOnLineItemPersistFail !== false;
   const lineItems = params.checkoutLineItems;
