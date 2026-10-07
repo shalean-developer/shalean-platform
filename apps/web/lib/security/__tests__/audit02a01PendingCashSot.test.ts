@@ -174,6 +174,18 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringPropagation).toContain(
       "...(preferredCleanerId",
     );
+    expect(recurringPropagation).toContain("let cleanerMutationSucceeded = false");
+    expect(recurringPropagation).toContain(
+      "cleanerMutationSucceeded = Boolean(preferredCleanerId)",
+    );
+    expect(recurringPropagation).toContain(
+      "preferredCleanerId && cleanerMutationSucceeded",
+    );
+
+    const paystackFinalize = read("lib/booking/upsertBookingFromPaystack.ts");
+    expect(paystackFinalize).toContain('error.code === "PAYMENT_FINALIZATION_CONFLICT"');
+    expect(paystackFinalize).toContain('reason: "finalization_failed" as const');
+    expect(paystackFinalize).toContain("recoveryEnqueue: true");
 
     const recurringCleanerAtomicSql = read(
       "../../supabase/migrations/20261007073500_audit_02a01_recurring_cleaner_atomic.sql",
