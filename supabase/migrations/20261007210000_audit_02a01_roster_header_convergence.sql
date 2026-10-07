@@ -15,6 +15,7 @@ declare
   n_lead int;
   n_distinct int;
   lead_id uuid;
+  lead_source text;
   elem jsonb;
   v_fin timestamptz;
 begin
@@ -85,7 +86,8 @@ begin
     coalesce(nullif(trim(e->>'source'), ''), 'admin')
   from jsonb_array_elements(p_rows) e;
 
-  select bc.cleaner_id into lead_id
+  select bc.cleaner_id, lower(trim(coalesce(bc.source, '')))
+    into lead_id, lead_source
     from public.booking_cleaners bc
    where bc.booking_id = p_booking_id
      and bc.role = 'lead'
@@ -96,8 +98,16 @@ begin
   end if;
 
   update public.bookings b
-     set cleaner_id = lead_id,
-         payout_owner_cleaner_id = lead_id,
+     set cleaner_id = case
+           when lead_source in ('checkout_preferred', 'customer_preferred', 'recurring_preferred')
+             then b.cleaner_id
+           else lead_id
+         end,
+         payout_owner_cleaner_id = case
+           when lead_source in ('checkout_preferred', 'customer_preferred', 'recurring_preferred')
+             then b.payout_owner_cleaner_id
+           else lead_id
+         end,
          cleaner_count = n_total
    where b.id = p_booking_id;
 end;
