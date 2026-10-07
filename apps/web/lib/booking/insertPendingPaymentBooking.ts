@@ -296,54 +296,42 @@ export async function updatePendingPaymentBookingForInit(
     ...(tenureShare != null ? { cleaner_share_percentage: tenureShare } : {}),
   };
 
+  const lineItems = params.checkoutLineItems;
+  const lineItemRows =
+    lineItems && lineItems.length > 0
+      ? lineItems.map((r) => ({
+          item_type: r.item_type,
+          slug: r.slug ?? null,
+          name: r.name,
+          quantity: r.quantity,
+          unit_price_cents: r.unit_price_cents,
+          total_price_cents: r.total_price_cents,
+          pricing_source: r.pricing_source ?? null,
+          metadata: r.metadata ?? {},
+          earns_cleaner: r.earns_cleaner ?? r.item_type !== "adjustment",
+        }))
+      : null;
+
+  // AUDIT-02A01: booking pricing + line-item replacement are one DB transaction.
   const { data: updatedId, error } = await admin.rpc("apply_pending_booking_init_patch", {
     p_booking_id: params.bookingId,
     p_patch: patch,
+    p_line_items: lineItemRows,
   });
 
-  if (error) return { ok: false, error: error.message, pgCode: error.code };
+  if (error) {
+    const deleteOnFail = params.deleteRowOnLineItemPersistFail !== false;
+    if (deleteOnFail) {
+      await admin.from("bookings").delete().eq("id", params.bookingId).eq("status", "pending_payment");
+    }
+    return { ok: false, error: error.message, pgCode: error.code };
+  }
   if (!updatedId) {
     return {
       ok: false,
       error: "Pending checkout changed or settlement evidence exists.",
       pgCode: undefined,
     };
-  }
-
-  const deleteOnFail = params.deleteRowOnLineItemPersistFail !== false;
-  const lineItems = params.checkoutLineItems;
-  if (lineItems && lineItems.length > 0) {
-    const rows = lineItems.map((r) => ({
-      item_type: r.item_type,
-      slug: r.slug ?? null,
-      name: r.name,
-      quantity: r.quantity,
-      unit_price_cents: r.unit_price_cents,
-      total_price_cents: r.total_price_cents,
-      pricing_source: r.pricing_source ?? null,
-      metadata: r.metadata ?? {},
-      earns_cleaner: r.earns_cleaner ?? r.item_type !== "adjustment",
-    }));
-
-    const { data: replacedCount, error: replaceErr } = await admin.rpc(
-      "replace_booking_line_items_atomic",
-      {
-        p_booking_id: params.bookingId,
-        p_rows: rows,
-      },
-    );
-
-    if (replaceErr || Number(replacedCount) !== rows.length) {
-      if (deleteOnFail) {
-        await admin.from("bookings").delete().eq("id", params.bookingId).eq("status", "pending_payment");
-      }
-      return {
-        ok: false,
-        error:
-          replaceErr?.message ||
-          `Could not reconcile booking line items: expected ${rows.length}, replaced ${Number(replacedCount) || 0}.`,
-      };
-    }
   }
 
   return { ok: true };
