@@ -19,12 +19,10 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(writer).toContain("...bookingUncollectedCashColumns()");
     expect(writer).not.toContain("total_paid_zar: params.totalPaidZar");
     expect(writer).not.toContain("totalPaidZar: number");
-    expect(writer).toContain("Pending checkout cannot be repriced after settlement evidence exists.");
-    expect(writer).toContain("Pending checkout cannot be repriced after payment ledger creation.");
-    expect(writer).toContain("payment_completed_at");
-    expect(writer).toContain("payment_transaction_id");
-    expect(writer).toContain("marked_paid_by_admin_id");
-    expect(writer).toContain('.from("payment_transactions")');
+    expect(writer).toContain('admin.rpc("apply_pending_booking_init_patch"');
+    expect(writer).toContain("Pending checkout changed or settlement evidence exists.");
+    expect(writer).not.toContain('.from("bookings")\n    .update({');
+
   });
 
   it("persists the actual Paystack charge as payable without writing collected cash", () => {
@@ -99,7 +97,11 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     const initialize = read("lib/booking/paystackInitializeCore.ts");
     expect(initialize).toContain("preserveExistingPendingPayable?: boolean");
     expect(initialize).toContain("preservedExistingPayableZar");
+    expect(initialize).toContain("preservedExistingPriceSnapshot");
     expect(initialize).toContain("const totalZar = preservedExistingPayableZar ?? recomputedTotalZar");
+    expect(initialize).toContain('payment_scope: "recurring_first_30_days" as const');
+    expect(initialize).toContain("per_visit_price_zar");
+    expect(initialize).toContain("prepaid_visit_count");
 
     const recurringFallback = read("lib/recurring/recurringPaymentLinkFallback.ts");
     expect(recurringFallback).toContain("{ preserveExistingPendingPayable: true }");
@@ -125,9 +127,15 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(sql).toContain("payment_transaction_id is not null");
     expect(sql).toContain("marked_paid_by_admin_id is not null");
     expect(sql).toContain("audit_02a01_ledger_only_settlement_requires_manual_reconciliation");
+    expect(sql).toContain("audit_02a01_divergent_cash_mirrors_require_manual_reconciliation");
+    expect(sql).toContain("coalesce(b.total_paid_zar, 0) <= 0");
     expect(sql).toContain("do $audit02a01$");
     expect(sql).toContain("$audit02a01$;");
     expect(sql).toContain("audit_02a01_legacy_payable_corroboration_failed");
+    expect(sql).toContain("create or replace function public.apply_pending_booking_init_patch");
+    expect(sql).toContain("for update");
+    expect(sql).toContain("from public.payment_transactions pt");
+    expect(sql).toContain("grant execute on function public.apply_pending_booking_init_patch(uuid, jsonb) to service_role");
     expect(sql).toContain("price_snapshot->>'total_price'");
     expect(sql).toContain("sum(coalesce(bli.total_price_cents, 0))");
     expect(sql).toContain("total_price = b.total_paid_zar");
