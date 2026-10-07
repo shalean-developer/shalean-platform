@@ -22,6 +22,8 @@ export async function applyRecurringOccurrenceRosterContinuity(
       cleanerCount: number;
       rosterRows: ReplaceBookingCleanersRpcRow[];
     } | null;
+    /** Preserve status/response/assigned timestamps even when the roster changes. */
+    preserveLifecycle?: boolean;
   },
 ): Promise<{
   ok: boolean;
@@ -159,7 +161,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
     cleaner_count: rosterRows.length,
     is_team_job: false,
     team_id: null,
-    ...(shouldReplaceRoster
+    ...(shouldReplaceRoster && !params.preserveLifecycle
       ? {
           assigned_at: new Date().toISOString(),
           cleaner_response_status: "pending",

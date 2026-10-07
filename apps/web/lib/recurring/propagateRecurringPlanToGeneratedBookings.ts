@@ -7,6 +7,7 @@ import { assertBookingCleanerEarningsResetSafe } from "@/lib/admin/adminBookingE
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import { lockedDurationMinutesPatch } from "@/lib/booking/durationMinutesIntegrity";
 import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
+import { buildExactSourceLineItems } from "@/lib/booking/buildBookingLineItems";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { provisionalPriceSnapshotJson } from "@/lib/booking/provisionalPriceSnapshotFromLocked";
 import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
@@ -69,6 +70,7 @@ type GeneratedBookingRow = {
   payout_owner_cleaner_id: string | null;
   is_team_job: boolean | null;
   invoice_status: string | null;
+  invoice_finalization_started: boolean;
 };
 
 function buildOccurrenceSnapshot(
@@ -157,7 +159,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
   const { data: rows, error } = await admin
     .from("bookings")
     .select(
-      "id, date, status, payment_status, payment_completed_at, paid_at, payment_transaction_id, marked_paid_by_admin_id, total_price, booking_snapshot, price_snapshot, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status)",
+      "id, date, status, payment_status, payment_completed_at, paid_at, payment_transaction_id, marked_paid_by_admin_id, total_price, booking_snapshot, price_snapshot, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status, snapshot_at_finalize, snapshot_current, finalized_at, paystack_reference, payment_link, sent_at, zoho_invoice_id, initial_invoice_email_dispatch_claimed, finalization_claim_token, finalization_claimed_at)",
     )
     .eq("recurring_id", plan.id)
     .neq("status", "cancelled");
@@ -199,11 +201,36 @@ export async function propagateRecurringPlanToGeneratedBookings(
         row.payout_owner_cleaner_id != null ? String(row.payout_owner_cleaner_id) : null,
       is_team_job: row.is_team_job === true,
       invoice_status: null,
+      invoice_finalization_started: false,
     };
 
     const invJoin = row.monthly_invoices;
     if (invJoin && typeof invJoin === "object" && !Array.isArray(invJoin)) {
-      booking.invoice_status = String((invJoin as { status?: unknown }).status ?? "") || null;
+      const invoice = invJoin as {
+        status?: unknown;
+        snapshot_at_finalize?: unknown;
+        snapshot_current?: unknown;
+        finalized_at?: unknown;
+        paystack_reference?: unknown;
+        payment_link?: unknown;
+        sent_at?: unknown;
+        zoho_invoice_id?: unknown;
+        initial_invoice_email_dispatch_claimed?: unknown;
+        finalization_claim_token?: unknown;
+        finalization_claimed_at?: unknown;
+      };
+      booking.invoice_status = String(invoice.status ?? "") || null;
+      booking.invoice_finalization_started =
+        invoice.snapshot_at_finalize != null ||
+        invoice.snapshot_current != null ||
+        invoice.finalized_at != null ||
+        Boolean(String(invoice.paystack_reference ?? "").trim()) ||
+        Boolean(String(invoice.payment_link ?? "").trim()) ||
+        invoice.sent_at != null ||
+        Boolean(String(invoice.zoho_invoice_id ?? "").trim()) ||
+        invoice.initial_invoice_email_dispatch_claimed === true ||
+        invoice.finalization_claim_token != null ||
+        invoice.finalization_claimed_at != null;
     }
 
     if (booking.monthly_invoice_id && isLockedInvoiceStatus(booking.invoice_status)) {
@@ -246,9 +273,17 @@ export async function propagateRecurringPlanToGeneratedBookings(
       Boolean(booking.payment_transaction_id) ||
       Boolean(booking.marked_paid_by_admin_id);
 
-    const mutableUnpaidCandidate = ordinaryUnpaidPending && !settlementMarkerPresent;
+    const draftMonthlyUnsettled =
+      paymentStatus === "pending_monthly" &&
+      Boolean(booking.monthly_invoice_id) &&
+      (booking.invoice_status ?? "").trim().toLowerCase() === "draft" &&
+      !booking.invoice_finalization_started &&
+      ["pending", "assigned", "pending_payment"].includes(lifecycleStatus);
+    const mutablePricingCandidate =
+      (ordinaryUnpaidPending || draftMonthlyUnsettled) && !settlementMarkerPresent;
     const preserveRecurringPackagePayable =
-      mutableUnpaidCandidate &&
+      ordinaryUnpaidPending &&
+      !settlementMarkerPresent &&
       booking.price_snapshot?.payment_scope === "recurring_first_30_days" &&
       booking.total_price != null &&
       booking.total_price > 0;
@@ -282,25 +317,48 @@ export async function propagateRecurringPlanToGeneratedBookings(
       ...nonPricingPatch,
       booking_snapshot: bookingSnapshotForMutableUpdate,
       total_price: preserveRecurringPackagePayable ? booking.total_price : priceZar,
-      ...bookingUncollectedCashColumns(),
+      ...(draftMonthlyUnsettled
+        ? {
+            amount_paid_cents: 0,
+            total_paid_cents: 0,
+            total_paid_zar: priceZar,
+          }
+        : bookingUncollectedCashColumns()),
       price_snapshot: preserveRecurringPackagePayable
         ? booking.price_snapshot
         : provisionalPriceSnapshotJson(locked),
-      ...(preferredCleanerId
+      ...(preferredCleanerId && ordinaryUnpaidPending
         ? recurringOccurrenceCleanerPatch(preferredCleanerId, {
             operationalStatus: "pending_payment",
           })
-        : {}),
+        : preferredCleanerId && draftMonthlyUnsettled
+          ? recurringOccurrenceCleanerIdentityOnlyPatch(preferredCleanerId)
+          : {}),
     };
+
+    const monthlyRepriceLineItems = draftMonthlyUnsettled
+      ? buildExactSourceLineItems({
+          declaredTotalCents: priceZar * 100,
+          source: "monthly_recurring_occurrence",
+          lines: [
+            {
+              name: "Monthly recurring service",
+              quantity: 1,
+              unitPriceCents: priceZar * 100,
+            },
+          ],
+        })
+      : null;
 
     let bookingUpdate: Record<string, unknown> = nonPricingPatch;
     let cleanerMutationSucceeded = false;
-    if (mutableUnpaidCandidate) {
+    if (mutablePricingCandidate) {
       const { data: repriced, error: repriceErr } = await admin.rpc(
-        "apply_recurring_occurrence_unpaid_patch",
+        "apply_recurring_occurrence_unpaid_patch_v2",
         {
           p_booking_id: booking.id,
           p_patch: mutablePricingPatch,
+          p_line_items: monthlyRepriceLineItems,
         },
       );
       if (repriceErr) {
@@ -309,11 +367,16 @@ export async function propagateRecurringPlanToGeneratedBookings(
       }
       if (repriced === true) {
         bookingUpdate = {};
-        cleanerMutationSucceeded = Boolean(preferredCleanerId);
+        cleanerMutationSucceeded = Boolean(
+          preferredCleanerId && (ordinaryUnpaidPending || draftMonthlyUnsettled),
+        );
+      } else if (draftMonthlyUnsettled) {
+        result.bookings_skipped_locked_invoice++;
+        continue;
       }
     }
 
-    if (preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent) {
+    if (preferredCleanerId && !mutablePricingCandidate && !settlementMarkerPresent) {
       Object.assign(
         bookingUpdate,
         preserveLifecycle
@@ -334,32 +397,68 @@ export async function propagateRecurringPlanToGeneratedBookings(
         result.errors.push(`Booking ${booking.id}: ${upErr.message}`);
         continue;
       }
-      if (preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent) {
+      if (preferredCleanerId && !mutablePricingCandidate && !settlementMarkerPresent) {
         cleanerMutationSucceeded = true;
       }
     }
 
     result.bookings_updated++;
     if (preferredCleanerId && cleanerMutationSucceeded) {
-      result.bookings_cleaner_updated++;
-      if (!bookingCompleted && !mutableUnpaidCandidate) {
-        await applyRecurringOccurrenceRosterContinuity(admin, {
+      if (!bookingCompleted && (!mutablePricingCandidate || draftMonthlyUnsettled)) {
+        const rosterContinuity = await applyRecurringOccurrenceRosterContinuity(admin, {
           bookingId: booking.id,
           recurringId: plan.id,
           leadCleanerId: preferredCleanerId,
+          preserveLifecycle: draftMonthlyUnsettled,
         });
+        if (!rosterContinuity.ok) {
+          result.errors.push(
+            `Booking ${booking.id}: recurring roster continuity failed: ${rosterContinuity.reason ?? "unknown_error"}`,
+          );
+          result.earnings_skipped++;
+          continue;
+        }
       }
+      result.bookings_cleaner_updated++;
     }
 
     if (booking.monthly_invoice_id) {
       invoiceIds.add(booking.monthly_invoice_id);
     }
 
-    const cleanerId = resolvePersistCleanerIdForBooking({
+    let earningsIdentity = {
       cleaner_id: booking.cleaner_id,
       payout_owner_cleaner_id: booking.payout_owner_cleaner_id,
       is_team_job: booking.is_team_job,
-    });
+    };
+
+    if (preferredCleanerId && cleanerMutationSucceeded) {
+      const { data: refreshedIdentity, error: refreshedIdentityErr } = await admin
+        .from("bookings")
+        .select("cleaner_id, payout_owner_cleaner_id, is_team_job")
+        .eq("id", booking.id)
+        .maybeSingle();
+
+      if (refreshedIdentityErr || !refreshedIdentity) {
+        result.errors.push(
+          `Booking ${booking.id}: cleaner identity reload failed: ${refreshedIdentityErr?.message ?? "booking_not_found"}`,
+        );
+        result.earnings_skipped++;
+        continue;
+      }
+
+      earningsIdentity = {
+        cleaner_id:
+          refreshedIdentity.cleaner_id != null ? String(refreshedIdentity.cleaner_id) : null,
+        payout_owner_cleaner_id:
+          refreshedIdentity.payout_owner_cleaner_id != null
+            ? String(refreshedIdentity.payout_owner_cleaner_id)
+            : null,
+        is_team_job: refreshedIdentity.is_team_job === true,
+      };
+    }
+
+    const cleanerId = resolvePersistCleanerIdForBooking(earningsIdentity);
 
     if (!cleanerId) continue;
 

@@ -129,15 +129,31 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringPropagation).toContain("preservedPackageSnapshot.total_zar");
     expect(recurringPropagation).toContain('"recurringPrepayment" in preservedPackageSnapshot');
     expect(recurringPropagation).toContain('payment_scope === "recurring_first_30_days"');
-    expect(recurringPropagation).toContain("mutableUnpaidCandidate");
-    expect(recurringPropagation).toContain('admin.rpc(\n        "apply_recurring_occurrence_unpaid_patch"');
+    expect(recurringPropagation).toContain("mutablePricingCandidate");
+    expect(recurringPropagation).toContain('admin.rpc(\n        "apply_recurring_occurrence_unpaid_patch_v2"');
     expect(recurringPropagation).toContain("p_booking_id: booking.id");
     expect(recurringPropagation).toContain("p_patch: mutablePricingPatch");
     expect(recurringPropagation).toContain("bookingUncollectedCashColumns()");
     expect(recurringPropagation).toContain("const nonPricingPatch");
     expect(recurringPropagation).toContain("let bookingUpdate: Record<string, unknown> = nonPricingPatch");
     expect(recurringPropagation).not.toContain("booking_snapshot: booking.booking_snapshot ?? snapshot");
-    expect(recurringPropagation).not.toContain("total_paid_zar: priceZar");
+    expect(recurringPropagation).toContain("draftMonthlyUnsettled");
+    expect(recurringPropagation).toContain("total_paid_zar: priceZar");
+    expect(recurringPropagation).toContain("amount_paid_cents: 0");
+    expect(recurringPropagation).toContain("total_paid_cents: 0");
+    expect(recurringPropagation).toContain("buildExactSourceLineItems");
+    expect(recurringPropagation).toContain('source: "monthly_recurring_occurrence"');
+    expect(recurringPropagation).toContain('name: "Monthly recurring service"');
+    expect(recurringPropagation).toContain("p_line_items: monthlyRepriceLineItems");
+    expect(recurringPropagation).toContain(
+      "preferredCleanerId && draftMonthlyUnsettled",
+    );
+    expect(recurringPropagation).toContain(
+      "recurringOccurrenceCleanerIdentityOnlyPatch(preferredCleanerId)",
+    );
+    expect(recurringPropagation).toContain(
+      "ordinaryUnpaidPending || draftMonthlyUnsettled",
+    );
 
     expect(recurringAtomicSql).toContain(
       "create or replace function public.apply_recurring_occurrence_unpaid_patch",
@@ -169,20 +185,34 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
       'operationalStatus: "pending_payment"',
     );
     expect(recurringPropagation).toContain(
-      "preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent",
+      "preferredCleanerId && !mutablePricingCandidate && !settlementMarkerPresent",
     );
     expect(recurringPropagation).toContain(
       "...(preferredCleanerId",
     );
     expect(recurringPropagation).toContain("let cleanerMutationSucceeded = false");
     expect(recurringPropagation).toContain(
-      "cleanerMutationSucceeded = Boolean(preferredCleanerId)",
+      "cleanerMutationSucceeded = Boolean(",
+    );
+    expect(recurringPropagation).toContain(
+      "preferredCleanerId && (ordinaryUnpaidPending || draftMonthlyUnsettled)",
     );
     expect(recurringPropagation).toContain(
       "preferredCleanerId && cleanerMutationSucceeded",
     );
+    expect(recurringPropagation).toContain("const draftMonthlyUnsettled");
+    expect(recurringPropagation).toContain('paymentStatus === "pending_monthly"');
+    expect(recurringPropagation).toContain('booking.invoice_status ?? ""');
+    expect(recurringPropagation).toContain('=== "draft"');
+    expect(recurringPropagation).toContain("invoice_finalization_started");
+    expect(recurringPropagation).toContain("!booking.invoice_finalization_started");
+    expect(recurringPropagation).toContain("finalization_claim_token");
+    expect(recurringPropagation).toContain("finalization_claimed_at");
+    expect(recurringPropagation).toContain("draftMonthlyUnsettled");
+    expect(recurringPropagation).toContain("total_paid_zar: priceZar");
+    expect(recurringPropagation).toContain("const mutablePricingCandidate");
     expect(recurringPropagation).toContain(
-      "!bookingCompleted && !mutableUnpaidCandidate",
+      "!bookingCompleted && (!mutablePricingCandidate || draftMonthlyUnsettled)",
     );
 
     const paystackFinalize = read("lib/booking/upsertBookingFromPaystack.ts");
@@ -214,7 +244,8 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterContinuity).toContain("const shouldReplaceRoster = !rosterAlreadyMatches");
     expect(rosterContinuity).not.toContain("leadId === continuity.leadCleanerId");
     expect(rosterContinuity).toContain("const bookingPatch");
-    expect(rosterContinuity).toContain("...(shouldReplaceRoster");
+    expect(rosterContinuity).toContain("...(shouldReplaceRoster && !params.preserveLifecycle");
+    expect(rosterContinuity).toContain("preserveLifecycle?: boolean");
     expect(rosterContinuity).toContain('cleaner_response_status: "pending"');
     expect(rosterContinuity).toContain('dispatch_status: "assigned"');
     expect(rosterContinuity).toContain('status: "assigned"');
@@ -222,6 +253,23 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterContinuity).toContain('.from("bookings")');
     expect(rosterContinuity).toContain("cleaner_id: leadId");
     expect(rosterContinuity).toContain("requestedLeadId !== continuity.leadCleanerId");
+    expect(recurringPropagation).toContain(
+      "(!mutablePricingCandidate || draftMonthlyUnsettled)",
+    );
+    expect(recurringPropagation).toContain(
+      "preserveLifecycle: draftMonthlyUnsettled",
+    );
+    expect(recurringPropagation).toContain(
+      "const rosterContinuity = await applyRecurringOccurrenceRosterContinuity",
+    );
+    expect(recurringPropagation).toContain("if (!rosterContinuity.ok)");
+    expect(recurringPropagation).toContain("recurring roster continuity failed");
+    expect(recurringPropagation).toContain(
+      '.select("cleaner_id, payout_owner_cleaner_id, is_team_job")',
+    );
+    expect(recurringPropagation).toContain("cleaner identity reload failed");
+    expect(recurringPropagation).toContain("} else if (draftMonthlyUnsettled) {");
+    expect(recurringPropagation).toContain("result.bookings_skipped_locked_invoice++");
     expect(rosterContinuity).toContain('role: member.cleaner_id === requestedLeadId ? "lead" : "member"');
     expect(rosterContinuity).toContain("cleaner_id: requestedLeadId");
     expect(rosterContinuity).toContain("ok: boolean");
@@ -280,8 +328,51 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(retryWorker).toContain("gateway settlement reconciliation attempts exhausted");
 
     const recurringCleanerAtomicSql = read(
-      "../../supabase/migrations/20261007073500_audit_02a01_recurring_cleaner_atomic.sql",
+      "../../supabase/migrations/20261007122500_audit_02a01_recurring_draft_monthly_atomic.sql",
     ).toLowerCase();
+    expect(recurringCleanerAtomicSql).toContain("v_is_draft_monthly");
+    expect(recurringCleanerAtomicSql).toContain("pending_monthly");
+    expect(recurringCleanerAtomicSql).toContain("monthly_invoices");
+    expect(recurringCleanerAtomicSql).toContain("for update");
+    expect(recurringCleanerAtomicSql).toContain("= 'draft'");
+    expect(recurringCleanerAtomicSql).toContain("snapshot_at_finalize");
+    expect(recurringCleanerAtomicSql).toContain("snapshot_current");
+    expect(recurringCleanerAtomicSql).toContain("finalized_at");
+    expect(recurringCleanerAtomicSql).toContain("paystack_reference");
+    expect(recurringCleanerAtomicSql).toContain("payment_link");
+    expect(recurringCleanerAtomicSql).toContain("initial_invoice_email_dispatch_claimed");
+    expect(recurringCleanerAtomicSql).toContain("finalization_claim_token");
+    expect(recurringCleanerAtomicSql).toContain("finalization_claimed_at");
+    expect(recurringCleanerAtomicSql).toContain("claim_monthly_invoice_finalization");
+    expect(recurringCleanerAtomicSql).toContain("release_monthly_invoice_finalization_claim");
+    expect(recurringCleanerAtomicSql).toContain("finalization_claim_token is null");
+    expect(recurringCleanerAtomicSql).toContain("finalization_claimed_at is null");
+    expect(recurringCleanerAtomicSql).not.toContain("interval '15 minutes'");
+    expect(recurringCleanerAtomicSql).toContain(
+      "recover_abandoned_monthly_invoice_finalization_claim",
+    );
+    expect(recurringCleanerAtomicSql).toContain("p_expected_token uuid");
+    expect(recurringCleanerAtomicSql).toContain("interval '30 minutes'");
+    expect(recurringCleanerAtomicSql).toContain("mi.snapshot_at_finalize is null");
+    expect(recurringCleanerAtomicSql).toContain("mi.snapshot_current is null");
+    expect(recurringCleanerAtomicSql).toContain("mi.finalized_at is null");
+
+    const abandonedClaimRecovery = read(
+      "lib/monthlyInvoice/recoverAbandonedMonthlyInvoiceFinalizationClaim.ts",
+    );
+    expect(abandonedClaimRecovery).toContain(
+      "recover_abandoned_monthly_invoice_finalization_claim",
+    );
+    expect(abandonedClaimRecovery).toContain("finalization_claim_token");
+    expect(abandonedClaimRecovery).toContain("p_expected_token: token");
+    expect(recurringCleanerAtomicSql).toContain(
+      "create or replace function public.apply_recurring_occurrence_unpaid_patch_v2",
+    );
+    expect(recurringCleanerAtomicSql).toContain("p_line_items jsonb");
+    expect(recurringCleanerAtomicSql).toContain("delete from public.booking_line_items");
+    expect(recurringCleanerAtomicSql).toContain("insert into public.booking_line_items");
+    expect(recurringCleanerAtomicSql).toContain("jsonb_array_elements(p_line_items)");
+    expect(recurringCleanerAtomicSql).toContain("v_inserted_line_items");
     expect(recurringCleanerAtomicSql).toContain("selected_cleaner_id");
     expect(recurringCleanerAtomicSql).toContain("assignment_type");
     expect(recurringCleanerAtomicSql).toContain("cleaner_id");
@@ -296,10 +387,16 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     const predeploySql = read(
       "../../supabase/migrations/20261007023000_audit_02a01_pending_cash_sot.sql",
     ).toLowerCase();
-    const postdeploySql = read(
+    const tombstoneSql = read(
       "../../supabase/migrations/20261007024500_audit_02a01_postdeploy_cash_guard.sql",
     ).toLowerCase();
+    const postdeploySql = read(
+      "../../supabase/postdeploy/audit-02a01-postdeploy-cash-guard.sql",
+    ).toLowerCase();
     const sql = `${predeploySql}\n${postdeploySql}`;
+
+    expect(tombstoneSql).toContain("migration tombstone");
+    expect(tombstoneSql).not.toContain("add constraint bookings_pending_unpaid_cash_zero");
 
     expect(sql).toContain("payment_completed_at is null");
     expect(sql).toContain("paid_at is null");
@@ -355,5 +452,35 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
       postdeploySql.indexOf("amount_paid_cents = 0"),
     );
     expect(sql).toContain("validate constraint bookings_pending_unpaid_cash_zero");
+  });
+});
+
+
+describe("AUDIT-02A01 release ordering", () => {
+  it("keeps the cash invariant outside the ordinary predeploy migration chain", () => {
+    const migration = read("../../supabase/migrations/20261007024500_audit_02a01_postdeploy_cash_guard.sql");
+    expect(migration).toContain("migration tombstone");
+    expect(migration).not.toContain("add constraint bookings_pending_unpaid_cash_zero");
+
+    const postdeploy = read("../../supabase/postdeploy/audit-02a01-postdeploy-cash-guard.sql");
+    expect(postdeploy).toContain("explicit POST-DEPLOY script");
+    expect(postdeploy).toContain("begin;");
+    expect(postdeploy).toContain("commit;");
+    expect(postdeploy).toContain("add constraint bookings_pending_unpaid_cash_zero");
+    expect(postdeploy).toContain("validate constraint bookings_pending_unpaid_cash_zero");
+  });
+});
+
+
+describe("AUDIT-02A01 monthly finalization/repricing exclusion", () => {
+  it("claims invoice finalization before recompute and always releases the claim", () => {
+    const finalize = read("lib/monthlyInvoice/finalizeAndSendMonthlyInvoice.ts");
+    expect(finalize).toContain("claim_monthly_invoice_finalization");
+    expect(finalize).toContain("crypto.randomUUID()");
+    expect(finalize.indexOf("claim_monthly_invoice_finalization")).toBeLessThan(
+      finalize.indexOf("recompute_monthly_invoice_totals"),
+    );
+    expect(finalize).toContain("finally {");
+    expect(finalize).toContain("release_monthly_invoice_finalization_claim");
   });
 });
