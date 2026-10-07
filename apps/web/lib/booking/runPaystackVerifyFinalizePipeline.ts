@@ -180,8 +180,51 @@ export async function runPaystackVerifyFinalizePipeline(
     });
   }
 
+  let recoveryResult = result;
+  if (result.bookingId && !result.error && adm) {
+    const settlementPersisted = await recordPaystackBookingPayment(adm, {
+      reference: ref,
+      amountCents: amount,
+      bookingId: result.bookingId,
+      currency,
+      paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+      chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
+    });
+    if (!settlementPersisted.ok) {
+      recoveryResult = {
+        ...result,
+        ok: false,
+        error: `settlement_persistence_failed:${settlementPersisted.error}`,
+        reason: "finalization_failed",
+        recoveryEnqueue: true,
+      };
+      await reportOperationalIssue(
+        "critical",
+        opsLogSource,
+        `payment settled but settlement side effects are incomplete: ${settlementPersisted.error}`,
+        { reference: ref, bookingId: result.bookingId },
+      );
+    }
+  }
+
+  await enqueuePaystackRecoveryFailedJobs({
+    reference: ref,
+    result: recoveryResult,
+    basePayload: {
+      paystackReference: ref,
+      amountCents: amount,
+      currency,
+      customerEmail: email,
+      snapshot,
+      paystackMetadata: metadata,
+      paystackAuthorizationCode: authorizationCode || null,
+      paystackCustomerCode: customerCode || null,
+      paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+      paystackChargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
+    },
+  });
+
   const runPostFinalizeWork = async () => {
-    let recoveryResult = result;
     if (result.bookingId && !result.error) {
       await logSystemEvent({
         level: "info",
@@ -189,55 +232,14 @@ export async function runPaystackVerifyFinalizePipeline(
         message: "paystack.booking.created",
         context: { reference: ref, bookingId: result.bookingId, skipped: result.skipped },
       });
-
       if (adm) {
         void syncPaidBookingSideEffects(adm, {
           bookingId: result.bookingId,
           reference: ref,
           amountCents: amount,
         });
-        const settlementPersisted = await recordPaystackBookingPayment(adm, {
-          reference: ref,
-          amountCents: amount,
-          bookingId: result.bookingId,
-          currency,
-          paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
-          chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
-        });
-        if (!settlementPersisted.ok) {
-          recoveryResult = {
-            ...result,
-            ok: false,
-            error: `settlement_persistence_failed:${settlementPersisted.error}`,
-            reason: "finalization_failed",
-            recoveryEnqueue: true,
-          };
-          await reportOperationalIssue(
-            "critical",
-            opsLogSource,
-            `payment settled but settlement side effects are incomplete: ${settlementPersisted.error}`,
-            { reference: ref, bookingId: result.bookingId },
-          );
-        }
       }
     }
-
-    await enqueuePaystackRecoveryFailedJobs({
-      reference: ref,
-      result: recoveryResult,
-      basePayload: {
-        paystackReference: ref,
-        amountCents: amount,
-        currency,
-        customerEmail: email,
-        snapshot,
-        paystackMetadata: metadata,
-        paystackAuthorizationCode: authorizationCode || null,
-        paystackCustomerCode: customerCode || null,
-        paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
-        paystackChargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
-      },
-    });
 
     if (email && !result.bookingId) {
       const cust = await sendCustomerBookingPaymentProcessingEmail({
