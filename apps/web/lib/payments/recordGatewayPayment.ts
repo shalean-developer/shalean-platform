@@ -114,6 +114,49 @@ async function paymentAccountingApplicability(
   return { applicable: true };
 }
 
+async function ensureExpenseAccountingQueue(
+  admin: SupabaseClient,
+  expenseId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await enqueueAccountingSync(admin, {
+    entityType: "expense",
+    entityId: expenseId,
+  });
+
+  const { data: existing, error: readErr } = await admin
+    .from("accounting_sync_records")
+    .select("id, sync_status")
+    .eq("entity_type", "expense")
+    .eq("entity_id", expenseId)
+    .maybeSingle();
+
+  if (!readErr && existing?.id) return { ok: true };
+
+  const now = new Date().toISOString();
+  const { error: insertErr } = await admin.from("accounting_sync_records").insert({
+    entity_type: "expense",
+    entity_id: expenseId,
+    sync_status: "pending",
+    created_at: now,
+    updated_at: now,
+  });
+
+  if (insertErr && (insertErr as { code?: string }).code !== "23505") {
+    await logSystemEvent({
+      level: "error",
+      source: "payments/recordGatewayPayment",
+      message: "expense_accounting_queue_enrollment_failed",
+      context: {
+        expense_id: expenseId,
+        read_error: readErr?.message ?? null,
+        insert_error: insertErr.message,
+      },
+    });
+    return { ok: false, error: insertErr.message };
+  }
+  return { ok: true };
+}
+
 async function ensurePaymentAccountingQueue(
   admin: SupabaseClient,
   paymentTransactionId: string,
@@ -259,7 +302,8 @@ export async function recordGatewayPayment(
       if (expenseLinkErr) return { ok: false, error: expenseLinkErr.message };
 
       if (expenseId) {
-        await enqueueAccountingSync(admin, { entityType: "expense", entityId: expenseId });
+        const expenseQueue = await ensureExpenseAccountingQueue(admin, expenseId);
+        if (!expenseQueue.ok) return { ok: false, error: expenseQueue.error };
       }
     }
 
