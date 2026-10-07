@@ -308,16 +308,18 @@ export async function processPaystackInitializeBody(
         : null;
 
   let preservedExistingPayableZar: number | null = null;
+  let preservedExistingPriceSnapshot: Record<string, unknown> | null = null;
   if (bookingIdFromBody) {
     const { data: payRow } = await admin
       .from("bookings")
-      .select("status, payment_status, total_price")
+      .select("status, payment_status, total_price, price_snapshot")
       .eq("id", bookingIdFromBody)
       .maybeSingle();
     const pay = payRow as {
       status?: string | null;
       payment_status?: string | null;
       total_price?: number | string | null;
+      price_snapshot?: unknown;
     } | null;
     const ps = String(pay?.payment_status ?? "").trim().toLowerCase();
     if (ps === "pending_monthly") {
@@ -344,7 +346,30 @@ export async function processPaystackInitializeBody(
           error: "The saved recurring payment amount is unavailable. Refresh this booking before retrying payment.",
         };
       }
+      const storedSnapshot =
+        pay?.price_snapshot && typeof pay.price_snapshot === "object" && !Array.isArray(pay.price_snapshot)
+          ? (pay.price_snapshot as Record<string, unknown>)
+          : null;
+      if (storedSnapshot?.payment_scope !== "recurring_first_30_days") {
+        return {
+          ok: false,
+          status: 409,
+          errorCode: "PRICE_MISMATCH",
+          error: "The saved recurring package scope is unavailable. Refresh this booking before retrying payment.",
+        };
+      }
+      const perVisit = Number(storedSnapshot.per_visit_price_zar);
+      const prepaidVisitCount = Number(storedSnapshot.prepaid_visit_count);
+      if (!Number.isFinite(perVisit) || perVisit <= 0 || !Number.isFinite(prepaidVisitCount) || prepaidVisitCount < 1) {
+        return {
+          ok: false,
+          status: 409,
+          errorCode: "PRICE_MISMATCH",
+          error: "The saved recurring package allocation is invalid. Refresh this booking before retrying payment.",
+        };
+      }
       preservedExistingPayableZar = Math.round(storedPayable);
+      preservedExistingPriceSnapshot = storedSnapshot;
     }
   }
 
@@ -735,7 +760,7 @@ export async function processPaystackInitializeBody(
           },
         ];
   const extrasSumZarMeta = Math.round(Number(checkoutForSnap.jobSubtotalSplit.extrasZar) || 0);
-  const checkoutPriceSnapshotForMetadata = buildCheckoutPriceSnapshotV1FromInit({
+  const checkoutPriceSnapshotBase = buildCheckoutPriceSnapshotV1FromInit({
     total_zar: totalZar,
     visit_total_zar: visitZar,
     subtotal_zar: Math.round(checkoutForSnap.serverQuote.subtotalZar),
@@ -747,6 +772,26 @@ export async function processPaystackInitializeBody(
     pricing_version_id: locked.pricing_version_id?.trim() ?? null,
     line_items: lineItemsSummary,
   });
+  const checkoutPriceSnapshotForMetadata =
+    preservedExistingPriceSnapshot != null
+      ? {
+          ...checkoutPriceSnapshotBase,
+          payment_scope: "recurring_first_30_days" as const,
+          per_visit_price_zar: Number(preservedExistingPriceSnapshot.per_visit_price_zar),
+          prepaid_visit_count: Number(preservedExistingPriceSnapshot.prepaid_visit_count),
+          prepaid_coverage_start_date:
+            typeof preservedExistingPriceSnapshot.prepaid_coverage_start_date === "string"
+              ? preservedExistingPriceSnapshot.prepaid_coverage_start_date
+              : undefined,
+          prepaid_coverage_end_date:
+            typeof preservedExistingPriceSnapshot.prepaid_coverage_end_date === "string"
+              ? preservedExistingPriceSnapshot.prepaid_coverage_end_date
+              : undefined,
+          prepaid_occurrence_dates: Array.isArray(preservedExistingPriceSnapshot.prepaid_occurrence_dates)
+            ? preservedExistingPriceSnapshot.prepaid_occurrence_dates.map(String)
+            : undefined,
+        }
+      : checkoutPriceSnapshotBase;
   if (bookingPaystackFinalizeTraceEnabled()) {
     console.log("[PRICE SNAPSHOT USED]", {
       phase: "initialize",
