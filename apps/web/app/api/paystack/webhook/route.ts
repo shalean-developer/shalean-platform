@@ -463,7 +463,7 @@ export async function POST(request: Request) {
         reference,
         amountCents: amount,
       });
-      await recordPaystackBookingPayment(supabase, {
+      const settlementPersisted = await recordPaystackBookingPayment(supabase, {
         reference,
         amountCents: amount,
         bookingId: persistedHead.bookingId,
@@ -471,6 +471,38 @@ export async function POST(request: Request) {
         paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
         chargeData: paystackChargeDataFromRecord(data),
       });
+      if (!settlementPersisted.ok) {
+        await enqueuePaystackRecoveryFailedJobs({
+          reference,
+          result: {
+            ok: false,
+            skipped: true,
+            bookingId: persistedHead.bookingId,
+            bookingInDatabase: true,
+            error: `settlement_persistence_failed:${settlementPersisted.error}`,
+            reason: "finalization_failed",
+            recoveryEnqueue: true,
+          },
+          basePayload: {
+            paystackReference: reference,
+            amountCents: amount,
+            currency,
+            customerEmail: email,
+            snapshot,
+            paystackMetadata: metadata,
+            paystackAuthorizationCode:
+              data.authorization && typeof data.authorization === "object"
+                ? String((data.authorization as { authorization_code?: string }).authorization_code ?? "") || null
+                : null,
+            paystackCustomerCode:
+              customerBlock && typeof customerBlock === "object"
+                ? String((customerBlock as { customer_code?: string }).customer_code ?? "") || null
+                : null,
+            paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
+            paystackChargeData: paystackChargeDataFromRecord(data),
+          },
+        });
+      }
       return NextResponse.json({ received: true });
     }
   }
@@ -543,7 +575,7 @@ export async function POST(request: Request) {
     });
     if (supabase) {
       void syncPaidBookingSideEffects(supabase, { bookingId: result.bookingId, reference, amountCents: amount });
-      await recordPaystackBookingPayment(supabase, {
+      const settlementPersisted = await recordPaystackBookingPayment(supabase, {
         reference,
         amountCents: amount,
         bookingId: result.bookingId,
@@ -551,6 +583,36 @@ export async function POST(request: Request) {
         paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
         chargeData: paystackChargeDataFromRecord(data),
       });
+      if (!settlementPersisted.ok) {
+        await enqueuePaystackRecoveryFailedJobs({
+          reference,
+          result: {
+            ...result,
+            ok: false,
+            error: `settlement_persistence_failed:${settlementPersisted.error}`,
+            reason: "finalization_failed",
+            recoveryEnqueue: true,
+          },
+          basePayload: {
+            paystackReference: reference,
+            amountCents: amount,
+            currency,
+            customerEmail: email,
+            snapshot,
+            paystackMetadata: metadata,
+            paystackAuthorizationCode:
+              data.authorization && typeof data.authorization === "object"
+                ? String((data.authorization as { authorization_code?: string }).authorization_code ?? "") || null
+                : null,
+            paystackCustomerCode:
+              customerBlock && typeof customerBlock === "object"
+                ? String((customerBlock as { customer_code?: string }).customer_code ?? "") || null
+                : null,
+            paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
+            paystackChargeData: paystackChargeDataFromRecord(data),
+          },
+        });
+      }
     }
   } else {
     logPaymentStructured("payment_webhook_outcome", {
