@@ -2,6 +2,8 @@ alter table public.monthly_invoices
   add column if not exists finalization_claim_token uuid,
   add column if not exists finalization_claimed_at timestamptz;
 
+-- Claims never auto-expire. A slow legitimate finalizer must not be fenced out by
+-- a second caller; stale claims require an explicit, audited recovery path.
 create or replace function public.claim_monthly_invoice_finalization(
   p_invoice_id uuid,
   p_token uuid
@@ -19,10 +21,8 @@ begin
       finalization_claimed_at = now()
   where mi.id = p_invoice_id
     and lower(trim(coalesce(mi.status, ''))) = 'draft'
-    and (
-      mi.finalization_claim_token is null
-      or mi.finalization_claimed_at < now() - interval '15 minutes'
-    )
+    and mi.finalization_claim_token is null
+    and mi.finalization_claimed_at is null
   returning mi.id into v_id;
 
   return v_id is not null;
