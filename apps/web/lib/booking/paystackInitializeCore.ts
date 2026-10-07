@@ -43,14 +43,18 @@ async function resolvePendingCheckoutPricingTarget(
   createdPendingBookingId: string | null,
   bookingIdFromBody: string | null,
   checkout: OkCheckoutForPricing,
-): Promise<{ bookingId: string; skipLineItemInsert: boolean } | null> {
+): Promise<
+  | { bookingId: string; skipLineItemInsert: boolean; pricingComplete: false }
+  | { bookingId: string; skipLineItemInsert: true; pricingComplete: true; existingPayableZar: number }
+  | null
+> {
   if (!checkout.serverQuote) return null;
   if (createdPendingBookingId) {
-    return { bookingId: createdPendingBookingId, skipLineItemInsert: false };
+    return { bookingId: createdPendingBookingId, skipLineItemInsert: false, pricingComplete: false };
   }
   const bid = bookingIdFromBody?.trim() ?? "";
   if (!/^[0-9a-f-]{36}$/i.test(bid)) return null;
-  const { data: row } = await admin.from("bookings").select("id, price_snapshot, status").eq("id", bid).maybeSingle();
+  const { data: row } = await admin.from("bookings").select("id, price_snapshot, status, total_price").eq("id", bid).maybeSingle();
   if (!row) return null;
   const st = String((row as { status?: string | null }).status ?? "").toLowerCase();
   if (st !== "pending_payment") return null;
@@ -62,8 +66,17 @@ async function resolvePendingCheckoutPricingTarget(
     .eq("booking_id", bid);
   if (ctErr) return null;
   const hasLi = (count ?? 0) > 0;
-  if (hasSnap && hasLi) return null;
-  return { bookingId: bid, skipLineItemInsert: hasLi };
+  if (hasSnap && hasLi) {
+    const existingPayableZar = Number((row as { total_price?: number | string | null }).total_price);
+    if (!Number.isFinite(existingPayableZar) || existingPayableZar <= 0) return null;
+    return {
+      bookingId: bid,
+      skipLineItemInsert: true,
+      pricingComplete: true,
+      existingPayableZar: Math.round(existingPayableZar),
+    };
+  }
+  return { bookingId: bid, skipLineItemInsert: hasLi, pricingComplete: false };
 }
 import { metrics } from "@/lib/metrics/counters";
 import { resolveRatesSnapshotForLockedBooking } from "@/lib/booking/resolveRatesSnapshot";
@@ -743,7 +756,28 @@ export async function processPaystackInitializeBody(
       )
     : null;
 
-  if (pricingTarget && checkout.ok && checkout.serverQuote) {
+  if (pricingTarget?.pricingComplete) {
+    if (pricingTarget.existingPayableZar !== totalZar) {
+      void reportOperationalIssue(
+        "warn",
+        "processPaystackInitializeBody",
+        "existing pending payable differs from reinitialized charge",
+        {
+          bookingId: pricingTarget.bookingId,
+          existingPayableZar: pricingTarget.existingPayableZar,
+          recomputedPayableZar: totalZar,
+        },
+      );
+      return {
+        ok: false,
+        status: 409,
+        errorCode: "PRICE_MISMATCH",
+        error: "This saved payment amount changed. Reopen the booking and refresh pricing before starting a new checkout.",
+      };
+    }
+  }
+
+  if (pricingTarget && !pricingTarget.pricingComplete && checkout.ok && checkout.serverQuote) {
     const flat = buildSnapshotFlat(locked);
     const bookingSnapshotMerged = mergeSnapshotWithFlat(snapshot, flat);
     const locationContext = await resolveBookingLocationContext(admin, locked);
