@@ -1270,11 +1270,19 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         ? Boolean((recurringRosterHead as { is_recurring_generated?: boolean | null }).is_recurring_generated)
         : false;
     if (recurringRosterGenerated && recurringRosterId && recurringRosterCleanerId) {
-      await applyRecurringOccurrenceRosterContinuity(supabase, {
+      const rosterContinuity = await applyRecurringOccurrenceRosterContinuity(supabase, {
         bookingId: id,
         recurringId: recurringRosterId,
         leadCleanerId: recurringRosterCleanerId,
       });
+      if (!rosterContinuity.ok) {
+        await enqueueFailedJob("recurring_roster_reconciliation", {
+          bookingId: id,
+          recurringId: recurringRosterId,
+          leadCleanerId: recurringRosterCleanerId,
+          reason: rosterContinuity.reason ?? "roster_reconciliation_failed",
+        });
+      }
     }
 
     const v2TeamPromote = await promoteV2TeamBookingAfterPayment(supabase, id);
