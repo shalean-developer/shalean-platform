@@ -7,6 +7,35 @@ import { rosterHasCustomProvenance } from "@/lib/recurring/recurringRosterProven
 import { recurringOccurrenceAssignmentIsCommitted } from "@/lib/recurring/resolveRecurringPreferredCleanerId";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+
+async function convergeCommittedRecurringHeaderOverGeneratedRoster(
+  admin: SupabaseClient,
+  params: { bookingId: string; committedLeadId: string; staleRosterCount: number },
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (params.staleRosterCount <= 0) return { ok: true };
+
+  const { error: staleRosterDeleteErr } = await admin
+    .from("booking_cleaners")
+    .delete()
+    .eq("booking_id", params.bookingId);
+  if (staleRosterDeleteErr) {
+    return { ok: false, reason: staleRosterDeleteErr.message };
+  }
+
+  const { error: committedHeaderErr } = await admin
+    .from("bookings")
+    .update({
+      payout_owner_cleaner_id: params.committedLeadId,
+      cleaner_count: 1,
+    })
+    .eq("id", params.bookingId);
+  if (committedHeaderErr) {
+    return { ok: false, reason: committedHeaderErr.message };
+  }
+
+  return { ok: true };
+}
+
 /**
  * Copies the prior visit's multi-cleaner roster onto a generated recurring occurrence.
  * No-op when the plan has no prior multi-cleaner visit or the booking is locked/finalized.
@@ -145,37 +174,20 @@ export async function applyRecurringOccurrenceRosterContinuity(
     }
 
     // Generated continuity/preference rows are not authoritative once a cleaner has
-    // actually accepted / been directly assigned. Remove stale generated roster rows
-    // so cleaner visibility and payout consumers cannot resurrect the former lead.
-    if (existingRoster.length > 0) {
-      const { error: staleRosterDeleteErr } = await admin
-        .from("booking_cleaners")
-        .delete()
-        .eq("booking_id", bookingId);
-      if (staleRosterDeleteErr) {
-        return {
-          ok: false,
-          applied: false,
-          cleanerCount: existingRoster.length,
-          reason: staleRosterDeleteErr.message,
-        };
-      }
-
-      const { error: committedHeaderErr } = await admin
-        .from("bookings")
-        .update({
-          payout_owner_cleaner_id: committedLeadId,
-          cleaner_count: 1,
-        })
-        .eq("id", bookingId);
-      if (committedHeaderErr) {
-        return {
-          ok: false,
-          applied: false,
-          cleanerCount: 1,
-          reason: committedHeaderErr.message,
-        };
-      }
+    // actually accepted / been directly assigned. Converge stale generated roster state
+    // through the helper while preserving the committed lifecycle in this branch.
+    const committedConvergence = await convergeCommittedRecurringHeaderOverGeneratedRoster(admin, {
+      bookingId,
+      committedLeadId,
+      staleRosterCount: existingRoster.length,
+    });
+    if (!committedConvergence.ok) {
+      return {
+        ok: false,
+        applied: false,
+        cleanerCount: existingRoster.length > 0 ? 1 : Number(row.cleaner_count ?? 1) || 1,
+        reason: committedConvergence.reason,
+      };
     }
 
     return {
