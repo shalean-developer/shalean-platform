@@ -1227,23 +1227,13 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     if (authCode) {
       const { data: recurringHead } = await supabase
         .from("bookings")
-        .select("recurring_id, selected_cleaner_id, is_recurring_generated")
+        .select("recurring_id")
         .eq("id", id)
         .maybeSingle();
       const recurringId =
         recurringHead && typeof recurringHead === "object" && "recurring_id" in recurringHead
           ? (recurringHead as { recurring_id: string | null }).recurring_id
           : null;
-      const recurringSelectedCleanerId =
-        recurringHead && typeof recurringHead === "object" && "selected_cleaner_id" in recurringHead
-          ? normalizeUuidCandidate(
-              (recurringHead as { selected_cleaner_id?: string | null }).selected_cleaner_id,
-            )
-          : null;
-      const isRecurringGenerated =
-        recurringHead && typeof recurringHead === "object" && "is_recurring_generated" in recurringHead
-          ? Boolean((recurringHead as { is_recurring_generated?: boolean | null }).is_recurring_generated)
-          : false;
       if (recurringId) {
         const { error: recAuthErr } = await supabase
           .from("recurring_bookings")
