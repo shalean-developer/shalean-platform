@@ -223,7 +223,9 @@ export async function updatePendingPaymentBookingForInit(
 
   const { data: row0, error: row0Err } = await admin
     .from("bookings")
-    .select("date, time, cleaner_id, selected_cleaner_id")
+    .select(
+      "date, time, cleaner_id, selected_cleaner_id, status, payment_status, payment_completed_at, paid_at, payment_transaction_id, marked_paid_by_admin_id",
+    )
     .eq("id", params.bookingId)
     .maybeSingle();
   if (row0Err) {
@@ -237,7 +239,46 @@ export async function updatePendingPaymentBookingForInit(
     time?: string | null;
     cleaner_id?: string | null;
     selected_cleaner_id?: string | null;
+    status?: string | null;
+    payment_status?: string | null;
+    payment_completed_at?: string | null;
+    paid_at?: string | null;
+    payment_transaction_id?: string | null;
+    marked_paid_by_admin_id?: string | null;
   } | null;
+
+  const lifecycleStatus = String(r0?.status ?? "").trim().toLowerCase();
+  const paymentStatus = String(r0?.payment_status ?? "").trim().toLowerCase();
+  const hasRowSettlementEvidence =
+    ["success", "paid", "succeeded", "completed", "pending_monthly"].includes(paymentStatus) ||
+    Boolean(r0?.payment_completed_at) ||
+    Boolean(r0?.paid_at) ||
+    Boolean(r0?.payment_transaction_id) ||
+    Boolean(r0?.marked_paid_by_admin_id);
+
+  if (lifecycleStatus !== "pending_payment" || hasRowSettlementEvidence) {
+    return {
+      ok: false,
+      error: "Pending checkout cannot be repriced after settlement evidence exists.",
+      pgCode: undefined,
+    };
+  }
+
+  const { count: linkedLedgerCount, error: ledgerCheckErr } = await admin
+    .from("payment_transactions")
+    .select("id", { count: "exact", head: true })
+    .eq("booking_id", params.bookingId);
+  if (ledgerCheckErr) {
+    return { ok: false, error: ledgerCheckErr.message, pgCode: ledgerCheckErr.code };
+  }
+  if ((linkedLedgerCount ?? 0) > 0) {
+    return {
+      ok: false,
+      error: "Pending checkout cannot be repriced after payment ledger creation.",
+      pgCode: undefined,
+    };
+  }
+
   const cleanerForTenure =
     (params.selected_cleaner_id && /^[0-9a-f-]{36}$/i.test(params.selected_cleaner_id)
       ? params.selected_cleaner_id
