@@ -129,7 +129,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
       applied: false,
       cleanerCount: Number(row.cleaner_count ?? 1) || 1,
       ...(committedLeadId ? { leadCleanerId: committedLeadId } : {}),
-      kind: "noop",
+      kind: "committed_existing",
     };
   }
 
