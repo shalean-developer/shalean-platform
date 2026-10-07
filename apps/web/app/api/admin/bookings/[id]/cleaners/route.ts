@@ -123,11 +123,12 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
   }
 
   const members = (Array.isArray(body.members) ? body.members : []) as RosterReplaceMemberInput[];
-  const built = validateMembersToReplaceBookingCleanersRpcRows(members, { defaultSource: "api" });
+  const built = validateMembersToReplaceBookingCleanersRpcRows(members, { defaultSource: "admin" });
   if (!built.ok) {
     return NextResponse.json({ error: built.error }, { status: built.status });
   }
-  const rpcRows = built.rows;
+  // Explicit admin roster edits are authoritative and must never look like generated preference rows.
+  const rpcRows = built.rows.map((row) => ({ ...row, source: "admin" }));
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
