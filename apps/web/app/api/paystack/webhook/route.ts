@@ -37,8 +37,7 @@ import { timingSafeEqualString } from "@/lib/security/timingSafeEqualString";
 import {
   paystackChargeDataFromRecord,
   recordPaystackBookingPayment,
-  recordPaystackMonthlyInvoicePayment,
-  recordPaystackSalesDocumentPayment,
+  recordPaystackEntitySettlementWithRecovery,
 } from "@/lib/payments/recordPaystackSettlement";
 import { routeSuccessfulPaystackRefund } from "@/lib/payments/routePaystackRefundEvent";
 import { isCheckoutCurrencyZar, maskPaystackReference } from "@/lib/payments/paymentAmountMismatch";
@@ -284,10 +283,12 @@ export async function POST(request: Request) {
         message: "monthly_invoice.charge.success",
         context: { reference, invoiceId: monthlyRouting.invoiceId, settled: monthlyRouting.settled, ...partialCtx },
       });
-      await recordPaystackMonthlyInvoicePayment(supabase, {
+      await recordPaystackEntitySettlementWithRecovery(supabase, {
+        entityType: "monthly_invoice",
+        entityId: monthlyRouting.invoiceId,
         reference,
         amountCents: typeof data.amount === "number" ? data.amount : 0,
-        invoiceId: monthlyRouting.invoiceId,
+        currency: typeof data.currency === "string" ? data.currency : "ZAR",
         paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
         chargeData: paystackChargeDataFromRecord(data),
       });
@@ -327,10 +328,12 @@ export async function POST(request: Request) {
         message: "sales_document.charge.success",
         context: { reference, documentId: salesRouting.documentId },
       });
-      await recordPaystackSalesDocumentPayment(supabase, {
+      await recordPaystackEntitySettlementWithRecovery(supabase, {
+        entityType: "sales_document",
+        entityId: salesRouting.documentId,
         reference,
         amountCents: typeof data.amount === "number" ? data.amount : 0,
-        documentId: salesRouting.documentId,
+        currency: typeof data.currency === "string" ? data.currency : "ZAR",
         paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
         chargeData: paystackChargeDataFromRecord(data),
       });
