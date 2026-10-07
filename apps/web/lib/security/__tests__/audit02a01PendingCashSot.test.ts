@@ -21,15 +21,16 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(writer).not.toContain("totalPaidZar: number");
   });
 
-  it("does not pass the amount due into the pending cash writer", () => {
+  it("persists the actual Paystack charge as payable without writing collected cash", () => {
     const initialize = read("lib/booking/paystackInitializeCore.ts");
     const updateCall = initialize.slice(
       initialize.indexOf("updatePendingPaymentBookingForInit(admin"),
       initialize.indexOf("if (!upd.ok)", initialize.indexOf("updatePendingPaymentBookingForInit(admin")),
     );
 
-    expect(updateCall).toContain("totalPriceZar: checkout.visitTotalZar");
+    expect(updateCall).toContain("totalPriceZar: totalZar");
     expect(updateCall).not.toContain("totalPaidZar:");
+    expect(initialize).toContain("total_price: totalZar");
   });
 
   it("resolves payment-link payable from total_price before legacy cash fallback", () => {
@@ -50,6 +51,17 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     const resend = read("app/api/admin/bookings/[id]/resend-payment-link/route.ts");
     expect(resend).toContain("trustedBookingPayableZar({");
     expect(resend).toContain("total_price: r.total_price");
+
+    const initialAdmin = read("lib/admin/adminPaystackPostInitialize.ts");
+    expect(initialAdmin).toContain("trustedBookingPayableZar({");
+    expect(initialAdmin).toContain("total_price: row.total_price");
+
+    const recoveryEmail = read("lib/email/paymentRecoveryEmails.ts");
+    expect(recoveryEmail).toContain("trustedBookingPayableZar({");
+    expect(recoveryEmail.indexOf("total_price:")).toBeGreaterThan(-1);
+    expect(recoveryEmail.indexOf("total_paid_zar:")).toBeGreaterThan(
+      recoveryEmail.indexOf("total_price:"),
+    );
   });
 
   it("repairs only evidence-free anomalies and adds a validated DB guard", () => {
