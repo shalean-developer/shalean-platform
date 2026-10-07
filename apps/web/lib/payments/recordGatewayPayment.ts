@@ -117,7 +117,7 @@ async function paymentAccountingApplicability(
 async function ensurePaymentAccountingQueue(
   admin: SupabaseClient,
   paymentTransactionId: string,
-): Promise<void> {
+): Promise<{ ok: true } | { ok: false; error: string }> {
   await enqueueAccountingSync(admin, {
     entityType: "payment_transaction",
     entityId: paymentTransactionId,
@@ -130,7 +130,7 @@ async function ensurePaymentAccountingQueue(
     .eq("entity_id", paymentTransactionId)
     .maybeSingle();
 
-  if (!readErr && existing?.id) return;
+  if (!readErr && existing?.id) return { ok: true };
 
   const now = new Date().toISOString();
   const { error: insertErr } = await admin.from("accounting_sync_records").insert({
@@ -152,7 +152,9 @@ async function ensurePaymentAccountingQueue(
         insert_error: insertErr.message,
       },
     });
+    return { ok: false, error: insertErr.message };
   }
+  return { ok: true };
 }
 
 /**
@@ -169,27 +171,155 @@ export async function recordGatewayPayment(
   const amountCents = Math.max(0, Math.round(params.amountCents));
   if (amountCents <= 0) return { ok: false, error: "invalid_amount" };
 
-  const { data: existing } = await admin
-    .from("payment_transactions")
-    .select("id, expense_id")
-    .eq("gateway", params.gateway)
-    .eq("gateway_reference", ref)
-    .maybeSingle();
-
-  if (existing?.id) {
-    return {
-      ok: true,
-      created: false,
-      paymentTransactionId: existing.id,
-      expenseId: existing.expense_id ?? null,
-    };
-  }
-
   const fee = resolvePaystackProcessingFee(amountCents, params.paystackChargeData ?? {});
   const netSettlement = Math.max(0, amountCents - fee.processing_fee_cents);
   const now = new Date().toISOString();
   const paidAt = params.paidAtIso ?? now;
   const bookingId = params.bookingId ?? (params.entityType === "booking" ? params.entityId : null);
+
+  const completeSideEffects = async (
+    paymentTransactionId: string,
+    existingExpenseId: string | null,
+    created: boolean,
+  ): Promise<RecordGatewayPaymentResult> => {
+    let expenseId = existingExpenseId;
+
+    if (fee.processing_fee_cents > 0) {
+      if (!expenseId) {
+        const { data: existingExpense, error: existingExpenseErr } = await admin
+          .from("expenses")
+          .select("id")
+          .eq("payment_transaction_id", paymentTransactionId)
+          .maybeSingle();
+        if (existingExpenseErr) return { ok: false, error: existingExpenseErr.message };
+        expenseId = existingExpense?.id ?? null;
+      }
+
+      if (!expenseId) {
+        const categoryId = await resolvePaystackFeesCategoryId(admin);
+        const branchId = await resolveBranchIdForEntity(admin, params.entityType, params.entityId, bookingId);
+        const accountId = await resolvePaystackAccountId(admin);
+        if (!categoryId || !branchId) {
+          return { ok: false, error: "paystack_fee_expense_prerequisites_missing" };
+        }
+
+        const settings = await loadZohoIntegrationSettings(admin);
+        const paystackVendorId = await ensurePaystackVendor(admin, settings);
+        const invoiceNumber = await resolveInvoiceNumberForBooking(admin, bookingId);
+        const feeDescription = invoiceNumber
+          ? `Paystack processing fee for Invoice ${invoiceNumber}`
+          : `Paystack processing fee — ${ref}`;
+        const expenseDate = paidAt.slice(0, 10);
+        const { data: expense, error: expErr } = await admin
+          .from("expenses")
+          .insert({
+            expense_date: expenseDate,
+            category_id: categoryId,
+            vendor_id: paystackVendorId,
+            description: feeDescription,
+            amount_cents: fee.processing_fee_cents,
+            payment_method: "paystack",
+            paid_from_account_id: accountId,
+            branch_id: branchId,
+            booking_id: bookingId,
+            notes: `Auto-recorded (${fee.fee_calculation_method}). Gross: R${(amountCents / 100).toFixed(2)}, net: R${(netSettlement / 100).toFixed(2)}. Ref: ${ref}`,
+            status: "approved",
+            approval_stage: "complete",
+            approved_at: now,
+            payment_transaction_id: paymentTransactionId,
+            processing_fees_cents: fee.processing_fee_cents,
+            sync_status: "pending",
+          })
+          .select("id")
+          .single();
+
+        if (expErr) {
+          const { data: raceExpense } = await admin
+            .from("expenses")
+            .select("id")
+            .eq("payment_transaction_id", paymentTransactionId)
+            .maybeSingle();
+          if (!raceExpense?.id) return { ok: false, error: expErr.message };
+          expenseId = raceExpense.id;
+        } else {
+          expenseId = expense?.id ?? null;
+        }
+
+        if (!expenseId) return { ok: false, error: "paystack_fee_expense_missing" };
+
+        if (paystackVendorId) {
+          await enqueueAccountingSync(admin, { entityType: "vendor", entityId: paystackVendorId });
+        }
+      }
+
+      const { error: expenseLinkErr } = await admin
+        .from("payment_transactions")
+        .update({ expense_id: expenseId, updated_at: now })
+        .eq("id", paymentTransactionId);
+      if (expenseLinkErr) return { ok: false, error: expenseLinkErr.message };
+
+      if (expenseId) {
+        await enqueueAccountingSync(admin, { entityType: "expense", entityId: expenseId });
+      }
+    }
+
+    const accountingApplicability = await paymentAccountingApplicability(
+      admin,
+      params.entityType,
+      params.entityId,
+    );
+    if (accountingApplicability.applicable) {
+      const queue = await ensurePaymentAccountingQueue(admin, paymentTransactionId);
+      if (!queue.ok) return { ok: false, error: queue.error };
+    } else {
+      const { error: ignoredErr } = await admin
+        .from("payment_transactions")
+        .update({
+          sync_status: "ignored",
+          sync_errors: `accounting_not_applicable:${accountingApplicability.reason}`,
+          updated_at: now,
+        })
+        .eq("id", paymentTransactionId);
+      if (ignoredErr) return { ok: false, error: ignoredErr.message };
+    }
+
+    if (bookingId) {
+      const { error: bookingLinkErr } = await admin
+        .from("bookings")
+        .update({ payment_transaction_id: paymentTransactionId })
+        .eq("id", bookingId);
+      if (bookingLinkErr) return { ok: false, error: bookingLinkErr.message };
+    }
+
+    await logSystemEvent({
+      level: "info",
+      source: "payments/recordGatewayPayment",
+      message: created ? "payment_transaction_recorded" : "payment_transaction_reconciled",
+      context: {
+        gateway: params.gateway,
+        reference: ref,
+        entity_type: params.entityType,
+        entity_id: params.entityId,
+        processing_fee_cents: fee.processing_fee_cents,
+        fee_calculation_method: fee.fee_calculation_method,
+        expense_id: expenseId,
+      },
+    });
+
+    return { ok: true, created, paymentTransactionId, expenseId };
+  };
+
+  const { data: existing, error: existingErr } = await admin
+    .from("payment_transactions")
+    .select("id, expense_id")
+    .eq("gateway", params.gateway)
+    .eq("gateway_reference", ref)
+    .maybeSingle();
+  if (existingErr) return { ok: false, error: existingErr.message };
+
+  if (existing?.id) {
+    return completeSideEffects(existing.id, existing.expense_id ?? null, false);
+  }
 
   const gatewayTxId =
     params.paystackChargeData?.id != null ? String(params.paystackChargeData.id) : null;
@@ -221,118 +351,19 @@ export async function recordGatewayPayment(
 
   if (insErr) {
     if ((insErr as { code?: string }).code === "23505") {
-      const { data: race } = await admin
+      const { data: race, error: raceErr } = await admin
         .from("payment_transactions")
         .select("id, expense_id")
         .eq("gateway", params.gateway)
         .eq("gateway_reference", ref)
         .maybeSingle();
-      if (race?.id) {
-        return {
-          ok: true,
-          created: false,
-          paymentTransactionId: race.id,
-          expenseId: race.expense_id ?? null,
-        };
-      }
+      if (raceErr) return { ok: false, error: raceErr.message };
+      if (race?.id) return completeSideEffects(race.id, race.expense_id ?? null, false);
     }
     return { ok: false, error: insErr.message };
   }
 
-  const paymentTransactionId = inserted.id;
-  let expenseId: string | null = null;
-
-  if (fee.processing_fee_cents > 0) {
-    const categoryId = await resolvePaystackFeesCategoryId(admin);
-    const branchId = await resolveBranchIdForEntity(admin, params.entityType, params.entityId, bookingId);
-    const accountId = await resolvePaystackAccountId(admin);
-
-    if (categoryId && branchId) {
-      const settings = await loadZohoIntegrationSettings(admin);
-      const paystackVendorId = await ensurePaystackVendor(admin, settings);
-      const invoiceNumber = await resolveInvoiceNumberForBooking(admin, bookingId);
-      const feeDescription = invoiceNumber
-        ? `Paystack processing fee for Invoice ${invoiceNumber}`
-        : `Paystack processing fee — ${ref}`;
-      const expenseDate = paidAt.slice(0, 10);
-      const { data: expense, error: expErr } = await admin
-        .from("expenses")
-        .insert({
-          expense_date: expenseDate,
-          category_id: categoryId,
-          vendor_id: paystackVendorId,
-          description: feeDescription,
-          amount_cents: fee.processing_fee_cents,
-          payment_method: "paystack",
-          paid_from_account_id: accountId,
-          branch_id: branchId,
-          booking_id: bookingId,
-          notes: `Auto-recorded (${fee.fee_calculation_method}). Gross: R${(amountCents / 100).toFixed(2)}, net: R${(netSettlement / 100).toFixed(2)}. Ref: ${ref}`,
-          status: "approved",
-          approval_stage: "complete",
-          approved_at: now,
-          payment_transaction_id: paymentTransactionId,
-          processing_fees_cents: fee.processing_fee_cents,
-          sync_status: "pending",
-        })
-        .select("id")
-        .single();
-
-      if (!expErr && expense?.id) {
-        expenseId = expense.id;
-        await admin
-          .from("payment_transactions")
-          .update({ expense_id: expenseId, updated_at: now })
-          .eq("id", paymentTransactionId);
-        void enqueueAccountingSync(admin, { entityType: "expense", entityId: expense.id });
-        if (paystackVendorId) {
-          void enqueueAccountingSync(admin, { entityType: "vendor", entityId: paystackVendorId });
-        }
-      }
-    }
-  }
-
-  const accountingApplicability = await paymentAccountingApplicability(
-    admin,
-    params.entityType,
-    params.entityId,
-  );
-  if (accountingApplicability.applicable) {
-    await ensurePaymentAccountingQueue(admin, paymentTransactionId);
-  } else {
-    await admin
-      .from("payment_transactions")
-      .update({
-        sync_status: "ignored",
-        sync_errors: `accounting_not_applicable:${accountingApplicability.reason}`,
-        updated_at: now,
-      })
-      .eq("id", paymentTransactionId);
-  }
-
-  if (bookingId) {
-    await admin
-      .from("bookings")
-      .update({ payment_transaction_id: paymentTransactionId })
-      .eq("id", bookingId);
-  }
-
-  await logSystemEvent({
-    level: "info",
-    source: "payments/recordGatewayPayment",
-    message: "payment_transaction_recorded",
-    context: {
-      gateway: params.gateway,
-      reference: ref,
-      entity_type: params.entityType,
-      entity_id: params.entityId,
-      processing_fee_cents: fee.processing_fee_cents,
-      fee_calculation_method: fee.fee_calculation_method,
-      expense_id: expenseId,
-    },
-  });
-
-  return { ok: true, created: true, paymentTransactionId, expenseId };
+  return completeSideEffects(inserted.id, null, true);
 }
 
 export async function loadPaymentTransactionForBooking(
