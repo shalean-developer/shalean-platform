@@ -36,7 +36,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
   const { data: booking, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, completed_at, team_id, is_team_job, cleaner_line_earnings_finalized_at, cleaner_count, booking_cleaners(cleaner_id, role)",
+      "id, status, completed_at, team_id, is_team_job, cleaner_line_earnings_finalized_at, cleaner_count, booking_cleaners(cleaner_id, role, source)",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -57,7 +57,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
     is_team_job?: boolean | null;
     cleaner_line_earnings_finalized_at?: string | null;
     cleaner_count?: number | null;
-    booking_cleaners?: { cleaner_id?: string | null; role?: string | null }[] | null;
+    booking_cleaners?: { cleaner_id?: string | null; role?: string | null; source?: string | null }[] | null;
   };
 
   if (isAuthoritativeBookingCompleted({ status: row.status, completed_at: row.completed_at })) {
@@ -68,10 +68,52 @@ export async function applyRecurringOccurrenceRosterContinuity(
   if (row.cleaner_line_earnings_finalized_at) return { ok: true, applied: false, cleanerCount: 0 };
 
   const existingRoster = Array.isArray(row.booking_cleaners) ? row.booking_cleaners : [];
-  // A booking-specific multi-cleaner roster is authoritative for this occurrence.
-  // Do not overwrite manual/customized membership or payout roles with plan continuity data.
-  if (existingRoster.length >= 2) {
-    return { ok: true, applied: false, cleanerCount: existingRoster.length };
+  const generatedRecurringSources = new Set(["recurring_preferred", "recurring_continuity"]);
+  const customExistingRoster =
+    existingRoster.length >= 2 &&
+    existingRoster.some(
+      (member) =>
+        !generatedRecurringSources.has(String(member.source ?? "").trim().toLowerCase()),
+    );
+
+  if (customExistingRoster) {
+    const leads = existingRoster.filter(
+      (member) => String(member.role ?? "").trim().toLowerCase() === "lead",
+    );
+    const existingLeadId =
+      leads.length === 1 ? String(leads[0]?.cleaner_id ?? "").trim() : "";
+    if (!existingLeadId) {
+      return {
+        ok: false,
+        applied: false,
+        cleanerCount: existingRoster.length,
+        reason: "custom_recurring_roster_missing_unique_lead",
+      };
+    }
+
+    const { error: customPatchErr } = await admin
+      .from("bookings")
+      .update({
+        cleaner_id: existingLeadId,
+        selected_cleaner_id: existingLeadId,
+        payout_owner_cleaner_id: existingLeadId,
+        cleaner_mode: "individual_cleaners",
+        cleaner_count: existingRoster.length,
+        is_team_job: false,
+        team_id: null,
+      })
+      .eq("id", bookingId);
+
+    if (customPatchErr) {
+      return {
+        ok: false,
+        applied: false,
+        cleanerCount: existingRoster.length,
+        reason: customPatchErr.message,
+      };
+    }
+
+    return { ok: true, applied: true, cleanerCount: existingRoster.length };
   }
 
   let continuity = params.roster ?? null;
@@ -95,7 +137,10 @@ export async function applyRecurringOccurrenceRosterContinuity(
   const leadId = requestedLeadId || continuity.leadCleanerId || null;
   if (!leadId) return { ok: true, applied: false, cleanerCount: 0 };
 
-  let rosterRows = continuity.rosterRows;
+  let rosterRows = continuity.rosterRows.map((member) => ({
+    ...member,
+    source: "recurring_continuity",
+  }));
   if (requestedLeadId && requestedLeadId !== continuity.leadCleanerId) {
     const existingRequestedLead = continuity.rosterRows.find(
       (member) => member.cleaner_id === requestedLeadId,
