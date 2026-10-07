@@ -15,14 +15,42 @@ declare
   n_lead int;
   n_distinct int;
   lead_id uuid;
+  lead_source text;
   elem jsonb;
   v_fin timestamptz;
+  v_old_cleaner_id uuid;
+  v_team_id uuid;
+  v_is_team_job boolean;
+  v_status text;
+  v_response text;
+  v_accepted_at timestamptz;
+  v_en_route_at timestamptz;
+  v_started_at timestamptz;
 begin
   if p_booking_id is null then
     raise exception 'replace_booking_cleaners_admin_atomic: p_booking_id required';
   end if;
 
-  select b.cleaner_line_earnings_finalized_at into v_fin
+  select
+    b.cleaner_line_earnings_finalized_at,
+    b.cleaner_id,
+    b.team_id,
+    b.is_team_job,
+    lower(trim(coalesce(b.status, ''))),
+    lower(trim(coalesce(b.cleaner_response_status, ''))),
+    b.accepted_at,
+    b.en_route_at,
+    b.started_at
+    into
+      v_fin,
+      v_old_cleaner_id,
+      v_team_id,
+      v_is_team_job,
+      v_status,
+      v_response,
+      v_accepted_at,
+      v_en_route_at,
+      v_started_at
     from public.bookings b
    where b.id = p_booking_id
    for update;
@@ -86,8 +114,8 @@ begin
     coalesce(nullif(trim(e->>'source'), ''), 'admin')
   from jsonb_array_elements(p_rows) e;
 
-  select bc.cleaner_id
-    into lead_id
+  select bc.cleaner_id, lower(trim(coalesce(bc.source, '')))
+    into lead_id, lead_source
     from public.booking_cleaners bc
    where bc.booking_id = p_booking_id
      and bc.role = 'lead'
@@ -97,11 +125,60 @@ begin
     raise exception 'replace_booking_cleaners_admin_atomic: lead row missing after insert';
   end if;
 
-  update public.bookings b
-     set cleaner_id = lead_id,
-         payout_owner_cleaner_id = lead_id,
-         cleaner_count = n_total
-   where b.id = p_booking_id;
+  if
+    lead_source = 'admin_roster_edit'
+    and v_old_cleaner_id is distinct from lead_id
+    and (
+      v_status = 'in_progress'
+      or v_response in ('accepted', 'on_my_way', 'started', 'completed')
+      or v_accepted_at is not null
+      or v_en_route_at is not null
+      or v_started_at is not null
+    )
+  then
+    raise exception 'replace_booking_cleaners_admin_atomic: committed lead replacement requires canonical direct assignment';
+  end if;
+
+  if lead_source = 'admin_roster_edit' and v_old_cleaner_id is distinct from lead_id then
+    update public.dispatch_offers
+       set status = 'expired',
+           responded_at = coalesce(responded_at, now())
+     where booking_id = p_booking_id
+       and status = 'pending';
+
+    if v_team_id is null and not coalesce(v_is_team_job, false) then
+      update public.bookings b
+         set cleaner_id = lead_id,
+             payout_owner_cleaner_id = lead_id,
+             cleaner_count = n_total,
+             status = 'assigned',
+             dispatch_status = 'assigned',
+             assigned_at = now(),
+             accepted_at = now(),
+             cleaner_response_status = 'accepted',
+             en_route_at = null,
+             started_at = null,
+             assignment_type = 'admin_assigned',
+             cleaner_payout_cents = null,
+             cleaner_bonus_cents = null,
+             company_revenue_cents = null,
+             payout_percentage = null,
+             payout_type = null
+       where b.id = p_booking_id;
+    else
+      update public.bookings b
+         set cleaner_id = lead_id,
+             payout_owner_cleaner_id = lead_id,
+             cleaner_count = n_total
+       where b.id = p_booking_id;
+    end if;
+  else
+    update public.bookings b
+       set cleaner_id = lead_id,
+           payout_owner_cleaner_id = lead_id,
+           cleaner_count = n_total
+     where b.id = p_booking_id;
+  end if;
 end;
 $function$;
 
@@ -207,7 +284,7 @@ begin
       raise exception 'replace_booking_cleaners_preference_atomic: invalid role %', elem->>'role';
     end if;
     v_source := lower(trim(coalesce(elem->>'source', '')));
-    if v_source not in ('checkout_preferred', 'customer_preferred', 'booking_v2_r0') then
+    if v_source not in ('checkout_preferred', 'customer_preferred', 'booking_v2_r0', 'recurring_preferred') then
       raise exception 'replace_booking_cleaners_preference_atomic: invalid preference source %', elem->>'source';
     end if;
   end loop;
@@ -219,7 +296,7 @@ begin
       from public.booking_cleaners bc
      where bc.booking_id = p_booking_id
        and lower(trim(coalesce(bc.source, ''))) not in
-         ('checkout_preferred', 'customer_preferred', 'booking_v2_r0')
+         ('checkout_preferred', 'customer_preferred', 'booking_v2_r0', 'recurring_preferred')
   ) then
     return 'skipped_authoritative_existing_roster';
   end if;
