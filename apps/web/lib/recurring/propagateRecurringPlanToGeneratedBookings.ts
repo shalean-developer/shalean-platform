@@ -286,6 +286,11 @@ export async function propagateRecurringPlanToGeneratedBookings(
       price_snapshot: preserveRecurringPackagePayable
         ? booking.price_snapshot
         : provisionalPriceSnapshotJson(locked),
+      ...(preferredCleanerId
+        ? recurringOccurrenceCleanerPatch(preferredCleanerId, {
+            operationalStatus: "pending_payment",
+          })
+        : {}),
     };
 
     let bookingUpdate: Record<string, unknown> = nonPricingPatch;
@@ -306,7 +311,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
       }
     }
 
-    if (preferredCleanerId) {
+    if (preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent) {
       Object.assign(
         bookingUpdate,
         preserveLifecycle
