@@ -25,6 +25,7 @@ import { syncCleanerQualityFlags } from "@/lib/ops/enforceCleanerQualityReview";
 import { processReviewSmsPromptQueue } from "@/lib/reviews/reviewPromptSms";
 import { repairPaidMonthlyInvoiceChildSettlementDrift } from "@/lib/monthlyInvoice/repairPaidMonthlyInvoiceChildSettlementDrift";
 import { recordPaystackBookingPayment } from "@/lib/payments/recordPaystackSettlement";
+import { applyRecurringOccurrenceRosterContinuity } from "@/lib/recurring/applyRecurringOccurrenceRosterContinuity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +48,9 @@ const FAILED_JOB_TYPE_BOOKING_INSERT_INVALID = "booking_insert_invalid_payload";
 /** Terminal: retries exhausted; excluded from cron selector (payload includes last_error / reference / attempts). */
 const FAILED_JOB_TYPE_BOOKING_INSERT_EXHAUSTED = "booking_insert_exhausted";
 const FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED = "payment_reconciliation_exhausted";
+const FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION = "recurring_roster_reconciliation";
+const FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION_EXHAUSTED =
+  "recurring_roster_reconciliation_exhausted";
 /** Max upsert failures before row stops being auto-selected; escalated via critical log. */
 const BOOKING_INSERT_MAX_ATTEMPTS = 25;
 
@@ -123,6 +127,8 @@ export async function POST(request: Request) {
       FAILED_JOB_TYPE_BOOKING_INSERT_INVALID,
       FAILED_JOB_TYPE_BOOKING_INSERT_EXHAUSTED,
       FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED,
+      FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION,
+      FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION_EXHAUSTED,
       "notification_delivery",
       "booking_finalize",
     ]);
@@ -212,6 +218,88 @@ export async function POST(request: Request) {
         await reportOperationalIssue("error", "cron/retry-failed-jobs", `booking_finalize terminal delete failed: ${tfDelErr.message}`, {
           failedJobId: id,
         });
+      }
+    }
+  }
+
+  const { data: rosterJobs, error: rosterSelErr } = await supabase
+    .from("failed_jobs")
+    .select("id, payload, attempts")
+    .eq("type", FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION)
+    .lt("attempts", BOOKING_INSERT_MAX_ATTEMPTS)
+    .order("created_at", { ascending: true })
+    .limit(MAX_BOOKING_INSERT_BATCH);
+
+  if (rosterSelErr) {
+    await reportOperationalIssue(
+      "warn",
+      "cron/retry-failed-jobs",
+      `recurring roster reconciliation select: ${rosterSelErr.message}`,
+    );
+  } else {
+    for (const row of rosterJobs ?? []) {
+      const id = typeof row.id === "string" ? row.id : null;
+      if (!id) continue;
+      const attempts = typeof row.attempts === "number" ? row.attempts : 0;
+      const payload = row.payload as {
+        bookingId?: unknown;
+        recurringId?: unknown;
+        leadCleanerId?: unknown;
+      } | null;
+      const bookingId = typeof payload?.bookingId === "string" ? payload.bookingId.trim() : "";
+      const recurringId = typeof payload?.recurringId === "string" ? payload.recurringId.trim() : "";
+      const leadCleanerId =
+        typeof payload?.leadCleanerId === "string" ? payload.leadCleanerId.trim() : "";
+
+      if (!bookingId || !recurringId || !leadCleanerId) {
+        await supabase
+          .from("failed_jobs")
+          .update({ type: FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION_EXHAUSTED })
+          .eq("id", id);
+        continue;
+      }
+
+      const rosterResult = await applyRecurringOccurrenceRosterContinuity(supabase, {
+        bookingId,
+        recurringId,
+        leadCleanerId,
+      });
+
+      if (rosterResult.ok) {
+        await supabase.from("failed_jobs").delete().eq("id", id);
+        continue;
+      }
+
+      const nextAttempts = attempts + 1;
+      if (nextAttempts >= BOOKING_INSERT_MAX_ATTEMPTS) {
+        await supabase
+          .from("failed_jobs")
+          .update({
+            type: FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION_EXHAUSTED,
+            attempts: nextAttempts,
+            payload: {
+              ...(payload ?? {}),
+              last_error: rosterResult.reason ?? "roster_reconciliation_failed",
+              exhausted_at: new Date().toISOString(),
+            },
+          })
+          .eq("id", id);
+        await reportOperationalIssue(
+          "critical",
+          "cron/retry-failed-jobs",
+          "recurring roster reconciliation attempts exhausted",
+          {
+            failedJobId: id,
+            bookingId,
+            recurringId,
+            attempts: nextAttempts,
+          },
+        );
+      } else {
+        await supabase
+          .from("failed_jobs")
+          .update({ attempts: nextAttempts })
+          .eq("id", id);
       }
     }
   }
@@ -540,6 +628,7 @@ export async function POST(request: Request) {
         FAILED_JOB_TYPE_BOOKING_INSERT_INVALID,
         FAILED_JOB_TYPE_BOOKING_INSERT_EXHAUSTED,
         FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED,
+        FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION_EXHAUSTED,
       ])
       .lt("created_at", cutoffIso)
       .select("id");
