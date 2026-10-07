@@ -137,7 +137,10 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringPropagation).toContain("const nonPricingPatch");
     expect(recurringPropagation).toContain("let bookingUpdate: Record<string, unknown> = nonPricingPatch");
     expect(recurringPropagation).not.toContain("booking_snapshot: booking.booking_snapshot ?? snapshot");
-    expect(recurringPropagation).not.toContain("total_paid_zar: priceZar");
+    expect(recurringPropagation).toContain("draftMonthlyUnsettled");
+    expect(recurringPropagation).toContain("total_paid_zar: priceZar");
+    expect(recurringPropagation).toContain("amount_paid_cents: 0");
+    expect(recurringPropagation).toContain("total_paid_cents: 0");
 
     expect(recurringAtomicSql).toContain(
       "create or replace function public.apply_recurring_occurrence_unpaid_patch",
