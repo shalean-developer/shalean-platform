@@ -129,7 +129,7 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringPropagation).toContain("preservedPackageSnapshot.total_zar");
     expect(recurringPropagation).toContain('"recurringPrepayment" in preservedPackageSnapshot');
     expect(recurringPropagation).toContain('payment_scope === "recurring_first_30_days"');
-    expect(recurringPropagation).toContain("mutableUnpaidCandidate");
+    expect(recurringPropagation).toContain("mutablePricingCandidate");
     expect(recurringPropagation).toContain('admin.rpc(\n        "apply_recurring_occurrence_unpaid_patch"');
     expect(recurringPropagation).toContain("p_booking_id: booking.id");
     expect(recurringPropagation).toContain("p_patch: mutablePricingPatch");
@@ -169,14 +169,14 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
       'operationalStatus: "pending_payment"',
     );
     expect(recurringPropagation).toContain(
-      "preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent",
+      "preferredCleanerId && !mutablePricingCandidate && !settlementMarkerPresent",
     );
     expect(recurringPropagation).toContain(
       "...(preferredCleanerId",
     );
     expect(recurringPropagation).toContain("let cleanerMutationSucceeded = false");
     expect(recurringPropagation).toContain(
-      "cleanerMutationSucceeded = Boolean(preferredCleanerId)",
+      "cleanerMutationSucceeded = Boolean(preferredCleanerId && ordinaryUnpaidPending)",
     );
     expect(recurringPropagation).toContain(
       "preferredCleanerId && cleanerMutationSucceeded",
@@ -306,10 +306,16 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     const predeploySql = read(
       "../../supabase/migrations/20261007023000_audit_02a01_pending_cash_sot.sql",
     ).toLowerCase();
-    const postdeploySql = read(
+    const tombstoneSql = read(
       "../../supabase/migrations/20261007024500_audit_02a01_postdeploy_cash_guard.sql",
     ).toLowerCase();
+    const postdeploySql = read(
+      "../../supabase/postdeploy/audit-02a01-postdeploy-cash-guard.sql",
+    ).toLowerCase();
     const sql = `${predeploySql}\n${postdeploySql}`;
+
+    expect(tombstoneSql).toContain("migration tombstone");
+    expect(tombstoneSql).not.toContain("add constraint bookings_pending_unpaid_cash_zero");
 
     expect(sql).toContain("payment_completed_at is null");
     expect(sql).toContain("paid_at is null");
