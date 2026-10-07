@@ -259,6 +259,15 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringPropagation).toContain(
       "preserveLifecycle: draftMonthlyUnsettled",
     );
+    expect(recurringPropagation).toContain(
+      "const rosterContinuity = await applyRecurringOccurrenceRosterContinuity",
+    );
+    expect(recurringPropagation).toContain("if (!rosterContinuity.ok)");
+    expect(recurringPropagation).toContain("recurring roster continuity failed");
+    expect(recurringPropagation).toContain(
+      '.select("cleaner_id, payout_owner_cleaner_id, is_team_job")',
+    );
+    expect(recurringPropagation).toContain("cleaner identity reload failed");
     expect(rosterContinuity).toContain('role: member.cleaner_id === requestedLeadId ? "lead" : "member"');
     expect(rosterContinuity).toContain("cleaner_id: requestedLeadId");
     expect(rosterContinuity).toContain("ok: boolean");
@@ -334,6 +343,9 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringCleanerAtomicSql).toContain("finalization_claimed_at");
     expect(recurringCleanerAtomicSql).toContain("claim_monthly_invoice_finalization");
     expect(recurringCleanerAtomicSql).toContain("release_monthly_invoice_finalization_claim");
+    expect(recurringCleanerAtomicSql).toContain("finalization_claim_token is null");
+    expect(recurringCleanerAtomicSql).toContain("finalization_claimed_at is null");
+    expect(recurringCleanerAtomicSql).not.toContain("interval '15 minutes'");
     expect(recurringCleanerAtomicSql).toContain(
       "create or replace function public.apply_recurring_occurrence_unpaid_patch_v2",
     );
