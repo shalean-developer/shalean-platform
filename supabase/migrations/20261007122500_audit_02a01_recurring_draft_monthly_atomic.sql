@@ -1,3 +1,67 @@
+alter table public.monthly_invoices
+  add column if not exists finalization_claim_token uuid,
+  add column if not exists finalization_claimed_at timestamptz;
+
+create or replace function public.claim_monthly_invoice_finalization(
+  p_invoice_id uuid,
+  p_token uuid
+)
+returns boolean
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $audit02a01_claim$
+declare
+  v_id uuid;
+begin
+  update public.monthly_invoices mi
+  set finalization_claim_token = p_token,
+      finalization_claimed_at = now()
+  where mi.id = p_invoice_id
+    and lower(trim(coalesce(mi.status, ''))) = 'draft'
+    and (
+      mi.finalization_claim_token is null
+      or mi.finalization_claimed_at < now() - interval '15 minutes'
+    )
+  returning mi.id into v_id;
+
+  return v_id is not null;
+end
+$audit02a01_claim$;
+
+create or replace function public.release_monthly_invoice_finalization_claim(
+  p_invoice_id uuid,
+  p_token uuid
+)
+returns boolean
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $audit02a01_release$
+declare
+  v_id uuid;
+begin
+  update public.monthly_invoices mi
+  set finalization_claim_token = null,
+      finalization_claimed_at = null
+  where mi.id = p_invoice_id
+    and mi.finalization_claim_token = p_token
+  returning mi.id into v_id;
+
+  return v_id is not null;
+end
+$audit02a01_release$;
+
+revoke all on function public.claim_monthly_invoice_finalization(uuid, uuid) from public;
+revoke all on function public.claim_monthly_invoice_finalization(uuid, uuid) from anon;
+revoke all on function public.claim_monthly_invoice_finalization(uuid, uuid) from authenticated;
+grant execute on function public.claim_monthly_invoice_finalization(uuid, uuid) to service_role;
+
+revoke all on function public.release_monthly_invoice_finalization_claim(uuid, uuid) from public;
+revoke all on function public.release_monthly_invoice_finalization_claim(uuid, uuid) from anon;
+revoke all on function public.release_monthly_invoice_finalization_claim(uuid, uuid) from authenticated;
+grant execute on function public.release_monthly_invoice_finalization_claim(uuid, uuid) to service_role;
+
 -- AUDIT-02A01: forward-only extension for draft monthly recurring repricing.
 -- Prior recurring RPC migrations remain immutable. This definition adds a serialized
 -- invoice-finalization boundary for draft monthly occurrences.
@@ -22,6 +86,8 @@ declare
   v_invoice_sent_at timestamptz;
   v_invoice_zoho_invoice_id text;
   v_invoice_email_claimed boolean;
+  v_invoice_finalization_claim_token uuid;
+  v_invoice_finalization_claimed_at timestamptz;
   v_is_ordinary_pending boolean := false;
   v_is_draft_monthly boolean := false;
 begin
@@ -53,7 +119,9 @@ begin
       mi.payment_link,
       mi.sent_at,
       mi.zoho_invoice_id,
-      mi.initial_invoice_email_dispatch_claimed
+      mi.initial_invoice_email_dispatch_claimed,
+      mi.finalization_claim_token,
+      mi.finalization_claimed_at
     into
       v_invoice_status,
       v_invoice_snapshot_at_finalize,
@@ -63,7 +131,9 @@ begin
       v_invoice_payment_link,
       v_invoice_sent_at,
       v_invoice_zoho_invoice_id,
-      v_invoice_email_claimed
+      v_invoice_email_claimed,
+      v_invoice_finalization_claim_token,
+      v_invoice_finalization_claimed_at
     from public.monthly_invoices mi
     where mi.id = v_row.monthly_invoice_id
     for update;
@@ -78,6 +148,8 @@ begin
       and v_invoice_sent_at is null
       and nullif(trim(coalesce(v_invoice_zoho_invoice_id, '')), '') is null
       and coalesce(v_invoice_email_claimed, false) = false
+      and v_invoice_finalization_claim_token is null
+      and v_invoice_finalization_claimed_at is null
       and lower(trim(coalesce(v_row.status, ''))) in ('pending', 'assigned', 'pending_payment');
   end if;
 
