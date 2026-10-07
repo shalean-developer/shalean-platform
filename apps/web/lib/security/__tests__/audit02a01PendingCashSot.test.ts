@@ -350,7 +350,9 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringRestore).toContain("rosterResult = await applyRecurringOccurrenceRosterContinuity");
     expect(recurringRestore).toContain("if (!rosterResult.ok)");
     expect(recurringRestore).toContain('rosterResult.kind === "committed_existing"');
+    expect(recurringRestore).toContain('rosterResult.kind === "locked"');
     expect(recurringRestore).toContain('rosterKind !== "custom_existing"');
+    expect(rosterContinuity).toContain('kind: "locked"');
 
 
   });
