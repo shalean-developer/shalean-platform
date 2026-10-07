@@ -65,9 +65,10 @@ grant execute on function public.release_monthly_invoice_finalization_claim(uuid
 -- AUDIT-02A01: forward-only extension for draft monthly recurring repricing.
 -- Prior recurring RPC migrations remain immutable. This definition adds a serialized
 -- invoice-finalization boundary for draft monthly occurrences.
-create or replace function public.apply_recurring_occurrence_unpaid_patch(
+create or replace function public.apply_recurring_occurrence_unpaid_patch_v2(
   p_booking_id uuid,
-  p_patch jsonb
+  p_patch jsonb,
+  p_line_items jsonb
 )
 returns boolean
 language plpgsql
@@ -90,6 +91,8 @@ declare
   v_invoice_finalization_claimed_at timestamptz;
   v_is_ordinary_pending boolean := false;
   v_is_draft_monthly boolean := false;
+  v_expected_line_items integer := 0;
+  v_inserted_line_items integer := 0;
 begin
   -- Serialize against payment_transactions FK inserts and booking settlement updates.
   select *
@@ -173,6 +176,16 @@ begin
     return false;
   end if;
 
+  if v_is_draft_monthly then
+    if p_line_items is null
+       or jsonb_typeof(p_line_items) <> 'array'
+       or jsonb_array_length(p_line_items) < 1
+    then
+      raise exception 'apply_recurring_occurrence_unpaid_patch_v2: draft monthly repricing requires non-empty p_line_items';
+    end if;
+    v_expected_line_items := jsonb_array_length(p_line_items);
+  end if;
+
   update public.bookings b
   set (
     booking_snapshot,
@@ -236,14 +249,61 @@ begin
     )
   returning b.id into v_updated_id;
 
-  return v_updated_id is not null;
+  if v_updated_id is null then
+    return false;
+  end if;
+
+  if v_is_draft_monthly then
+    delete from public.booking_line_items
+    where booking_id = p_booking_id;
+
+    insert into public.booking_line_items (
+      booking_id,
+      item_type,
+      slug,
+      name,
+      quantity,
+      unit_price_cents,
+      total_price_cents,
+      pricing_source,
+      metadata,
+      earns_cleaner,
+      cleaner_earnings_cents
+    )
+    select
+      p_booking_id,
+      r->>'item_type',
+      nullif(trim(r->>'slug'), ''),
+      coalesce(r->>'name', ''),
+      greatest(1, coalesce((r->>'quantity')::integer, 1)),
+      (r->>'unit_price_cents')::integer,
+      (r->>'total_price_cents')::integer,
+      nullif(trim(r->>'pricing_source'), ''),
+      case
+        when jsonb_typeof(r->'metadata') = 'object' then r->'metadata'
+        else '{}'::jsonb
+      end,
+      coalesce((r->>'earns_cleaner')::boolean, (r->>'item_type')::text is distinct from 'adjustment'),
+      null
+    from jsonb_array_elements(p_line_items) as r;
+
+    get diagnostics v_inserted_line_items = row_count;
+    if v_inserted_line_items <> v_expected_line_items then
+      raise exception
+        'apply_recurring_occurrence_unpaid_patch_v2: expected % line rows, inserted %',
+        v_expected_line_items,
+        v_inserted_line_items;
+    end if;
+  end if;
+
+  return true;
 end
 $audit02a01_recurring_rpc$;
 
-revoke all on function public.apply_recurring_occurrence_unpaid_patch(uuid, jsonb) from public;
-revoke all on function public.apply_recurring_occurrence_unpaid_patch(uuid, jsonb) from anon;
-revoke all on function public.apply_recurring_occurrence_unpaid_patch(uuid, jsonb) from authenticated;
-grant execute on function public.apply_recurring_occurrence_unpaid_patch(uuid, jsonb) to service_role;
+revoke all on function public.apply_recurring_occurrence_unpaid_patch_v2(uuid, jsonb, jsonb) from public;
+revoke all on function public.apply_recurring_occurrence_unpaid_patch_v2(uuid, jsonb, jsonb) from anon;
+revoke all on function public.apply_recurring_occurrence_unpaid_patch_v2(uuid, jsonb, jsonb) from authenticated;
+grant execute on function public.apply_recurring_occurrence_unpaid_patch_v2(uuid, jsonb, jsonb) to service_role;
 
-comment on function public.apply_recurring_occurrence_unpaid_patch(uuid, jsonb) is
-  'AUDIT-02A01 atomic boundary: reprices an evidence-free pending checkout or untouched draft-monthly recurring occurrence, serializing against invoice finalization and settlement.';
+comment on function public.apply_recurring_occurrence_unpaid_patch_v2(uuid, jsonb, jsonb) is
+  'AUDIT-02A01 v2 atomic boundary: reprices an evidence-free pending checkout or untouched draft-monthly occurrence and replaces monthly pricing lines in the same serialized transaction.';
