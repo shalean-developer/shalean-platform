@@ -61,7 +61,8 @@ export function isMonthlyBillingContext(row: BookingFinancialContractRow): boole
     Boolean(String(row.monthly_invoice_id ?? "").trim()) ||
     norm(row.payment_status) === "pending_monthly" ||
     billingType === "monthly_contract" ||
-    billingType === "recurring_invoice"
+    billingType === "recurring_invoice" ||
+    billingType === "pay_later"
   );
 }
 
