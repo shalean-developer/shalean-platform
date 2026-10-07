@@ -111,7 +111,7 @@ export async function restoreRecurringPreferredCleanerAssignments(
     }
 
     let effectiveCleanerId = cleanerId;
-    let rosterKind: "custom_existing" | "committed_existing" | "continuity_applied" | "noop" | undefined;
+    let rosterKind: "custom_existing" | "committed_existing" | "continuity_applied" | "noop" | "locked" | undefined;
 
     if (row.recurring_id) {
       const rosterResult = await applyRecurringOccurrenceRosterContinuity(admin, {
@@ -129,7 +129,7 @@ export async function restoreRecurringPreferredCleanerAssignments(
         updated++;
         rostersApplied++;
       }
-      if (rosterResult.kind === "committed_existing") {
+      if (rosterResult.kind === "committed_existing" || rosterResult.kind === "locked") {
         continue;
       }
     }
@@ -150,6 +150,7 @@ export async function restoreRecurringPreferredCleanerAssignments(
       row.recurring_id &&
       rosterKind !== "custom_existing" &&
       rosterKind !== "committed_existing" &&
+      rosterKind !== "locked" &&
       !planCleaner.has(row.recurring_id)
     ) {
       planCleaner.set(row.recurring_id, effectiveCleanerId);
