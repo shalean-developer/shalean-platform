@@ -39,6 +39,7 @@ type BookingHead = {
   service: string | null;
   date: string | null;
   time: string | null;
+  total_price: number | string | null;
   total_paid_zar: number | string | null;
   payment_link_send_count: number | null;
   payment_link_first_sent_at: string | null;
@@ -54,7 +55,7 @@ function boolish(v: unknown): boolean {
 }
 
 const HEAD_SELECT =
-  "id, user_id, payment_status, status, payment_link, payment_link_expires_at, payment_link_last_sent_at, paystack_reference, customer_name, customer_phone, customer_email, service, date, time, total_paid_zar, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel";
+  "id, user_id, payment_status, status, payment_link, payment_link_expires_at, payment_link_last_sent_at, paystack_reference, customer_name, customer_phone, customer_email, service, date, time, total_price, total_paid_zar, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel";
 
 /**
  * Admin-only: same pipeline as customer checkout (`processPaystackInitializeBody`).

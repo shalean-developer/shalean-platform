@@ -107,6 +107,10 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/security/__tests__/audit01c02CleanupLogsRbac.test.ts
 
+      - name: AUDIT-02A01 pending cash source-of-truth contract
+        if: steps.filter.outputs.run_suite == 'true'
+        run: npm run test -- lib/security/__tests__/audit02a01PendingCashSot.test.ts
+
       - name: Staging branch bootstrap convergence
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/env/__tests__/stagingBranchBootstrapConvergence.test.ts

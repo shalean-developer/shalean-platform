@@ -43,14 +43,18 @@ async function resolvePendingCheckoutPricingTarget(
   createdPendingBookingId: string | null,
   bookingIdFromBody: string | null,
   checkout: OkCheckoutForPricing,
-): Promise<{ bookingId: string; skipLineItemInsert: boolean } | null> {
+): Promise<
+  | { bookingId: string; skipLineItemInsert: boolean; pricingComplete: false }
+  | { bookingId: string; skipLineItemInsert: true; pricingComplete: true; existingPayableZar: number }
+  | null
+> {
   if (!checkout.serverQuote) return null;
   if (createdPendingBookingId) {
-    return { bookingId: createdPendingBookingId, skipLineItemInsert: false };
+    return { bookingId: createdPendingBookingId, skipLineItemInsert: false, pricingComplete: false };
   }
   const bid = bookingIdFromBody?.trim() ?? "";
   if (!/^[0-9a-f-]{36}$/i.test(bid)) return null;
-  const { data: row } = await admin.from("bookings").select("id, price_snapshot, status").eq("id", bid).maybeSingle();
+  const { data: row } = await admin.from("bookings").select("id, price_snapshot, status, total_price").eq("id", bid).maybeSingle();
   if (!row) return null;
   const st = String((row as { status?: string | null }).status ?? "").toLowerCase();
   if (st !== "pending_payment") return null;
@@ -62,8 +66,22 @@ async function resolvePendingCheckoutPricingTarget(
     .eq("booking_id", bid);
   if (ctErr) return null;
   const hasLi = (count ?? 0) > 0;
-  if (hasSnap && hasLi) return null;
-  return { bookingId: bid, skipLineItemInsert: hasLi };
+  if (hasLi && hasSnap) {
+    const existingPayableZar = Number((row as { total_price?: number | string | null }).total_price);
+    return {
+      bookingId: bid,
+      skipLineItemInsert: true,
+      pricingComplete: true,
+      existingPayableZar:
+        Number.isFinite(existingPayableZar) && existingPayableZar > 0
+          ? Math.round(existingPayableZar)
+          : 0,
+    };
+  }
+
+  // Partial pricing state is not immutable yet. Rebuild both the snapshot and
+  // line items so the persisted breakdown is reconciled to the exact payable.
+  return { bookingId: bid, skipLineItemInsert: false, pricingComplete: false };
 }
 import { metrics } from "@/lib/metrics/counters";
 import { resolveRatesSnapshotForLockedBooking } from "@/lib/booking/resolveRatesSnapshot";
@@ -227,6 +245,11 @@ export type ProcessPaystackInitializeBodyOptions = {
   adminSlotFlags?: { slotDuplicateExempt: boolean; adminForceSlotOverride: boolean };
   /** Optional IP + User-Agent for referral checkout fingerprint (customer `/api/paystack/initialize` only). */
   checkoutTrustSignals?: CheckoutTrustSignals;
+  /**
+   * Server-only recurring fallback: preserve the already-persisted pending booking payable
+   * (for example the 30-day recurring package total) instead of recomputing from the per-visit lock.
+   */
+  preserveExistingPendingPayable?: boolean;
 };
 
 /**
@@ -289,9 +312,21 @@ export async function processPaystackInitializeBody(
         ? b.booking_id.trim()
         : null;
 
+  let preservedExistingPayableZar: number | null = null;
+  let preservedExistingPriceSnapshot: Record<string, unknown> | null = null;
   if (bookingIdFromBody) {
-    const { data: payRow } = await admin.from("bookings").select("payment_status").eq("id", bookingIdFromBody).maybeSingle();
-    const ps = String((payRow as { payment_status?: string } | null)?.payment_status ?? "");
+    const { data: payRow } = await admin
+      .from("bookings")
+      .select("status, payment_status, total_price, price_snapshot")
+      .eq("id", bookingIdFromBody)
+      .maybeSingle();
+    const pay = payRow as {
+      status?: string | null;
+      payment_status?: string | null;
+      total_price?: number | string | null;
+      price_snapshot?: unknown;
+    } | null;
+    const ps = String(pay?.payment_status ?? "").trim().toLowerCase();
     if (ps === "pending_monthly") {
       return {
         ok: false,
@@ -299,6 +334,47 @@ export async function processPaystackInitializeBody(
         errorCode: "MONTHLY_INVOICE_BOOKING",
         error: "This booking is on monthly consolidated billing. Pay the invoice link from your email instead.",
       };
+    }
+    if (initOptions?.preserveExistingPendingPayable) {
+      const lifecycle = String(pay?.status ?? "").trim().toLowerCase();
+      const storedPayable = Number(pay?.total_price);
+      if (
+        lifecycle !== "pending_payment" ||
+        ["success", "paid", "succeeded", "completed", "pending_monthly"].includes(ps) ||
+        !Number.isFinite(storedPayable) ||
+        storedPayable <= 0
+      ) {
+        return {
+          ok: false,
+          status: 409,
+          errorCode: "PRICE_MISMATCH",
+          error: "The saved recurring payment amount is unavailable. Refresh this booking before retrying payment.",
+        };
+      }
+      const storedSnapshot =
+        pay?.price_snapshot && typeof pay.price_snapshot === "object" && !Array.isArray(pay.price_snapshot)
+          ? (pay.price_snapshot as Record<string, unknown>)
+          : null;
+      if (storedSnapshot?.payment_scope !== "recurring_first_30_days") {
+        return {
+          ok: false,
+          status: 409,
+          errorCode: "PRICE_MISMATCH",
+          error: "The saved recurring package scope is unavailable. Refresh this booking before retrying payment.",
+        };
+      }
+      const perVisit = Number(storedSnapshot.per_visit_price_zar);
+      const prepaidVisitCount = Number(storedSnapshot.prepaid_visit_count);
+      if (!Number.isFinite(perVisit) || perVisit <= 0 || !Number.isFinite(prepaidVisitCount) || prepaidVisitCount < 1) {
+        return {
+          ok: false,
+          status: 409,
+          errorCode: "PRICE_MISMATCH",
+          error: "The saved recurring package allocation is invalid. Refresh this booking before retrying payment.",
+        };
+      }
+      preservedExistingPayableZar = Math.round(storedPayable);
+      preservedExistingPriceSnapshot = storedSnapshot;
     }
   }
 
@@ -644,7 +720,8 @@ export async function processPaystackInitializeBody(
   const discountZar = promoDiscountZar + referralDiscountZar + planDiscountZar;
 
   /** Server-only — never trust a client-supplied `amount` or `locked.finalPrice` for Paystack. */
-  const totalZar = computeCheckoutTotalZar(visitZar, tip, discountZar);
+  const recomputedTotalZar = computeCheckoutTotalZar(visitZar, tip, discountZar);
+  const totalZar = preservedExistingPayableZar ?? recomputedTotalZar;
   const amountCents = totalZar * 100;
 
   const checkoutForSnap = checkout as OkCheckoutForPricing;
@@ -654,9 +731,28 @@ export async function processPaystackInitializeBody(
     subtotalZar: checkoutForSnap.serverQuote.subtotalZar,
     visitTotalZar: checkoutForSnap.visitTotalZar,
   });
+  const metadataLineDeltaCents =
+    zarToCents(totalZar) - sumLineItemsCents(visitLineItemsForMetadata);
+  const payableLineItemsForMetadata =
+    metadataLineDeltaCents === 0
+      ? visitLineItemsForMetadata
+      : [
+          ...visitLineItemsForMetadata,
+          {
+            item_type: "adjustment" as const,
+            slug: null,
+            name: "Tip, discounts & payment adjustment",
+            quantity: 1,
+            unit_price_cents: metadataLineDeltaCents,
+            total_price_cents: metadataLineDeltaCents,
+            pricing_source: "checkout_payable_reconciliation_v1",
+            metadata: { tipZar: tip, discountZar },
+            earns_cleaner: false,
+          },
+        ];
   const lineItemsSummary =
-    visitLineItemsForMetadata.length > 0
-      ? visitLineItemsForMetadata.map((r) => ({
+    payableLineItemsForMetadata.length > 0
+      ? payableLineItemsForMetadata.map((r) => ({
           id: String(r.slug ?? r.item_type ?? "line"),
           name: r.name,
           amount_zar: Math.round(r.total_price_cents / 100),
@@ -669,7 +765,7 @@ export async function processPaystackInitializeBody(
           },
         ];
   const extrasSumZarMeta = Math.round(Number(checkoutForSnap.jobSubtotalSplit.extrasZar) || 0);
-  const checkoutPriceSnapshotForMetadata = buildCheckoutPriceSnapshotV1FromInit({
+  const checkoutPriceSnapshotBase = buildCheckoutPriceSnapshotV1FromInit({
     total_zar: totalZar,
     visit_total_zar: visitZar,
     subtotal_zar: Math.round(checkoutForSnap.serverQuote.subtotalZar),
@@ -681,6 +777,26 @@ export async function processPaystackInitializeBody(
     pricing_version_id: locked.pricing_version_id?.trim() ?? null,
     line_items: lineItemsSummary,
   });
+  const checkoutPriceSnapshotForMetadata =
+    preservedExistingPriceSnapshot != null
+      ? {
+          ...checkoutPriceSnapshotBase,
+          payment_scope: "recurring_first_30_days" as const,
+          per_visit_price_zar: Number(preservedExistingPriceSnapshot.per_visit_price_zar),
+          prepaid_visit_count: Number(preservedExistingPriceSnapshot.prepaid_visit_count),
+          prepaid_coverage_start_date:
+            typeof preservedExistingPriceSnapshot.prepaid_coverage_start_date === "string"
+              ? preservedExistingPriceSnapshot.prepaid_coverage_start_date
+              : undefined,
+          prepaid_coverage_end_date:
+            typeof preservedExistingPriceSnapshot.prepaid_coverage_end_date === "string"
+              ? preservedExistingPriceSnapshot.prepaid_coverage_end_date
+              : undefined,
+          prepaid_occurrence_dates: Array.isArray(preservedExistingPriceSnapshot.prepaid_occurrence_dates)
+            ? preservedExistingPriceSnapshot.prepaid_occurrence_dates.map(String)
+            : undefined,
+        }
+      : checkoutPriceSnapshotBase;
   if (bookingPaystackFinalizeTraceEnabled()) {
     console.log("[PRICE SNAPSHOT USED]", {
       phase: "initialize",
@@ -724,7 +840,28 @@ export async function processPaystackInitializeBody(
       )
     : null;
 
-  if (pricingTarget && checkout.ok && checkout.serverQuote) {
+  if (pricingTarget?.pricingComplete) {
+    if (pricingTarget.existingPayableZar !== totalZar) {
+      void reportOperationalIssue(
+        "warn",
+        "processPaystackInitializeBody",
+        "existing pending payable differs from reinitialized charge",
+        {
+          bookingId: pricingTarget.bookingId,
+          existingPayableZar: pricingTarget.existingPayableZar,
+          recomputedPayableZar: totalZar,
+        },
+      );
+      return {
+        ok: false,
+        status: 409,
+        errorCode: "PRICE_MISMATCH",
+        error: "This saved payment amount changed. Reopen the booking and refresh pricing before starting a new checkout.",
+      };
+    }
+  }
+
+  if (pricingTarget && !pricingTarget.pricingComplete && checkout.ok && checkout.serverQuote) {
     const flat = buildSnapshotFlat(locked);
     const bookingSnapshotMerged = mergeSnapshotWithFlat(snapshot, flat);
     const locationContext = await resolveBookingLocationContext(admin, locked);
@@ -741,12 +878,31 @@ export async function processPaystackInitializeBody(
     ).map(({ slug, name, price }) => ({ slug, name, price }));
     const visitRounded = Math.round(checkout.visitTotalZar);
     const visitCents = zarToCents(visitRounded);
-    const checkoutLineItems = buildCheckoutVisitLineItems({
+    const payableCents = zarToCents(totalZar);
+    const visitLineItems = buildCheckoutVisitLineItems({
       serviceTypeSlug: locked.service ? adminBookingServiceSlug(String(locked.service)) : null,
       job: checkout.jobSubtotalSplit,
       subtotalZar: checkout.serverQuote.subtotalZar,
       visitTotalZar: checkout.visitTotalZar,
     });
+    const payableDeltaCents = payableCents - sumLineItemsCents(visitLineItems);
+    const checkoutLineItems =
+      payableDeltaCents === 0
+        ? visitLineItems
+        : [
+            ...visitLineItems,
+            {
+              item_type: "adjustment" as const,
+              slug: null,
+              name: "Tip, discounts & payment adjustment",
+              quantity: 1,
+              unit_price_cents: payableDeltaCents,
+              total_price_cents: payableDeltaCents,
+              pricing_source: "checkout_payable_reconciliation_v1",
+              metadata: { tipZar: tip, discountZar },
+              earns_cleaner: false,
+            },
+          ];
     if (checkoutLineItems.length === 0) {
       if (createdPendingBookingId) {
         await deletePendingPaymentBooking(admin, createdPendingBookingId);
@@ -759,13 +915,14 @@ export async function processPaystackInitializeBody(
       };
     }
     const lineSumCents = sumLineItemsCents(checkoutLineItems);
-    if (lineSumCents !== visitCents) {
+    if (lineSumCents !== payableCents) {
       if (createdPendingBookingId) {
         await deletePendingPaymentBooking(admin, createdPendingBookingId);
       }
-      void reportOperationalIssue("error", "processPaystackInitializeBody", "checkout line sum != visit total", {
+      void reportOperationalIssue("error", "processPaystackInitializeBody", "checkout line sum != payable total", {
         bookingId: pricingTarget.bookingId,
         visitCents,
+        payableCents,
         lineSumCents,
       });
       return {
@@ -783,7 +940,7 @@ export async function processPaystackInitializeBody(
         name: typeof x.name === "string" ? x.name : String(x.slug ?? "Extra"),
         price: Math.round(Number(x.price) || 0),
       })),
-      total_price: visitRounded,
+      total_price: totalZar,
     });
     const priceBreakdown = { ...checkout.serverQuote, job: checkout.jobSubtotalSplit };
     const slotF = initOptions?.adminSlotFlags;
@@ -795,8 +952,7 @@ export async function processPaystackInitializeBody(
       bookingSnapshot: bookingSnapshotMerged,
       durationMinutes: selectLockedBookingDurationMinutesForPersistence(locked),
       priceBreakdown,
-      totalPriceZar: checkout.visitTotalZar,
-      totalPaidZar: totalZar,
+      totalPriceZar: totalZar,
       customerName: customer.name.trim() || null,
       customerPhone: customer.phone.trim() || null,
       userId: customer.user_id,
