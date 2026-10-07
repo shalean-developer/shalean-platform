@@ -192,7 +192,10 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     );
     expect(recurringPropagation).toContain("let cleanerMutationSucceeded = false");
     expect(recurringPropagation).toContain(
-      "cleanerMutationSucceeded = Boolean(preferredCleanerId && ordinaryUnpaidPending)",
+      "cleanerMutationSucceeded = Boolean(",
+    );
+    expect(recurringPropagation).toContain(
+      "preferredCleanerId && (ordinaryUnpaidPending || draftMonthlyUnsettled)",
     );
     expect(recurringPropagation).toContain(
       "preferredCleanerId && cleanerMutationSucceeded",
