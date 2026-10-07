@@ -56,9 +56,6 @@ export async function applyRecurringOccurrenceRosterContinuity(
   if (row.cleaner_line_earnings_finalized_at) return { applied: false, cleanerCount: 0 };
 
   const existingRoster = Array.isArray(row.booking_cleaners) ? row.booking_cleaners : [];
-  if (existingRoster.length >= 2) {
-    return { applied: false, cleanerCount: existingRoster.length };
-  }
 
   const continuity =
     params.roster ?? (await fetchLastAssignedRosterForRecurringPlan(admin, recurringId));
@@ -66,12 +63,51 @@ export async function applyRecurringOccurrenceRosterContinuity(
     return { applied: false, cleanerCount: Number(row.cleaner_count ?? 1) || 1 };
   }
 
-  const leadId = continuity.leadCleanerId || params.leadCleanerId?.trim() || null;
+  const requestedLeadId = params.leadCleanerId?.trim() || null;
+  const leadId = requestedLeadId || continuity.leadCleanerId || null;
   if (!leadId) return { applied: false, cleanerCount: 0 };
+
+  let rosterRows = continuity.rosterRows;
+  if (requestedLeadId && requestedLeadId !== continuity.leadCleanerId) {
+    const existingRequestedLead = continuity.rosterRows.find(
+      (member) => member.cleaner_id === requestedLeadId,
+    );
+    const originalLead = continuity.rosterRows.find((member) => member.role === "lead");
+    if (existingRequestedLead) {
+      const transferredLeadBonus = originalLead?.lead_bonus_cents ?? 0;
+      rosterRows = continuity.rosterRows.map((member) => ({
+        ...member,
+        role: member.cleaner_id === requestedLeadId ? "lead" : "member",
+        lead_bonus_cents:
+          member.cleaner_id === requestedLeadId ? transferredLeadBonus : 0,
+      }));
+    } else if (originalLead) {
+      rosterRows = continuity.rosterRows.map((member) =>
+        member.role === "lead"
+          ? { ...member, cleaner_id: requestedLeadId }
+          : member,
+      );
+    }
+  }
+
+  const existingIds = new Set(
+    existingRoster
+      .map((member) => String(member.cleaner_id ?? "").trim())
+      .filter(Boolean),
+  );
+  const desiredIds = new Set(rosterRows.map((member) => member.cleaner_id));
+  const rosterAlreadyMatches =
+    existingRoster.length >= 2 &&
+    existingIds.size === desiredIds.size &&
+    [...desiredIds].every((cleanerId) => existingIds.has(cleanerId)) &&
+    desiredIds.has(leadId);
+  if (rosterAlreadyMatches && leadId === continuity.leadCleanerId) {
+    return { applied: false, cleanerCount: existingRoster.length };
+  }
 
   const { error: rpcErr } = await admin.rpc("replace_booking_cleaners_admin_atomic", {
     p_booking_id: bookingId,
-    p_rows: continuity.rosterRows,
+    p_rows: rosterRows,
   });
   if (rpcErr) return { applied: false, cleanerCount: 0 };
 
@@ -83,7 +119,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
       selected_cleaner_id: leadId,
       payout_owner_cleaner_id: leadId,
       cleaner_mode: "individual_cleaners",
-      cleaner_count: continuity.cleanerCount,
+      cleaner_count: rosterRows.length,
       is_team_job: false,
       team_id: null,
       assigned_at: now,
@@ -95,5 +131,5 @@ export async function applyRecurringOccurrenceRosterContinuity(
 
   if (patchErr) return { applied: false, cleanerCount: 0 };
 
-  return { applied: true, cleanerCount: continuity.cleanerCount };
+  return { applied: true, cleanerCount: rosterRows.length };
 }
