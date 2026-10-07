@@ -193,6 +193,11 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(sql).toContain("audit_02a01_ledger_only_settlement_requires_manual_reconciliation");
     expect(sql).toContain("audit_02a01_divergent_cash_mirrors_require_manual_reconciliation");
     expect(sql).toContain("coalesce(b.total_paid_zar, 0) <= 0");
+    expect(postdeploySql).toContain("do $audit02a01_repair_lock$");
+    expect(postdeploySql).toContain("for update");
+    expect(postdeploySql.indexOf("do $audit02a01_repair_lock$")).toBeLessThan(
+      postdeploySql.indexOf("create temporary table audit_02a01_repair"),
+    );
     expect(postdeploySql).toContain("do $audit02a01_ledger$");
     expect(postdeploySql).toContain("$audit02a01_ledger$;");
     expect(postdeploySql).toContain("do $audit02a01_cashshape$");

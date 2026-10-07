@@ -4,6 +4,28 @@
 -- Precondition: application code using apply_pending_booking_init_patch(..., p_line_items)
 -- is already deployed and verified in this environment.
 
+-- Serialize the one-time repair against concurrent settlement/payment writes.
+-- Lock every pending/expired positive-cash row before any evidence checks or
+-- candidate capture. FOR UPDATE conflicts with the KEY SHARE lock taken by
+-- payment_transactions foreign-key inserts, so a concurrent payment either
+-- commits before these checks (and is observed) or waits until this repair
+-- transaction finishes.
+do $audit02a01_repair_lock$
+begin
+  perform 1
+  from public.bookings b
+  where lower(trim(coalesce(b.status, ''))) in ('pending_payment', 'payment_expired')
+    and lower(trim(coalesce(b.payment_status, 'pending')))
+      not in ('success', 'paid', 'succeeded', 'completed', 'pending_monthly')
+    and greatest(
+      coalesce(b.amount_paid_cents, 0),
+      coalesce(b.total_paid_cents, 0),
+      coalesce(b.total_paid_zar, 0) * 100
+    ) > 0
+  for update;
+end
+$audit02a01_repair_lock$;
+
 -- Fail closed if settlement evidence exists only in the normalized ledger.
 do $audit02a01_ledger$
 begin
