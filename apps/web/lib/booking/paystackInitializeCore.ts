@@ -654,9 +654,28 @@ export async function processPaystackInitializeBody(
     subtotalZar: checkoutForSnap.serverQuote.subtotalZar,
     visitTotalZar: checkoutForSnap.visitTotalZar,
   });
+  const metadataLineDeltaCents =
+    zarToCents(totalZar) - sumLineItemsCents(visitLineItemsForMetadata);
+  const payableLineItemsForMetadata =
+    metadataLineDeltaCents === 0
+      ? visitLineItemsForMetadata
+      : [
+          ...visitLineItemsForMetadata,
+          {
+            item_type: "adjustment" as const,
+            slug: null,
+            name: "Tip, discounts & payment adjustment",
+            quantity: 1,
+            unit_price_cents: metadataLineDeltaCents,
+            total_price_cents: metadataLineDeltaCents,
+            pricing_source: "checkout_payable_reconciliation_v1",
+            metadata: { tipZar: tip, discountZar },
+            earns_cleaner: false,
+          },
+        ];
   const lineItemsSummary =
-    visitLineItemsForMetadata.length > 0
-      ? visitLineItemsForMetadata.map((r) => ({
+    payableLineItemsForMetadata.length > 0
+      ? payableLineItemsForMetadata.map((r) => ({
           id: String(r.slug ?? r.item_type ?? "line"),
           name: r.name,
           amount_zar: Math.round(r.total_price_cents / 100),
@@ -741,12 +760,31 @@ export async function processPaystackInitializeBody(
     ).map(({ slug, name, price }) => ({ slug, name, price }));
     const visitRounded = Math.round(checkout.visitTotalZar);
     const visitCents = zarToCents(visitRounded);
-    const checkoutLineItems = buildCheckoutVisitLineItems({
+    const payableCents = zarToCents(totalZar);
+    const visitLineItems = buildCheckoutVisitLineItems({
       serviceTypeSlug: locked.service ? adminBookingServiceSlug(String(locked.service)) : null,
       job: checkout.jobSubtotalSplit,
       subtotalZar: checkout.serverQuote.subtotalZar,
       visitTotalZar: checkout.visitTotalZar,
     });
+    const payableDeltaCents = payableCents - sumLineItemsCents(visitLineItems);
+    const checkoutLineItems =
+      payableDeltaCents === 0
+        ? visitLineItems
+        : [
+            ...visitLineItems,
+            {
+              item_type: "adjustment" as const,
+              slug: null,
+              name: "Tip, discounts & payment adjustment",
+              quantity: 1,
+              unit_price_cents: payableDeltaCents,
+              total_price_cents: payableDeltaCents,
+              pricing_source: "checkout_payable_reconciliation_v1",
+              metadata: { tipZar: tip, discountZar },
+              earns_cleaner: false,
+            },
+          ];
     if (checkoutLineItems.length === 0) {
       if (createdPendingBookingId) {
         await deletePendingPaymentBooking(admin, createdPendingBookingId);
@@ -759,13 +797,14 @@ export async function processPaystackInitializeBody(
       };
     }
     const lineSumCents = sumLineItemsCents(checkoutLineItems);
-    if (lineSumCents !== visitCents) {
+    if (lineSumCents !== payableCents) {
       if (createdPendingBookingId) {
         await deletePendingPaymentBooking(admin, createdPendingBookingId);
       }
-      void reportOperationalIssue("error", "processPaystackInitializeBody", "checkout line sum != visit total", {
+      void reportOperationalIssue("error", "processPaystackInitializeBody", "checkout line sum != payable total", {
         bookingId: pricingTarget.bookingId,
         visitCents,
+        payableCents,
         lineSumCents,
       });
       return {
