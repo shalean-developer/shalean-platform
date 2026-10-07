@@ -157,7 +157,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
   const { data: rows, error } = await admin
     .from("bookings")
     .select(
-      "id, date, status, payment_status, payment_completed_at, paid_at, payment_transaction_id, marked_paid_by_admin_id, total_price, booking_snapshot, price_snapshot, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status)",
+      "id, date, status, payment_status, payment_completed_at, paid_at, payment_transaction_id, marked_paid_by_admin_id, total_price, booking_snapshot, price_snapshot, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, booking_cleaners(cleaner_id, role, source), monthly_invoices(status)",
     )
     .eq("recurring_id", plan.id)
     .neq("status", "cancelled");
@@ -210,6 +210,26 @@ export async function propagateRecurringPlanToGeneratedBookings(
       result.bookings_skipped_locked_invoice++;
       continue;
     }
+
+    const existingRoster = Array.isArray(row.booking_cleaners)
+      ? (row.booking_cleaners as Array<{ cleaner_id?: string | null; role?: string | null; source?: string | null }>)
+      : [];
+    const generatedRecurringSources = new Set(["recurring_preferred", "recurring_continuity"]);
+    const hasCustomExistingRoster =
+      existingRoster.length > 0 &&
+      existingRoster.some(
+        (member) =>
+          !generatedRecurringSources.has(String(member.source ?? "").trim().toLowerCase()),
+      );
+    const customLeadRows = hasCustomExistingRoster
+      ? existingRoster.filter(
+          (member) => String(member.role ?? "").trim().toLowerCase() === "lead",
+        )
+      : [];
+    const customRosterLeadId =
+      customLeadRows.length === 1
+        ? normalizeUuidCandidate(customLeadRows[0]?.cleaner_id ?? null)
+        : null;
 
     const earningsFinalized = Boolean(booking.cleaner_line_earnings_finalized_at);
     const bookingCompleted =
@@ -286,7 +306,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
       price_snapshot: preserveRecurringPackagePayable
         ? booking.price_snapshot
         : provisionalPriceSnapshotJson(locked),
-      ...(preferredCleanerId
+      ...(preferredCleanerId && !hasCustomExistingRoster
         ? recurringOccurrenceCleanerPatch(preferredCleanerId, {
             operationalStatus: "pending_payment",
           })
@@ -313,7 +333,12 @@ export async function propagateRecurringPlanToGeneratedBookings(
       }
     }
 
-    if (preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent) {
+    if (
+      preferredCleanerId &&
+      !hasCustomExistingRoster &&
+      !mutableUnpaidCandidate &&
+      !settlementMarkerPresent
+    ) {
       Object.assign(
         bookingUpdate,
         preserveLifecycle
@@ -334,14 +359,40 @@ export async function propagateRecurringPlanToGeneratedBookings(
         result.errors.push(`Booking ${booking.id}: ${upErr.message}`);
         continue;
       }
-      if (preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent) {
+      if (
+        preferredCleanerId &&
+        !hasCustomExistingRoster &&
+        !mutableUnpaidCandidate &&
+        !settlementMarkerPresent
+      ) {
         cleanerMutationSucceeded = true;
       }
     }
 
     result.bookings_updated++;
     let reconciledCleanerId: string | null =
-      preferredCleanerId && cleanerMutationSucceeded ? preferredCleanerId : null;
+      customRosterLeadId ??
+      (preferredCleanerId && cleanerMutationSucceeded ? preferredCleanerId : null);
+
+    if (hasCustomExistingRoster && !bookingCompleted && !mutableUnpaidCandidate) {
+      const customRosterContinuity = await applyRecurringOccurrenceRosterContinuity(admin, {
+        bookingId: booking.id,
+        recurringId: plan.id,
+        leadCleanerId: customRosterLeadId ?? preferredCleanerId,
+      });
+      if (!customRosterContinuity.ok) {
+        result.errors.push(
+          `Booking ${booking.id}: recurring custom roster reconciliation failed: ${customRosterContinuity.reason ?? "failed"}`,
+        );
+        result.earnings_skipped++;
+        continue;
+      }
+      if (customRosterContinuity.leadCleanerId) {
+        reconciledCleanerId = customRosterContinuity.leadCleanerId;
+        result.bookings_cleaner_updated++;
+      }
+    }
+
     if (preferredCleanerId && cleanerMutationSucceeded) {
       result.bookings_cleaner_updated++;
       if (!bookingCompleted && !mutableUnpaidCandidate) {
