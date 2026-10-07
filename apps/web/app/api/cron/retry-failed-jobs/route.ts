@@ -309,17 +309,28 @@ export async function POST(request: Request) {
 
       if (result.bookingId && !result.error) {
         if (jobType === FAILED_JOB_TYPE_PAYMENT_RECONCILIATION) {
-          const paymentPersisted = await recordPaystackBookingPayment(supabase, {
-            reference: payload.paystackReference,
-            amountCents: payload.amountCents,
-            bookingId: result.bookingId,
-            currency: typeof payload.currency === "string" ? payload.currency : "ZAR",
-            paidAtIso: typeof payload.paidAtIso === "string" ? payload.paidAtIso : null,
-            chargeData:
-              payload.paystackChargeData && typeof payload.paystackChargeData === "object"
-                ? payload.paystackChargeData
-                : undefined,
-          });
+          let paymentPersisted;
+          try {
+            paymentPersisted = await recordPaystackBookingPayment(supabase, {
+              reference: payload.paystackReference,
+              amountCents: payload.amountCents,
+              bookingId: result.bookingId,
+              currency: typeof payload.currency === "string" ? payload.currency : "ZAR",
+              paidAtIso: typeof payload.paidAtIso === "string" ? payload.paidAtIso : null,
+              chargeData:
+                payload.paystackChargeData && typeof payload.paystackChargeData === "object"
+                  ? payload.paystackChargeData
+                  : undefined,
+            });
+          } catch (settlementErr) {
+            paymentPersisted = {
+              ok: false as const,
+              error:
+                settlementErr instanceof Error
+                  ? settlementErr.message
+                  : String(settlementErr),
+            };
+          }
           if (!paymentPersisted.ok) {
             const nextAttempts = attempts + 1;
             await reportOperationalIssue(
