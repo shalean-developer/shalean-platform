@@ -59,7 +59,10 @@ begin
     service_slug,
     rooms,
     bathrooms,
-    duration_minutes
+    duration_minutes,
+    selected_cleaner_id,
+    assignment_type,
+    cleaner_id
   ) = (
     select
       x.booking_snapshot,
@@ -74,7 +77,10 @@ begin
       x.service_slug,
       x.rooms,
       x.bathrooms,
-      x.duration_minutes
+      x.duration_minutes,
+      x.selected_cleaner_id,
+      x.assignment_type,
+      x.cleaner_id
     from jsonb_populate_record(b, p_patch) as x
   )
   where b.id = p_booking_id
