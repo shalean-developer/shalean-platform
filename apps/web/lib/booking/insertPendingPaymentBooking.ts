@@ -9,7 +9,6 @@ import { provisionalPriceSnapshotFromLocked } from "@/lib/booking/provisionalPri
 import type { BookingLineItemInsert } from "@/lib/booking/bookingLineItemTypes";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
-import { persistBookingLineItems } from "@/lib/booking/persistBookingLineItems";
 import {
   lockedDurationMinutesFromBookingSnapshot,
 } from "@/lib/booking/durationMinutesIntegrity";
@@ -314,25 +313,36 @@ export async function updatePendingPaymentBookingForInit(
   const deleteOnFail = params.deleteRowOnLineItemPersistFail !== false;
   const lineItems = params.checkoutLineItems;
   if (lineItems && lineItems.length > 0) {
-    const { count, error: ctErr } = await admin
-      .from("booking_line_items")
-      .select("id", { count: "exact", head: true })
-      .eq("booking_id", params.bookingId);
-    const existing = typeof count === "number" ? count : 0;
-    if (ctErr) {
+    const rows = lineItems.map((r) => ({
+      item_type: r.item_type,
+      slug: r.slug ?? null,
+      name: r.name,
+      quantity: r.quantity,
+      unit_price_cents: r.unit_price_cents,
+      total_price_cents: r.total_price_cents,
+      pricing_source: r.pricing_source ?? null,
+      metadata: r.metadata ?? {},
+      earns_cleaner: r.earns_cleaner ?? r.item_type !== "adjustment",
+    }));
+
+    const { data: replacedCount, error: replaceErr } = await admin.rpc(
+      "replace_booking_line_items_atomic",
+      {
+        p_booking_id: params.bookingId,
+        p_rows: rows,
+      },
+    );
+
+    if (replaceErr || Number(replacedCount) !== rows.length) {
       if (deleteOnFail) {
         await admin.from("bookings").delete().eq("id", params.bookingId).eq("status", "pending_payment");
       }
-      return { ok: false, error: ctErr.message || "Could not verify booking line items." };
-    }
-    if (existing === 0) {
-      const persisted = await persistBookingLineItems(admin, params.bookingId, lineItems);
-      if (!persisted.ok) {
-        if (deleteOnFail) {
-          await admin.from("bookings").delete().eq("id", params.bookingId).eq("status", "pending_payment");
-        }
-        return { ok: false, error: persisted.error || "Could not save booking line items." };
-      }
+      return {
+        ok: false,
+        error:
+          replaceErr?.message ||
+          `Could not reconcile booking line items: expected ${rows.length}, replaced ${Number(replacedCount) || 0}.`,
+      };
     }
   }
 
