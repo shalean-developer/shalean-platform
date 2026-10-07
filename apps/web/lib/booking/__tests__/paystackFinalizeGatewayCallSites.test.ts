@@ -46,6 +46,9 @@ describe("Paystack finalize gateway call sites", () => {
     expect(retry).toContain("payload.paystackCustomerCode");
     expect(retry).toContain("payload.paidAtIso");
     expect(retry).toContain('jobType === FAILED_JOB_TYPE_PAYMENT_RECONCILIATION');
+    expect(retry).toContain("const paymentPersisted = await recordPaystackBookingPayment");
+    expect(retry).toContain("if (!paymentPersisted.ok)");
+    expect(retry).toContain("continue;");
     expect(retry).toContain("await recordPaystackBookingPayment");
     const reconciliationBlock = retry.slice(
       retry.indexOf("if (result.bookingId && !result.error)"),
