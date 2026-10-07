@@ -28,6 +28,21 @@ describe("Paystack finalize gateway call sites", () => {
     expect(src).not.toMatch(/\bfinalizePaystackChargeSuccess\s*\(/);
   });
 
+  it("primary Paystack callbacks durably reconcile settlement side-effect failures", () => {
+    const retryPipeline = readFileSync(join(root, "lib/booking/runPaystackVerifyFinalizePipeline.ts"), "utf8");
+    const webhook = readFileSync(join(root, "app/api/paystack/webhook/route.ts"), "utf8");
+
+    expect(retryPipeline).toContain("const settlementPersisted = await recordPaystackBookingPayment");
+    expect(retryPipeline).toContain("let recoveryResult = result");
+    expect(retryPipeline).toContain("settlement_persistence_failed:");
+    expect(retryPipeline).toContain("result: recoveryResult");
+
+    expect(webhook).toContain("const settlementPersisted = await recordPaystackBookingPayment");
+    expect(webhook).toContain("settlement_persistence_failed:");
+    expect(webhook).toContain('reason: "finalization_failed"');
+    expect(webhook).toContain("recoveryEnqueue: true");
+  });
+
   it("payment reconciliation retries preserve gateway data and record settlement before deletion", () => {
     const retry = readFileSync(join(root, "app/api/cron/retry-failed-jobs/route.ts"), "utf8");
     const verifyPipeline = readFileSync(join(root, "lib/booking/runPaystackVerifyFinalizePipeline.ts"), "utf8");
