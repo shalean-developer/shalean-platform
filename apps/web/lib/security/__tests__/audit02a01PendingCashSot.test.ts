@@ -268,6 +268,8 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
       '.select("cleaner_id, payout_owner_cleaner_id, is_team_job")',
     );
     expect(recurringPropagation).toContain("cleaner identity reload failed");
+    expect(recurringPropagation).toContain("} else if (draftMonthlyUnsettled) {");
+    expect(recurringPropagation).toContain("result.bookings_skipped_locked_invoice++");
     expect(rosterContinuity).toContain('role: member.cleaner_id === requestedLeadId ? "lead" : "member"');
     expect(rosterContinuity).toContain("cleaner_id: requestedLeadId");
     expect(rosterContinuity).toContain("ok: boolean");
@@ -346,6 +348,23 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringCleanerAtomicSql).toContain("finalization_claim_token is null");
     expect(recurringCleanerAtomicSql).toContain("finalization_claimed_at is null");
     expect(recurringCleanerAtomicSql).not.toContain("interval '15 minutes'");
+    expect(recurringCleanerAtomicSql).toContain(
+      "recover_abandoned_monthly_invoice_finalization_claim",
+    );
+    expect(recurringCleanerAtomicSql).toContain("p_expected_token uuid");
+    expect(recurringCleanerAtomicSql).toContain("interval '30 minutes'");
+    expect(recurringCleanerAtomicSql).toContain("mi.snapshot_at_finalize is null");
+    expect(recurringCleanerAtomicSql).toContain("mi.snapshot_current is null");
+    expect(recurringCleanerAtomicSql).toContain("mi.finalized_at is null");
+
+    const abandonedClaimRecovery = read(
+      "lib/monthlyInvoice/recoverAbandonedMonthlyInvoiceFinalizationClaim.ts",
+    );
+    expect(abandonedClaimRecovery).toContain(
+      "recover_abandoned_monthly_invoice_finalization_claim",
+    );
+    expect(abandonedClaimRecovery).toContain("finalization_claim_token");
+    expect(abandonedClaimRecovery).toContain("p_expected_token: token");
     expect(recurringCleanerAtomicSql).toContain(
       "create or replace function public.apply_recurring_occurrence_unpaid_patch_v2",
     );
