@@ -216,6 +216,21 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(rosterContinuity).toContain("ok: boolean");
     expect(paystackFinalize).toContain('"recurring_roster_reconciliation"');
     expect(paystackFinalize).toContain("if (!rosterContinuity.ok)");
+    expect(paystackFinalize).toContain("const rosterRecoveryQueued = await enqueueFailedJob");
+    expect(paystackFinalize).toContain("if (!rosterRecoveryQueued)");
+    expect(paystackFinalize).toContain("recurring_roster_reconciliation_enqueue_failed");
+
+    const bookingRecovery = read("lib/booking/enqueuePaystackRecoveryFailedJobs.ts");
+    expect(bookingRecovery).toContain("recovery_payment_reconciliation_enqueue_failed");
+    expect(bookingRecovery).toContain('throw new Error("recovery_payment_reconciliation_enqueue_failed")');
+
+    const verifyPipeline = read("lib/booking/runPaystackVerifyFinalizePipeline.ts");
+    expect(verifyPipeline.indexOf("await recordPaystackBookingPayment")).toBeLessThan(
+      verifyPipeline.indexOf("after(runPostFinalizeWork)"),
+    );
+    expect(verifyPipeline.indexOf("await enqueuePaystackRecoveryFailedJobs")).toBeLessThan(
+      verifyPipeline.indexOf("after(runPostFinalizeWork)"),
+    );
     expect(paystackFinalize).toContain("is_recurring_generated, recurring_id, price_snapshot");
     expect(paystackFinalize).toContain("recurringRosterHeadErr");
     expect(paystackFinalize).toContain("recurring_roster_head_load_failed:");
