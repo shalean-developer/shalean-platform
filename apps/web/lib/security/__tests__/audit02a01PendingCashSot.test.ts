@@ -219,6 +219,25 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(adminRosterRoute).toContain(
       'const rpcRows = built.rows.map((row) => ({ ...row, source: "admin" }))',
     );
+
+    const preferredRosterSync = read("lib/booking/persistPreferredCleaners.ts");
+    expect(preferredRosterSync).toContain('"skipped_custom_existing_roster"');
+    expect(preferredRosterSync).toContain('"checkout_preferred"');
+    expect(preferredRosterSync).toContain('"customer_preferred"');
+    expect(preferredRosterSync).toContain('"recurring_preferred"');
+    expect(preferredRosterSync).toContain('"recurring_continuity"');
+    expect(preferredRosterSync).toContain("customExistingRoster");
+
+    expect(rosterContinuity).toContain("leadCleanerId?: string");
+    expect(rosterContinuity).toContain("leadCleanerId: existingLeadId");
+    expect(rosterContinuity).toContain("leadCleanerId: leadId");
+
+    expect(recurringPropagation).toContain("let reconciledCleanerId: string | null");
+    expect(recurringPropagation).toContain("const rosterContinuity = await applyRecurringOccurrenceRosterContinuity");
+    expect(recurringPropagation).toContain("if (rosterContinuity.leadCleanerId)");
+    expect(recurringPropagation).toContain("reconciledCleanerId = rosterContinuity.leadCleanerId");
+    expect(recurringPropagation).toContain("reconciledCleanerId ??");
+    expect(recurringPropagation).toContain("recurring roster reconciliation failed");
     expect(rosterContinuity.indexOf("customExistingRoster")).toBeLessThan(
       rosterContinuity.indexOf("let continuity = params.roster ?? null"),
     );
