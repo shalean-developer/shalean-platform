@@ -294,6 +294,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
     };
 
     let bookingUpdate: Record<string, unknown> = nonPricingPatch;
+    let cleanerMutationSucceeded = false;
     if (mutableUnpaidCandidate) {
       const { data: repriced, error: repriceErr } = await admin.rpc(
         "apply_recurring_occurrence_unpaid_patch",
@@ -308,6 +309,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
       }
       if (repriced === true) {
         bookingUpdate = {};
+        cleanerMutationSucceeded = Boolean(preferredCleanerId);
       }
     }
 
@@ -332,10 +334,13 @@ export async function propagateRecurringPlanToGeneratedBookings(
         result.errors.push(`Booking ${booking.id}: ${upErr.message}`);
         continue;
       }
+      if (preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent) {
+        cleanerMutationSucceeded = true;
+      }
     }
 
     result.bookings_updated++;
-    if (preferredCleanerId) {
+    if (preferredCleanerId && cleanerMutationSucceeded) {
       result.bookings_cleaner_updated++;
       if (!bookingCompleted) {
         await applyRecurringOccurrenceRosterContinuity(admin, {
