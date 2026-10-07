@@ -9,6 +9,8 @@
 -- Precondition: application code using apply_pending_booking_init_patch(..., p_line_items)
 -- is already deployed and verified in this environment.
 
+begin;
+
 -- Serialize the one-time repair against concurrent settlement/payment writes.
 -- Lock every pending/expired positive-cash row before any evidence checks or
 -- candidate capture. FOR UPDATE conflicts with the KEY SHARE lock taken by
@@ -278,3 +280,5 @@ alter table public.bookings
 
 comment on constraint bookings_pending_unpaid_cash_zero on public.bookings is
   'AUDIT-02A01 post-deploy invariant: ordinary unpaid pending/expired rows cannot carry collected cash.';
+
+commit;
