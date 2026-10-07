@@ -96,18 +96,45 @@ describe("AUDIT-02A01 Piece 1 financial contract", () => {
     expect(canonicalServiceValueCents({ booking: row })).toBe(46_700);
   });
 
-  it("classifies R0 covered settlement without inventing collected cash", () => {
-    const row = {
+  it("classifies R0 only with verified ledger evidence and completion timestamp", () => {
+    const verified = {
       status: "pending",
       payment_status: "success",
       total_price: 0,
       amount_paid_cents: 0,
       total_paid_cents: 0,
       total_paid_zar: 0,
+      payment_completed_at: "2026-10-07T12:00:00.000Z",
+      zero_cash_r0_verified: true,
     };
 
-    expect(classifyBookingFinancialMode(row)).toBe("covered_zero");
-    expect(canonicalCollectedCashCents(row)).toBe(0);
+    expect(classifyBookingFinancialMode(verified)).toBe("covered_zero");
+    expect(canonicalCollectedCashCents(verified)).toBe(0);
+
+    expect(
+      classifyBookingFinancialMode({
+        ...verified,
+        zero_cash_r0_verified: false,
+      }),
+    ).toBe("legacy_unknown");
+
+    expect(
+      classifyBookingFinancialMode({
+        ...verified,
+        payment_completed_at: null,
+      }),
+    ).toBe("legacy_unknown");
+  });
+
+  it("fails closed for successful partial projections with unknown cash", () => {
+    expect(
+      classifyBookingFinancialMode({
+        status: "pending",
+        payment_status: "success",
+        total_price: 500,
+        amount_paid_cents: null,
+      }),
+    ).toBe("legacy_unknown");
   });
 
   it("treats pay_later as deferred accrual context", () => {
