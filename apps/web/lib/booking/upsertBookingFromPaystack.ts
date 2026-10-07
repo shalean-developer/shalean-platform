@@ -314,7 +314,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
 
   const existingSelect =
-    `id, status, customer_email, ${ownershipColumn}, paystack_reference, is_recurring_generated, price_snapshot, selected_cleaner_id, cleaner_id, assignment_type, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, location, date, time, service, service_slug, service_details, selected_extras, pricing_summary, booking_snapshot, rooms, bathrooms, extras, suburb, access_instructions, parking_instructions, gate_code, cleaner_mode, cleaner_count, assigned_team_id, booking_type, fulfillment_mode, base_amount_cents, service_fee_cents, extras_amount_cents`;
+    `id, status, customer_email, ${ownershipColumn}, paystack_reference, is_recurring_generated, recurring_id, price_snapshot, selected_cleaner_id, cleaner_id, assignment_type, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, location, date, time, service, service_slug, service_details, selected_extras, pricing_summary, booking_snapshot, rooms, bathrooms, extras, suburb, access_instructions, parking_instructions, gate_code, cleaner_mode, cleaner_count, assigned_team_id, booking_type, fulfillment_mode, base_amount_cents, service_fee_cents, extras_amount_cents`;
 
   const { data: existingByRef, error: selectErr } = await supabase
     .from("bookings")
@@ -885,6 +885,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     assigned_team_id?: string | null;
     booking_type?: string | null;
     selected_cleaner_id?: string | null;
+    recurring_id?: string | null;
     base_amount_cents?: number | null;
     service_fee_cents?: number | null;
     extras_amount_cents?: number | null;
