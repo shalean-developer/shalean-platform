@@ -370,6 +370,9 @@ export async function propagateRecurringPlanToGeneratedBookings(
         cleanerMutationSucceeded = Boolean(
           preferredCleanerId && (ordinaryUnpaidPending || draftMonthlyUnsettled),
         );
+      } else if (draftMonthlyUnsettled) {
+        result.bookings_skipped_locked_invoice++;
+        continue;
       }
     }
 
