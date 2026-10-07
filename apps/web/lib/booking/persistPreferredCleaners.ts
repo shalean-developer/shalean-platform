@@ -74,6 +74,7 @@ export function preferredCleanerAssignmentFields(
 export type SyncPreferredCleanerRosterResult =
   | { ok: true; kind: "synced"; cleanerCount: number; rows: ReplaceBookingCleanersRpcRow[] }
   | { ok: true; kind: "skipped_single_or_empty"; cleanerCount: number }
+  | { ok: true; kind: "skipped_custom_existing_roster"; cleanerCount: number }
   | { ok: false; kind: "validation_failed"; error: string; cleanerCount: number }
   | { ok: false; kind: "rpc_failed"; error: string; cleanerCount: number };
 
@@ -159,5 +160,43 @@ export async function syncPreferredCleanerRosterFromBookingRow(
   source = "checkout_preferred",
 ): Promise<SyncPreferredCleanerRosterResult> {
   const ids = preferredCleanerIdsFromSnapshot(row.booking_snapshot, row.selected_cleaner_id);
+  if (ids.length >= 2) {
+    const { data: existingRows, error: existingErr } = await admin
+      .from("booking_cleaners")
+      .select("cleaner_id, source")
+      .eq("booking_id", bookingId);
+
+    if (existingErr) {
+      return {
+        ok: false,
+        kind: "rpc_failed",
+        error: existingErr.message ?? String(existingErr),
+        cleanerCount: ids.length,
+      };
+    }
+
+    const generatedSources = new Set([
+      "checkout_preferred",
+      "customer_preferred",
+      "recurring_preferred",
+      "recurring_continuity",
+    ]);
+    const existing = Array.isArray(existingRows) ? existingRows : [];
+    const customExistingRoster =
+      existing.length > 0 &&
+      existing.some(
+        (member) =>
+          !generatedSources.has(String((member as { source?: string | null }).source ?? "").trim().toLowerCase()),
+      );
+
+    if (customExistingRoster) {
+      return {
+        ok: true,
+        kind: "skipped_custom_existing_roster",
+        cleanerCount: existing.length,
+      };
+    }
+  }
+
   return syncPreferredCleanerRoster(admin, bookingId, ids, source);
 }
