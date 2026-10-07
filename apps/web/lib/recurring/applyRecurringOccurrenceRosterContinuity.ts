@@ -86,7 +86,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
   const customExistingRoster = rosterHasCustomProvenance(existingRoster);
   const committedAssignment = recurringOccurrenceAssignmentIsCommitted(row);
 
-  if (customExistingRoster || (committedAssignment && existingRoster.length > 0)) {
+  if (customExistingRoster) {
     const leads = existingRoster.filter(
       (member) => String(member.role ?? "").trim().toLowerCase() === "lead",
     );
@@ -132,14 +132,57 @@ export async function applyRecurringOccurrenceRosterContinuity(
 
   if (committedAssignment) {
     const committedLeadId = String(row.cleaner_id ?? "").trim();
+    if (!committedLeadId) {
+      return {
+        ok: true,
+        applied: false,
+        cleanerCount: Number(row.cleaner_count ?? 1) || 1,
+        reason: "committed_recurring_identity_requires_manual_reconciliation",
+        kind: "committed_existing",
+        lifecyclePromoted: false,
+        assignmentCommitted: true,
+      };
+    }
+
+    // Generated continuity/preference rows are not authoritative once a cleaner has
+    // actually accepted / been directly assigned. Remove stale generated roster rows
+    // so cleaner visibility and payout consumers cannot resurrect the former lead.
+    if (existingRoster.length > 0) {
+      const { error: staleRosterDeleteErr } = await admin
+        .from("booking_cleaners")
+        .delete()
+        .eq("booking_id", bookingId);
+      if (staleRosterDeleteErr) {
+        return {
+          ok: false,
+          applied: false,
+          cleanerCount: existingRoster.length,
+          reason: staleRosterDeleteErr.message,
+        };
+      }
+
+      const { error: committedHeaderErr } = await admin
+        .from("bookings")
+        .update({
+          payout_owner_cleaner_id: committedLeadId,
+          cleaner_count: 1,
+        })
+        .eq("id", bookingId);
+      if (committedHeaderErr) {
+        return {
+          ok: false,
+          applied: false,
+          cleanerCount: 1,
+          reason: committedHeaderErr.message,
+        };
+      }
+    }
+
     return {
       ok: true,
-      applied: false,
-      cleanerCount: Number(row.cleaner_count ?? 1) || 1,
-      ...(committedLeadId ? { leadCleanerId: committedLeadId } : {}),
-      ...(!committedLeadId
-        ? { reason: "committed_recurring_identity_requires_manual_reconciliation" }
-        : {}),
+      applied: existingRoster.length > 0,
+      cleanerCount: existingRoster.length > 0 ? 1 : Number(row.cleaner_count ?? 1) || 1,
+      leadCleanerId: committedLeadId,
       kind: "committed_existing",
       lifecyclePromoted: false,
       assignmentCommitted: true,
