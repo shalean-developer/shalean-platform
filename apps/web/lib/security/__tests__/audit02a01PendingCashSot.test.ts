@@ -97,9 +97,11 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(initialize).toContain("checkoutLineItems: pricingTarget.skipLineItemInsert ? null : checkoutLineItems");
 
     const writer = read("lib/booking/insertPendingPaymentBooking.ts");
-    expect(writer).toContain('admin.rpc(\n      "replace_booking_line_items_atomic"');
+    expect(writer).toContain('admin.rpc("apply_pending_booking_init_patch"');
     expect(writer).toContain("p_booking_id: params.bookingId");
-    expect(writer).toContain("p_rows: rows");
+    expect(writer).toContain("p_patch: patch");
+    expect(writer).toContain("p_line_items: lineItemRows");
+    expect(writer).not.toContain('"replace_booking_line_items_atomic"');
     expect(writer).not.toContain("persistBookingLineItems(admin, params.bookingId, lineItems)");
   });
 
@@ -127,9 +129,13 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
   });
 
   it("repairs only evidence-free anomalies and adds a validated DB guard", () => {
-    const sql = read(
+    const predeploySql = read(
       "../../supabase/migrations/20261007023000_audit_02a01_pending_cash_sot.sql",
     ).toLowerCase();
+    const postdeploySql = read(
+      "../../supabase/migrations/20261007024500_audit_02a01_postdeploy_cash_guard.sql",
+    ).toLowerCase();
+    const sql = `${predeploySql}\n${postdeploySql}`;
 
     expect(sql).toContain("payment_completed_at is null");
     expect(sql).toContain("paid_at is null");
@@ -152,9 +158,16 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(sql).toContain("$audit02a01$;");
     expect(sql).toContain("audit_02a01_legacy_payable_corroboration_failed");
     expect(sql).toContain("create or replace function public.apply_pending_booking_init_patch");
+    expect(predeploySql).toContain("p_line_items jsonb default null");
+    expect(predeploySql).toContain("delete from public.booking_line_items where booking_id = p_booking_id");
+    expect(predeploySql).toContain("from jsonb_array_elements(p_line_items) as r");
+    expect(predeploySql).not.toContain("bookings_pending_unpaid_cash_zero");
+    expect(postdeploySql).toContain("bookings_pending_unpaid_cash_zero");
+    expect(postdeploySql).toContain("legacy checkout payable reconciliation");
+    expect(postdeploySql).toContain("audit_02a01_line_item_reconciliation_failed");
     expect(sql).toContain("for update");
     expect(sql).toContain("from public.payment_transactions pt");
-    expect(sql).toContain("grant execute on function public.apply_pending_booking_init_patch(uuid, jsonb) to service_role");
+    expect(predeploySql).toContain("grant execute on function public.apply_pending_booking_init_patch(uuid, jsonb, jsonb) to service_role");
     expect(sql).not.toContain("    user_id,");
     expect(sql).not.toContain("      x.user_id,");
     expect(sql).toContain("booking_snapshot->'total_zar'");
