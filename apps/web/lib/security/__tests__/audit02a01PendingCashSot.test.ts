@@ -212,7 +212,7 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringPropagation).toContain("total_paid_zar: priceZar");
     expect(recurringPropagation).toContain("const mutablePricingCandidate");
     expect(recurringPropagation).toContain(
-      "!bookingCompleted && !mutablePricingCandidate",
+      "!bookingCompleted && (!mutablePricingCandidate || draftMonthlyUnsettled)",
     );
 
     const paystackFinalize = read("lib/booking/upsertBookingFromPaystack.ts");
