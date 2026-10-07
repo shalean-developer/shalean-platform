@@ -219,6 +219,18 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(paystackFinalize).toContain("is_recurring_generated, recurring_id, price_snapshot");
     expect(paystackFinalize).toContain("recurringRosterHeadErr");
     expect(paystackFinalize).toContain("recurring_roster_head_load_failed:");
+    expect(paystackFinalize).toContain("existingIsRecurringGenerated");
+    expect(paystackFinalize).toContain("fallbackRecurringId && fallbackLeadCleanerId");
+
+    const settlementWrappers = read("lib/payments/recordPaystackSettlement.ts");
+    expect(settlementWrappers).toContain("recordPaystackEntitySettlementWithRecovery");
+    expect(settlementWrappers).toContain('"gateway_settlement_reconciliation"');
+    expect(settlementWrappers).toContain('entityType: "monthly_invoice"');
+    expect(settlementWrappers).toContain('entityType: "sales_document"');
+
+    const retryWorker = read("app/api/cron/retry-failed-jobs/route.ts");
+    expect(retryWorker).toContain("FAILED_JOB_TYPE_GATEWAY_SETTLEMENT_RECONCILIATION");
+    expect(retryWorker).toContain("gateway settlement reconciliation attempts exhausted");
 
     const recurringCleanerAtomicSql = read(
       "../../supabase/migrations/20261007073500_audit_02a01_recurring_cleaner_atomic.sql",
