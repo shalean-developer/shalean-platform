@@ -84,6 +84,25 @@ export function recurringPropagateCleanerOperationalStatus(bookingStatus: string
   return "pending";
 }
 
+export function recurringOccurrenceAssignmentIsCommitted(row: {
+  status?: string | null;
+  cleaner_response_status?: string | null;
+  accepted_at?: string | null;
+  en_route_at?: string | null;
+  started_at?: string | null;
+}): boolean {
+  const status = String(row.status ?? "").trim().toLowerCase();
+  if (status === "in_progress") return true;
+
+  const response = String(row.cleaner_response_status ?? "").trim().toLowerCase();
+  if (["accepted", "on_my_way", "started", "completed"].includes(response)) return true;
+  return Boolean(
+    String(row.accepted_at ?? "").trim() ||
+      String(row.en_route_at ?? "").trim() ||
+      String(row.started_at ?? "").trim(),
+  );
+}
+
 /**
  * Whether a generated occurrence must keep its lifecycle columns when propagating
  * preferred-cleaner identity (completed visits with or without status drift).

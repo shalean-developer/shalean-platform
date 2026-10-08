@@ -17,12 +17,14 @@ import {
 } from "@/lib/recurring/reconcileRecurringPlanOccurrences";
 import { cloneSnapshotTemplate } from "@/lib/recurring/insertRecurringOccurrenceBooking";
 import {
+  recurringOccurrenceAssignmentIsCommitted,
   recurringOccurrenceCleanerIdentityOnlyPatch,
   recurringOccurrenceCleanerPatch,
   recurringOccurrenceMustPreserveLifecycle,
   recurringPropagateCleanerOperationalStatus,
 } from "@/lib/recurring/resolveRecurringPreferredCleanerId";
 import { applyRecurringOccurrenceRosterContinuity } from "@/lib/recurring/applyRecurringOccurrenceRosterContinuity";
+import { rosterHasCustomProvenance } from "@/lib/recurring/recurringRosterProvenance";
 import { normalizeUuidCandidate } from "@/lib/booking/userSelectedCleanerFromSnapshot";
 import { resolvePersistCleanerIdForBooking } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
@@ -63,6 +65,10 @@ type GeneratedBookingRow = {
   booking_snapshot: Record<string, unknown> | null;
   price_snapshot: Record<string, unknown> | null;
   completed_at: string | null;
+  cleaner_response_status: string | null;
+  accepted_at: string | null;
+  en_route_at: string | null;
+  started_at: string | null;
   cleaner_line_earnings_finalized_at: string | null;
   monthly_invoice_id: string | null;
   cleaner_id: string | null;
@@ -157,7 +163,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
   const { data: rows, error } = await admin
     .from("bookings")
     .select(
-      "id, date, status, payment_status, payment_completed_at, paid_at, payment_transaction_id, marked_paid_by_admin_id, total_price, booking_snapshot, price_snapshot, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status)",
+      "id, date, status, payment_status, payment_completed_at, paid_at, payment_transaction_id, marked_paid_by_admin_id, total_price, booking_snapshot, price_snapshot, completed_at, cleaner_response_status, accepted_at, en_route_at, started_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, booking_cleaners(cleaner_id, role, source), monthly_invoices(status)",
     )
     .eq("recurring_id", plan.id)
     .neq("status", "cancelled");
@@ -191,6 +197,11 @@ export async function propagateRecurringPlanToGeneratedBookings(
           ? (row.price_snapshot as Record<string, unknown>)
           : null,
       completed_at: row.completed_at != null ? String(row.completed_at) : null,
+      cleaner_response_status:
+        row.cleaner_response_status != null ? String(row.cleaner_response_status) : null,
+      accepted_at: row.accepted_at != null ? String(row.accepted_at) : null,
+      en_route_at: row.en_route_at != null ? String(row.en_route_at) : null,
+      started_at: row.started_at != null ? String(row.started_at) : null,
       cleaner_line_earnings_finalized_at:
         row.cleaner_line_earnings_finalized_at != null ? String(row.cleaner_line_earnings_finalized_at) : null,
       monthly_invoice_id: row.monthly_invoice_id != null ? String(row.monthly_invoice_id) : null,
@@ -210,6 +221,21 @@ export async function propagateRecurringPlanToGeneratedBookings(
       result.bookings_skipped_locked_invoice++;
       continue;
     }
+
+    const existingRoster = Array.isArray(row.booking_cleaners)
+      ? (row.booking_cleaners as Array<{ cleaner_id?: string | null; role?: string | null; source?: string | null }>)
+      : [];
+    const hasCustomExistingRoster = rosterHasCustomProvenance(existingRoster);
+    const assignmentCommitted = recurringOccurrenceAssignmentIsCommitted(booking);
+    const customLeadRows = hasCustomExistingRoster
+      ? existingRoster.filter(
+          (member) => String(member.role ?? "").trim().toLowerCase() === "lead",
+        )
+      : [];
+    const customRosterLeadId =
+      customLeadRows.length === 1
+        ? normalizeUuidCandidate(customLeadRows[0]?.cleaner_id ?? null)
+        : null;
 
     const earningsFinalized = Boolean(booking.cleaner_line_earnings_finalized_at);
     const bookingCompleted =
@@ -286,7 +312,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
       price_snapshot: preserveRecurringPackagePayable
         ? booking.price_snapshot
         : provisionalPriceSnapshotJson(locked),
-      ...(preferredCleanerId
+      ...(preferredCleanerId && !hasCustomExistingRoster && !assignmentCommitted
         ? recurringOccurrenceCleanerPatch(preferredCleanerId, {
             operationalStatus: "pending_payment",
           })
@@ -313,7 +339,13 @@ export async function propagateRecurringPlanToGeneratedBookings(
       }
     }
 
-    if (preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent) {
+    if (
+      preferredCleanerId &&
+      !hasCustomExistingRoster &&
+      !assignmentCommitted &&
+      !mutableUnpaidCandidate &&
+      !settlementMarkerPresent
+    ) {
       Object.assign(
         bookingUpdate,
         preserveLifecycle
@@ -334,20 +366,60 @@ export async function propagateRecurringPlanToGeneratedBookings(
         result.errors.push(`Booking ${booking.id}: ${upErr.message}`);
         continue;
       }
-      if (preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent) {
+      if (
+        preferredCleanerId &&
+        !hasCustomExistingRoster &&
+        !assignmentCommitted &&
+        !mutableUnpaidCandidate &&
+        !settlementMarkerPresent
+      ) {
         cleanerMutationSucceeded = true;
       }
     }
 
     result.bookings_updated++;
+    let reconciledCleanerId: string | null =
+      customRosterLeadId ??
+      (assignmentCommitted ? normalizeUuidCandidate(booking.cleaner_id) : null) ??
+      (preferredCleanerId && cleanerMutationSucceeded ? preferredCleanerId : null);
+
+    if (hasCustomExistingRoster && !bookingCompleted && !mutableUnpaidCandidate) {
+      const customRosterContinuity = await applyRecurringOccurrenceRosterContinuity(admin, {
+        bookingId: booking.id,
+        recurringId: plan.id,
+        leadCleanerId: customRosterLeadId ?? preferredCleanerId,
+      });
+      if (!customRosterContinuity.ok) {
+        result.errors.push(
+          `Booking ${booking.id}: recurring custom roster reconciliation failed: ${customRosterContinuity.reason ?? "failed"}`,
+        );
+        result.earnings_skipped++;
+        continue;
+      }
+      if (customRosterContinuity.leadCleanerId) {
+        reconciledCleanerId = customRosterContinuity.leadCleanerId;
+        result.bookings_cleaner_updated++;
+      }
+    }
+
     if (preferredCleanerId && cleanerMutationSucceeded) {
       result.bookings_cleaner_updated++;
       if (!bookingCompleted && !mutableUnpaidCandidate) {
-        await applyRecurringOccurrenceRosterContinuity(admin, {
+        const rosterContinuity = await applyRecurringOccurrenceRosterContinuity(admin, {
           bookingId: booking.id,
           recurringId: plan.id,
           leadCleanerId: preferredCleanerId,
         });
+        if (!rosterContinuity.ok) {
+          result.errors.push(
+            `Booking ${booking.id}: recurring roster reconciliation failed: ${rosterContinuity.reason ?? "failed"}`,
+          );
+          result.earnings_skipped++;
+          continue;
+        }
+        if (rosterContinuity.leadCleanerId) {
+          reconciledCleanerId = rosterContinuity.leadCleanerId;
+        }
       }
     }
 
@@ -355,11 +427,13 @@ export async function propagateRecurringPlanToGeneratedBookings(
       invoiceIds.add(booking.monthly_invoice_id);
     }
 
-    const cleanerId = resolvePersistCleanerIdForBooking({
-      cleaner_id: booking.cleaner_id,
-      payout_owner_cleaner_id: booking.payout_owner_cleaner_id,
-      is_team_job: booking.is_team_job,
-    });
+    const cleanerId =
+      reconciledCleanerId ??
+      resolvePersistCleanerIdForBooking({
+        cleaner_id: booking.cleaner_id,
+        payout_owner_cleaner_id: booking.payout_owner_cleaner_id,
+        is_team_job: booking.is_team_job,
+      });
 
     if (!cleanerId) continue;
 

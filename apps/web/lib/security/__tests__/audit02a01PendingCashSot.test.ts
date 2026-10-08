@@ -169,8 +169,10 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
       'operationalStatus: "pending_payment"',
     );
     expect(recurringPropagation).toContain(
-      "preferredCleanerId && !mutableUnpaidCandidate && !settlementMarkerPresent",
+      "preferredCleanerId && !hasCustomExistingRoster && !assignmentCommitted",
     );
+    expect(recurringPropagation).toContain("!mutableUnpaidCandidate");
+    expect(recurringPropagation).toContain("!settlementMarkerPresent");
     expect(recurringPropagation).toContain(
       "...(preferredCleanerId",
     );
@@ -202,7 +204,74 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(paystackFinalize).toContain("normalizeUuidCandidate(existingPersistedSelectedCleanerId)");
     expect(paystackFinalize).toContain("applyRecurringOccurrenceRosterContinuity");
     const rosterContinuity = read("lib/recurring/applyRecurringOccurrenceRosterContinuity.ts");
-    expect(rosterContinuity).toContain("booking_cleaners(cleaner_id, role)");
+    expect(rosterContinuity).toContain("booking_cleaners(cleaner_id, role, source)");
+    expect(rosterContinuity).toContain("rosterHasCustomProvenance");
+    expect(rosterContinuity).toContain("recurringOccurrenceAssignmentIsCommitted");
+    expect(rosterContinuity).toContain("customExistingRoster");
+    expect(rosterContinuity).toContain("committedAssignment");
+    expect(rosterContinuity).toContain("authoritative_recurring_roster_missing_unique_lead");
+    expect(rosterContinuity).toContain("cleaner_id: existingLeadId");
+    expect(rosterContinuity).toContain("payout_owner_cleaner_id: existingLeadId");
+    expect(rosterContinuity).toContain('source: "recurring_continuity"');
+    expect(rosterContinuity).toContain("const existingRequestedLead = rosterRows.find");
+    expect(rosterContinuity).toContain("const originalLead = rosterRows.find");
+    expect(rosterContinuity).toContain("rosterRows = rosterRows.map");
+
+    const adminRosterRoute = read("app/api/admin/bookings/[id]/roster/route.ts");
+    expect(adminRosterRoute).toContain(
+      'const rpcRows = built.rows.map((row) => ({ ...row, source: "admin_roster_edit" }))',
+    );
+    expect(adminRosterRoute).toContain("committedLead");
+
+    const preferredRosterSync = read("lib/booking/persistPreferredCleaners.ts");
+    expect(preferredRosterSync).toContain("syncPreferredCleanerOfferRoster");
+    expect(preferredRosterSync).toContain('"deferred_preference_only"');
+    expect(preferredRosterSync).not.toContain("replace_booking_cleaners_preference_atomic");
+    expect(preferredRosterSync).not.toContain("rosterIsPreferenceOnly");
+    const rosterProvenance = read("lib/recurring/recurringRosterProvenance.ts");
+    expect(rosterProvenance).toContain('"checkout_preferred"');
+    expect(rosterProvenance).toContain('"customer_preferred"');
+    expect(rosterProvenance).toContain('"recurring_preferred"');
+    expect(rosterProvenance).toContain('"recurring_continuity"');
+    expect(rosterProvenance).toContain('"booking_v2_r0"');
+
+    const cleanersRoute = read("app/api/admin/bookings/[id]/cleaners/route.ts");
+    expect(cleanersRoute).toContain('{ defaultSource: "admin_roster_edit" }');
+    expect(cleanersRoute).toContain('source: "admin_roster_edit"');
+    expect(cleanersRoute).toContain("committedLead");
+    expect(cleanersRoute).toContain("A01_ROSTER_LEAD_DIRECT_ASSIGN");
+
+    const rosterRoute = read("app/api/admin/bookings/[id]/roster/route.ts");
+    expect(rosterRoute).toContain('source: "admin_roster_edit"');
+    expect(rosterRoute).toContain("committedLead");
+    expect(rosterRoute).toContain("A01_ROSTER_LEAD_DIRECT_ASSIGN");
+
+    const recurringInsert = read("lib/recurring/insertRecurringOccurrenceBooking.ts");
+    expect(recurringInsert).toContain("if (prepaidAllocation && preferredCleanerIds.length >= 2)");
+    expect(recurringInsert).toContain("else if (prepaidAllocation && preferredCleanerId)");
+    expect(recurringInsert).toContain('syncPreferredCleanerRoster(admin, id, preferredCleanerIds, "recurring_preferred")');
+    const unpaidPostInsert = recurringInsert.slice(recurringInsert.indexOf("if (prepaidAllocation && preferredCleanerIds.length >= 2)"));
+    expect(unpaidPostInsert).not.toContain("syncPreferredCleanerOfferRoster");
+
+    expect(rosterContinuity).toContain("leadCleanerId?: string");
+    expect(rosterContinuity).toContain("leadCleanerId: existingLeadId");
+    expect(rosterContinuity).toContain("leadCleanerId: leadId");
+
+    expect(recurringPropagation).toContain("let reconciledCleanerId: string | null");
+    expect(recurringPropagation).toContain("const rosterContinuity = await applyRecurringOccurrenceRosterContinuity");
+    expect(recurringPropagation).toContain("if (rosterContinuity.leadCleanerId)");
+    expect(recurringPropagation).toContain("reconciledCleanerId = rosterContinuity.leadCleanerId");
+    expect(recurringPropagation).toContain("reconciledCleanerId ??");
+    expect(recurringPropagation).toContain("recurring roster reconciliation failed");
+    expect(recurringPropagation).toContain("booking_cleaners(cleaner_id, role, source)");
+    expect(recurringPropagation).toContain("hasCustomExistingRoster");
+    expect(recurringPropagation).toContain("assignmentCommitted");
+    expect(recurringPropagation).toContain("customRosterLeadId");
+    expect(recurringPropagation).toContain("preferredCleanerId && !hasCustomExistingRoster && !assignmentCommitted");
+    expect(recurringPropagation).toContain("recurring custom roster reconciliation failed");
+    expect(rosterContinuity.indexOf("customExistingRoster")).toBeLessThan(
+      rosterContinuity.indexOf("let continuity = params.roster ?? null"),
+    );
     expect(rosterContinuity).toContain("existingRoleByCleanerId");
     expect(rosterContinuity).toContain("desiredRoleByCleanerId");
     expect(rosterContinuity).toContain('desiredRoleByCleanerId.get(leadId) === "lead"');
@@ -289,6 +358,84 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     expect(recurringCleanerAtomicSql).toContain(
       "create or replace function public.apply_recurring_occurrence_unpaid_patch",
     );
+
+    const rosterHeaderSql = read(
+      "../../supabase/migrations/20261007210000_audit_02a01_roster_header_convergence.sql",
+    ).toLowerCase();
+    expect(rosterHeaderSql).toContain(
+      "create or replace function public.replace_booking_cleaners_admin_atomic",
+    );
+    expect(rosterHeaderSql).toContain("cleaner_id = lead_id");
+    expect(rosterHeaderSql).toContain("payout_owner_cleaner_id = lead_id");
+    expect(rosterHeaderSql).toContain("cleaner_count = n_total");
+    expect(rosterHeaderSql).not.toContain(
+      "create or replace function public.replace_booking_cleaners_preference_atomic",
+    );
+    expect(rosterHeaderSql).toContain("lead_source = 'admin_roster_edit'");
+    expect(rosterHeaderSql).toContain("a01_roster_lead_direct_assign");
+    expect(rosterHeaderSql).toContain("lead replacement requires canonical direct assignment");
+    expect(rosterHeaderSql).toContain("v_old_cleaner_id is distinct from lead_id");
+    expect(rosterHeaderSql).toContain("v_team_id is null");
+    expect(rosterHeaderSql).toContain("not coalesce(v_is_team_job, false)");
+    expect(rosterHeaderSql).toContain("team_member_count_snapshot = case");
+    expect(rosterHeaderSql).toContain("then n_total");
+    expect(rosterHeaderSql).not.toContain("committed lead replacement requires canonical direct assignment");
+    expect(rosterHeaderSql).not.toContain("update public.dispatch_offers");
+    expect(rosterHeaderSql).not.toContain("assignment_type = 'admin_assigned'");
+
+    const payoutRemoval = read("lib/payout/removeCleanerFromVisitPayout.ts");
+    expect(payoutRemoval).toContain('source: "admin_remove_visit_payout"');
+    expect(payoutRemoval).not.toContain('source: m.source ?? "admin_remove_visit_payout"');
+    expect(rosterHeaderSql).toContain("cleaner_count = n_total");
+    expect(rosterHeaderSql).not.toContain("set cleaner_id = lead_id,\n         payout_owner_cleaner_id = lead_id,\n         cleaner_count = n_total\n   where b.id = p_booking_id;\n\n  return 'synced'");
+    expect(rosterHeaderSql).not.toContain("replace_booking_cleaners_preference_atomic");
+    expect(rosterHeaderSql).not.toContain("selected_cleaner_id = lead_id");
+
+    const recurringRestore = read("lib/recurring/restoreRecurringPreferredCleanerAssignments.ts");
+    expect(recurringRestore).toContain("rosterResult = await applyRecurringOccurrenceRosterContinuity");
+    expect(recurringRestore).toContain("if (!rosterResult.ok)");
+    expect(recurringRestore).toContain('rosterResult.kind === "committed_existing"');
+    expect(recurringRestore).toContain('rosterResult.kind === "locked"');
+    expect(recurringRestore).toContain("rosterLifecyclePromoted");
+    expect(recurringRestore).toContain("rosterAssignmentCommitted");
+    expect(recurringRestore).toContain("!rosterLifecyclePromoted");
+    expect(recurringRestore).toContain("!rosterAssignmentCommitted");
+    expect(recurringRestore).toContain('rosterKind !== "committed_existing"');
+    expect(recurringRestore).toContain('rosterKind !== "locked"');
+    const lifecycleRepairStart = recurringRestore.indexOf(
+      'if (\n      rosterKind !== "committed_existing"',
+    );
+    const lifecycleRepairEnd = recurringRestore.indexOf(
+      "const patch = recurringOccurrenceCleanerPatch",
+      lifecycleRepairStart,
+    );
+    expect(lifecycleRepairStart).toBeGreaterThan(-1);
+    expect(lifecycleRepairEnd).toBeGreaterThan(lifecycleRepairStart);
+    expect(
+      recurringRestore.slice(lifecycleRepairStart, lifecycleRepairEnd),
+    ).not.toContain('rosterKind !== "custom_existing"');
+    expect(recurringRestore).toContain("let repaired = false");
+    expect(recurringRestore).toContain("if (repaired) updated++");
+    expect(rosterContinuity).toContain("lifecyclePromoted?: boolean");
+    expect(rosterContinuity).toContain("assignmentCommitted?: boolean");
+    expect(rosterContinuity).toContain("assignmentCommitted: true");
+    expect(rosterContinuity).toContain("assignmentCommitted: false");
+    expect(rosterContinuity).toContain(
+      "committed_recurring_identity_requires_manual_reconciliation",
+    );
+    const committedBranchStart = rosterContinuity.indexOf("if (committedAssignment)");
+    const continuityLookupStart = rosterContinuity.indexOf("let continuity = params.roster ?? null");
+    const committedBranch = rosterContinuity.slice(committedBranchStart, continuityLookupStart);
+    expect(committedBranch).not.toContain("params.leadCleanerId");
+    expect(committedBranch).toContain("repair_header_from_roster");
+    expect(committedBranch).toContain("cleaner_id: existingLeadId");
+    expect(committedBranch).toContain("payout_owner_cleaner_id: existingLeadId");
+    expect(committedBranch).toContain("collapse_to_committed_header");
+    expect(committedBranch).toContain("reconcileCommittedRecurringSoloAssignment");
+    expect(committedBranch).not.toContain("preferredCleanerId");
+    expect(rosterContinuity).toContain("lifecyclePromoted: shouldReplaceRoster");
+    expect(rosterContinuity).toContain('kind: "locked"');
+
 
   });
 

@@ -123,11 +123,12 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
   }
 
   const members = (Array.isArray(body.members) ? body.members : []) as RosterReplaceMemberInput[];
-  const built = validateMembersToReplaceBookingCleanersRpcRows(members, { defaultSource: "api" });
+  const built = validateMembersToReplaceBookingCleanersRpcRows(members, { defaultSource: "admin_roster_edit" });
   if (!built.ok) {
     return NextResponse.json({ error: built.error }, { status: built.status });
   }
-  const rpcRows = built.rows;
+  // Explicit admin roster edits are authoritative and must never look like generated preference rows.
+  const rpcRows = built.rows.map((row) => ({ ...row, source: "admin_roster_edit" }));
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
@@ -160,9 +161,16 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
   if (rpcErr) {
     const msg = rpcErr.message ?? "";
     const locked = /finalized|roster locked|cleaner_line_earnings_finalized/i.test(msg);
+    const committedLead = /A01_ROSTER_LEAD_DIRECT_ASSIGN/i.test(msg);
     return NextResponse.json(
-      { error: msg, ...(locked ? { hint: BOOKING_ROSTER_LOCKED_HINT } : {}) },
-      { status: locked ? 409 : 400 },
+      {
+        error: msg,
+        ...(locked ? { hint: BOOKING_ROSTER_LOCKED_HINT } : {}),
+        ...(committedLead
+          ? { hint: "Use the Direct Assign action to replace the solo booking lead cleaner." }
+          : {}),
+      },
+      { status: locked || committedLead ? 409 : 400 },
     );
   }
 

@@ -8,6 +8,42 @@ import {
 } from "@/lib/admin/bookingRosterReplacePayload";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PREFERENCE_ROSTER_SOURCES = new Set([
+  "checkout_preferred",
+  "customer_preferred",
+  "booking_v2_r0",
+  "recurring_preferred",
+]);
+
+
+export async function syncPreferredCleanerOfferRoster(
+  _admin: SupabaseClient,
+  _bookingId: string,
+  selectedCleanerIds: readonly string[],
+  source: string,
+): Promise<SyncPreferredCleanerRosterResult> {
+  const ids = normalizePreferredCleanerIds(selectedCleanerIds);
+  if (ids.length < 2) {
+    return { ok: true, kind: "skipped_single_or_empty", cleanerCount: ids.length };
+  }
+  if (!PREFERENCE_ROSTER_SOURCES.has(source.trim().toLowerCase())) {
+    return {
+      ok: false,
+      kind: "validation_failed",
+      error: "Invalid preference roster source.",
+      cleanerCount: ids.length,
+    };
+  }
+
+  // Customer preference is intent, not assignment. Keep it in selected_cleaner_id /
+  // booking_snapshot and let dispatch materialize authoritative assignment only on accept.
+  return {
+    ok: true,
+    kind: "deferred_preference_only",
+    cleanerCount: ids.length,
+  };
+}
+
 
 /** Normalize, dedupe, and cap preferred cleaner UUIDs. */
 export function normalizePreferredCleanerIds(raw: readonly string[] | null | undefined): string[] {
@@ -74,6 +110,8 @@ export function preferredCleanerAssignmentFields(
 export type SyncPreferredCleanerRosterResult =
   | { ok: true; kind: "synced"; cleanerCount: number; rows: ReplaceBookingCleanersRpcRow[] }
   | { ok: true; kind: "skipped_single_or_empty"; cleanerCount: number }
+  | { ok: true; kind: "skipped_custom_existing_roster"; cleanerCount: number }
+  | { ok: true; kind: "deferred_preference_only"; cleanerCount: number }
   | { ok: false; kind: "validation_failed"; error: string; cleanerCount: number }
   | { ok: false; kind: "rpc_failed"; error: string; cleanerCount: number };
 
@@ -159,5 +197,5 @@ export async function syncPreferredCleanerRosterFromBookingRow(
   source = "checkout_preferred",
 ): Promise<SyncPreferredCleanerRosterResult> {
   const ids = preferredCleanerIdsFromSnapshot(row.booking_snapshot, row.selected_cleaner_id);
-  return syncPreferredCleanerRoster(admin, bookingId, ids, source);
+  return syncPreferredCleanerOfferRoster(admin, bookingId, ids, source);
 }
