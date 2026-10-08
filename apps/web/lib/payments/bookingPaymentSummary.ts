@@ -69,6 +69,8 @@ export type BookingPaymentSummary = {
   assignmentType: string | null;
   /** DB `service_slug` or normalized service from snapshot / `service` label. */
   serviceSlug: string | null;
+  /** Immutable pricing catalog version associated with the booking. */
+  pricingVersionId: string | null;
   /** Visit location for review (street + area). */
   locationDisplay: string | null;
 };
@@ -108,6 +110,7 @@ export type BookingRowPaymentInput = {
   booking_snapshot?: unknown;
   selected_cleaner_id?: string | null;
   assignment_type?: string | null;
+  pricing_version_id?: string | null;
   location?: string | null;
 };
 
@@ -146,6 +149,12 @@ export function bookingRowToPaymentSummary(row: BookingRowPaymentInput): Booking
   const assignmentRaw = typeof row.assignment_type === "string" ? row.assignment_type.trim() : "";
   const assignmentType = assignmentRaw.length > 0 ? assignmentRaw : null;
   const serviceSlug = serviceSlugFromBookingRow(row);
+  const pricingVersionId =
+    typeof row.pricing_version_id === "string" && row.pricing_version_id.trim()
+      ? row.pricing_version_id.trim()
+      : typeof locked?.pricing_version_id === "string" && locked.pricing_version_id.trim()
+        ? locked.pricing_version_id.trim()
+        : null;
   const customerName =
     typeof snap?.customer?.name === "string" && snap.customer.name.trim() ? snap.customer.name.trim() : null;
   const customerPhone =
@@ -234,6 +243,7 @@ export function bookingRowToPaymentSummary(row: BookingRowPaymentInput): Booking
     selectedCleanerId,
     assignmentType,
     serviceSlug,
+    pricingVersionId,
     locationDisplay: locationDisplay === "Not set yet" ? null : locationDisplay,
   };
 }
