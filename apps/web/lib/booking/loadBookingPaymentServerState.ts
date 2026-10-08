@@ -40,7 +40,7 @@ export async function loadBookingPaymentServerState(bookingId: string): Promise<
   const { data: row, error } = await admin
     .from("bookings")
     .select(
-      "id, customer_email, service, service_slug, rooms, bathrooms, extras, total_price, total_paid_zar, status, booking_snapshot, payment_completed_at, selected_cleaner_id, assignment_type, location",
+      "id, customer_email, service, service_slug, rooms, bathrooms, extras, total_price, total_paid_zar, status, booking_snapshot, payment_completed_at, selected_cleaner_id, assignment_type, pricing_version_id, location",
     )
     .eq("id", bookingId)
     .maybeSingle();

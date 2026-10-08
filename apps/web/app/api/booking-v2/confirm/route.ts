@@ -806,6 +806,7 @@ export async function POST(request: Request) {
     referral_discount_zar: referralAppliedZar,
     cleaning_credit_zar: creditToApplyCap,
     pay_total_zar: payAmountZar,
+    pricing_version_id: pricingVersionId,
     ...(recurringPrepaymentQuote
       ? {
           payment_scope: "recurring_first_30_days" as const,

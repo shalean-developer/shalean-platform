@@ -623,3 +623,40 @@ describe("PRICING-06B.5 — atomic quote-lock payment handoff", () => {
     expect(src).not.toContain("...values,\n          applyCleaningCreditZar");
   });
 });
+
+
+describe("A02-01 — immutable pricing version survives payment finalization", () => {
+  it("embeds the validated quote-lock pricing version in the Booking V2 price snapshot", () => {
+    const src = readFileSync(join(process.cwd(), "app/api/booking-v2/confirm/route.ts"), "utf8");
+    expect(src).toContain("pricing_version_id: pricingVersionId");
+  });
+
+  it("loads pricing_version_id into existing-booking payment summary and inline metadata", () => {
+    const loader = readFileSync(join(process.cwd(), "lib/booking/loadBookingPaymentServerState.ts"), "utf8");
+    const summary = readFileSync(join(process.cwd(), "lib/payments/bookingPaymentSummary.ts"), "utf8");
+    const inline = readFileSync(join(process.cwd(), "lib/booking/useUnifiedPaymentFlow.ts"), "utf8");
+    expect(loader).toContain("pricing_version_id");
+    expect(summary).toContain("pricingVersionId: string | null");
+    expect(summary).toContain("pricing_version_id?: string | null");
+    expect(inline).toContain("pricing_version_id: summary.pricingVersionId");
+    expect(inline).not.toContain("pricing_version_id: null as string | null");
+  });
+
+  it("selects and preserves the persisted booking version as finalization source of truth", () => {
+    const src = readFileSync(join(process.cwd(), "lib/booking/upsertBookingFromPaystack.ts"), "utf8");
+    expect(src).toContain("payment_status, pricing_version_id, location");
+    expect(src).toContain("persistedPricingVersionId");
+    expect(src).toContain("normalizedPricingVersionId(params.persistedPricingVersionId)");
+    expect(src).toContain("snapshotPricingVersionId: resolvedPriceSnapshot.pricing_version_id");
+    expect(src).toContain("const priceSnapshot = {");
+    expect(src).toContain("...resolvedPriceSnapshot");
+    expect(src).toContain("pricing_version_id,");
+  });
+
+  it("sources server-initialize checkout metadata from the persisted Booking V2 pricing version", () => {
+    const src = readFileSync(join(process.cwd(), "lib/booking/paystackInitializeCore.ts"), "utf8");
+    expect(src).toContain('select("status, payment_status, total_price, price_snapshot, pricing_version_id")');
+    expect(src).toContain("persistedBookingPricingVersionId");
+    expect(src).toContain("persistedBookingPricingVersionId ?? locked.pricing_version_id?.trim() ?? null");
+  });
+});
