@@ -110,15 +110,11 @@ export async function restoreRecurringPreferredCleanerAssignments(
       continue;
     }
 
-    const patch = recurringOccurrenceCleanerPatch(cleanerId, {
-      operationalStatus: recurringPropagateCleanerOperationalStatus(row.status),
-    });
-    const { error: updateErr } = await admin.from("bookings").update(patch).eq("id", row.id);
-    if (updateErr) {
-      skipped++;
-      continue;
-    }
-    updated++;
+    let effectiveCleanerId = cleanerId;
+    let rosterKind: "custom_existing" | "committed_existing" | "continuity_applied" | "noop" | "locked" | undefined;
+    let rosterLifecyclePromoted = false;
+    let rosterAssignmentCommitted = false;
+    let repaired = false;
 
     if (row.recurring_id) {
       const rosterResult = await applyRecurringOccurrenceRosterContinuity(admin, {
@@ -126,12 +122,52 @@ export async function restoreRecurringPreferredCleanerAssignments(
         recurringId: row.recurring_id,
         leadCleanerId: cleanerId,
       });
-      if (rosterResult.applied) rostersApplied++;
+      if (!rosterResult.ok) {
+        skipped++;
+        continue;
+      }
+      rosterKind = rosterResult.kind;
+      rosterLifecyclePromoted = rosterResult.lifecyclePromoted === true;
+      rosterAssignmentCommitted = rosterResult.assignmentCommitted === true;
+      if (rosterResult.leadCleanerId) effectiveCleanerId = rosterResult.leadCleanerId;
+      if (rosterResult.applied) {
+        repaired = true;
+        rostersApplied++;
+      }
+      if (rosterResult.kind === "committed_existing" || rosterResult.kind === "locked") {
+        if (repaired) updated++;
+        continue;
+      }
     }
 
-    if (row.recurring_id && !planCleaner.has(row.recurring_id)) {
-      planCleaner.set(row.recurring_id, cleanerId);
+    if (
+      rosterKind !== "committed_existing" &&
+      rosterKind !== "locked" &&
+      !rosterAssignmentCommitted &&
+      !rosterLifecyclePromoted
+    ) {
+      const patch = recurringOccurrenceCleanerPatch(effectiveCleanerId, {
+        operationalStatus: recurringPropagateCleanerOperationalStatus(row.status),
+      });
+      const { error: updateErr } = await admin.from("bookings").update(patch).eq("id", row.id);
+      if (updateErr) {
+        skipped++;
+        continue;
+      }
+      repaired = true;
     }
+
+    if (
+      row.recurring_id &&
+      rosterKind !== "custom_existing" &&
+      rosterKind !== "committed_existing" &&
+      rosterKind !== "locked" &&
+      !planCleaner.has(row.recurring_id)
+    ) {
+      planCleaner.set(row.recurring_id, effectiveCleanerId);
+    }
+
+    if (repaired) updated++;
   }
 
   let plansUpdated = 0;

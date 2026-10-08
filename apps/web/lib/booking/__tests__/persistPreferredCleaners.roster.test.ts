@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   preferredCleanerIdsFromSnapshot,
   syncPreferredCleanerRoster,
+  syncPreferredCleanerOfferRoster,
   syncPreferredCleanerRosterFromBookingRow,
 } from "@/lib/booking/persistPreferredCleaners";
 
@@ -10,12 +11,20 @@ const LEAD = "11111111-1111-4111-8111-111111111111";
 const MEMBER_A = "22222222-2222-4222-8222-222222222222";
 const MEMBER_B = "33333333-3333-4333-8333-333333333333";
 
-function makeAdmin(rpcImpl?: (args: unknown) => Promise<{ error: { message: string } | null }>) {
+function makeAdmin(
+  rpcImpl?: (args: unknown) => Promise<{ data?: unknown; error: { message: string } | null }>,
+  existingRows: Array<{ cleaner_id: string; source: string | null }> = [],
+) {
   const rpc = vi.fn(async (_name: string, args: unknown) => {
     if (rpcImpl) return rpcImpl(args);
-    return { error: null };
+    return { data: "synced", error: null };
   });
-  return { rpc, admin: { rpc } as never };
+  const from = vi.fn(() => ({
+    select: vi.fn(() => ({
+      eq: vi.fn(async () => ({ data: existingRows, error: null })),
+    })),
+  }));
+  return { rpc, from, admin: { rpc, from } as never };
 }
 
 describe("syncPreferredCleanerRoster (payment-already-received / monthly parity)", () => {
@@ -132,8 +141,8 @@ describe("syncPreferredCleanerRoster (payment-already-received / monthly parity)
     expect(rpc).toHaveBeenCalledTimes(1);
   });
 
-  it("from booking row/snapshot: restores multi-cleaner roster after payment finalize shape", async () => {
-    const { admin } = makeAdmin();
+  it("from booking row/snapshot: preserves preference as intent without booking_cleaners write", async () => {
+    const { admin, rpc } = makeAdmin();
     const result = await syncPreferredCleanerRosterFromBookingRow(
       admin,
       "b1",
@@ -143,13 +152,57 @@ describe("syncPreferredCleanerRoster (payment-already-received / monthly parity)
       },
       "checkout_preferred",
     );
-    expect(result.ok).toBe(true);
-    if (!result.ok || result.kind !== "synced") return;
-    expect(result.cleanerCount).toBe(3);
+    expect(result).toEqual({ ok: true, kind: "deferred_preference_only", cleanerCount: 3 });
+    expect(rpc).not.toHaveBeenCalled();
     expect(preferredCleanerIdsFromSnapshot({ selectedCleanerIds: [LEAD, MEMBER_A, MEMBER_B] }, LEAD)).toEqual([
       LEAD,
       MEMBER_A,
       MEMBER_B,
     ]);
+  });
+
+  it("post-payment preference sync never mutates an authoritative existing roster", async () => {
+    const { admin, rpc } = makeAdmin(undefined, [
+      { cleaner_id: LEAD, source: "admin" },
+      { cleaner_id: MEMBER_A, source: "admin" },
+    ]);
+    const result = await syncPreferredCleanerRosterFromBookingRow(
+      admin,
+      "b1",
+      {
+        booking_snapshot: { selectedCleanerIds: [LEAD, MEMBER_B] },
+        selected_cleaner_id: LEAD,
+      },
+      "checkout_preferred",
+    );
+    expect(result).toEqual({ ok: true, kind: "deferred_preference_only", cleanerCount: 2 });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("unpaid recurring preference never writes booking_cleaners", async () => {
+    const { admin, rpc } = makeAdmin();
+    const result = await syncPreferredCleanerOfferRoster(
+      admin,
+      "b1",
+      [LEAD, MEMBER_A],
+      "recurring_preferred",
+    );
+    expect(result).toEqual({ ok: true, kind: "deferred_preference_only", cleanerCount: 2 });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("R0 post-payment preference stays intent-only until dispatch acceptance", async () => {
+    const { admin, rpc } = makeAdmin();
+    const result = await syncPreferredCleanerRosterFromBookingRow(
+      admin,
+      "b1",
+      {
+        booking_snapshot: { selectedCleanerIds: [LEAD, MEMBER_A] },
+        selected_cleaner_id: LEAD,
+      },
+      "booking_v2_r0",
+    );
+    expect(result).toEqual({ ok: true, kind: "deferred_preference_only", cleanerCount: 2 });
+    expect(rpc).not.toHaveBeenCalled();
   });
 });
