@@ -28,6 +28,9 @@ describe("MASTER-00A release source truth", () => {
     expect(workflow).toContain(STAGING_REF);
     expect(workflow).toContain("git fetch --no-tags origin refs/heads/deploy/staging");
     expect(workflow).toContain("git switch --detach FETCH_HEAD");
+    expect(workflow).toContain('PLESK_STAGING_HISTORY_ANCHOR: "7103351ad7307790773f5d514692ad656a31222c"');
+    expect(workflow).toContain('git merge-base --is-ancestor "$PLESK_STAGING_HISTORY_ANCHOR" HEAD');
+    expect(workflow).toContain('git merge --no-edit --strategy=ours --allow-unrelated-histories "$PLESK_STAGING_HISTORY_ANCHOR"');
     expect(workflow).not.toContain("git switch --orphan");
     expect(workflow).not.toContain("git push --force origin HEAD:refs/heads/deploy/staging");
   });
