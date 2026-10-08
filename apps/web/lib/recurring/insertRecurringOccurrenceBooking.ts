@@ -344,7 +344,10 @@ export async function insertRecurringOccurrenceBooking(
     }),
   );
 
-  if (preferredCleanerIds.length >= 2) {
+  // Unpaid per-booking recurring rows retain customer cleaner intent only.
+  // Operational roster continuity is materialized after payment. Prepaid allocations
+  // are already settled and may continue directly into authoritative assignment.
+  if (prepaidAllocation && preferredCleanerIds.length >= 2) {
     const continuity = await applyRecurringOccurrenceRosterContinuity(admin, {
       bookingId: id,
       recurringId: params.recurring.id,
@@ -353,7 +356,7 @@ export async function insertRecurringOccurrenceBooking(
     if (!continuity.applied) {
       await syncPreferredCleanerRoster(admin, id, preferredCleanerIds, "recurring_preferred");
     }
-  } else if (preferredCleanerId) {
+  } else if (prepaidAllocation && preferredCleanerId) {
     await applyRecurringOccurrenceRosterContinuity(admin, {
       bookingId: id,
       recurringId: params.recurring.id,
