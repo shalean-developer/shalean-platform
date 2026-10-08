@@ -107,6 +107,27 @@ export function isPrepaidPaystackCheckoutReference(reference: string | null | un
   );
 }
 
+function normalizedPricingVersionId(raw: unknown): string | null {
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}
+
+/**
+ * Immutable pricing-version precedence at payment finalization.
+ * The persisted pending booking is authoritative because it was created from the server-validated
+ * quote lock. Provider/client metadata may be stale and must never erase or replace that DB value.
+ */
+export function resolvePaystackFinalPricingVersionId(params: {
+  persistedPricingVersionId?: unknown;
+  lockedPricingVersionId?: unknown;
+  snapshotPricingVersionId?: unknown;
+}): string | null {
+  return (
+    normalizedPricingVersionId(params.persistedPricingVersionId) ??
+    normalizedPricingVersionId(params.lockedPricingVersionId) ??
+    normalizedPricingVersionId(params.snapshotPricingVersionId)
+  );
+}
+
 /**
  * `payment_status='success'` is the single signal `bookingPayableForWeeklyBatch` (prepaid path) keys off.
  * Monthly-managed rows (recurring/monthly customers) keep their own lifecycle states
@@ -314,7 +335,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
 
   const existingSelect =
-    `id, status, customer_email, ${ownershipColumn}, paystack_reference, is_recurring_generated, recurring_id, price_snapshot, selected_cleaner_id, cleaner_id, assignment_type, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, location, date, time, service, service_slug, service_details, selected_extras, pricing_summary, booking_snapshot, rooms, bathrooms, extras, suburb, access_instructions, parking_instructions, gate_code, cleaner_mode, cleaner_count, assigned_team_id, booking_type, fulfillment_mode, base_amount_cents, service_fee_cents, extras_amount_cents`;
+    `id, status, customer_email, ${ownershipColumn}, paystack_reference, is_recurring_generated, recurring_id, price_snapshot, selected_cleaner_id, cleaner_id, assignment_type, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, pricing_version_id, location, date, time, service, service_slug, service_details, selected_extras, pricing_summary, booking_snapshot, rooms, bathrooms, extras, suburb, access_instructions, parking_instructions, gate_code, cleaner_mode, cleaner_count, assigned_team_id, booking_type, fulfillment_mode, base_amount_cents, service_fee_cents, extras_amount_cents`;
 
   const { data: existingByRef, error: selectErr } = await supabase
     .from("bookings")
@@ -719,8 +740,14 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     line_items: priceSnapshot.line_items,
   };
   const total_price = bookingVisitZar;
-  const pricing_version_id =
-    priceSnapshot.pricing_version_id ?? lockedRow?.pricing_version_id?.trim() ?? null;
+  const pricing_version_id = resolvePaystackFinalPricingVersionId({
+    persistedPricingVersionId:
+      existing && typeof existing === "object" && "pricing_version_id" in existing
+        ? (existing as { pricing_version_id?: unknown }).pricing_version_id
+        : null,
+    lockedPricingVersionId: lockedRow?.pricing_version_id,
+    snapshotPricingVersionId: priceSnapshot.pricing_version_id,
+  });
 
   let extrasSnapshotRaw: { slug: string; name: string; price: number }[] = [];
   if (lockedRow) {
@@ -891,6 +918,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     booking_type?: string | null;
     selected_cleaner_id?: string | null;
     recurring_id?: string | null;
+    pricing_version_id?: string | null;
     base_amount_cents?: number | null;
     service_fee_cents?: number | null;
     extras_amount_cents?: number | null;
