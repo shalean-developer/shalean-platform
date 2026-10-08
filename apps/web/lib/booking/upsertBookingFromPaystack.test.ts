@@ -57,6 +57,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { parseCheckoutPriceSnapshotV1FromMeta } from "@/lib/booking/priceSnapshotBooking";
 import {
   detectMonthlyManagedRowForPaystackFinalize,
+  resolvePaystackFinalPricingVersionId,
   upsertBookingFromPaystack,
 } from "@/lib/booking/upsertBookingFromPaystack";
 
@@ -121,6 +122,49 @@ describe("parseCheckoutPriceSnapshotV1FromMeta (Paystack string metadata)", () =
     });
     expect(out).not.toBeNull();
     expect(out?.total_zar).toBe(500);
+  });
+});
+
+describe("A02-01 pricing version preservation", () => {
+  const persisted = "11111111-1111-4111-8111-111111111111";
+  const locked = "22222222-2222-4222-8222-222222222222";
+  const metadata = "33333333-3333-4333-8333-333333333333";
+
+  it("keeps the persisted booking version when provider metadata is null", () => {
+    expect(
+      resolvePaystackFinalPricingVersionId({
+        persistedPricingVersionId: persisted,
+        lockedPricingVersionId: null,
+        snapshotPricingVersionId: null,
+      }),
+    ).toBe(persisted);
+  });
+
+  it("treats the persisted booking version as authoritative over conflicting metadata", () => {
+    expect(
+      resolvePaystackFinalPricingVersionId({
+        persistedPricingVersionId: persisted,
+        lockedPricingVersionId: locked,
+        snapshotPricingVersionId: metadata,
+      }),
+    ).toBe(persisted);
+  });
+
+  it("falls back to the validated lock, then metadata, only when the DB row has no version", () => {
+    expect(
+      resolvePaystackFinalPricingVersionId({
+        persistedPricingVersionId: null,
+        lockedPricingVersionId: locked,
+        snapshotPricingVersionId: metadata,
+      }),
+    ).toBe(locked);
+    expect(
+      resolvePaystackFinalPricingVersionId({
+        persistedPricingVersionId: null,
+        lockedPricingVersionId: null,
+        snapshotPricingVersionId: metadata,
+      }),
+    ).toBe(metadata);
   });
 });
 
