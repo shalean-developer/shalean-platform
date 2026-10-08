@@ -647,6 +647,16 @@ describe("A02-01 — immutable pricing version survives payment finalization", (
     expect(src).toContain("payment_status, pricing_version_id, location");
     expect(src).toContain("persistedPricingVersionId");
     expect(src).toContain("normalizedPricingVersionId(params.persistedPricingVersionId)");
-    expect(src).toContain("snapshotPricingVersionId: priceSnapshot.pricing_version_id");
+    expect(src).toContain("snapshotPricingVersionId: resolvedPriceSnapshot.pricing_version_id");
+    expect(src).toContain("const priceSnapshot = {");
+    expect(src).toContain("...resolvedPriceSnapshot");
+    expect(src).toContain("pricing_version_id,");
+  });
+
+  it("sources server-initialize checkout metadata from the persisted Booking V2 pricing version", () => {
+    const src = readFileSync(join(process.cwd(), "lib/booking/paystackInitializeCore.ts"), "utf8");
+    expect(src).toContain('select("status, payment_status, total_price, price_snapshot, pricing_version_id")');
+    expect(src).toContain("persistedBookingPricingVersionId");
+    expect(src).toContain("persistedBookingPricingVersionId ?? locked.pricing_version_id?.trim() ?? null");
   });
 });
