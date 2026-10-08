@@ -57,7 +57,7 @@ export function buildInlinePaystackMetadata(
     duration_hours: summary.hours ?? 0,
     cleaners_count: summary.cleanersCount,
     line_items: [{ id: "booking_total", name: "Booking total", amount_zar: visitTotalZar }],
-    pricing_version_id: null as string | null,
+    pricing_version_id: summary.pricingVersionId,
   };
   const extrasSlugs = summary.extras
     .map((x) => (typeof x.slug === "string" ? x.slug : x.name ?? ""))

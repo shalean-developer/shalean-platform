@@ -115,6 +115,7 @@ describe("metadata parity: inline summary vs server-shaped canonical", () => {
     status: "pending_payment",
     selected_cleaner_id: cleanerUuid,
     assignment_type: "user_selected",
+    pricing_version_id: "11111111-1111-4111-8111-111111111111",
     booking_snapshot: {
       v: 1,
       locked: {
@@ -141,6 +142,7 @@ describe("metadata parity: inline summary vs server-shaped canonical", () => {
     expect(summary.selectedCleanerId).toBe(cleanerUuid.toLowerCase());
     expect(summary.assignmentType).toBe("user_selected");
     expect(summary.serviceSlug).toBe("standard_cleaning");
+    expect(summary.pricingVersionId).toBe("11111111-1111-4111-8111-111111111111");
 
     const lockTiming = parseLockTimingFromBookingSnapshotJson(summary.bookingSnapshotJson);
     const meta = buildCanonicalPaystackCheckoutMetadata({
