@@ -44,13 +44,16 @@ describe("buildBookingLineItemsFromRow", () => {
       .filter((r) => r.earns_cleaner !== false && r.item_type !== "adjustment")
       .reduce((sum, r) => sum + r.total_price_cents, 0);
     const allTotal = items.reduce((sum, r) => sum + r.total_price_cents, 0);
+    const reconciliation = items.find((r) => r.name === "Backfill payable reconciliation");
 
     expect(base?.total_price_cents).toBe(65_000);
     expect(fee?.item_type).toBe("adjustment");
     expect(fee?.earns_cleaner).toBe(false);
     expect(fee?.total_price_cents).toBe(3_000);
+    expect(reconciliation?.earns_cleaner).toBe(false);
+    expect(reconciliation?.total_price_cents).toBe(-68_000);
     expect(eligibleTotal).toBe(65_000);
-    expect(allTotal).toBe(68_000);
+    expect(allTotal).toBe(0);
   });
 
   it("does not double-count legacy extras when authoritative base already contains the visit subtotal", () => {
@@ -68,7 +71,37 @@ describe("buildBookingLineItemsFromRow", () => {
     });
 
     expect(items.filter((r) => r.item_type === "extra")).toHaveLength(0);
-    expect(items.reduce((sum, r) => sum + r.total_price_cents, 0)).toBe(68_000);
+    const eligibleTotal = items
+      .filter((r) => r.earns_cleaner !== false && r.item_type !== "adjustment")
+      .reduce((sum, r) => sum + r.total_price_cents, 0);
+    expect(eligibleTotal).toBe(65_000);
+    expect(items.reduce((sum, r) => sum + r.total_price_cents, 0)).toBe(0);
+  });
+
+  it("adds a non-cleaner reconciliation line for referral-discounted authoritative subtotal backfill", () => {
+    const items = buildBookingLineItemsFromRow({
+      id: "00000000-0000-4000-8000-000000000044",
+      service: "Regular Cleaning",
+      rooms: 1,
+      bathrooms: 1,
+      extras: [],
+      total_paid_zar: 310,
+      amount_paid_cents: 31_000,
+      base_amount_cents: 33_000,
+      service_fee_cents: 3_000,
+      booking_snapshot: null,
+    });
+
+    const reconciliation = items.find((r) => r.name === "Backfill payable reconciliation");
+    const eligibleTotal = items
+      .filter((r) => r.earns_cleaner !== false && r.item_type !== "adjustment")
+      .reduce((sum, r) => sum + r.total_price_cents, 0);
+    const allTotal = items.reduce((sum, r) => sum + r.total_price_cents, 0);
+
+    expect(eligibleTotal).toBe(33_000);
+    expect(reconciliation?.earns_cleaner).toBe(false);
+    expect(reconciliation?.total_price_cents).toBe(-5_000);
+    expect(allTotal).toBe(31_000);
   });
 
   it("returns empty when nothing to record", () => {
