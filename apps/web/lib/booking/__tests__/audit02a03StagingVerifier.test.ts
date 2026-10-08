@@ -26,10 +26,12 @@ describe("AUDIT-02A03 staging-only repair verifier", () => {
     expect(src).toContain('{ status: 403 }');
   });
 
-  it("serializes retries for the same fixture before invoking the real repair helper", () => {
-    expect(src).toContain("const repairLocks = new Map<string, Promise<void>>()");
-    expect(src).toContain("withBookingRepairLock(bookingId");
+  it("claims the fixture atomically in the database before invoking the real repair helper", () => {
+    expect(src).toContain('booking_source: "audit_a02_03_fixture_repairing"');
+    expect(src).toContain('.eq("booking_source", "audit_a02_03_fixture")');
+    expect(src).toContain('{ status: 409 }');
     expect(src).toContain("ensureBookingLineItemsForEarningsIfMissing(admin, bookingId)");
+    expect(src).toContain('booking_source: "audit_a02_03_fixture_repaired"');
     expect(src).toContain("lineTotalCents");
     expect(src).toContain("cleanerLineCents");
   });
