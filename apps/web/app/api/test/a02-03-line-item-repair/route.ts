@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensureBookingLineItemsForEarnings";
 import { resolveDeploymentEnvironment } from "@/lib/env/deploymentEnvironment";
+import { isProductionTestRouteBlocked } from "@/lib/security/productionTestRouteGuard";
+import { timingSafeEqualString } from "@/lib/security/timingSafeEqualString";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -10,9 +12,26 @@ export const dynamic = "force-dynamic";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function loadVerifierSecret(): string | null {
+  const secret = process.env.DISPATCH_LOAD_TEST_SECRET?.trim();
+  return secret && secret.length > 0 ? secret : null;
+}
+
 export async function POST(request: Request) {
-  if (resolveDeploymentEnvironment() !== "staging") {
+  if (isProductionTestRouteBlocked(request.url) || resolveDeploymentEnvironment() !== "staging") {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
+  const secret = loadVerifierSecret();
+  if (!secret) {
+    return NextResponse.json({ error: "Verifier secret is not configured." }, { status: 503 });
+  }
+  const provided =
+    request.headers.get("x-dispatch-load-test-secret")?.trim() ??
+    request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ??
+    "";
+  if (!timingSafeEqualString(provided, secret)) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
   let body: { bookingId?: string } = {};
