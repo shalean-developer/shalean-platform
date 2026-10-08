@@ -176,9 +176,15 @@ describe("removeCleanerFromVisitPayout", () => {
     });
 
     expect(result).toEqual({ ok: true, payoutId: null, batchTotalCents: null, mode: "roster_removed" });
-    expect(admin.rpc).toHaveBeenCalledWith("replace_booking_cleaners_admin_atomic", expect.objectContaining({
-      p_booking_id: BOOKING_ID,
-    }));
+    expect(admin.rpc).toHaveBeenCalledWith(
+      "replace_booking_cleaners_admin_atomic",
+      expect.objectContaining({
+        p_booking_id: BOOKING_ID,
+        p_rows: expect.arrayContaining([
+          expect.objectContaining({ source: "admin_remove_visit_payout" }),
+        ]),
+      }),
+    );
     expect(admin.bookingUpdates).toContainEqual({ team_member_count_snapshot: 1 });
   });
 
