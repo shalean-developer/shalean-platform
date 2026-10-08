@@ -166,6 +166,30 @@ export function buildBookingLineItemsFromRow(b: BookingRowLineItemBackfillInput)
       });
     }
 
+    // Mirror the live checkout invariant: gross cleaner-earning value remains intact,
+    // while company-only discounts/credits/tips reconcile the full ledger to the
+    // authoritative payable. This also covers fully covered R0 bookings.
+    if (totalZar != null) {
+      const sumCents = items.reduce((s, r) => s + r.total_price_cents, 0);
+      const expectedCents = zarToCents(totalZar);
+      if (sumCents !== expectedCents) {
+        items.push({
+          item_type: "adjustment",
+          slug: null,
+          name: "Backfill payable reconciliation",
+          quantity: 1,
+          unit_price_cents: expectedCents - sumCents,
+          total_price_cents: expectedCents - sumCents,
+          pricing_source: AUTHORITATIVE_SUBTOTAL_BACKFILL_SOURCE,
+          metadata: {
+            expectedZar: totalZar,
+            sumCentsBefore: sumCents,
+          },
+          earns_cleaner: false,
+        });
+      }
+    }
+
     return items;
   }
 
