@@ -427,7 +427,12 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     const continuityLookupStart = rosterContinuity.indexOf("let continuity = params.roster ?? null");
     const committedBranch = rosterContinuity.slice(committedBranchStart, continuityLookupStart);
     expect(committedBranch).not.toContain("params.leadCleanerId");
-    expect(committedBranch).not.toContain(".update(");
+    expect(committedBranch).toContain("repair_header_from_roster");
+    expect(committedBranch).toContain("cleaner_id: existingLeadId");
+    expect(committedBranch).toContain("payout_owner_cleaner_id: existingLeadId");
+    expect(committedBranch).toContain("collapse_to_committed_header");
+    expect(committedBranch).toContain("reconcileCommittedRecurringSoloAssignment");
+    expect(committedBranch).not.toContain("preferredCleanerId");
     expect(rosterContinuity).toContain("lifecyclePromoted: shouldReplaceRoster");
     expect(rosterContinuity).toContain('kind: "locked"');
 
