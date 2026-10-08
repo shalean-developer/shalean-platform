@@ -75,12 +75,20 @@ export function buildBookingLineItemsFromRow(b: BookingRowLineItemBackfillInput)
     bookingId: b.id,
   });
 
-  const authoritativePaidCents =
+  const exactPaidCents =
     typeof b.amount_paid_cents === "number" && Number.isFinite(b.amount_paid_cents)
-      ? Math.round(b.amount_paid_cents)
-      : typeof b.total_paid_zar === "number" && Number.isFinite(b.total_paid_zar)
-        ? zarToCents(b.total_paid_zar)
-        : null;
+      ? Math.max(0, Math.round(b.amount_paid_cents))
+      : null;
+  const payableFromZarCents =
+    typeof b.total_paid_zar === "number" && Number.isFinite(b.total_paid_zar)
+      ? Math.max(0, zarToCents(b.total_paid_zar))
+      : null;
+  const authoritativePaidCents =
+    exactPaidCents != null && exactPaidCents > 0
+      ? exactPaidCents
+      : payableFromZarCents != null && payableFromZarCents > 0
+        ? payableFromZarCents
+        : exactPaidCents ?? payableFromZarCents;
   const totalZar =
     authoritativePaidCents != null
       ? authoritativePaidCents / 100
