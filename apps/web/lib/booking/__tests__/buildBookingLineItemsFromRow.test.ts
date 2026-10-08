@@ -104,6 +104,27 @@ describe("buildBookingLineItemsFromRow", () => {
     expect(allTotal).toBe(31_000);
   });
 
+  it("prefers exact amount_paid_cents over rounded total_paid_zar", () => {
+    const items = buildBookingLineItemsFromRow({
+      id: "00000000-0000-4000-8000-000000000045",
+      service: "Regular Cleaning",
+      rooms: 1,
+      bathrooms: 1,
+      extras: [],
+      total_paid_zar: 126,
+      amount_paid_cents: 12_550,
+      base_amount_cents: 10_000,
+      service_fee_cents: 3_000,
+      booking_snapshot: null,
+    });
+
+    const reconciliation = items.find((r) => r.name === "Backfill payable reconciliation");
+    const allTotal = items.reduce((sum, r) => sum + r.total_price_cents, 0);
+
+    expect(reconciliation?.total_price_cents).toBe(-450);
+    expect(allTotal).toBe(12_550);
+  });
+
   it("returns empty when nothing to record", () => {
     expect(
       buildBookingLineItemsFromRow({
