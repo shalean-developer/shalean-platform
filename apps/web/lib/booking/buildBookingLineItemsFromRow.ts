@@ -75,12 +75,16 @@ export function buildBookingLineItemsFromRow(b: BookingRowLineItemBackfillInput)
     bookingId: b.id,
   });
 
-  let totalZar: number | null = null;
-  if (typeof b.total_paid_zar === "number" && Number.isFinite(b.total_paid_zar)) {
-    totalZar = Math.round(b.total_paid_zar);
-  } else if (typeof b.amount_paid_cents === "number" && Number.isFinite(b.amount_paid_cents)) {
-    totalZar = Math.round(b.amount_paid_cents / 100);
-  }
+  const authoritativePaidCents =
+    typeof b.amount_paid_cents === "number" && Number.isFinite(b.amount_paid_cents)
+      ? Math.round(b.amount_paid_cents)
+      : typeof b.total_paid_zar === "number" && Number.isFinite(b.total_paid_zar)
+        ? zarToCents(b.total_paid_zar)
+        : null;
+  const totalZar =
+    authoritativePaidCents != null
+      ? authoritativePaidCents / 100
+      : null;
 
   const extraSumZar = extrasPersist.reduce((s, e) => s + (Number.isFinite(e.price) ? e.price : 0), 0);
   const serviceLabel = typeof b.service === "string" && b.service.trim() ? b.service.trim() : "Booking";
@@ -171,7 +175,7 @@ export function buildBookingLineItemsFromRow(b: BookingRowLineItemBackfillInput)
     // authoritative payable. This also covers fully covered R0 bookings.
     if (totalZar != null) {
       const sumCents = items.reduce((s, r) => s + r.total_price_cents, 0);
-      const expectedCents = zarToCents(totalZar);
+      const expectedCents = authoritativePaidCents ?? zarToCents(totalZar);
       if (sumCents !== expectedCents) {
         items.push({
           item_type: "adjustment",
@@ -249,7 +253,7 @@ export function buildBookingLineItemsFromRow(b: BookingRowLineItemBackfillInput)
 
   if (totalZar != null) {
     const sumCents = items.reduce((s, r) => s + r.total_price_cents, 0);
-    const expectedCents = zarToCents(totalZar);
+    const expectedCents = authoritativePaidCents ?? zarToCents(totalZar);
     if (sumCents !== expectedCents) {
       items.push({
         item_type: "adjustment",
