@@ -314,10 +314,11 @@ export async function processPaystackInitializeBody(
 
   let preservedExistingPayableZar: number | null = null;
   let preservedExistingPriceSnapshot: Record<string, unknown> | null = null;
+  let persistedBookingPricingVersionId: string | null = null;
   if (bookingIdFromBody) {
     const { data: payRow } = await admin
       .from("bookings")
-      .select("status, payment_status, total_price, price_snapshot")
+      .select("status, payment_status, total_price, price_snapshot, pricing_version_id")
       .eq("id", bookingIdFromBody)
       .maybeSingle();
     const pay = payRow as {
@@ -325,7 +326,12 @@ export async function processPaystackInitializeBody(
       payment_status?: string | null;
       total_price?: number | string | null;
       price_snapshot?: unknown;
+      pricing_version_id?: string | null;
     } | null;
+    persistedBookingPricingVersionId =
+      typeof pay?.pricing_version_id === "string" && pay.pricing_version_id.trim()
+        ? pay.pricing_version_id.trim()
+        : null;
     const ps = String(pay?.payment_status ?? "").trim().toLowerCase();
     if (ps === "pending_monthly") {
       return {
@@ -774,7 +780,8 @@ export async function processPaystackInitializeBody(
     tip_zar: tip,
     duration_hours: locked.finalHours ?? locked.duration ?? 0,
     cleaners_count: locked.cleanersCount ?? 1,
-    pricing_version_id: locked.pricing_version_id?.trim() ?? null,
+    pricing_version_id:
+      persistedBookingPricingVersionId ?? locked.pricing_version_id?.trim() ?? null,
     line_items: lineItemsSummary,
   });
   const checkoutPriceSnapshotForMetadata =
