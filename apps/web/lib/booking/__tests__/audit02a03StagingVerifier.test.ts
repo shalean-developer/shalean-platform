@@ -8,9 +8,16 @@ describe("AUDIT-02A03 staging-only repair verifier", () => {
     "utf8",
   );
 
-  it("is unavailable outside staging", () => {
+  it("is unavailable outside staging and uses the hardened production-route guard", () => {
+    expect(src).toContain("isProductionTestRouteBlocked(request.url)");
     expect(src).toContain('resolveDeploymentEnvironment() !== "staging"');
     expect(src).toContain('{ status: 404 }');
+  });
+
+  it("requires a timing-safe verifier secret before accepting a fixture id", () => {
+    expect(src).toContain("DISPATCH_LOAD_TEST_SECRET");
+    expect(src).toContain("timingSafeEqualString(provided, secret)");
+    expect(src).toContain('{ status: 401 }');
   });
 
   it("accepts only dedicated test fixtures", () => {
