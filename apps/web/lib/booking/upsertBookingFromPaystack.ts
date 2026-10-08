@@ -531,12 +531,12 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     console.log("[UPSERT SNAPSHOT PARSED]", priceSnapshotFromMeta);
   }
 
-  const priceSnapshot =
+  const resolvedPriceSnapshot =
     priceSnapshotFromMeta ??
     (existing && typeof existing === "object" && "price_snapshot" in existing
       ? checkoutPriceSnapshotFromLegacyPriceSnapshotV1((existing as { price_snapshot?: unknown }).price_snapshot)
       : null);
-  if (!priceSnapshot) {
+  if (!resolvedPriceSnapshot) {
     const metaKeys = Object.keys(input.paystackMetadata ?? {});
     logPaymentStructured("payment_finalize", {
       reference: input.paystackReference,
@@ -547,10 +547,27 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     throw new Error("Missing price snapshot — cannot safely finalize booking");
   }
 
+  const pricing_version_id = resolvePaystackFinalPricingVersionId({
+    persistedPricingVersionId:
+      existing && typeof existing === "object" && "pricing_version_id" in existing
+        ? (existing as { pricing_version_id?: unknown }).pricing_version_id
+        : null,
+    lockedPricingVersionId: lockedRow?.pricing_version_id,
+    snapshotPricingVersionId: resolvedPriceSnapshot.pricing_version_id,
+  });
+  // Paystack metadata is not authoritative for immutable catalog identity.
+  // Stamp the persisted/validated version into the snapshot before any terminal write,
+  // so finalization cannot downgrade a Booking V2 snapshot to pricing_version_id=null.
+  const priceSnapshot = {
+    ...resolvedPriceSnapshot,
+    pricing_version_id,
+  };
+
   if (bookingPaystackFinalizeTraceEnabled()) {
     console.log("[PRICE SNAPSHOT USED]", {
       reference: input.paystackReference,
       total: priceSnapshot.total_zar,
+      pricing_version_id: priceSnapshot.pricing_version_id,
       source: priceSnapshotFromMeta ? "metadata" : "db_legacy",
     });
   }
@@ -740,14 +757,6 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     line_items: priceSnapshot.line_items,
   };
   const total_price = bookingVisitZar;
-  const pricing_version_id = resolvePaystackFinalPricingVersionId({
-    persistedPricingVersionId:
-      existing && typeof existing === "object" && "pricing_version_id" in existing
-        ? (existing as { pricing_version_id?: unknown }).pricing_version_id
-        : null,
-    lockedPricingVersionId: lockedRow?.pricing_version_id,
-    snapshotPricingVersionId: priceSnapshot.pricing_version_id,
-  });
 
   let extrasSnapshotRaw: { slug: string; name: string; price: number }[] = [];
   if (lockedRow) {
