@@ -27,6 +27,9 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: "https://uwvnmluiqbczeduzjgse.supabase.co"
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ vars.PLESK_STAGING_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_Jl3ESJbVyt2gnuiVslYvHg_gy-LaG_1' }}"
       NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "${{ vars.PLESK_TEST_PAYSTACK_PUBLIC_KEY }}"
+      # One-time bridge anchor: exact deploy/staging commit currently checked out by Plesk.
+      # Once this SHA becomes an ancestor of deploy/staging, the publish step skips the merge.
+      PLESK_STAGING_HISTORY_ANCHOR: "7103351ad7307790773f5d514692ad656a31222c"
 
     steps:
       - name: Checkout main
@@ -116,6 +119,10 @@ jobs:
           # Preserve deploy/staging history so Plesk can fast-forward its checked-out branch.
           git fetch --no-tags origin refs/heads/deploy/staging
           git switch --detach FETCH_HEAD
+          git fetch --no-tags origin "$PLESK_STAGING_HISTORY_ANCHOR"
+          if ! git merge-base --is-ancestor "$PLESK_STAGING_HISTORY_ANCHOR" HEAD; then
+            git merge --no-edit --strategy=ours --allow-unrelated-histories "$PLESK_STAGING_HISTORY_ANCHOR"
+          fi
           git rm -rf --ignore-unmatch .
           git clean -fdx
           cp "$RUNNER_TEMP/pricing-test-runtime.tar.gz" pricing-test-runtime.tar.gz
