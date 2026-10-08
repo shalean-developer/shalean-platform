@@ -26,7 +26,9 @@ describe("AUDIT-02A03 staging-only repair verifier", () => {
     expect(src).toContain('{ status: 403 }');
   });
 
-  it("invokes the real missing-ledger repair helper", () => {
+  it("serializes retries for the same fixture before invoking the real repair helper", () => {
+    expect(src).toContain("const repairLocks = new Map<string, Promise<void>>()");
+    expect(src).toContain("withBookingRepairLock(bookingId");
     expect(src).toContain("ensureBookingLineItemsForEarningsIfMissing(admin, bookingId)");
     expect(src).toContain("lineTotalCents");
     expect(src).toContain("cleanerLineCents");
