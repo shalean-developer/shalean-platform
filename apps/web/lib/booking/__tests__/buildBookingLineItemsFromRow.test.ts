@@ -125,6 +125,25 @@ describe("buildBookingLineItemsFromRow", () => {
     expect(allTotal).toBe(12_550);
   });
 
+  it("uses positive total_paid_zar when amount_paid_cents is a zero placeholder", () => {
+    const items = buildBookingLineItemsFromRow({
+      id: "00000000-0000-4000-8000-000000000046",
+      service: "Regular Cleaning",
+      rooms: 1,
+      bathrooms: 1,
+      extras: [],
+      total_paid_zar: 390,
+      amount_paid_cents: 0,
+      base_amount_cents: 36_000,
+      service_fee_cents: 3_000,
+      booking_snapshot: null,
+    });
+
+    const allTotal = items.reduce((sum, r) => sum + r.total_price_cents, 0);
+    expect(allTotal).toBe(39_000);
+    expect(items.find((r) => r.name === "Backfill payable reconciliation")).toBeUndefined();
+  });
+
   it("returns empty when nothing to record", () => {
     expect(
       buildBookingLineItemsFromRow({
