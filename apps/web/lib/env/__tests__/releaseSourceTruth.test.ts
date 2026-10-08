@@ -26,6 +26,10 @@ describe("MASTER-00A release source truth", () => {
     expect(workflow).toContain("- main");
     expect(workflow).toContain("refs/heads/deploy/staging");
     expect(workflow).toContain(STAGING_REF);
+    expect(workflow).toContain("git fetch --no-tags origin refs/heads/deploy/staging");
+    expect(workflow).toContain("git switch --detach FETCH_HEAD");
+    expect(workflow).not.toContain("git switch --orphan");
+    expect(workflow).not.toContain("git push --force origin HEAD:refs/heads/deploy/staging");
   });
 
   it("keeps production as the production build source and deploy/production as its artifact branch", () => {
