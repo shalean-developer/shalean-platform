@@ -12,28 +12,6 @@ export const dynamic = "force-dynamic";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const repairLocks = new Map<string, Promise<void>>();
-
-async function withBookingRepairLock<T>(bookingId: string, task: () => Promise<T>): Promise<T> {
-  const prior = repairLocks.get(bookingId) ?? Promise.resolve();
-  let release!: () => void;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const tail = prior.then(() => gate);
-  repairLocks.set(bookingId, tail);
-
-  await prior;
-  try {
-    return await task();
-  } finally {
-    release();
-    if (repairLocks.get(bookingId) === tail) {
-      repairLocks.delete(bookingId);
-    }
-  }
-}
-
 function loadVerifierSecret(): string | null {
   const secret = process.env.DISPATCH_LOAD_TEST_SECRET?.trim();
   return secret && secret.length > 0 ? secret : null;
@@ -87,35 +65,65 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Fixture booking required." }, { status: 403 });
   }
 
-  return withBookingRepairLock(bookingId, async () => {
-    const repaired = await ensureBookingLineItemsForEarningsIfMissing(admin, bookingId);
-    if (!repaired.ok) {
-      return NextResponse.json({ ok: false, error: repaired.error }, { status: 500 });
-    }
+  const { data: claim, error: claimError } = await admin
+    .from("bookings")
+    .update({ booking_source: "audit_a02_03_fixture_repairing" })
+    .eq("id", bookingId)
+    .eq("is_test", true)
+    .eq("booking_source", "audit_a02_03_fixture")
+    .select("id")
+    .maybeSingle();
 
-    const { data: lines, error: linesError } = await admin
-      .from("booking_line_items")
-      .select("item_type, slug, name, total_price_cents, earns_cleaner, pricing_source")
-      .eq("booking_id", bookingId)
-      .order("created_at", { ascending: true });
+  if (claimError) {
+    return NextResponse.json({ ok: false, error: claimError.message }, { status: 500 });
+  }
+  if (!claim) {
+    return NextResponse.json({ ok: false, error: "Fixture repair already claimed." }, { status: 409 });
+  }
 
-    if (linesError) {
-      return NextResponse.json({ ok: false, error: linesError.message }, { status: 500 });
-    }
+  const repaired = await ensureBookingLineItemsForEarningsIfMissing(admin, bookingId);
+  if (!repaired.ok) {
+    await admin
+      .from("bookings")
+      .update({ booking_source: "audit_a02_03_fixture" })
+      .eq("id", bookingId)
+      .eq("booking_source", "audit_a02_03_fixture_repairing");
+    return NextResponse.json({ ok: false, error: repaired.error }, { status: 500 });
+  }
 
-    const rows = lines ?? [];
-    const lineTotalCents = rows.reduce((sum, row) => sum + Number(row.total_price_cents ?? 0), 0);
-    const cleanerLineCents = rows
-      .filter((row) => row.earns_cleaner !== false)
-      .reduce((sum, row) => sum + Number(row.total_price_cents ?? 0), 0);
+  const { data: lines, error: linesError } = await admin
+    .from("booking_line_items")
+    .select("item_type, slug, name, total_price_cents, earns_cleaner, pricing_source")
+    .eq("booking_id", bookingId)
+    .order("created_at", { ascending: true });
 
-    return NextResponse.json({
-      ok: true,
-      bookingId,
-      lineCount: rows.length,
-      lineTotalCents,
-      cleanerLineCents,
-      lines: rows,
-    });
+  if (linesError) {
+    await admin
+      .from("bookings")
+      .update({ booking_source: "audit_a02_03_fixture" })
+      .eq("id", bookingId)
+      .eq("booking_source", "audit_a02_03_fixture_repairing");
+    return NextResponse.json({ ok: false, error: linesError.message }, { status: 500 });
+  }
+
+  const rows = lines ?? [];
+  const lineTotalCents = rows.reduce((sum, row) => sum + Number(row.total_price_cents ?? 0), 0);
+  const cleanerLineCents = rows
+    .filter((row) => row.earns_cleaner !== false)
+    .reduce((sum, row) => sum + Number(row.total_price_cents ?? 0), 0);
+
+  await admin
+    .from("bookings")
+    .update({ booking_source: "audit_a02_03_fixture_repaired" })
+    .eq("id", bookingId)
+    .eq("booking_source", "audit_a02_03_fixture_repairing");
+
+  return NextResponse.json({
+    ok: true,
+    bookingId,
+    lineCount: rows.length,
+    lineTotalCents,
+    cleanerLineCents,
+    lines: rows,
   });
 }
