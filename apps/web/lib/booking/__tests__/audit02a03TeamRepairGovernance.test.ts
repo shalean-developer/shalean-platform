@@ -47,5 +47,10 @@ describe("A02-03-02 historical team ledger repair governance", () => {
     expect(src).toContain("Invalid --booking-id value");
     expect(src).toContain("Unknown argument");
     expect(src).toContain("Use --booking-id=<uuid>; spaced --booking-id values are not accepted.");
+    expect(src).toContain("B3_C1BD_AUDITED_FIXTURE");
+    expect(src).toContain("assertB3AuditedFixtureUnchanged");
+    expect(src).toContain("audited fixture mismatch; live pricing snapshot changed since B3 audit");
+    expect(src).toContain("audited fixture mismatch; reconstructed payload changed since B3 audit");
+    expect(src).toContain("assertB3AuditedFixtureUnchanged(bookingId, booking.booking_snapshot, built)");
   });
 });
