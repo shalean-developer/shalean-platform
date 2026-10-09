@@ -61,4 +61,27 @@ describe("A02-03-02B3 atomic repair allowlist expansion", () => {
     expect((sql.match(/\$a02_03_02\$/g) ?? []).length).toBe(2);
     expect((sql.match(/return 'inserted';/g) ?? []).length).toBe(1);
   });
+
+  it("serializes canonical roster sync with the same booking advisory lock", () => {
+    const rosterSql = fs.readFileSync(
+      path.join(
+        process.cwd(),
+        "../../supabase/migrations/20261009175000_audit_02a03_02b3_roster_sync_serialization.sql",
+      ),
+      "utf8",
+    );
+
+    expect(rosterSql).toContain("create or replace function public.sync_booking_cleaners_for_team_booking");
+    expect(rosterSql).toContain("pg_advisory_xact_lock(920302, abs(hashtext(p_booking_id::text)))");
+    expect(rosterSql.indexOf("pg_advisory_xact_lock")).toBeLessThan(
+      rosterSql.indexOf("select b.team_id"),
+    );
+    expect(rosterSql.indexOf("pg_advisory_xact_lock")).toBeLessThan(
+      rosterSql.indexOf("delete from public.booking_cleaners"),
+    );
+    expect(rosterSql).toContain("cleaner_line_earnings_finalized_at");
+    expect(rosterSql).toContain("if b_status = 'completed' then");
+    expect(rosterSql).toContain("delete from public.booking_cleaners where booking_id = p_booking_id");
+    expect(rosterSql).toContain("insert into public.booking_cleaners");
+  });
 });
