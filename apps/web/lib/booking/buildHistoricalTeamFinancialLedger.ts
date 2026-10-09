@@ -21,6 +21,14 @@ function centsFromZar(v: unknown): number | null {
   return Math.round(n * 100);
 }
 
+function scopeQuantity(label: string, itemType: BookingLineItemInsert["item_type"]): number {
+  if (itemType !== "room" && itemType !== "bathroom") return 1;
+  const match = label.trim().match(/^(\d+)\b/);
+  if (!match) return 1;
+  const n = Number(match[1]);
+  return Number.isFinite(n) && n > 0 ? Math.max(1, Math.round(n)) : 1;
+}
+
 function classifyLine(label: string, matchedExtraSlug: string | null): Pick<BookingLineItemInsert, "item_type" | "slug"> {
   const n = norm(label);
   if (/service\s*fee|platform\s*fee|payment\s*fee/.test(n)) return { item_type: "adjustment", slug: "service-fee" };
@@ -89,12 +97,16 @@ export function buildHistoricalTeamFinancialLedger(
       extras.find((e) => e.name === norm(label) && e.priceCents === amountCents) ??
       extras.find((e) => e.name === norm(label));
     const classified = classifyLine(label, matchedExtra?.slug ?? null);
+    const quantity = scopeQuantity(label, classified.item_type);
+    if (amountCents % quantity !== 0) {
+      return { ok: false, error: `Scope line "${label}" does not divide evenly across quantity ${quantity}.` };
+    }
     items.push({
       item_type: classified.item_type,
       slug: classified.slug,
       name: label,
-      quantity: 1,
-      unit_price_cents: amountCents,
+      quantity,
+      unit_price_cents: Math.round(amountCents / quantity),
       total_price_cents: amountCents,
       pricing_source: SOURCE,
       metadata: {
