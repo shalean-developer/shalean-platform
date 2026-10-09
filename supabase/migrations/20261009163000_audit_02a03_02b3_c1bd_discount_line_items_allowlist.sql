@@ -27,6 +27,8 @@ declare
   v_b3_expected_projection jsonb;
   v_b3_payout_count integer;
   v_b3_batched_count integer;
+  v_b3_roster_payload jsonb;
+  v_b3_payout_payload jsonb;
   v_inserted integer;
   v_authoritative_cents bigint;
 begin
@@ -81,15 +83,54 @@ begin
   end if;
 
   if p_booking_id = 'c1bd1fc8-03e9-4f2c-a597-e0ac395c841a'::uuid then
+    select coalesce(jsonb_agg(to_jsonb(bc.cleaner_id::text) order by bc.cleaner_id::text), '[]'::jsonb)
+    into v_b3_roster_payload
+    from public.booking_cleaners bc
+    where bc.booking_id = p_booking_id;
+
+    if v_b3_roster_payload <> $b3_roster$
+      [
+        "015e91e8-df25-4fde-8db1-a5901b005ae3",
+        "2231fa06-1ba5-43d6-bf2d-ca757368a05a",
+        "389196b4-bfb5-4d8d-a9cf-a672b2fe741d"
+      ]
+      $b3_roster$::jsonb
+    then
+      raise exception 'a02_03_02_b3_roster_mismatch';
+    end if;
+
     select
       count(*)::integer,
-      count(*) filter (where lower(trim(coalesce(tp.status, ''))) = 'batched')::integer
-    into v_b3_payout_count, v_b3_batched_count
+      count(*) filter (where lower(trim(coalesce(tp.status, ''))) = 'batched')::integer,
+      coalesce(
+        jsonb_agg(
+          jsonb_build_object(
+            'cleaner_id', tp.cleaner_id::text,
+            'payout_cents', tp.payout_cents,
+            'status', lower(trim(coalesce(tp.status, ''))),
+            'cleaner_payout_id', case when tp.cleaner_payout_id is null then null else tp.cleaner_payout_id::text end
+          )
+          order by tp.cleaner_id::text
+        ),
+        '[]'::jsonb
+      )
+    into v_b3_payout_count, v_b3_batched_count, v_b3_payout_payload
     from public.team_job_member_payouts tp
     where tp.booking_id = p_booking_id;
 
     if v_b3_payout_count <> 3 or v_b3_batched_count <> 3 then
       raise exception 'a02_03_02_b3_payout_state_mismatch';
+    end if;
+
+    if v_b3_payout_payload <> $b3_payouts$
+      [
+        {"cleaner_id":"015e91e8-df25-4fde-8db1-a5901b005ae3","payout_cents":25000,"status":"batched","cleaner_payout_id":"45254fb5-c94d-45e5-afb3-88b696e389b1"},
+        {"cleaner_id":"2231fa06-1ba5-43d6-bf2d-ca757368a05a","payout_cents":27000,"status":"batched","cleaner_payout_id":"b7054032-ad31-466f-86f6-13ab65005d3d"},
+        {"cleaner_id":"389196b4-bfb5-4d8d-a9cf-a672b2fe741d","payout_cents":25000,"status":"batched","cleaner_payout_id":"b9bcaf62-f50c-4323-b99a-0db039c6cdfd"}
+      ]
+      $b3_payouts$::jsonb
+    then
+      raise exception 'a02_03_02_b3_payout_linkage_mismatch';
     end if;
   end if;
 
