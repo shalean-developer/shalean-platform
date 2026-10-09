@@ -28,5 +28,9 @@ describe("A02-03-02 atomic historical team repair RPC", () => {
     expect(sql).toContain("revoke all on function public.repair_a02_03_02_team_line_items");
     expect(sql).toContain("from anon");
     expect(sql).toContain("from authenticated");
+    expect((sql.match(/create or replace function public\.repair_a02_03_02_team_line_items/g) ?? []).length).toBe(1);
+    expect((sql.match(/\$a02_03_02\$/g) ?? []).length).toBe(2);
+    expect((sql.match(/return 'inserted';/g) ?? []).length).toBe(1);
+    expect((sql.match(/comment on function public\.repair_a02_03_02_team_line_items/g) ?? []).length).toBe(1);
   });
 });
