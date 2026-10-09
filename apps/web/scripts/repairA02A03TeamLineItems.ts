@@ -388,6 +388,37 @@ async function preflightTarget(admin: SupabaseClient, bookingId: string): Promis
     throw new Error(`${bookingId}: prepaid billing_type required for this bounded repair`);
   }
 
+  if (bookingId === B3_C1BD_ID) {
+    const auditedBuilt = buildHistoricalTeamFinancialLedger(B3_C1BD_AUDITED_FIXTURE);
+    if (!auditedBuilt.ok) {
+      throw new Error(`${bookingId}: internal audited fixture is invalid: ${auditedBuilt.error}`);
+    }
+
+    const existingAudited = await readPersistedRepairState(
+      admin,
+      bookingId,
+      auditedBuilt.items,
+      auditedBuilt.declaredPayableCents,
+    );
+    if (!existingAudited.ok) throw new Error(`${bookingId}: ${existingAudited.error}`);
+    if (existingAudited.valid) {
+      const [{ count: currentRosterCount }, { count: currentPayoutCount }] = await Promise.all([
+        admin.from("booking_cleaners").select("cleaner_id", { count: "exact", head: true }).eq("booking_id", bookingId),
+        admin.from("team_job_member_payouts").select("cleaner_id", { count: "exact", head: true }).eq("booking_id", bookingId),
+      ]);
+      return {
+        bookingId,
+        rosterCount: currentRosterCount ?? 0,
+        payoutCount: currentPayoutCount ?? 0,
+        alreadyRepaired: true,
+        built: auditedBuilt,
+      };
+    }
+    if (existingAudited.count > 0) {
+      throw new Error(`${bookingId}: existing booking_line_items conflict with bounded repair`);
+    }
+  }
+
   const { count: rosterCount, error: rosterError } = await admin
     .from("booking_cleaners")
     .select("cleaner_id", { count: "exact", head: true })
@@ -411,8 +442,8 @@ async function preflightTarget(admin: SupabaseClient, bookingId: string): Promis
   });
   if (!built.ok) throw new Error(`${bookingId}: ${built.error}`);
 
-  // B3 is a one-booking financial repair: pin the live immutable pricing projection and
-  // resulting persisted payload to the exact audited fixture, not merely the same total.
+  // For a first-time B3 insert only, require the live audited snapshot and mutable
+  // roster/payout state to still match the audit. Exact existing ledgers returned above.
   assertB3AuditedFixtureUnchanged(bookingId, booking.booking_snapshot, built);
   await assertB3AuditedTeamState(admin, bookingId);
 
