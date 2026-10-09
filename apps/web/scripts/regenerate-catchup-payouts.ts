@@ -20,13 +20,7 @@ async function main() {
   const lockResult = await withCronLock(
     admin,
     { jobName: CRON_LOCK_KEYS.generatePayouts, leaseSeconds: 900 },
-    async () => {
-      // Standalone CLI intentionally does not reopen frozen draft-run payouts:
-      // an abrupt process exit could strand them detached from their run.
-      // Governed cron/admin routes own reopen/restore because their lifecycle is
-      // observable and protected by the renewable payout-generation lease.
-      return generateCatchUpWeeklyPayouts(admin);
-    },
+    async () => generateCatchUpWeeklyPayouts(admin),
   );
 
   console.log(
