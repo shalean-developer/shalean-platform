@@ -18,6 +18,9 @@ describe("AUDIT-02A03 staging-only repair verifier", () => {
     expect(src).toContain("supabaseRefFromUrl");
     expect(src).toContain("expectedSupabaseRefForDeployment");
     expect(src).toContain('deployment === "staging"');
+    expect(src).toContain("SHALEAN_SUPABASE_REFS.production");
+    expect(src).toContain("configuredSupabaseRef !== SHALEAN_SUPABASE_REFS.production");
+    expect(src).toContain("expectedSupabaseRef !== SHALEAN_SUPABASE_REFS.production");
     expect(src).toContain("configuredSupabaseRef === expectedSupabaseRef");
     expect(src).toContain("Staging database identity mismatch.");
   });
@@ -36,6 +39,8 @@ describe("AUDIT-02A03 staging-only repair verifier", () => {
     expect(src).toContain("audit_a02_03_");
     expect(src).toContain("crypto.randomUUID().replace(/-/g, \"\")");
     expect(src).toContain("paystack_reference: paystackReference");
+    expect(src).toContain("buildPriceSnapshotV1Checkout");
+    expect(src).toContain("price_snapshot: priceSnapshot");
     expect(src).toContain('payment_status: discounted ? "success" : "pending_monthly"');
     expect(src).toContain('payment_completed_at: new Date().toISOString()');
     expect(src).toContain("is_test: true");
