@@ -318,7 +318,7 @@ async function main() {
       const recovered = await readPersistedRepairState(
         admin,
         bookingId,
-        built.items.length,
+        built.items,
         built.declaredPayableCents,
       );
       if (recovered.ok && recovered.valid) {
@@ -339,7 +339,7 @@ async function main() {
     const verified = await readPersistedRepairState(
       admin,
       bookingId,
-      built.items.length,
+      built.items,
       built.declaredPayableCents,
     );
     if (!verified.ok) {
