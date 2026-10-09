@@ -103,11 +103,291 @@ begin
   if v_existing_count > 0 then
     select
       count(*) = v_expected_count
+      and count(distinct case
+        when (metadata->>'sourceLineIndex') ~ '^\d+        select 1
+        from (
+          select
+            case
+              when (metadata->>'sourceLineIndex') ~ '^\d+        ) persisted
+        full outer join (
+          select
+            ordinality - 1 as source_index,
+            r->>'item_type' as item_type,
+            nullif(trim(r->>'slug'), '') as slug,
+            coalesce(r->>'name', '') as name,
+            greatest(1, coalesce((r->>'quantity')::integer, 1)) as quantity,
+            (r->>'unit_price_cents')::integer as unit_price_cents,
+            (r->>'total_price_cents')::integer as total_price_cents,
+            'historical_team_snapshot_v1'::text as pricing_source,
+            case when jsonb_typeof(r->'metadata') = 'object' then r->'metadata' else '{}'::jsonb end as metadata,
+            false as earns_cleaner
+          from jsonb_array_elements(p_line_items) with ordinality as x(r, ordinality)
+        ) requested
+          using (source_index)
+        where persisted.source_index is null
+           or requested.source_index is null
+           or persisted.item_type is distinct from requested.item_type
+           or persisted.slug is distinct from requested.slug
+           or persisted.name is distinct from requested.name
+           or persisted.quantity is distinct from requested.quantity
+           or persisted.unit_price_cents is distinct from requested.unit_price_cents
+           or persisted.total_price_cents is distinct from requested.total_price_cents
+           or persisted.pricing_source is distinct from requested.pricing_source
+           or persisted.metadata is distinct from requested.metadata
+           or persisted.earns_cleaner is distinct from requested.earns_cleaner
+      )
+    into v_existing_matches_payload
+    from public.booking_line_items
+    where booking_id = p_booking_id;
+
+    if v_existing_count = v_expected_count
+       and v_existing_total = p_expected_total_cents::bigint
+       and v_existing_all_safe is true
+       and v_existing_matches_payload is true then
+      return 'already_repaired';
+    end if;
+    raise exception 'a02_03_02_existing_line_items_conflict';
+  end if;
+
+  insert into public.booking_line_items (
+    booking_id,
+    item_type,
+    slug,
+    name,
+    quantity,
+    unit_price_cents,
+    total_price_cents,
+    pricing_source,
+    metadata,
+    earns_cleaner,
+    cleaner_earnings_cents
+  )
+  select
+    p_booking_id,
+    r->>'item_type',
+    nullif(trim(r->>'slug'), ''),
+    coalesce(r->>'name', ''),
+    greatest(1, coalesce((r->>'quantity')::integer, 1)),
+    (r->>'unit_price_cents')::integer,
+    (r->>'total_price_cents')::integer,
+    'historical_team_snapshot_v1',
+    case when jsonb_typeof(r->'metadata') = 'object' then r->'metadata' else '{}'::jsonb end,
+    false,
+    null
+  from jsonb_array_elements(p_line_items) as r;
+
+  get diagnostics v_inserted = row_count;
+  if v_inserted <> v_expected_count then
+    raise exception 'a02_03_02_insert_count_mismatch expected %, inserted %', v_expected_count, v_inserted;
+  end if;
+
+  return 'inserted';
+end
+$a02_03_02$;
+
+revoke all on function public.repair_a02_03_02_team_line_items(uuid, jsonb, integer) from public;
+revoke all on function public.repair_a02_03_02_team_line_items(uuid, jsonb, integer) from anon;
+revoke all on function public.repair_a02_03_02_team_line_items(uuid, jsonb, integer) from authenticated;
+grant execute on function public.repair_a02_03_02_team_line_items(uuid, jsonb, integer) to service_role;
+
+comment on function public.repair_a02_03_02_team_line_items(uuid, jsonb, integer) is
+  'A02-03-02A bounded atomic historical team financial-ledger repair for exactly two audited bookings.';
+
+                then (metadata->>'sourceLineIndex')::bigint
+              else null
+            end as source_index,
+            item_type,
+            slug,
+            name,
+            quantity,
+            unit_price_cents,
+            total_price_cents,
+            pricing_source,
+            metadata,
+            earns_cleaner
+          from public.booking_line_items
+          where booking_id = p_booking_id
+        ) persisted
+        full outer join (
+          select
+            ordinality - 1 as source_index,
+            r->>'item_type' as item_type,
+            nullif(trim(r->>'slug'), '') as slug,
+            coalesce(r->>'name', '') as name,
+            greatest(1, coalesce((r->>'quantity')::integer, 1)) as quantity,
+            (r->>'unit_price_cents')::integer as unit_price_cents,
+            (r->>'total_price_cents')::integer as total_price_cents,
+            'historical_team_snapshot_v1'::text as pricing_source,
+            case when jsonb_typeof(r->'metadata') = 'object' then r->'metadata' else '{}'::jsonb end as metadata,
+            false as earns_cleaner
+          from jsonb_array_elements(p_line_items) with ordinality as x(r, ordinality)
+        ) requested
+          using (source_index)
+        where persisted.source_index is null
+           or requested.source_index is null
+           or persisted.item_type is distinct from requested.item_type
+           or persisted.slug is distinct from requested.slug
+           or persisted.name is distinct from requested.name
+           or persisted.quantity is distinct from requested.quantity
+           or persisted.unit_price_cents is distinct from requested.unit_price_cents
+           or persisted.total_price_cents is distinct from requested.total_price_cents
+           or persisted.pricing_source is distinct from requested.pricing_source
+           or persisted.metadata is distinct from requested.metadata
+           or persisted.earns_cleaner is distinct from requested.earns_cleaner
+      )
+    into v_existing_matches_payload
+    from public.booking_line_items
+    where booking_id = p_booking_id;
+
+    if v_existing_count = v_expected_count
+       and v_existing_total = p_expected_total_cents::bigint
+       and v_existing_all_safe is true
+       and v_existing_matches_payload is true then
+      return 'already_repaired';
+    end if;
+    raise exception 'a02_03_02_existing_line_items_conflict';
+  end if;
+
+  insert into public.booking_line_items (
+    booking_id,
+    item_type,
+    slug,
+    name,
+    quantity,
+    unit_price_cents,
+    total_price_cents,
+    pricing_source,
+    metadata,
+    earns_cleaner,
+    cleaner_earnings_cents
+  )
+  select
+    p_booking_id,
+    r->>'item_type',
+    nullif(trim(r->>'slug'), ''),
+    coalesce(r->>'name', ''),
+    greatest(1, coalesce((r->>'quantity')::integer, 1)),
+    (r->>'unit_price_cents')::integer,
+    (r->>'total_price_cents')::integer,
+    'historical_team_snapshot_v1',
+    case when jsonb_typeof(r->'metadata') = 'object' then r->'metadata' else '{}'::jsonb end,
+    false,
+    null
+  from jsonb_array_elements(p_line_items) as r;
+
+  get diagnostics v_inserted = row_count;
+  if v_inserted <> v_expected_count then
+    raise exception 'a02_03_02_insert_count_mismatch expected %, inserted %', v_expected_count, v_inserted;
+  end if;
+
+  return 'inserted';
+end
+$a02_03_02$;
+
+revoke all on function public.repair_a02_03_02_team_line_items(uuid, jsonb, integer) from public;
+revoke all on function public.repair_a02_03_02_team_line_items(uuid, jsonb, integer) from anon;
+revoke all on function public.repair_a02_03_02_team_line_items(uuid, jsonb, integer) from authenticated;
+grant execute on function public.repair_a02_03_02_team_line_items(uuid, jsonb, integer) to service_role;
+
+comment on function public.repair_a02_03_02_team_line_items(uuid, jsonb, integer) is
+  'A02-03-02A bounded atomic historical team financial-ledger repair for exactly two audited bookings.';
+
+          then (metadata->>'sourceLineIndex')::integer
+        else null
+      end) = v_expected_count
       and not exists (
         select 1
         from (
           select
-            row_number() over (order by created_at, id) - 1 as source_index,
+            case
+              when (metadata->>'sourceLineIndex') ~ '^\d+        ) persisted
+        full outer join (
+          select
+            ordinality - 1 as source_index,
+            r->>'item_type' as item_type,
+            nullif(trim(r->>'slug'), '') as slug,
+            coalesce(r->>'name', '') as name,
+            greatest(1, coalesce((r->>'quantity')::integer, 1)) as quantity,
+            (r->>'unit_price_cents')::integer as unit_price_cents,
+            (r->>'total_price_cents')::integer as total_price_cents,
+            'historical_team_snapshot_v1'::text as pricing_source,
+            case when jsonb_typeof(r->'metadata') = 'object' then r->'metadata' else '{}'::jsonb end as metadata,
+            false as earns_cleaner
+          from jsonb_array_elements(p_line_items) with ordinality as x(r, ordinality)
+        ) requested
+          using (source_index)
+        where persisted.source_index is null
+           or requested.source_index is null
+           or persisted.item_type is distinct from requested.item_type
+           or persisted.slug is distinct from requested.slug
+           or persisted.name is distinct from requested.name
+           or persisted.quantity is distinct from requested.quantity
+           or persisted.unit_price_cents is distinct from requested.unit_price_cents
+           or persisted.total_price_cents is distinct from requested.total_price_cents
+           or persisted.pricing_source is distinct from requested.pricing_source
+           or persisted.metadata is distinct from requested.metadata
+           or persisted.earns_cleaner is distinct from requested.earns_cleaner
+      )
+    into v_existing_matches_payload
+    from public.booking_line_items
+    where booking_id = p_booking_id;
+
+    if v_existing_count = v_expected_count
+       and v_existing_total = p_expected_total_cents::bigint
+       and v_existing_all_safe is true
+       and v_existing_matches_payload is true then
+      return 'already_repaired';
+    end if;
+    raise exception 'a02_03_02_existing_line_items_conflict';
+  end if;
+
+  insert into public.booking_line_items (
+    booking_id,
+    item_type,
+    slug,
+    name,
+    quantity,
+    unit_price_cents,
+    total_price_cents,
+    pricing_source,
+    metadata,
+    earns_cleaner,
+    cleaner_earnings_cents
+  )
+  select
+    p_booking_id,
+    r->>'item_type',
+    nullif(trim(r->>'slug'), ''),
+    coalesce(r->>'name', ''),
+    greatest(1, coalesce((r->>'quantity')::integer, 1)),
+    (r->>'unit_price_cents')::integer,
+    (r->>'total_price_cents')::integer,
+    'historical_team_snapshot_v1',
+    case when jsonb_typeof(r->'metadata') = 'object' then r->'metadata' else '{}'::jsonb end,
+    false,
+    null
+  from jsonb_array_elements(p_line_items) as r;
+
+  get diagnostics v_inserted = row_count;
+  if v_inserted <> v_expected_count then
+    raise exception 'a02_03_02_insert_count_mismatch expected %, inserted %', v_expected_count, v_inserted;
+  end if;
+
+  return 'inserted';
+end
+$a02_03_02$;
+
+revoke all on function public.repair_a02_03_02_team_line_items(uuid, jsonb, integer) from public;
+revoke all on function public.repair_a02_03_02_team_line_items(uuid, jsonb, integer) from anon;
+revoke all on function public.repair_a02_03_02_team_line_items(uuid, jsonb, integer) from authenticated;
+grant execute on function public.repair_a02_03_02_team_line_items(uuid, jsonb, integer) to service_role;
+
+comment on function public.repair_a02_03_02_team_line_items(uuid, jsonb, integer) is
+  'A02-03-02A bounded atomic historical team financial-ledger repair for exactly two audited bookings.';
+
+                then (metadata->>'sourceLineIndex')::bigint
+              else null
+            end as source_index,
             item_type,
             slug,
             name,
