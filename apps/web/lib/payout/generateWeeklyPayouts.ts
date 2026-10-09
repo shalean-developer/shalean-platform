@@ -38,6 +38,7 @@ import {
   teamJobMemberWeeklyPayoutTotalCents,
 } from "@/lib/payout/teamJobMemberWeeklyPayoutCandidates";
 import { syncPayoutBatchFromBookings } from "@/lib/payout/syncPayoutBatchFromBookings";
+import { fetchAllPayoutRows, payoutQueryChunks } from "@/lib/payout/payoutQueryPagination";
 
 export type GenerateWeeklyPayoutsResult = {
   period: { start: string; end: string };
@@ -163,22 +164,6 @@ async function ensureNoMissingCompletedPayouts(
   return { backfilled, remaining: 0 };
 }
 
-const PAYOUT_DISCOVERY_PAGE_SIZE = 500;
-
-export async function fetchAllPayoutDiscoveryRows<T>(
-  loadPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
-): Promise<T[]> {
-  const rows: T[] = [];
-  for (let from = 0; ; from += PAYOUT_DISCOVERY_PAGE_SIZE) {
-    const { data, error } = await loadPage(from, from + PAYOUT_DISCOVERY_PAGE_SIZE - 1);
-    if (error) throw new Error(error.message);
-    const page = data ?? [];
-    rows.push(...page);
-    if (page.length < PAYOUT_DISCOVERY_PAGE_SIZE) break;
-  }
-  return rows;
-}
-
 export function closedCatchUpPayoutPeriods(
   periodStarts: Iterable<string>,
   now: Date = new Date(),
@@ -193,7 +178,7 @@ async function listUnbatchedCompletionMonths(
   admin: SupabaseClient,
   now: Date = new Date(),
 ): Promise<Array<{ periodStart: string; periodEnd: string }>> {
-  const directRows = await fetchAllPayoutDiscoveryRows((from, to) =>
+  const directRows = await fetchAllPayoutRows((from, to) =>
     admin
       .from("bookings")
       .select("id, completed_at, date, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id")
@@ -214,7 +199,7 @@ async function listUnbatchedCompletionMonths(
   }
 
   const [rosterRows, teamRows] = await Promise.all([
-    fetchAllPayoutDiscoveryRows((from, to) =>
+    fetchAllPayoutRows((from, to) =>
       admin
         .from("booking_roster_member_payouts")
         .select("id, booking_id")
@@ -223,7 +208,7 @@ async function listUnbatchedCompletionMonths(
         .order("id", { ascending: true })
         .range(from, to),
     ),
-    fetchAllPayoutDiscoveryRows((from, to) =>
+    fetchAllPayoutRows((from, to) =>
       admin
         .from("team_job_member_payouts")
         .select("id, booking_id")
@@ -284,9 +269,17 @@ async function generateWeeklyPayoutsForPeriod(
   let jhbCutoffEdgeCaseBookings = 0;
   let batchCutoffUiVsBatchFridayMismatches = 0;
 
-  const { data: cleaners, error: cErr } = await admin.from("cleaners").select("id");
-  if (cErr || !cleaners?.length) {
-    await reportOperationalIssue("warn", "generateWeeklyPayouts", cErr?.message ?? "no cleaners", {});
+  let cleaners: Array<{ id?: string }> = [];
+  try {
+    cleaners = await fetchAllPayoutRows((from, to) =>
+      admin.from("cleaners").select("id").order("id", { ascending: true }).range(from, to),
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await reportOperationalIssue("warn", "generateWeeklyPayouts", msg || "no cleaners", {});
+    return { payoutsCreated: 0, bookingsLinked: 0, payoutsBackfilled: 0, skippedCleaners: 0 };
+  }
+  if (!cleaners.length) {
     return { payoutsCreated: 0, bookingsLinked: 0, payoutsBackfilled: 0, skippedCleaners: 0 };
   }
 
@@ -294,21 +287,27 @@ async function generateWeeklyPayoutsForPeriod(
     const cleanerId = String((row as { id?: string }).id ?? "");
     if (!cleanerId) continue;
 
-    const { data: rawBookings, error: bErr } = await admin
-      .from("bookings")
-      .select(BOOKING_SELECT_FIELDS_FOR_WEEKLY_BATCH_ELIGIBILITY)
-      .eq("cleaner_id", cleanerId)
-      .eq("status", "completed")
-      .eq("is_test", false)
-      .is("payout_id", null);
-
-    if (bErr) {
-      await reportOperationalIssue("warn", "generateWeeklyPayouts", bErr.message, { cleanerId });
+    let rawBookings: unknown[] = [];
+    try {
+      rawBookings = await fetchAllPayoutRows((from, to) =>
+        admin
+          .from("bookings")
+          .select(BOOKING_SELECT_FIELDS_FOR_WEEKLY_BATCH_ELIGIBILITY)
+          .eq("cleaner_id", cleanerId)
+          .eq("status", "completed")
+          .eq("is_test", false)
+          .is("payout_id", null)
+          .order("id", { ascending: true })
+          .range(from, to),
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await reportOperationalIssue("warn", "generateWeeklyPayouts", msg, { cleanerId });
       skippedCleaners += 1;
       continue;
     }
 
-    const candidateBookings = (rawBookings ?? []).filter((b) => {
+    const candidateBookings = rawBookings.filter((b) => {
       const br = b as BookingPayoutRow;
       const ymd = weeklyBatchDayYmd(br);
       if (!ymd || ymd < MONTHLY_PAYOUT_START_YMD) return false;
@@ -584,72 +583,86 @@ async function generateWeeklyPayoutsForPeriod(
     let linkedCount = 0;
 
     if (ids.length > 0) {
-      const { data: updated, error: upErr } = await admin
-        .from("bookings")
-        .update({ payout_id: payoutId })
-        .in("id", ids)
-        .eq("cleaner_id", cleanerId)
-        .is("payout_id", null)
-        .select("id");
-
-      if (upErr) {
-        await reportOperationalIssue("error", "generateWeeklyPayouts", `link bookings failed: ${upErr.message}`, {
-          cleanerId,
-          payoutId,
-        });
-        if (createdNewBatch) await admin.from("cleaner_payouts").delete().eq("id", payoutId);
+      let directLinkFailed = false;
+      for (const idChunk of payoutQueryChunks(ids)) {
+        const { data: updated, error: upErr } = await admin
+          .from("bookings")
+          .update({ payout_id: payoutId })
+          .in("id", idChunk)
+          .eq("cleaner_id", cleanerId)
+          .is("payout_id", null)
+          .select("id");
+        if (upErr) {
+          await reportOperationalIssue("error", "generateWeeklyPayouts", `link bookings failed: ${upErr.message}`, {
+            cleanerId,
+            payoutId,
+          });
+          directLinkFailed = true;
+          break;
+        }
+        linkedCount += updated?.length ?? 0;
+      }
+      if (directLinkFailed) {
+        if (createdNewBatch && linkedCount === 0) await admin.from("cleaner_payouts").delete().eq("id", payoutId);
         skippedCleaners += 1;
         continue;
       }
-      linkedCount += updated?.length ?? 0;
     }
 
     if (rosterMemberCandidates.length > 0) {
-      const memberIds = rosterMemberCandidates.map((row) => row.id);
-      const { data: linkedMembers, error: memberUpErr } = await admin
-        .from("booking_roster_member_payouts")
-        .update({ cleaner_payout_id: payoutId, status: "batched" })
-        .in("id", memberIds)
-        .eq("cleaner_id", cleanerId)
-        .is("cleaner_payout_id", null)
-        .eq("status", "pending")
-        .select("id");
-      if (memberUpErr) {
-        await reportOperationalIssue("error", "generateWeeklyPayouts", `link roster member payouts failed: ${memberUpErr.message}`, {
-          cleanerId,
-          payoutId,
-        });
-        if (linkedCount === 0) {
-          if (createdNewBatch) await admin.from("cleaner_payouts").delete().eq("id", payoutId);
+      let rosterLinkFailed = false;
+      for (const memberIds of payoutQueryChunks(rosterMemberCandidates.map((row) => row.id))) {
+        const { data: linkedMembers, error: memberUpErr } = await admin
+          .from("booking_roster_member_payouts")
+          .update({ cleaner_payout_id: payoutId, status: "batched" })
+          .in("id", memberIds)
+          .eq("cleaner_id", cleanerId)
+          .is("cleaner_payout_id", null)
+          .eq("status", "pending")
+          .select("id");
+        if (memberUpErr) {
+          await reportOperationalIssue("error", "generateWeeklyPayouts", `link roster member payouts failed: ${memberUpErr.message}`, {
+            cleanerId,
+            payoutId,
+          });
+          rosterLinkFailed = true;
+          break;
         }
+        linkedCount += linkedMembers?.length ?? 0;
+      }
+      if (rosterLinkFailed) {
+        if (linkedCount === 0 && createdNewBatch) await admin.from("cleaner_payouts").delete().eq("id", payoutId);
         skippedCleaners += 1;
         continue;
       }
-      linkedCount += linkedMembers?.length ?? 0;
     }
 
     if (teamJobMemberCandidates.length > 0) {
-      const teamMemberIds = teamJobMemberCandidates.map((row) => row.id);
-      const { data: linkedTeamMembers, error: teamMemberUpErr } = await admin
-        .from("team_job_member_payouts")
-        .update({ status: "batched", cleaner_payout_id: payoutId })
-        .in("id", teamMemberIds)
-        .eq("cleaner_id", cleanerId)
-        .is("cleaner_payout_id", null)
-        .eq("status", "pending")
-        .select("id");
-      if (teamMemberUpErr) {
-        await reportOperationalIssue("error", "generateWeeklyPayouts", `link team job member payouts failed: ${teamMemberUpErr.message}`, {
-          cleanerId,
-          payoutId,
-        });
-        if (linkedCount === 0) {
-          if (createdNewBatch) await admin.from("cleaner_payouts").delete().eq("id", payoutId);
+      let teamLinkFailed = false;
+      for (const teamMemberIds of payoutQueryChunks(teamJobMemberCandidates.map((row) => row.id))) {
+        const { data: linkedTeamMembers, error: teamMemberUpErr } = await admin
+          .from("team_job_member_payouts")
+          .update({ status: "batched", cleaner_payout_id: payoutId })
+          .in("id", teamMemberIds)
+          .eq("cleaner_id", cleanerId)
+          .is("cleaner_payout_id", null)
+          .eq("status", "pending")
+          .select("id");
+        if (teamMemberUpErr) {
+          await reportOperationalIssue("error", "generateWeeklyPayouts", `link team job member payouts failed: ${teamMemberUpErr.message}`, {
+            cleanerId,
+            payoutId,
+          });
+          teamLinkFailed = true;
+          break;
         }
+        linkedCount += linkedTeamMembers?.length ?? 0;
+      }
+      if (teamLinkFailed) {
+        if (linkedCount === 0 && createdNewBatch) await admin.from("cleaner_payouts").delete().eq("id", payoutId);
         skippedCleaners += 1;
         continue;
       }
-      linkedCount += linkedTeamMembers?.length ?? 0;
     }
 
     if (linkedCount === 0) {
