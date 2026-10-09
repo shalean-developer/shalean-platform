@@ -40,6 +40,8 @@ export type BookingRowLineItemBackfillInput = {
   extras?: unknown;
   total_paid_zar?: number | null;
   amount_paid_cents?: number | null;
+  /** Team jobs are excluded from the generic historical backfill runner. */
+  is_team_job?: boolean | null;
   /** Authoritative visit subtotal before the company-only service fee. */
   base_amount_cents?: number | null;
   /** Company-only service fee; persisted as a non-cleaner-earning reconciliation line. */
