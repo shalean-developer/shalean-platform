@@ -20,6 +20,7 @@ describe("A02-03-02 historical team ledger repair governance", () => {
     expect(src).toContain("f6b2316e-2518-4f43-b6e8-b050c6d07483");
     expect(src).toContain("e865f74b-33af-481f-a12e-576e1e0ed227");
     expect(src).toContain("d2cfcb8d-118f-48cc-90c7-420ffe122c9b");
+    expect(src).toContain("c1bd1fc8-03e9-4f2c-a597-e0ac395c841a");
     expect(src).not.toContain("fc75a013-5858-43e8-b499-3aa2ab047bcf");
     expect(src).toContain('process.env.A02_03_02_APPLY !== "YES"');
     expect(src).toContain("function parseArgs");
