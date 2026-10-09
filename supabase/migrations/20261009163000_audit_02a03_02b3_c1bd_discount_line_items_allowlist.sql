@@ -83,6 +83,14 @@ begin
   end if;
 
   if p_booking_id = 'c1bd1fc8-03e9-4f2c-a597-e0ac395c841a'::uuid then
+    -- Freeze the three audited payout rows for the remainder of this transaction so
+    -- concurrent batch settlement cannot change their status/linkage after validation.
+    perform 1
+    from public.team_job_member_payouts tp
+    where tp.booking_id = p_booking_id
+    order by tp.cleaner_id
+    for update;
+
     select coalesce(jsonb_agg(to_jsonb(bc.cleaner_id::text) order by bc.cleaner_id::text), '[]'::jsonb)
     into v_b3_roster_payload
     from public.booking_cleaners bc
