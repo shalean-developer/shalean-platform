@@ -10,6 +10,7 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { buildHistoricalTeamFinancialLedger } from "../lib/booking/buildHistoricalTeamFinancialLedger";
+import type { BookingLineItemInsert } from "../lib/booking/bookingLineItemTypes";
 
 const TARGET_IDS = new Set([
   "d860554e-c132-477b-bf15-557fb9c88a5e",
@@ -113,10 +114,22 @@ type PreparedTarget = {
   built: Extract<ReturnType<typeof buildHistoricalTeamFinancialLedger>, { ok: true }>;
 };
 
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value != null && typeof value === "object") {
+    const rec = value as Record<string, unknown>;
+    return `{${Object.keys(rec)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(rec[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 async function readPersistedRepairState(
   admin: SupabaseClient,
   bookingId: string,
-  expectedItems: readonly Extract<ReturnType<typeof buildHistoricalTeamFinancialLedger>, { ok: true }>["items"],
+  expectedItems: readonly BookingLineItemInsert[],
   expectedTotalCents: number,
 ): Promise<{ ok: true; valid: boolean; count: number; total: number } | { ok: false; error: string }> {
   const { data, error } = await admin
@@ -157,7 +170,7 @@ async function readPersistedRepairState(
       Number(row.total_price_cents) !== Number(expected.total_price_cents) ||
       row.pricing_source !== "historical_team_snapshot_v1" ||
       row.earns_cleaner !== false ||
-      JSON.stringify(metadata) !== JSON.stringify(expectedMetadata)
+      canonicalJson(metadata) !== canonicalJson(expectedMetadata)
     ) {
       exact = false;
       break;
