@@ -25,6 +25,10 @@ describe("A02-03-02B3 atomic repair allowlist expansion", () => {
     expect(sql).toContain("v_existing_payload = v_requested_payload");
     expect(sql).toContain("a02_03_02_b3_live_snapshot_mismatch");
     expect(sql).toContain("a02_03_02_b3_payload_mismatch");
+    expect(sql).toContain("a02_03_02_b3_payout_state_mismatch");
+    expect(sql).toContain("v_b3_payout_count");
+    expect(sql).toContain("v_b3_batched_count");
+    expect(sql).toContain("v_b3_payout_count <> 3 or v_b3_batched_count <> 3");
     expect(sql).toContain("v_b3_expected_projection");
     expect(sql).toContain("v_b3_expected_payload");
     expect(sql).toContain("\"15% discount\"");
