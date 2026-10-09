@@ -121,6 +121,45 @@ describe("buildHistoricalTeamFinancialLedger", () => {
     });
   });
 
+  it("reconstructs B2 d2cf exact R1950 moving ledger with paid team payouts", () => {
+    const result = buildHistoricalTeamFinancialLedger({
+      bookingId: "d2cfcb8d-118f-48cc-90c7-420ffe122c9b",
+      totalPaidZar: 1950,
+      amountPaidCents: 195000,
+      bookingSnapshot: {
+        pricingSummary: {
+          lineItems: [
+            { label: "Moving Cleaning (base)", amountZar: 1200 },
+            { label: "2 bedrooms", amountZar: 200 },
+            { label: "3 bathrooms", amountZar: 450 },
+            { label: "Furnished property", amountZar: 50 },
+            { label: "Inside oven", amountZar: 20 },
+            { label: "Service fee", amountZar: 30 },
+          ],
+          selected_extras: [{ name: "Inside oven", price: 20, extra_id: "inside-oven" }],
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.sourceLineTotalCents).toBe(195000);
+    expect(result.items).toHaveLength(6);
+    expect(result.items.every((line) => line.earns_cleaner === false)).toBe(true);
+    expect(result.items.find((line) => line.name === "Inside oven")?.slug).toBe("inside-oven");
+    expect(result.items.find((line) => line.name === "Bedrooms")).toMatchObject({
+      quantity: 2,
+      unit_price_cents: 10_000,
+      total_price_cents: 20_000,
+    });
+    expect(result.items.find((line) => line.name === "Bathrooms")).toMatchObject({
+      quantity: 3,
+      unit_price_cents: 15_000,
+      total_price_cents: 45_000,
+    });
+    expect(result.items.find((line) => line.name === "Furnished property")?.item_type).toBe("adjustment");
+  });
+
   it("fails closed when immutable lines do not reconcile to paid cents", () => {
     const result = buildHistoricalTeamFinancialLedger({
       bookingId: "00000000-0000-4000-8000-000000000001",
