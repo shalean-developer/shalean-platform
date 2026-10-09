@@ -40,6 +40,11 @@ export type BookingRowLineItemBackfillInput = {
   extras?: unknown;
   total_paid_zar?: number | null;
   amount_paid_cents?: number | null;
+  /** Billing context determines whether payable means invoice line value or collected cash. */
+  billing_type?: string | null;
+  is_monthly_billing_booking?: boolean | null;
+  payment_status?: string | null;
+  monthly_invoice_id?: string | null;
   /** Authoritative visit subtotal before the company-only service fee. */
   base_amount_cents?: number | null;
   /** Company-only service fee; persisted as a non-cleaner-earning reconciliation line. */
@@ -83,8 +88,24 @@ export function buildBookingLineItemsFromRow(b: BookingRowLineItemBackfillInput)
     typeof b.total_paid_zar === "number" && Number.isFinite(b.total_paid_zar)
       ? Math.max(0, zarToCents(b.total_paid_zar))
       : null;
-  const authoritativePaidCents =
-    exactPaidCents != null && exactPaidCents > 0
+  const billingType =
+    typeof b.billing_type === "string" ? b.billing_type.trim().toLowerCase() : "";
+  const paymentStatus =
+    typeof b.payment_status === "string" ? b.payment_status.trim().toLowerCase() : "";
+  const invoiceBacked =
+    b.is_monthly_billing_booking === true ||
+    paymentStatus === "pending_monthly" ||
+    (typeof b.monthly_invoice_id === "string" && b.monthly_invoice_id.trim().length > 0) ||
+    billingType === "recurring_invoice" ||
+    billingType === "monthly_contract" ||
+    billingType === "pay_later";
+  const authoritativePaidCents = invoiceBacked
+    ? payableFromZarCents != null && payableFromZarCents > 0
+      ? payableFromZarCents
+      : exactPaidCents != null && exactPaidCents > 0
+        ? exactPaidCents
+        : payableFromZarCents ?? exactPaidCents
+    : exactPaidCents != null && exactPaidCents > 0
       ? exactPaidCents
       : payableFromZarCents != null && payableFromZarCents > 0
         ? payableFromZarCents
