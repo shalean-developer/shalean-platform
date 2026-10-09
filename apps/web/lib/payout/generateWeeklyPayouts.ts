@@ -163,6 +163,22 @@ async function ensureNoMissingCompletedPayouts(
   return { backfilled, remaining: 0 };
 }
 
+const PAYOUT_DISCOVERY_PAGE_SIZE = 500;
+
+export async function fetchAllPayoutDiscoveryRows<T>(
+  loadPage: (from: number, to: number) => Promise<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += PAYOUT_DISCOVERY_PAGE_SIZE) {
+    const { data, error } = await loadPage(from, from + PAYOUT_DISCOVERY_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < PAYOUT_DISCOVERY_PAGE_SIZE) break;
+  }
+  return rows;
+}
+
 export function closedCatchUpPayoutPeriods(
   periodStarts: Iterable<string>,
   now: Date = new Date(),
@@ -177,42 +193,50 @@ async function listUnbatchedCompletionMonths(
   admin: SupabaseClient,
   now: Date = new Date(),
 ): Promise<Array<{ periodStart: string; periodEnd: string }>> {
-  const { data, error } = await admin
-    .from("bookings")
-    .select("completed_at, date, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id")
-    .eq("status", "completed")
-    .eq("is_test", false)
-    .is("payout_id", null)
-    .not("cleaner_payout_cents", "is", null)
-    .gt("cleaner_payout_cents", 0);
-
-  if (error) throw new Error(error.message);
+  const directRows = await fetchAllPayoutDiscoveryRows((from, to) =>
+    admin
+      .from("bookings")
+      .select("id, completed_at, date, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id")
+      .eq("status", "completed")
+      .eq("is_test", false)
+      .is("payout_id", null)
+      .not("cleaner_payout_cents", "is", null)
+      .gt("cleaner_payout_cents", 0)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 
   const monthStarts = new Set<string>();
-  for (const row of data ?? []) {
+  for (const row of directRows) {
     const ymd = weeklyBatchDayYmd(row as Parameters<typeof weeklyBatchDayYmd>[0]);
     if (!ymd || ymd < MONTHLY_PAYOUT_START_YMD) continue;
     monthStarts.add(getJohannesburgMonthBoundsContainingYmd(ymd).periodStart);
   }
 
-  const [{ data: rosterRows, error: rosterErr }, { data: teamRows, error: teamErr }] = await Promise.all([
-    admin
-      .from("booking_roster_member_payouts")
-      .select("booking_id")
-      .eq("status", "pending")
-      .is("cleaner_payout_id", null),
-    admin
-      .from("team_job_member_payouts")
-      .select("booking_id")
-      .eq("status", "pending")
-      .is("cleaner_payout_id", null),
+  const [rosterRows, teamRows] = await Promise.all([
+    fetchAllPayoutDiscoveryRows((from, to) =>
+      admin
+        .from("booking_roster_member_payouts")
+        .select("id, booking_id")
+        .eq("status", "pending")
+        .is("cleaner_payout_id", null)
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+    fetchAllPayoutDiscoveryRows((from, to) =>
+      admin
+        .from("team_job_member_payouts")
+        .select("id, booking_id")
+        .eq("status", "pending")
+        .is("cleaner_payout_id", null)
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
   ]);
-  if (rosterErr) throw new Error(rosterErr.message);
-  if (teamErr) throw new Error(teamErr.message);
 
   const memberBookingIds = [
     ...new Set(
-      [...(rosterRows ?? []), ...(teamRows ?? [])]
+      [...rosterRows, ...teamRows]
         .map((row) => String((row as { booking_id?: string }).booking_id ?? "").trim())
         .filter(Boolean),
     ),
