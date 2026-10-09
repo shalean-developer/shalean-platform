@@ -33,6 +33,8 @@ describe("AUDIT-02A03 staging-only repair verifier", () => {
     expect(src).toContain('body.variant === "discounted" || body.variant === "zero_placeholder"');
     expect(src).toContain('source: "audit_a02_03_fixture"');
     expect(src).toContain('booking_source: "audit_a02_03_fixture"');
+    expect(src).toContain('payment_status: discounted ? "success" : "pending_monthly"');
+    expect(src).toContain('payment_completed_at: new Date().toISOString()');
     expect(src).toContain("is_test: true");
     expect(src).toContain("lineItemsPricing: null");
     expect(src).toContain("initialLineCount: 0");
