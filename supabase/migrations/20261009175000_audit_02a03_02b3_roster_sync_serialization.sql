@@ -111,3 +111,138 @@ $function$;
 
 comment on function public.sync_booking_cleaners_for_team_booking(uuid, text) is
   'Canonical team-roster sync; A02-03-02B3 adds booking-scoped advisory serialization with bounded historical financial repair.';
+
+
+-- Keep team assignment on the same lock order as the repair and roster sync:
+-- advisory lock first, booking row lock second.
+create or replace function public.assign_team_and_sync_roster(
+  p_booking_id uuid,
+  p_team_id uuid,
+  p_payout_owner_cleaner_id uuid,
+  p_team_member_count_snapshot integer,
+  p_variant text,
+  p_source text default null::text,
+  p_assigned_at timestamp with time zone default null::timestamp with time zone
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public'
+as $function$
+declare
+  v_variant text := lower(trim(coalesce(p_variant, '')));
+  v_fin timestamptz;
+  v_src text;
+  v_n int;
+  v_lock_id uuid;
+begin
+  if p_booking_id is null or p_team_id is null or p_payout_owner_cleaner_id is null then
+    raise exception 'assign_team_and_sync_roster: p_booking_id, p_team_id, and p_payout_owner_cleaner_id are required';
+  end if;
+
+  -- Match A02-03-02 repair + canonical roster sync lock order.
+  perform pg_advisory_xact_lock(920302, abs(hashtext(p_booking_id::text)));
+
+  select b.id, b.cleaner_line_earnings_finalized_at
+    into v_lock_id, v_fin
+    from public.bookings b
+   where b.id = p_booking_id
+   for update;
+
+  if v_lock_id is null then
+    raise exception 'assign_team_and_sync_roster: booking % not found', p_booking_id;
+  end if;
+
+  if v_fin is not null then
+    raise exception 'assign_team_and_sync_roster: roster changes blocked (cleaner line earnings finalized)';
+  end if;
+
+  if v_variant not in ('admin', 'dispatch') then
+    raise exception 'assign_team_and_sync_roster: invalid variant %', p_variant;
+  end if;
+
+  v_src := nullif(trim(coalesce(p_source, '')), '');
+  if v_src is null then
+    v_src := case when v_variant = 'admin' then 'admin' else 'dispatch' end;
+  end if;
+
+  if v_variant = 'admin' then
+    update public.bookings b set
+      team_id = p_team_id,
+      is_team_job = true,
+      cleaner_id = p_payout_owner_cleaner_id,
+      payout_owner_cleaner_id = p_payout_owner_cleaner_id,
+      team_member_count_snapshot = coalesce(p_team_member_count_snapshot, b.team_member_count_snapshot),
+      status = case
+        when lower(trim(coalesce(b.status, ''))) in ('pending', 'pending_assignment', 'offered')
+          then 'assigned'
+        else b.status
+      end,
+      dispatch_status = case
+        when lower(trim(coalesce(b.status, ''))) in ('pending', 'pending_assignment', 'offered')
+          then 'assigned'
+        when lower(trim(coalesce(b.dispatch_status, ''))) in ('searching', 'offered', 'failed', '')
+          then 'assigned'
+        else b.dispatch_status
+      end,
+      assigned_at = case
+        when lower(trim(coalesce(b.status, ''))) in ('pending', 'pending_assignment', 'offered')
+          then coalesce(b.assigned_at, coalesce(p_assigned_at, now()))
+        else b.assigned_at
+      end,
+      cleaner_response_status = case
+        when lower(trim(coalesce(b.cleaner_response_status, ''))) in (
+          'accepted', 'on_my_way', 'started', 'completed'
+        ) then b.cleaner_response_status
+        else 'pending'
+      end,
+      en_route_at = case
+        when lower(trim(coalesce(b.cleaner_response_status, ''))) in (
+          'accepted', 'on_my_way', 'started', 'completed'
+        ) then b.en_route_at
+        else null
+      end,
+      started_at = case
+        when lower(trim(coalesce(b.cleaner_response_status, ''))) in (
+          'accepted', 'on_my_way', 'started', 'completed'
+        ) then b.started_at
+        else null
+      end,
+      accepted_at = case
+        when lower(trim(coalesce(b.cleaner_response_status, ''))) in (
+          'accepted', 'on_my_way', 'started', 'completed'
+        ) then b.accepted_at
+        else null
+      end
+    where b.id = p_booking_id;
+    get diagnostics v_n = row_count;
+    if v_n <> 1 then
+      raise exception 'assign_team_and_sync_roster: admin update expected 1 row (got %)', v_n;
+    end if;
+  else
+    update public.bookings b set
+      team_id = p_team_id,
+      is_team_job = true,
+      cleaner_id = p_payout_owner_cleaner_id,
+      payout_owner_cleaner_id = p_payout_owner_cleaner_id,
+      team_member_count_snapshot = coalesce(p_team_member_count_snapshot, b.team_member_count_snapshot),
+      status = 'assigned',
+      dispatch_status = 'assigned',
+      assigned_at = coalesce(p_assigned_at, now()),
+      cleaner_response_status = 'pending'
+    where b.id = p_booking_id
+      and lower(trim(coalesce(b.status, ''))) = 'pending'
+      and b.cleaner_id is null;
+    get diagnostics v_n = row_count;
+    if v_n = 0 then
+      return jsonb_build_object('ok', false, 'reason', 'race_lost');
+    end if;
+  end if;
+
+  perform public.sync_booking_cleaners_for_team_booking(p_booking_id, v_src);
+  return jsonb_build_object('ok', true, 'variant', v_variant);
+end;
+$function$;
+
+comment on function public.assign_team_and_sync_roster(uuid, uuid, uuid, integer, text, text, timestamp with time zone) is
+  'Canonical team assignment + roster sync; A02-03-02B3 standardizes booking lock order: advisory lock before booking row lock.';
