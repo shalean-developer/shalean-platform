@@ -17,12 +17,10 @@ export const dynamic = "force-dynamic";
  * period guard, so active earnings and monthly customer invoices keep accruing
  * without creating an early payout batch.
  *
- * Late-earnings reconciliation: frozen cleaner payouts that are still inside a
- * DRAFT payout run are temporarily re-opened while this same payout-generation
- * lock is held. The generator can then append newly eligible earnings to the
- * canonical cleaner/period payout. In a finally block the payout is restored
- * to its original draft run and the run total is recomputed. Approved/paid runs
- * are never re-opened.
+ * Late-earnings reconciliation: a frozen cleaner payout may receive newly
+ * eligible earnings only while its parent payout run is still DRAFT. The
+ * canonical payout stays frozen and attached to its run; payout and draft-run
+ * totals are recomputed in place. Approved/paid runs remain immutable.
  *
  * M-18: shares the same H-15 cron lease (`CRON_LOCK_KEYS.generatePayouts`) as
  * `/api/cron/generate-payouts`, so an admin replay cannot race the scheduled
