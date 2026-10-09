@@ -1,11 +1,11 @@
 /**
- * A02-03-02A/B1/B2 — bounded historical team booking_line_items repair.
+ * A02-03-02A/B1/B2/B3 — bounded historical team booking_line_items repair.
  *
  * Default is dry-run. Writes require BOTH:
  *   --apply
  *   A02_03_02_APPLY=YES
  *
- * B1/B2 extend the bounded allowlist one audited booking at a time.
+ * B1/B2/B3 extend the bounded allowlist one audited booking at a time.
  * Team cleaner payouts are NOT recomputed or mutated.
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -17,6 +17,7 @@ const TARGET_IDS = new Set([
   "f6b2316e-2518-4f43-b6e8-b050c6d07483",
   "e865f74b-33af-481f-a12e-576e1e0ed227",
   "d2cfcb8d-118f-48cc-90c7-420ffe122c9b",
+  "c1bd1fc8-03e9-4f2c-a597-e0ac395c841a",
 ]);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -135,6 +136,28 @@ function runFixtureCheck(): void {
         },
       },
     },
+    {
+      bookingId: "c1bd1fc8-03e9-4f2c-a597-e0ac395c841a",
+      totalPaidZar: 1819,
+      amountPaidCents: 181900,
+      bookingSnapshot: {
+        pricingSummary: {
+          lineItems: [
+            { label: "Deep Cleaning (base)", amountZar: 1200 },
+            { label: "3 bedrooms", amountZar: 450 },
+            { label: "2 bathrooms", amountZar: 400 },
+            { label: "Inside cabinets", amountZar: 25 },
+            { label: "Interior walls", amountZar: 35 },
+            { label: "Service fee", amountZar: 30 },
+            { label: "15% discount", amountZar: -321 },
+          ],
+          selected_extras: [
+            { name: "Inside cabinets", price: 25, extra_id: "inside-cabinets" },
+            { name: "Interior walls", price: 35, extra_id: "interior-walls" },
+          ],
+        },
+      },
+    },
   ] as const;
 
   for (const fixture of fixtures) {
@@ -147,7 +170,7 @@ function runFixtureCheck(): void {
       throw new Error(`${fixture.bookingId}: reconstructed team line may affect cleaner earnings`);
     }
   }
-  console.log("A02-03-02A/B1/B2 fixture check PASS");
+  console.log("A02-03-02A/B1/B2/B3 fixture check PASS");
 }
 
 type PreparedTarget = {
@@ -292,7 +315,7 @@ async function main() {
 
   const ids = requestedIds.length > 0 ? requestedIds : [...TARGET_IDS];
   for (const id of ids) {
-    if (!TARGET_IDS.has(id)) throw new Error(`Booking ${id} is outside the bounded A02-03-02A/B1/B2 allowlist.`);
+    if (!TARGET_IDS.has(id)) throw new Error(`Booking ${id} is outside the bounded A02-03-02A/B1/B2/B3 allowlist.`);
   }
 
   if (apply && requestedIds.length !== 1) {
