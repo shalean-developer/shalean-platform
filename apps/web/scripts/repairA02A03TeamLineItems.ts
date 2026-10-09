@@ -11,6 +11,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { buildHistoricalTeamFinancialLedger } from "../lib/booking/buildHistoricalTeamFinancialLedger";
 import type { BookingLineItemInsert } from "../lib/booking/bookingLineItemTypes";
+import { SHALEAN_SUPABASE_REFS, supabaseRefFromUrl } from "../lib/env/deploymentEnvironment";
 
 const TARGET_IDS = new Set([
   "d860554e-c132-477b-bf15-557fb9c88a5e",
@@ -261,6 +262,28 @@ async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error("Missing Supabase URL/service role configuration.");
+
+  const configuredRef = supabaseRefFromUrl(url);
+  const productionRef = SHALEAN_SUPABASE_REFS.production;
+  let configuredHost = "<invalid>";
+  try {
+    configuredHost = new URL(url).hostname.toLowerCase();
+  } catch {
+    // Fail closed below on missing/invalid configuredRef.
+  }
+  console.log(JSON.stringify({
+    databaseIdentity: {
+      configuredRef,
+      expectedRef: productionRef,
+      host: configuredHost,
+    },
+  }));
+
+  if (apply && configuredRef !== productionRef) {
+    throw new Error(
+      `Apply blocked: expected production Supabase ref ${productionRef}, got ${configuredRef ?? "<invalid>"}.`,
+    );
+  }
 
   const admin = createClient(url, key, { auth: { persistSession: false } });
 
