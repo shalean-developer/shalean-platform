@@ -33,6 +33,10 @@ describe("A02-03-02 historical team ledger repair governance", () => {
     expect(src).toContain("recovered_after_ambiguous_rpc_error");
     expect(src).toContain("alreadyRepaired");
     expect(src).toContain("safe to retry");
+    expect(src).toContain("canonicalJson");
+    expect(src).toContain("sourceLineIndex");
+    expect(src).toContain("row.item_type !== expected.item_type");
+    expect(src).toContain("canonicalJson(metadata) !== canonicalJson(expectedMetadata)");
     expect(src).toContain("preflightTarget");
     expect(src).toContain("Validate and build every requested target before any write occurs.");
     expect(src).toContain("Apply requires exactly one explicit --booking-id=<uuid> target.");
