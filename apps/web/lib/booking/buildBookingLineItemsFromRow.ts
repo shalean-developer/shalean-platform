@@ -40,6 +40,11 @@ export type BookingRowLineItemBackfillInput = {
   extras?: unknown;
   total_paid_zar?: number | null;
   amount_paid_cents?: number | null;
+  /** Billing context determines whether payable means invoice line value or collected cash. */
+  billing_type?: string | null;
+  is_monthly_billing_booking?: boolean | null;
+  payment_status?: string | null;
+  monthly_invoice_id?: string | null;
   /** Authoritative visit subtotal before the company-only service fee. */
   base_amount_cents?: number | null;
   /** Company-only service fee; persisted as a non-cleaner-earning reconciliation line. */
@@ -75,12 +80,40 @@ export function buildBookingLineItemsFromRow(b: BookingRowLineItemBackfillInput)
     bookingId: b.id,
   });
 
-  let totalZar: number | null = null;
-  if (typeof b.total_paid_zar === "number" && Number.isFinite(b.total_paid_zar)) {
-    totalZar = Math.round(b.total_paid_zar);
-  } else if (typeof b.amount_paid_cents === "number" && Number.isFinite(b.amount_paid_cents)) {
-    totalZar = Math.round(b.amount_paid_cents / 100);
-  }
+  const exactPaidCents =
+    typeof b.amount_paid_cents === "number" && Number.isFinite(b.amount_paid_cents)
+      ? Math.max(0, Math.round(b.amount_paid_cents))
+      : null;
+  const payableFromZarCents =
+    typeof b.total_paid_zar === "number" && Number.isFinite(b.total_paid_zar)
+      ? Math.max(0, zarToCents(b.total_paid_zar))
+      : null;
+  const billingType =
+    typeof b.billing_type === "string" ? b.billing_type.trim().toLowerCase() : "";
+  const paymentStatus =
+    typeof b.payment_status === "string" ? b.payment_status.trim().toLowerCase() : "";
+  const invoiceBacked =
+    b.is_monthly_billing_booking === true ||
+    paymentStatus === "pending_monthly" ||
+    (typeof b.monthly_invoice_id === "string" && b.monthly_invoice_id.trim().length > 0) ||
+    billingType === "recurring_invoice" ||
+    billingType === "monthly_contract" ||
+    billingType === "pay_later";
+  const authoritativePaidCents = invoiceBacked
+    ? payableFromZarCents != null && payableFromZarCents > 0
+      ? payableFromZarCents
+      : exactPaidCents != null && exactPaidCents > 0
+        ? exactPaidCents
+        : payableFromZarCents ?? exactPaidCents
+    : exactPaidCents != null && exactPaidCents > 0
+      ? exactPaidCents
+      : payableFromZarCents != null && payableFromZarCents > 0
+        ? payableFromZarCents
+        : exactPaidCents ?? payableFromZarCents;
+  const totalZar =
+    authoritativePaidCents != null
+      ? authoritativePaidCents / 100
+      : null;
 
   const extraSumZar = extrasPersist.reduce((s, e) => s + (Number.isFinite(e.price) ? e.price : 0), 0);
   const serviceLabel = typeof b.service === "string" && b.service.trim() ? b.service.trim() : "Booking";
@@ -166,6 +199,30 @@ export function buildBookingLineItemsFromRow(b: BookingRowLineItemBackfillInput)
       });
     }
 
+    // Mirror the live checkout invariant: gross cleaner-earning value remains intact,
+    // while company-only discounts/credits/tips reconcile the full ledger to the
+    // authoritative payable. This also covers fully covered R0 bookings.
+    if (totalZar != null) {
+      const sumCents = items.reduce((s, r) => s + r.total_price_cents, 0);
+      const expectedCents = authoritativePaidCents ?? zarToCents(totalZar);
+      if (sumCents !== expectedCents) {
+        items.push({
+          item_type: "adjustment",
+          slug: null,
+          name: "Backfill payable reconciliation",
+          quantity: 1,
+          unit_price_cents: expectedCents - sumCents,
+          total_price_cents: expectedCents - sumCents,
+          pricing_source: AUTHORITATIVE_SUBTOTAL_BACKFILL_SOURCE,
+          metadata: {
+            expectedZar: totalZar,
+            sumCentsBefore: sumCents,
+          },
+          earns_cleaner: false,
+        });
+      }
+    }
+
     return items;
   }
 
@@ -225,7 +282,7 @@ export function buildBookingLineItemsFromRow(b: BookingRowLineItemBackfillInput)
 
   if (totalZar != null) {
     const sumCents = items.reduce((s, r) => s + r.total_price_cents, 0);
-    const expectedCents = zarToCents(totalZar);
+    const expectedCents = authoritativePaidCents ?? zarToCents(totalZar);
     if (sumCents !== expectedCents) {
       items.push({
         item_type: "adjustment",

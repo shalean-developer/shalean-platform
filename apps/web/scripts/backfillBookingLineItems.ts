@@ -59,7 +59,7 @@ async function main() {
   for (;;) {
     let q = admin
       .from("bookings")
-      .select("id, service, rooms, bathrooms, extras, total_paid_zar, amount_paid_cents, booking_snapshot")
+      .select("id, service, rooms, bathrooms, extras, total_paid_zar, amount_paid_cents, booking_snapshot, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id")
       .order("id", { ascending: true })
       .limit(pageSize);
     if (lastId) q = q.gt("id", lastId);
