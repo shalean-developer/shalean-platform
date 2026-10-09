@@ -1,7 +1,7 @@
 -- MASTER-03A — atomically reconcile late earnings into a frozen payout whose
 -- parent payout run is still DRAFT.
 --
--- Do not redefine cleaner_payouts_block_mutate_when_frozen() here. MASTER-00B
+-- Do not redefine the MASTER-00B frozen-payout trigger here. MASTER-00B
 -- permanently owns that security contract. Instead this service-role-only RPC
 -- performs the existing detach/update/reattach sequence inside one PostgreSQL
 -- transaction, so a failure or process exit rolls back the whole sequence.
