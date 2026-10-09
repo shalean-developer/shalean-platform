@@ -14,23 +14,31 @@ describe("AUDIT-02A03 staging-only repair verifier", () => {
     expect(src).toContain('{ status: 404 }');
   });
 
+  it("fails closed unless the configured Supabase ref matches canonical staging", () => {
+    expect(src).toContain("supabaseRefFromUrl");
+    expect(src).toContain("expectedSupabaseRefForDeployment");
+    expect(src).toContain('deployment !== "staging"');
+    expect(src).toContain("configuredSupabaseRef !== expectedSupabaseRef");
+    expect(src).toContain("Staging database identity mismatch.");
+  });
+
   it("requires a timing-safe verifier secret before accepting a fixture id", () => {
     expect(src).toContain("DISPATCH_LOAD_TEST_SECRET");
     expect(src).toContain("timingSafeEqualString(provided, secret)");
     expect(src).toContain('{ status: 401 }');
   });
 
-  it("accepts only dedicated test fixtures or a stale recoverable repair lease", () => {
+  it("accepts only fresh dedicated test fixtures and never performs stale takeover", () => {
     expect(src).toContain("booking.is_test !== true");
     expect(src).toContain('const source = String(booking.booking_source ?? "")');
-    expect(src).toContain('source !== "audit_a02_03_fixture" && !staleRepairing');
-    expect(src).toContain('source === "audit_a02_03_fixture_repairing" ? 409 : 403');
+    expect(src).toContain('source !== "audit_a02_03_fixture"');
+    expect(src).toContain("create a fresh fixture");
+    expect(src).not.toContain("staleRepairing");
   });
 
-  it("claims fixtures with a recoverable database lease before invoking the real repair helper", () => {
+  it("claims fixtures in the database before invoking the real repair helper", () => {
     expect(src).toContain('booking_source: "audit_a02_03_fixture_repairing"');
-    expect(src).toContain("Date.now() - 5 * 60_000");
-    expect(src).toContain('.eq("updated_at", String(booking.updated_at))');
+    expect(src).toContain('.eq("booking_source", "audit_a02_03_fixture")');
     expect(src).toContain('select("id, updated_at")');
     expect(src).toContain("leaseUpdatedAt");
     expect(src).toContain("Fixture repair lease token missing.");
