@@ -83,6 +83,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Fixture booking required." }, { status: 403 });
   }
 
+  const { count: existingLineCount, error: existingLineError } = await admin
+    .from("booking_line_items")
+    .select("id", { count: "exact", head: true })
+    .eq("booking_id", bookingId);
+
+  if (existingLineError) {
+    return NextResponse.json({ ok: false, error: existingLineError.message }, { status: 500 });
+  }
+  if ((existingLineCount ?? 0) !== 0) {
+    return NextResponse.json(
+      { ok: false, error: "Fixture must start with zero line items." },
+      { status: 409 },
+    );
+  }
+
   const source = String(booking.booking_source ?? "");
   if (source !== "audit_a02_03_fixture") {
     return NextResponse.json(
