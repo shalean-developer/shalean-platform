@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { withCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
-import { generateWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
+import { generateCatchUpWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
 import {
   prepareDraftRunPayoutsForCatchUp,
   restoreDraftRunPayoutsAfterCatchUp,
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     async () => {
       const prep = await prepareDraftRunPayoutsForCatchUp(admin);
       try {
-        const generated = await generateWeeklyPayouts(admin);
+        const generated = await generateCatchUpWeeklyPayouts(admin);
         return {
           ...generated,
           lateEarningsReconciledPayouts: prep.payouts.length,
