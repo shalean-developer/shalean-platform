@@ -77,6 +77,17 @@ function runFixtureCheck(): void {
   console.log("A02-03-02A fixture check PASS");
 }
 
+async function rollbackInsertedRepairRows(admin: ReturnType<typeof createClient>, bookingId: string): Promise<void> {
+  const { error: rollbackError } = await admin
+    .from("booking_line_items")
+    .delete()
+    .eq("booking_id", bookingId)
+    .eq("pricing_source", "historical_team_snapshot_v1");
+  if (rollbackError) {
+    throw new Error(`${bookingId}: verification failed AND rollback failed: ${rollbackError.message}`);
+  }
+}
+
 async function main() {
   if (fixtureCheck) {
     runFixtureCheck();
@@ -175,7 +186,10 @@ async function main() {
       .from("booking_line_items")
       .select("total_price_cents, earns_cleaner, pricing_source")
       .eq("booking_id", bookingId);
-    if (verifyError) throw new Error(`${bookingId}: ${verifyError.message}`);
+    if (verifyError) {
+      await rollbackInsertedRepairRows(admin, bookingId);
+      throw new Error(`${bookingId}: verification read failed after rollback: ${verifyError.message}`);
+    }
     const persistedRows = persisted ?? [];
     const persistedTotal = persistedRows.reduce((sum, row) => sum + Number(row.total_price_cents ?? 0), 0);
     const safe =
@@ -185,16 +199,7 @@ async function main() {
         (row) => row.earns_cleaner === false && row.pricing_source === "historical_team_snapshot_v1",
       );
     if (!safe) {
-      const { error: rollbackError } = await admin
-        .from("booking_line_items")
-        .delete()
-        .eq("booking_id", bookingId)
-        .eq("pricing_source", "historical_team_snapshot_v1");
-      if (rollbackError) {
-        throw new Error(
-          `${bookingId}: verification failed AND rollback failed: ${rollbackError.message}`,
-        );
-      }
+      await rollbackInsertedRepairRows(admin, bookingId);
       throw new Error(`${bookingId}: verification failed; inserted repair rows rolled back by source marker`);
     }
   }
