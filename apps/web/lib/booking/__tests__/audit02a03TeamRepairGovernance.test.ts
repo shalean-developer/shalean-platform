@@ -25,7 +25,8 @@ describe("A02-03-02 historical team ledger repair governance", () => {
     expect(pkg.scripts?.["repair:a02-03-02-team-lines"]).toContain("--env-file=.env.local");
     expect(pkg.scripts?.["repair:a02-03-02-team-lines"]).toContain("--conditions=react-server");
     expect(src).toContain('arg === "--fixture-check"');
-    expect(src).toContain("existing booking_line_items block repair");
+    const migration = read("../../supabase/migrations/20261009123000_audit_02a03_02_team_line_items_atomic_repair.sql");
+    expect(migration).toContain("a02_03_02_existing_line_items_conflict");
     expect(src).toContain("team payout ledger missing");
     expect(src).toContain("historical_team_snapshot_v1");
     expect(src).toContain('admin.rpc("repair_a02_03_02_team_line_items"');
