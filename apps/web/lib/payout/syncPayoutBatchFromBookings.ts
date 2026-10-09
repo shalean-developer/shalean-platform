@@ -19,7 +19,7 @@ export async function syncPayoutBatchFromBookings(
 ): Promise<{ ok: true; totalCents: number } | { ok: false; error: string }> {
   const { data: payout, error: payoutErr } = await admin
     .from("cleaner_payouts")
-    .select("id, status, cleaner_id, period_start, period_end")
+    .select("id, status, cleaner_id, period_start, period_end, payout_run_id")
     .eq("id", payoutId)
     .maybeSingle();
   if (payoutErr) return { ok: false, error: payoutErr.message };
@@ -33,6 +33,16 @@ export async function syncPayoutBatchFromBookings(
   const loaded = await loadCleanerPayoutBatchItems(admin, payoutId);
   if (loaded.error) return { ok: false, error: loaded.error };
   const totalCents = loaded.totalCents;
+  const payoutRunId = String((payout as { payout_run_id?: string | null }).payout_run_id ?? "").trim();
+
+  if (status === "frozen" && payoutRunId) {
+    const { error } = await admin.rpc("sync_draft_run_payout_total", {
+      p_payout_id: payoutId,
+      p_total_amount_cents: totalCents,
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, totalCents };
+  }
 
   const { data: updated, error: upErr } = await admin
     .from("cleaner_payouts")
