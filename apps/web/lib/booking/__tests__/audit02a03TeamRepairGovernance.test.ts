@@ -54,6 +54,9 @@ describe("A02-03-02 historical team ledger repair governance", () => {
     expect(src).toContain("assertB3AuditedFixtureUnchanged(bookingId, booking.booking_snapshot, built)");
     expect(src).toContain("assertB3AuditedTeamState");
     expect(src).toContain("await assertB3AuditedTeamState(admin, bookingId)");
+    expect(src).toContain("const existingAudited = await readPersistedRepairState");
+    expect(src).toContain("if (existingAudited.valid)");
+    expect(src.indexOf("if (existingAudited.valid)")).toBeLessThan(src.indexOf("await assertB3AuditedTeamState(admin, bookingId)"));
     expect(src).toContain("audited B3 roster changed since audit");
     expect(src).toContain("audited B3 payout rows changed since audit");
     expect(src).toContain("B3_C1BD_AUDITED_ROSTER");
