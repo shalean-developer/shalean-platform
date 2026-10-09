@@ -21,6 +21,9 @@ describe("A02-03-02B3 atomic repair allowlist expansion", () => {
     expect(sql).not.toContain("073947f2-d37d-4852-9a2d-5bdd138d2440");
     expect(sql).toContain("pg_advisory_xact_lock");
     expect(sql).toContain("for update");
+    expect(sql.indexOf("return 'already_repaired';")).toBeLessThan(
+      sql.indexOf("a02_03_02_b3_payout_state_mismatch"),
+    );
     expect(sql).toContain("historical_team_snapshot_v1");
     expect(sql).toContain("v_existing_payload = v_requested_payload");
     expect(sql).toContain("a02_03_02_b3_live_snapshot_mismatch");
