@@ -82,6 +82,7 @@ export async function PUT(request: Request) {
   }
 
   const discounted = variant === "discounted";
+  const paystackReference = `audit_a02_03_${variant}_${crypto.randomUUID().replace(/-/g, "")}`;
   const payableCents = discounted ? 31_000 : 39_000;
   const baseAmountCents = discounted ? 33_000 : 36_000;
   const serviceFeeCents = 3_000;
@@ -92,6 +93,7 @@ export async function PUT(request: Request) {
     rowBase: {
       is_test: true,
       booking_source: "audit_a02_03_fixture",
+      paystack_reference: paystackReference,
       status: "pending",
       payment_status: discounted ? "success" : "pending_monthly",
       ...(discounted ? { payment_completed_at: new Date().toISOString() } : {}),
