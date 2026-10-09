@@ -72,6 +72,27 @@ export async function acquireCronLock(
   return { ok: false, reason: "concurrent_run", jobName };
 }
 
+export async function renewCronLock(
+  admin: SupabaseClient,
+  jobName: string,
+  holderId: string,
+  leaseSeconds: number,
+): Promise<boolean> {
+  const j = String(jobName ?? "").trim();
+  const h = String(holderId ?? "").trim();
+  if (!j || !h) return false;
+  const { data, error } = await admin.rpc("renew_cron_lock", {
+    p_job_name: j,
+    p_holder_id: h,
+    p_lease_seconds: clampLeaseSeconds(leaseSeconds),
+  });
+  if (error) {
+    void reportOperationalIssue("error", "cronLock/renew", error.message, { jobName: j, holderId: h });
+    return false;
+  }
+  return data === true;
+}
+
 /**
  * Release a lease held by `holderId`. Best-effort: errors are logged but not re-thrown.
  */
@@ -115,6 +136,21 @@ export async function withCronLock<T>(
     return { ok: true, skipped: true, reason: "concurrent_run", jobName: acq.jobName };
   }
 
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+  if (!acq.degraded) {
+    const heartbeatMs = Math.max(10_000, Math.floor((acq.leaseSeconds * 1000) / 3));
+    heartbeat = setInterval(() => {
+      void renewCronLock(admin, acq.jobName, acq.holderId, acq.leaseSeconds).then((renewed) => {
+        if (!renewed) {
+          void reportOperationalIssue("error", "cronLock/renew", "Cron lease renewal failed or lease was lost", {
+            jobName: acq.jobName,
+            holderId: acq.holderId,
+          });
+        }
+      });
+    }, heartbeatMs);
+  }
+
   try {
     const ranIt = await fn();
     return {
@@ -125,6 +161,7 @@ export async function withCronLock<T>(
       ...(acq.degraded ? { degraded: true } : {}),
     };
   } finally {
+    if (heartbeat) clearInterval(heartbeat);
     if (!acq.degraded) {
       // Best-effort; never throws (releaseCronLock catches its own errors).
       await releaseCronLock(admin, acq.jobName, acq.holderId);
