@@ -84,4 +84,23 @@ describe("A02-03-02B3 atomic repair allowlist expansion", () => {
     expect(rosterSql).toContain("delete from public.booking_cleaners where booking_id = p_booking_id");
     expect(rosterSql).toContain("insert into public.booking_cleaners");
   });
+
+  it("keeps team assignment on advisory-lock-before-row-lock ordering", () => {
+    const rosterSql = fs.readFileSync(
+      path.join(
+        process.cwd(),
+        "../../supabase/migrations/20261009175000_audit_02a03_02b3_roster_sync_serialization.sql",
+      ),
+      "utf8",
+    );
+
+    const assignStart = rosterSql.indexOf("create or replace function public.assign_team_and_sync_roster");
+    expect(assignStart).toBeGreaterThanOrEqual(0);
+    const assignSql = rosterSql.slice(assignStart);
+    expect(assignSql).toContain("pg_advisory_xact_lock(920302, abs(hashtext(p_booking_id::text)))");
+    expect(assignSql.indexOf("pg_advisory_xact_lock")).toBeLessThan(assignSql.indexOf("for update"));
+    expect(assignSql).toContain("if v_variant not in ('admin', 'dispatch')");
+    expect(assignSql).toContain("return jsonb_build_object('ok', false, 'reason', 'race_lost')");
+    expect(assignSql).toContain("perform public.sync_booking_cleaners_for_team_booking(p_booking_id, v_src)");
+  });
 });
