@@ -25,6 +25,8 @@ declare
   v_b3_expected_payload jsonb;
   v_b3_live_projection jsonb;
   v_b3_expected_projection jsonb;
+  v_b3_payout_count integer;
+  v_b3_batched_count integer;
   v_inserted integer;
   v_authoritative_cents bigint;
 begin
@@ -76,6 +78,19 @@ begin
     where tp.booking_id = p_booking_id
   ) then
     raise exception 'a02_03_02_team_payout_ledger_required';
+  end if;
+
+  if p_booking_id = 'c1bd1fc8-03e9-4f2c-a597-e0ac395c841a'::uuid then
+    select
+      count(*)::integer,
+      count(*) filter (where lower(trim(coalesce(tp.status, ''))) = 'batched')::integer
+    into v_b3_payout_count, v_b3_batched_count
+    from public.team_job_member_payouts tp
+    where tp.booking_id = p_booking_id;
+
+    if v_b3_payout_count <> 3 or v_b3_batched_count <> 3 then
+      raise exception 'a02_03_02_b3_payout_state_mismatch';
+    end if;
   end if;
 
   v_authoritative_cents := case
