@@ -31,14 +31,19 @@ describe("AUDIT-02A03 staging-only repair verifier", () => {
     expect(src).toContain('booking_source: "audit_a02_03_fixture_repairing"');
     expect(src).toContain("Date.now() - 5 * 60_000");
     expect(src).toContain('.eq("updated_at", String(booking.updated_at))');
-    expect(src).toContain("claimTime");
+    expect(src).toContain('select("id, updated_at")');
+    expect(src).toContain("leaseUpdatedAt");
+    expect(src).toContain("Fixture repair lease token missing.");
     expect(src).toContain('{ status: 409 }');
     expect(src).toContain("ensureBookingLineItemsForEarningsIfMissing(admin, bookingId)");
   });
 
-  it("rejects unreconciled ledger evidence before finalizing the fixture", () => {
+  it("rejects unreconciled or vacuous ledger evidence before finalizing the fixture", () => {
     expect(src).toContain("expectedPayableCents");
     expect(src).toContain("expectedCleanerCents");
+    expect(src).toContain("expectedCleanerCents > 0");
+    expect(src).toContain("hasPositiveCleanerLine");
+    expect(src).toContain("validCleanerEvidence");
     expect(src).toContain("lineTotalCents !== expectedPayableCents");
     expect(src).toContain("cleanerLineCents !== expectedCleanerCents");
     expect(src).toContain('booking_source: "audit_a02_03_fixture_failed"');
@@ -47,7 +52,7 @@ describe("AUDIT-02A03 staging-only repair verifier", () => {
 
   it("confirms the conditional repaired-state transition before returning success", () => {
     expect(src).toContain('booking_source: "audit_a02_03_fixture_repaired"');
-    expect(src).toContain('.eq("updated_at", claimTime)');
+    expect(src).toContain('.eq("updated_at", leaseUpdatedAt)');
     expect(src).toContain("finalizeError || !finalized");
     expect(src).toContain("Could not finalize fixture repair state.");
   });
