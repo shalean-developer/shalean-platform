@@ -26,12 +26,38 @@ describe("late earnings reconciliation safety boundary", () => {
     }
   });
 
-  it("keeps the standalone catch-up script serialized under the same payout lock and reopen/restore boundary", () => {
+  it("keeps the standalone catch-up script serialized but never detaches frozen draft-run payouts", () => {
     const src = read("scripts/regenerate-catchup-payouts.ts");
     expect(src).toContain("withCronLock");
     expect(src).toContain("CRON_LOCK_KEYS.generatePayouts");
     expect(src).toContain("generateCatchUpWeeklyPayouts");
-    expect(src).toContain("prepareDraftRunPayoutsForCatchUp");
-    expect(src).toContain("restoreDraftRunPayoutsAfterCatchUp");
+    expect(src).not.toContain("prepareDraftRunPayoutsForCatchUp");
+    expect(src).not.toContain("restoreDraftRunPayoutsAfterCatchUp");
+  });
+
+  it("renews long-running payout cron leases through an owner-checked RPC", () => {
+    const lock = read("lib/cron/cronLock.ts");
+    const sql = read("../../supabase/migrations/20261009203000_master_03a_renew_cron_lock.sql");
+    expect(lock).toContain("renewCronLock");
+    expect(lock).toContain('admin.rpc("renew_cron_lock"');
+    expect(lock).toContain("setInterval");
+    expect(lock).toContain("clearInterval");
+    expect(sql).toContain("holder_id = p_holder_id");
+    expect(sql).toContain("expires_at > v_now");
+    expect(sql).toContain("grant execute on function public.renew_cron_lock");
+  });
+
+  it("paginates both payout discovery and downstream payout processing", () => {
+    const generator = read("lib/payout/generateWeeklyPayouts.ts");
+    const roster = read("lib/payout/rosterMemberWeeklyPayoutCandidates.ts");
+    const team = read("lib/payout/teamJobMemberWeeklyPayoutCandidates.ts");
+    expect(generator).toContain("fetchAllPayoutRows");
+    expect(generator).toContain('from("cleaners")');
+    expect(generator).toContain('.order("id", { ascending: true })');
+    expect(generator).toContain("payoutQueryChunks");
+    expect(roster).toContain("fetchAllPayoutRows");
+    expect(roster).toContain("payoutQueryChunks");
+    expect(team).toContain("fetchAllPayoutRows");
+    expect(team).toContain("payoutQueryChunks");
   });
 });
