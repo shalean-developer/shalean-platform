@@ -47,6 +47,33 @@ const B3_C1BD_AUDITED_FIXTURE = {
   },
 } as const;
 
+const B3_C1BD_AUDITED_ROSTER = [
+  "015e91e8-df25-4fde-8db1-a5901b005ae3",
+  "2231fa06-1ba5-43d6-bf2d-ca757368a05a",
+  "389196b4-bfb5-4d8d-a9cf-a672b2fe741d",
+] as const;
+
+const B3_C1BD_AUDITED_PAYOUTS = [
+  {
+    cleaner_id: "015e91e8-df25-4fde-8db1-a5901b005ae3",
+    payout_cents: 25000,
+    status: "batched",
+    cleaner_payout_id: "45254fb5-c94d-45e5-afb3-88b696e389b1",
+  },
+  {
+    cleaner_id: "2231fa06-1ba5-43d6-bf2d-ca757368a05a",
+    payout_cents: 27000,
+    status: "batched",
+    cleaner_payout_id: "b7054032-ad31-466f-86f6-13ab65005d3d",
+  },
+  {
+    cleaner_id: "389196b4-bfb5-4d8d-a9cf-a672b2fe741d",
+    payout_cents: 25000,
+    status: "batched",
+    cleaner_payout_id: "b9bcaf62-f50c-4323-b99a-0db039c6cdfd",
+  },
+] as const;
+
 
 function parseArgs(argv: string[]): { apply: boolean; fixtureCheck: boolean; requestedIds: string[] } {
   let apply = false;
@@ -257,6 +284,39 @@ function assertB3AuditedFixtureUnchanged(
   }
 }
 
+async function assertB3AuditedTeamState(admin: SupabaseClient, bookingId: string): Promise<void> {
+  if (bookingId !== B3_C1BD_ID) return;
+
+  const { data: rosterRows, error: rosterError } = await admin
+    .from("booking_cleaners")
+    .select("cleaner_id")
+    .eq("booking_id", bookingId)
+    .order("cleaner_id", { ascending: true });
+  if (rosterError) throw new Error(`${bookingId}: B3 roster audit failed: ${rosterError.message}`);
+
+  const liveRoster = (rosterRows ?? []).map((row) => String(row.cleaner_id ?? ""));
+  if (canonicalJson(liveRoster) !== canonicalJson([...B3_C1BD_AUDITED_ROSTER])) {
+    throw new Error(`${bookingId}: audited B3 roster changed since audit`);
+  }
+
+  const { data: payoutRows, error: payoutError } = await admin
+    .from("team_job_member_payouts")
+    .select("cleaner_id, payout_cents, status, cleaner_payout_id")
+    .eq("booking_id", bookingId)
+    .order("cleaner_id", { ascending: true });
+  if (payoutError) throw new Error(`${bookingId}: B3 payout audit failed: ${payoutError.message}`);
+
+  const livePayouts = (payoutRows ?? []).map((row) => ({
+    cleaner_id: String(row.cleaner_id ?? ""),
+    payout_cents: Number(row.payout_cents),
+    status: String(row.status ?? "").trim().toLowerCase(),
+    cleaner_payout_id: row.cleaner_payout_id == null ? null : String(row.cleaner_payout_id),
+  }));
+  if (canonicalJson(livePayouts) !== canonicalJson([...B3_C1BD_AUDITED_PAYOUTS])) {
+    throw new Error(`${bookingId}: audited B3 payout rows changed since audit`);
+  }
+}
+
 async function readPersistedRepairState(
   admin: SupabaseClient,
   bookingId: string,
@@ -354,6 +414,7 @@ async function preflightTarget(admin: SupabaseClient, bookingId: string): Promis
   // B3 is a one-booking financial repair: pin the live immutable pricing projection and
   // resulting persisted payload to the exact audited fixture, not merely the same total.
   assertB3AuditedFixtureUnchanged(bookingId, booking.booking_snapshot, built);
+  await assertB3AuditedTeamState(admin, bookingId);
 
   const existing = await readPersistedRepairState(
     admin,
