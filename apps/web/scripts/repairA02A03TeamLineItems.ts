@@ -105,23 +105,36 @@ function runFixtureCheck(): void {
   console.log("A02-03-02A fixture check PASS");
 }
 
-async function rollbackInsertedRepairRows(admin: SupabaseClient, bookingId: string): Promise<void> {
-  const { error: rollbackError } = await admin
-    .from("booking_line_items")
-    .delete()
-    .eq("booking_id", bookingId)
-    .eq("pricing_source", "historical_team_snapshot_v1");
-  if (rollbackError) {
-    throw new Error(`${bookingId}: verification failed AND rollback failed: ${rollbackError.message}`);
-  }
-}
-
 type PreparedTarget = {
   bookingId: string;
   rosterCount: number;
   payoutCount: number;
+  alreadyRepaired: boolean;
   built: Extract<ReturnType<typeof buildHistoricalTeamFinancialLedger>, { ok: true }>;
 };
+
+async function readPersistedRepairState(
+  admin: SupabaseClient,
+  bookingId: string,
+  expectedCount: number,
+  expectedTotalCents: number,
+): Promise<{ ok: true; valid: boolean; count: number; total: number } | { ok: false; error: string }> {
+  const { data, error } = await admin
+    .from("booking_line_items")
+    .select("total_price_cents, earns_cleaner, pricing_source")
+    .eq("booking_id", bookingId);
+  if (error) return { ok: false, error: error.message };
+
+  const rows = data ?? [];
+  const total = rows.reduce((sum, row) => sum + Number(row.total_price_cents ?? 0), 0);
+  const valid =
+    rows.length === expectedCount &&
+    total === expectedTotalCents &&
+    rows.every(
+      (row) => row.earns_cleaner === false && row.pricing_source === "historical_team_snapshot_v1",
+    );
+  return { ok: true, valid, count: rows.length, total };
+}
 
 async function preflightTarget(admin: SupabaseClient, bookingId: string): Promise<PreparedTarget> {
   const { data: booking, error: bookingError } = await admin
@@ -138,13 +151,6 @@ async function preflightTarget(admin: SupabaseClient, bookingId: string): Promis
   if (String(booking.billing_type ?? "").trim().toLowerCase() !== "prepaid") {
     throw new Error(`${bookingId}: prepaid billing_type required for this bounded repair`);
   }
-
-  const { count: existingLineCount, error: lineCountError } = await admin
-    .from("booking_line_items")
-    .select("id", { count: "exact", head: true })
-    .eq("booking_id", bookingId);
-  if (lineCountError) throw new Error(`${bookingId}: ${lineCountError.message}`);
-  if ((existingLineCount ?? 0) !== 0) throw new Error(`${bookingId}: existing booking_line_items block repair`);
 
   const { count: rosterCount, error: rosterError } = await admin
     .from("booking_cleaners")
@@ -169,10 +175,22 @@ async function preflightTarget(admin: SupabaseClient, bookingId: string): Promis
   });
   if (!built.ok) throw new Error(`${bookingId}: ${built.error}`);
 
+  const existing = await readPersistedRepairState(
+    admin,
+    bookingId,
+    built.items.length,
+    built.declaredPayableCents,
+  );
+  if (!existing.ok) throw new Error(`${bookingId}: ${existing.error}`);
+  if (existing.count > 0 && !existing.valid) {
+    throw new Error(`${bookingId}: existing booking_line_items conflict with bounded repair`);
+  }
+
   return {
     bookingId,
     rosterCount: rosterCount ?? 0,
     payoutCount: payoutCount ?? 0,
+    alreadyRepaired: existing.valid,
     built,
   };
 }
@@ -214,6 +232,7 @@ async function main() {
         bookingId: target.bookingId,
         rosterCount: target.rosterCount,
         payoutCount: target.payoutCount,
+        alreadyRepaired: target.alreadyRepaired,
         declaredPayableCents: target.built.declaredPayableCents,
         sourceLineTotalCents: target.built.sourceLineTotalCents,
         lineCount: target.built.items.length,
@@ -225,40 +244,69 @@ async function main() {
 
   for (const target of prepared) {
     const { bookingId, built } = target;
-
-    // Re-check immediately before insert. Explicit allowlist + dual apply gate keep this
-    // bounded; the second count prevents accidental reruns in normal operations.
-    const { count: beforeInsertCount, error: beforeInsertError } = await admin
-      .from("booking_line_items")
-      .select("id", { count: "exact", head: true })
-      .eq("booking_id", bookingId);
-    if (beforeInsertError) throw new Error(`${bookingId}: ${beforeInsertError.message}`);
-    if ((beforeInsertCount ?? 0) !== 0) throw new Error(`${bookingId}: concurrent/existing line items block insert`);
-
-    const rows = built.items.map((item) => ({ ...item, booking_id: bookingId }));
-    const { error: insertError } = await admin.from("booking_line_items").insert(rows);
-    if (insertError) throw new Error(`${bookingId}: ${insertError.message}`);
-
-    const { data: persisted, error: verifyError } = await admin
-      .from("booking_line_items")
-      .select("total_price_cents, earns_cleaner, pricing_source")
-      .eq("booking_id", bookingId);
-    if (verifyError) {
-      await rollbackInsertedRepairRows(admin, bookingId);
-      throw new Error(`${bookingId}: verification read failed after rollback: ${verifyError.message}`);
+    if (target.alreadyRepaired) {
+      console.log(JSON.stringify({ mode: "apply", bookingId, result: "already_repaired" }));
+      continue;
     }
-    const persistedRows = persisted ?? [];
-    const persistedTotal = persistedRows.reduce((sum, row) => sum + Number(row.total_price_cents ?? 0), 0);
-    const safe =
-      persistedRows.length === built.items.length &&
-      persistedTotal === built.declaredPayableCents &&
-      persistedRows.every(
-        (row) => row.earns_cleaner === false && row.pricing_source === "historical_team_snapshot_v1",
+
+    const lineRows = built.items.map((item) => ({
+      item_type: item.item_type,
+      slug: item.slug ?? null,
+      name: item.name,
+      quantity: item.quantity,
+      unit_price_cents: item.unit_price_cents,
+      total_price_cents: item.total_price_cents,
+      pricing_source: item.pricing_source,
+      metadata: item.metadata ?? {},
+      earns_cleaner: false,
+    }));
+
+    const { data: rpcResult, error: rpcError } = await admin.rpc("repair_a02_03_02_team_line_items", {
+      p_booking_id: bookingId,
+      p_line_items: lineRows,
+      p_expected_total_cents: built.declaredPayableCents,
+    });
+
+    if (rpcError) {
+      // PostgREST can report an error after the DB committed if the response is lost.
+      // Read back the source-marked ledger before deciding the repair failed.
+      const recovered = await readPersistedRepairState(
+        admin,
+        bookingId,
+        built.items.length,
+        built.declaredPayableCents,
       );
-    if (!safe) {
-      await rollbackInsertedRepairRows(admin, bookingId);
-      throw new Error(`${bookingId}: verification failed; inserted repair rows rolled back by source marker`);
+      if (recovered.ok && recovered.valid) {
+        console.log(JSON.stringify({ mode: "apply", bookingId, result: "recovered_after_ambiguous_rpc_error" }));
+        continue;
+      }
+      const recoveryDetail = recovered.ok
+        ? `persisted_count=${recovered.count} persisted_total=${recovered.total}`
+        : `readback_error=${recovered.error}`;
+      throw new Error(`${bookingId}: RPC failed: ${rpcError.message}; ${recoveryDetail}`);
     }
+
+    const result = String(rpcResult ?? "");
+    if (!["inserted", "already_repaired"].includes(result)) {
+      throw new Error(`${bookingId}: unexpected RPC result ${result || "<empty>"}`);
+    }
+
+    const verified = await readPersistedRepairState(
+      admin,
+      bookingId,
+      built.items.length,
+      built.declaredPayableCents,
+    );
+    if (!verified.ok) {
+      throw new Error(`${bookingId}: verification read failed; safe to retry: ${verified.error}`);
+    }
+    if (!verified.valid) {
+      throw new Error(
+        `${bookingId}: atomic RPC returned ${result} but persisted ledger failed verification (count=${verified.count}, total=${verified.total})`,
+      );
+    }
+
+    console.log(JSON.stringify({ mode: "apply", bookingId, result }));
   }
 }
 
