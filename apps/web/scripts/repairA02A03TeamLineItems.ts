@@ -16,12 +16,40 @@ const TARGET_IDS = new Set([
   "f6b2316e-2518-4f43-b6e8-b050c6d07483",
 ]);
 
-const apply = process.argv.includes("--apply");
-const fixtureCheck = process.argv.includes("--fixture-check");
-const requestedIds = process.argv
-  .filter((arg) => arg.startsWith("--booking-id="))
-  .map((arg) => arg.slice("--booking-id=".length).trim().toLowerCase())
-  .filter(Boolean);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function parseArgs(argv: string[]): { apply: boolean; fixtureCheck: boolean; requestedIds: string[] } {
+  let apply = false;
+  let fixtureCheck = false;
+  const requestedIds: string[] = [];
+
+  for (const arg of argv.slice(2)) {
+    if (arg === "--apply") {
+      apply = true;
+      continue;
+    }
+    if (arg === "--fixture-check") {
+      fixtureCheck = true;
+      continue;
+    }
+    if (arg.startsWith("--booking-id=")) {
+      const id = arg.slice("--booking-id=".length).trim().toLowerCase();
+      if (!UUID_RE.test(id)) {
+        throw new Error(`Invalid --booking-id value: ${id || "<empty>"}`);
+      }
+      requestedIds.push(id);
+      continue;
+    }
+    if (arg === "--booking-id") {
+      throw new Error("Use --booking-id=<uuid>; spaced --booking-id values are not accepted.");
+    }
+    throw new Error(`Unknown argument: ${arg}`);
+  }
+
+  return { apply, fixtureCheck, requestedIds: [...new Set(requestedIds)] };
+}
+
+const { apply, fixtureCheck, requestedIds } = parseArgs(process.argv);
 
 function runFixtureCheck(): void {
   const fixtures = [
@@ -88,6 +116,67 @@ async function rollbackInsertedRepairRows(admin: SupabaseClient, bookingId: stri
   }
 }
 
+type PreparedTarget = {
+  bookingId: string;
+  rosterCount: number;
+  payoutCount: number;
+  built: Extract<ReturnType<typeof buildHistoricalTeamFinancialLedger>, { ok: true }>;
+};
+
+async function preflightTarget(admin: SupabaseClient, bookingId: string): Promise<PreparedTarget> {
+  const { data: booking, error: bookingError } = await admin
+    .from("bookings")
+    .select("id, is_team_job, payment_status, billing_type, total_paid_zar, amount_paid_cents, booking_snapshot")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (bookingError || !booking) throw new Error(`${bookingId}: ${bookingError?.message ?? "booking not found"}`);
+
+  if (booking.is_team_job !== true) throw new Error(`${bookingId}: team booking required`);
+  if (!["success", "paid"].includes(String(booking.payment_status ?? "").trim().toLowerCase())) {
+    throw new Error(`${bookingId}: paid booking required`);
+  }
+  if (String(booking.billing_type ?? "").trim().toLowerCase() !== "prepaid") {
+    throw new Error(`${bookingId}: prepaid billing_type required for this bounded repair`);
+  }
+
+  const { count: existingLineCount, error: lineCountError } = await admin
+    .from("booking_line_items")
+    .select("id", { count: "exact", head: true })
+    .eq("booking_id", bookingId);
+  if (lineCountError) throw new Error(`${bookingId}: ${lineCountError.message}`);
+  if ((existingLineCount ?? 0) !== 0) throw new Error(`${bookingId}: existing booking_line_items block repair`);
+
+  const { count: rosterCount, error: rosterError } = await admin
+    .from("booking_cleaners")
+    .select("cleaner_id", { count: "exact", head: true })
+    .eq("booking_id", bookingId);
+  if (rosterError) throw new Error(`${bookingId}: ${rosterError.message}`);
+  if ((rosterCount ?? 0) < 1) throw new Error(`${bookingId}: team roster missing`);
+
+  const { count: payoutCount, error: payoutError } = await admin
+    .from("team_job_member_payouts")
+    .select("cleaner_id", { count: "exact", head: true })
+    .eq("booking_id", bookingId);
+  if (payoutError) throw new Error(`${bookingId}: ${payoutError.message}`);
+  if ((payoutCount ?? 0) < 1) throw new Error(`${bookingId}: team payout ledger missing`);
+
+  const built = buildHistoricalTeamFinancialLedger({
+    bookingId,
+    bookingSnapshot: booking.booking_snapshot,
+    totalPaidZar: typeof booking.total_paid_zar === "number" ? booking.total_paid_zar : Number(booking.total_paid_zar),
+    amountPaidCents:
+      typeof booking.amount_paid_cents === "number" ? booking.amount_paid_cents : Number(booking.amount_paid_cents),
+  });
+  if (!built.ok) throw new Error(`${bookingId}: ${built.error}`);
+
+  return {
+    bookingId,
+    rosterCount: rosterCount ?? 0,
+    payoutCount: payoutCount ?? 0,
+    built,
+  };
+}
+
 async function main() {
   if (fixtureCheck) {
     runFixtureCheck();
@@ -99,6 +188,9 @@ async function main() {
     if (!TARGET_IDS.has(id)) throw new Error(`Booking ${id} is outside the bounded A02-03-02A allowlist.`);
   }
 
+  if (apply && requestedIds.length !== 1) {
+    throw new Error("Apply requires exactly one explicit --booking-id=<uuid> target.");
+  }
   if (apply && process.env.A02_03_02_APPLY !== "YES") {
     throw new Error("Apply blocked. Set A02_03_02_APPLY=YES and pass --apply.");
   }
@@ -109,65 +201,30 @@ async function main() {
 
   const admin = createClient(url, key, { auth: { persistSession: false } });
 
+  // Validate and build every requested target before any write occurs.
+  const prepared: PreparedTarget[] = [];
   for (const bookingId of ids) {
-    const { data: booking, error: bookingError } = await admin
-      .from("bookings")
-      .select("id, is_team_job, payment_status, billing_type, total_paid_zar, amount_paid_cents, booking_snapshot")
-      .eq("id", bookingId)
-      .maybeSingle();
-    if (bookingError || !booking) throw new Error(`${bookingId}: ${bookingError?.message ?? "booking not found"}`);
+    prepared.push(await preflightTarget(admin, bookingId));
+  }
 
-    if (booking.is_team_job !== true) throw new Error(`${bookingId}: team booking required`);
-    if (!["success", "paid"].includes(String(booking.payment_status ?? "").trim().toLowerCase())) {
-      throw new Error(`${bookingId}: paid booking required`);
-    }
-    if (String(booking.billing_type ?? "").trim().toLowerCase() !== "prepaid") {
-      throw new Error(`${bookingId}: prepaid billing_type required for this bounded repair`);
-    }
-
-    const { count: existingLineCount, error: lineCountError } = await admin
-      .from("booking_line_items")
-      .select("id", { count: "exact", head: true })
-      .eq("booking_id", bookingId);
-    if (lineCountError) throw new Error(`${bookingId}: ${lineCountError.message}`);
-    if ((existingLineCount ?? 0) !== 0) throw new Error(`${bookingId}: existing booking_line_items block repair`);
-
-    const { count: rosterCount, error: rosterError } = await admin
-      .from("booking_cleaners")
-      .select("cleaner_id", { count: "exact", head: true })
-      .eq("booking_id", bookingId);
-    if (rosterError) throw new Error(`${bookingId}: ${rosterError.message}`);
-    if ((rosterCount ?? 0) < 1) throw new Error(`${bookingId}: team roster missing`);
-
-    const { count: payoutCount, error: payoutError } = await admin
-      .from("team_job_member_payouts")
-      .select("cleaner_id", { count: "exact", head: true })
-      .eq("booking_id", bookingId);
-    if (payoutError) throw new Error(`${bookingId}: ${payoutError.message}`);
-    if ((payoutCount ?? 0) < 1) throw new Error(`${bookingId}: team payout ledger missing`);
-
-    const built = buildHistoricalTeamFinancialLedger({
-      bookingId,
-      bookingSnapshot: booking.booking_snapshot,
-      totalPaidZar: typeof booking.total_paid_zar === "number" ? booking.total_paid_zar : Number(booking.total_paid_zar),
-      amountPaidCents:
-        typeof booking.amount_paid_cents === "number" ? booking.amount_paid_cents : Number(booking.amount_paid_cents),
-    });
-    if (!built.ok) throw new Error(`${bookingId}: ${built.error}`);
-
+  for (const target of prepared) {
     console.log(
       JSON.stringify({
         mode: apply ? "apply" : "dry-run",
-        bookingId,
-        rosterCount,
-        payoutCount,
-        declaredPayableCents: built.declaredPayableCents,
-        sourceLineTotalCents: built.sourceLineTotalCents,
-        lineCount: built.items.length,
+        bookingId: target.bookingId,
+        rosterCount: target.rosterCount,
+        payoutCount: target.payoutCount,
+        declaredPayableCents: target.built.declaredPayableCents,
+        sourceLineTotalCents: target.built.sourceLineTotalCents,
+        lineCount: target.built.items.length,
       }),
     );
+  }
 
-    if (!apply) continue;
+  if (!apply) return;
+
+  for (const target of prepared) {
+    const { bookingId, built } = target;
 
     // Re-check immediately before insert. Explicit allowlist + dual apply gate keep this
     // bounded; the second count prevents accidental reruns in normal operations.
