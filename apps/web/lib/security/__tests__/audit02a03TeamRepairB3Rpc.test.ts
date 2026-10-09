@@ -23,6 +23,14 @@ describe("A02-03-02B3 atomic repair allowlist expansion", () => {
     expect(sql).toContain("for update");
     expect(sql).toContain("historical_team_snapshot_v1");
     expect(sql).toContain("v_existing_payload = v_requested_payload");
+    expect(sql).toContain("a02_03_02_b3_live_snapshot_mismatch");
+    expect(sql).toContain("a02_03_02_b3_payload_mismatch");
+    expect(sql).toContain("v_b3_expected_projection");
+    expect(sql).toContain("v_b3_expected_payload");
+    expect(sql).toContain("\"15% discount\"");
+    expect(sql).toContain("-32100");
+    expect(sql).toContain("\"inside-cabinets\"");
+    expect(sql).toContain("\"interior-walls\"");
     expect(sql).toContain("grant execute on function public.repair_a02_03_02_team_line_items");
     expect(sql).toContain("to service_role");
     expect(sql).toContain("from anon");
