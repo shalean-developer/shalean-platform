@@ -27,6 +27,12 @@ describe("A02-03-02 historical team ledger repair governance", () => {
     expect(src).toContain("existing booking_line_items block repair");
     expect(src).toContain("team payout ledger missing");
     expect(src).toContain("historical_team_snapshot_v1");
+    expect(src).toContain("preflightTarget");
+    expect(src).toContain("Validate and build every requested target before any write occurs.");
+    expect(src).toContain("Apply requires exactly one explicit --booking-id=<uuid> target.");
+    expect(src).toContain("Invalid --booking-id value");
+    expect(src).toContain("Unknown argument");
+    expect(src).toContain("Use --booking-id=<uuid>; spaced --booking-id values are not accepted.");
     expect(src).toContain("rollbackInsertedRepairRows");
     expect(src).toContain("verification read failed after rollback");
     expect(src).toContain("verification failed AND rollback failed");
