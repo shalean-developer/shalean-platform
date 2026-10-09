@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensureBookingLineItemsForEarnings";
-import { resolveDeploymentEnvironment } from "@/lib/env/deploymentEnvironment";
+import {
+  expectedSupabaseRefForDeployment,
+  resolveDeploymentEnvironment,
+  supabaseRefFromUrl,
+} from "@/lib/env/deploymentEnvironment";
 import { isProductionTestRouteBlocked } from "@/lib/security/productionTestRouteGuard";
 import { timingSafeEqualString } from "@/lib/security/timingSafeEqualString";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -46,6 +50,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid booking id." }, { status: 400 });
   }
 
+  const deployment = resolveDeploymentEnvironment();
+  const configuredSupabaseRef = supabaseRefFromUrl(
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL,
+  );
+  const expectedSupabaseRef = expectedSupabaseRefForDeployment(deployment);
+  if (
+    deployment !== "staging" ||
+    !configuredSupabaseRef ||
+    !expectedSupabaseRef ||
+    configuredSupabaseRef !== expectedSupabaseRef
+  ) {
+    return NextResponse.json({ error: "Staging database identity mismatch." }, { status: 503 });
+  }
+
   const admin = getSupabaseAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
@@ -66,15 +84,14 @@ export async function POST(request: Request) {
   }
 
   const source = String(booking.booking_source ?? "");
-  const updatedAtMs = Date.parse(String(booking.updated_at ?? ""));
-  const staleRepairing =
-    source === "audit_a02_03_fixture_repairing" &&
-    Number.isFinite(updatedAtMs) &&
-    updatedAtMs <= Date.now() - 5 * 60_000;
-
-  if (source !== "audit_a02_03_fixture" && !staleRepairing) {
+  if (source !== "audit_a02_03_fixture") {
     return NextResponse.json(
-      { error: source === "audit_a02_03_fixture_repairing" ? "Fixture repair already claimed." : "Fixture booking required." },
+      {
+        error:
+          source === "audit_a02_03_fixture_repairing"
+            ? "Fixture repair already claimed; create a fresh fixture."
+            : "Fixture booking required.",
+      },
       { status: source === "audit_a02_03_fixture_repairing" ? 409 : 403 },
     );
   }
@@ -88,11 +105,7 @@ export async function POST(request: Request) {
     })
     .eq("id", bookingId)
     .eq("is_test", true)
-    .eq("booking_source", source);
-
-  if (staleRepairing) {
-    claimQuery = claimQuery.eq("updated_at", String(booking.updated_at));
-  }
+    .eq("booking_source", "audit_a02_03_fixture");
 
   const { data: claim, error: claimError } = await claimQuery.select("id, updated_at").maybeSingle();
 
