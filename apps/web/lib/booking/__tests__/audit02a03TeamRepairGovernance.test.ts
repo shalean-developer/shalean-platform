@@ -9,7 +9,8 @@ function read(rel: string): string {
 describe("A02-03-02 historical team ledger repair governance", () => {
   it("keeps the generic booking-line backfill away from team jobs", () => {
     const src = read("scripts/backfillBookingLineItems.ts");
-    expect(src).toContain('.select("id, service, rooms, bathrooms, extras, total_paid_zar, amount_paid_cents, booking_snapshot, is_team_job")');
+    expect(src).toContain('.from("bookings")');
+    expect(src).toContain('monthly_invoice_id, is_team_job")');
     expect(src).toContain("raw.is_team_job === true");
   });
 
@@ -43,5 +44,9 @@ describe("A02-03-02 historical team ledger repair governance", () => {
     expect(src).toContain("Invalid --booking-id value");
     expect(src).toContain("Unknown argument");
     expect(src).toContain("Use --booking-id=<uuid>; spaced --booking-id values are not accepted.");
+    expect(src).toContain("SHALEAN_SUPABASE_REFS.production");
+    expect(src).toContain("supabaseRefFromUrl");
+    expect(src).toContain("databaseIdentity");
+    expect(src).toContain("Apply blocked: expected production Supabase ref");
   });
 });
