@@ -72,16 +72,18 @@ async function loadMonthlyInvoiceStatusMap(
   const map = new Map<string, string>();
   if (!uniq.length) return map;
 
-  const { data, error } = await admin.from("monthly_invoices").select("id, status").in("id", uniq);
-  if (error) {
-    await reportOperationalIssue("error", "generateWeeklyPayouts", `monthly_invoices lookup failed: ${error.message}`, {
-      invoice_count: uniq.length,
-    });
-    return null;
-  }
-  for (const row of data ?? []) {
-    const r = row as { id?: string; status?: string | null };
-    if (typeof r.id === "string") map.set(r.id, String(r.status ?? ""));
+  for (const idChunk of payoutQueryChunks(uniq)) {
+    const { data, error } = await admin.from("monthly_invoices").select("id, status").in("id", idChunk);
+    if (error) {
+      await reportOperationalIssue("error", "generateWeeklyPayouts", `monthly_invoices lookup failed: ${error.message}`, {
+        invoice_count: uniq.length,
+      });
+      return null;
+    }
+    for (const row of data ?? []) {
+      const r = row as { id?: string; status?: string | null };
+      if (typeof r.id === "string") map.set(r.id, String(r.status ?? ""));
+    }
   }
   return map;
 }
