@@ -20,10 +20,11 @@ describe("AUDIT-02A03 staging-only repair verifier", () => {
     expect(src).toContain('{ status: 401 }');
   });
 
-  it("accepts only dedicated test fixtures", () => {
+  it("accepts only dedicated test fixtures or a stale recoverable repair lease", () => {
     expect(src).toContain("booking.is_test !== true");
-    expect(src).toContain('booking.booking_source !== "audit_a02_03_fixture"');
-    expect(src).toContain('{ status: 403 }');
+    expect(src).toContain('const source = String(booking.booking_source ?? "")');
+    expect(src).toContain('source !== "audit_a02_03_fixture" && !staleRepairing');
+    expect(src).toContain('source === "audit_a02_03_fixture_repairing" ? 409 : 403');
   });
 
   it("claims fixtures with a recoverable database lease before invoking the real repair helper", () => {
