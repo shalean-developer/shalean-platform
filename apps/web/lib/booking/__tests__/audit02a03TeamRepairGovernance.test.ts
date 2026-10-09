@@ -24,7 +24,7 @@ describe("A02-03-02 historical team ledger repair governance", () => {
     const pkg = JSON.parse(read("package.json")) as { scripts?: Record<string, string> };
     expect(pkg.scripts?.["repair:a02-03-02-team-lines"]).toContain("--env-file=.env.local");
     expect(pkg.scripts?.["repair:a02-03-02-team-lines"]).toContain("--conditions=react-server");
-    expect(src).toContain('process.argv.includes("--fixture-check")');
+    expect(src).toContain('arg === "--fixture-check"');
     expect(src).toContain("existing booking_line_items block repair");
     expect(src).toContain("team payout ledger missing");
     expect(src).toContain("historical_team_snapshot_v1");
