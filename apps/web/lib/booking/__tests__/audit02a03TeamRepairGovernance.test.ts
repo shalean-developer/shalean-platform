@@ -9,7 +9,7 @@ function read(rel: string): string {
 describe("A02-03-02 historical team ledger repair governance", () => {
   it("keeps the generic booking-line backfill away from team jobs", () => {
     const src = read("scripts/backfillBookingLineItems.ts");
-    expect(src).toContain("is_team_job");
+    expect(src).toContain('booking_snapshot, is_team_job');
     expect(src).toContain("is_team_job === true");
   });
 
@@ -20,9 +20,14 @@ describe("A02-03-02 historical team ledger repair governance", () => {
     expect(src).toContain("f6b2316e-2518-4f43-b6e8-b050c6d07483");
     expect(src).toContain('process.env.A02_03_02_APPLY !== "YES"');
     expect(src).toContain('process.argv.includes("--apply")');
+    const pkg = JSON.parse(read("package.json")) as { scripts?: Record<string, string> };
+    expect(pkg.scripts?.["repair:a02-03-02-team-lines"]).toContain("--env-file=.env.local");
+    expect(pkg.scripts?.["repair:a02-03-02-team-lines"]).toContain("--conditions=react-server");
     expect(src).toContain('process.argv.includes("--fixture-check")');
     expect(src).toContain("existing booking_line_items block repair");
     expect(src).toContain("team payout ledger missing");
     expect(src).toContain("historical_team_snapshot_v1");
+    expect(src).toContain("rollbackError");
+    expect(src).toContain("verification failed AND rollback failed");
   });
 });
