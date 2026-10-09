@@ -33,6 +33,9 @@ describe("AUDIT-02A03 staging-only repair verifier", () => {
     expect(src).toContain('body.variant === "discounted" || body.variant === "zero_placeholder"');
     expect(src).toContain('source: "audit_a02_03_fixture"');
     expect(src).toContain('booking_source: "audit_a02_03_fixture"');
+    expect(src).toContain("audit_a02_03_");
+    expect(src).toContain("crypto.randomUUID().replace(/-/g, \"\")");
+    expect(src).toContain("paystack_reference: paystackReference");
     expect(src).toContain('payment_status: discounted ? "success" : "pending_monthly"');
     expect(src).toContain('payment_completed_at: new Date().toISOString()');
     expect(src).toContain("is_test: true");
