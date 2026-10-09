@@ -28,6 +28,13 @@ describe("AUDIT-02A03 staging-only repair verifier", () => {
     expect(src).toContain('{ status: 401 }');
   });
 
+  it("requires a true missing-ledger fixture before claiming repair", () => {
+    expect(src).toContain('.from("booking_line_items")');
+    expect(src).toContain('.select("id", { count: "exact", head: true })');
+    expect(src).toContain('(existingLineCount ?? 0) !== 0');
+    expect(src).toContain("Fixture must start with zero line items.");
+  });
+
   it("accepts only fresh dedicated test fixtures and never performs stale takeover", () => {
     expect(src).toContain("booking.is_test !== true");
     expect(src).toContain('const source = String(booking.booking_source ?? "")');
