@@ -59,7 +59,7 @@ async function main() {
   for (;;) {
     let q = admin
       .from("bookings")
-      .select("id, service, rooms, bathrooms, extras, total_paid_zar, amount_paid_cents, booking_snapshot, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id")
+      .select("id, service, rooms, bathrooms, extras, total_paid_zar, amount_paid_cents, booking_snapshot, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id, is_team_job")
       .order("id", { ascending: true })
       .limit(pageSize);
     if (lastId) q = q.gt("id", lastId);
@@ -74,6 +74,10 @@ async function main() {
     for (const raw of batch as Parameters<typeof buildBookingLineItemsFromRow>[0][]) {
       scanned += 1;
       const id = typeof raw.id === "string" ? raw.id : "";
+      if (raw.is_team_job === true) {
+        skipped += 1;
+        continue;
+      }
       if (!id || already.has(id)) {
         skipped += 1;
         continue;
