@@ -40,6 +40,8 @@ export type BookingRowLineItemBackfillInput = {
   extras?: unknown;
   total_paid_zar?: number | null;
   amount_paid_cents?: number | null;
+  /** Team jobs are excluded from the generic historical backfill runner. */
+  is_team_job?: boolean | null;
   /** Billing context determines whether payable means invoice line value or collected cash. */
   billing_type?: string | null;
   is_monthly_billing_booking?: boolean | null;
