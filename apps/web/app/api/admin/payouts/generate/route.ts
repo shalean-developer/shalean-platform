@@ -3,7 +3,7 @@ import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { withCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { PayoutGenerationBlockedError } from "@/lib/payout/backfillLegacyWeeklyPayoutColumns";
-import { generateWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
+import { generateCatchUpWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
 import {
   prepareDraftRunPayoutsForCatchUp,
   restoreDraftRunPayoutsAfterCatchUp,
@@ -16,10 +16,10 @@ export const dynamic = "force-dynamic";
 /**
  * Admin manual trigger for the canonical monthly cleaner payout cycle.
  *
- * Only the previous, fully closed Johannesburg calendar month may be generated.
- * This intentionally prevents the admin button from creating/finalising payout
- * batches for the current month while cleaner earnings and monthly customer
- * invoices are still accruing.
+ * Generates every closed Johannesburg calendar month that still has unlinked
+ * payable cleaner earnings. Current-month rows are excluded by the catch-up
+ * period guard, so active earnings and monthly customer invoices keep accruing
+ * without creating an early payout batch.
  *
  * Late-earnings reconciliation: frozen cleaner payouts that are still inside a
  * DRAFT payout run are temporarily re-opened while this same payout-generation
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       async () => {
         const prep = await prepareDraftRunPayoutsForCatchUp(admin);
         try {
-          const generated = await generateWeeklyPayouts(admin, { createdBy: auth.userId });
+          const generated = await generateCatchUpWeeklyPayouts(admin, { createdBy: auth.userId });
           return {
             ...generated,
             payoutFrequency: "monthly" as const,
