@@ -149,33 +149,6 @@ begin
   from jsonb_array_elements(p_line_items) as r;
 
   if p_booking_id = 'c1bd1fc8-03e9-4f2c-a597-e0ac395c841a'::uuid then
-    v_b3_live_projection := jsonb_build_object(
-      'lineItems', v_booking.booking_snapshot->'pricingSummary'->'lineItems',
-      'selected_extras', coalesce(v_booking.booking_snapshot->'pricingSummary'->'selected_extras', '[]'::jsonb)
-    );
-
-    v_b3_expected_projection := $b3_snapshot$
-    {
-      "lineItems": [
-        {"label":"Deep Cleaning (base)","amountZar":1200},
-        {"label":"3 bedrooms","amountZar":450},
-        {"label":"2 bathrooms","amountZar":400},
-        {"label":"Inside cabinets","amountZar":25},
-        {"label":"Interior walls","amountZar":35},
-        {"label":"Service fee","amountZar":30},
-        {"label":"15% discount","amountZar":-321}
-      ],
-      "selected_extras": [
-        {"name":"Inside cabinets","price":25,"total":25,"extra_id":"inside-cabinets","quantity":1},
-        {"name":"Interior walls","price":35,"total":35,"extra_id":"interior-walls","quantity":1}
-      ]
-    }
-    $b3_snapshot$::jsonb;
-
-    if v_b3_live_projection <> v_b3_expected_projection then
-      raise exception 'a02_03_02_b3_live_snapshot_mismatch';
-    end if;
-
     v_b3_expected_payload := $b3_payload$
     [
       {"sourceLineIndex":0,"item_type":"base","slug":null,"name":"Deep Cleaning (base)","quantity":1,"unit_price_cents":120000,"total_price_cents":120000,"pricing_source":"historical_team_snapshot_v1","metadata":{"source":"booking_snapshot.pricingSummary.lineItems","sourceLineIndex":0,"historical_team_financial_ledger_only":true},"earns_cleaner":false},
@@ -259,6 +232,35 @@ begin
     end if;
 
     raise exception 'a02_03_02_existing_line_items_conflict';
+  end if;
+
+  if p_booking_id = 'c1bd1fc8-03e9-4f2c-a597-e0ac395c841a'::uuid then
+    v_b3_live_projection := jsonb_build_object(
+      'lineItems', v_booking.booking_snapshot->'pricingSummary'->'lineItems',
+      'selected_extras', coalesce(v_booking.booking_snapshot->'pricingSummary'->'selected_extras', '[]'::jsonb)
+    );
+
+    v_b3_expected_projection := $b3_snapshot$
+    {
+      "lineItems": [
+        {"label":"Deep Cleaning (base)","amountZar":1200},
+        {"label":"3 bedrooms","amountZar":450},
+        {"label":"2 bathrooms","amountZar":400},
+        {"label":"Inside cabinets","amountZar":25},
+        {"label":"Interior walls","amountZar":35},
+        {"label":"Service fee","amountZar":30},
+        {"label":"15% discount","amountZar":-321}
+      ],
+      "selected_extras": [
+        {"name":"Inside cabinets","price":25,"total":25,"extra_id":"inside-cabinets","quantity":1},
+        {"name":"Interior walls","price":35,"total":35,"extra_id":"interior-walls","quantity":1}
+      ]
+    }
+    $b3_snapshot$::jsonb;
+
+    if v_b3_live_projection <> v_b3_expected_projection then
+      raise exception 'a02_03_02_b3_live_snapshot_mismatch';
+    end if;
   end if;
 
   if p_booking_id = 'c1bd1fc8-03e9-4f2c-a597-e0ac395c841a'::uuid then
