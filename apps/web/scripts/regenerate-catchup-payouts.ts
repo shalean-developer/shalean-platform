@@ -6,10 +6,6 @@ import { createClient } from "@supabase/supabase-js";
 import { withCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { generateCatchUpWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
-import {
-  prepareDraftRunPayoutsForCatchUp,
-  restoreDraftRunPayoutsAfterCatchUp,
-} from "@/lib/payout/runs/reconcileDraftRunLateEarnings";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -25,17 +21,11 @@ async function main() {
     admin,
     { jobName: CRON_LOCK_KEYS.generatePayouts, leaseSeconds: 900 },
     async () => {
-      const prep = await prepareDraftRunPayoutsForCatchUp(admin);
-      try {
-        const generated = await generateCatchUpWeeklyPayouts(admin);
-        return {
-          ...generated,
-          lateEarningsReconciledPayouts: prep.payouts.length,
-          lateEarningsReconciledRuns: prep.runIds.length,
-        };
-      } finally {
-        await restoreDraftRunPayoutsAfterCatchUp(admin, prep);
-      }
+      // Standalone CLI intentionally does not reopen frozen draft-run payouts:
+      // an abrupt process exit could strand them detached from their run.
+      // Governed cron/admin routes own reopen/restore because their lifecycle is
+      // observable and protected by the renewable payout-generation lease.
+      return generateCatchUpWeeklyPayouts(admin);
     },
   );
 
