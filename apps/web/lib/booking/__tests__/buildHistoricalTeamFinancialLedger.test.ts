@@ -160,6 +160,46 @@ describe("buildHistoricalTeamFinancialLedger", () => {
     expect(result.items.find((line) => line.name === "Furnished property")?.item_type).toBe("adjustment");
   });
 
+  it("reconstructs B3 c1bd exact R1819 ledger and preserves negative discount", () => {
+    const result = buildHistoricalTeamFinancialLedger({
+      bookingId: "c1bd1fc8-03e9-4f2c-a597-e0ac395c841a",
+      totalPaidZar: 1819,
+      amountPaidCents: 181900,
+      bookingSnapshot: {
+        pricingSummary: {
+          lineItems: [
+            { label: "Deep Cleaning (base)", amountZar: 1200 },
+            { label: "3 bedrooms", amountZar: 450 },
+            { label: "2 bathrooms", amountZar: 400 },
+            { label: "Inside cabinets", amountZar: 25 },
+            { label: "Interior walls", amountZar: 35 },
+            { label: "Service fee", amountZar: 30 },
+            { label: "15% discount", amountZar: -321 },
+          ],
+          selected_extras: [
+            { name: "Inside cabinets", price: 25, extra_id: "inside-cabinets" },
+            { name: "Interior walls", price: 35, extra_id: "interior-walls" },
+          ],
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.sourceLineTotalCents).toBe(181900);
+    expect(result.items).toHaveLength(7);
+    expect(result.items.every((line) => line.earns_cleaner === false)).toBe(true);
+    expect(result.items.find((line) => line.name === "Inside cabinets")?.slug).toBe("inside-cabinets");
+    expect(result.items.find((line) => line.name === "Interior walls")?.slug).toBe("interior-walls");
+    expect(result.items.find((line) => line.name === "15% discount")).toMatchObject({
+      item_type: "adjustment",
+      quantity: 1,
+      unit_price_cents: -32_100,
+      total_price_cents: -32_100,
+      earns_cleaner: false,
+    });
+  });
+
   it("fails closed when immutable lines do not reconcile to paid cents", () => {
     const result = buildHistoricalTeamFinancialLedger({
       bookingId: "00000000-0000-4000-8000-000000000001",
