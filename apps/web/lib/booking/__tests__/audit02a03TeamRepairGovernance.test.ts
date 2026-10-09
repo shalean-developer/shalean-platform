@@ -55,5 +55,6 @@ describe("A02-03-02 historical team ledger repair governance", () => {
     const b3Migration = read("../../supabase/migrations/20261009163000_audit_02a03_02b3_c1bd_discount_line_items_allowlist.sql");
     expect(b3Migration).toContain("a02_03_02_b3_live_snapshot_mismatch");
     expect(b3Migration).toContain("a02_03_02_b3_payload_mismatch");
+    expect(b3Migration).toContain("a02_03_02_b3_payout_state_mismatch");
   });
 });
