@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { insertBookingRowUnified } from "@/lib/booking/createBookingUnified";
 import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensureBookingLineItemsForEarnings";
 import {
   expectedSupabaseRefForDeployment,
@@ -21,21 +22,139 @@ function loadVerifierSecret(): string | null {
   return secret && secret.length > 0 ? secret : null;
 }
 
-export async function POST(request: Request) {
+function authorizedTestRequest(request: Request): { ok: true } | { ok: false; response: NextResponse } {
   if (isProductionTestRouteBlocked(request.url) || resolveDeploymentEnvironment() !== "staging") {
-    return NextResponse.json({ error: "Not found." }, { status: 404 });
+    return { ok: false, response: NextResponse.json({ error: "Not found." }, { status: 404 }) };
   }
-
   const secret = loadVerifierSecret();
   if (!secret) {
-    return NextResponse.json({ error: "Verifier secret is not configured." }, { status: 503 });
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "Verifier secret is not configured." }, { status: 503 }),
+    };
   }
   const provided =
     request.headers.get("x-dispatch-load-test-secret")?.trim() ??
     request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ??
     "";
   if (!timingSafeEqualString(provided, secret)) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    return { ok: false, response: NextResponse.json({ error: "Unauthorized." }, { status: 401 }) };
+  }
+  return { ok: true };
+}
+
+function stagingDatabaseIdentityOk(): boolean {
+  const deployment = resolveDeploymentEnvironment();
+  const configuredSupabaseRef = supabaseRefFromUrl(
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL,
+  );
+  const expectedSupabaseRef = expectedSupabaseRefForDeployment(deployment);
+  return Boolean(
+    deployment === "staging" &&
+      configuredSupabaseRef &&
+      expectedSupabaseRef &&
+      configuredSupabaseRef === expectedSupabaseRef,
+  );
+}
+
+export async function PUT(request: Request) {
+  const auth = authorizedTestRequest(request);
+  if (!auth.ok) return auth.response;
+  if (!stagingDatabaseIdentityOk()) {
+    return NextResponse.json({ error: "Staging database identity mismatch." }, { status: 503 });
+  }
+
+  let body: { variant?: string } = {};
+  try {
+    body = (await request.json()) as { variant?: string };
+  } catch {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  const variant = body.variant === "discounted" || body.variant === "zero_placeholder" ? body.variant : null;
+  if (!variant) {
+    return NextResponse.json({ error: "variant must be discounted or zero_placeholder." }, { status: 400 });
+  }
+
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+  }
+
+  const discounted = variant === "discounted";
+  const payableCents = discounted ? 31_000 : 39_000;
+  const baseAmountCents = discounted ? 33_000 : 36_000;
+  const serviceFeeCents = 3_000;
+  const amountPaidCents = discounted ? payableCents : 0;
+
+  const inserted = await insertBookingRowUnified(admin, {
+    source: "audit_a02_03_fixture",
+    rowBase: {
+      is_test: true,
+      booking_source: "audit_a02_03_fixture",
+      status: "pending",
+      payment_status: discounted ? "success" : "pending_monthly",
+      service: "Regular Cleaning",
+      service_slug: "standard",
+      total_paid_zar: payableCents / 100,
+      amount_paid_cents: amountPaidCents,
+      total_paid_cents: amountPaidCents,
+      base_amount_cents: baseAmountCents,
+      extras_amount_cents: 0,
+      service_fee_cents: serviceFeeCents,
+      currency: "ZAR",
+      date: "2099-01-01",
+      time: "10:00",
+      location: "A02-03 staging fixture",
+    },
+    rooms: 1,
+    bathrooms: 1,
+    extrasRaw: [],
+    serviceSlugForFlat: "standard",
+    locationForFlat: "A02-03 staging fixture",
+    dateForFlat: "2099-01-01",
+    timeForFlat: "10:00",
+    snapshotExtension: {
+      audit_fixture: "A02-03",
+      variant,
+      expected_payable_cents: payableCents,
+      expected_cleaner_cents: baseAmountCents,
+    },
+    select: "id",
+    logInsert: false,
+    lineItemsPricing: null,
+  });
+
+  if (!inserted.ok) {
+    return NextResponse.json({ ok: false, error: inserted.error }, { status: 500 });
+  }
+
+  const { count, error: lineCountError } = await admin
+    .from("booking_line_items")
+    .select("id", { count: "exact", head: true })
+    .eq("booking_id", inserted.id);
+  if (lineCountError || (count ?? 0) !== 0) {
+    return NextResponse.json(
+      { ok: false, error: lineCountError?.message ?? "Fixture unexpectedly contains line items." },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    bookingId: inserted.id,
+    variant,
+    expectedPayableCents: payableCents,
+    expectedCleanerCents: baseAmountCents,
+    initialLineCount: 0,
+  });
+}
+
+export async function POST(request: Request) {
+  const auth = authorizedTestRequest(request);
+  if (!auth.ok) return auth.response;
+  if (!stagingDatabaseIdentityOk()) {
+    return NextResponse.json({ error: "Staging database identity mismatch." }, { status: 503 });
   }
 
   let body: { bookingId?: string } = {};
@@ -48,20 +167,6 @@ export async function POST(request: Request) {
   const bookingId = typeof body.bookingId === "string" ? body.bookingId.trim().toLowerCase() : "";
   if (!UUID_RE.test(bookingId)) {
     return NextResponse.json({ error: "Invalid booking id." }, { status: 400 });
-  }
-
-  const deployment = resolveDeploymentEnvironment();
-  const configuredSupabaseRef = supabaseRefFromUrl(
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL,
-  );
-  const expectedSupabaseRef = expectedSupabaseRefForDeployment(deployment);
-  if (
-    deployment !== "staging" ||
-    !configuredSupabaseRef ||
-    !expectedSupabaseRef ||
-    configuredSupabaseRef !== expectedSupabaseRef
-  ) {
-    return NextResponse.json({ error: "Staging database identity mismatch." }, { status: 503 });
   }
 
   const admin = getSupabaseAdmin();
