@@ -27,6 +27,25 @@ describe("buildHistoricalTeamFinancialLedger", () => {
     expect(result.items).toHaveLength(6);
     expect(result.items.every((line) => line.earns_cleaner === false)).toBe(true);
     expect(result.items.find((line) => line.name === "Service fee")?.item_type).toBe("adjustment");
+    expect(result.items.find((line) => line.name === "2 bedrooms")).toMatchObject({
+      item_type: "room",
+      quantity: 2,
+      unit_price_cents: 15_000,
+      total_price_cents: 30_000,
+    });
+    expect(result.items.find((line) => line.name === "2 bathrooms")).toMatchObject({
+      item_type: "bathroom",
+      quantity: 2,
+      unit_price_cents: 20_000,
+      total_price_cents: 40_000,
+    });
+    expect(result.items.find((line) => line.name === "3 extra rooms")).toMatchObject({
+      item_type: "room",
+      slug: "extra-rooms",
+      quantity: 3,
+      unit_price_cents: 12_000,
+      total_price_cents: 36_000,
+    });
   });
 
   it("preserves the Sep 13 known extra slug and exact R2730 payable", () => {
