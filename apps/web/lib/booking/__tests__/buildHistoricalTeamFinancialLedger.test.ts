@@ -75,6 +75,52 @@ describe("buildHistoricalTeamFinancialLedger", () => {
     expect(result.items.every((line) => line.earns_cleaner === false)).toBe(true);
   });
 
+  it("reconstructs B1 e865 exact R2530 ledger with known extra slugs", () => {
+    const result = buildHistoricalTeamFinancialLedger({
+      bookingId: "e865f74b-33af-481f-a12e-576e1e0ed227",
+      totalPaidZar: 2530,
+      amountPaidCents: 253000,
+      bookingSnapshot: {
+        pricingSummary: {
+          lineItems: [
+            { label: "Deep Cleaning (base)", amountZar: 1200 },
+            { label: "2 bedrooms", amountZar: 300 },
+            { label: "2 bathrooms", amountZar: 400 },
+            { label: "Property condition", amountZar: 100 },
+            { label: "Balcony cleaning", amountZar: 50 },
+            { label: "Ceiling cleaning", amountZar: 100 },
+            { label: "Outside windows", amountZar: 350 },
+            { label: "Service fee", amountZar: 30 },
+          ],
+          selected_extras: [
+            { name: "Balcony cleaning", price: 50, extra_id: "balcony-cleaning" },
+            { name: "Ceiling cleaning", price: 100, extra_id: "ceiling-cleaning" },
+            { name: "Outside windows", price: 350, extra_id: "outside-windows" },
+          ],
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.sourceLineTotalCents).toBe(253000);
+    expect(result.items).toHaveLength(8);
+    expect(result.items.every((line) => line.earns_cleaner === false)).toBe(true);
+    expect(result.items.find((line) => line.name === "Balcony cleaning")?.slug).toBe("balcony-cleaning");
+    expect(result.items.find((line) => line.name === "Ceiling cleaning")?.slug).toBe("ceiling-cleaning");
+    expect(result.items.find((line) => line.name === "Outside windows")?.slug).toBe("outside-windows");
+    expect(result.items.find((line) => line.name === "Bedrooms")).toMatchObject({
+      quantity: 2,
+      unit_price_cents: 15_000,
+      total_price_cents: 30_000,
+    });
+    expect(result.items.find((line) => line.name === "Bathrooms")).toMatchObject({
+      quantity: 2,
+      unit_price_cents: 20_000,
+      total_price_cents: 40_000,
+    });
+  });
+
   it("fails closed when immutable lines do not reconcile to paid cents", () => {
     const result = buildHistoricalTeamFinancialLedger({
       bookingId: "00000000-0000-4000-8000-000000000001",
