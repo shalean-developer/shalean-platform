@@ -17,8 +17,8 @@ describe("AUDIT-02A03 staging-only repair verifier", () => {
   it("fails closed unless the configured Supabase ref matches canonical staging", () => {
     expect(src).toContain("supabaseRefFromUrl");
     expect(src).toContain("expectedSupabaseRefForDeployment");
-    expect(src).toContain('deployment !== "staging"');
-    expect(src).toContain("configuredSupabaseRef !== expectedSupabaseRef");
+    expect(src).toContain('deployment === "staging"');
+    expect(src).toContain("configuredSupabaseRef === expectedSupabaseRef");
     expect(src).toContain("Staging database identity mismatch.");
   });
 
@@ -26,6 +26,16 @@ describe("AUDIT-02A03 staging-only repair verifier", () => {
     expect(src).toContain("DISPATCH_LOAD_TEST_SECRET");
     expect(src).toContain("timingSafeEqualString(provided, secret)");
     expect(src).toContain('{ status: 401 }');
+  });
+
+  it("provides governed staging-only fixture creation for both audit variants", () => {
+    expect(src).toContain("export async function PUT(request: Request)");
+    expect(src).toContain('body.variant === "discounted" || body.variant === "zero_placeholder"');
+    expect(src).toContain('source: "audit_a02_03_fixture"');
+    expect(src).toContain('booking_source: "audit_a02_03_fixture"');
+    expect(src).toContain("is_test: true");
+    expect(src).toContain("lineItemsPricing: null");
+    expect(src).toContain("initialLineCount: 0");
   });
 
   it("requires a true missing-ledger fixture before claiming repair", () => {
