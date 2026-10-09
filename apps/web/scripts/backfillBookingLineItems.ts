@@ -74,6 +74,10 @@ async function main() {
     for (const raw of batch as Parameters<typeof buildBookingLineItemsFromRow>[0][]) {
       scanned += 1;
       const id = typeof raw.id === "string" ? raw.id : "";
+      if ((raw as { is_team_job?: boolean | null }).is_team_job === true) {
+        skipped += 1;
+        continue;
+      }
       if (!id || already.has(id)) {
         skipped += 1;
         continue;
