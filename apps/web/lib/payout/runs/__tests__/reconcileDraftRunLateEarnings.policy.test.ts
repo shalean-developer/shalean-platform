@@ -6,23 +6,16 @@ function read(path: string): string {
   return readFileSync(join(process.cwd(), path), "utf8");
 }
 
-describe("late earnings reconciliation safety boundary", () => {
-  it("only permits draft payout runs to be reopened", () => {
-    const reopenable = (status: string) => status === "draft";
-    expect(reopenable("draft")).toBe(true);
-    expect(reopenable("approved")).toBe(false);
-    expect(reopenable("paid")).toBe(false);
-  });
-
-  it("runs cron and admin generation through closed-month catch-up while draft runs are temporarily reopened", () => {
+describe("MASTER-03A late earnings reconciliation safety boundary", () => {
+  it("routes cron and admin generation through closed-month catch-up without detaching draft-run payouts", () => {
     for (const path of [
       "app/api/cron/generate-payouts/route.ts",
       "app/api/admin/payouts/generate/route.ts",
     ]) {
       const src = read(path);
       expect(src).toContain("generateCatchUpWeeklyPayouts");
-      expect(src).toContain("prepareDraftRunPayoutsForCatchUp");
-      expect(src).toContain("restoreDraftRunPayoutsAfterCatchUp");
+      expect(src).not.toContain("prepareDraftRunPayoutsForCatchUp");
+      expect(src).not.toContain("restoreDraftRunPayoutsAfterCatchUp");
     }
   });
 
@@ -35,22 +28,21 @@ describe("late earnings reconciliation safety boundary", () => {
     expect(src).not.toContain("restoreDraftRunPayoutsAfterCatchUp");
   });
 
-  it("renews long-running payout cron leases through an owner-checked RPC", () => {
-    const lock = read("lib/cron/cronLock.ts");
-    const sql = read("../../supabase/migrations/20261009203000_master_03a_renew_cron_lock.sql");
-    expect(lock).toContain("renewCronLock");
-    expect(lock).toContain('admin.rpc("renew_cron_lock"');
-    expect(lock).toContain("setInterval");
-    expect(lock).toContain("clearInterval");
-    expect(sql).toContain("holder_id = p_holder_id");
-    expect(sql).toContain("expires_at > v_now");
-    expect(sql).toContain("grant execute on function public.renew_cron_lock");
+  it("allows late earnings only on pending batches or frozen batches whose parent run is still draft", () => {
+    const src = read("lib/payout/generateWeeklyPayouts.ts");
+    expect(src).toContain('existingStatus === "pending" && !existingRunId');
+    expect(src).toContain('existingStatus === "frozen"');
+    expect(src).toContain('existingRunStatus === "draft"');
+    expect(src).toContain("refreshDraftPayoutRunTotal");
+    expect(src).toContain("Eligible earnings found after the monthly payout batch was locked");
   });
 
-  it("paginates both payout discovery and downstream payout processing", () => {
+  it("paginates discovery, downstream processing, and post-link payout total loading", () => {
     const generator = read("lib/payout/generateWeeklyPayouts.ts");
     const roster = read("lib/payout/rosterMemberWeeklyPayoutCandidates.ts");
     const team = read("lib/payout/teamJobMemberWeeklyPayoutCandidates.ts");
+    const batchItems = read("lib/payout/loadCleanerPayoutBatchItems.ts");
+
     expect(generator).toContain("fetchAllPayoutRows");
     expect(generator).toContain('from("cleaners")');
     expect(generator).toContain('.order("id", { ascending: true })');
@@ -59,5 +51,22 @@ describe("late earnings reconciliation safety boundary", () => {
     expect(roster).toContain("payoutQueryChunks");
     expect(team).toContain("fetchAllPayoutRows");
     expect(team).toContain("payoutQueryChunks");
+    expect(batchItems).toContain("fetchAllPayoutRows");
+    expect(batchItems).toContain("payoutQueryChunks");
+  });
+
+  it("reconciles a partially linked batch before surfacing a chunk failure", () => {
+    const src = read("lib/payout/generateWeeklyPayouts.ts");
+    expect(src).toContain("syncAndAbortAfterPartialLinkFailure");
+    expect(src).toContain("partial batch reconciliation failed");
+    expect(src).toContain("throw new Error(reason)");
+  });
+
+  it("keeps draft-run total recomputation paginated and draft-only", () => {
+    const src = read("lib/payout/runs/reconcileDraftRunLateEarnings.ts");
+    expect(src).toContain("fetchAllPayoutRows");
+    expect(src).toContain('.eq("status", "draft")');
+    expect(src).not.toContain("payout_run_id: null");
+    expect(src).not.toContain('status: "pending"');
   });
 });
