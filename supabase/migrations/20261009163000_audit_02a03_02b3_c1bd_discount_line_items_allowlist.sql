@@ -22,6 +22,9 @@ declare
   v_existing_index_count integer;
   v_existing_payload jsonb;
   v_requested_payload jsonb;
+  v_b3_expected_payload jsonb;
+  v_b3_live_projection jsonb;
+  v_b3_expected_projection jsonb;
   v_inserted integer;
   v_authoritative_cents bigint;
 begin
@@ -120,6 +123,73 @@ begin
   end if;
 
   select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'sourceLineIndex', (r->'metadata'->>'sourceLineIndex')::integer,
+          'item_type', r->>'item_type',
+          'slug', nullif(trim(r->>'slug'), ''),
+          'name', coalesce(r->>'name', ''),
+          'quantity', greatest(1, coalesce((r->>'quantity')::integer, 1)),
+          'unit_price_cents', (r->>'unit_price_cents')::integer,
+          'total_price_cents', (r->>'total_price_cents')::integer,
+          'pricing_source', 'historical_team_snapshot_v1',
+          'metadata', r->'metadata',
+          'earns_cleaner', false
+        )
+        order by (r->'metadata'->>'sourceLineIndex')::integer
+      ),
+      '[]'::jsonb
+    )
+  into v_requested_payload
+  from jsonb_array_elements(p_line_items) as r;
+
+  if p_booking_id = 'c1bd1fc8-03e9-4f2c-a597-e0ac395c841a'::uuid then
+    v_b3_live_projection := jsonb_build_object(
+      'lineItems', v_booking.booking_snapshot->'pricingSummary'->'lineItems',
+      'selected_extras', coalesce(v_booking.booking_snapshot->'pricingSummary'->'selected_extras', '[]'::jsonb)
+    );
+
+    v_b3_expected_projection := $b3_snapshot$
+    {
+      "lineItems": [
+        {"label":"Deep Cleaning (base)","amountZar":1200},
+        {"label":"3 bedrooms","amountZar":450},
+        {"label":"2 bathrooms","amountZar":400},
+        {"label":"Inside cabinets","amountZar":25},
+        {"label":"Interior walls","amountZar":35},
+        {"label":"Service fee","amountZar":30},
+        {"label":"15% discount","amountZar":-321}
+      ],
+      "selected_extras": [
+        {"name":"Inside cabinets","price":25,"total":25,"extra_id":"inside-cabinets","quantity":1},
+        {"name":"Interior walls","price":35,"total":35,"extra_id":"interior-walls","quantity":1}
+      ]
+    }
+    $b3_snapshot$::jsonb;
+
+    if v_b3_live_projection <> v_b3_expected_projection then
+      raise exception 'a02_03_02_b3_live_snapshot_mismatch';
+    end if;
+
+    v_b3_expected_payload := $b3_payload$
+    [
+      {"sourceLineIndex":0,"item_type":"base","slug":null,"name":"Deep Cleaning (base)","quantity":1,"unit_price_cents":120000,"total_price_cents":120000,"pricing_source":"historical_team_snapshot_v1","metadata":{"source":"booking_snapshot.pricingSummary.lineItems","sourceLineIndex":0,"historical_team_financial_ledger_only":true},"earns_cleaner":false},
+      {"sourceLineIndex":1,"item_type":"room","slug":null,"name":"Bedrooms","quantity":3,"unit_price_cents":15000,"total_price_cents":45000,"pricing_source":"historical_team_snapshot_v1","metadata":{"source":"booking_snapshot.pricingSummary.lineItems","sourceLineIndex":1,"historical_team_financial_ledger_only":true},"earns_cleaner":false},
+      {"sourceLineIndex":2,"item_type":"bathroom","slug":null,"name":"Bathrooms","quantity":2,"unit_price_cents":20000,"total_price_cents":40000,"pricing_source":"historical_team_snapshot_v1","metadata":{"source":"booking_snapshot.pricingSummary.lineItems","sourceLineIndex":2,"historical_team_financial_ledger_only":true},"earns_cleaner":false},
+      {"sourceLineIndex":3,"item_type":"extra","slug":"inside-cabinets","name":"Inside cabinets","quantity":1,"unit_price_cents":2500,"total_price_cents":2500,"pricing_source":"historical_team_snapshot_v1","metadata":{"source":"booking_snapshot.pricingSummary.lineItems","sourceLineIndex":3,"historical_team_financial_ledger_only":true},"earns_cleaner":false},
+      {"sourceLineIndex":4,"item_type":"extra","slug":"interior-walls","name":"Interior walls","quantity":1,"unit_price_cents":3500,"total_price_cents":3500,"pricing_source":"historical_team_snapshot_v1","metadata":{"source":"booking_snapshot.pricingSummary.lineItems","sourceLineIndex":4,"historical_team_financial_ledger_only":true},"earns_cleaner":false},
+      {"sourceLineIndex":5,"item_type":"adjustment","slug":"service-fee","name":"Service fee","quantity":1,"unit_price_cents":3000,"total_price_cents":3000,"pricing_source":"historical_team_snapshot_v1","metadata":{"source":"booking_snapshot.pricingSummary.lineItems","sourceLineIndex":5,"historical_team_financial_ledger_only":true},"earns_cleaner":false},
+      {"sourceLineIndex":6,"item_type":"adjustment","slug":null,"name":"15% discount","quantity":1,"unit_price_cents":-32100,"total_price_cents":-32100,"pricing_source":"historical_team_snapshot_v1","metadata":{"source":"booking_snapshot.pricingSummary.lineItems","sourceLineIndex":6,"historical_team_financial_ledger_only":true},"earns_cleaner":false}
+    ]
+    $b3_payload$::jsonb;
+
+    if v_requested_payload <> v_b3_expected_payload then
+      raise exception 'a02_03_02_b3_payload_mismatch';
+    end if;
+  end if;
+
+  select
     count(*)::integer,
     coalesce(sum(total_price_cents), 0)::bigint,
     coalesce(
@@ -174,28 +244,6 @@ begin
       from public.booking_line_items
       where booking_id = p_booking_id
     ) persisted;
-
-    select
-      coalesce(
-        jsonb_agg(
-          jsonb_build_object(
-            'sourceLineIndex', (r->'metadata'->>'sourceLineIndex')::integer,
-            'item_type', r->>'item_type',
-            'slug', nullif(trim(r->>'slug'), ''),
-            'name', coalesce(r->>'name', ''),
-            'quantity', greatest(1, coalesce((r->>'quantity')::integer, 1)),
-            'unit_price_cents', (r->>'unit_price_cents')::integer,
-            'total_price_cents', (r->>'total_price_cents')::integer,
-            'pricing_source', 'historical_team_snapshot_v1',
-            'metadata', r->'metadata',
-            'earns_cleaner', false
-          )
-          order by (r->'metadata'->>'sourceLineIndex')::integer
-        ),
-        '[]'::jsonb
-      )
-    into v_requested_payload
-    from jsonb_array_elements(p_line_items) as r;
 
     if v_existing_count = v_expected_count
        and v_existing_total = p_expected_total_cents::bigint
