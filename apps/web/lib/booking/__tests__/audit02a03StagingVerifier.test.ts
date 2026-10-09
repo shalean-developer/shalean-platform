@@ -26,13 +26,28 @@ describe("AUDIT-02A03 staging-only repair verifier", () => {
     expect(src).toContain('{ status: 403 }');
   });
 
-  it("claims the fixture atomically in the database before invoking the real repair helper", () => {
+  it("claims fixtures with a recoverable database lease before invoking the real repair helper", () => {
     expect(src).toContain('booking_source: "audit_a02_03_fixture_repairing"');
-    expect(src).toContain('.eq("booking_source", "audit_a02_03_fixture")');
+    expect(src).toContain("Date.now() - 5 * 60_000");
+    expect(src).toContain('.eq("updated_at", String(booking.updated_at))');
+    expect(src).toContain("claimTime");
     expect(src).toContain('{ status: 409 }');
     expect(src).toContain("ensureBookingLineItemsForEarningsIfMissing(admin, bookingId)");
+  });
+
+  it("rejects unreconciled ledger evidence before finalizing the fixture", () => {
+    expect(src).toContain("expectedPayableCents");
+    expect(src).toContain("expectedCleanerCents");
+    expect(src).toContain("lineTotalCents !== expectedPayableCents");
+    expect(src).toContain("cleanerLineCents !== expectedCleanerCents");
+    expect(src).toContain('booking_source: "audit_a02_03_fixture_failed"');
+    expect(src).toContain("Repaired ledger did not reconcile.");
+  });
+
+  it("confirms the conditional repaired-state transition before returning success", () => {
     expect(src).toContain('booking_source: "audit_a02_03_fixture_repaired"');
-    expect(src).toContain("lineTotalCents");
-    expect(src).toContain("cleanerLineCents");
+    expect(src).toContain('.eq("updated_at", claimTime)');
+    expect(src).toContain("finalizeError || !finalized");
+    expect(src).toContain("Could not finalize fixture repair state.");
   });
 });
