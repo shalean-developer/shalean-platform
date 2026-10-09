@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { closedCatchUpPayoutPeriods, fetchAllPayoutDiscoveryRows } from "@/lib/payout/generateWeeklyPayouts";
+import { closedCatchUpPayoutPeriods } from "@/lib/payout/generateWeeklyPayouts";
+import { fetchAllPayoutRows } from "@/lib/payout/payoutQueryPagination";
 
 describe("MASTER-03A payout catch-up discovery", () => {
   it("paginates discovery until a short page is returned", async () => {
     const calls: Array<[number, number]> = [];
     const rows = Array.from({ length: 1200 }, (_, id) => ({ id }));
 
-    const result = await fetchAllPayoutDiscoveryRows(async (from, to) => {
+    const result = await fetchAllPayoutRows(async (from, to) => {
       calls.push([from, to]);
       return { data: rows.slice(from, to + 1), error: null };
     });
@@ -21,7 +22,7 @@ describe("MASTER-03A payout catch-up discovery", () => {
 
   it("surfaces a discovery page error instead of returning a truncated set", async () => {
     await expect(
-      fetchAllPayoutDiscoveryRows(async (from) =>
+      fetchAllPayoutRows(async (from) =>
         from === 0
           ? { data: Array.from({ length: 500 }, (_, id) => ({ id })), error: null }
           : { data: null, error: { message: "page failed" } },
