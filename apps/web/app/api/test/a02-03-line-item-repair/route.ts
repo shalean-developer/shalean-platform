@@ -94,13 +94,18 @@ export async function POST(request: Request) {
     claimQuery = claimQuery.eq("updated_at", String(booking.updated_at));
   }
 
-  const { data: claim, error: claimError } = await claimQuery.select("id").maybeSingle();
+  const { data: claim, error: claimError } = await claimQuery.select("id, updated_at").maybeSingle();
 
   if (claimError) {
     return NextResponse.json({ ok: false, error: claimError.message }, { status: 500 });
   }
   if (!claim) {
     return NextResponse.json({ ok: false, error: "Fixture repair already claimed." }, { status: 409 });
+  }
+  const leaseUpdatedAt =
+    typeof claim.updated_at === "string" && claim.updated_at.trim() ? claim.updated_at : null;
+  if (!leaseUpdatedAt) {
+    return NextResponse.json({ ok: false, error: "Fixture repair lease token missing." }, { status: 500 });
   }
 
   const repaired = await ensureBookingLineItemsForEarningsIfMissing(admin, bookingId);
@@ -110,7 +115,7 @@ export async function POST(request: Request) {
       .update({ booking_source: "audit_a02_03_fixture" })
       .eq("id", bookingId)
       .eq("booking_source", "audit_a02_03_fixture_repairing")
-      .eq("updated_at", claimTime);
+      .eq("updated_at", leaseUpdatedAt);
     return NextResponse.json({ ok: false, error: repaired.error }, { status: 500 });
   }
 
@@ -126,7 +131,7 @@ export async function POST(request: Request) {
       .update({ booking_source: "audit_a02_03_fixture" })
       .eq("id", bookingId)
       .eq("booking_source", "audit_a02_03_fixture_repairing")
-      .eq("updated_at", claimTime);
+      .eq("updated_at", leaseUpdatedAt);
     return NextResponse.json({ ok: false, error: linesError.message }, { status: 500 });
   }
 
@@ -155,7 +160,16 @@ export async function POST(request: Request) {
       ? Math.max(0, Math.round(booking.base_amount_cents))
       : 0;
 
-  if (lineTotalCents !== expectedPayableCents || cleanerLineCents !== expectedCleanerCents) {
+  const hasPositiveCleanerLine = rows.some(
+    (row) => row.earns_cleaner !== false && Number(row.total_price_cents ?? 0) > 0,
+  );
+  const validCleanerEvidence = expectedCleanerCents > 0 && cleanerLineCents > 0 && hasPositiveCleanerLine;
+
+  if (
+    lineTotalCents !== expectedPayableCents ||
+    cleanerLineCents !== expectedCleanerCents ||
+    !validCleanerEvidence
+  ) {
     await admin
       .from("bookings")
       .update({
@@ -164,7 +178,7 @@ export async function POST(request: Request) {
       })
       .eq("id", bookingId)
       .eq("booking_source", "audit_a02_03_fixture_repairing")
-      .eq("updated_at", claimTime);
+      .eq("updated_at", leaseUpdatedAt);
     return NextResponse.json(
       {
         ok: false,
@@ -174,6 +188,7 @@ export async function POST(request: Request) {
         expectedPayableCents,
         cleanerLineCents,
         expectedCleanerCents,
+        validCleanerEvidence,
         lines: rows,
       },
       { status: 409 },
@@ -188,7 +203,7 @@ export async function POST(request: Request) {
     })
     .eq("id", bookingId)
     .eq("booking_source", "audit_a02_03_fixture_repairing")
-    .eq("updated_at", claimTime)
+    .eq("updated_at", leaseUpdatedAt)
     .select("id")
     .maybeSingle();
 
