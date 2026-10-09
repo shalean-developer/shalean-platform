@@ -1,11 +1,11 @@
 /**
- * A02-03-02A/B1/B2 — bounded historical team booking_line_items repair.
+ * A02-03-02A/B1/B2/B3 — bounded historical team booking_line_items repair.
  *
  * Default is dry-run. Writes require BOTH:
  *   --apply
  *   A02_03_02_APPLY=YES
  *
- * B1/B2 extend the bounded allowlist one audited booking at a time.
+ * B1/B2/B3 extend the bounded allowlist one audited booking at a time.
  * Team cleaner payouts are NOT recomputed or mutated.
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -18,9 +18,63 @@ const TARGET_IDS = new Set([
   "f6b2316e-2518-4f43-b6e8-b050c6d07483",
   "e865f74b-33af-481f-a12e-576e1e0ed227",
   "d2cfcb8d-118f-48cc-90c7-420ffe122c9b",
+  "c1bd1fc8-03e9-4f2c-a597-e0ac395c841a",
 ]);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const B3_C1BD_ID = "c1bd1fc8-03e9-4f2c-a597-e0ac395c841a";
+
+const B3_C1BD_AUDITED_FIXTURE = {
+  bookingId: B3_C1BD_ID,
+  totalPaidZar: 1819,
+  amountPaidCents: 181900,
+  bookingSnapshot: {
+    pricingSummary: {
+      lineItems: [
+        { label: "Deep Cleaning (base)", amountZar: 1200 },
+        { label: "3 bedrooms", amountZar: 450 },
+        { label: "2 bathrooms", amountZar: 400 },
+        { label: "Inside cabinets", amountZar: 25 },
+        { label: "Interior walls", amountZar: 35 },
+        { label: "Service fee", amountZar: 30 },
+        { label: "15% discount", amountZar: -321 },
+      ],
+      selected_extras: [
+        { name: "Inside cabinets", price: 25, total: 25, extra_id: "inside-cabinets", quantity: 1 },
+        { name: "Interior walls", price: 35, total: 35, extra_id: "interior-walls", quantity: 1 },
+      ],
+    },
+  },
+} as const;
+
+const B3_C1BD_AUDITED_ROSTER = [
+  "015e91e8-df25-4fde-8db1-a5901b005ae3",
+  "2231fa06-1ba5-43d6-bf2d-ca757368a05a",
+  "389196b4-bfb5-4d8d-a9cf-a672b2fe741d",
+] as const;
+
+const B3_C1BD_AUDITED_PAYOUTS = [
+  {
+    cleaner_id: "015e91e8-df25-4fde-8db1-a5901b005ae3",
+    payout_cents: 25000,
+    status: "batched",
+    cleaner_payout_id: "45254fb5-c94d-45e5-afb3-88b696e389b1",
+  },
+  {
+    cleaner_id: "2231fa06-1ba5-43d6-bf2d-ca757368a05a",
+    payout_cents: 27000,
+    status: "batched",
+    cleaner_payout_id: "b7054032-ad31-466f-86f6-13ab65005d3d",
+  },
+  {
+    cleaner_id: "389196b4-bfb5-4d8d-a9cf-a672b2fe741d",
+    payout_cents: 25000,
+    status: "batched",
+    cleaner_payout_id: "b9bcaf62-f50c-4323-b99a-0db039c6cdfd",
+  },
+] as const;
+
 
 function parseArgs(argv: string[]): { apply: boolean; fixtureCheck: boolean; requestedIds: string[] } {
   let apply = false;
@@ -136,6 +190,28 @@ function runFixtureCheck(): void {
         },
       },
     },
+    {
+      bookingId: "c1bd1fc8-03e9-4f2c-a597-e0ac395c841a",
+      totalPaidZar: 1819,
+      amountPaidCents: 181900,
+      bookingSnapshot: {
+        pricingSummary: {
+          lineItems: [
+            { label: "Deep Cleaning (base)", amountZar: 1200 },
+            { label: "3 bedrooms", amountZar: 450 },
+            { label: "2 bathrooms", amountZar: 400 },
+            { label: "Inside cabinets", amountZar: 25 },
+            { label: "Interior walls", amountZar: 35 },
+            { label: "Service fee", amountZar: 30 },
+            { label: "15% discount", amountZar: -321 },
+          ],
+          selected_extras: [
+            { name: "Inside cabinets", price: 25, extra_id: "inside-cabinets" },
+            { name: "Interior walls", price: 35, extra_id: "interior-walls" },
+          ],
+        },
+      },
+    },
   ] as const;
 
   for (const fixture of fixtures) {
@@ -148,7 +224,7 @@ function runFixtureCheck(): void {
       throw new Error(`${fixture.bookingId}: reconstructed team line may affect cleaner earnings`);
     }
   }
-  console.log("A02-03-02A/B1/B2 fixture check PASS");
+  console.log("A02-03-02A/B1/B2/B3 fixture check PASS");
 }
 
 type PreparedTarget = {
@@ -169,6 +245,77 @@ function canonicalJson(value: unknown): string {
       .join(",")}}`;
   }
   return JSON.stringify(value);
+}
+
+function auditedPricingProjection(snapshot: unknown): unknown {
+  if (snapshot == null || typeof snapshot !== "object" || Array.isArray(snapshot)) return null;
+  const pricing = (snapshot as Record<string, unknown>).pricingSummary;
+  if (pricing == null || typeof pricing !== "object" || Array.isArray(pricing)) return null;
+  const p = pricing as Record<string, unknown>;
+  return {
+    lineItems: Array.isArray(p.lineItems) ? p.lineItems : null,
+    selected_extras: Array.isArray(p.selected_extras) ? p.selected_extras : [],
+  };
+}
+
+function assertB3AuditedFixtureUnchanged(
+  bookingId: string,
+  liveSnapshot: unknown,
+  built: Extract<ReturnType<typeof buildHistoricalTeamFinancialLedger>, { ok: true }>,
+): void {
+  if (bookingId !== B3_C1BD_ID) return;
+
+  const expectedBuilt = buildHistoricalTeamFinancialLedger(B3_C1BD_AUDITED_FIXTURE);
+  if (!expectedBuilt.ok) {
+    throw new Error(`${bookingId}: internal audited fixture is invalid: ${expectedBuilt.error}`);
+  }
+
+  const liveProjection = auditedPricingProjection(liveSnapshot);
+  const expectedProjection = auditedPricingProjection(B3_C1BD_AUDITED_FIXTURE.bookingSnapshot);
+  if (canonicalJson(liveProjection) !== canonicalJson(expectedProjection)) {
+    throw new Error(`${bookingId}: audited fixture mismatch; live pricing snapshot changed since B3 audit`);
+  }
+
+  if (
+    built.declaredPayableCents !== expectedBuilt.declaredPayableCents ||
+    built.sourceLineTotalCents !== expectedBuilt.sourceLineTotalCents ||
+    canonicalJson(built.items) !== canonicalJson(expectedBuilt.items)
+  ) {
+    throw new Error(`${bookingId}: audited fixture mismatch; reconstructed payload changed since B3 audit`);
+  }
+}
+
+async function assertB3AuditedTeamState(admin: SupabaseClient, bookingId: string): Promise<void> {
+  if (bookingId !== B3_C1BD_ID) return;
+
+  const { data: rosterRows, error: rosterError } = await admin
+    .from("booking_cleaners")
+    .select("cleaner_id")
+    .eq("booking_id", bookingId)
+    .order("cleaner_id", { ascending: true });
+  if (rosterError) throw new Error(`${bookingId}: B3 roster audit failed: ${rosterError.message}`);
+
+  const liveRoster = (rosterRows ?? []).map((row) => String(row.cleaner_id ?? ""));
+  if (canonicalJson(liveRoster) !== canonicalJson([...B3_C1BD_AUDITED_ROSTER])) {
+    throw new Error(`${bookingId}: audited B3 roster changed since audit`);
+  }
+
+  const { data: payoutRows, error: payoutError } = await admin
+    .from("team_job_member_payouts")
+    .select("cleaner_id, payout_cents, status, cleaner_payout_id")
+    .eq("booking_id", bookingId)
+    .order("cleaner_id", { ascending: true });
+  if (payoutError) throw new Error(`${bookingId}: B3 payout audit failed: ${payoutError.message}`);
+
+  const livePayouts = (payoutRows ?? []).map((row) => ({
+    cleaner_id: String(row.cleaner_id ?? ""),
+    payout_cents: Number(row.payout_cents),
+    status: String(row.status ?? "").trim().toLowerCase(),
+    cleaner_payout_id: row.cleaner_payout_id == null ? null : String(row.cleaner_payout_id),
+  }));
+  if (canonicalJson(livePayouts) !== canonicalJson([...B3_C1BD_AUDITED_PAYOUTS])) {
+    throw new Error(`${bookingId}: audited B3 payout rows changed since audit`);
+  }
 }
 
 async function readPersistedRepairState(
@@ -242,6 +389,37 @@ async function preflightTarget(admin: SupabaseClient, bookingId: string): Promis
     throw new Error(`${bookingId}: prepaid billing_type required for this bounded repair`);
   }
 
+  if (bookingId === B3_C1BD_ID) {
+    const auditedBuilt = buildHistoricalTeamFinancialLedger(B3_C1BD_AUDITED_FIXTURE);
+    if (!auditedBuilt.ok) {
+      throw new Error(`${bookingId}: internal audited fixture is invalid: ${auditedBuilt.error}`);
+    }
+
+    const existingAudited = await readPersistedRepairState(
+      admin,
+      bookingId,
+      auditedBuilt.items,
+      auditedBuilt.declaredPayableCents,
+    );
+    if (!existingAudited.ok) throw new Error(`${bookingId}: ${existingAudited.error}`);
+    if (existingAudited.valid) {
+      const [{ count: currentRosterCount }, { count: currentPayoutCount }] = await Promise.all([
+        admin.from("booking_cleaners").select("cleaner_id", { count: "exact", head: true }).eq("booking_id", bookingId),
+        admin.from("team_job_member_payouts").select("cleaner_id", { count: "exact", head: true }).eq("booking_id", bookingId),
+      ]);
+      return {
+        bookingId,
+        rosterCount: currentRosterCount ?? 0,
+        payoutCount: currentPayoutCount ?? 0,
+        alreadyRepaired: true,
+        built: auditedBuilt,
+      };
+    }
+    if (existingAudited.count > 0) {
+      throw new Error(`${bookingId}: existing booking_line_items conflict with bounded repair`);
+    }
+  }
+
   const { count: rosterCount, error: rosterError } = await admin
     .from("booking_cleaners")
     .select("cleaner_id", { count: "exact", head: true })
@@ -264,6 +442,11 @@ async function preflightTarget(admin: SupabaseClient, bookingId: string): Promis
       typeof booking.amount_paid_cents === "number" ? booking.amount_paid_cents : Number(booking.amount_paid_cents),
   });
   if (!built.ok) throw new Error(`${bookingId}: ${built.error}`);
+
+  // For a first-time B3 insert only, require the live audited snapshot and mutable
+  // roster/payout state to still match the audit. Exact existing ledgers returned above.
+  assertB3AuditedFixtureUnchanged(bookingId, booking.booking_snapshot, built);
+  await assertB3AuditedTeamState(admin, bookingId);
 
   const existing = await readPersistedRepairState(
     admin,
@@ -293,7 +476,7 @@ async function main() {
 
   const ids = requestedIds.length > 0 ? requestedIds : [...TARGET_IDS];
   for (const id of ids) {
-    if (!TARGET_IDS.has(id)) throw new Error(`Booking ${id} is outside the bounded A02-03-02A/B1/B2 allowlist.`);
+    if (!TARGET_IDS.has(id)) throw new Error(`Booking ${id} is outside the bounded A02-03-02A/B1/B2/B3 allowlist.`);
   }
 
   if (apply && requestedIds.length !== 1) {
