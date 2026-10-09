@@ -38,6 +38,7 @@ import {
   teamJobMemberWeeklyPayoutTotalCents,
 } from "@/lib/payout/teamJobMemberWeeklyPayoutCandidates";
 import { syncPayoutBatchFromBookings } from "@/lib/payout/syncPayoutBatchFromBookings";
+import { refreshDraftPayoutRunTotal } from "@/lib/payout/runs/reconcileDraftRunLateEarnings";
 import { fetchAllPayoutRows, payoutQueryChunks } from "@/lib/payout/payoutQueryPagination";
 
 export type GenerateWeeklyPayoutsResult = {
@@ -502,12 +503,42 @@ async function generateWeeklyPayoutsForPeriod(
 
     const existingStatus = String((existingBatch as { status?: string } | null)?.status ?? "").toLowerCase();
     const existingRunId = String((existingBatch as { payout_run_id?: string | null } | null)?.payout_run_id ?? "").trim();
-    if (existingBatch && (existingStatus !== "pending" || existingRunId)) {
+    let existingRunStatus = "";
+    if (existingRunId) {
+      const { data: runRow, error: runErr } = await admin
+        .from("cleaner_payout_runs")
+        .select("status")
+        .eq("id", existingRunId)
+        .maybeSingle();
+      if (runErr) {
+        await reportOperationalIssue("error", "generateWeeklyPayouts", runErr.message, {
+          cleanerId,
+          payoutId: (existingBatch as { id?: string } | null)?.id ?? null,
+          payoutRunId: existingRunId,
+        });
+        skippedCleaners += 1;
+        continue;
+      }
+      existingRunStatus = String((runRow as { status?: string } | null)?.status ?? "").toLowerCase();
+    }
+
+    const editablePendingBatch = existingStatus === "pending" && !existingRunId;
+    const editableFrozenDraftBatch =
+      existingStatus === "frozen" && Boolean(existingRunId) && existingRunStatus === "draft";
+
+    if (existingBatch && !editablePendingBatch && !editableFrozenDraftBatch) {
       await reportOperationalIssue(
         "warn",
         "generateWeeklyPayouts",
         "Eligible earnings found after the monthly payout batch was locked",
-        { cleanerId, periodStart, periodEnd, payoutId: (existingBatch as { id?: string }).id, existingStatus },
+        {
+          cleanerId,
+          periodStart,
+          periodEnd,
+          payoutId: (existingBatch as { id?: string }).id,
+          existingStatus,
+          existingRunStatus,
+        },
       );
       skippedCleaners += 1;
       continue;
@@ -584,6 +615,25 @@ async function generateWeeklyPayoutsForPeriod(
     const ids = bookings.map((b) => b.id);
     let linkedCount = 0;
 
+    const syncAndAbortAfterPartialLinkFailure = async (reason: string): Promise<never> => {
+      if (linkedCount === 0 && createdNewBatch) {
+        await admin.from("cleaner_payouts").delete().eq("id", payoutId);
+        throw new Error(reason);
+      }
+
+      const reconciled = await syncPayoutBatchFromBookings(admin, payoutId);
+      if (!reconciled.ok) {
+        throw new Error(`${reason}; partial batch reconciliation failed: ${reconciled.error}`);
+      }
+      if (editableFrozenDraftBatch && existingRunId) {
+        const runSync = await refreshDraftPayoutRunTotal(admin, existingRunId);
+        if (!runSync.ok) {
+          throw new Error(`${reason}; draft payout-run reconciliation failed: ${runSync.error}`);
+        }
+      }
+      throw new Error(reason);
+    };
+
     if (ids.length > 0) {
       let directLinkFailed = false;
       for (const idChunk of payoutQueryChunks(ids)) {
@@ -605,9 +655,7 @@ async function generateWeeklyPayoutsForPeriod(
         linkedCount += updated?.length ?? 0;
       }
       if (directLinkFailed) {
-        if (createdNewBatch && linkedCount === 0) await admin.from("cleaner_payouts").delete().eq("id", payoutId);
-        skippedCleaners += 1;
-        continue;
+        await syncAndAbortAfterPartialLinkFailure("Direct payout linking failed after partial progress.");
       }
     }
 
@@ -633,9 +681,7 @@ async function generateWeeklyPayoutsForPeriod(
         linkedCount += linkedMembers?.length ?? 0;
       }
       if (rosterLinkFailed) {
-        if (linkedCount === 0 && createdNewBatch) await admin.from("cleaner_payouts").delete().eq("id", payoutId);
-        skippedCleaners += 1;
-        continue;
+        await syncAndAbortAfterPartialLinkFailure("Roster-member payout linking failed after partial progress.");
       }
     }
 
@@ -661,9 +707,7 @@ async function generateWeeklyPayoutsForPeriod(
         linkedCount += linkedTeamMembers?.length ?? 0;
       }
       if (teamLinkFailed) {
-        if (linkedCount === 0 && createdNewBatch) await admin.from("cleaner_payouts").delete().eq("id", payoutId);
-        skippedCleaners += 1;
-        continue;
+        await syncAndAbortAfterPartialLinkFailure("Team-member payout linking failed after partial progress.");
       }
     }
 
@@ -679,8 +723,14 @@ async function generateWeeklyPayoutsForPeriod(
         cleanerId,
         payoutId,
       });
-      skippedCleaners += 1;
-      continue;
+      throw new Error(`Payout batch total sync failed for ${payoutId}: ${synced.error}`);
+    }
+
+    if (editableFrozenDraftBatch && existingRunId) {
+      const runSync = await refreshDraftPayoutRunTotal(admin, existingRunId);
+      if (!runSync.ok) {
+        throw new Error(`Draft payout-run total sync failed for ${existingRunId}: ${runSync.error}`);
+      }
     }
 
     if (createdNewBatch) payoutsCreated += 1;
