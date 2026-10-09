@@ -75,7 +75,9 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     expect(migration).toContain("security definer");
     expect(migration).toContain("auth.role() <> 'service_role'");
     expect(migration).toContain("v_run_status <> 'draft'");
-    expect(migration).toContain("and draft_run");
+    expect(migration).toContain("set payout_run_id = null");
+    expect(migration).toContain("set payout_run_id = v_run_id");
+    expect(migration).not.toContain("cleaner_payouts_block_mutate_when_frozen");
     expect(migration).toContain("grant execute on function public.sync_draft_run_payout_total");
   });
 
