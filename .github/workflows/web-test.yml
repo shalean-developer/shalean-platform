@@ -111,6 +111,10 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/security/__tests__/audit02a01PendingCashSot.test.ts
 
+      - name: AUDIT-02A03 team ledger repair regression
+        if: steps.filter.outputs.run_suite == 'true'
+        run: npm run test -- lib/booking/__tests__/buildHistoricalTeamFinancialLedger.test.ts lib/booking/__tests__/audit02a03TeamRepairGovernance.test.ts
+
       - name: Staging branch bootstrap convergence
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/env/__tests__/stagingBranchBootstrapConvergence.test.ts
