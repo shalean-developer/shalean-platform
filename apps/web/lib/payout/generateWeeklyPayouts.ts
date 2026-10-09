@@ -166,7 +166,7 @@ async function ensureNoMissingCompletedPayouts(
 const PAYOUT_DISCOVERY_PAGE_SIZE = 500;
 
 export async function fetchAllPayoutDiscoveryRows<T>(
-  loadPage: (from: number, to: number) => Promise<{ data: T[] | null; error: { message: string } | null }>,
+  loadPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
 ): Promise<T[]> {
   const rows: T[] = [];
   for (let from = 0; ; from += PAYOUT_DISCOVERY_PAGE_SIZE) {
