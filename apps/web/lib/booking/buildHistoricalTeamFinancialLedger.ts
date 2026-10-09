@@ -29,6 +29,13 @@ function scopeQuantity(label: string, itemType: BookingLineItemInsert["item_type
   return Number.isFinite(n) && n > 0 ? Math.max(1, Math.round(n)) : 1;
 }
 
+function persistedScopeName(label: string, itemType: BookingLineItemInsert["item_type"], slug: string | null): string {
+  if (itemType === "bathroom") return "Bathrooms";
+  if (itemType === "room" && slug === "extra-rooms") return "Extra rooms";
+  if (itemType === "room") return "Bedrooms";
+  return label;
+}
+
 function classifyLine(label: string, matchedExtraSlug: string | null): Pick<BookingLineItemInsert, "item_type" | "slug"> {
   const n = norm(label);
   if (/service\s*fee|platform\s*fee|payment\s*fee/.test(n)) return { item_type: "adjustment", slug: "service-fee" };
@@ -104,7 +111,7 @@ export function buildHistoricalTeamFinancialLedger(
     items.push({
       item_type: classified.item_type,
       slug: classified.slug,
-      name: label,
+      name: persistedScopeName(label, classified.item_type, classified.slug),
       quantity,
       unit_price_cents: Math.round(amountCents / quantity),
       total_price_cents: amountCents,
