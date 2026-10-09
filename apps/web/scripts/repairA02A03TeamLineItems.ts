@@ -185,11 +185,16 @@ async function main() {
         (row) => row.earns_cleaner === false && row.pricing_source === "historical_team_snapshot_v1",
       );
     if (!safe) {
-      await admin
+      const { error: rollbackError } = await admin
         .from("booking_line_items")
         .delete()
         .eq("booking_id", bookingId)
         .eq("pricing_source", "historical_team_snapshot_v1");
+      if (rollbackError) {
+        throw new Error(
+          `${bookingId}: verification failed AND rollback failed: ${rollbackError.message}`,
+        );
+      }
       throw new Error(`${bookingId}: verification failed; inserted repair rows rolled back by source marker`);
     }
   }
