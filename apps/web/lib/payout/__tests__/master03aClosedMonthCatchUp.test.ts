@@ -1,7 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { closedCatchUpPayoutPeriods } from "@/lib/payout/generateWeeklyPayouts";
+import { closedCatchUpPayoutPeriods, fetchAllPayoutDiscoveryRows } from "@/lib/payout/generateWeeklyPayouts";
 
-describe("MASTER-03A closed-month payout catch-up periods", () => {
+describe("MASTER-03A payout catch-up discovery", () => {
+  it("paginates discovery until a short page is returned", async () => {
+    const calls: Array<[number, number]> = [];
+    const rows = Array.from({ length: 1200 }, (_, id) => ({ id }));
+
+    const result = await fetchAllPayoutDiscoveryRows(async (from, to) => {
+      calls.push([from, to]);
+      return { data: rows.slice(from, to + 1), error: null };
+    });
+
+    expect(result).toHaveLength(1200);
+    expect(calls).toEqual([
+      [0, 499],
+      [500, 999],
+      [1000, 1499],
+    ]);
+  });
+
+  it("surfaces a discovery page error instead of returning a truncated set", async () => {
+    await expect(
+      fetchAllPayoutDiscoveryRows(async (from) =>
+        from === 0
+          ? { data: Array.from({ length: 500 }, (_, id) => ({ id })), error: null }
+          : { data: null, error: { message: "page failed" } },
+      ),
+    ).rejects.toThrow("page failed");
+  });
+
+  it("includes older closed months and excludes the current open month", () => {
   it("includes older closed months and excludes the current open month", () => {
     const now = new Date("2026-10-09T12:00:00+02:00");
 
