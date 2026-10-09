@@ -40,8 +40,8 @@ const B3_C1BD_AUDITED_FIXTURE = {
         { label: "15% discount", amountZar: -321 },
       ],
       selected_extras: [
-        { name: "Inside cabinets", price: 25, extra_id: "inside-cabinets" },
-        { name: "Interior walls", price: 35, extra_id: "interior-walls" },
+        { name: "Inside cabinets", price: 25, total: 25, extra_id: "inside-cabinets", quantity: 1 },
+        { name: "Interior walls", price: 35, total: 35, extra_id: "interior-walls", quantity: 1 },
       ],
     },
   },
