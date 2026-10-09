@@ -612,6 +612,22 @@ async function generateWeeklyPayoutsForPeriod(
 
     const payoutId = String((payout as { id: string }).id);
     const ids = bookings.map((b) => b.id);
+
+    if (editableFrozenDraftBatch) {
+      const result = await admin.rpc("append_draft_run_payout_earnings", {
+        p_payout_id: payoutId,
+        p_cleaner_id: cleanerId,
+        p_direct_booking_ids: ids,
+        p_roster_ids: rosterMemberCandidates.map((row) => row.id),
+        p_team_ids: teamJobMemberCandidates.map((row) => row.id),
+      });
+      if (result.error) throw new Error(`Atomic late-earnings append failed for ${payoutId}: ${result.error.message}`);
+      const atomicLinkedCount = Math.max(0, Math.floor(Number(result.data) || 0));
+      bookingsLinked += atomicLinkedCount;
+      if (atomicLinkedCount === 0) skippedCleaners += 1;
+      continue;
+    }
+
     let linkedCount = 0;
     const linkedDirectIds: string[] = [];
     const linkedRosterIds: string[] = [];
