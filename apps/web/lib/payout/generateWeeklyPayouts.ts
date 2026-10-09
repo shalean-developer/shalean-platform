@@ -22,6 +22,7 @@ import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import {
   getJohannesburgMonthBoundsContainingYmd,
   getPreviousMonthDateBoundsJhb,
+  isClosedMonthlyPayoutBatchPeriod,
   isMonthlyPayoutBatchPeriod,
   isMonthlyPayoutPeriod,
 } from "@/lib/payout/monthBounds";
@@ -162,7 +163,20 @@ async function ensureNoMissingCompletedPayouts(
   return { backfilled, remaining: 0 };
 }
 
-async function listUnbatchedCompletionMonths(admin: SupabaseClient): Promise<Array<{ periodStart: string; periodEnd: string }>> {
+export function closedCatchUpPayoutPeriods(
+  periodStarts: Iterable<string>,
+  now: Date = new Date(),
+): Array<{ periodStart: string; periodEnd: string }> {
+  return [...new Set(periodStarts)]
+    .sort()
+    .map((periodStart) => getJohannesburgMonthBoundsContainingYmd(periodStart))
+    .filter(({ periodStart, periodEnd }) => isClosedMonthlyPayoutBatchPeriod(periodStart, periodEnd, now));
+}
+
+async function listUnbatchedCompletionMonths(
+  admin: SupabaseClient,
+  now: Date = new Date(),
+): Promise<Array<{ periodStart: string; periodEnd: string }>> {
   const { data, error } = await admin
     .from("bookings")
     .select("completed_at, date, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id")
@@ -218,10 +232,10 @@ async function listUnbatchedCompletionMonths(admin: SupabaseClient): Promise<Arr
     }
   }
 
-  return [...monthStarts]
-    .sort()
-    .filter((periodStart) => isMonthlyPayoutPeriod(periodStart))
-    .map((periodStart) => getJohannesburgMonthBoundsContainingYmd(periodStart));
+  return closedCatchUpPayoutPeriods(
+    [...monthStarts].filter((periodStart) => isMonthlyPayoutPeriod(periodStart)),
+    now,
+  );
 }
 
 type GeneratePeriodResult = Omit<GenerateWeeklyPayoutsResult, "period">;
@@ -726,10 +740,10 @@ export async function generateWeeklyPayouts(
  */
 export async function generateCatchUpWeeklyPayouts(
   admin: SupabaseClient,
-  opts?: { createdBy?: string | null },
+  opts?: { createdBy?: string | null; asOf?: Date },
 ): Promise<GenerateCatchUpWeeklyPayoutsResult> {
   const preflight = await ensureNoMissingCompletedPayouts(admin);
-  const months = await listUnbatchedCompletionMonths(admin);
+  const months = await listUnbatchedCompletionMonths(admin, opts?.asOf ?? new Date());
 
   let payoutsCreated = 0;
   let bookingsLinked = 0;
