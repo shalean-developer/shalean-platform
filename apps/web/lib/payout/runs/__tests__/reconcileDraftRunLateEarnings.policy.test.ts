@@ -33,7 +33,7 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     expect(src).toContain('existingStatus === "pending" && !existingRunId');
     expect(src).toContain('existingStatus === "frozen"');
     expect(src).toContain('existingRunStatus === "draft"');
-    expect(src).toContain("refreshDraftPayoutRunTotal");
+    expect(src).toContain("syncPayoutBatchFromBookings");
     expect(src).toContain("Eligible earnings found after the monthly payout batch was locked");
   });
 
@@ -59,7 +59,24 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     const src = read("lib/payout/generateWeeklyPayouts.ts");
     expect(src).toContain("syncAndAbortAfterPartialLinkFailure");
     expect(src).toContain("partial batch reconciliation failed");
+    expect(src).toContain("rollbackNewLinks");
+    expect(src).toContain("new links rolled back");
     expect(src).toContain("throw new Error(reason)");
+  });
+
+  it("uses the service-role atomic sync for frozen payouts attached to draft runs", () => {
+    const sync = read("lib/payout/syncPayoutBatchFromBookings.ts");
+    const migration = read(
+      "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
+    );
+
+    expect(sync).toContain('status === "frozen" && payoutRunId');
+    expect(sync).toContain('admin.rpc("sync_draft_run_payout_total"');
+    expect(migration).toContain("security definer");
+    expect(migration).toContain("auth.role() <> 'service_role'");
+    expect(migration).toContain("v_run_status <> 'draft'");
+    expect(migration).toContain("and draft_run");
+    expect(migration).toContain("grant execute on function public.sync_draft_run_payout_total");
   });
 
   it("keeps draft-run total recomputation paginated and draft-only", () => {
