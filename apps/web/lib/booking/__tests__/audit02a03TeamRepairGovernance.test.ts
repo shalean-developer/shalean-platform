@@ -52,9 +52,17 @@ describe("A02-03-02 historical team ledger repair governance", () => {
     expect(src).toContain("audited fixture mismatch; live pricing snapshot changed since B3 audit");
     expect(src).toContain("audited fixture mismatch; reconstructed payload changed since B3 audit");
     expect(src).toContain("assertB3AuditedFixtureUnchanged(bookingId, booking.booking_snapshot, built)");
+    expect(src).toContain("assertB3AuditedTeamState");
+    expect(src).toContain("await assertB3AuditedTeamState(admin, bookingId)");
+    expect(src).toContain("audited B3 roster changed since audit");
+    expect(src).toContain("audited B3 payout rows changed since audit");
+    expect(src).toContain("B3_C1BD_AUDITED_ROSTER");
+    expect(src).toContain("B3_C1BD_AUDITED_PAYOUTS");
     const b3Migration = read("../../supabase/migrations/20261009163000_audit_02a03_02b3_c1bd_discount_line_items_allowlist.sql");
     expect(b3Migration).toContain("a02_03_02_b3_live_snapshot_mismatch");
     expect(b3Migration).toContain("a02_03_02_b3_payload_mismatch");
     expect(b3Migration).toContain("a02_03_02_b3_payout_state_mismatch");
+    expect(b3Migration).toContain("a02_03_02_b3_roster_mismatch");
+    expect(b3Migration).toContain("a02_03_02_b3_payout_linkage_mismatch");
   });
 });
