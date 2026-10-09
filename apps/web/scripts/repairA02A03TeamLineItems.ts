@@ -22,6 +22,32 @@ const TARGET_IDS = new Set([
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+const B3_C1BD_ID = "c1bd1fc8-03e9-4f2c-a597-e0ac395c841a";
+
+const B3_C1BD_AUDITED_FIXTURE = {
+  bookingId: B3_C1BD_ID,
+  totalPaidZar: 1819,
+  amountPaidCents: 181900,
+  bookingSnapshot: {
+    pricingSummary: {
+      lineItems: [
+        { label: "Deep Cleaning (base)", amountZar: 1200 },
+        { label: "3 bedrooms", amountZar: 450 },
+        { label: "2 bathrooms", amountZar: 400 },
+        { label: "Inside cabinets", amountZar: 25 },
+        { label: "Interior walls", amountZar: 35 },
+        { label: "Service fee", amountZar: 30 },
+        { label: "15% discount", amountZar: -321 },
+      ],
+      selected_extras: [
+        { name: "Inside cabinets", price: 25, extra_id: "inside-cabinets" },
+        { name: "Interior walls", price: 35, extra_id: "interior-walls" },
+      ],
+    },
+  },
+} as const;
+
+
 function parseArgs(argv: string[]): { apply: boolean; fixtureCheck: boolean; requestedIds: string[] } {
   let apply = false;
   let fixtureCheck = false;
@@ -193,6 +219,44 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function auditedPricingProjection(snapshot: unknown): unknown {
+  if (snapshot == null || typeof snapshot !== "object" || Array.isArray(snapshot)) return null;
+  const pricing = (snapshot as Record<string, unknown>).pricingSummary;
+  if (pricing == null || typeof pricing !== "object" || Array.isArray(pricing)) return null;
+  const p = pricing as Record<string, unknown>;
+  return {
+    lineItems: Array.isArray(p.lineItems) ? p.lineItems : null,
+    selected_extras: Array.isArray(p.selected_extras) ? p.selected_extras : [],
+  };
+}
+
+function assertB3AuditedFixtureUnchanged(
+  bookingId: string,
+  liveSnapshot: unknown,
+  built: Extract<ReturnType<typeof buildHistoricalTeamFinancialLedger>, { ok: true }>,
+): void {
+  if (bookingId !== B3_C1BD_ID) return;
+
+  const expectedBuilt = buildHistoricalTeamFinancialLedger(B3_C1BD_AUDITED_FIXTURE);
+  if (!expectedBuilt.ok) {
+    throw new Error(`${bookingId}: internal audited fixture is invalid: ${expectedBuilt.error}`);
+  }
+
+  const liveProjection = auditedPricingProjection(liveSnapshot);
+  const expectedProjection = auditedPricingProjection(B3_C1BD_AUDITED_FIXTURE.bookingSnapshot);
+  if (canonicalJson(liveProjection) !== canonicalJson(expectedProjection)) {
+    throw new Error(`${bookingId}: audited fixture mismatch; live pricing snapshot changed since B3 audit`);
+  }
+
+  if (
+    built.declaredPayableCents !== expectedBuilt.declaredPayableCents ||
+    built.sourceLineTotalCents !== expectedBuilt.sourceLineTotalCents ||
+    canonicalJson(built.items) !== canonicalJson(expectedBuilt.items)
+  ) {
+    throw new Error(`${bookingId}: audited fixture mismatch; reconstructed payload changed since B3 audit`);
+  }
+}
+
 async function readPersistedRepairState(
   admin: SupabaseClient,
   bookingId: string,
@@ -286,6 +350,10 @@ async function preflightTarget(admin: SupabaseClient, bookingId: string): Promis
       typeof booking.amount_paid_cents === "number" ? booking.amount_paid_cents : Number(booking.amount_paid_cents),
   });
   if (!built.ok) throw new Error(`${bookingId}: ${built.error}`);
+
+  // B3 is a one-booking financial repair: pin the live immutable pricing projection and
+  // resulting persisted payload to the exact audited fixture, not merely the same total.
+  assertB3AuditedFixtureUnchanged(bookingId, booking.booking_snapshot, built);
 
   const existing = await readPersistedRepairState(
     admin,
