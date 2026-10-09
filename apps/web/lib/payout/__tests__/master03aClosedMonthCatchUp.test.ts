@@ -30,7 +30,6 @@ describe("MASTER-03A payout catch-up discovery", () => {
   });
 
   it("includes older closed months and excludes the current open month", () => {
-  it("includes older closed months and excludes the current open month", () => {
     const now = new Date("2026-10-09T12:00:00+02:00");
 
     expect(
