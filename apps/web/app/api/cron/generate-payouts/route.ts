@@ -2,10 +2,6 @@ import { NextResponse } from "next/server";
 import { withCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { generateCatchUpWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
-import {
-  prepareDraftRunPayoutsForCatchUp,
-  restoreDraftRunPayoutsAfterCatchUp,
-} from "@/lib/payout/runs/reconcileDraftRunLateEarnings";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
