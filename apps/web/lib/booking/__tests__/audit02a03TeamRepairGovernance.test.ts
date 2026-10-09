@@ -9,8 +9,8 @@ function read(rel: string): string {
 describe("A02-03-02 historical team ledger repair governance", () => {
   it("keeps the generic booking-line backfill away from team jobs", () => {
     const src = read("scripts/backfillBookingLineItems.ts");
-    expect(src).toContain('booking_snapshot, is_team_job');
-    expect(src).toContain("is_team_job === true");
+    expect(src).toContain('.select("id, service, rooms, bathrooms, extras, total_paid_zar, amount_paid_cents, booking_snapshot, is_team_job")');
+    expect(src).toContain("raw.is_team_job === true");
   });
 
   it("keeps the team repair bounded, dry-run by default, and dual-gated for writes", () => {
@@ -27,7 +27,8 @@ describe("A02-03-02 historical team ledger repair governance", () => {
     expect(src).toContain("existing booking_line_items block repair");
     expect(src).toContain("team payout ledger missing");
     expect(src).toContain("historical_team_snapshot_v1");
-    expect(src).toContain("rollbackError");
+    expect(src).toContain("rollbackInsertedRepairRows");
+    expect(src).toContain("verification read failed after rollback");
     expect(src).toContain("verification failed AND rollback failed");
   });
 });
