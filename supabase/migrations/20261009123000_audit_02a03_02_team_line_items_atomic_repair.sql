@@ -19,6 +19,7 @@ declare
   v_existing_count integer;
   v_existing_total bigint;
   v_existing_all_safe boolean;
+  v_existing_matches_payload boolean;
   v_inserted integer;
   v_authoritative_cents bigint;
 begin
@@ -100,9 +101,60 @@ begin
   where booking_id = p_booking_id;
 
   if v_existing_count > 0 then
+    select
+      count(*) = v_expected_count
+      and not exists (
+        select 1
+        from (
+          select
+            row_number() over (order by created_at, id) - 1 as source_index,
+            item_type,
+            slug,
+            name,
+            quantity,
+            unit_price_cents,
+            total_price_cents,
+            pricing_source,
+            metadata,
+            earns_cleaner
+          from public.booking_line_items
+          where booking_id = p_booking_id
+        ) persisted
+        full outer join (
+          select
+            ordinality - 1 as source_index,
+            r->>'item_type' as item_type,
+            nullif(trim(r->>'slug'), '') as slug,
+            coalesce(r->>'name', '') as name,
+            greatest(1, coalesce((r->>'quantity')::integer, 1)) as quantity,
+            (r->>'unit_price_cents')::integer as unit_price_cents,
+            (r->>'total_price_cents')::integer as total_price_cents,
+            'historical_team_snapshot_v1'::text as pricing_source,
+            case when jsonb_typeof(r->'metadata') = 'object' then r->'metadata' else '{}'::jsonb end as metadata,
+            false as earns_cleaner
+          from jsonb_array_elements(p_line_items) with ordinality as x(r, ordinality)
+        ) requested
+          using (source_index)
+        where persisted.source_index is null
+           or requested.source_index is null
+           or persisted.item_type is distinct from requested.item_type
+           or persisted.slug is distinct from requested.slug
+           or persisted.name is distinct from requested.name
+           or persisted.quantity is distinct from requested.quantity
+           or persisted.unit_price_cents is distinct from requested.unit_price_cents
+           or persisted.total_price_cents is distinct from requested.total_price_cents
+           or persisted.pricing_source is distinct from requested.pricing_source
+           or persisted.metadata is distinct from requested.metadata
+           or persisted.earns_cleaner is distinct from requested.earns_cleaner
+      )
+    into v_existing_matches_payload
+    from public.booking_line_items
+    where booking_id = p_booking_id;
+
     if v_existing_count = v_expected_count
        and v_existing_total = p_expected_total_cents::bigint
-       and v_existing_all_safe is true then
+       and v_existing_all_safe is true
+       and v_existing_matches_payload is true then
       return 'already_repaired';
     end if;
     raise exception 'a02_03_02_existing_line_items_conflict';
