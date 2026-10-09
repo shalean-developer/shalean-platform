@@ -94,6 +94,7 @@ export async function PUT(request: Request) {
       booking_source: "audit_a02_03_fixture",
       status: "pending",
       payment_status: discounted ? "success" : "pending_monthly",
+      ...(discounted ? { payment_completed_at: new Date().toISOString() } : {}),
       service: "Regular Cleaning",
       service_slug: "standard",
       total_paid_zar: payableCents / 100,
