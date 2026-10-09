@@ -81,6 +81,28 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     expect(migration).toContain("grant execute on function public.sync_draft_run_payout_total");
   });
 
+  it("links frozen draft-run late earnings inside the database transaction", () => {
+    const generator = read("lib/payout/generateWeeklyPayouts.ts");
+    const migration = read(
+      "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
+    );
+
+    expect(generator).toContain('admin.rpc("append_draft_run_payout_earnings"');
+    expect(migration).toContain("create or replace function public.append_draft_run_payout_earnings");
+    expect(migration).toContain("update public.bookings");
+    expect(migration).toContain("update public.booking_roster_member_payouts");
+    expect(migration).toContain("update public.team_job_member_payouts");
+    expect(migration).toContain("select distinct on (cleaner_id, booking_id)");
+    expect(migration).toContain("grant execute on function public.append_draft_run_payout_earnings");
+  });
+
+  it("chunks payout funding booking and invoice reads", () => {
+    const src = read("lib/payout/payoutFunding.ts");
+    expect(src).toContain("payoutQueryChunks");
+    expect(src).toContain("for (const idChunk of payoutQueryChunks(bookingIds))");
+    expect(src).toContain("for (const idChunk of payoutQueryChunks(uniqueInvoiceIds))");
+  });
+
   it("keeps draft-run total recomputation paginated and draft-only", () => {
     const src = read("lib/payout/runs/reconcileDraftRunLateEarnings.ts");
     expect(src).toContain("fetchAllPayoutRows");
