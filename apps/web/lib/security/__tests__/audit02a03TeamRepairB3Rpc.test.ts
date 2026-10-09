@@ -30,6 +30,8 @@ describe("A02-03-02B3 atomic repair allowlist expansion", () => {
     expect(sql).toContain("a02_03_02_b3_payout_linkage_mismatch");
     expect(sql).toContain("v_b3_roster_payload");
     expect(sql).toContain("v_b3_payout_payload");
+    expect(sql).toContain("from public.team_job_member_payouts tp");
+    expect(sql).toContain("for update");
     expect(sql).toContain("45254fb5-c94d-45e5-afb3-88b696e389b1");
     expect(sql).toContain("b7054032-ad31-466f-86f6-13ab65005d3d");
     expect(sql).toContain("b9bcaf62-f50c-4323-b99a-0db039c6cdfd");
