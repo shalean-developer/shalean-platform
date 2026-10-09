@@ -27,19 +27,19 @@ describe("buildHistoricalTeamFinancialLedger", () => {
     expect(result.items).toHaveLength(6);
     expect(result.items.every((line) => line.earns_cleaner === false)).toBe(true);
     expect(result.items.find((line) => line.name === "Service fee")?.item_type).toBe("adjustment");
-    expect(result.items.find((line) => line.name === "2 bedrooms")).toMatchObject({
+    expect(result.items.find((line) => line.name === "Bedrooms")).toMatchObject({
       item_type: "room",
       quantity: 2,
       unit_price_cents: 15_000,
       total_price_cents: 30_000,
     });
-    expect(result.items.find((line) => line.name === "2 bathrooms")).toMatchObject({
+    expect(result.items.find((line) => line.name === "Bathrooms")).toMatchObject({
       item_type: "bathroom",
       quantity: 2,
       unit_price_cents: 20_000,
       total_price_cents: 40_000,
     });
-    expect(result.items.find((line) => line.name === "3 extra rooms")).toMatchObject({
+    expect(result.items.find((line) => line.name === "Extra rooms")).toMatchObject({
       item_type: "room",
       slug: "extra-rooms",
       quantity: 3,
