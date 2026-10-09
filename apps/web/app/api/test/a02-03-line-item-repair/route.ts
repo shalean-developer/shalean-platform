@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 
 import { insertBookingRowUnified } from "@/lib/booking/createBookingUnified";
 import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensureBookingLineItemsForEarnings";
+import { buildPriceSnapshotV1Checkout } from "@/lib/booking/priceSnapshotBooking";
 import {
   expectedSupabaseRefForDeployment,
   resolveDeploymentEnvironment,
+  SHALEAN_SUPABASE_REFS,
   supabaseRefFromUrl,
 } from "@/lib/env/deploymentEnvironment";
 import { isProductionTestRouteBlocked } from "@/lib/security/productionTestRouteGuard";
@@ -53,6 +55,8 @@ function stagingDatabaseIdentityOk(): boolean {
     deployment === "staging" &&
       configuredSupabaseRef &&
       expectedSupabaseRef &&
+      configuredSupabaseRef !== SHALEAN_SUPABASE_REFS.production &&
+      expectedSupabaseRef !== SHALEAN_SUPABASE_REFS.production &&
       configuredSupabaseRef === expectedSupabaseRef,
   );
 }
@@ -87,6 +91,12 @@ export async function PUT(request: Request) {
   const baseAmountCents = discounted ? 33_000 : 36_000;
   const serviceFeeCents = 3_000;
   const amountPaidCents = discounted ? payableCents : 0;
+  const priceSnapshot = buildPriceSnapshotV1Checkout({
+    service_type: "standard",
+    base_price: baseAmountCents / 100,
+    extras: [],
+    total_price: payableCents / 100,
+  });
 
   const inserted = await insertBookingRowUnified(admin, {
     source: "audit_a02_03_fixture",
@@ -105,6 +115,7 @@ export async function PUT(request: Request) {
       base_amount_cents: baseAmountCents,
       extras_amount_cents: 0,
       service_fee_cents: serviceFeeCents,
+      price_snapshot: priceSnapshot,
       currency: "ZAR",
       date: "2099-01-01",
       time: "10:00",
