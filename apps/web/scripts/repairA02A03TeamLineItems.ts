@@ -116,24 +116,56 @@ type PreparedTarget = {
 async function readPersistedRepairState(
   admin: SupabaseClient,
   bookingId: string,
-  expectedCount: number,
+  expectedItems: readonly Extract<ReturnType<typeof buildHistoricalTeamFinancialLedger>, { ok: true }>["items"],
   expectedTotalCents: number,
 ): Promise<{ ok: true; valid: boolean; count: number; total: number } | { ok: false; error: string }> {
   const { data, error } = await admin
     .from("booking_line_items")
-    .select("total_price_cents, earns_cleaner, pricing_source")
+    .select("item_type, slug, name, quantity, unit_price_cents, total_price_cents, pricing_source, metadata, earns_cleaner")
     .eq("booking_id", bookingId);
   if (error) return { ok: false, error: error.message };
 
   const rows = data ?? [];
   const total = rows.reduce((sum, row) => sum + Number(row.total_price_cents ?? 0), 0);
-  const valid =
-    rows.length === expectedCount &&
-    total === expectedTotalCents &&
-    rows.every(
-      (row) => row.earns_cleaner === false && row.pricing_source === "historical_team_snapshot_v1",
-    );
-  return { ok: true, valid, count: rows.length, total };
+
+  const expectedByIndex = new Map(
+    expectedItems.map((item) => [Number((item.metadata as Record<string, unknown> | undefined)?.sourceLineIndex), item]),
+  );
+  const seen = new Set<number>();
+  let exact = rows.length === expectedItems.length && total === expectedTotalCents;
+
+  for (const row of rows) {
+    const metadata =
+      row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+        ? (row.metadata as Record<string, unknown>)
+        : {};
+    const sourceLineIndex = Number(metadata.sourceLineIndex);
+    const expected = expectedByIndex.get(sourceLineIndex);
+    if (!Number.isInteger(sourceLineIndex) || sourceLineIndex < 0 || !expected || seen.has(sourceLineIndex)) {
+      exact = false;
+      break;
+    }
+    seen.add(sourceLineIndex);
+
+    const expectedMetadata = expected.metadata ?? {};
+    if (
+      row.item_type !== expected.item_type ||
+      (row.slug ?? null) !== (expected.slug ?? null) ||
+      row.name !== expected.name ||
+      Number(row.quantity) !== Number(expected.quantity) ||
+      Number(row.unit_price_cents) !== Number(expected.unit_price_cents) ||
+      Number(row.total_price_cents) !== Number(expected.total_price_cents) ||
+      row.pricing_source !== "historical_team_snapshot_v1" ||
+      row.earns_cleaner !== false ||
+      JSON.stringify(metadata) !== JSON.stringify(expectedMetadata)
+    ) {
+      exact = false;
+      break;
+    }
+  }
+
+  if (seen.size !== expectedItems.length) exact = false;
+  return { ok: true, valid: exact, count: rows.length, total };
 }
 
 async function preflightTarget(admin: SupabaseClient, bookingId: string): Promise<PreparedTarget> {
@@ -178,7 +210,7 @@ async function preflightTarget(admin: SupabaseClient, bookingId: string): Promis
   const existing = await readPersistedRepairState(
     admin,
     bookingId,
-    built.items.length,
+    built.items,
     built.declaredPayableCents,
   );
   if (!existing.ok) throw new Error(`${bookingId}: ${existing.error}`);
