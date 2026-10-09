@@ -4,10 +4,6 @@ import { withCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { PayoutGenerationBlockedError } from "@/lib/payout/backfillLegacyWeeklyPayoutColumns";
 import { generateCatchUpWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
-import {
-  prepareDraftRunPayoutsForCatchUp,
-  restoreDraftRunPayoutsAfterCatchUp,
-} from "@/lib/payout/runs/reconcileDraftRunLateEarnings";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -46,19 +42,12 @@ export async function POST(request: Request) {
       admin,
       { jobName: CRON_LOCK_KEYS.generatePayouts, leaseSeconds: 900 },
       async () => {
-        const prep = await prepareDraftRunPayoutsForCatchUp(admin);
-        try {
-          const generated = await generateCatchUpWeeklyPayouts(admin, { createdBy: auth.userId });
-          return {
-            ...generated,
-            payoutFrequency: "monthly" as const,
-            closedPeriodOnly: true,
-            lateEarningsReconciledPayouts: prep.payouts.length,
-            lateEarningsReconciledRuns: prep.runIds.length,
-          };
-        } finally {
-          await restoreDraftRunPayoutsAfterCatchUp(admin, prep);
-        }
+        const generated = await generateCatchUpWeeklyPayouts(admin, { createdBy: auth.userId });
+        return {
+          ...generated,
+          payoutFrequency: "monthly" as const,
+          closedPeriodOnly: true,
+        };
       },
     );
     if (lockResult.skipped) {
