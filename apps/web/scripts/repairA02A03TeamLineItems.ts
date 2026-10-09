@@ -8,7 +8,7 @@
  * This first bounded stage only permits the two audited production booking IDs.
  * Team cleaner payouts are NOT recomputed or mutated.
  */
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { buildHistoricalTeamFinancialLedger } from "../lib/booking/buildHistoricalTeamFinancialLedger";
 
 const TARGET_IDS = new Set([
@@ -77,7 +77,7 @@ function runFixtureCheck(): void {
   console.log("A02-03-02A fixture check PASS");
 }
 
-async function rollbackInsertedRepairRows(admin: ReturnType<typeof createClient>, bookingId: string): Promise<void> {
+async function rollbackInsertedRepairRows(admin: SupabaseClient, bookingId: string): Promise<void> {
   const { error: rollbackError } = await admin
     .from("booking_line_items")
     .delete()
