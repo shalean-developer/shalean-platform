@@ -20,6 +20,8 @@ describe("A02-03-02 atomic historical team repair RPC", () => {
     expect(sql).toContain("full outer join");
     expect(sql).toContain("persisted.item_type is distinct from requested.item_type");
     expect(sql).toContain("persisted.metadata is distinct from requested.metadata");
+    expect(sql).toContain("metadata->>'sourceLineIndex'");
+    expect(sql).toContain("count(distinct case");
     expect(sql).toContain("historical_team_snapshot_v1");
     expect(sql).toContain("grant execute on function public.repair_a02_03_02_team_line_items");
     expect(sql).toContain("to service_role");
