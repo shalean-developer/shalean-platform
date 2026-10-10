@@ -14,7 +14,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $reconcile$
 begin
   if new.status = 'needs_reconcile'
      and old.status is distinct from 'needs_reconcile' then
@@ -28,7 +28,7 @@ begin
   end if;
   return new;
 end;
-$;
+$reconcile$;
 
 drop trigger if exists trg_payout_transfer_reconcile_started_at on public.payout_transfer_outbox;
 create trigger trg_payout_transfer_reconcile_started_at
