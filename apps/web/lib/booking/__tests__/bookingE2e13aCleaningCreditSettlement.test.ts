@@ -26,10 +26,21 @@ describe("BOOKING-E2E-13A Cleaning Credit settlement authority", () => {
     const sql = read("../../supabase/migrations/20261010213000_payment_finalize_reclaim_released_cleaning_credit.sql");
 
     expect(sql).toContain("if v.status = 'released' then");
+    expect(sql).toContain("if v_balance < v.amount_zar then");
+    expect(sql).toContain("released_credit_reclaim_insufficient_balance");
     expect(sql).toContain("credit_balance_zar = v_after");
     expect(sql).toContain("v_balance - v.amount_zar");
     expect(sql).toContain("Settled Cleaning Credit reservation after late verified payment");
     expect(sql).toContain("status = 'settled'");
+  });
+
+  it("quarantines the paid booking when Cleaning Credit settlement cannot complete", () => {
+    const src = read("lib/booking/upsertBookingFromPaystack.ts");
+
+    expect(src).toContain("cleaning_credit_settlement_failed:");
+    expect(src).toContain('status: "payment_reconciliation_required"');
+    expect(src).toContain('reason: "finalization_failed"');
+    expect(src).toContain("recoveryEnqueue: true");
   });
 
   it("terminal expiration remains release-not-settle", () => {
