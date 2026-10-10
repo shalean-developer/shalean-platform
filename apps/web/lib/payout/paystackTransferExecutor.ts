@@ -796,11 +796,33 @@ export async function submitPaystackTransferViaOutbox(
       };
     }
 
+    const unresolvedMessage = verified.ok
+      ? "Payout transfer is still leased for submission."
+      : verified.error;
+    const { data: held, error: holdErr } = await admin
+      .from("payout_transfer_outbox")
+      .update({
+        status: "needs_reconcile",
+        last_error: String(unresolvedMessage).slice(0, 2000),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", outbox.id)
+      .eq("status", "sending")
+      .eq("attempts", outbox.attempts)
+      .select("id")
+      .maybeSingle();
+
+    if (holdErr || !held) {
+      return {
+        ok: false,
+        error: holdErr?.message ?? "Recovered outbox lease changed before unresolved reconciliation hold.",
+        needsReconcile: true,
+      };
+    }
+
     return {
       ok: false,
-      error: verified.ok
-        ? "Payout transfer is still leased for submission."
-        : verified.error,
+      error: unresolvedMessage,
       needsReconcile: true,
     };
   }
@@ -1328,16 +1350,55 @@ export async function processPaystackTransferOutboxBatch(
   const cleanerPaystackEnabled =
     String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "").trim().toLowerCase() === "true";
 
+  const { data: legacyFailed, error: legacyFailedErr } = await admin
+    .from("payout_transfer_outbox")
+    .select("id, rail, subject_id, cleaner_id, amount_cents, recipient_code, reference, status, attempts, transfer_code, last_error")
+    .eq("status", "failed")
+    .eq("rail", "cleaner_payout")
+    .or("transfer_code.not.is.null,last_error.ilike.%duplicate%,last_error.ilike.%already%,last_error.ilike.%reference%")
+    .order("updated_at", { ascending: true })
+    .limit(limit);
+
+  if (legacyFailedErr) throw new Error(legacyFailedErr.message);
+
+  const results: SubmitPaystackTransferResult[] = [];
+
+  for (const row of legacyFailed ?? []) {
+    const r = row as {
+      id: string;
+      rail: PayoutTransferRail;
+      subject_id: string;
+      cleaner_id: string;
+      amount_cents: number;
+      recipient_code: string;
+      reference: string;
+    };
+
+    results.push(
+      await submitPaystackTransferViaOutbox(admin, {
+        rail: r.rail,
+        subjectId: r.subject_id,
+        cleanerId: r.cleaner_id,
+        amountCents: r.amount_cents,
+        recipientCode: r.recipient_code,
+        reference: r.reference,
+        initiatedBy: "cron/process-payout-outbox",
+      }),
+    );
+  }
+
+  const remainingLimit = Math.max(0, limit - results.length);
+  if (remainingLimit === 0) return { processed: results.length, results };
+
   const { data, error } = await admin
     .from("payout_transfer_outbox")
     .select("id, rail, subject_id, cleaner_id, amount_cents, recipient_code, reference, status, attempts, transfer_code")
     .in("status", ["pending", "sending", "needs_reconcile"])
     .order("updated_at", { ascending: true })
-    .limit(limit);
+    .limit(remainingLimit);
 
   if (error) throw new Error(error.message);
 
-  const results: SubmitPaystackTransferResult[] = [];
   for (const row of data ?? []) {
     const r = row as {
       id: string;
