@@ -134,11 +134,11 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
 
     expect(adjust).toContain('admin.rpc(\n      "adjust_unrun_member_payout_earnings"');
     expect(adjust).toContain("p_booking_patch: patch");
-    expect(adjust).toContain("p_direct_payout_id: editable.payoutId");
     expect(adjust).toContain("if (!hasTj && !hasRosterPay && Object.keys(patch).length > 0)");
     expect(migration).toContain("create or replace function public.adjust_unrun_member_payout_earnings");
     expect(migration).toContain("p_booking_patch jsonb");
-    expect(migration).toContain("p_direct_payout_id uuid");
+    expect(migration).toContain("v_current_direct_payout_id uuid");
+    expect(migration).toContain("select b.payout_id");
     expect(migration).toContain("for update");
     expect(migration).toContain("p.payout_run_id is null");
     expect(migration).toContain("update public.team_job_member_payouts");
@@ -147,6 +147,42 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     expect(migration).toContain("p_booking_patch ? 'earnings_summary'");
     expect(migration).toContain("update public.cleaner_payouts");
     expect(migration).toContain("grant execute on function public.adjust_unrun_member_payout_earnings");
+  });
+
+  it("locks member bookings before transactional eligibility revalidation", () => {
+    const migration = read(
+      "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
+    );
+
+    expect(migration).toContain("select r.booking_id");
+    expect(migration).toContain("select t.booking_id");
+    expect(migration).toContain("order by b.id");
+    expect(migration).toContain("for update");
+  });
+
+  it("mirrors payout-attribution removal semantics for empty/header-owner states", () => {
+    const migration = read(
+      "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
+    );
+
+    expect(migration).toContain("payout_owner_cleaner_id");
+    expect(migration).toContain("header_cleaner_id_at_removal");
+    expect(migration).toContain("= ''");
+  });
+
+  it("creates payout runs atomically after locking frozen closed-month payouts", () => {
+    const createRun = read("lib/payout/runs/createPayoutRun.ts");
+    const migration = read(
+      "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
+    );
+
+    expect(createRun).toContain('rpc("create_cleaner_payout_run_atomic"');
+    expect(migration).toContain("create or replace function public.create_cleaner_payout_run_atomic");
+    expect(migration).toContain("for update");
+    expect(migration).toContain("array_agg(id order by id)");
+    expect(migration).toContain("insert into public.cleaner_payout_runs");
+    expect(migration).toContain("set payout_run_id = v_run_id");
+    expect(migration).toContain("grant execute on function public.create_cleaner_payout_run_atomic");
   });
 
   it("keeps draft-run total recomputation paginated and draft-only", () => {
