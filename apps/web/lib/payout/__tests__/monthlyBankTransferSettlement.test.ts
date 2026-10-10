@@ -81,6 +81,9 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(detail).toContain("Monthly bank-transfer run");
     expect(detail).toContain("/bank-transfer");
     expect(detail).toContain("Bank reference");
+    expect(detail).toContain("Bank transfer date");
+    expect(detail).toContain("paid_at:");
+    expect(detail).toContain("T12:00:00+02:00");
     expect(detail).toContain("Record paid");
     expect(detail).not.toContain("Send Paystack");
     expect(detail).not.toContain("Mark paid (manual)");
