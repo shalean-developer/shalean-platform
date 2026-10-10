@@ -340,6 +340,18 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("use bank-transfer settlement");
   });
 
+  it("atomically cancels disabled fresh cleaner payout intents before provider POST", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain('admin.rpc("fail_cleaner_payout_outbox_validation"');
+    expect(executor).toContain('p_expected_status: "sending"');
+    expect(executor).toContain("p_expected_attempts: outbox.attempts");
+    expect(executor).toContain("Fresh transfer intent was cancelled before provider submission");
+    expect(executor.indexOf("fail_cleaner_payout_outbox_validation")).toBeLessThan(
+      executor.indexOf("const transfer = await paystackPostTransfer"),
+    );
+  });
+
   it("enforces cleaner Paystack opt-in at the final provider POST boundary", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
 
