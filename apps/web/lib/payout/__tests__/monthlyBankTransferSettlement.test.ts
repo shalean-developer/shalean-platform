@@ -366,6 +366,15 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain('status: "needs_reconcile"');
   });
 
+  it("checks unresolved reconciliation state updates before returning", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("retryableIntent");
+    expect(executor).toContain("retryableErr");
+    expect(executor).toContain("Payout transfer intent changed before it could remain retryable.");
+    expect(executor).toContain("intent remains retryable");
+  });
+
   it("preserves a stable reconciliation grace-period clock while updated_at rotates", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
     const sql = read("../../supabase/migrations/20261010134000_master_03b_reconcile_absent_paystack_intent.sql");
