@@ -74,7 +74,13 @@ begin
     from public.payout_transfer_outbox pto
     where pto.rail = 'cleaner_payout'
       and pto.subject_id = p_payout_id
-      and lower(coalesce(pto.status, '')) in ('pending', 'sending', 'submitted', 'needs_reconcile', 'succeeded')
+      and (
+        lower(coalesce(pto.status, '')) in ('pending', 'sending', 'submitted', 'needs_reconcile', 'succeeded')
+        or (
+          lower(coalesce(pto.status, '')) = 'failed'
+          and lower(coalesce(pto.last_error, '')) ~ '(duplicate|already|reference)'
+        )
+      )
   ) then
     raise exception 'paystack_transfer_in_flight';
   end if;
