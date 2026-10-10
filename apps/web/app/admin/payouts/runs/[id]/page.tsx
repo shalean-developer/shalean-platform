@@ -324,7 +324,9 @@ export default function AdminPayoutRunDetailPage() {
                                 Record paid
                               </Button>
                             </div>
-                          ) : p.status === "approved" ? (\n                            <span className="text-zinc-500">View only</span>\n                          ) : p.status === "paid" ? (
+                          ) : p.status === "approved" ? (
+                            <span className="text-zinc-500">View only</span>
+                          ) : p.status === "paid" ? (
                             <div>
                               <span className="text-emerald-600 dark:text-emerald-400">✓ Paid</span>
                               {p.payment_reference ? (
