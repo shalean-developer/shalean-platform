@@ -262,6 +262,20 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("needsReconcile: true");
   });
 
+  it("keeps recovered sending 404s nonterminal and applies terminal failures", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("automatic retry is blocked pending provider confirmation or manual reconciliation");
+    expect(executor).toContain('status: "needs_reconcile"');
+    expect(executor).not.toContain("return submitPaystackTransferViaOutbox(admin, params)");
+    expect(executor).toContain("Recovered transfer failure reconciliation failed.");
+    expect(executor).toContain("recoveredProviderStatus");
+    expect(executor).toContain('"abandoned"');
+    expect(executor).toContain('"blocked"');
+    expect(executor).toContain('"rejected"');
+    expect(executor).toContain("await applyTransferFailed(admin");
+  });
+
   it("converges recovered sending leases before retiring the outbox", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
     expect(executor).toContain('from "@/lib/payout/paystackTransferStatus"');
