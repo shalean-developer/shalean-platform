@@ -5,7 +5,7 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getPaystackBaseUrl } from "@/lib/payout/paystackOrigin";
 import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
 import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
-import { applyTransferSuccess } from "@/lib/payout/paystackTransferStatus";
+import { applyTransferFailed, applyTransferSuccess } from "@/lib/payout/paystackTransferStatus";
 
 /**
  * Single Paystack money-send entry point for cleaner payouts.
@@ -38,7 +38,15 @@ export type SubmitPaystackTransferResult =
       needsReconcile?: boolean;
       outboxId: string;
     }
-  | { ok: false; error: string; status?: number; needsReconcile?: boolean };
+  | {
+      ok: false;
+      error: string;
+      status?: number;
+      needsReconcile?: boolean;
+      transferCode?: string | null;
+      reference?: string;
+      outboxId?: string;
+    };
 
 type PaystackJson = {
   status?: boolean;
@@ -58,6 +66,8 @@ type OutboxRow = {
   reference: string;
   attempts: number;
   updated_at: string;
+  last_error?: string | null;
+  reconcile_started_at?: string | null;
 };
 
 function auditTable(rail: PayoutTransferRail): "payout_transfers" | "earnings_disbursement_transfers" {
@@ -260,7 +270,7 @@ async function loadOutboxByReference(
 ): Promise<OutboxRow | null> {
   const { data, error } = await admin
     .from("payout_transfer_outbox")
-    .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at")
+    .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at, last_error, reconcile_started_at")
     .eq("reference", reference)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -307,9 +317,20 @@ export async function submitPaystackTransferViaOutbox(
           reference: existingSuccess.reference?.trim() || params.reference,
         });
       } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Existing successful transfer reconciliation failed.";
+        await admin
+          .from("payout_transfer_outbox")
+          .update({
+            status: "needs_reconcile",
+            last_error: message.slice(0, 2000),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("reference", params.reference)
+          .neq("status", "succeeded");
         return {
           ok: false,
-          error: error instanceof Error ? error.message : "Existing successful transfer reconciliation failed.",
+          error: message,
           needsReconcile: true,
         };
       }
@@ -328,7 +349,7 @@ export async function submitPaystackTransferViaOutbox(
 
   // Already submitted — resume / verify, never create a second Paystack transfer.
   if (outbox && (outbox.status === "submitted" || outbox.status === "needs_reconcile" || outbox.status === "succeeded")) {
-    if (outbox.status === "succeeded" || outbox.transfer_code) {
+    if (outbox.status === "succeeded") {
       return {
         ok: true,
         transferCode: outbox.transfer_code,
@@ -339,29 +360,217 @@ export async function submitPaystackTransferViaOutbox(
     }
     const verified = await paystackGetTransferByReference(params.reference);
     if (verified.ok && verified.transferCode) {
+      const providerStatus = String(verified.status ?? "").trim().toLowerCase();
+      const providerSucceeded = providerStatus === "success" || providerStatus === "successful";
+      const providerFailed = ["failed", "reversed", "cancelled", "canceled"].includes(providerStatus);
+
+      if (outbox.transfer_row_id) {
+        const table = auditTable(params.rail);
+        const { error: auditCodeErr } = await admin
+          .from(table)
+          .update({
+            transfer_code: verified.transferCode,
+            ...(providerFailed ? {} : { status: "processing" }),
+            ...(params.rail === "cleaner_earnings" ? { reference: params.reference } : {}),
+          })
+          .eq("id", outbox.transfer_row_id)
+          .neq("status", "success");
+        if (auditCodeErr) {
+          return {
+            ok: false,
+            error: auditCodeErr.message,
+            needsReconcile: true,
+          };
+        }
+      }
+
+      if (providerSucceeded) {
+        try {
+          await applyTransferSuccess(admin, {
+            transfer_code: verified.transferCode,
+            reference: params.reference,
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Verified transfer success convergence failed.";
+          await admin
+            .from("payout_transfer_outbox")
+            .update({
+              status: "needs_reconcile",
+              last_error: message.slice(0, 2000),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", outbox.id)
+            .neq("status", "succeeded");
+          return {
+            ok: false,
+            error: message,
+            status: 500,
+            needsReconcile: true,
+          };
+        }
+        return {
+          ok: true,
+          transferCode: verified.transferCode,
+          reference: params.reference,
+          skippedExisting: true,
+          outboxId: outbox.id,
+        };
+      }
+
+      if (providerFailed) {
+        try {
+          await applyTransferFailed(admin, {
+            transfer_code: verified.transferCode,
+            reference: params.reference,
+            reason: `Paystack verify returned ${providerStatus}`,
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Verified transfer failure convergence failed.";
+          await admin
+            .from("payout_transfer_outbox")
+            .update({
+              status: "needs_reconcile",
+              last_error: message.slice(0, 2000),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", outbox.id)
+            .neq("status", "succeeded");
+          return {
+            ok: false,
+            error: message,
+            status: 500,
+            needsReconcile: true,
+          };
+        }
+
+        // The outbox may not yet have carried the provider transfer_code (for
+        // example after an uncertain POST). Retire this exact intent by id/reference
+        // so it cannot remain needs_reconcile and monopolize future worker batches.
+        const { error: retireFailedErr } = await admin
+          .from("payout_transfer_outbox")
+          .update({
+            status: "failed",
+            transfer_code: verified.transferCode,
+            last_error: `Paystack verify returned ${providerStatus}`,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", outbox.id)
+          .eq("reference", params.reference)
+          .neq("status", "succeeded");
+
+        if (retireFailedErr) {
+          return {
+            ok: false,
+            error: retireFailedErr.message,
+            status: 500,
+            needsReconcile: true,
+          };
+        }
+
+        return {
+          ok: false,
+          error: `Paystack transfer is ${providerStatus}; payout state was converged for retry or bank settlement.`,
+          status: 409,
+        };
+      }
+
       await admin
         .from("payout_transfer_outbox")
         .update({
-          status: verified.status === "success" || verified.status === "successful" ? "succeeded" : "submitted",
+          status: "submitted",
           transfer_code: verified.transferCode,
           updated_at: new Date().toISOString(),
         })
         .eq("id", outbox.id);
+
       return {
         ok: true,
         transferCode: verified.transferCode,
         reference: params.reference,
         skippedExisting: true,
         outboxId: outbox.id,
-        needsReconcile: verified.status !== "success" && verified.status !== "successful",
+        needsReconcile: true,
       };
     }
+    const reconcileStart = outbox.reconcile_started_at ?? outbox.updated_at;
+    const reconcileAgeMs = Date.now() - new Date(reconcileStart).getTime();
+    const verifiedAbsent =
+      !verified.ok &&
+      (verified.httpStatus === 404 || /not found|does not exist/i.test(verified.error));
+
+    if (
+      params.rail === "cleaner_payout" &&
+      outbox.status === "needs_reconcile" &&
+      !String(outbox.transfer_code ?? "").trim() &&
+      verifiedAbsent &&
+      Number.isFinite(reconcileAgeMs) &&
+      reconcileAgeMs >= 15 * 60 * 1000
+    ) {
+      const { error: absentErr } = await admin.rpc("fail_cleaner_payout_outbox_validation", {
+        p_outbox_id: outbox.id,
+        p_error: "Paystack reference verified absent after reconciliation grace period; use bank-transfer settlement.",
+        p_expected_status: "needs_reconcile",
+        p_expected_attempts: outbox.attempts,
+      });
+
+      if (absentErr) {
+        return {
+          ok: false,
+          error: absentErr.message,
+          status: 500,
+          needsReconcile: true,
+        };
+      }
+
+      return {
+        ok: false,
+        error: "Paystack reference verified absent after reconciliation grace period; bank-transfer settlement is now available.",
+        status: 404,
+      };
+    }
+
+    const { data: retryableIntent, error: retryableErr } = await admin
+      .from("payout_transfer_outbox")
+      .update({
+        status: "needs_reconcile",
+        last_error: verified.ok
+          ? "Provider verification returned no transfer code."
+          : String(verified.error ?? "Provider verification unresolved.").slice(0, 2000),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", outbox.id)
+      .in("status", ["submitted", "needs_reconcile"])
+      .select("id")
+      .maybeSingle();
+
+    if (retryableErr) {
+      return {
+        ok: false,
+        error: retryableErr.message,
+        status: 500,
+        needsReconcile: true,
+      };
+    }
+    if (!retryableIntent) {
+      return {
+        ok: false,
+        error: "Payout transfer intent changed before it could remain retryable.",
+        status: 409,
+        needsReconcile: true,
+      };
+    }
+
     return {
-      ok: true,
+      ok: false,
       transferCode: null,
       reference: params.reference,
       outboxId: outbox.id,
       needsReconcile: true,
+      error: verified.ok
+        ? "Provider verification returned no transfer code; intent remains retryable."
+        : String(verified.error ?? "Provider verification unresolved."),
     };
   }
 
@@ -470,7 +679,51 @@ export async function submitPaystackTransferViaOutbox(
     };
   }
 
-  // Failed outbox: reuse same reference — reset to pending for retry (Paystack idempotent on reference).
+  // Failed outbox: if cleaner Paystack payouts are disabled and provider history
+  // exists, reconcile that immutable reference before any retry lease/cancellation.
+  // A retained transfer_code means the intent is not definitely unsent.
+  const failedOutboxHasProviderUncertainty =
+    Boolean(String(outbox?.transfer_code ?? "").trim()) ||
+    /duplicate|already|reference/i.test(String(outbox?.last_error ?? ""));
+
+  if (
+    outbox &&
+    outbox.status === "failed" &&
+    params.rail === "cleaner_payout" &&
+    String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "").trim().toLowerCase() !== "true" &&
+    failedOutboxHasProviderUncertainty
+  ) {
+    const { data: reconciledIntent, error: reconcileStateErr } = await admin
+      .from("payout_transfer_outbox")
+      .update({ status: "needs_reconcile", updated_at: new Date().toISOString() })
+      .eq("id", outbox.id)
+      .eq("status", "failed")
+      .select("id")
+      .maybeSingle();
+
+    if (reconcileStateErr) {
+      return {
+        ok: false,
+        error: reconcileStateErr.message,
+        status: 500,
+        needsReconcile: true,
+      };
+    }
+    if (!reconciledIntent) {
+      return {
+        ok: false,
+        error: "Failed payout intent changed before it could enter reconciliation.",
+        status: 409,
+        needsReconcile: true,
+      };
+    }
+
+    return submitPaystackTransferViaOutbox(admin, params);
+  }
+
+  // Failed outbox with no retained provider history: reuse same reference — reset
+  // to pending for retry. When cleaner Paystack is disabled the final send boundary
+  // atomically cancels this definitely-unsent intent into the bank-transfer path.
   if (outbox && outbox.status === "failed") {
     await admin
       .from("payout_transfer_outbox")
@@ -520,7 +773,7 @@ export async function submitPaystackTransferViaOutbox(
         transfer_row_id: transferRowId || null,
         status: "pending",
       })
-      .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at")
+      .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at, last_error, reconcile_started_at")
       .maybeSingle();
 
     if (outboxErr) {
@@ -547,6 +800,49 @@ export async function submitPaystackTransferViaOutbox(
       reference: params.reference,
       context: { rail: params.rail, outboxId: outbox.id },
     });
+  }
+
+  // A pending cleaner-payout intent with prior attempts has crossed a send lease
+  // before. If Paystack is now disabled, its immutable reference must be verified
+  // before any terminal cancellation; it is not definitely unsent.
+  if (
+    outbox &&
+    outbox.status === "pending" &&
+    params.rail === "cleaner_payout" &&
+    String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "").trim().toLowerCase() !== "true" &&
+    Math.max(0, Math.round(Number(outbox.attempts ?? 0))) > 0
+  ) {
+    const { data: priorAttemptIntent, error: priorAttemptErr } = await admin
+      .from("payout_transfer_outbox")
+      .update({
+        status: "needs_reconcile",
+        last_error: "Prior send attempt requires provider verification before bank settlement.",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", outbox.id)
+      .eq("status", "pending")
+      .eq("attempts", outbox.attempts)
+      .select("id")
+      .maybeSingle();
+
+    if (priorAttemptErr) {
+      return {
+        ok: false,
+        error: priorAttemptErr.message,
+        status: 500,
+        needsReconcile: true,
+      };
+    }
+    if (!priorAttemptIntent) {
+      return {
+        ok: false,
+        error: "Pending payout intent changed before it could enter reconciliation.",
+        status: 409,
+        needsReconcile: true,
+      };
+    }
+
+    return submitPaystackTransferViaOutbox(admin, params);
   }
 
   // Claim outbox for send using an exclusive pending -> sending lease.
@@ -670,6 +966,37 @@ export async function submitPaystackTransferViaOutbox(
     return safetyGate;
   }
 
+  // MASTER-03B: the final money-send boundary. Existing submitted/succeeded
+  // transfers are reconciled above even when cleaner Paystack payouts are disabled,
+  // but no fresh provider POST may occur for the cleaner_payout rail without
+  // explicit operational opt-in.
+  if (
+    params.rail === "cleaner_payout" &&
+    String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "").trim().toLowerCase() !== "true"
+  ) {
+    const { error: cancelErr } = await admin.rpc("fail_cleaner_payout_outbox_validation", {
+      p_outbox_id: outbox.id,
+      p_error: "Cleaner Paystack payouts disabled; use bank-transfer settlement.",
+      p_expected_status: "sending",
+      p_expected_attempts: outbox.attempts,
+    });
+
+    if (cancelErr) {
+      return {
+        ok: false,
+        error: cancelErr.message,
+        status: 500,
+        needsReconcile: true,
+      };
+    }
+
+    return {
+      ok: false,
+      error: "Cleaner Paystack payouts are disabled. Fresh transfer intent was cancelled before provider submission; use bank-transfer settlement.",
+      status: 403,
+    };
+  }
+
   const transfer = await paystackPostTransfer({
     source: "balance",
     amount,
@@ -682,7 +1009,9 @@ export async function submitPaystackTransferViaOutbox(
   const table = auditTable(params.rail);
 
   if (!transfer.ok) {
-    // Duplicate reference often means Paystack already accepted — verify instead of failing hard.
+    // Duplicate/reference rejection means Paystack may already own the immutable
+    // reference. Verification failure is therefore uncertain, never a safe terminal
+    // failure. Keep the intent in needs_reconcile until the provider outcome is known.
     if (/duplicate|already|reference/i.test(transfer.error)) {
       const verified = await paystackGetTransferByReference(params.reference);
       if (verified.ok && verified.transferCode) {
@@ -711,6 +1040,34 @@ export async function submitPaystackTransferViaOutbox(
           outboxId: outbox.id,
         };
       }
+
+      const { error: uncertainErr } = await admin
+        .from("payout_transfer_outbox")
+        .update({
+          status: "needs_reconcile",
+          last_error: `Duplicate/reference response; verification unresolved: ${
+            verified.ok ? "provider returned no transfer code" : verified.error
+          }`.slice(0, 2000),
+          updated_at: now,
+        })
+        .eq("id", outbox.id)
+        .eq("status", "sending")
+        .eq("attempts", outbox.attempts);
+
+      if (uncertainErr) {
+        return {
+          ok: false,
+          error: uncertainErr.message,
+          status: 500,
+          needsReconcile: true,
+        };
+      }
+
+      return {
+        ok: false,
+        error: "Paystack reference may already exist; transfer left for reconciliation.",
+        needsReconcile: true,
+      };
     }
 
     if (transfer.networkError) {
@@ -842,11 +1199,14 @@ export async function processPaystackTransferOutboxBatch(
   opts?: { limit?: number },
 ): Promise<{ processed: number; results: SubmitPaystackTransferResult[] }> {
   const limit = Math.min(50, Math.max(1, opts?.limit ?? 25));
+  const cleanerPaystackEnabled =
+    String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "").trim().toLowerCase() === "true";
+
   const { data, error } = await admin
     .from("payout_transfer_outbox")
-    .select("id, rail, subject_id, cleaner_id, amount_cents, recipient_code, reference, status")
+    .select("id, rail, subject_id, cleaner_id, amount_cents, recipient_code, reference, status, attempts, transfer_code")
     .in("status", ["pending", "sending", "needs_reconcile"])
-    .order("created_at", { ascending: true })
+    .order("updated_at", { ascending: true })
     .limit(limit);
 
   if (error) throw new Error(error.message);
@@ -854,13 +1214,85 @@ export async function processPaystackTransferOutboxBatch(
   const results: SubmitPaystackTransferResult[] = [];
   for (const row of data ?? []) {
     const r = row as {
+      id: string;
       rail: PayoutTransferRail;
       subject_id: string;
       cleaner_id: string;
       amount_cents: number;
       recipient_code: string;
       reference: string;
+      status: string;
+      attempts?: number | null;
+      transfer_code?: string | null;
     };
+
+    // A pending cleaner-payout outbox has never owned a provider-send lease and has
+    // no submitted/uncertain provider state. When the rail is disabled, converge
+    // that definitely-unsent intent to terminal failed so the approved payout can
+    // be settled by bank transfer. This also prevents old disabled rows from
+    // permanently occupying the shared oldest-first outbox batch.
+    if (!cleanerPaystackEnabled && r.rail === "cleaner_payout" && r.status === "pending") {
+      if (
+        String(r.transfer_code ?? "").trim() ||
+        Math.max(0, Math.round(Number(r.attempts ?? 0))) > 0
+      ) {
+        const { error: markReconcileErr } = await admin
+          .from("payout_transfer_outbox")
+          .update({
+            status: "needs_reconcile",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", r.id)
+          .eq("status", "pending")
+          .eq("attempts", Math.max(0, Math.round(Number(r.attempts ?? 0))));
+
+        if (markReconcileErr) {
+          results.push({
+            ok: false,
+            error: markReconcileErr.message,
+            status: 500,
+            needsReconcile: true,
+          });
+          continue;
+        }
+
+        results.push(
+          await submitPaystackTransferViaOutbox(admin, {
+            rail: r.rail,
+            subjectId: r.subject_id,
+            cleanerId: r.cleaner_id,
+            amountCents: r.amount_cents,
+            recipientCode: r.recipient_code,
+            reference: r.reference,
+            initiatedBy: "cron/process-payout-outbox",
+          }),
+        );
+        continue;
+      }
+
+      const { error: convergeErr } = await admin.rpc("fail_cleaner_payout_outbox_validation", {
+        p_outbox_id: r.id,
+        p_error: "Cleaner Paystack payouts disabled; use bank-transfer settlement.",
+        p_expected_status: "pending",
+        p_expected_attempts: Math.max(0, Math.round(Number(r.attempts ?? 0))),
+      });
+      if (convergeErr) {
+        results.push({
+          ok: false,
+          error: convergeErr.message,
+          status: 500,
+          needsReconcile: true,
+        });
+      } else {
+        results.push({
+          ok: false,
+          error: "Cleaner Paystack payout intent cancelled before provider submission; use bank-transfer settlement.",
+          status: 403,
+        });
+      }
+      continue;
+    }
+
     const result = await submitPaystackTransferViaOutbox(admin, {
       rail: r.rail,
       subjectId: r.subject_id,

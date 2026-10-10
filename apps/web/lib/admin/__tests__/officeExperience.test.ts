@@ -57,6 +57,15 @@ describe("role-based Office experience", () => {
     for (const [role, permissions] of Object.entries(ROLE_PERMISSIONS)) expect(inferOfficeRole(new Set(permissions)), role).toBe(role);
   });
 
+  it("keeps payout-run settlement owner-only", () => {
+    const policy = policyForOfficePath("/office/payout-runs");
+    expect(policy?.audience).toEqual(["owner"]);
+    expect(policy?.anyOf).toEqual(["payout.release"]);
+    expect(hasAnyOfficePermission(new Set(ROLE_PERMISSIONS.manager), policy!.anyOf)).toBe(false);
+    expect(hasAnyOfficePermission(new Set(ROLE_PERMISSIONS.finance), policy!.anyOf)).toBe(false);
+    expect(hasAnyOfficePermission(new Set(ROLE_PERMISSIONS.owner), policy!.anyOf)).toBe(true);
+  });
+
   it("keeps Supervisor isolated from customer, finance, security and marketing", () => {
     const supervisor = new Set(ROLE_PERMISSIONS.supervisor);
     expect(hasAnyOfficePermission(supervisor, policyForOfficePath("/office/schedule")!.anyOf)).toBe(true);
