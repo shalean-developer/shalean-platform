@@ -116,6 +116,16 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(detail).toContain('p.status === "approved" && canRelease');
   });
 
+  it("verifies uncertain Paystack references across every configured key before declaring absence", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain('getPaystackSecretKeyCandidates');
+    expect(executor).toContain('for (const candidate of candidates)');
+    expect(executor).toContain('Authorization: `Bearer ${candidate.secret}`');
+    expect(executor).toContain('if (res.status === 404)');
+    expect(executor).toContain('Transfer reference was not found in any configured Paystack account');
+  });
+
   it("has a dedicated bank-transfer API that requires a reference", () => {
     const src = read("app/api/admin/payouts/[id]/bank-transfer/route.ts");
     expect(src).toContain('"payout.release"');
