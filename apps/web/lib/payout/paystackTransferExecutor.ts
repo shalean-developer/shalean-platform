@@ -864,20 +864,10 @@ export async function processPaystackTransferOutboxBatch(
   const cleanerPaystackEnabled =
     String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "").trim().toLowerCase() === "true";
 
-  let query = admin
+  const { data, error } = await admin
     .from("payout_transfer_outbox")
-    .select("id, rail, subject_id, cleaner_id, amount_cents, recipient_code, reference, status")
-    .in("status", ["pending", "sending", "needs_reconcile"]);
-
-  // When cleaner Paystack payouts are disabled, do not let old pending cleaner-payout
-  // rows repeatedly consume the oldest-first batch. Keep sending/needs_reconcile rows
-  // visible so already-started provider activity can still be verified/converged, and
-  // keep the cleaner_earnings rail fully serviceable.
-  if (!cleanerPaystackEnabled) {
-    query = query.or("rail.eq.cleaner_earnings,status.in.(sending,needs_reconcile)");
-  }
-
-  const { data, error } = await query
+    .select("id, rail, subject_id, cleaner_id, amount_cents, recipient_code, reference, status, attempts")
+    .in("status", ["pending", "sending", "needs_reconcile"])
     .order("created_at", { ascending: true })
     .limit(limit);
 
@@ -886,13 +876,46 @@ export async function processPaystackTransferOutboxBatch(
   const results: SubmitPaystackTransferResult[] = [];
   for (const row of data ?? []) {
     const r = row as {
+      id: string;
       rail: PayoutTransferRail;
       subject_id: string;
       cleaner_id: string;
       amount_cents: number;
       recipient_code: string;
       reference: string;
+      status: string;
+      attempts?: number | null;
     };
+
+    // A pending cleaner-payout outbox has never owned a provider-send lease and has
+    // no submitted/uncertain provider state. When the rail is disabled, converge
+    // that definitely-unsent intent to terminal failed so the approved payout can
+    // be settled by bank transfer. This also prevents old disabled rows from
+    // permanently occupying the shared oldest-first outbox batch.
+    if (!cleanerPaystackEnabled && r.rail === "cleaner_payout" && r.status === "pending") {
+      const { error: convergeErr } = await admin.rpc("fail_cleaner_payout_outbox_validation", {
+        p_outbox_id: r.id,
+        p_error: "Cleaner Paystack payouts disabled; use bank-transfer settlement.",
+        p_expected_status: "pending",
+        p_expected_attempts: Math.max(0, Math.round(Number(r.attempts ?? 0))),
+      });
+      if (convergeErr) {
+        results.push({
+          ok: false,
+          error: convergeErr.message,
+          status: 500,
+          needsReconcile: true,
+        });
+      } else {
+        results.push({
+          ok: false,
+          error: "Cleaner Paystack payout intent cancelled before provider submission; use bank-transfer settlement.",
+          status: 403,
+        });
+      }
+      continue;
+    }
+
     const result = await submitPaystackTransferViaOutbox(admin, {
       rail: r.rail,
       subjectId: r.subject_id,
