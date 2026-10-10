@@ -543,6 +543,46 @@ async function generateWeeklyPayoutsForPeriod(
       continue;
     }
 
+    if (!editableFrozenDraftBatch) {
+      const pendingResult = await admin.rpc("upsert_pending_payout_earnings", {
+        p_payout_id: existingBatch ? String((existingBatch as { id?: string }).id ?? "") || null : null,
+        p_cleaner_id: cleanerId,
+        p_period_start: periodStart,
+        p_period_end: periodEnd,
+        p_direct_booking_ids: bookings.map((b) => b.id),
+        p_roster_ids: rosterMemberCandidates.map((row) => row.id),
+        p_team_ids: teamJobMemberCandidates.map((row) => row.id),
+        p_created_by: opts?.createdBy ?? null,
+      });
+
+      if (pendingResult.error) {
+        const errorCode = String((pendingResult.error as { code?: string }).code ?? "");
+        if (errorCode === "23505") {
+          metrics.increment("cleaner.weekly_payout_duplicate_creation_blocked", {
+            cleanerId,
+            period_start: periodStart,
+            period_end: periodEnd,
+            source: "generateWeeklyPayouts",
+          });
+          skippedCleaners += 1;
+          continue;
+        }
+        throw new Error(`Atomic pending payout append failed: ${pendingResult.error.message}`);
+      }
+
+      const pendingData = (pendingResult.data ?? {}) as {
+        created?: boolean;
+        linked_count?: number;
+        payout_id?: string | null;
+        total_amount_cents?: number;
+      };
+      const pendingLinkedCount = Math.max(0, Math.floor(Number(pendingData.linked_count) || 0));
+      if (pendingData.created === true) payoutsCreated += 1;
+      bookingsLinked += pendingLinkedCount;
+      if (pendingLinkedCount === 0) skippedCleaners += 1;
+      continue;
+    }
+
     let payout = existingBatch as { id?: string } | null;
     let insErr: { code?: string; message?: string } | null = null;
     const createdNewBatch = !payout;
@@ -627,44 +667,6 @@ async function generateWeeklyPayoutsForPeriod(
       if (atomicLinkedCount === 0) skippedCleaners += 1;
       continue;
     }
-
-    const pendingResult = await admin.rpc("upsert_pending_payout_earnings", {
-      p_payout_id: existingBatch ? payoutId : null,
-      p_cleaner_id: cleanerId,
-      p_period_start: periodStart,
-      p_period_end: periodEnd,
-      p_direct_booking_ids: ids,
-      p_roster_ids: rosterMemberCandidates.map((row) => row.id),
-      p_team_ids: teamJobMemberCandidates.map((row) => row.id),
-      p_created_by: opts?.createdBy ?? null,
-    });
-
-    if (pendingResult.error) {
-      const errorCode = String((pendingResult.error as { code?: string }).code ?? "");
-      if (errorCode === "23505") {
-        metrics.increment("cleaner.weekly_payout_duplicate_creation_blocked", {
-          cleanerId,
-          period_start: periodStart,
-          period_end: periodEnd,
-          source: "generateWeeklyPayouts",
-        });
-        skippedCleaners += 1;
-        continue;
-      }
-      throw new Error(`Atomic pending payout append failed: ${pendingResult.error.message}`);
-    }
-
-    const pendingData = (pendingResult.data ?? {}) as {
-      created?: boolean;
-      linked_count?: number;
-      payout_id?: string | null;
-      total_amount_cents?: number;
-    };
-    const pendingLinkedCount = Math.max(0, Math.floor(Number(pendingData.linked_count) || 0));
-    if (pendingData.created === true) payoutsCreated += 1;
-    bookingsLinked += pendingLinkedCount;
-    if (pendingLinkedCount === 0) skippedCleaners += 1;
-    continue;
 
     let linkedCount = 0;
     const linkedDirectIds: string[] = [];
