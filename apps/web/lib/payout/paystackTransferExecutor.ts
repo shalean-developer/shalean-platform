@@ -239,6 +239,7 @@ async function paystackGetTransferByReference(
 
   const origin = getPaystackBaseUrl();
   const notFoundErrors: string[] = [];
+  const authErrors: string[] = [];
 
   for (const candidate of candidates) {
     try {
@@ -275,6 +276,10 @@ async function paystackGetTransferByReference(
         notFoundErrors.push(`${candidate.label}(${candidate.mode}): ${error}`);
         continue;
       }
+      if (res.status === 401 || res.status === 403) {
+        authErrors.push(`${candidate.label}(${candidate.mode}): ${error}`);
+        continue;
+      }
 
       return {
         ok: false,
@@ -291,6 +296,14 @@ async function paystackGetTransferByReference(
         networkError: true,
       };
     }
+  }
+
+  if (authErrors.length > 0) {
+    return {
+      ok: false,
+      error: `Paystack transfer verification could not authenticate every configured key candidate: ${authErrors.join("; ")}`,
+      httpStatus: 401,
+    };
   }
 
   return {
@@ -710,6 +723,41 @@ export async function submitPaystackTransferViaOutbox(
         skippedExisting: true,
         outboxId: outbox.id,
         needsReconcile: !providerSucceeded,
+      };
+    }
+
+    const verifyNeedsManualReconciliation =
+      !verified.ok &&
+      verified.httpStatus === 409 &&
+      /manual reconciliation required/i.test(verified.error);
+
+    if (verifyNeedsManualReconciliation) {
+      const { data: held, error: holdErr } = await admin
+        .from("payout_transfer_outbox")
+        .update({
+          status: "needs_reconcile",
+          last_error: String(verified.error).slice(0, 2000),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", outbox.id)
+        .eq("status", "sending")
+        .eq("attempts", outbox.attempts)
+        .select("id")
+        .maybeSingle();
+
+      if (holdErr || !held) {
+        return {
+          ok: false,
+          error: holdErr?.message ?? "Recovered outbox lease changed before manual reconciliation hold.",
+          needsReconcile: true,
+        };
+      }
+
+      return {
+        ok: false,
+        error: verified.error,
+        status: 409,
+        needsReconcile: true,
       };
     }
 
