@@ -59,6 +59,7 @@ type OutboxRow = {
   attempts: number;
   updated_at: string;
   last_error?: string | null;
+  reconcile_started_at?: string | null;
 };
 
 function auditTable(rail: PayoutTransferRail): "payout_transfers" | "earnings_disbursement_transfers" {
@@ -261,7 +262,7 @@ async function loadOutboxByReference(
 ): Promise<OutboxRow | null> {
   const { data, error } = await admin
     .from("payout_transfer_outbox")
-    .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at, last_error")
+    .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at, last_error, reconcile_started_at")
     .eq("reference", reference)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -485,7 +486,8 @@ export async function submitPaystackTransferViaOutbox(
         needsReconcile: true,
       };
     }
-    const reconcileAgeMs = Date.now() - new Date(outbox.updated_at).getTime();
+    const reconcileStart = outbox.reconcile_started_at ?? outbox.updated_at;
+    const reconcileAgeMs = Date.now() - new Date(reconcileStart).getTime();
     const verifiedAbsent =
       !verified.ok &&
       (verified.httpStatus === 404 || /not found|does not exist/i.test(verified.error));
@@ -741,7 +743,7 @@ export async function submitPaystackTransferViaOutbox(
         transfer_row_id: transferRowId || null,
         status: "pending",
       })
-      .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at, last_error")
+      .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at, last_error, reconcile_started_at")
       .maybeSingle();
 
     if (outboxErr) {
