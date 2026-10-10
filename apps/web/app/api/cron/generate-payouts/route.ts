@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 import { withCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
-import { generateWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
-import {
-  prepareDraftRunPayoutsForCatchUp,
-  restoreDraftRunPayoutsAfterCatchUp,
-} from "@/lib/payout/runs/reconcileDraftRunLateEarnings";
+import { generateCatchUpWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -25,19 +21,7 @@ export async function POST(request: Request) {
   const lockResult = await withCronLock(
     admin,
     { jobName: CRON_LOCK_KEYS.generatePayouts, leaseSeconds: 900 },
-    async () => {
-      const prep = await prepareDraftRunPayoutsForCatchUp(admin);
-      try {
-        const generated = await generateWeeklyPayouts(admin);
-        return {
-          ...generated,
-          lateEarningsReconciledPayouts: prep.payouts.length,
-          lateEarningsReconciledRuns: prep.runIds.length,
-        };
-      } finally {
-        await restoreDraftRunPayoutsAfterCatchUp(admin, prep);
-      }
-    },
+    async () => generateCatchUpWeeklyPayouts(admin),
   );
   if (lockResult.skipped) {
     return NextResponse.json({ ok: true, skipped: true, reason: lockResult.reason });

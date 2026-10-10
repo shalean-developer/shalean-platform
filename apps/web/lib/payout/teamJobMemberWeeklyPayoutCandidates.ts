@@ -5,6 +5,7 @@ import {
   type BookingRowForWeeklyBatchEligibility,
 } from "@/lib/payout/bookingPayableForWeeklyBatch";
 import { isYmdInInclusiveRange, weeklyBatchDayYmd } from "@/lib/payout/weekBounds";
+import { fetchAllPayoutRows, payoutQueryChunks } from "@/lib/payout/payoutQueryPagination";
 
 export type TeamJobMemberWeeklyPayoutCandidate = {
   id: string;
@@ -26,13 +27,22 @@ export async function listTeamJobMemberWeeklyPayoutCandidates(params: {
 }): Promise<TeamJobMemberWeeklyPayoutCandidate[]> {
   const { admin, cleanerId, periodStart, periodEnd, invoiceStatusById } = params;
 
-  const { data: memberRows, error: memberErr } = await admin
-    .from("team_job_member_payouts")
-    .select("id, booking_id, payout_cents")
-    .eq("cleaner_id", cleanerId)
-    .is("cleaner_payout_id", null)
-    .eq("status", "pending");
-  if (memberErr || !memberRows?.length) return [];
+  let memberRows: unknown[] = [];
+  try {
+    memberRows = await fetchAllPayoutRows((from, to) =>
+      admin
+        .from("team_job_member_payouts")
+        .select("id, booking_id, payout_cents")
+        .eq("cleaner_id", cleanerId)
+        .is("cleaner_payout_id", null)
+        .eq("status", "pending")
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
+  } catch {
+    return [];
+  }
+  if (!memberRows.length) return [];
 
   const bookingIds = [
     ...new Set(
@@ -43,13 +53,18 @@ export async function listTeamJobMemberWeeklyPayoutCandidates(params: {
   ];
   if (!bookingIds.length) return [];
 
-  const { data: bookingRows, error: bErr } = await admin
-    .from("bookings")
-    .select(BOOKING_SELECT_FIELDS_FOR_WEEKLY_BATCH_ELIGIBILITY)
-    .in("id", bookingIds)
-    .eq("status", "completed")
-    .eq("is_test", false);
-  if (bErr || !bookingRows?.length) return [];
+  const bookingRows: unknown[] = [];
+  for (const idChunk of payoutQueryChunks(bookingIds)) {
+    const { data, error } = await admin
+      .from("bookings")
+      .select(BOOKING_SELECT_FIELDS_FOR_WEEKLY_BATCH_ELIGIBILITY)
+      .in("id", idChunk)
+      .eq("status", "completed")
+      .eq("is_test", false);
+    if (error) return [];
+    bookingRows.push(...(data ?? []));
+  }
+  if (!bookingRows.length) return [];
 
   const bookingById = new Map<string, BookingRowForWeeklyBatchEligibility & { id: string }>();
   for (const raw of bookingRows) {

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllPayoutRows, payoutQueryChunks } from "@/lib/payout/payoutQueryPagination";
 
 export type CleanerPayoutBatchItemSource = "booking" | "roster_member" | "team_member";
 
@@ -78,26 +79,41 @@ export async function loadCleanerPayoutBatchItems(
   admin: SupabaseClient,
   payoutId: string,
 ): Promise<{ items: CleanerPayoutBatchItem[]; totalCents: number; error: string | null }> {
-  const [{ data: direct, error: directErr }, { data: roster, error: rosterErr }, { data: team, error: teamErr }] =
-    await Promise.all([
-      admin
-        .from("bookings")
-        .select(
-          "id, cleaner_id, customer_name, service, date, cleaner_payout_cents, cleaner_bonus_cents, payout_status, payout_frozen_cents, is_test, status, refunded_at",
-        )
-        .eq("payout_id", payoutId),
-      admin
-        .from("booking_roster_member_payouts")
-        .select("id, booking_id, cleaner_id, payout_cents, bonus_cents, status")
-        .eq("cleaner_payout_id", payoutId),
-      admin
-        .from("team_job_member_payouts")
-        .select("id, booking_id, cleaner_id, payout_cents, status")
-        .eq("cleaner_payout_id", payoutId),
+  let direct: unknown[] = [];
+  let roster: unknown[] = [];
+  let team: unknown[] = [];
+  try {
+    [direct, roster, team] = await Promise.all([
+      fetchAllPayoutRows((from, to) =>
+        admin
+          .from("bookings")
+          .select(
+            "id, cleaner_id, customer_name, service, date, cleaner_payout_cents, cleaner_bonus_cents, payout_status, payout_frozen_cents, is_test, status, refunded_at",
+          )
+          .eq("payout_id", payoutId)
+          .order("id", { ascending: true })
+          .range(from, to),
+      ),
+      fetchAllPayoutRows((from, to) =>
+        admin
+          .from("booking_roster_member_payouts")
+          .select("id, booking_id, cleaner_id, payout_cents, bonus_cents, status")
+          .eq("cleaner_payout_id", payoutId)
+          .order("id", { ascending: true })
+          .range(from, to),
+      ),
+      fetchAllPayoutRows((from, to) =>
+        admin
+          .from("team_job_member_payouts")
+          .select("id, booking_id, cleaner_id, payout_cents, status")
+          .eq("cleaner_payout_id", payoutId)
+          .order("id", { ascending: true })
+          .range(from, to),
+      ),
     ]);
-
-  const firstError = directErr ?? rosterErr ?? teamErr;
-  if (firstError) return { items: [], totalCents: 0, error: firstError.message };
+  } catch (e) {
+    return { items: [], totalCents: 0, error: e instanceof Error ? e.message : String(e) };
+  }
 
   const memberBookingIds = [
     ...new Set(
@@ -108,13 +124,13 @@ export async function loadCleanerPayoutBatchItems(
   ];
   const bookingById = new Map<string, BookingMeta>();
   if (memberBookingIds.length > 0) {
-    for (let i = 0; i < memberBookingIds.length; i += 120) {
+    for (const idChunk of payoutQueryChunks(memberBookingIds)) {
       const { data, error } = await admin
         .from("bookings")
         .select(
           "id, cleaner_id, customer_name, service, date, cleaner_payout_cents, cleaner_bonus_cents, payout_status, payout_frozen_cents, is_test, status, refunded_at",
         )
-        .in("id", memberBookingIds.slice(i, i + 120));
+        .in("id", idChunk);
       if (error) return { items: [], totalCents: 0, error: error.message };
       for (const raw of data ?? []) {
         const row = raw as BookingMeta;
