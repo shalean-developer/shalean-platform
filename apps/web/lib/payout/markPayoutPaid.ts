@@ -102,6 +102,30 @@ export async function markCleanerPayoutPaid(
   if ((testBookings?.length ?? 0) > 0) return { ok: false, error: "Cannot mark test payout as paid." };
 
   if (method === "bank_transfer") {
+    // Backward-compatible safety fence: block bank settlement before the
+    // database migration is present when any Paystack outbox still represents
+    // an active or unresolved intent for this payout.
+    const { data: unresolvedOutbox, error: unresolvedOutboxErr } = await admin
+      .from("payout_transfer_outbox")
+      .select("id, status, last_error")
+      .eq("rail", "cleaner_payout")
+      .eq("subject_id", payoutId)
+      .limit(50);
+    if (unresolvedOutboxErr) return { ok: false, error: unresolvedOutboxErr.message };
+
+    const blocksBankSettlement = (unresolvedOutbox ?? []).some((row) => {
+      const outboxStatus = String(row.status ?? "").trim().toLowerCase();
+      if (["pending", "sending", "submitted", "needs_reconcile", "succeeded"].includes(outboxStatus)) return true;
+      if (outboxStatus !== "failed") return false;
+      return /duplicate|already|reference/i.test(String(row.last_error ?? ""));
+    });
+    if (blocksBankSettlement) {
+      return {
+        ok: false,
+        error: "Paystack transfer history still requires reconciliation before bank settlement.",
+      };
+    }
+
     const { error: settleErr } = await admin.rpc("settle_cleaner_payout_bank_transfer", {
       p_payout_id: payoutId,
       p_paid_by: actor,
