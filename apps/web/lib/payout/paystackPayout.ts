@@ -234,7 +234,6 @@ export async function payCleanerPayoutWithPaystack(
     };
   }
 
-
   if (payout.status !== "approved") {
     return { ok: false, error: "Only approved payout batches can be paid.", status: 400 };
   }

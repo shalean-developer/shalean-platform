@@ -30,7 +30,7 @@ export const OFFICE_ACCESS_POLICIES: OfficeAccessPolicy[] = [
 
   { path: "/office/payouts", anyOf: ["payout.view"], audience: ["owner", "manager", "finance"] },
   { path: "/office/payout-batches", anyOf: ["payout.view"], audience: ["owner", "manager", "finance"] },
-  { path: "/office/payout-runs", anyOf: ["payout.view"], audience: ["owner", "manager", "finance"] },
+  { path: "/office/payout-runs", anyOf: ["payout.release"], audience: ["owner"] },
   { path: "/office/earnings-policies", anyOf: ["payout.prepare"], audience: ["owner", "manager", "finance"] },
   { path: "/office/financial-dashboard", anyOf: ["finance.summary.view", "finance.full.view"], audience: ["owner", "manager", "finance"] },
   { path: "/office/business-health", anyOf: ["finance.summary.view", "finance.full.view"], audience: ["owner", "manager", "finance"] },

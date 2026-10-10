@@ -70,6 +70,87 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(src).toContain('"settle_cleaner_payout_bank_transfer"');
   });
 
+  it("makes bank transfer the visible run settlement path and keeps Paystack opt-in", () => {
+    const list = read("components/admin/payout-runs/AdminDisbursementRunsPanel.tsx");
+    const detail = read("app/admin/payouts/runs/[id]/page.tsx");
+    const process = read("lib/payout/runs/processPayoutRun.ts");
+
+    expect(list).toContain("record bank transfers per cleaner");
+    expect(list).not.toContain(">Paystack<");
+    expect(list).not.toContain("Manual paid");
+    expect(detail).toContain("Monthly bank-transfer run");
+    expect(detail).toContain("/bank-transfer");
+    expect(detail).toContain("Bank reference");
+    expect(detail).toContain("Bank transfer date");
+    expect(detail).toContain("paid_at:");
+    expect(detail).toContain("T12:00:00+02:00");
+    expect(detail).toContain("Record paid");
+    expect(detail.indexOf('payment_status ?? "").toLowerCase() === "processing"')).toBeLessThan(
+      detail.indexOf('p.status === "approved"'),
+    );
+    expect(detail).not.toContain("Send Paystack");
+    expect(detail).not.toContain("Mark paid (manual)");
+    expect(process).toContain("ENABLE_CLEANER_PAYSTACK_PAYOUTS");
+    expect(process).toContain("Cleaner Paystack payouts are disabled.");
+    expect(process).toContain('const mode = opts.mode ?? "manual"');
+  });
+
+  it("keeps the payout-run bank-transfer UI reachable from the office payout hub", () => {
+    const office = read("app/(ui-redesign)/office/payouts/page.tsx");
+    const route = read("app/(ui-redesign)/office/payout-runs/page.tsx");
+    const detail = read("app/admin/payouts/runs/[id]/page.tsx");
+
+    expect(office).toContain('href="/office/payout-runs"');
+    expect(office).toContain("Payout runs");
+    expect(office).toContain('permissionData?.permissions?.includes("payout.release")');
+    expect(office).toContain("canReleasePayouts ? (");
+    expect(route).toContain('AdminDisbursementRunsPanel');
+    expect(route).not.toContain('redirect(');
+    expect(detail).toContain('href="/office/payouts"');
+    expect(detail).toContain("← Cleaner payouts");
+    expect(detail).not.toContain('/admin/payouts?tab=disbursements');
+    expect(detail).toContain('/api/admin/security/my-permissions');
+    expect(detail).toContain('permissions.has("payout.approve")');
+    expect(detail).toContain('permissions.has("payout.release")');
+    expect(detail).toContain('runStatus === "draft" && canApprove');
+    expect(detail).toContain('p.status === "approved" && canRelease');
+  });
+
+  it("verifies uncertain Paystack references across every configured key without crossing settlement modes", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("getPaystackSecretKeyCandidates");
+    expect(executor).toContain("for (const candidate of candidates)");
+    expect(executor).toContain('Authorization: `Bearer ${candidate.secret}`');
+    expect(executor).toContain("primaryCandidate");
+    expect(executor).toContain("if (!primaryCandidate)");
+    expect(executor).toContain("no explicit primary Paystack key is configured");
+    expect(executor).toContain("primaryMode");
+    expect(executor).toContain("candidate.mode !== primaryMode");
+    expect(executor).toContain("manual reconciliation required");
+    expect(executor).toContain("Transfer reference was not found in any configured Paystack account");
+  });
+
+  it("blocks bank settlement in application code before the database guard migration is present", () => {
+    const mark = read("lib/payout/markPayoutPaid.ts");
+
+    expect(mark).toContain('from("payout_transfer_outbox")');
+    expect(mark).toContain('eq("rail", "cleaner_payout")');
+    expect(mark).toContain('eq("subject_id", payoutId)');
+    expect(mark).toContain('"pending", "sending", "submitted", "needs_reconcile", "succeeded"');
+    expect(mark).toContain("duplicate|already|reference");
+    expect(mark).toContain("Paystack transfer history still requires reconciliation before bank settlement.");
+  });
+
+  it("reconciles uncertain failed cleaner payout intents regardless of the Paystack feature flag", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("failedOutboxHasProviderUncertainty");
+    expect(executor).toContain('outbox.status === "failed"');
+    expect(executor).toContain('params.rail === "cleaner_payout"');
+    expect(executor).not.toContain('String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "").trim().toLowerCase() !== "true" &&\n    failedOutboxHasProviderUncertainty');
+  });
+
   it("has a dedicated bank-transfer API that requires a reference", () => {
     const src = read("app/api/admin/payouts/[id]/bank-transfer/route.ts");
     expect(src).toContain('"payout.release"');
@@ -204,9 +285,36 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("needsReconcile: true");
   });
 
+  it("continues past stale Paystack auth keys and holds cross-mode sending intents", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("res.status === 401 || res.status === 403");
+    expect(executor).toContain("authErrors.push");
+    expect(executor).toContain("continue;");
+    expect(executor).toContain("verifyNeedsManualReconciliation");
+    expect(executor).toContain("manual reconciliation hold");
+    expect(executor).toContain('status: "needs_reconcile"');
+  });
+
+  it("keeps recovered sending 404s nonterminal and applies terminal failures", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("automatic retry is blocked pending provider confirmation or manual reconciliation");
+    expect(executor).toContain('status: "needs_reconcile"');
+    expect(executor).not.toContain("return submitPaystackTransferViaOutbox(admin, params)");
+    expect(executor).toContain("Recovered transfer failure reconciliation failed.");
+    expect(executor).toContain("recoveredProviderStatus");
+    expect(executor).toContain('"abandoned"');
+    expect(executor).toContain('"blocked"');
+    expect(executor).toContain('"rejected"');
+    expect(executor).toContain("await applyTransferFailed(admin");
+  });
+
   it("converges recovered sending leases before retiring the outbox", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
-    expect(executor).toContain('import { applyTransferSuccess } from "@/lib/payout/paystackTransferStatus"');
+    expect(executor).toContain('from "@/lib/payout/paystackTransferStatus"');
+    expect(executor).toContain("applyTransferSuccess");
+    expect(executor).toContain("applyTransferFailed");
     expect(executor).toContain("Recovered Paystack transfer could not update audit row");
     expect(executor).toContain("await applyTransferSuccess(admin");
     expect(executor).toContain("Recovered outbox lease changed before submission convergence.");
@@ -241,6 +349,266 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(status).toContain('if (referenceErr) throw new Error(referenceErr.message)');
     expect(status).toContain('if (error) throw new Error(error.message)');
     expect(pay.indexOf("existingSuccess")).toBeLessThan(pay.indexOf('payout.status !== "approved"'));
+  });
+
+  it("isolates verified success convergence errors per outbox row", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("Verified transfer success convergence failed.");
+    expect(executor).toContain("needsReconcile: true");
+    expect(executor).toContain("await applyTransferSuccess(admin");
+  });
+
+  it("isolates verified failure convergence errors per outbox row", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("Verified transfer failure convergence failed.");
+    expect(executor).toContain("needsReconcile: true");
+    expect(executor).toContain("try {");
+    expect(executor).toContain("await applyTransferFailed(admin");
+  });
+
+  it("retires verified terminal-failure outboxes by id and immutable reference", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("retireFailedErr");
+    expect(executor).toContain('.eq("id", outbox.id)');
+    expect(executor).toContain('.eq("reference", params.reference)');
+    expect(executor).toContain('status: "failed"');
+    expect(executor).toContain("transfer_code: verified.transferCode");
+  });
+
+  it("treats every conclusive Paystack failure status as terminal", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain('"abandoned"');
+    expect(executor).toContain('"blocked"');
+    expect(executor).toContain('"rejected"');
+    expect(executor).toContain("providerFailed");
+    expect(executor).toContain("await applyTransferFailed(admin");
+  });
+
+  it("applies verified provider outcomes before retiring reconciliation outboxes", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("applyTransferFailed, applyTransferSuccess");
+    expect(executor).toContain("providerSucceeded");
+    expect(executor).toContain("providerFailed");
+    expect(executor).toContain("await applyTransferSuccess(admin");
+    expect(executor).toContain("await applyTransferFailed(admin");
+    expect(executor).toContain('status: "submitted"');
+    expect(executor).toContain('status: "processing"');
+  });
+
+  it("routes pending payout intents with provider history into reconciliation, not cancellation", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("transfer_code");
+    expect(executor).toContain('status: "needs_reconcile"');
+    expect(executor).toContain("await submitPaystackTransferViaOutbox");
+    expect(executor).toContain("if (outbox.status === \"succeeded\")");
+    expect(executor).not.toContain('outbox.status === "succeeded" || outbox.transfer_code');
+  });
+
+  it("hides bank settlement for partial Paystack failures", () => {
+    const detail = read("app/admin/payouts/runs/[id]/page.tsx");
+
+    expect(detail).toContain('payment_status ?? "").toLowerCase() === "partial_failed"');
+    expect(detail).toContain("Transfer requires reconciliation");
+    expect(detail.indexOf('payment_status ?? "").toLowerCase() === "partial_failed"')).toBeLessThan(
+      detail.indexOf('p.status === "approved"'),
+    );
+  });
+
+  it("converges disabled pending cleaner payouts into a bank-transfer-safe state", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("cleanerPaystackEnabled");
+    expect(executor).toContain('r.rail === "cleaner_payout" && r.status === "pending"');
+    expect(executor).toContain('admin.rpc("fail_cleaner_payout_outbox_validation"');
+    expect(executor).toContain('p_expected_status: "pending"');
+    expect(executor).toContain("definitely-unsent intent to terminal failed");
+    expect(executor).toContain("use bank-transfer settlement");
+  });
+
+  it("moves legacy no-code uncertain failed rows into reconciliation without a transfer-code filter", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("reconciledIntent");
+    expect(executor).toContain('.select("id")');
+    expect(executor).toContain("Failed payout intent changed before it could enter reconciliation.");
+    expect(executor).not.toContain('.not("transfer_code", "is", null)');
+  });
+
+  it("refreshes existing-success convergence failures so they rotate fairly", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("Existing successful transfer reconciliation failed.");
+    expect(executor).toContain('.eq("reference", params.reference)');
+    expect(executor).toContain('status: "needs_reconcile"');
+    expect(executor).toContain("updated_at: new Date().toISOString()");
+  });
+
+  it("blocks bank settlement while an unresolved Paystack outbox still exists", () => {
+    const sql = read("../../supabase/migrations/20261010173500_master_03b_block_unresolved_outbox_bank_settlement.sql");
+
+    expect(sql).toContain("public.payout_transfer_outbox");
+    expect(sql).toContain("pto.subject_id = p_payout_id");
+    expect(sql).toContain("'pending', 'sending', 'submitted', 'needs_reconcile', 'succeeded'");
+    expect(sql).toContain("lower(coalesce(pto.status, '')) = 'failed'");
+    expect(sql).toContain("duplicate|already|reference");
+    expect(sql).toContain("raise exception 'paystack_transfer_in_flight'");
+  });
+
+  it("reconciles legacy uncertain failed outboxes before ordinary worker rows", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("legacyFailed");
+    expect(executor).toContain('.eq("status", "failed")');
+    expect(executor).toContain('.eq("rail", "cleaner_payout")');
+    expect(executor).toContain("last_error.ilike.%duplicate%");
+    expect(executor).toContain("last_error.ilike.%already%");
+    expect(executor).toContain("last_error.ilike.%reference%");
+    expect(executor).not.toContain("transfer_code.not.is.null");
+    expect(executor).toContain("remainingLimit");
+  });
+
+  it("moves every unresolved recovered sending lease into reconciliation", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("unresolvedMessage");
+    expect(executor).toContain("unresolved reconciliation hold");
+    expect(executor).toContain('status: "needs_reconcile"');
+    expect(executor).toContain("updated_at: new Date().toISOString()");
+  });
+
+  it("honors prior attempts in the disabled worker shortcut", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("Number(r.attempts ?? 0)");
+    expect(executor).toContain('.eq("attempts", Math.max(0, Math.round(Number(r.attempts ?? 0))))');
+    expect(executor).toContain('status: "needs_reconcile"');
+  });
+
+  it("checks unresolved reconciliation state updates before returning", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("retryableIntent");
+    expect(executor).toContain("retryableErr");
+    expect(executor).toContain("Payout transfer intent changed before it could remain retryable.");
+    expect(executor).toContain("intent remains retryable");
+  });
+
+  it("keeps provider-not-found transfer intents nonterminal and schema-backward-compatible", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+    const sql = read("../../supabase/migrations/20261010134000_master_03b_reconcile_absent_paystack_intent.sql");
+
+    expect(executor).toContain("Never convert a provider 404 into terminal");
+    expect(executor).toContain('status: "needs_reconcile"');
+    expect(executor).not.toContain("reconcileAgeMs");
+    expect(executor).not.toContain("outbox.reconcile_started_at");
+    expect(executor).not.toContain("reconcile_started_at\")");
+    expect(executor).not.toContain("Paystack reference verified absent after reconciliation grace period");
+    expect(sql).toContain("add column if not exists reconcile_started_at timestamptz");
+  });
+
+  it("routes prior-attempt pending cleaner payouts to reconciliation before disabled cancellation", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain('outbox.status === "pending"');
+    expect(executor).toContain("Number(outbox.attempts ?? 0)");
+    expect(executor).toContain("Prior send attempt requires provider verification before bank settlement.");
+    expect(executor).toContain("priorAttemptIntent");
+    expect(executor).toContain("return submitPaystackTransferViaOutbox(admin, params)");
+  });
+
+  it("rotates caught provider-convergence failures by refreshing updated_at", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("Verified transfer success convergence failed.");
+    expect(executor).toContain("Verified transfer failure convergence failed.");
+    expect(executor).toContain('status: "needs_reconcile"');
+    expect(executor).toContain("last_error: message.slice(0, 2000)");
+    expect(executor).toContain("updated_at: new Date().toISOString()");
+  });
+
+  it("preserves pre-deploy duplicate/reference uncertainty on failed no-code outboxes", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("failedOutboxHasProviderUncertainty");
+    expect(executor).toContain('/duplicate|already|reference/i.test(String(outbox?.last_error ?? ""))');
+    expect(executor).toContain('status: "needs_reconcile"');
+  });
+
+  it("rotates unresolved reconciliation rows using updated_at fairness", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain('.order("updated_at", { ascending: true })');
+    expect(executor).toContain("Provider verification unresolved.");
+    expect(executor).toContain("updated_at: new Date().toISOString()");
+  });
+
+  it("keeps unresolved duplicate/reference responses out of terminal failed state", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("Duplicate/reference rejection means Paystack may already own the immutable");
+    expect(executor).toContain('status: "needs_reconcile"');
+    expect(executor).toContain("Paystack reference may already exist; transfer left for reconciliation.");
+    expect(executor).toContain("verification unresolved");
+  });
+
+  it("reconciles coded failed cleaner-payout retries before disabled cancellation", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain('outbox.status === "failed"');
+    expect(executor).toContain('String(outbox.transfer_code ?? "").trim()');
+    expect(executor).toContain('status: "needs_reconcile"');
+    expect(executor).toContain("return submitPaystackTransferViaOutbox(admin, params)");
+    expect(executor).toContain("A retained transfer_code means the intent is not definitely unsent.");
+  });
+
+  it("atomically cancels disabled fresh cleaner payout intents before provider POST", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain('admin.rpc("fail_cleaner_payout_outbox_validation"');
+    expect(executor).toContain('p_expected_status: "sending"');
+    expect(executor).toContain("p_expected_attempts: outbox.attempts");
+    expect(executor).toContain("Fresh transfer intent was cancelled before provider submission");
+    expect(executor.indexOf("fail_cleaner_payout_outbox_validation")).toBeLessThan(
+      executor.indexOf("const transfer = await paystackPostTransfer"),
+    );
+  });
+
+  it("enforces cleaner Paystack opt-in at the final provider POST boundary", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("the final money-send boundary");
+    expect(executor).toContain('params.rail === "cleaner_payout"');
+    expect(executor).toContain("ENABLE_CLEANER_PAYSTACK_PAYOUTS");
+    expect(executor).toContain("await releaseOutboxSendLease");
+    expect(executor.indexOf("ENABLE_CLEANER_PAYSTACK_PAYOUTS")).toBeLessThan(
+      executor.indexOf("const transfer = await paystackPostTransfer"),
+    );
+    expect(executor.indexOf("Already submitted — resume / verify")).toBeLessThan(
+      executor.indexOf("the final money-send boundary"),
+    );
+  });
+
+  it("lets existing Paystack intents reach executor reconciliation before opt-in enforcement", () => {
+    const pay = read("lib/payout/paystackPayout.ts");
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(pay).not.toContain("ENABLE_CLEANER_PAYSTACK_PAYOUTS");
+    expect(pay).toContain("submitPaystackTransferViaOutbox");
+    expect(executor).toContain("ENABLE_CLEANER_PAYSTACK_PAYOUTS");
+    expect(executor.indexOf("Already submitted — resume / verify")).toBeLessThan(
+      executor.indexOf("the final money-send boundary"),
+    );
+
+    const directPayRoute = read("app/api/admin/payouts/[id]/pay/route.ts");
+    const retryRoute = read("app/api/admin/payouts/runs/[id]/retry/route.ts");
+    expect(directPayRoute).toContain("payCleanerPayoutWithPaystack");
+    expect(retryRoute).toContain("payCleanerPayoutWithPaystack");
   });
 
   it("keeps Paystack optional while stamping Paystack settlement truth", () => {
