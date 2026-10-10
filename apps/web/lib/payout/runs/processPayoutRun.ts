@@ -35,14 +35,27 @@ function manualPayoutAllowed(): boolean {
     .toLowerCase() === "true";
 }
 
+function paystackPayoutAllowed(): boolean {
+  return String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "")
+    .trim()
+    .toLowerCase() === "true";
+}
+
 export async function processPayoutRun(
   admin: SupabaseClient,
   runId: string,
   opts: { paidBy: string; mode?: "paystack" | "manual" },
 ): Promise<ProcessPayoutRunResult> {
-  const mode = opts.mode ?? (process.env.PAYSTACK_SECRET_KEY?.trim() ? "paystack" : "manual");
-  if (mode === "paystack" && !process.env.PAYSTACK_SECRET_KEY?.trim()) {
-    throw new Error("Paystack mode requires PAYSTACK_SECRET_KEY.");
+  const mode = opts.mode ?? "manual";
+  if (mode === "paystack") {
+    if (!paystackPayoutAllowed()) {
+      throw new Error(
+        "Cleaner Paystack payouts are disabled. Use the bank-transfer settlement path, or explicitly enable ENABLE_CLEANER_PAYSTACK_PAYOUTS=true.",
+      );
+    }
+    if (!process.env.PAYSTACK_SECRET_KEY?.trim()) {
+      throw new Error("Paystack mode requires PAYSTACK_SECRET_KEY.");
+    }
   }
   if (mode === "manual") {
     if (!manualPayoutAllowed()) {
