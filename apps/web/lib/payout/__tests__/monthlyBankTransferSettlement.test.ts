@@ -70,6 +70,25 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(src).toContain('"settle_cleaner_payout_bank_transfer"');
   });
 
+  it("makes bank transfer the visible run settlement path and keeps Paystack opt-in", () => {
+    const list = read("components/admin/payout-runs/AdminDisbursementRunsPanel.tsx");
+    const detail = read("app/admin/payouts/runs/[id]/page.tsx");
+    const process = read("lib/payout/runs/processPayoutRun.ts");
+
+    expect(list).toContain("record bank transfers per cleaner");
+    expect(list).not.toContain(">Paystack<");
+    expect(list).not.toContain("Manual paid");
+    expect(detail).toContain("Monthly bank-transfer run");
+    expect(detail).toContain("/bank-transfer");
+    expect(detail).toContain("Bank reference");
+    expect(detail).toContain("Record paid");
+    expect(detail).not.toContain("Send Paystack");
+    expect(detail).not.toContain("Mark paid (manual)");
+    expect(process).toContain("ENABLE_CLEANER_PAYSTACK_PAYOUTS");
+    expect(process).toContain("Cleaner Paystack payouts are disabled.");
+    expect(process).toContain('const mode = opts.mode ?? "manual"');
+  });
+
   it("has a dedicated bank-transfer API that requires a reference", () => {
     const src = read("app/api/admin/payouts/[id]/bank-transfer/route.ts");
     expect(src).toContain('"payout.release"');
