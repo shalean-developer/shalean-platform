@@ -845,7 +845,6 @@ export async function submitPaystackTransferViaOutbox(
     outbox &&
     outbox.status === "failed" &&
     params.rail === "cleaner_payout" &&
-    String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "").trim().toLowerCase() !== "true" &&
     failedOutboxHasProviderUncertainty
   ) {
     const { data: reconciledIntent, error: reconcileStateErr } = await admin
