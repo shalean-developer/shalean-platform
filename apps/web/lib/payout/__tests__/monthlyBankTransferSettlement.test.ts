@@ -349,6 +349,25 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).not.toContain('.not("transfer_code", "is", null)');
   });
 
+  it("refreshes existing-success convergence failures so they rotate fairly", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("Existing successful transfer reconciliation failed.");
+    expect(executor).toContain('.eq("reference", params.reference)');
+    expect(executor).toContain('status: "needs_reconcile"');
+    expect(executor).toContain("updated_at: new Date().toISOString()");
+  });
+
+  it("routes prior-attempt pending cleaner payouts to reconciliation before disabled cancellation", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain('outbox.status === "pending"');
+    expect(executor).toContain("Number(outbox.attempts ?? 0)");
+    expect(executor).toContain("Prior send attempt requires provider verification before bank settlement.");
+    expect(executor).toContain("priorAttemptIntent");
+    expect(executor).toContain("return submitPaystackTransferViaOutbox(admin, params)");
+  });
+
   it("rotates caught provider-convergence failures by refreshing updated_at", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
 
