@@ -289,7 +289,6 @@ export async function adjustBookingTeamMemberPayoutEarnings(
         p_payout_cents: payoutCents,
         p_bonus_cents: bonusCents,
         p_booking_patch: patch,
-        p_direct_payout_id: editable.payoutId,
       },
     );
     if (atomicMemberErr) {
