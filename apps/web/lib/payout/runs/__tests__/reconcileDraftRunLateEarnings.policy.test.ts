@@ -217,6 +217,35 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     expect(migration).toContain("grant execute on function public.approve_cleaner_payout_run_atomic");
   });
 
+  it("revalidates pending candidates transactionally before linking", () => {
+    const migration = read(
+      "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
+    );
+
+    expect(migration).toContain("create or replace function public.upsert_pending_payout_earnings");
+    expect(migration).toContain("select unnest(coalesce(p_direct_booking_ids");
+    expect(migration).toContain("order by b.id");
+    expect(migration).toContain("coalesce(b.cleaner_payout_cents, 0) > 0");
+    expect(migration).toContain("payout_attribution_removal_v1");
+    expect(migration).toContain("between p_period_start and p_period_end");
+    expect(migration).toContain("monthly_invoices mi");
+    expect(migration).toContain("cleaner_earnings ce");
+  });
+
+  it("uses parent-run then child-payout lock order for append and approval", () => {
+    const migration = read(
+      "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
+    );
+    const appendStart = migration.indexOf("create or replace function public.append_draft_run_payout_earnings");
+    const approveStart = migration.indexOf("create or replace function public.approve_cleaner_payout_run_atomic");
+    const append = migration.slice(appendStart, approveStart);
+
+    expect(append.indexOf("from public.cleaner_payout_runs r")).toBeLessThan(
+      append.indexOf("and p.payout_run_id = v_run_id\n  for update"),
+    );
+    expect(migration).toContain("approve_cleaner_payout_run_atomic");
+  });
+
   it("keeps draft-run total recomputation paginated and draft-only", () => {
     const src = read("lib/payout/runs/reconcileDraftRunLateEarnings.ts");
     expect(src).toContain("fetchAllPayoutRows");
