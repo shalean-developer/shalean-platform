@@ -64,21 +64,14 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     expect(src).toContain("throw new Error(reason)");
   });
 
-  it("uses the service-role atomic sync for frozen payouts attached to draft runs", () => {
+  it("keeps general visit-edit sync out of run-linked payouts", () => {
     const sync = read("lib/payout/syncPayoutBatchFromBookings.ts");
-    const migration = read(
-      "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
-    );
 
-    expect(sync).toContain('status === "frozen" && payoutRunId');
-    expect(sync).toContain('admin.rpc("sync_draft_run_payout_total"');
-    expect(migration).toContain("security definer");
-    expect(migration).toContain("auth.role() <> 'service_role'");
-    expect(migration).toContain("v_run_status <> 'draft'");
-    expect(migration).toContain("set payout_run_id = null");
-    expect(migration).toContain("set payout_run_id = v_run_id");
-    expect(migration).not.toContain("cleaner_payouts_block_mutate_when_frozen");
-    expect(migration).toContain("grant execute on function public.sync_draft_run_payout_total");
+    expect(sync).toContain("if (payoutRunId)");
+    expect(sync).toContain("Payout is part of a disbursement run");
+    expect(sync).not.toContain('admin.rpc("sync_draft_run_payout_total"');
+    expect(sync).toContain('select("id, period_start, period_end, status, payout_run_id")');
+    expect(sync).toContain("if (!id || !from || !to || runId) continue");
   });
 
   it("links frozen draft-run late earnings inside the database transaction", () => {
@@ -110,6 +103,8 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     expect(migration).toContain("b.payout_frozen_cents is not null");
     expect(migration).toContain("cleaner_earnings ce");
     expect(migration).toContain("greatest(coalesce(r.payout_cents, 0), 0)");
+    expect(migration).toContain("where b.id = r.booking_id");
+    expect(migration).toContain("and coalesce(b.cleaner_payout_cents, 0) > 0");
     expect(migration).toContain("greatest(coalesce(t.payout_cents, 0), 0) > 0");
   });
 
