@@ -79,6 +79,20 @@ begin
 
   -- Revalidate the same authoritative eligibility boundary inside this transaction.
   -- JavaScript discovery is advisory; only rows still payable at mutation time may link.
+  perform 1
+  from public.bookings b
+  where b.id in (
+    select r.booking_id
+    from public.booking_roster_member_payouts r
+    where r.id = any(coalesce(p_roster_ids, array[]::uuid[]))
+    union
+    select t.booking_id
+    from public.team_job_member_payouts t
+    where t.id = any(coalesce(p_team_ids, array[]::uuid[]))
+  )
+  order by b.id
+  for update;
+
   update public.bookings b
   set payout_id = p_payout_id
   where b.id = any(coalesce(p_direct_booking_ids, array[]::uuid[]))
@@ -92,9 +106,20 @@ begin
       ('refunded', 'full', 'partial', 'chargeback', 'reversed', 'failed_after_success')
     and not (
       lower(coalesce(b.metadata -> 'payout_attribution_removal_v1' ->> 'active', '')) = 'true'
-      and b.cleaner_id::text = coalesce(
-        nullif(b.metadata -> 'payout_attribution_removal_v1' ->> 'header_cleaner_id_at_removal', ''),
-        b.metadata -> 'payout_attribution_removal_v1' ->> 'cleaner_id'
+      and (
+        coalesce(
+          nullif(b.cleaner_id::text, ''),
+          nullif(b.payout_owner_cleaner_id::text, ''),
+          ''
+        ) = ''
+        or coalesce(
+          nullif(b.cleaner_id::text, ''),
+          nullif(b.payout_owner_cleaner_id::text, ''),
+          ''
+        ) = coalesce(
+          nullif(b.metadata -> 'payout_attribution_removal_v1' ->> 'header_cleaner_id_at_removal', ''),
+          b.metadata -> 'payout_attribution_removal_v1' ->> 'cleaner_id'
+        )
       )
     )
     and (
@@ -176,9 +201,20 @@ begin
           ('refunded', 'full', 'partial', 'chargeback', 'reversed', 'failed_after_success')
         and not (
           lower(coalesce(b.metadata -> 'payout_attribution_removal_v1' ->> 'active', '')) = 'true'
-          and coalesce(b.cleaner_id::text, '') = coalesce(
-            nullif(b.metadata -> 'payout_attribution_removal_v1' ->> 'header_cleaner_id_at_removal', ''),
-            b.metadata -> 'payout_attribution_removal_v1' ->> 'cleaner_id'
+          and (
+            coalesce(
+              nullif(b.cleaner_id::text, ''),
+              nullif(b.payout_owner_cleaner_id::text, ''),
+              ''
+            ) = ''
+            or coalesce(
+              nullif(b.cleaner_id::text, ''),
+              nullif(b.payout_owner_cleaner_id::text, ''),
+              ''
+            ) = coalesce(
+              nullif(b.metadata -> 'payout_attribution_removal_v1' ->> 'header_cleaner_id_at_removal', ''),
+              b.metadata -> 'payout_attribution_removal_v1' ->> 'cleaner_id'
+            )
           )
         )
         and (
@@ -251,9 +287,20 @@ begin
           ('refunded', 'full', 'partial', 'chargeback', 'reversed', 'failed_after_success')
         and not (
           lower(coalesce(b.metadata -> 'payout_attribution_removal_v1' ->> 'active', '')) = 'true'
-          and coalesce(b.cleaner_id::text, '') = coalesce(
-            nullif(b.metadata -> 'payout_attribution_removal_v1' ->> 'header_cleaner_id_at_removal', ''),
-            b.metadata -> 'payout_attribution_removal_v1' ->> 'cleaner_id'
+          and (
+            coalesce(
+              nullif(b.cleaner_id::text, ''),
+              nullif(b.payout_owner_cleaner_id::text, ''),
+              ''
+            ) = ''
+            or coalesce(
+              nullif(b.cleaner_id::text, ''),
+              nullif(b.payout_owner_cleaner_id::text, ''),
+              ''
+            ) = coalesce(
+              nullif(b.metadata -> 'payout_attribution_removal_v1' ->> 'header_cleaner_id_at_removal', ''),
+              b.metadata -> 'payout_attribution_removal_v1' ->> 'cleaner_id'
+            )
           )
         )
         and (
@@ -432,8 +479,7 @@ create or replace function public.adjust_unrun_member_payout_earnings(
   p_cleaner_id uuid,
   p_payout_cents bigint,
   p_bonus_cents bigint,
-  p_booking_patch jsonb,
-  p_direct_payout_id uuid
+  p_booking_patch jsonb
 )
 returns jsonb
 language plpgsql
@@ -442,6 +488,7 @@ set search_path = pg_catalog
 as $$
 declare
   v_payout_id uuid;
+  v_current_direct_payout_id uuid;
   v_total bigint;
   v_last_total bigint := null;
   v_synced_ids uuid[] := array[]::uuid[];
@@ -459,7 +506,8 @@ begin
   end if;
 
   -- Lock the visit row before touching any of its financial representations.
-  perform 1
+  select b.payout_id
+    into v_current_direct_payout_id
   from public.bookings b
   where b.id = p_booking_id
   for update;
@@ -474,8 +522,8 @@ begin
   for v_payout_id in
     select distinct x.payout_id
     from (
-      select p_direct_payout_id as payout_id
-      where p_direct_payout_id is not null
+      select v_current_direct_payout_id as payout_id
+      where v_current_direct_payout_id is not null
       union
       select t.cleaner_payout_id as payout_id
       from public.team_job_member_payouts t
@@ -565,8 +613,8 @@ begin
   for v_payout_id in
     select distinct x.payout_id
     from (
-      select p_direct_payout_id as payout_id
-      where p_direct_payout_id is not null
+      select v_current_direct_payout_id as payout_id
+      where v_current_direct_payout_id is not null
       union
       select t.cleaner_payout_id as payout_id
       from public.team_job_member_payouts t
@@ -661,10 +709,88 @@ begin
 end;
 $$;
 
-revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb, uuid) from public;
-revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb, uuid) from anon;
-revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb, uuid) from authenticated;
-grant execute on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb, uuid) to service_role;
+revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb) from public;
+revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb) from anon;
+revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb) from authenticated;
+grant execute on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb) to service_role;
 
-comment on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb, uuid) is
+comment on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb) is
   'MASTER-03A: atomically locks unrun member payout batches, updates team/roster earnings, and reconciles payout totals so createPayoutRun cannot race the edit.';
+
+
+create or replace function public.create_cleaner_payout_run_atomic(
+  p_closed_through date
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+declare
+  v_run_id uuid;
+  v_ids uuid[];
+  v_total bigint := 0;
+  v_linked integer := 0;
+  v_created_at timestamptz;
+begin
+  if auth.role() <> 'service_role' then
+    raise exception 'service_role required' using errcode = '42501';
+  end if;
+
+  with locked as (
+    select p.id, p.total_amount_cents
+    from public.cleaner_payouts p
+    where lower(coalesce(p.status::text, '')) = 'frozen'
+      and p.payout_run_id is null
+      and p.period_start::date >= date '2026-07-01'
+      and p.period_start::date = date_trunc('month', p.period_start::date)::date
+      and p.period_end::date = (date_trunc('month', p.period_start::date) + interval '1 month - 1 day')::date
+      and p.period_end::date <= p_closed_through
+    order by p.id
+    for update
+  )
+  select
+    array_agg(id order by id),
+    coalesce(sum(greatest(coalesce(total_amount_cents, 0), 0)), 0)::bigint
+  into v_ids, v_total
+  from locked;
+
+  if v_ids is null or cardinality(v_ids) = 0 then
+    return null;
+  end if;
+
+  insert into public.cleaner_payout_runs (status, total_amount_cents)
+  values ('draft', v_total)
+  returning id, created_at into v_run_id, v_created_at;
+
+  update public.cleaner_payouts
+  set payout_run_id = v_run_id
+  where id = any(v_ids)
+    and payout_run_id is null
+    and lower(coalesce(status::text, '')) = 'frozen';
+
+  get diagnostics v_linked = row_count;
+
+  if v_linked <> cardinality(v_ids) then
+    raise exception 'payout run claim changed during atomic creation' using errcode = '40001';
+  end if;
+
+  return jsonb_build_object(
+    'id', v_run_id,
+    'status', 'draft',
+    'total_amount_cents', v_total,
+    'created_at', v_created_at,
+    'approved_at', null,
+    'paid_at', null,
+    'payout_count', v_linked
+  );
+end;
+$$;
+
+revoke all on function public.create_cleaner_payout_run_atomic(date) from public;
+revoke all on function public.create_cleaner_payout_run_atomic(date) from anon;
+revoke all on function public.create_cleaner_payout_run_atomic(date) from authenticated;
+grant execute on function public.create_cleaner_payout_run_atomic(date) to service_role;
+
+comment on function public.create_cleaner_payout_run_atomic(date) is
+  'MASTER-03A: locks eligible closed-month frozen payouts, computes the total, creates the DRAFT run, and attaches payouts in one transaction.';
