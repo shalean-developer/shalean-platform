@@ -426,6 +426,27 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("updated_at: new Date().toISOString()");
   });
 
+  it("reconciles legacy uncertain failed outboxes before ordinary worker rows", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("legacyFailed");
+    expect(executor).toContain('.eq("status", "failed")');
+    expect(executor).toContain('.eq("rail", "cleaner_payout")');
+    expect(executor).toContain("last_error.ilike.%duplicate%");
+    expect(executor).toContain("last_error.ilike.%already%");
+    expect(executor).toContain("last_error.ilike.%reference%");
+    expect(executor).toContain("remainingLimit");
+  });
+
+  it("moves every unresolved recovered sending lease into reconciliation", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("unresolvedMessage");
+    expect(executor).toContain("unresolved reconciliation hold");
+    expect(executor).toContain('status: "needs_reconcile"');
+    expect(executor).toContain("updated_at: new Date().toISOString()");
+  });
+
   it("honors prior attempts in the disabled worker shortcut", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
 
