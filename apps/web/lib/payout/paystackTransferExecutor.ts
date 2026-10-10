@@ -5,7 +5,7 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getPaystackBaseUrl } from "@/lib/payout/paystackOrigin";
 import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
 import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
-import { applyTransferSuccess } from "@/lib/payout/paystackTransferStatus";
+import { applyTransferFailed, applyTransferSuccess } from "@/lib/payout/paystackTransferStatus";
 
 /**
  * Single Paystack money-send entry point for cleaner payouts.
@@ -339,21 +339,73 @@ export async function submitPaystackTransferViaOutbox(
     }
     const verified = await paystackGetTransferByReference(params.reference);
     if (verified.ok && verified.transferCode) {
+      const providerStatus = String(verified.status ?? "").trim().toLowerCase();
+      const providerSucceeded = providerStatus === "success" || providerStatus === "successful";
+      const providerFailed = ["failed", "reversed", "cancelled", "canceled"].includes(providerStatus);
+
+      if (outbox.transfer_row_id) {
+        const table = auditTable(params.rail);
+        const { error: auditCodeErr } = await admin
+          .from(table)
+          .update({
+            transfer_code: verified.transferCode,
+            ...(providerFailed ? {} : { status: "processing" }),
+            ...(params.rail === "cleaner_earnings" ? { reference: params.reference } : {}),
+          })
+          .eq("id", outbox.transfer_row_id)
+          .neq("status", "success");
+        if (auditCodeErr) {
+          return {
+            ok: false,
+            error: auditCodeErr.message,
+            needsReconcile: true,
+          };
+        }
+      }
+
+      if (providerSucceeded) {
+        await applyTransferSuccess(admin, {
+          transfer_code: verified.transferCode,
+          reference: params.reference,
+        });
+        return {
+          ok: true,
+          transferCode: verified.transferCode,
+          reference: params.reference,
+          skippedExisting: true,
+          outboxId: outbox.id,
+        };
+      }
+
+      if (providerFailed) {
+        await applyTransferFailed(admin, {
+          transfer_code: verified.transferCode,
+          reference: params.reference,
+          reason: `Paystack verify returned ${providerStatus}`,
+        });
+        return {
+          ok: false,
+          error: `Paystack transfer is ${providerStatus}; payout state was converged for retry or bank settlement.`,
+          status: 409,
+        };
+      }
+
       await admin
         .from("payout_transfer_outbox")
         .update({
-          status: verified.status === "success" || verified.status === "successful" ? "succeeded" : "submitted",
+          status: "submitted",
           transfer_code: verified.transferCode,
           updated_at: new Date().toISOString(),
         })
         .eq("id", outbox.id);
+
       return {
         ok: true,
         transferCode: verified.transferCode,
         reference: params.reference,
         skippedExisting: true,
         outboxId: outbox.id,
-        needsReconcile: verified.status !== "success" && verified.status !== "successful",
+        needsReconcile: true,
       };
     }
     return {
