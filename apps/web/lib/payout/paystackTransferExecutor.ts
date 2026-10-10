@@ -523,7 +523,7 @@ export async function submitPaystackTransferViaOutbox(
       };
     }
 
-    await admin
+    const { data: retryableIntent, error: retryableErr } = await admin
       .from("payout_transfer_outbox")
       .update({
         status: "needs_reconcile",
@@ -533,14 +533,36 @@ export async function submitPaystackTransferViaOutbox(
         updated_at: new Date().toISOString(),
       })
       .eq("id", outbox.id)
-      .in("status", ["submitted", "needs_reconcile"]);
+      .in("status", ["submitted", "needs_reconcile"])
+      .select("id")
+      .maybeSingle();
+
+    if (retryableErr) {
+      return {
+        ok: false,
+        error: retryableErr.message,
+        status: 500,
+        needsReconcile: true,
+      };
+    }
+    if (!retryableIntent) {
+      return {
+        ok: false,
+        error: "Payout transfer intent changed before it could remain retryable.",
+        status: 409,
+        needsReconcile: true,
+      };
+    }
 
     return {
-      ok: true,
+      ok: false,
       transferCode: null,
       reference: params.reference,
       outboxId: outbox.id,
       needsReconcile: true,
+      error: verified.ok
+        ? "Provider verification returned no transfer code; intent remains retryable."
+        : String(verified.error ?? "Provider verification unresolved."),
     };
   }
 
