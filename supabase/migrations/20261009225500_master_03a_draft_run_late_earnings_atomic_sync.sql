@@ -432,7 +432,8 @@ create or replace function public.adjust_unrun_member_payout_earnings(
   p_cleaner_id uuid,
   p_payout_cents bigint,
   p_bonus_cents bigint,
-  p_booking_patch jsonb
+  p_booking_patch jsonb,
+  p_direct_payout_id uuid
 )
 returns jsonb
 language plpgsql
@@ -473,6 +474,9 @@ begin
   for v_payout_id in
     select distinct x.payout_id
     from (
+      select p_direct_payout_id as payout_id
+      where p_direct_payout_id is not null
+      union
       select t.cleaner_payout_id as payout_id
       from public.team_job_member_payouts t
       where t.booking_id = p_booking_id
@@ -561,6 +565,9 @@ begin
   for v_payout_id in
     select distinct x.payout_id
     from (
+      select p_direct_payout_id as payout_id
+      where p_direct_payout_id is not null
+      union
       select t.cleaner_payout_id as payout_id
       from public.team_job_member_payouts t
       where t.booking_id = p_booking_id
@@ -654,10 +661,10 @@ begin
 end;
 $$;
 
-revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb) from public;
-revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb) from anon;
-revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb) from authenticated;
-grant execute on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb) to service_role;
+revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb, uuid) from public;
+revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb, uuid) from anon;
+revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb, uuid) from authenticated;
+grant execute on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb, uuid) to service_role;
 
-comment on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb) is
+comment on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb, uuid) is
   'MASTER-03A: atomically locks unrun member payout batches, updates team/roster earnings, and reconciles payout totals so createPayoutRun cannot race the edit.';
