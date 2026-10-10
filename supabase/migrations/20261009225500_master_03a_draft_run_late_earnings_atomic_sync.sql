@@ -39,34 +39,20 @@ begin
     raise exception 'service_role required' using errcode = '42501';
   end if;
 
-  select
-    p.payout_run_id,
-    lower(coalesce(p.status::text, '')),
-    p.cleaner_id,
-    p.period_start::date,
-    p.period_end::date
-  into
-    v_run_id,
-    v_payout_status,
-    v_payout_cleaner_id,
-    v_period_start,
-    v_period_end
+  select p.payout_run_id
+    into v_run_id
   from public.cleaner_payouts p
-  where p.id = p_payout_id
-  for update;
+  where p.id = p_payout_id;
 
   if not found then
     raise exception 'cleaner payout % not found', p_payout_id using errcode = 'P0002';
   end if;
 
-  if v_payout_status <> 'frozen' or v_run_id is null then
-    raise exception 'cleaner payout % is not a frozen run payout', p_payout_id using errcode = '55000';
+  if v_run_id is null then
+    raise exception 'cleaner payout % is not attached to a payout run', p_payout_id using errcode = '55000';
   end if;
 
-  if v_payout_cleaner_id is distinct from p_cleaner_id then
-    raise exception 'cleaner payout % does not belong to cleaner %', p_payout_id, p_cleaner_id using errcode = '22023';
-  end if;
-
+  -- Match approval lock order: parent run first, then child payout.
   select lower(coalesce(r.status::text, ''))
     into v_run_status
   from public.cleaner_payout_runs r
@@ -75,6 +61,30 @@ begin
 
   if not found or v_run_status <> 'draft' then
     raise exception 'payout run % is no longer draft', v_run_id using errcode = '55000';
+  end if;
+
+  select
+    lower(coalesce(p.status::text, '')),
+    p.cleaner_id,
+    p.period_start::date,
+    p.period_end::date
+  into
+    v_payout_status,
+    v_payout_cleaner_id,
+    v_period_start,
+    v_period_end
+  from public.cleaner_payouts p
+  where p.id = p_payout_id
+    and p.payout_run_id = v_run_id
+  for update;
+
+  if not found or v_payout_status <> 'frozen' then
+    raise exception 'cleaner payout % is no longer a frozen child of run %', p_payout_id, v_run_id
+      using errcode = '55000';
+  end if;
+
+  if v_payout_cleaner_id is distinct from p_cleaner_id then
+    raise exception 'cleaner payout % does not belong to cleaner %', p_payout_id, p_cleaner_id using errcode = '22023';
   end if;
 
   -- Revalidate the same authoritative eligibility boundary inside this transaction.
@@ -861,11 +871,101 @@ begin
     end if;
   end if;
 
+  -- Lock every candidate booking before revalidating the authoritative payout gate.
+  perform 1
+  from public.bookings b
+  where b.id in (
+    select unnest(coalesce(p_direct_booking_ids, array[]::uuid[]))
+    union
+    select r.booking_id
+    from public.booking_roster_member_payouts r
+    where r.id = any(coalesce(p_roster_ids, array[]::uuid[]))
+    union
+    select t.booking_id
+    from public.team_job_member_payouts t
+    where t.id = any(coalesce(p_team_ids, array[]::uuid[]))
+  )
+  order by b.id
+  for update;
+
   update public.bookings b
   set payout_id = v_payout_id
   where b.id = any(coalesce(p_direct_booking_ids, array[]::uuid[]))
     and b.cleaner_id = p_cleaner_id
-    and b.payout_id is null;
+    and b.payout_id is null
+    and lower(coalesce(b.status::text, '')) = 'completed'
+    and coalesce(b.is_test, false) = false
+    and coalesce(b.cleaner_payout_cents, 0) > 0
+    and b.refunded_at is null
+    and lower(coalesce(b.refund_status::text, '')) not in
+      ('refunded', 'full', 'partial', 'chargeback', 'reversed', 'failed_after_success')
+    and not (
+      lower(coalesce(b.metadata -> 'payout_attribution_removal_v1' ->> 'active', '')) = 'true'
+      and (
+        coalesce(nullif(b.cleaner_id::text, ''), nullif(b.payout_owner_cleaner_id::text, ''), '') = ''
+        or coalesce(nullif(b.cleaner_id::text, ''), nullif(b.payout_owner_cleaner_id::text, ''), '') = coalesce(
+          nullif(b.metadata -> 'payout_attribution_removal_v1' ->> 'header_cleaner_id_at_removal', ''),
+          b.metadata -> 'payout_attribution_removal_v1' ->> 'cleaner_id'
+        )
+      )
+    )
+    and (
+      case
+        when (
+          lower(coalesce(b.billing_type::text, '')) in ('recurring_invoice', 'monthly_contract', 'pay_later')
+          or coalesce(b.is_monthly_billing_booking, false)
+          or lower(coalesce(b.payment_status::text, '')) = 'pending_monthly'
+          or b.monthly_invoice_id is not null
+        ) and b.date is not null
+          then b.date::date
+        when b.date is not null
+          and b.completed_at is not null
+          and date_trunc('week', b.date::date) <> date_trunc('week', b.completed_at::date)
+          then b.date::date
+        when b.completed_at is not null
+          then b.completed_at::date
+        else b.date::date
+      end
+    ) between p_period_start and p_period_end
+    and (
+      (
+        (
+          lower(coalesce(b.billing_type::text, '')) in ('recurring_invoice', 'monthly_contract', 'pay_later')
+          or coalesce(b.is_monthly_billing_booking, false)
+          or lower(coalesce(b.payment_status::text, '')) = 'pending_monthly'
+          or b.monthly_invoice_id is not null
+        )
+        and b.monthly_invoice_id is not null
+        and exists (
+          select 1
+          from public.monthly_invoices mi
+          where mi.id = b.monthly_invoice_id
+            and lower(coalesce(mi.status::text, '')) = 'paid'
+        )
+        and lower(coalesce(b.payment_status::text, '')) = 'success'
+        and lower(coalesce(b.payout_status::text, '')) = 'eligible'
+        and b.payout_frozen_cents is not null
+      )
+      or
+      (
+        not (
+          lower(coalesce(b.billing_type::text, '')) in ('recurring_invoice', 'monthly_contract', 'pay_later')
+          or coalesce(b.is_monthly_billing_booking, false)
+          or lower(coalesce(b.payment_status::text, '')) = 'pending_monthly'
+          or b.monthly_invoice_id is not null
+        )
+        and lower(coalesce(b.payment_status::text, '')) in ('success', 'paid', 'succeeded')
+      )
+    )
+    and not exists (
+      select 1
+      from public.cleaner_earnings ce
+      where ce.booking_id = b.id
+        and (
+          ce.disbursement_id is not null
+          or lower(coalesce(ce.status::text, '')) in ('paid', 'claimed', 'disbursed')
+        )
+    );
   get diagnostics v_direct_count = row_count;
 
   update public.booking_roster_member_payouts r
@@ -874,7 +974,77 @@ begin
   where r.id = any(coalesce(p_roster_ids, array[]::uuid[]))
     and r.cleaner_id = p_cleaner_id
     and r.cleaner_payout_id is null
-    and lower(coalesce(r.status::text, '')) = 'pending';
+    and lower(coalesce(r.status::text, '')) = 'pending'
+    and greatest(coalesce(r.payout_cents, 0), 0) + greatest(coalesce(r.bonus_cents, 0), 0) > 0
+    and exists (
+      select 1
+      from public.bookings b
+      where b.id = r.booking_id
+        and lower(coalesce(b.status::text, '')) = 'completed'
+        and coalesce(b.is_test, false) = false
+        and coalesce(b.cleaner_payout_cents, 0) > 0
+        and b.refunded_at is null
+        and lower(coalesce(b.refund_status::text, '')) not in
+          ('refunded', 'full', 'partial', 'chargeback', 'reversed', 'failed_after_success')
+        and not (
+          lower(coalesce(b.metadata -> 'payout_attribution_removal_v1' ->> 'active', '')) = 'true'
+          and (
+            coalesce(nullif(b.cleaner_id::text, ''), nullif(b.payout_owner_cleaner_id::text, ''), '') = ''
+            or coalesce(nullif(b.cleaner_id::text, ''), nullif(b.payout_owner_cleaner_id::text, ''), '') = coalesce(
+              nullif(b.metadata -> 'payout_attribution_removal_v1' ->> 'header_cleaner_id_at_removal', ''),
+              b.metadata -> 'payout_attribution_removal_v1' ->> 'cleaner_id'
+            )
+          )
+        )
+        and (
+          case
+            when (
+              lower(coalesce(b.billing_type::text, '')) in ('recurring_invoice', 'monthly_contract', 'pay_later')
+              or coalesce(b.is_monthly_billing_booking, false)
+              or lower(coalesce(b.payment_status::text, '')) = 'pending_monthly'
+              or b.monthly_invoice_id is not null
+            ) and b.date is not null
+              then b.date::date
+            when b.date is not null
+              and b.completed_at is not null
+              and date_trunc('week', b.date::date) <> date_trunc('week', b.completed_at::date)
+              then b.date::date
+            when b.completed_at is not null
+              then b.completed_at::date
+            else b.date::date
+          end
+        ) between p_period_start and p_period_end
+        and (
+          (
+            (
+              lower(coalesce(b.billing_type::text, '')) in ('recurring_invoice', 'monthly_contract', 'pay_later')
+              or coalesce(b.is_monthly_billing_booking, false)
+              or lower(coalesce(b.payment_status::text, '')) = 'pending_monthly'
+              or b.monthly_invoice_id is not null
+            )
+            and b.monthly_invoice_id is not null
+            and exists (
+              select 1
+              from public.monthly_invoices mi
+              where mi.id = b.monthly_invoice_id
+                and lower(coalesce(mi.status::text, '')) = 'paid'
+            )
+            and lower(coalesce(b.payment_status::text, '')) = 'success'
+            and lower(coalesce(b.payout_status::text, '')) = 'eligible'
+            and b.payout_frozen_cents is not null
+          )
+          or
+          (
+            not (
+              lower(coalesce(b.billing_type::text, '')) in ('recurring_invoice', 'monthly_contract', 'pay_later')
+              or coalesce(b.is_monthly_billing_booking, false)
+              or lower(coalesce(b.payment_status::text, '')) = 'pending_monthly'
+              or b.monthly_invoice_id is not null
+            )
+            and lower(coalesce(b.payment_status::text, '')) in ('success', 'paid', 'succeeded')
+          )
+        )
+    );
   get diagnostics v_roster_count = row_count;
 
   update public.team_job_member_payouts t
@@ -883,7 +1053,76 @@ begin
   where t.id = any(coalesce(p_team_ids, array[]::uuid[]))
     and t.cleaner_id = p_cleaner_id
     and t.cleaner_payout_id is null
-    and lower(coalesce(t.status::text, '')) = 'pending';
+    and lower(coalesce(t.status::text, '')) = 'pending'
+    and greatest(coalesce(t.payout_cents, 0), 0) > 0
+    and exists (
+      select 1
+      from public.bookings b
+      where b.id = t.booking_id
+        and lower(coalesce(b.status::text, '')) = 'completed'
+        and coalesce(b.is_test, false) = false
+        and b.refunded_at is null
+        and lower(coalesce(b.refund_status::text, '')) not in
+          ('refunded', 'full', 'partial', 'chargeback', 'reversed', 'failed_after_success')
+        and not (
+          lower(coalesce(b.metadata -> 'payout_attribution_removal_v1' ->> 'active', '')) = 'true'
+          and (
+            coalesce(nullif(b.cleaner_id::text, ''), nullif(b.payout_owner_cleaner_id::text, ''), '') = ''
+            or coalesce(nullif(b.cleaner_id::text, ''), nullif(b.payout_owner_cleaner_id::text, ''), '') = coalesce(
+              nullif(b.metadata -> 'payout_attribution_removal_v1' ->> 'header_cleaner_id_at_removal', ''),
+              b.metadata -> 'payout_attribution_removal_v1' ->> 'cleaner_id'
+            )
+          )
+        )
+        and (
+          case
+            when (
+              lower(coalesce(b.billing_type::text, '')) in ('recurring_invoice', 'monthly_contract', 'pay_later')
+              or coalesce(b.is_monthly_billing_booking, false)
+              or lower(coalesce(b.payment_status::text, '')) = 'pending_monthly'
+              or b.monthly_invoice_id is not null
+            ) and b.date is not null
+              then b.date::date
+            when b.date is not null
+              and b.completed_at is not null
+              and date_trunc('week', b.date::date) <> date_trunc('week', b.completed_at::date)
+              then b.date::date
+            when b.completed_at is not null
+              then b.completed_at::date
+            else b.date::date
+          end
+        ) between p_period_start and p_period_end
+        and (
+          (
+            (
+              lower(coalesce(b.billing_type::text, '')) in ('recurring_invoice', 'monthly_contract', 'pay_later')
+              or coalesce(b.is_monthly_billing_booking, false)
+              or lower(coalesce(b.payment_status::text, '')) = 'pending_monthly'
+              or b.monthly_invoice_id is not null
+            )
+            and b.monthly_invoice_id is not null
+            and exists (
+              select 1
+              from public.monthly_invoices mi
+              where mi.id = b.monthly_invoice_id
+                and lower(coalesce(mi.status::text, '')) = 'paid'
+            )
+            and lower(coalesce(b.payment_status::text, '')) = 'success'
+            and lower(coalesce(b.payout_status::text, '')) = 'eligible'
+            and b.payout_frozen_cents is not null
+          )
+          or
+          (
+            not (
+              lower(coalesce(b.billing_type::text, '')) in ('recurring_invoice', 'monthly_contract', 'pay_later')
+              or coalesce(b.is_monthly_billing_booking, false)
+              or lower(coalesce(b.payment_status::text, '')) = 'pending_monthly'
+              or b.monthly_invoice_id is not null
+            )
+            and lower(coalesce(b.payment_status::text, '')) in ('success', 'paid', 'succeeded')
+          )
+        )
+    );
   get diagnostics v_team_count = row_count;
 
   v_linked := v_direct_count + v_roster_count + v_team_count;
