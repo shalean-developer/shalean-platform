@@ -95,6 +95,27 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(process).toContain('const mode = opts.mode ?? "manual"');
   });
 
+  it("keeps the payout-run bank-transfer UI reachable from the office payout hub", () => {
+    const office = read("app/(ui-redesign)/office/payouts/page.tsx");
+    const route = read("app/(ui-redesign)/office/payout-runs/page.tsx");
+    const detail = read("app/admin/payouts/runs/[id]/page.tsx");
+
+    expect(office).toContain('href="/office/payout-runs"');
+    expect(office).toContain("Payout runs");
+    expect(office).toContain('permissionData?.permissions?.includes("payout.release")');
+    expect(office).toContain("canReleasePayouts ? (");
+    expect(route).toContain('AdminDisbursementRunsPanel');
+    expect(route).not.toContain('redirect(');
+    expect(detail).toContain('href="/office/payouts"');
+    expect(detail).toContain("← Cleaner payouts");
+    expect(detail).not.toContain('/admin/payouts?tab=disbursements');
+    expect(detail).toContain('/api/admin/security/my-permissions');
+    expect(detail).toContain('permissions.has("payout.approve")');
+    expect(detail).toContain('permissions.has("payout.release")');
+    expect(detail).toContain('runStatus === "draft" && canApprove');
+    expect(detail).toContain('p.status === "approved" && canRelease');
+  });
+
   it("has a dedicated bank-transfer API that requires a reference", () => {
     const src = read("app/api/admin/payouts/[id]/bank-transfer/route.ts");
     expect(src).toContain('"payout.release"');

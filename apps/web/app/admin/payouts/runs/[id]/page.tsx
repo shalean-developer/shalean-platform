@@ -52,6 +52,7 @@ export default function AdminPayoutRunDetailPage() {
   const [toast, setToast] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const [bankReferences, setBankReferences] = useState<Record<string, string>>({});
   const [bankPaidDates, setBankPaidDates] = useState<Record<string, string>>({});
+  const [permissions, setPermissions] = useState<Set<string>>(new Set());
 
   const getToken = useCallback(async () => {
     const sb = getSupabaseBrowser();
@@ -66,11 +67,17 @@ export default function AdminPayoutRunDetailPage() {
     setToast(null);
     try {
       const token = await getToken();
-      const res = await fetch(`/api/admin/payouts/runs/${encodeURIComponent(runId)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const headers = { Authorization: `Bearer ${token}` };
+      const [res, permissionRes] = await Promise.all([
+        fetch(`/api/admin/payouts/runs/${encodeURIComponent(runId)}`, { headers }),
+        fetch("/api/admin/security/my-permissions", { headers, cache: "no-store" }),
+      ]);
       const json = await readJson<{ run?: Record<string, unknown>; payouts?: AdminPayoutRunDetailPayout[] }>(res);
       if (!res.ok) throw new Error(json.error ?? "Could not load run.");
+      const permissionJson = permissionRes.ok
+        ? await readJson<{ permissions?: string[] }>(permissionRes)
+        : { permissions: [] as string[] };
+      setPermissions(new Set(Array.isArray(permissionJson.permissions) ? permissionJson.permissions : []));
       setRun(json.run ?? null);
       setPayouts(json.payouts ?? []);
     } catch (e) {
@@ -179,13 +186,15 @@ export default function AdminPayoutRunDetailPage() {
 
   const base = `/api/admin/payouts/runs/${encodeURIComponent(runId)}`;
   const runStatus = String(run?.status ?? "");
+  const canApprove = permissions.has("payout.approve");
+  const canRelease = permissions.has("payout.release");
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Button variant="ghost" size="sm" className="mb-2 -ml-2 h-8 px-2" asChild>
-            <Link href="/admin/payouts?tab=disbursements">← Payout runs</Link>
+            <Link href="/office/payouts">← Cleaner payouts</Link>
           </Button>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Run detail</h1>
           <p className="mt-1 font-mono text-xs text-zinc-500">{runId}</p>
@@ -244,7 +253,7 @@ export default function AdminPayoutRunDetailPage() {
                 <CardDescription>Record the real bank transfer reference for each approved cleaner payout. The final child closes the run automatically.</CardDescription>
               </div>
               <div className="flex flex-wrap gap-2">
-                {runStatus === "draft" ? (
+                {runStatus === "draft" && canApprove ? (
                   <Button size="sm" disabled={busy !== null} onClick={() => void post(`${base}/approve`)}>
                     Approve run
                   </Button>
@@ -283,7 +292,7 @@ export default function AdminPayoutRunDetailPage() {
                             <span className="text-amber-700 dark:text-amber-400">Transfer in progress</span>
                           ) : String(p.payment_status ?? "").toLowerCase() === "partial_failed" ? (
                             <span className="text-amber-700 dark:text-amber-400">Transfer requires reconciliation</span>
-                          ) : p.status === "approved" ? (
+                          ) : p.status === "approved" && canRelease ? (
                             <div className="ml-auto flex max-w-md flex-wrap items-center justify-end gap-2">
                               <Input
                                 aria-label={`Bank reference for ${p.cleaner_name}`}
@@ -315,6 +324,8 @@ export default function AdminPayoutRunDetailPage() {
                                 Record paid
                               </Button>
                             </div>
+                          ) : p.status === "approved" ? (
+                            <span className="text-zinc-500">View only</span>
                           ) : p.status === "paid" ? (
                             <div>
                               <span className="text-emerald-600 dark:text-emerald-400">✓ Paid</span>

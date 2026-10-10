@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { AdminDisbursementRunsPanel } from "@/components/admin/payout-runs/AdminDisbursementRunsPanel";
 
-export default function OfficePayoutRunsLegacyRedirectPage() {
-  redirect("/office/payouts?tab=disbursements");
+export default function OfficePayoutRunsPage() {
+  return <AdminDisbursementRunsPanel />;
 }
