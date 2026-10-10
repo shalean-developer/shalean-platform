@@ -246,6 +246,47 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     expect(migration).toContain("approve_cleaner_payout_run_atomic");
   });
 
+  it("freezes all eligible payouts through one unbounded database statement", () => {
+    const freeze = read("lib/payout/runs/freezeEligiblePayouts.ts");
+    const migration = read(
+      "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
+    );
+
+    expect(freeze).toContain('rpc("freeze_eligible_cleaner_payouts_atomic"');
+    expect(migration).toContain("create or replace function public.freeze_eligible_cleaner_payouts_atomic");
+    expect(migration).toContain("update public.cleaner_payouts p");
+    expect(migration).toContain("p.period_end::date < p_current_month_start");
+    expect(migration).toContain("grant execute on function public.freeze_eligible_cleaner_payouts_atomic");
+  });
+
+  it("preserves valid manual payout overrides during atomic approval", () => {
+    const migration = read(
+      "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
+    );
+
+    expect(migration).toContain("p.calculated_amount_cents");
+    expect(migration).toContain("p.adjustment_note");
+    expect(migration).toContain("p.amount_adjusted_at");
+    expect(migration).toContain("p.amount_adjusted_by");
+    expect(migration).toContain("item_total <> greatest(coalesce(calculated_amount_cents, 0), 0)");
+    expect(migration).toContain("total_amount_cents is distinct from calculated_amount_cents");
+    expect(migration).toContain("length(trim(coalesce(adjustment_note, ''))) < 3");
+  });
+
+  it("uses booking-before-payout lock order for pending generation and visit edits", () => {
+    const migration = read(
+      "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
+    );
+
+    const pendingStart = migration.indexOf("create or replace function public.upsert_pending_payout_earnings");
+    const pendingEnd = migration.indexOf("revoke all on function public.upsert_pending_payout_earnings", pendingStart);
+    const pending = migration.slice(pendingStart, pendingEnd);
+
+    expect(pending.indexOf("order by b.id\n  for update")).toBeLessThan(
+      pending.indexOf("from public.cleaner_payouts p"),
+    );
+  });
+
   it("keeps draft-run total recomputation paginated and draft-only", () => {
     const src = read("lib/payout/runs/reconcileDraftRunLateEarnings.ts");
     expect(src).toContain("fetchAllPayoutRows");
