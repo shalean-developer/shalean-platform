@@ -227,6 +227,17 @@ export async function recordGatewayPayment(
   ): Promise<RecordGatewayPaymentResult> => {
     let expenseId = existingExpenseId;
 
+    // Payment-to-booking linkage is core settlement truth and must not depend on
+    // optional accounting/expense configuration. Link the durable gateway ledger
+    // row first so later accounting failures can be retried idempotently.
+    if (bookingId) {
+      const { error: bookingLinkErr } = await admin
+        .from("bookings")
+        .update({ payment_transaction_id: paymentTransactionId })
+        .eq("id", bookingId);
+      if (bookingLinkErr) return { ok: false, error: bookingLinkErr.message };
+    }
+
     if (fee.processing_fee_cents > 0) {
       if (!expenseId) {
         const { data: existingExpense, error: existingExpenseErr } = await admin
@@ -325,14 +336,6 @@ export async function recordGatewayPayment(
         })
         .eq("id", paymentTransactionId);
       if (ignoredErr) return { ok: false, error: ignoredErr.message };
-    }
-
-    if (bookingId) {
-      const { error: bookingLinkErr } = await admin
-        .from("bookings")
-        .update({ payment_transaction_id: paymentTransactionId })
-        .eq("id", bookingId);
-      if (bookingLinkErr) return { ok: false, error: bookingLinkErr.message };
     }
 
     await logSystemEvent({
