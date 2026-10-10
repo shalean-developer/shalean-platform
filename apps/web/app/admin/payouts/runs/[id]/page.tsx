@@ -51,6 +51,7 @@ export default function AdminPayoutRunDetailPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const [bankReferences, setBankReferences] = useState<Record<string, string>>({});
+  const [bankPaidDates, setBankPaidDates] = useState<Record<string, string>>({});
 
   const getToken = useCallback(async () => {
     const sb = getSupabaseBrowser();
@@ -115,8 +116,13 @@ export default function AdminPayoutRunDetailPage() {
 
   const recordBankTransfer = async (payoutId: string) => {
     const reference = String(bankReferences[payoutId] ?? "").trim();
+    const paidDate = String(bankPaidDates[payoutId] ?? "").trim();
     if (reference.length < 3) {
       setToast({ kind: "error", text: "Enter the bank transfer reference before recording payment." });
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(paidDate)) {
+      setToast({ kind: "error", text: "Select the actual bank transfer date before recording payment." });
       return;
     }
     const path = `/api/admin/payouts/${encodeURIComponent(payoutId)}/bank-transfer`;
@@ -130,11 +136,15 @@ export default function AdminPayoutRunDetailPage() {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ reference }),
+        body: JSON.stringify({
+          reference,
+          paid_at: `${paidDate}T12:00:00+02:00`,
+        }),
       });
       const json = await readJson<{ error?: string }>(res);
       if (!res.ok) throw new Error(json.error ?? "Could not record bank transfer.");
       setBankReferences((current) => ({ ...current, [payoutId]: "" }));
+      setBankPaidDates((current) => ({ ...current, [payoutId]: "" }));
       setToast({ kind: "success", text: "Bank transfer recorded and payout reconciled." });
       await load();
     } catch (e) {
@@ -270,7 +280,7 @@ export default function AdminPayoutRunDetailPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           {p.status === "approved" ? (
-                            <div className="ml-auto flex max-w-sm items-center justify-end gap-2">
+                            <div className="ml-auto flex max-w-md flex-wrap items-center justify-end gap-2">
                               <Input
                                 aria-label={`Bank reference for ${p.cleaner_name}`}
                                 placeholder="Bank reference"
@@ -280,9 +290,22 @@ export default function AdminPayoutRunDetailPage() {
                                 }
                                 className="h-8 min-w-36"
                               />
+                              <Input
+                                aria-label={`Bank transfer date for ${p.cleaner_name}`}
+                                type="date"
+                                value={bankPaidDates[p.id] ?? ""}
+                                onChange={(e) =>
+                                  setBankPaidDates((current) => ({ ...current, [p.id]: e.target.value }))
+                                }
+                                className="h-8 w-auto"
+                              />
                               <Button
                                 size="sm"
-                                disabled={busy !== null || String(bankReferences[p.id] ?? "").trim().length < 3}
+                                disabled={
+                                  busy !== null ||
+                                  String(bankReferences[p.id] ?? "").trim().length < 3 ||
+                                  !/^\d{4}-\d{2}-\d{2}$/.test(String(bankPaidDates[p.id] ?? "").trim())
+                                }
                                 onClick={() => void recordBankTransfer(p.id)}
                               >
                                 Record paid
