@@ -185,6 +185,38 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     expect(migration).toContain("grant execute on function public.create_cleaner_payout_run_atomic");
   });
 
+  it("creates and links pending payouts transactionally", () => {
+    const generator = read("lib/payout/generateWeeklyPayouts.ts");
+    const migration = read(
+      "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
+    );
+
+    expect(generator).toContain('admin.rpc("upsert_pending_payout_earnings"');
+    expect(migration).toContain("create or replace function public.upsert_pending_payout_earnings");
+    expect(migration).toContain("insert into public.cleaner_payouts");
+    expect(migration).toContain("update public.booking_roster_member_payouts");
+    expect(migration).toContain("update public.team_job_member_payouts");
+    expect(migration).toContain("update public.cleaner_payouts");
+    expect(migration).toContain("grant execute on function public.upsert_pending_payout_earnings");
+  });
+
+  it("approves unbounded payout runs atomically with funding validation", () => {
+    const approve = read("lib/payout/runs/approvePayoutRun.ts");
+    const migration = read(
+      "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
+    );
+
+    expect(approve).toContain('rpc("approve_cleaner_payout_run_atomic"');
+    expect(migration).toContain("create or replace function public.approve_cleaner_payout_run_atomic");
+    expect(migration).toContain("from public.cleaner_payout_runs r");
+    expect(migration).toContain("from public.cleaner_payouts p");
+    expect(migration).toContain("for update");
+    expect(migration).toContain("funded_items as");
+    expect(migration).toContain("payout_sums as");
+    expect(migration).toContain("status = 'approved'");
+    expect(migration).toContain("grant execute on function public.approve_cleaner_payout_run_atomic");
+  });
+
   it("keeps draft-run total recomputation paginated and draft-only", () => {
     const src = read("lib/payout/runs/reconcileDraftRunLateEarnings.ts");
     expect(src).toContain("fetchAllPayoutRows");
