@@ -279,6 +279,14 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(pay).toContain("Existing successful transfers must always be allowed to converge above.");
   });
 
+  it("isolates verified success convergence errors per outbox row", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("Verified transfer success convergence failed.");
+    expect(executor).toContain("needsReconcile: true");
+    expect(executor).toContain("await applyTransferSuccess(admin");
+  });
+
   it("isolates verified failure convergence errors per outbox row", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
 
