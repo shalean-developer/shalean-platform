@@ -277,6 +277,26 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(pay).toContain("Existing successful transfers must always be allowed to converge above.");
   });
 
+  it("routes pending payout intents with provider history into reconciliation, not cancellation", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("transfer_code");
+    expect(executor).toContain('status: "needs_reconcile"');
+    expect(executor).toContain("await submitPaystackTransferViaOutbox");
+    expect(executor).toContain("if (outbox.status === \"succeeded\")");
+    expect(executor).not.toContain('outbox.status === "succeeded" || outbox.transfer_code');
+  });
+
+  it("hides bank settlement for partial Paystack failures", () => {
+    const detail = read("app/admin/payouts/runs/[id]/page.tsx");
+
+    expect(detail).toContain('payment_status ?? "").toLowerCase() === "partial_failed"');
+    expect(detail).toContain("Transfer requires reconciliation");
+    expect(detail.indexOf('payment_status ?? "").toLowerCase() === "partial_failed"')).toBeLessThan(
+      detail.indexOf('p.status === "approved"'),
+    );
+  });
+
   it("converges disabled pending cleaner payouts into a bank-transfer-safe state", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
 
