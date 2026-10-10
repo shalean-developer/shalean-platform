@@ -239,6 +239,11 @@ export default function PayoutsPage() {
     { params: reportParams },
   );
 
+  const { data: permissionData } = useAdminData<{ permissions?: string[] }>(
+    "/api/admin/security/my-permissions",
+  );
+  const canReleasePayouts = permissionData?.permissions?.includes("payout.release") ?? false;
+
   const { data: profitData } = useAdminData<{
     profit: {
       customer_revenue_cents: number;
@@ -622,13 +627,15 @@ export default function PayoutsPage() {
             <OfficeZohoSecondaryButton disabled={filtered.length === 0} onClick={handleExportBatches}>
               <Download className="h-4 w-4" /> Batches CSV
             </OfficeZohoSecondaryButton>
-            <Link
-              href="/office/payout-runs"
-              className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              Payout runs
-              <ExternalLink className="h-3.5 w-3.5" />
-            </Link>
+            {canReleasePayouts ? (
+              <Link
+                href="/office/payout-runs"
+                className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                Payout runs
+                <ExternalLink className="h-3.5 w-3.5" />
+              </Link>
+            ) : null}
             <Link
               href="/office/payouts/phase15a-diagnostics"
               className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
