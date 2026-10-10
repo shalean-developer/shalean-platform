@@ -185,6 +185,23 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     expect(migration).toContain("grant execute on function public.create_cleaner_payout_run_atomic");
   });
 
+  it("preserves existing pending payout adjustments when zero candidates survive revalidation", () => {
+    const migration = read(
+      "../../supabase/migrations/20261010071000_master_03a_zero_link_preserve_adjustment.sql",
+    );
+
+    const zeroLinkStart = migration.indexOf("if v_linked = 0 then");
+    const zeroLinkEnd = migration.indexOf("with payout_items as", zeroLinkStart);
+    const zeroLink = migration.slice(zeroLinkStart, zeroLinkEnd);
+
+    expect(zeroLink).toContain("if v_created then");
+    expect(zeroLink).toContain("'payout_id', v_payout_id");
+    expect(zeroLink).toContain("select greatest(coalesce(p.total_amount_cents, 0), 0)");
+    expect(zeroLink).not.toContain("adjustment_note = null");
+    expect(zeroLink).not.toContain("amount_adjusted_at = null");
+    expect(zeroLink).not.toContain("amount_adjusted_by = null");
+  });
+
   it("creates and links pending payouts transactionally", () => {
     const generator = read("lib/payout/generateWeeklyPayouts.ts");
     const migration = read(
