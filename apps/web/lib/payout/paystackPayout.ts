@@ -179,6 +179,16 @@ export async function payCleanerPayoutWithPaystack(
   admin: SupabaseClient,
   params: { payoutId: string; paidBy: string },
 ): Promise<PaystackTransferResult> {
+  const paystackPayoutsEnabled =
+    String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "").trim().toLowerCase() === "true";
+  if (!paystackPayoutsEnabled) {
+    return {
+      ok: false,
+      error:
+        "Cleaner Paystack payouts are disabled. Use the bank-transfer settlement path, or explicitly enable ENABLE_CLEANER_PAYSTACK_PAYOUTS=true.",
+      status: 403,
+    };
+  }
   const { data: payoutData, error: payoutErr } = await admin
     .from("cleaner_payouts")
     .select(
