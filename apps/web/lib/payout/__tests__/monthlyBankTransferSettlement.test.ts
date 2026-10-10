@@ -262,6 +262,17 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("needsReconcile: true");
   });
 
+  it("continues past stale Paystack auth keys and holds cross-mode sending intents", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("res.status === 401 || res.status === 403");
+    expect(executor).toContain("authErrors.push");
+    expect(executor).toContain("continue;");
+    expect(executor).toContain("verifyNeedsManualReconciliation");
+    expect(executor).toContain("manual reconciliation hold");
+    expect(executor).toContain('status: "needs_reconcile"');
+  });
+
   it("keeps recovered sending 404s nonterminal and applies terminal failures", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
 
