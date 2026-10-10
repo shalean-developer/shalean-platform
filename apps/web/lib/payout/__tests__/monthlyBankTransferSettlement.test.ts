@@ -131,6 +131,26 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("Transfer reference was not found in any configured Paystack account");
   });
 
+  it("blocks bank settlement in application code before the database guard migration is present", () => {
+    const mark = read("lib/payout/markPayoutPaid.ts");
+
+    expect(mark).toContain('from("payout_transfer_outbox")');
+    expect(mark).toContain('eq("rail", "cleaner_payout")');
+    expect(mark).toContain('eq("subject_id", payoutId)');
+    expect(mark).toContain('"pending", "sending", "submitted", "needs_reconcile", "succeeded"');
+    expect(mark).toContain("duplicate|already|reference");
+    expect(mark).toContain("Paystack transfer history still requires reconciliation before bank settlement.");
+  });
+
+  it("reconciles uncertain failed cleaner payout intents regardless of the Paystack feature flag", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("failedOutboxHasProviderUncertainty");
+    expect(executor).toContain('outbox.status === "failed"');
+    expect(executor).toContain('params.rail === "cleaner_payout"');
+    expect(executor).not.toContain('String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "").trim().toLowerCase() !== "true" &&\n    failedOutboxHasProviderUncertainty');
+  });
+
   it("has a dedicated bank-transfer API that requires a reference", () => {
     const src = read("app/api/admin/payouts/[id]/bank-transfer/route.ts");
     expect(src).toContain('"payout.release"');
