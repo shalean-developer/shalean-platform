@@ -426,6 +426,15 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("updated_at: new Date().toISOString()");
   });
 
+  it("blocks bank settlement while an unresolved Paystack outbox still exists", () => {
+    const sql = read("../../supabase/migrations/20261010173500_master_03b_block_unresolved_outbox_bank_settlement.sql");
+
+    expect(sql).toContain("public.payout_transfer_outbox");
+    expect(sql).toContain("pto.subject_id = p_payout_id");
+    expect(sql).toContain("'pending', 'sending', 'submitted', 'needs_reconcile', 'succeeded'");
+    expect(sql).toContain("raise exception 'paystack_transfer_in_flight'");
+  });
+
   it("reconciles legacy uncertain failed outboxes before ordinary worker rows", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
 
@@ -435,6 +444,7 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("last_error.ilike.%duplicate%");
     expect(executor).toContain("last_error.ilike.%already%");
     expect(executor).toContain("last_error.ilike.%reference%");
+    expect(executor).not.toContain("transfer_code.not.is.null");
     expect(executor).toContain("remainingLimit");
   });
 
