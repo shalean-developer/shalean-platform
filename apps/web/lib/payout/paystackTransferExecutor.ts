@@ -565,7 +565,38 @@ export async function submitPaystackTransferViaOutbox(
     };
   }
 
-  // Failed outbox: reuse same reference — reset to pending for retry (Paystack idempotent on reference).
+  // Failed outbox: if cleaner Paystack payouts are disabled and provider history
+  // exists, reconcile that immutable reference before any retry lease/cancellation.
+  // A retained transfer_code means the intent is not definitely unsent.
+  if (
+    outbox &&
+    outbox.status === "failed" &&
+    params.rail === "cleaner_payout" &&
+    String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "").trim().toLowerCase() !== "true" &&
+    String(outbox.transfer_code ?? "").trim()
+  ) {
+    const { error: reconcileStateErr } = await admin
+      .from("payout_transfer_outbox")
+      .update({ status: "needs_reconcile", updated_at: new Date().toISOString() })
+      .eq("id", outbox.id)
+      .eq("status", "failed")
+      .not("transfer_code", "is", null);
+
+    if (reconcileStateErr) {
+      return {
+        ok: false,
+        error: reconcileStateErr.message,
+        status: 500,
+        needsReconcile: true,
+      };
+    }
+
+    return submitPaystackTransferViaOutbox(admin, params);
+  }
+
+  // Failed outbox with no retained provider history: reuse same reference — reset
+  // to pending for retry. When cleaner Paystack is disabled the final send boundary
+  // atomically cancels this definitely-unsent intent into the bank-transfer path.
   if (outbox && outbox.status === "failed") {
     await admin
       .from("payout_transfer_outbox")
