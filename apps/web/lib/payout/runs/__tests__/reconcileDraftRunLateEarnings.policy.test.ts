@@ -299,6 +299,18 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     );
   });
 
+  it("paginates payout-run processing and completion reads", () => {
+    const processRun = read("lib/payout/runs/processPayoutRun.ts");
+    const transferStatus = read("lib/payout/paystackTransferStatus.ts");
+
+    expect(processRun).toContain("fetchAllPayoutRows");
+    expect(processRun).toContain('.order("id", { ascending: true })');
+    expect(processRun).toContain(".range(from, to)");
+    expect(transferStatus).toContain("fetchAllPayoutRows");
+    expect(transferStatus).toContain('.order("id", { ascending: true })');
+    expect(transferStatus).toContain(".range(from, to)");
+  });
+
   it("keeps draft-run total recomputation paginated and draft-only", () => {
     const src = read("lib/payout/runs/reconcileDraftRunLateEarnings.ts");
     expect(src).toContain("fetchAllPayoutRows");
