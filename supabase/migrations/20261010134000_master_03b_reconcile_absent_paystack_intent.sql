@@ -1,5 +1,43 @@
 -- MASTER-03B: allow service-role atomic terminal convergence of a
 -- provider-verified absent cleaner payout intent from needs_reconcile.
+
+alter table public.payout_transfer_outbox
+  add column if not exists reconcile_started_at timestamptz;
+
+update public.payout_transfer_outbox
+set reconcile_started_at = coalesce(reconcile_started_at, updated_at, created_at)
+where status = 'needs_reconcile'
+  and reconcile_started_at is null;
+
+create or replace function public.stamp_payout_transfer_reconcile_started_at()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.status = 'needs_reconcile'
+     and old.status is distinct from 'needs_reconcile'
+     and new.reconcile_started_at is null then
+    new.reconcile_started_at := now();
+  elsif new.status = 'needs_reconcile'
+     and old.status = 'needs_reconcile'
+     and old.reconcile_started_at is not null then
+    new.reconcile_started_at := old.reconcile_started_at;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_payout_transfer_reconcile_started_at on public.payout_transfer_outbox;
+create trigger trg_payout_transfer_reconcile_started_at
+before update on public.payout_transfer_outbox
+for each row
+execute function public.stamp_payout_transfer_reconcile_started_at();
+
+comment on column public.payout_transfer_outbox.reconcile_started_at is
+  'Stable start time for the current needs_reconcile episode. updated_at may rotate for queue fairness without resetting the provider-absence grace period.';
+
 create or replace function public.fail_cleaner_payout_outbox_validation(
   p_outbox_id uuid,
   p_error text,
