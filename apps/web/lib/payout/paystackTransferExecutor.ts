@@ -831,7 +831,6 @@ export async function submitPaystackTransferViaOutbox(
   // exists, reconcile that immutable reference before any retry lease/cancellation.
   // A retained transfer_code means the intent is not definitely unsent.
   const failedOutboxHasProviderUncertainty =
-    Boolean(String(outbox?.transfer_code ?? "").trim()) ||
     /duplicate|already|reference/i.test(String(outbox?.last_error ?? ""));
 
   if (
@@ -1355,7 +1354,7 @@ export async function processPaystackTransferOutboxBatch(
     .select("id, rail, subject_id, cleaner_id, amount_cents, recipient_code, reference, status, attempts, transfer_code, last_error")
     .eq("status", "failed")
     .eq("rail", "cleaner_payout")
-    .or("transfer_code.not.is.null,last_error.ilike.%duplicate%,last_error.ilike.%already%,last_error.ilike.%reference%")
+    .or("last_error.ilike.%duplicate%,last_error.ilike.%already%,last_error.ilike.%reference%")
     .order("updated_at", { ascending: true })
     .limit(limit);
 
