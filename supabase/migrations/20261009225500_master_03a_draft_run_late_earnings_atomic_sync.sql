@@ -834,6 +834,23 @@ begin
     raise exception 'service_role required' using errcode = '42501';
   end if;
 
+  -- Match visit-edit lock order: candidate bookings first, then payout batch.
+  perform 1
+  from public.bookings b
+  where b.id in (
+    select unnest(coalesce(p_direct_booking_ids, array[]::uuid[]))
+    union
+    select r.booking_id
+    from public.booking_roster_member_payouts r
+    where r.id = any(coalesce(p_roster_ids, array[]::uuid[]))
+    union
+    select t.booking_id
+    from public.team_job_member_payouts t
+    where t.id = any(coalesce(p_team_ids, array[]::uuid[]))
+  )
+  order by b.id
+  for update;
+
   if v_payout_id is null then
     insert into public.cleaner_payouts (
       cleaner_id,
@@ -870,23 +887,6 @@ begin
       raise exception 'pending payout % is no longer editable', v_payout_id using errcode = '55000';
     end if;
   end if;
-
-  -- Lock every candidate booking before revalidating the authoritative payout gate.
-  perform 1
-  from public.bookings b
-  where b.id in (
-    select unnest(coalesce(p_direct_booking_ids, array[]::uuid[]))
-    union
-    select r.booking_id
-    from public.booking_roster_member_payouts r
-    where r.id = any(coalesce(p_roster_ids, array[]::uuid[]))
-    union
-    select t.booking_id
-    from public.team_job_member_payouts t
-    where t.id = any(coalesce(p_team_ids, array[]::uuid[]))
-  )
-  order by b.id
-  for update;
 
   update public.bookings b
   set payout_id = v_payout_id
@@ -1372,16 +1372,36 @@ begin
     select
       p.id as payout_id,
       p.total_amount_cents,
+      p.calculated_amount_cents,
+      p.adjustment_note,
+      p.amount_adjusted_at,
+      p.amount_adjusted_by,
       coalesce(sum(f.amount_cents), 0)::bigint as item_total,
       coalesce(sum(case when f.funded then 0 else f.amount_cents end), 0)::bigint as funding_gap
     from public.cleaner_payouts p
     left join funded_items f on f.payout_id = p.id
     where p.payout_run_id = p_run_id
-    group by p.id, p.total_amount_cents
+    group by
+      p.id,
+      p.total_amount_cents,
+      p.calculated_amount_cents,
+      p.adjustment_note,
+      p.amount_adjusted_at,
+      p.amount_adjusted_by
   )
   select
     count(*) filter (where funding_gap > 0)::integer,
-    count(*) filter (where item_total <> greatest(coalesce(total_amount_cents, 0), 0))::integer
+    count(*) filter (
+      where item_total <> greatest(coalesce(calculated_amount_cents, 0), 0)
+        or (
+          total_amount_cents is distinct from calculated_amount_cents
+          and (
+            amount_adjusted_at is null
+            or amount_adjusted_by is null
+            or length(trim(coalesce(adjustment_note, ''))) < 3
+          )
+        )
+    )::integer
   into v_unfunded_count, v_mismatch_count
   from payout_sums;
 
@@ -1390,7 +1410,7 @@ begin
   end if;
 
   if v_mismatch_count > 0 then
-    raise exception 'Payout run contains payout totals that do not match authoritative earning rows.' using errcode = '55000';
+    raise exception 'Payout run contains an invalid calculated total or manual adjustment.' using errcode = '55000';
   end if;
 
   update public.cleaner_payouts
@@ -1430,3 +1450,43 @@ grant execute on function public.approve_cleaner_payout_run_atomic(uuid, date, u
 
 comment on function public.approve_cleaner_payout_run_atomic(uuid, date, uuid) is
   'MASTER-03A: locks a DRAFT run and all children, validates closed periods, authoritative totals and collected-cash funding, then approves the run atomically.';
+
+
+create or replace function public.freeze_eligible_cleaner_payouts_atomic(
+  p_current_month_start date,
+  p_frozen_at timestamptz
+)
+returns integer
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+declare
+  v_count integer := 0;
+begin
+  if auth.role() <> 'service_role' then
+    raise exception 'service_role required' using errcode = '42501';
+  end if;
+
+  update public.cleaner_payouts p
+  set status = 'frozen',
+      frozen_at = p_frozen_at
+  where lower(coalesce(p.status::text, '')) = 'pending'
+    and p.payout_run_id is null
+    and p.period_start::date >= date '2026-07-01'
+    and p.period_start::date = date_trunc('month', p.period_start::date)::date
+    and p.period_end::date = (date_trunc('month', p.period_start::date) + interval '1 month - 1 day')::date
+    and p.period_end::date < p_current_month_start;
+
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+
+revoke all on function public.freeze_eligible_cleaner_payouts_atomic(date, timestamptz) from public;
+revoke all on function public.freeze_eligible_cleaner_payouts_atomic(date, timestamptz) from anon;
+revoke all on function public.freeze_eligible_cleaner_payouts_atomic(date, timestamptz) from authenticated;
+grant execute on function public.freeze_eligible_cleaner_payouts_atomic(date, timestamptz) to service_role;
+
+comment on function public.freeze_eligible_cleaner_payouts_atomic(date, timestamptz) is
+  'MASTER-03A: freezes every eligible closed-month pending payout in one database statement without API pagination limits.';
