@@ -278,6 +278,43 @@ export async function adjustBookingTeamMemberPayoutEarnings(
     }
   }
 
+  let memberBatchTotalCents: number | null = null;
+  let memberSyncedPayoutIds: string[] = [];
+  if (hasTj || hasRosterPay) {
+    const { data: atomicMemberResult, error: atomicMemberErr } = await admin.rpc(
+      "adjust_unrun_member_payout_earnings",
+      {
+        p_booking_id: params.bookingId,
+        p_cleaner_id: cleanerId,
+        p_payout_cents: payoutCents,
+        p_bonus_cents: bonusCents,
+      },
+    );
+    if (atomicMemberErr) {
+      const locked =
+        atomicMemberErr.code === "55000" ||
+        String(atomicMemberErr.message ?? "").toLowerCase().includes("disbursement run") ||
+        String(atomicMemberErr.message ?? "").toLowerCase().includes("locked");
+      return {
+        ok: false,
+        error: atomicMemberErr.message,
+        code: locked ? "payout_run_locked" : "member_payout_update_failed",
+      };
+    }
+
+    const atomic = (atomicMemberResult ?? {}) as {
+      batch_total_cents?: number | null;
+      synced_payout_ids?: string[] | null;
+    };
+    memberBatchTotalCents =
+      atomic.batch_total_cents == null || !Number.isFinite(Number(atomic.batch_total_cents))
+        ? null
+        : Math.round(Number(atomic.batch_total_cents));
+    memberSyncedPayoutIds = Array.isArray(atomic.synced_payout_ids)
+      ? atomic.synced_payout_ids.map((id) => String(id ?? "").trim()).filter(Boolean)
+      : [];
+  }
+
   if (Object.keys(patch).length > 0) {
     const { data: updated, error: upErr } = await admin
       .from("bookings")
@@ -288,47 +325,23 @@ export async function adjustBookingTeamMemberPayoutEarnings(
     if (!updated?.length) return { ok: false, error: "Booking could not be updated.", code: "booking_update_failed" };
   }
 
-  if (hasTj) {
-    const memberStatus = String((memberRow as { status?: string | null }).status ?? "")
-      .trim()
-      .toLowerCase();
-    const tjQuery = admin
-      .from("team_job_member_payouts")
-      .update({ payout_cents: payoutCents })
-      .eq("booking_id", params.bookingId)
-      .eq("cleaner_id", cleanerId);
-    const { error: teamUpErr } =
-      memberStatus === "batched"
-        ? await tjQuery.eq("status", "batched")
-        : await tjQuery.eq("status", "pending");
-    if (teamUpErr) return { ok: false, error: teamUpErr.message, code: "team_member_payout_update_failed" };
-  }
+  const directPayoutNeedsSync =
+    editable.payoutId && !memberSyncedPayoutIds.includes(editable.payoutId) ? editable.payoutId : null;
 
-  if (hasRosterPay) {
-    const rosterStatus = String((rosterPayRow as { status?: string | null }).status ?? "")
-      .trim()
-      .toLowerCase();
-    const rosterQuery = admin
-      .from("booking_roster_member_payouts")
-      .update({ payout_cents: payoutCents, bonus_cents: bonusCents })
-      .eq("booking_id", params.bookingId)
-      .eq("cleaner_id", cleanerId);
-    const { error: rosterUpErr } =
-      rosterStatus === "batched"
-        ? await rosterQuery.eq("status", "batched")
-        : await rosterQuery.eq("status", "pending");
-    if (rosterUpErr) return { ok: false, error: rosterUpErr.message, code: "roster_member_payout_update_failed" };
+  let batchTotalCents = memberBatchTotalCents;
+  let syncedPayoutIds = [...memberSyncedPayoutIds];
+  if (directPayoutNeedsSync || (!hasTj && !hasRosterPay)) {
+    const synced = await syncOpenPayoutBatchesForVisitEdit(admin, {
+      cleanerId,
+      bookingPayoutId: directPayoutNeedsSync,
+      bookingDate: row.date,
+      rosterCleanerPayoutId: hasRosterPay ? null : String((rosterPayRow as { cleaner_payout_id?: string | null } | null)?.cleaner_payout_id ?? "").trim() || null,
+      teamCleanerPayoutId: hasTj ? null : String((memberRow as { cleaner_payout_id?: string | null } | null)?.cleaner_payout_id ?? "").trim() || null,
+    });
+    if (!synced.ok) return { ok: false, error: synced.error, code: "batch_sync_failed" };
+    if (synced.batchTotalCents != null) batchTotalCents = synced.batchTotalCents;
+    syncedPayoutIds = [...new Set([...syncedPayoutIds, ...synced.syncedPayoutIds])];
   }
-
-  const synced = await syncOpenPayoutBatchesForVisitEdit(admin, {
-    cleanerId,
-    bookingPayoutId: editable.payoutId,
-    bookingDate: row.date,
-    rosterCleanerPayoutId: String((rosterPayRow as { cleaner_payout_id?: string | null } | null)?.cleaner_payout_id ?? "").trim() || null,
-    teamCleanerPayoutId: String((memberRow as { cleaner_payout_id?: string | null } | null)?.cleaner_payout_id ?? "").trim() || null,
-  });
-  if (!synced.ok) return { ok: false, error: synced.error, code: "batch_sync_failed" };
-  const batchTotalCents = synced.batchTotalCents;
 
   const raw = await assertVisitEarningsReadAfterWrite(admin, {
     bookingId: params.bookingId,
@@ -372,7 +385,7 @@ export async function adjustBookingTeamMemberPayoutEarnings(
       bonus_cents: bonusCents,
       adjustment_note: params.adjustmentNote?.trim() || null,
       batch_total_cents: batchTotalCents,
-      synced_payout_ids: synced.syncedPayoutIds,
+      synced_payout_ids: syncedPayoutIds,
       hybrid_owner: hybridOwner,
     },
   });
