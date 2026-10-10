@@ -340,6 +340,16 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("use bank-transfer settlement");
   });
 
+  it("reconciles coded failed cleaner-payout retries before disabled cancellation", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain('outbox.status === "failed"');
+    expect(executor).toContain('String(outbox.transfer_code ?? "").trim()');
+    expect(executor).toContain('status: "needs_reconcile"');
+    expect(executor).toContain("return submitPaystackTransferViaOutbox(admin, params)");
+    expect(executor).toContain("A retained transfer_code means the intent is not definitely unsent.");
+  });
+
   it("atomically cancels disabled fresh cleaner payout intents before provider POST", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
 
