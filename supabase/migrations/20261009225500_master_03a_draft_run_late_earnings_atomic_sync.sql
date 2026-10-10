@@ -170,6 +170,7 @@ begin
       where b.id = r.booking_id
         and lower(coalesce(b.status::text, '')) = 'completed'
         and coalesce(b.is_test, false) = false
+        and coalesce(b.cleaner_payout_cents, 0) > 0
         and b.refunded_at is null
         and lower(coalesce(b.refund_status::text, '')) not in
           ('refunded', 'full', 'partial', 'chargeback', 'reversed', 'failed_after_success')
@@ -245,7 +246,6 @@ begin
       where b.id = t.booking_id
         and lower(coalesce(b.status::text, '')) = 'completed'
         and coalesce(b.is_test, false) = false
-        and coalesce(b.cleaner_payout_cents, 0) > 0
         and b.refunded_at is null
         and lower(coalesce(b.refund_status::text, '')) not in
           ('refunded', 'full', 'partial', 'chargeback', 'reversed', 'failed_after_success')
