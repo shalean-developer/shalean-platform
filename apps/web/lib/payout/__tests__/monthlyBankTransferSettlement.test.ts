@@ -340,6 +340,25 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("use bank-transfer settlement");
   });
 
+  it("moves legacy no-code uncertain failed rows into reconciliation without a transfer-code filter", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("reconciledIntent");
+    expect(executor).toContain('.select("id")');
+    expect(executor).toContain("Failed payout intent changed before it could enter reconciliation.");
+    expect(executor).not.toContain('.not("transfer_code", "is", null)');
+  });
+
+  it("rotates caught provider-convergence failures by refreshing updated_at", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("Verified transfer success convergence failed.");
+    expect(executor).toContain("Verified transfer failure convergence failed.");
+    expect(executor).toContain('status: "needs_reconcile"');
+    expect(executor).toContain("last_error: message.slice(0, 2000)");
+    expect(executor).toContain("updated_at: new Date().toISOString()");
+  });
+
   it("preserves pre-deploy duplicate/reference uncertainty on failed no-code outboxes", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
 
