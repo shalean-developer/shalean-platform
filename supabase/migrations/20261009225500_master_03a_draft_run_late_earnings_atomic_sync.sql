@@ -980,3 +980,214 @@ grant execute on function public.upsert_pending_payout_earnings(uuid, uuid, date
 
 comment on function public.upsert_pending_payout_earnings(uuid, uuid, date, date, uuid[], uuid[], uuid[], uuid) is
   'MASTER-03A: atomically creates/locks a pending payout, links all supplied earning rows, and reconciles its authoritative total.';
+
+
+create or replace function public.approve_cleaner_payout_run_atomic(
+  p_run_id uuid,
+  p_current_month_start date,
+  p_approved_by uuid
+)
+returns integer
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+declare
+  v_run_status text;
+  v_child_count integer := 0;
+  v_invalid_count integer := 0;
+  v_unfunded_count integer := 0;
+  v_mismatch_count integer := 0;
+  v_now timestamptz := now();
+begin
+  if auth.role() <> 'service_role' then
+    raise exception 'service_role required' using errcode = '42501';
+  end if;
+
+  select lower(coalesce(r.status::text, ''))
+    into v_run_status
+  from public.cleaner_payout_runs r
+  where r.id = p_run_id
+  for update;
+
+  if not found or v_run_status <> 'draft' then
+    raise exception 'Run not found or not in draft status.' using errcode = '55000';
+  end if;
+
+  perform 1
+  from public.cleaner_payouts p
+  where p.payout_run_id = p_run_id
+  order by p.id
+  for update;
+
+  select count(*)::integer
+    into v_child_count
+  from public.cleaner_payouts p
+  where p.payout_run_id = p_run_id;
+
+  if v_child_count = 0 then
+    raise exception 'Payout run has no cleaner payouts.' using errcode = '55000';
+  end if;
+
+  select count(*)::integer
+    into v_invalid_count
+  from public.cleaner_payouts p
+  where p.payout_run_id = p_run_id
+    and (
+      lower(coalesce(p.status::text, '')) <> 'frozen'
+      or p.period_start::date < date '2026-07-01'
+      or p.period_start::date <> date_trunc('month', p.period_start::date)::date
+      or p.period_end::date <> (date_trunc('month', p.period_start::date) + interval '1 month - 1 day')::date
+      or p.period_end::date >= p_current_month_start
+    );
+
+  if v_invalid_count > 0 then
+    raise exception 'Payout run contains an open, invalid, or non-frozen payout.' using errcode = '55000';
+  end if;
+
+  with payout_items as (
+    select
+      p.id as payout_id,
+      b.cleaner_id,
+      b.id as booking_id,
+      0 as source_rank,
+      case
+        when lower(coalesce(b.payout_status::text, '')) in ('eligible', 'paid')
+          and coalesce(b.payout_frozen_cents, 0) > 0
+        then greatest(coalesce(b.payout_frozen_cents, 0), 0)::bigint
+        else (
+          greatest(coalesce(b.cleaner_payout_cents, 0), 0)
+          + greatest(coalesce(b.cleaner_bonus_cents, 0), 0)
+        )::bigint
+      end as amount_cents
+    from public.cleaner_payouts p
+    join public.bookings b on b.payout_id = p.id
+    where p.payout_run_id = p_run_id
+
+    union all
+
+    select
+      p.id,
+      r.cleaner_id,
+      r.booking_id,
+      1,
+      (
+        greatest(coalesce(r.payout_cents, 0), 0)
+        + greatest(coalesce(r.bonus_cents, 0), 0)
+      )::bigint
+    from public.cleaner_payouts p
+    join public.booking_roster_member_payouts r on r.cleaner_payout_id = p.id
+    where p.payout_run_id = p_run_id
+
+    union all
+
+    select
+      p.id,
+      t.cleaner_id,
+      t.booking_id,
+      2,
+      greatest(coalesce(t.payout_cents, 0), 0)::bigint
+    from public.cleaner_payouts p
+    join public.team_job_member_payouts t on t.cleaner_payout_id = p.id
+    where p.payout_run_id = p_run_id
+  ),
+  authoritative as (
+    select distinct on (payout_id, cleaner_id, booking_id)
+      payout_id,
+      cleaner_id,
+      booking_id,
+      amount_cents
+    from payout_items
+    order by payout_id, cleaner_id, booking_id, source_rank desc
+  ),
+  funded_items as (
+    select
+      a.payout_id,
+      a.booking_id,
+      a.amount_cents,
+      case
+        when b.id is null then false
+        when b.refunded_at is not null then false
+        when lower(coalesce(b.refund_status::text, '')) in ('refunded', 'reversed', 'failed') then false
+        when (
+          lower(coalesce(b.billing_type::text, '')) in ('recurring_invoice', 'monthly_contract', 'pay_later')
+          or coalesce(b.is_monthly_billing_booking, false)
+          or lower(coalesce(b.payment_status::text, '')) = 'pending_monthly'
+          or b.monthly_invoice_id is not null
+        ) then (
+          b.monthly_invoice_id is not null
+          and lower(coalesce(b.payment_status::text, '')) = 'success'
+          and exists (
+            select 1
+            from public.monthly_invoices mi
+            where mi.id = b.monthly_invoice_id
+              and lower(coalesce(mi.status::text, '')) = 'paid'
+          )
+        )
+        else lower(coalesce(b.payment_status::text, '')) in ('success', 'paid', 'succeeded')
+      end as funded
+    from authoritative a
+    left join public.bookings b on b.id = a.booking_id
+  ),
+  payout_sums as (
+    select
+      p.id as payout_id,
+      p.total_amount_cents,
+      coalesce(sum(f.amount_cents), 0)::bigint as item_total,
+      coalesce(sum(case when f.funded then 0 else f.amount_cents end), 0)::bigint as funding_gap
+    from public.cleaner_payouts p
+    left join funded_items f on f.payout_id = p.id
+    where p.payout_run_id = p_run_id
+    group by p.id, p.total_amount_cents
+  )
+  select
+    count(*) filter (where funding_gap > 0)::integer,
+    count(*) filter (where item_total <> greatest(coalesce(total_amount_cents, 0), 0))::integer
+  into v_unfunded_count, v_mismatch_count
+  from payout_sums;
+
+  if v_unfunded_count > 0 then
+    raise exception 'Payout run is not fully funded by collected customer cash.' using errcode = '55000';
+  end if;
+
+  if v_mismatch_count > 0 then
+    raise exception 'Payout run contains payout totals that do not match authoritative earning rows.' using errcode = '55000';
+  end if;
+
+  update public.cleaner_payouts
+  set status = 'approved',
+      approved_at = v_now,
+      approved_by = p_approved_by
+  where payout_run_id = p_run_id
+    and lower(coalesce(status::text, '')) = 'frozen';
+
+  if not found then
+    raise exception 'Payout run changed during approval.' using errcode = '40001';
+  end if;
+
+  get diagnostics v_invalid_count = row_count;
+  if v_invalid_count <> v_child_count then
+    raise exception 'Payout run changed during approval.' using errcode = '40001';
+  end if;
+
+  update public.cleaner_payout_runs
+  set status = 'approved',
+      approved_at = v_now
+  where id = p_run_id
+    and lower(coalesce(status::text, '')) = 'draft';
+
+  if not found then
+    raise exception 'Payout run changed during approval.' using errcode = '40001';
+  end if;
+
+  return v_child_count;
+end;
+$$;
+
+revoke all on function public.approve_cleaner_payout_run_atomic(uuid, date, uuid) from public;
+revoke all on function public.approve_cleaner_payout_run_atomic(uuid, date, uuid) from anon;
+revoke all on function public.approve_cleaner_payout_run_atomic(uuid, date, uuid) from authenticated;
+grant execute on function public.approve_cleaner_payout_run_atomic(uuid, date, uuid) to service_role;
+
+comment on function public.approve_cleaner_payout_run_atomic(uuid, date, uuid) is
+  'MASTER-03A: locks a DRAFT run and all children, validates closed periods, authoritative totals and collected-cash funding, then approves the run atomically.';
