@@ -232,7 +232,7 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     expect(migration).toContain("cleaner_earnings ce");
   });
 
-  it("uses parent-run then child-payout lock order for append and approval", () => {
+  it("uses booking-first lock order for late append, then run and child payout", () => {
     const migration = read(
       "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
     );
@@ -240,6 +240,9 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     const approveStart = migration.indexOf("create or replace function public.approve_cleaner_payout_run_atomic");
     const append = migration.slice(appendStart, approveStart);
 
+    expect(append.indexOf("select unnest(coalesce(p_direct_booking_ids")).toBeLessThan(
+      append.indexOf("from public.cleaner_payout_runs r"),
+    );
     expect(append.indexOf("from public.cleaner_payout_runs r")).toBeLessThan(
       append.indexOf("and p.payout_run_id = v_run_id\n  for update"),
     );
