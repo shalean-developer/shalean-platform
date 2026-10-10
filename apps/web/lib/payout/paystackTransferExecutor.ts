@@ -861,10 +861,23 @@ export async function processPaystackTransferOutboxBatch(
   opts?: { limit?: number },
 ): Promise<{ processed: number; results: SubmitPaystackTransferResult[] }> {
   const limit = Math.min(50, Math.max(1, opts?.limit ?? 25));
-  const { data, error } = await admin
+  const cleanerPaystackEnabled =
+    String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "").trim().toLowerCase() === "true";
+
+  let query = admin
     .from("payout_transfer_outbox")
     .select("id, rail, subject_id, cleaner_id, amount_cents, recipient_code, reference, status")
-    .in("status", ["pending", "sending", "needs_reconcile"])
+    .in("status", ["pending", "sending", "needs_reconcile"]);
+
+  // When cleaner Paystack payouts are disabled, do not let old pending cleaner-payout
+  // rows repeatedly consume the oldest-first batch. Keep sending/needs_reconcile rows
+  // visible so already-started provider activity can still be verified/converged, and
+  // keep the cleaner_earnings rail fully serviceable.
+  if (!cleanerPaystackEnabled) {
+    query = query.or("rail.eq.cleaner_earnings,status.in.(sending,needs_reconcile)");
+  }
+
+  const { data, error } = await query
     .order("created_at", { ascending: true })
     .limit(limit);
 
