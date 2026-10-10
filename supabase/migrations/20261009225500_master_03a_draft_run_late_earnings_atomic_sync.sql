@@ -431,7 +431,8 @@ create or replace function public.adjust_unrun_member_payout_earnings(
   p_booking_id uuid,
   p_cleaner_id uuid,
   p_payout_cents bigint,
-  p_bonus_cents bigint
+  p_bonus_cents bigint,
+  p_booking_patch jsonb
 )
 returns jsonb
 language plpgsql
@@ -450,6 +451,20 @@ begin
 
   if p_payout_cents < 0 or p_bonus_cents < 0 then
     raise exception 'payout and bonus must be non-negative' using errcode = '22003';
+  end if;
+
+  if p_booking_patch is null then
+    p_booking_patch := '{}'::jsonb;
+  end if;
+
+  -- Lock the visit row before touching any of its financial representations.
+  perform 1
+  from public.bookings b
+  where b.id = p_booking_id
+  for update;
+
+  if not found then
+    raise exception 'booking % not found', p_booking_id using errcode = 'P0002';
   end if;
 
   -- Lock every currently linked member payout first. If createPayoutRun won the
@@ -498,6 +513,50 @@ begin
   where r.booking_id = p_booking_id
     and r.cleaner_id = p_cleaner_id
     and lower(coalesce(r.status::text, '')) in ('pending', 'batched');
+
+  -- Keep booking-wide financial representations in the same transaction as
+  -- member earnings and payout totals. Missing JSON keys preserve old values;
+  -- present JSON nulls intentionally clear nullable columns.
+  update public.bookings b
+  set earnings_summary = case
+        when p_booking_patch ? 'earnings_summary' then p_booking_patch -> 'earnings_summary'
+        else b.earnings_summary
+      end,
+      cleaner_earnings_total_cents = case
+        when p_booking_patch ? 'cleaner_earnings_total_cents'
+          then (p_booking_patch ->> 'cleaner_earnings_total_cents')::bigint
+        else b.cleaner_earnings_total_cents
+      end,
+      company_revenue_cents = case
+        when p_booking_patch ? 'company_revenue_cents'
+          then (p_booking_patch ->> 'company_revenue_cents')::bigint
+        else b.company_revenue_cents
+      end,
+      cleaner_payout_cents = case
+        when p_booking_patch ? 'cleaner_payout_cents'
+          then (p_booking_patch ->> 'cleaner_payout_cents')::bigint
+        else b.cleaner_payout_cents
+      end,
+      cleaner_bonus_cents = case
+        when p_booking_patch ? 'cleaner_bonus_cents'
+          then (p_booking_patch ->> 'cleaner_bonus_cents')::bigint
+        else b.cleaner_bonus_cents
+      end,
+      display_earnings_cents = case
+        when p_booking_patch ? 'display_earnings_cents'
+          then (p_booking_patch ->> 'display_earnings_cents')::bigint
+        else b.display_earnings_cents
+      end,
+      payout_frozen_cents = case
+        when p_booking_patch ? 'payout_frozen_cents'
+          then (p_booking_patch ->> 'payout_frozen_cents')::bigint
+        else b.payout_frozen_cents
+      end
+  where b.id = p_booking_id;
+
+  if not found then
+    raise exception 'booking % changed before atomic member adjustment', p_booking_id using errcode = '40001';
+  end if;
 
   for v_payout_id in
     select distinct x.payout_id
@@ -595,10 +654,10 @@ begin
 end;
 $$;
 
-revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint) from public;
-revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint) from anon;
-revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint) from authenticated;
-grant execute on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint) to service_role;
+revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb) from public;
+revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb) from anon;
+revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb) from authenticated;
+grant execute on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb) to service_role;
 
-comment on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint) is
+comment on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint, jsonb) is
   'MASTER-03A: atomically locks unrun member payout batches, updates team/roster earnings, and reconciles payout totals so createPayoutRun cannot race the edit.';
