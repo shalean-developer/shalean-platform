@@ -340,6 +340,22 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("use bank-transfer settlement");
   });
 
+  it("preserves pre-deploy duplicate/reference uncertainty on failed no-code outboxes", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("failedOutboxHasProviderUncertainty");
+    expect(executor).toContain('/duplicate|already|reference/i.test(String(outbox?.last_error ?? ""))');
+    expect(executor).toContain('status: "needs_reconcile"');
+  });
+
+  it("rotates unresolved reconciliation rows using updated_at fairness", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain('.order("updated_at", { ascending: true })');
+    expect(executor).toContain("Provider verification unresolved.");
+    expect(executor).toContain("updated_at: new Date().toISOString()");
+  });
+
   it("keeps unresolved duplicate/reference responses out of terminal failed state", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
 
