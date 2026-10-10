@@ -268,6 +268,18 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(pay.indexOf("existingSuccess")).toBeLessThan(pay.indexOf('payout.status !== "approved"'));
   });
 
+  it("enforces cleaner Paystack opt-in at the shared payout send boundary", () => {
+    const pay = read("lib/payout/paystackPayout.ts");
+    expect(pay).toContain("ENABLE_CLEANER_PAYSTACK_PAYOUTS");
+    expect(pay).toContain("Cleaner Paystack payouts are disabled.");
+    expect(pay).toContain("status: 403");
+
+    const directPayRoute = read("app/api/admin/payouts/[id]/pay/route.ts");
+    const retryRoute = read("app/api/admin/payouts/runs/[id]/retry/route.ts");
+    expect(directPayRoute).toContain("payCleanerPayoutWithPaystack");
+    expect(retryRoute).toContain("payCleanerPayoutWithPaystack");
+  });
+
   it("keeps Paystack optional while stamping Paystack settlement truth", () => {
     const pay = read("lib/payout/paystackPayout.ts");
     const webhook = read("lib/payout/paystackTransferStatus.ts");
