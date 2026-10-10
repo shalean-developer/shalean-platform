@@ -419,7 +419,7 @@ export async function POST(request: Request) {
 
   if (supabase) {
     const persistedHead = await findBookingIdStatusForPaystackReference(supabase, reference);
-    if (persistedHead && persistedHead.!["pending_payment", "payment_expired"].includes(status)) {
+    if (persistedHead && !["pending_payment", "payment_expired"].includes(persistedHead.status)) {
       if (!await provePersistedPaystackReplay({
         supabase, bookingId: persistedHead.bookingId, reference, amountCents: amount,
         customerEmail: email, metadata,
