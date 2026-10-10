@@ -1628,6 +1628,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         `Cleaning Credit settlement failed after verified payment: ${creditSettlement.error}`,
         { bookingId: id, paystackReference: input.paystackReference },
       );
+      throw new Error(`cleaning_credit_settlement_failed:${creditSettlement.error}`);
     }
 
     void syncUserPrimaryCityFromBooking(supabase, userIdForEffects, cityId);
