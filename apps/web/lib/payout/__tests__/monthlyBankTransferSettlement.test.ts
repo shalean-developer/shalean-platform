@@ -330,6 +330,16 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("transfer_code: verified.transferCode");
   });
 
+  it("treats every conclusive Paystack failure status as terminal", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain('"abandoned"');
+    expect(executor).toContain('"blocked"');
+    expect(executor).toContain('"rejected"');
+    expect(executor).toContain("providerFailed");
+    expect(executor).toContain("await applyTransferFailed(admin");
+  });
+
   it("applies verified provider outcomes before retiring reconciliation outboxes", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
 
