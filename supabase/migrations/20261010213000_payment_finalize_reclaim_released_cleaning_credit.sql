@@ -46,9 +46,15 @@ begin
     end if;
 
     -- The release was provisional because the gateway outcome was not yet persisted.
-    -- Once Paystack success is proven, reclaim exactly that released amount. A negative
-    -- balance is intentional if the customer spent the temporarily restored credit:
-    -- it records the real liability instead of double-funding the booking.
+    -- Reclaim only when the temporarily restored credit is still available. If the
+    -- customer has already spent it, do not create a negative/invalid ledger balance:
+    -- return an explicit reconciliation error and let the booking finalizer quarantine
+    -- the paid booking for manual resolution.
+    if v_balance < v.amount_zar then
+      return query select false, v.id, v.status, 'released_credit_reclaim_insufficient_balance';
+      return;
+    end if;
+
     v_after := round((v_balance - v.amount_zar) * 100) / 100;
     update public.user_profiles
       set credit_balance_zar = v_after
