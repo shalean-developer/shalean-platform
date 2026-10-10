@@ -22,6 +22,16 @@ describe("BOOKING-E2E-13A Cleaning Credit settlement authority", () => {
     expect(src).toContain("await settleFullyCoveredBooking(supabase, { bookingId, payAmountZar })");
   });
 
+  it("reclaims a released Cleaning Credit reservation when late Paystack success is finalized", () => {
+    const sql = read("../../supabase/migrations/20261010213000_payment_finalize_reclaim_released_cleaning_credit.sql");
+
+    expect(sql).toContain("if v.status = 'released' then");
+    expect(sql).toContain("credit_balance_zar = v_after");
+    expect(sql).toContain("v_balance - v.amount_zar");
+    expect(sql).toContain("Settled Cleaning Credit reservation after late verified payment");
+    expect(sql).toContain("status = 'settled'");
+  });
+
   it("terminal expiration remains release-not-settle", () => {
     const src = read("lib/booking/expirePendingPaymentTerminal.ts");
     expect(src).toContain("releaseCleaningCreditForBooking");
