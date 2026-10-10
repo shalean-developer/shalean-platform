@@ -378,11 +378,20 @@ export async function submitPaystackTransferViaOutbox(
       }
 
       if (providerFailed) {
-        await applyTransferFailed(admin, {
-          transfer_code: verified.transferCode,
-          reference: params.reference,
-          reason: `Paystack verify returned ${providerStatus}`,
-        });
+        try {
+          await applyTransferFailed(admin, {
+            transfer_code: verified.transferCode,
+            reference: params.reference,
+            reason: `Paystack verify returned ${providerStatus}`,
+          });
+        } catch (error) {
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : "Verified transfer failure convergence failed.",
+            status: 500,
+            needsReconcile: true,
+          };
+        }
 
         // The outbox may not yet have carried the provider transfer_code (for
         // example after an uncertain POST). Retire this exact intent by id/reference
