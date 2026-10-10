@@ -106,7 +106,8 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(office).toContain("canReleasePayouts ? (");
     expect(route).toContain('AdminDisbursementRunsPanel');
     expect(route).not.toContain('redirect(');
-    expect(detail).toContain('href="/office/payout-runs"');
+    expect(detail).toContain('href="/office/payouts"');
+    expect(detail).toContain("← Cleaner payouts");
     expect(detail).not.toContain('/admin/payouts?tab=disbursements');
     expect(detail).toContain('/api/admin/security/my-permissions');
     expect(detail).toContain('permissions.has("payout.approve")');
