@@ -122,6 +122,9 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("getPaystackSecretKeyCandidates");
     expect(executor).toContain("for (const candidate of candidates)");
     expect(executor).toContain('Authorization: `Bearer ${candidate.secret}`');
+    expect(executor).toContain("primaryCandidate");
+    expect(executor).toContain("if (!primaryCandidate)");
+    expect(executor).toContain("no explicit primary Paystack key is configured");
     expect(executor).toContain("primaryMode");
     expect(executor).toContain("candidate.mode !== primaryMode");
     expect(executor).toContain("manual reconciliation required");
@@ -432,6 +435,8 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(sql).toContain("public.payout_transfer_outbox");
     expect(sql).toContain("pto.subject_id = p_payout_id");
     expect(sql).toContain("'pending', 'sending', 'submitted', 'needs_reconcile', 'succeeded'");
+    expect(sql).toContain("lower(coalesce(pto.status, '')) = 'failed'");
+    expect(sql).toContain("duplicate|already|reference");
     expect(sql).toContain("raise exception 'paystack_transfer_in_flight'");
   });
 
