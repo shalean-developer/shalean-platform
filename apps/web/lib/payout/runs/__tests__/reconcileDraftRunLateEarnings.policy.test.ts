@@ -133,14 +133,18 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     );
 
     expect(adjust).toContain('admin.rpc(\n      "adjust_unrun_member_payout_earnings"');
-    expect(adjust.indexOf("adjust_unrun_member_payout_earnings")).toBeLessThan(
-      adjust.indexOf('from("bookings")\n      .update(patch)'),
-    );
+    expect(adjust).toContain("p_booking_patch: patch");
+    expect(adjust).toContain("p_direct_payout_id: editable.payoutId");
+    expect(adjust).toContain("if (!hasTj && !hasRosterPay && Object.keys(patch).length > 0)");
     expect(migration).toContain("create or replace function public.adjust_unrun_member_payout_earnings");
+    expect(migration).toContain("p_booking_patch jsonb");
+    expect(migration).toContain("p_direct_payout_id uuid");
     expect(migration).toContain("for update");
     expect(migration).toContain("p.payout_run_id is null");
     expect(migration).toContain("update public.team_job_member_payouts");
     expect(migration).toContain("update public.booking_roster_member_payouts");
+    expect(migration).toContain("update public.bookings b");
+    expect(migration).toContain("p_booking_patch ? 'earnings_summary'");
     expect(migration).toContain("update public.cleaner_payouts");
     expect(migration).toContain("grant execute on function public.adjust_unrun_member_payout_earnings");
   });
