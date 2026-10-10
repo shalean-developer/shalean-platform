@@ -277,13 +277,15 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(pay).toContain("Existing successful transfers must always be allowed to converge above.");
   });
 
-  it("does not let disabled pending cleaner payouts starve cleaner earnings outbox work", () => {
+  it("converges disabled pending cleaner payouts into a bank-transfer-safe state", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
 
     expect(executor).toContain("cleanerPaystackEnabled");
-    expect(executor).toContain('query.or("rail.eq.cleaner_earnings,status.in.(sending,needs_reconcile)")');
-    expect(executor).toContain("do not let old pending cleaner-payout");
-    expect(executor).toContain("keep the cleaner_earnings rail fully serviceable");
+    expect(executor).toContain('r.rail === "cleaner_payout" && r.status === "pending"');
+    expect(executor).toContain('admin.rpc("fail_cleaner_payout_outbox_validation"');
+    expect(executor).toContain('p_expected_status: "pending"');
+    expect(executor).toContain("definitely-unsent intent to terminal failed");
+    expect(executor).toContain("use bank-transfer settlement");
   });
 
   it("enforces cleaner Paystack opt-in at the final provider POST boundary", () => {
