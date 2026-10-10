@@ -68,7 +68,6 @@ type OutboxRow = {
   attempts: number;
   updated_at: string;
   last_error?: string | null;
-  reconcile_started_at?: string | null;
 };
 
 function auditTable(rail: PayoutTransferRail): "payout_transfers" | "earnings_disbursement_transfers" {
@@ -252,6 +251,18 @@ async function paystackGetTransferByReference(
       };
 
       if (res.ok && json.status !== false) {
+        const primaryMode = candidates.find((item) => item.label === "primary")?.mode ?? candidates[0]?.mode ?? "unknown";
+        if (
+          candidate.mode !== "unknown" &&
+          primaryMode !== "unknown" &&
+          candidate.mode !== primaryMode
+        ) {
+          return {
+            ok: false,
+            error: `Transfer reference matched ${candidate.mode} Paystack while primary mode is ${primaryMode}; manual reconciliation required.`,
+            httpStatus: 409,
+          };
+        }
         return {
           ok: true,
           transferCode: json.data?.transfer_code?.trim() ?? null,
@@ -295,7 +306,7 @@ async function loadOutboxByReference(
 ): Promise<OutboxRow | null> {
   const { data, error } = await admin
     .from("payout_transfer_outbox")
-    .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at, last_error, reconcile_started_at")
+    .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at, last_error")
     .eq("reference", reference)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -519,43 +530,10 @@ export async function submitPaystackTransferViaOutbox(
         needsReconcile: true,
       };
     }
-    const reconcileStart = outbox.reconcile_started_at ?? outbox.updated_at;
-    const reconcileAgeMs = Date.now() - new Date(reconcileStart).getTime();
-    const verifiedAbsent =
-      !verified.ok &&
-      (verified.httpStatus === 404 || /not found|does not exist/i.test(verified.error));
-
-    if (
-      params.rail === "cleaner_payout" &&
-      outbox.status === "needs_reconcile" &&
-      !String(outbox.transfer_code ?? "").trim() &&
-      verifiedAbsent &&
-      Number.isFinite(reconcileAgeMs) &&
-      reconcileAgeMs >= 15 * 60 * 1000
-    ) {
-      const { error: absentErr } = await admin.rpc("fail_cleaner_payout_outbox_validation", {
-        p_outbox_id: outbox.id,
-        p_error: "Paystack reference verified absent after reconciliation grace period; use bank-transfer settlement.",
-        p_expected_status: "needs_reconcile",
-        p_expected_attempts: outbox.attempts,
-      });
-
-      if (absentErr) {
-        return {
-          ok: false,
-          error: absentErr.message,
-          status: 500,
-          needsReconcile: true,
-        };
-      }
-
-      return {
-        ok: false,
-        error: "Paystack reference verified absent after reconciliation grace period; bank-transfer settlement is now available.",
-        status: 404,
-      };
-    }
-
+    // Paystack documents reference-not-found as potentially transient while a transfer
+    // request is still being validated. Never convert a provider 404 into terminal
+    // failure or bank-settlement eligibility automatically; keep the intent in
+    // needs_reconcile until an explicit terminal provider outcome or manual review.
     const { data: retryableIntent, error: retryableErr } = await admin
       .from("payout_transfer_outbox")
       .update({
@@ -798,7 +776,7 @@ export async function submitPaystackTransferViaOutbox(
         transfer_row_id: transferRowId || null,
         status: "pending",
       })
-      .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at, last_error, reconcile_started_at")
+      .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at, last_error")
       .maybeSingle();
 
     if (outboxErr) {
