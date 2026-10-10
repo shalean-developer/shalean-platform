@@ -366,6 +366,18 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain('status: "needs_reconcile"');
   });
 
+  it("preserves a stable reconciliation grace-period clock while updated_at rotates", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+    const sql = read("../../supabase/migrations/20261010134000_master_03b_reconcile_absent_paystack_intent.sql");
+
+    expect(executor).toContain("reconcile_started_at");
+    expect(executor).toContain("const reconcileStart = outbox.reconcile_started_at ?? outbox.updated_at");
+    expect(sql).toContain("add column if not exists reconcile_started_at timestamptz");
+    expect(sql).toContain("trg_payout_transfer_reconcile_started_at");
+    expect(sql).toContain("new.reconcile_started_at := now()");
+    expect(sql).toContain("new.reconcile_started_at := old.reconcile_started_at");
+  });
+
   it("terminally converges aged provider-verified absent cleaner payout intents", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
     const sql = read("../../supabase/migrations/20261010134000_master_03b_reconcile_absent_paystack_intent.sql");
