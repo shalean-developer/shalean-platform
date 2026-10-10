@@ -371,9 +371,20 @@ export async function submitPaystackTransferViaOutbox(
             reference: params.reference,
           });
         } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Verified transfer success convergence failed.";
+          await admin
+            .from("payout_transfer_outbox")
+            .update({
+              status: "needs_reconcile",
+              last_error: message.slice(0, 2000),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", outbox.id)
+            .neq("status", "succeeded");
           return {
             ok: false,
-            error: error instanceof Error ? error.message : "Verified transfer success convergence failed.",
+            error: message,
             status: 500,
             needsReconcile: true,
           };
@@ -395,9 +406,20 @@ export async function submitPaystackTransferViaOutbox(
             reason: `Paystack verify returned ${providerStatus}`,
           });
         } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Verified transfer failure convergence failed.";
+          await admin
+            .from("payout_transfer_outbox")
+            .update({
+              status: "needs_reconcile",
+              last_error: message.slice(0, 2000),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", outbox.id)
+            .neq("status", "succeeded");
           return {
             ok: false,
-            error: error instanceof Error ? error.message : "Verified transfer failure convergence failed.",
+            error: message,
             status: 500,
             needsReconcile: true,
           };
@@ -592,18 +614,27 @@ export async function submitPaystackTransferViaOutbox(
     String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "").trim().toLowerCase() !== "true" &&
     failedOutboxHasProviderUncertainty
   ) {
-    const { error: reconcileStateErr } = await admin
+    const { data: reconciledIntent, error: reconcileStateErr } = await admin
       .from("payout_transfer_outbox")
       .update({ status: "needs_reconcile", updated_at: new Date().toISOString() })
       .eq("id", outbox.id)
       .eq("status", "failed")
-      .not("transfer_code", "is", null);
+      .select("id")
+      .maybeSingle();
 
     if (reconcileStateErr) {
       return {
         ok: false,
         error: reconcileStateErr.message,
         status: 500,
+        needsReconcile: true,
+      };
+    }
+    if (!reconciledIntent) {
+      return {
+        ok: false,
+        error: "Failed payout intent changed before it could enter reconciliation.",
+        status: 409,
         needsReconcile: true,
       };
     }
