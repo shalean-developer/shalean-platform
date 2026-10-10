@@ -279,7 +279,9 @@ export default function AdminPayoutRunDetailPage() {
                           {p.account_masked ? ` · ${p.account_masked}` : ""}
                         </TableCell>
                         <TableCell className="text-right">
-                          {p.status === "approved" ? (
+                          {String(p.payment_status ?? "").toLowerCase() === "processing" ? (
+                            <span className="text-amber-700 dark:text-amber-400">Transfer in progress</span>
+                          ) : p.status === "approved" ? (
                             <div className="ml-auto flex max-w-md flex-wrap items-center justify-end gap-2">
                               <Input
                                 aria-label={`Bank reference for ${p.cleaner_name}`}
@@ -318,8 +320,6 @@ export default function AdminPayoutRunDetailPage() {
                                 <div className="mt-1 font-mono text-[11px] text-zinc-500">{p.payment_reference}</div>
                               ) : null}
                             </div>
-                          ) : String(p.payment_status ?? "").toLowerCase() === "processing" ? (
-                            <span className="text-amber-700 dark:text-amber-400">Transfer in progress</span>
                           ) : (
                             <span className="text-zinc-500">Await approval</span>
                           )}
