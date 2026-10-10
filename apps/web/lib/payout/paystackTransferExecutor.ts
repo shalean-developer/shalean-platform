@@ -328,7 +328,7 @@ export async function submitPaystackTransferViaOutbox(
 
   // Already submitted — resume / verify, never create a second Paystack transfer.
   if (outbox && (outbox.status === "submitted" || outbox.status === "needs_reconcile" || outbox.status === "succeeded")) {
-    if (outbox.status === "succeeded" || outbox.transfer_code) {
+    if (outbox.status === "succeeded") {
       return {
         ok: true,
         transferCode: outbox.transfer_code,
@@ -866,7 +866,7 @@ export async function processPaystackTransferOutboxBatch(
 
   const { data, error } = await admin
     .from("payout_transfer_outbox")
-    .select("id, rail, subject_id, cleaner_id, amount_cents, recipient_code, reference, status, attempts")
+    .select("id, rail, subject_id, cleaner_id, amount_cents, recipient_code, reference, status, attempts, transfer_code")
     .in("status", ["pending", "sending", "needs_reconcile"])
     .order("created_at", { ascending: true })
     .limit(limit);
@@ -885,6 +885,7 @@ export async function processPaystackTransferOutboxBatch(
       reference: string;
       status: string;
       attempts?: number | null;
+      transfer_code?: string | null;
     };
 
     // A pending cleaner-payout outbox has never owned a provider-send lease and has
@@ -893,6 +894,41 @@ export async function processPaystackTransferOutboxBatch(
     // be settled by bank transfer. This also prevents old disabled rows from
     // permanently occupying the shared oldest-first outbox batch.
     if (!cleanerPaystackEnabled && r.rail === "cleaner_payout" && r.status === "pending") {
+      if (String(r.transfer_code ?? "").trim()) {
+        const { error: markReconcileErr } = await admin
+          .from("payout_transfer_outbox")
+          .update({
+            status: "needs_reconcile",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", r.id)
+          .eq("status", "pending")
+          .not("transfer_code", "is", null);
+
+        if (markReconcileErr) {
+          results.push({
+            ok: false,
+            error: markReconcileErr.message,
+            status: 500,
+            needsReconcile: true,
+          });
+          continue;
+        }
+
+        results.push(
+          await submitPaystackTransferViaOutbox(admin, {
+            rail: r.rail,
+            subjectId: r.subject_id,
+            cleanerId: r.cleaner_id,
+            amountCents: r.amount_cents,
+            recipientCode: r.recipient_code,
+            reference: r.reference,
+            initiatedBy: "cron/process-payout-outbox",
+          }),
+        );
+        continue;
+      }
+
       const { error: convergeErr } = await admin.rpc("fail_cleaner_payout_outbox_validation", {
         p_outbox_id: r.id,
         p_error: "Cleaner Paystack payouts disabled; use bank-transfer settlement.",
