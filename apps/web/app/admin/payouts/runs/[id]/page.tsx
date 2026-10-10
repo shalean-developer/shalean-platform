@@ -281,6 +281,8 @@ export default function AdminPayoutRunDetailPage() {
                         <TableCell className="text-right">
                           {String(p.payment_status ?? "").toLowerCase() === "processing" ? (
                             <span className="text-amber-700 dark:text-amber-400">Transfer in progress</span>
+                          ) : String(p.payment_status ?? "").toLowerCase() === "partial_failed" ? (
+                            <span className="text-amber-700 dark:text-amber-400">Transfer requires reconciliation</span>
                           ) : p.status === "approved" ? (
                             <div className="ml-auto flex max-w-md flex-wrap items-center justify-end gap-2">
                               <Input
