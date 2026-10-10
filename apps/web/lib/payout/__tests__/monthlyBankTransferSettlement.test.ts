@@ -268,6 +268,24 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(pay.indexOf("existingSuccess")).toBeLessThan(pay.indexOf('payout.status !== "approved"'));
   });
 
+  it("keeps successful transfer reconciliation ahead of cleaner Paystack opt-in", () => {
+    const pay = read("lib/payout/paystackPayout.ts");
+
+    expect(pay.indexOf("existingSuccess")).toBeLessThan(
+      pay.indexOf("ENABLE_CLEANER_PAYSTACK_PAYOUTS"),
+    );
+    expect(pay).toContain("Existing successful transfers must always be allowed to converge above.");
+  });
+
+  it("does not let disabled pending cleaner payouts starve cleaner earnings outbox work", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("cleanerPaystackEnabled");
+    expect(executor).toContain('query.or("rail.eq.cleaner_earnings,status.in.(sending,needs_reconcile)")');
+    expect(executor).toContain("do not let old pending cleaner-payout");
+    expect(executor).toContain("keep the cleaner_earnings rail fully serviceable");
+  });
+
   it("enforces cleaner Paystack opt-in at the final provider POST boundary", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
 
