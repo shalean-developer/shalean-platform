@@ -364,10 +364,19 @@ export async function submitPaystackTransferViaOutbox(
       }
 
       if (providerSucceeded) {
-        await applyTransferSuccess(admin, {
-          transfer_code: verified.transferCode,
-          reference: params.reference,
-        });
+        try {
+          await applyTransferSuccess(admin, {
+            transfer_code: verified.transferCode,
+            reference: params.reference,
+          });
+        } catch (error) {
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : "Verified transfer success convergence failed.",
+            status: 500,
+            needsReconcile: true,
+          };
+        }
         return {
           ok: true,
           transferCode: verified.transferCode,
