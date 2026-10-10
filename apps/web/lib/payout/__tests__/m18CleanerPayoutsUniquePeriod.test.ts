@@ -243,6 +243,121 @@ class StubDb {
   async rpc(name: string, args: Record<string, unknown>) {
     const override = this.rpcOverrides[name];
     if (override) return override(args);
+
+    if (name === "upsert_pending_payout_earnings") {
+      const queued = this.nextInsertError.cleaner_payouts ?? [];
+      let payoutId = String(args.p_payout_id ?? "").trim() || null;
+      let created = false;
+
+      if (!payoutId) {
+        if (queued.length > 0) {
+          const e = queued.shift()!;
+          return { data: null, error: e };
+        }
+        payoutId = this.newId();
+        this.tables.cleaner_payouts.push({
+          id: payoutId,
+          cleaner_id: args.p_cleaner_id,
+          total_amount_cents: 0,
+          calculated_amount_cents: 0,
+          status: "pending",
+          payout_run_id: null,
+          period_start: args.p_period_start,
+          period_end: args.p_period_end,
+        });
+        created = true;
+      }
+
+      let linked = 0;
+      const directIds = new Set((args.p_direct_booking_ids as string[] | undefined) ?? []);
+      for (const row of this.tables.bookings) {
+        if (
+          directIds.has(String(row.id ?? "")) &&
+          row.cleaner_id === args.p_cleaner_id &&
+          (row.payout_id == null || row.payout_id === "")
+        ) {
+          row.payout_id = payoutId;
+          linked += 1;
+        }
+      }
+
+      const rosterIds = new Set((args.p_roster_ids as string[] | undefined) ?? []);
+      for (const row of this.tables.booking_roster_member_payouts ?? []) {
+        if (
+          rosterIds.has(String(row.id ?? "")) &&
+          row.cleaner_id === args.p_cleaner_id &&
+          (row.cleaner_payout_id == null || row.cleaner_payout_id === "") &&
+          row.status === "pending"
+        ) {
+          row.cleaner_payout_id = payoutId;
+          row.status = "batched";
+          linked += 1;
+        }
+      }
+
+      const teamIds = new Set((args.p_team_ids as string[] | undefined) ?? []);
+      for (const row of this.tables.team_job_member_payouts ?? []) {
+        if (
+          teamIds.has(String(row.id ?? "")) &&
+          row.cleaner_id === args.p_cleaner_id &&
+          (row.cleaner_payout_id == null || row.cleaner_payout_id === "") &&
+          row.status === "pending"
+        ) {
+          row.cleaner_payout_id = payoutId;
+          row.status = "batched";
+          linked += 1;
+        }
+      }
+
+      const payout = this.tables.cleaner_payouts.find((row) => row.id === payoutId);
+      let total = 0;
+      const visitAmounts = new Map<string, { rank: number; amount: number }>();
+
+      for (const row of this.tables.bookings) {
+        if (row.payout_id !== payoutId) continue;
+        visitAmounts.set(`${row.cleaner_id}:${row.id}`, {
+          rank: 0,
+          amount:
+            Math.max(0, Number(row.cleaner_payout_cents) || 0) +
+            Math.max(0, Number(row.cleaner_bonus_cents) || 0),
+        });
+      }
+      for (const row of this.tables.booking_roster_member_payouts ?? []) {
+        if (row.cleaner_payout_id !== payoutId) continue;
+        const key = `${row.cleaner_id}:${row.booking_id}`;
+        const prev = visitAmounts.get(key);
+        if (!prev || prev.rank < 1) {
+          visitAmounts.set(key, {
+            rank: 1,
+            amount:
+              Math.max(0, Number(row.payout_cents) || 0) +
+              Math.max(0, Number(row.bonus_cents) || 0),
+          });
+        }
+      }
+      for (const row of this.tables.team_job_member_payouts ?? []) {
+        if (row.cleaner_payout_id !== payoutId) continue;
+        const key = `${row.cleaner_id}:${row.booking_id}`;
+        visitAmounts.set(key, { rank: 2, amount: Math.max(0, Number(row.payout_cents) || 0) });
+      }
+      for (const value of visitAmounts.values()) total += value.amount;
+
+      if (payout) {
+        payout.total_amount_cents = total;
+        payout.calculated_amount_cents = total;
+      }
+
+      return {
+        data: {
+          payout_id: payoutId,
+          created,
+          linked_count: linked,
+          total_amount_cents: total,
+        },
+        error: null,
+      };
+    }
+
     if (name !== "create_cleaner_payout_run_atomic") {
       return { data: null, error: { message: `unsupported rpc: ${name}` } };
     }
