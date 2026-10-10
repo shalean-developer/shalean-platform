@@ -121,8 +121,8 @@ export function AdminDisbursementRunsPanel() {
         <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Disbursement</p>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Payout runs</h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Freeze weekly batches, group into a run, approve, then send Paystack transfers. Payout rows show <strong>Paid</strong> only after Paystack webhooks
-          confirm.
+          Freeze closed monthly payouts, group them into a run, approve, then record each cleaner&apos;s bank transfer from the run detail page.
+          <strong> Paid</strong> is recorded only after the bank transfer reference is captured.
         </p>
       </div>
 
@@ -141,7 +141,7 @@ export function AdminDisbursementRunsPanel() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Actions</CardTitle>
-          <CardDescription>Safe order: freeze pending → create run → approve run → open run to send transfers.</CardDescription>
+          <CardDescription>Safe order: freeze pending → create run → approve run → open the run and record bank transfers per cleaner.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" disabled={busy !== null} onClick={() => void post("/api/admin/payouts/runs/freeze")}>
@@ -231,17 +231,9 @@ export function AdminDisbursementRunsPanel() {
                           </Button>
                         ) : null}
                         {r.status === "approved" || r.status === "processing" ? (
-                          <>
-                            <Button size="sm" disabled={busy !== null} onClick={() => void postRun(r.id, "/process")}>
-                              Paystack
-                            </Button>
-                            <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void postRun(r.id, "/process", { mode: "manual" })}>
-                              Manual paid
-                            </Button>
-                            <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => void postRun(r.id, "/retry")}>
-                              Retry failed
-                            </Button>
-                          </>
+                          <Button size="sm" variant="secondary" asChild>
+                            <Link href={`/admin/payouts/runs/${encodeURIComponent(r.id)}`}>Record bank transfers</Link>
+                          </Button>
                         ) : null}
                       </div>
                     </TableCell>
