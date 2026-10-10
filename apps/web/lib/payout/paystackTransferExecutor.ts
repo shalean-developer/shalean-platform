@@ -591,11 +591,24 @@ export async function submitPaystackTransferViaOutbox(
         };
       }
 
+      const recoveredProviderStatus = String(verified.status ?? "").trim().toLowerCase();
+      const providerSucceeded =
+        recoveredProviderStatus === "success" || recoveredProviderStatus === "successful";
+      const providerFailed = [
+        "failed",
+        "reversed",
+        "cancelled",
+        "canceled",
+        "abandoned",
+        "blocked",
+        "rejected",
+      ].includes(recoveredProviderStatus);
+
       const { error: auditErr } = await admin
         .from(table)
         .update({
           transfer_code: verified.transferCode,
-          status: "processing",
+          ...(providerFailed ? {} : { status: "processing" }),
           ...(params.rail === "cleaner_earnings" ? { reference: params.reference } : {}),
         })
         .eq("id", outbox.transfer_row_id)
@@ -609,7 +622,6 @@ export async function submitPaystackTransferViaOutbox(
         };
       }
 
-      const providerSucceeded = verified.status === "success" || verified.status === "successful";
       if (providerSucceeded) {
         try {
           await applyTransferSuccess(admin, {
@@ -623,6 +635,51 @@ export async function submitPaystackTransferViaOutbox(
             needsReconcile: true,
           };
         }
+      } else if (providerFailed) {
+        try {
+          await applyTransferFailed(admin, {
+            transfer_code: verified.transferCode,
+            reference: params.reference,
+            reason: `Paystack verify returned ${recoveredProviderStatus}`,
+          });
+        } catch (error) {
+          return {
+            ok: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Recovered transfer failure reconciliation failed.",
+            needsReconcile: true,
+          };
+        }
+
+        const { data: retired, error: retireErr } = await admin
+          .from("payout_transfer_outbox")
+          .update({
+            status: "failed",
+            transfer_code: verified.transferCode,
+            last_error: `Paystack verify returned ${recoveredProviderStatus}`,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", outbox.id)
+          .eq("status", "sending")
+          .eq("attempts", outbox.attempts)
+          .select("id")
+          .maybeSingle();
+
+        if (retireErr || !retired) {
+          return {
+            ok: false,
+            error: retireErr?.message ?? "Recovered outbox lease changed before failure convergence.",
+            needsReconcile: true,
+          };
+        }
+
+        return {
+          ok: false,
+          error: `Paystack transfer is ${recoveredProviderStatus}; payout state was converged for retry or bank settlement.`,
+          status: 409,
+        };
       } else {
         const { data: retired, error: retireErr } = await admin
           .from("payout_transfer_outbox")
@@ -656,21 +713,39 @@ export async function submitPaystackTransferViaOutbox(
       };
     }
 
-    const leaseAgeMs = Date.now() - new Date(outbox.updated_at).getTime();
     const verifyNotFound =
       !verified.ok &&
       (verified.httpStatus === 404 || /not found|does not exist/i.test(verified.error));
 
-    if (verifyNotFound && Number.isFinite(leaseAgeMs) && leaseAgeMs >= 15 * 60 * 1000) {
-      const released = await releaseOutboxSendLease(admin, outbox.id, outbox.attempts);
-      if (!released.ok) {
+    if (verifyNotFound) {
+      const { data: held, error: holdErr } = await admin
+        .from("payout_transfer_outbox")
+        .update({
+          status: "needs_reconcile",
+          last_error:
+            "Paystack reference not found after a prior send attempt; automatic retry is blocked pending provider confirmation or manual reconciliation.",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", outbox.id)
+        .eq("status", "sending")
+        .eq("attempts", outbox.attempts)
+        .select("id")
+        .maybeSingle();
+
+      if (holdErr || !held) {
         return {
           ok: false,
-          error: released.error,
+          error: holdErr?.message ?? "Recovered outbox lease changed before reconciliation hold.",
           needsReconcile: true,
         };
       }
-      return submitPaystackTransferViaOutbox(admin, params);
+
+      return {
+        ok: false,
+        error:
+          "Paystack reference not found after a prior send attempt; intent remains in reconciliation and will not be retried automatically.",
+        needsReconcile: true,
+      };
     }
 
     return {
