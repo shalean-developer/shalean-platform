@@ -398,7 +398,7 @@ export async function submitPaystackTransferViaOutbox(
     if (verified.ok && verified.transferCode) {
       const providerStatus = String(verified.status ?? "").trim().toLowerCase();
       const providerSucceeded = providerStatus === "success" || providerStatus === "successful";
-      const providerFailed = ["failed", "reversed", "cancelled", "canceled"].includes(providerStatus);
+      const providerFailed = ["failed", "reversed", "cancelled", "canceled", "abandoned", "blocked", "rejected"].includes(providerStatus);
 
       if (outbox.transfer_row_id) {
         const table = auditTable(params.rail);
