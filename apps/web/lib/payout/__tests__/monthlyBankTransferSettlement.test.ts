@@ -277,6 +277,16 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(pay).toContain("Existing successful transfers must always be allowed to converge above.");
   });
 
+  it("retires verified terminal-failure outboxes by id and immutable reference", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("retireFailedErr");
+    expect(executor).toContain('.eq("id", outbox.id)');
+    expect(executor).toContain('.eq("reference", params.reference)');
+    expect(executor).toContain('status: "failed"');
+    expect(executor).toContain("transfer_code: verified.transferCode");
+  });
+
   it("applies verified provider outcomes before retiring reconciliation outboxes", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
 
