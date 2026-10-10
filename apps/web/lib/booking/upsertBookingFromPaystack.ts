@@ -1339,6 +1339,20 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
 
   await runRequiredPostPersistRecovery();
 
+  // Cleaning Credit is payment-critical. It must settle synchronously before any
+  // optional/deferred post-persist work so a late verified Paystack success cannot
+  // be reported as finalized while its released credit remains unreconciled.
+  const creditSettlement = await settleCleaningCreditForBooking(supabase, id);
+  if (!creditSettlement.ok && creditSettlement.error !== "reservation_not_found") {
+    await reportOperationalIssue(
+      "error",
+      "upsertBookingFromPaystack",
+      `Cleaning Credit settlement failed after verified payment: ${creditSettlement.error}`,
+      { bookingId: id, paystackReference: input.paystackReference },
+    );
+    throw new Error(`cleaning_credit_settlement_failed:${creditSettlement.error}`);
+  }
+
   const runPostPersistSideEffects = async (): Promise<void> => {
   if (id) {
     const authCode = input.paystackAuthorizationCode?.trim() ?? "";
@@ -1618,17 +1632,6 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         bookingId: id,
         paystackReference: input.paystackReference,
       });
-    }
-
-    const creditSettlement = await settleCleaningCreditForBooking(supabase, id);
-    if (!creditSettlement.ok && creditSettlement.error !== "reservation_not_found") {
-      await reportOperationalIssue(
-        "error",
-        "upsertBookingFromPaystack",
-        `Cleaning Credit settlement failed after verified payment: ${creditSettlement.error}`,
-        { bookingId: id, paystackReference: input.paystackReference },
-      );
-      throw new Error(`cleaning_credit_settlement_failed:${creditSettlement.error}`);
     }
 
     void syncUserPrimaryCityFromBooking(supabase, userIdForEffects, cityId);
