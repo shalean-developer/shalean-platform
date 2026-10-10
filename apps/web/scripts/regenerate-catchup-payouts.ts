@@ -3,6 +3,8 @@
  * Run: npx tsx --env-file=.env.local scripts/regenerate-catchup-payouts.ts
  */
 import { createClient } from "@supabase/supabase-js";
+import { withCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { generateCatchUpWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -15,8 +17,21 @@ if (!url || !key) {
 const admin = createClient(url, key, { auth: { persistSession: false } });
 
 async function main() {
-  const result = await generateCatchUpWeeklyPayouts(admin);
-  console.log(JSON.stringify(result, null, 2));
+  const lockResult = await withCronLock(
+    admin,
+    { jobName: CRON_LOCK_KEYS.generatePayouts, leaseSeconds: 900 },
+    async () => generateCatchUpWeeklyPayouts(admin),
+  );
+
+  console.log(
+    JSON.stringify(
+      lockResult.skipped
+        ? { ok: true, skipped: true, reason: lockResult.reason }
+        : { ok: true, ...lockResult.ranIt },
+      null,
+      2,
+    ),
+  );
 }
 
 main().catch((e) => {

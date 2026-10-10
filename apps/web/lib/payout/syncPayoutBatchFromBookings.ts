@@ -19,7 +19,7 @@ export async function syncPayoutBatchFromBookings(
 ): Promise<{ ok: true; totalCents: number } | { ok: false; error: string }> {
   const { data: payout, error: payoutErr } = await admin
     .from("cleaner_payouts")
-    .select("id, status, cleaner_id, period_start, period_end")
+    .select("id, status, cleaner_id, period_start, period_end, payout_run_id")
     .eq("id", payoutId)
     .maybeSingle();
   if (payoutErr) return { ok: false, error: payoutErr.message };
@@ -28,6 +28,11 @@ export async function syncPayoutBatchFromBookings(
   const status = String((payout as { status?: string }).status ?? "").toLowerCase();
   if (!EDITABLE_BATCH_STATUSES.has(status)) {
     return { ok: false, error: "Payout batch is no longer editable." };
+  }
+
+  const payoutRunId = String((payout as { payout_run_id?: string | null }).payout_run_id ?? "").trim();
+  if (payoutRunId) {
+    return { ok: false, error: "Payout is part of a disbursement run and cannot be resynced from a visit edit." };
   }
 
   const loaded = await loadCleanerPayoutBatchItems(admin, payoutId);
@@ -78,16 +83,22 @@ export async function syncOpenPayoutBatchesForVisitEdit(
   if (cleanerId && /^\d{4}-\d{2}-\d{2}$/.test(bookingDate)) {
     const { data: openBatches, error } = await admin
       .from("cleaner_payouts")
-      .select("id, period_start, period_end, status")
+      .select("id, period_start, period_end, status, payout_run_id")
       .eq("cleaner_id", cleanerId)
       .in("status", ["pending", "frozen"]);
     if (error) return { ok: false, error: error.message };
     for (const raw of openBatches ?? []) {
-      const row = raw as { id?: string; period_start?: string | null; period_end?: string | null };
+      const row = raw as {
+        id?: string;
+        period_start?: string | null;
+        period_end?: string | null;
+        payout_run_id?: string | null;
+      };
       const id = String(row.id ?? "").trim();
       const from = String(row.period_start ?? "").trim();
       const to = String(row.period_end ?? "").trim();
-      if (!id || !from || !to) continue;
+      const runId = String(row.payout_run_id ?? "").trim();
+      if (!id || !from || !to || runId) continue;
       if (ymdInInclusiveRange(bookingDate, from, to)) ids.add(id);
     }
   }
