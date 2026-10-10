@@ -485,6 +485,42 @@ export async function submitPaystackTransferViaOutbox(
         needsReconcile: true,
       };
     }
+    const reconcileAgeMs = Date.now() - new Date(outbox.updated_at).getTime();
+    const verifiedAbsent =
+      !verified.ok &&
+      (verified.httpStatus === 404 || /not found|does not exist/i.test(verified.error));
+
+    if (
+      params.rail === "cleaner_payout" &&
+      outbox.status === "needs_reconcile" &&
+      !String(outbox.transfer_code ?? "").trim() &&
+      verifiedAbsent &&
+      Number.isFinite(reconcileAgeMs) &&
+      reconcileAgeMs >= 15 * 60 * 1000
+    ) {
+      const { error: absentErr } = await admin.rpc("fail_cleaner_payout_outbox_validation", {
+        p_outbox_id: outbox.id,
+        p_error: "Paystack reference verified absent after reconciliation grace period; use bank-transfer settlement.",
+        p_expected_status: "needs_reconcile",
+        p_expected_attempts: outbox.attempts,
+      });
+
+      if (absentErr) {
+        return {
+          ok: false,
+          error: absentErr.message,
+          status: 500,
+          needsReconcile: true,
+        };
+      }
+
+      return {
+        ok: false,
+        error: "Paystack reference verified absent after reconciliation grace period; bank-transfer settlement is now available.",
+        status: 404,
+      };
+    }
+
     await admin
       .from("payout_transfer_outbox")
       .update({
@@ -1164,7 +1200,10 @@ export async function processPaystackTransferOutboxBatch(
     // be settled by bank transfer. This also prevents old disabled rows from
     // permanently occupying the shared oldest-first outbox batch.
     if (!cleanerPaystackEnabled && r.rail === "cleaner_payout" && r.status === "pending") {
-      if (String(r.transfer_code ?? "").trim()) {
+      if (
+        String(r.transfer_code ?? "").trim() ||
+        Math.max(0, Math.round(Number(r.attempts ?? 0))) > 0
+      ) {
         const { error: markReconcileErr } = await admin
           .from("payout_transfer_outbox")
           .update({
@@ -1173,7 +1212,7 @@ export async function processPaystackTransferOutboxBatch(
           })
           .eq("id", r.id)
           .eq("status", "pending")
-          .not("transfer_code", "is", null);
+          .eq("attempts", Math.max(0, Math.round(Number(r.attempts ?? 0))));
 
         if (markReconcileErr) {
           results.push({
