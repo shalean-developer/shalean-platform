@@ -252,7 +252,15 @@ async function paystackGetTransferByReference(
       };
 
       if (res.ok && json.status !== false) {
-        const primaryMode = candidates.find((item) => item.label === "primary")?.mode ?? candidates[0]?.mode ?? "unknown";
+        const primaryCandidate = candidates.find((item) => item.label === "primary");
+        const primaryMode = primaryCandidate?.mode ?? "unknown";
+        if (!primaryCandidate) {
+          return {
+            ok: false,
+            error: `Transfer reference matched ${candidate.mode} Paystack but no explicit primary Paystack key is configured; manual reconciliation required.`,
+            httpStatus: 409,
+          };
+        }
         if (
           candidate.mode !== "unknown" &&
           primaryMode !== "unknown" &&
