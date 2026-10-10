@@ -383,6 +383,31 @@ export async function submitPaystackTransferViaOutbox(
           reference: params.reference,
           reason: `Paystack verify returned ${providerStatus}`,
         });
+
+        // The outbox may not yet have carried the provider transfer_code (for
+        // example after an uncertain POST). Retire this exact intent by id/reference
+        // so it cannot remain needs_reconcile and monopolize future worker batches.
+        const { error: retireFailedErr } = await admin
+          .from("payout_transfer_outbox")
+          .update({
+            status: "failed",
+            transfer_code: verified.transferCode,
+            last_error: `Paystack verify returned ${providerStatus}`,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", outbox.id)
+          .eq("reference", params.reference)
+          .neq("status", "succeeded");
+
+        if (retireFailedErr) {
+          return {
+            ok: false,
+            error: retireFailedErr.message,
+            status: 500,
+            needsReconcile: true,
+          };
+        }
+
         return {
           ok: false,
           error: `Paystack transfer is ${providerStatus}; payout state was converged for retry or bank settlement.`,
