@@ -227,6 +227,7 @@ class StubDb {
   updateCalls: Record<string, number> = {};
   deleteCalls: Record<string, number> = {};
   nextInsertError: Record<string, Array<{ code?: string; message: string }>> = {};
+  rpcOverrides: Record<string, (args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>> = {};
   private idCounter = 0;
 
   constructor(seed?: Record<string, Row[]>) {
@@ -239,6 +240,41 @@ class StubDb {
     };
   }
   from(table: string) { return new StubBuilder(table, this); }
+  async rpc(name: string, args: Record<string, unknown>) {
+    const override = this.rpcOverrides[name];
+    if (override) return override(args);
+    if (name !== "create_cleaner_payout_run_atomic") {
+      return { data: null, error: { message: `unsupported rpc: ${name}` } };
+    }
+
+    const closedThrough = String(args.p_closed_through ?? "");
+    const candidates = (this.tables.cleaner_payouts ?? []).filter((row) => {
+      const status = String(row.status ?? "").toLowerCase();
+      const runId = row.payout_run_id;
+      const start = String(row.period_start ?? "");
+      const end = String(row.period_end ?? "");
+      return status === "frozen" && (runId == null || runId === "") && start >= "2026-07-01" && end <= closedThrough;
+    });
+    if (!candidates.length) return { data: null, error: null };
+
+    const runId = this.newId();
+    const total = candidates.reduce(
+      (sum, row) => sum + Math.max(0, Math.floor(Number(row.total_amount_cents) || 0)),
+      0,
+    );
+    const run = {
+      id: runId,
+      status: "draft",
+      total_amount_cents: total,
+      created_at: "2026-08-05T10:00:00.000Z",
+      approved_at: null,
+      paid_at: null,
+      payout_count: candidates.length,
+    };
+    this.tables.cleaner_payout_runs = [...(this.tables.cleaner_payout_runs ?? []), run];
+    for (const row of candidates) row.payout_run_id = runId;
+    return { data: run, error: null };
+  }
   newId() { this.idCounter += 1; return `id-${this.idCounter}`; }
   /** Queue a unique-violation error to be returned by the next insert into `table`. */
   queueInsertError(table: string, err: { code?: string; message: string }) {
@@ -484,14 +520,8 @@ describe("M-18 createPayoutRun: race-loss against concurrent run is rolled back,
     expect(db.tables.cleaner_payouts.every((p) => (p as Row).payout_run_id === out!.id)).toBe(true);
   });
 
-  it("race-loss: candidate payouts already claimed by another run → empty draft is deleted, returns null", async () => {
+  it("race-loss: atomic RPC can return null when a concurrent run already claimed candidates", async () => {
     const db = new StubDb();
-    /**
-     * Simulate the race: by the time we run our INSERT + UPDATE, a concurrent
-     * runner has already linked these frozen payouts to its own run. Our SELECT
-     * happened first (saw them as `payout_run_id IS NULL`), then the other
-     * runner won the link, so our update with `is null` guard finds 0 rows.
-     */
     db.tables.cleaner_payouts = [
       {
         id: "cp-1",
@@ -504,44 +534,17 @@ describe("M-18 createPayoutRun: race-loss against concurrent run is rolled back,
     ];
     db.tables.cleaner_payout_runs = [];
 
-    const { createPayoutRun } = await import("@/lib/payout/runs/createPayoutRun");
-
-    /**
-     * Patch the .select / .is chain so that between the SELECT and the UPDATE
-     * the rows get hijacked. We monkey-patch the existing payouts to set
-     * `payout_run_id` to a competing winner UUID right before our update
-     * builder runs.
-     */
-    const realFrom = db.from.bind(db);
-    let sawSelect = false;
-    db.from = (table: string) => {
-      const builder = realFrom(table);
-      if (table === "cleaner_payouts") {
-        const origSelect = builder.select.bind(builder);
-        builder.select = (cols?: string, opts?: { count?: string; head?: boolean }) => {
-          if (!sawSelect && cols && cols.includes("total_amount_cents")) {
-            sawSelect = true;
-            queueMicrotask(() => {
-              for (const p of db.tables.cleaner_payouts) {
-                (p as Row).payout_run_id = "concurrent-winner-run";
-              }
-            });
-          }
-          return origSelect(cols, opts);
-        };
-      }
-      return builder;
+    db.rpcOverrides.create_cleaner_payout_run_atomic = async () => {
+      db.tables.cleaner_payouts[0]!.payout_run_id = "concurrent-winner-run";
+      return { data: null, error: null };
     };
 
+    const { createPayoutRun } = await import("@/lib/payout/runs/createPayoutRun");
     const out = await createPayoutRun(db as unknown as never);
 
     expect(out).toBeNull();
-    /** The empty draft run we inserted must have been rolled back. */
     expect(db.tables.cleaner_payout_runs.length).toBe(0);
-    /** The original payouts must still be linked to the *winner*, not us. */
-    for (const p of db.tables.cleaner_payouts) {
-      expect((p as Row).payout_run_id).toBe("concurrent-winner-run");
-    }
+    expect(db.tables.cleaner_payouts[0]!.payout_run_id).toBe("concurrent-winner-run");
   });
 
   it("no frozen unbilled payouts → returns null, makes no inserts (idempotent retry)", async () => {
@@ -624,7 +627,7 @@ describe("M-18 H-15 cron-lock coverage: every cleaner_payouts insert site is ser
     expect(insertSites).toEqual(["lib/payout/generateWeeklyPayouts.ts"]);
   });
 
-  it("createPayoutRun is the SOLE cleaner_payout_runs insert site (audit guard)", () => {
+  it("cleaner_payout_runs creation is delegated to the atomic database RPC", () => {
     const candidates = [
       "lib/payout/runs/createPayoutRun.ts",
       "lib/payout/runs/approvePayoutRun.ts",
@@ -639,7 +642,9 @@ describe("M-18 H-15 cron-lock coverage: every cleaner_payouts insert site is ser
         insertSites.push(rel);
       }
     }
-    expect(insertSites).toEqual(["lib/payout/runs/createPayoutRun.ts"]);
+    expect(insertSites).toEqual([]);
+    const src = readFileSync(path.join(webRoot, "lib/payout/runs/createPayoutRun.ts"), "utf8");
+    expect(src).toContain('rpc("create_cleaner_payout_run_atomic"');
   });
 });
 
@@ -658,11 +663,11 @@ describe("M-18 application-level idempotency contract: source code shape", () =>
     expect(errReportInDupSection).toBe(false);
   });
 
-  it("createPayoutRun guards the post-insert update with .is('payout_run_id', null) and rolls back on race-loss", () => {
+  it("createPayoutRun delegates candidate locking, total calculation and attachment to one atomic RPC", () => {
     const src = readFileSync(path.join(webRoot, "lib/payout/runs/createPayoutRun.ts"), "utf8");
-    expect(src).toMatch(/\.is\(\s*["']payout_run_id["']\s*,\s*null\s*\)/);
-    expect(src).toMatch(/cleaner_payout_runs[\s\S]*delete[\s\S]*runRow\.id/);
-    expect(src).toContain("cleaner.create_payout_run_race_lost");
+    expect(src).toContain('rpc("create_cleaner_payout_run_atomic"');
+    expect(src).not.toContain('.insert({ total_amount_cents');
+    expect(src).not.toContain('.update({ payout_run_id');
   });
 
   it("admin manual /api/admin/payouts/generate now shares the H-15 lease with the scheduled cron", () => {
@@ -701,10 +706,8 @@ describe("M-18 isolation: dedup hardening does not touch payout formulas / eligi
     expect(src).toMatch(/bookingPayableForWeeklyBatch/);
   });
 
-  it("createPayoutRun still computes total as sum of frozen payouts (formula unchanged)", () => {
+  it("createPayoutRun keeps total calculation inside the atomic database operation", () => {
     const src = readFileSync(path.join(webRoot, "lib/payout/runs/createPayoutRun.ts"), "utf8");
-    expect(src).toMatch(
-      /Math\.floor\(Number\(\(p as \{ total_amount_cents\?: number \}\)\.total_amount_cents\)/,
-    );
+    expect(src).toContain("create_cleaner_payout_run_atomic");
   });
 });
