@@ -3,6 +3,7 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
 import { markCleanerPayoutPaid } from "@/lib/payout/markPayoutPaid";
 import { payCleanerPayoutWithPaystack } from "@/lib/payout/paystackPayout";
 import { tryCloseDisbursementRunIfComplete } from "@/lib/payout/paystackTransferStatus";
+import { fetchAllPayoutRows } from "@/lib/payout/payoutQueryPagination";
 
 export type ProcessPayoutRunResult = {
   runId: string;
@@ -63,11 +64,19 @@ async function processPayoutRunManual(
   if (!run) throw new Error("Run not found.");
   const runStatus = run.status;
   if (runStatus === "paid") {
-    const { data: paidRows } = await admin.from("cleaner_payouts").select("id").eq("payout_run_id", runId).eq("status", "paid");
+    const paidRows = await fetchAllPayoutRows((from, to) =>
+      admin
+        .from("cleaner_payouts")
+        .select("id")
+        .eq("payout_run_id", runId)
+        .eq("status", "paid")
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
     return {
       runId,
       mode: "manual",
-      successCount: paidRows?.length ?? 0,
+      successCount: paidRows.length,
       skippedInFlightCount: 0,
       failedCount: 0,
       errors: [],
@@ -83,13 +92,19 @@ async function processPayoutRunManual(
     throw new Error(`Run cannot be processed from status ${runStatus}.`);
   }
 
-  const { data: payouts, error: pErr } = await admin.from("cleaner_payouts").select("id, status").eq("payout_run_id", runId);
-  if (pErr) throw new Error(pErr.message);
+  const payouts = await fetchAllPayoutRows((from, to) =>
+    admin
+      .from("cleaner_payouts")
+      .select("id, status")
+      .eq("payout_run_id", runId)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 
   const errors: string[] = [];
   let successCount = 0;
 
-  for (const p of payouts ?? []) {
+  for (const p of payouts) {
     const id = String((p as { id?: string }).id ?? "");
     const st = String((p as { status?: string }).status ?? "");
     if (!id) continue;
@@ -157,15 +172,21 @@ async function processPayoutRunPaystack(admin: SupabaseClient, runId: string, pa
     throw new Error(`Run cannot be processed from status ${runStatus}.`);
   }
 
-  const { data: payouts, error: pErr } = await admin.from("cleaner_payouts").select("id, status").eq("payout_run_id", runId);
-  if (pErr) throw new Error(pErr.message);
+  const payouts = await fetchAllPayoutRows((from, to) =>
+    admin
+      .from("cleaner_payouts")
+      .select("id, status")
+      .eq("payout_run_id", runId)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 
   const errors: string[] = [];
   let successCount = 0;
   let skippedInFlightCount = 0;
   let failedCount = 0;
 
-  for (const p of payouts ?? []) {
+  for (const p of payouts) {
     const id = String((p as { id?: string }).id ?? "");
     const st = String((p as { status?: string }).status ?? "");
     if (!id) continue;

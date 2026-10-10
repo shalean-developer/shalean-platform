@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { bookingUsesAccrualPayoutCap } from "@/lib/payout/bookingPayoutCapCents";
 import type { CleanerPayoutBatchItem } from "@/lib/payout/loadCleanerPayoutBatchItems";
+import { payoutQueryChunks } from "@/lib/payout/payoutQueryPagination";
 
 export type CleanerPayoutFundingSummary = {
   payoutId: string;
@@ -75,15 +76,19 @@ export async function loadCleanerPayoutFunding(
     };
   }
 
-  const { data: bookingRows, error: bookingErr } = await admin
-    .from("bookings")
-    .select("id, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, refunded_at, refund_status")
-    .in("id", bookingIds);
-  if (bookingErr) return { summary: null, error: bookingErr.message };
+  const bookingRows: unknown[] = [];
+  for (const idChunk of payoutQueryChunks(bookingIds)) {
+    const { data, error } = await admin
+      .from("bookings")
+      .select("id, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, refunded_at, refund_status")
+      .in("id", idChunk);
+    if (error) return { summary: null, error: error.message };
+    bookingRows.push(...(data ?? []));
+  }
 
   const bookingById = new Map<string, FundingBookingRow>();
   const invoiceIds: string[] = [];
-  for (const raw of bookingRows ?? []) {
+  for (const raw of bookingRows) {
     const row = raw as FundingBookingRow;
     if (!row.id) continue;
     bookingById.set(row.id, row);
@@ -94,14 +99,16 @@ export async function loadCleanerPayoutFunding(
   const invoiceStatusById = new Map<string, string>();
   const uniqueInvoiceIds = [...new Set(invoiceIds)];
   if (uniqueInvoiceIds.length) {
-    const { data: invoiceRows, error: invoiceErr } = await admin
-      .from("monthly_invoices")
-      .select("id, status")
-      .in("id", uniqueInvoiceIds);
-    if (invoiceErr) return { summary: null, error: invoiceErr.message };
-    for (const raw of invoiceRows ?? []) {
-      const row = raw as { id?: string; status?: string | null };
-      if (row.id) invoiceStatusById.set(row.id, String(row.status ?? ""));
+    for (const idChunk of payoutQueryChunks(uniqueInvoiceIds)) {
+      const { data: invoiceRows, error: invoiceErr } = await admin
+        .from("monthly_invoices")
+        .select("id, status")
+        .in("id", idChunk);
+      if (invoiceErr) return { summary: null, error: invoiceErr.message };
+      for (const raw of invoiceRows ?? []) {
+        const row = raw as { id?: string; status?: string | null };
+        if (row.id) invoiceStatusById.set(row.id, String(row.status ?? ""));
+      }
     }
   }
 
