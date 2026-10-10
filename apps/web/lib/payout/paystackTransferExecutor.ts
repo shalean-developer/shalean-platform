@@ -58,6 +58,7 @@ type OutboxRow = {
   reference: string;
   attempts: number;
   updated_at: string;
+  last_error?: string | null;
 };
 
 function auditTable(rail: PayoutTransferRail): "payout_transfers" | "earnings_disbursement_transfers" {
@@ -260,7 +261,7 @@ async function loadOutboxByReference(
 ): Promise<OutboxRow | null> {
   const { data, error } = await admin
     .from("payout_transfer_outbox")
-    .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at")
+    .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at, last_error")
     .eq("reference", reference)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -451,6 +452,18 @@ export async function submitPaystackTransferViaOutbox(
         needsReconcile: true,
       };
     }
+    await admin
+      .from("payout_transfer_outbox")
+      .update({
+        status: "needs_reconcile",
+        last_error: verified.ok
+          ? "Provider verification returned no transfer code."
+          : String(verified.error ?? "Provider verification unresolved.").slice(0, 2000),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", outbox.id)
+      .in("status", ["submitted", "needs_reconcile"]);
+
     return {
       ok: true,
       transferCode: null,
@@ -568,12 +581,16 @@ export async function submitPaystackTransferViaOutbox(
   // Failed outbox: if cleaner Paystack payouts are disabled and provider history
   // exists, reconcile that immutable reference before any retry lease/cancellation.
   // A retained transfer_code means the intent is not definitely unsent.
+  const failedOutboxHasProviderUncertainty =
+    Boolean(String(outbox?.transfer_code ?? "").trim()) ||
+    /duplicate|already|reference/i.test(String(outbox?.last_error ?? ""));
+
   if (
     outbox &&
     outbox.status === "failed" &&
     params.rail === "cleaner_payout" &&
     String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "").trim().toLowerCase() !== "true" &&
-    String(outbox.transfer_code ?? "").trim()
+    failedOutboxHasProviderUncertainty
   ) {
     const { error: reconcileStateErr } = await admin
       .from("payout_transfer_outbox")
@@ -646,7 +663,7 @@ export async function submitPaystackTransferViaOutbox(
         transfer_row_id: transferRowId || null,
         status: "pending",
       })
-      .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at")
+      .select("id, status, transfer_code, transfer_row_id, reference, attempts, updated_at, last_error")
       .maybeSingle();
 
     if (outboxErr) {
@@ -1036,7 +1053,7 @@ export async function processPaystackTransferOutboxBatch(
     .from("payout_transfer_outbox")
     .select("id, rail, subject_id, cleaner_id, amount_cents, recipient_code, reference, status, attempts, transfer_code")
     .in("status", ["pending", "sending", "needs_reconcile"])
-    .order("created_at", { ascending: true })
+    .order("updated_at", { ascending: true })
     .limit(limit);
 
   if (error) throw new Error(error.message);
