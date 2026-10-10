@@ -17,17 +17,18 @@ set search_path = public
 as $$
 begin
   if new.status = 'needs_reconcile'
-     and old.status is distinct from 'needs_reconcile'
-     and new.reconcile_started_at is null then
+     and old.status is distinct from 'needs_reconcile' then
     new.reconcile_started_at := now();
   elsif new.status = 'needs_reconcile'
-     and old.status = 'needs_reconcile'
-     and old.reconcile_started_at is not null then
+     and old.status = 'needs_reconcile' then
     new.reconcile_started_at := old.reconcile_started_at;
+  elsif old.status = 'needs_reconcile'
+     and new.status is distinct from 'needs_reconcile' then
+    new.reconcile_started_at := null;
   end if;
   return new;
 end;
-$$;
+$;
 
 drop trigger if exists trg_payout_transfer_reconcile_started_at on public.payout_transfer_outbox;
 create trigger trg_payout_transfer_reconcile_started_at
