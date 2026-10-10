@@ -3,11 +3,7 @@ import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { withCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { PayoutGenerationBlockedError } from "@/lib/payout/backfillLegacyWeeklyPayoutColumns";
-import { generateWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
-import {
-  prepareDraftRunPayoutsForCatchUp,
-  restoreDraftRunPayoutsAfterCatchUp,
-} from "@/lib/payout/runs/reconcileDraftRunLateEarnings";
+import { generateCatchUpWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -16,17 +12,15 @@ export const dynamic = "force-dynamic";
 /**
  * Admin manual trigger for the canonical monthly cleaner payout cycle.
  *
- * Only the previous, fully closed Johannesburg calendar month may be generated.
- * This intentionally prevents the admin button from creating/finalising payout
- * batches for the current month while cleaner earnings and monthly customer
- * invoices are still accruing.
+ * Generates every closed Johannesburg calendar month that still has unlinked
+ * payable cleaner earnings. Current-month rows are excluded by the catch-up
+ * period guard, so active earnings and monthly customer invoices keep accruing
+ * without creating an early payout batch.
  *
- * Late-earnings reconciliation: frozen cleaner payouts that are still inside a
- * DRAFT payout run are temporarily re-opened while this same payout-generation
- * lock is held. The generator can then append newly eligible earnings to the
- * canonical cleaner/period payout. In a finally block the payout is restored
- * to its original draft run and the run total is recomputed. Approved/paid runs
- * are never re-opened.
+ * Late-earnings reconciliation: a frozen cleaner payout may receive newly
+ * eligible earnings only while its parent payout run is still DRAFT. The
+ * canonical payout stays frozen and attached to its run; payout and draft-run
+ * totals are recomputed in place. Approved/paid runs remain immutable.
  *
  * M-18: shares the same H-15 cron lease (`CRON_LOCK_KEYS.generatePayouts`) as
  * `/api/cron/generate-payouts`, so an admin replay cannot race the scheduled
@@ -46,19 +40,12 @@ export async function POST(request: Request) {
       admin,
       { jobName: CRON_LOCK_KEYS.generatePayouts, leaseSeconds: 900 },
       async () => {
-        const prep = await prepareDraftRunPayoutsForCatchUp(admin);
-        try {
-          const generated = await generateWeeklyPayouts(admin, { createdBy: auth.userId });
-          return {
-            ...generated,
-            payoutFrequency: "monthly" as const,
-            closedPeriodOnly: true,
-            lateEarningsReconciledPayouts: prep.payouts.length,
-            lateEarningsReconciledRuns: prep.runIds.length,
-          };
-        } finally {
-          await restoreDraftRunPayoutsAfterCatchUp(admin, prep);
-        }
+        const generated = await generateCatchUpWeeklyPayouts(admin, { createdBy: auth.userId });
+        return {
+          ...generated,
+          payoutFrequency: "monthly" as const,
+          closedPeriodOnly: true,
+        };
       },
     );
     if (lockResult.skipped) {

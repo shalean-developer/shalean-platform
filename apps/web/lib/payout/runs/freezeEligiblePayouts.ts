@@ -1,53 +1,31 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isClosedMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
+import { johannesburgCalendarYmd } from "@/lib/dashboard/johannesburgMonth";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { getJohannesburgMonthBoundsContainingYmd } from "@/lib/payout/monthBounds";
 
 export type FreezeEligiblePayoutsResult = { frozenCount: number };
 
 /**
- * Locks monthly `cleaner_payouts` rows that are still `pending` so amounts are safe to batch.
- *
- * Only fully closed Johannesburg calendar months may be frozen. Current-month
- * earnings are still accruing and must remain editable/unbatched until month
- * close. Does not touch rows already assigned to a disbursement run or legacy
- * weekly periods.
+ * Freezes every eligible fully closed Johannesburg monthly payout in one
+ * database statement. This avoids API page limits and leaves no subset behind
+ * before payout-run creation.
  */
 export async function freezeEligiblePayouts(
   admin: SupabaseClient,
   now: Date = new Date(),
 ): Promise<FreezeEligiblePayoutsResult> {
-  const { data: pending, error: selErr } = await admin
-    .from("cleaner_payouts")
-    .select("id, period_start, period_end")
-    .eq("status", "pending")
-    .is("payout_run_id", null);
-
-  if (selErr) throw new Error(selErr.message);
-
-  const ids = (pending ?? [])
-    .filter((row) =>
-      isClosedMonthlyPayoutBatchPeriod(
-        String((row as { period_start?: string }).period_start ?? ""),
-        String((row as { period_end?: string }).period_end ?? ""),
-        now,
-      ),
-    )
-    .map((row) => String((row as { id?: string }).id ?? ""))
-    .filter(Boolean);
-
-  if (!ids.length) return { frozenCount: 0 };
-
+  const currentMonthStart = getJohannesburgMonthBoundsContainingYmd(
+    johannesburgCalendarYmd(now),
+  ).periodStart;
   const frozenAt = now.toISOString();
-  const { data, error } = await admin
-    .from("cleaner_payouts")
-    .update({ status: "frozen", frozen_at: frozenAt })
-    .in("id", ids)
-    .eq("status", "pending")
-    .is("payout_run_id", null)
-    .select("id");
 
+  const { data, error } = await admin.rpc("freeze_eligible_cleaner_payouts_atomic", {
+    p_current_month_start: currentMonthStart,
+    p_frozen_at: frozenAt,
+  });
   if (error) throw new Error(error.message);
-  const frozenCount = data?.length ?? 0;
+
+  const frozenCount = Math.max(0, Math.floor(Number(data) || 0));
   if (frozenCount > 0) {
     void logSystemEvent({
       level: "info",
@@ -56,5 +34,6 @@ export async function freezeEligiblePayouts(
       context: { frozenCount },
     });
   }
+
   return { frozenCount };
 }

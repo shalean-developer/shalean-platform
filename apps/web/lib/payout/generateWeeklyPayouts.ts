@@ -22,6 +22,7 @@ import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import {
   getJohannesburgMonthBoundsContainingYmd,
   getPreviousMonthDateBoundsJhb,
+  isClosedMonthlyPayoutBatchPeriod,
   isMonthlyPayoutBatchPeriod,
   isMonthlyPayoutPeriod,
 } from "@/lib/payout/monthBounds";
@@ -37,6 +38,7 @@ import {
   teamJobMemberWeeklyPayoutTotalCents,
 } from "@/lib/payout/teamJobMemberWeeklyPayoutCandidates";
 import { syncPayoutBatchFromBookings } from "@/lib/payout/syncPayoutBatchFromBookings";
+import { fetchAllPayoutRows, payoutQueryChunks } from "@/lib/payout/payoutQueryPagination";
 
 export type GenerateWeeklyPayoutsResult = {
   period: { start: string; end: string };
@@ -70,16 +72,18 @@ async function loadMonthlyInvoiceStatusMap(
   const map = new Map<string, string>();
   if (!uniq.length) return map;
 
-  const { data, error } = await admin.from("monthly_invoices").select("id, status").in("id", uniq);
-  if (error) {
-    await reportOperationalIssue("error", "generateWeeklyPayouts", `monthly_invoices lookup failed: ${error.message}`, {
-      invoice_count: uniq.length,
-    });
-    return null;
-  }
-  for (const row of data ?? []) {
-    const r = row as { id?: string; status?: string | null };
-    if (typeof r.id === "string") map.set(r.id, String(r.status ?? ""));
+  for (const idChunk of payoutQueryChunks(uniq)) {
+    const { data, error } = await admin.from("monthly_invoices").select("id, status").in("id", idChunk);
+    if (error) {
+      await reportOperationalIssue("error", "generateWeeklyPayouts", `monthly_invoices lookup failed: ${error.message}`, {
+        invoice_count: uniq.length,
+      });
+      return null;
+    }
+    for (const row of data ?? []) {
+      const r = row as { id?: string; status?: string | null };
+      if (typeof r.id === "string") map.set(r.id, String(r.status ?? ""));
+    }
   }
   return map;
 }
@@ -162,43 +166,64 @@ async function ensureNoMissingCompletedPayouts(
   return { backfilled, remaining: 0 };
 }
 
-async function listUnbatchedCompletionMonths(admin: SupabaseClient): Promise<Array<{ periodStart: string; periodEnd: string }>> {
-  const { data, error } = await admin
-    .from("bookings")
-    .select("completed_at, date, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id")
-    .eq("status", "completed")
-    .eq("is_test", false)
-    .is("payout_id", null)
-    .not("cleaner_payout_cents", "is", null)
-    .gt("cleaner_payout_cents", 0);
+export function closedCatchUpPayoutPeriods(
+  periodStarts: Iterable<string>,
+  now: Date = new Date(),
+): Array<{ periodStart: string; periodEnd: string }> {
+  return [...new Set(periodStarts)]
+    .sort()
+    .map((periodStart) => getJohannesburgMonthBoundsContainingYmd(periodStart))
+    .filter(({ periodStart, periodEnd }) => isClosedMonthlyPayoutBatchPeriod(periodStart, periodEnd, now));
+}
 
-  if (error) throw new Error(error.message);
+async function listUnbatchedCompletionMonths(
+  admin: SupabaseClient,
+  now: Date = new Date(),
+): Promise<Array<{ periodStart: string; periodEnd: string }>> {
+  const directRows = await fetchAllPayoutRows((from, to) =>
+    admin
+      .from("bookings")
+      .select("id, completed_at, date, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id")
+      .eq("status", "completed")
+      .eq("is_test", false)
+      .is("payout_id", null)
+      .not("cleaner_payout_cents", "is", null)
+      .gt("cleaner_payout_cents", 0)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 
   const monthStarts = new Set<string>();
-  for (const row of data ?? []) {
+  for (const row of directRows) {
     const ymd = weeklyBatchDayYmd(row as Parameters<typeof weeklyBatchDayYmd>[0]);
     if (!ymd || ymd < MONTHLY_PAYOUT_START_YMD) continue;
     monthStarts.add(getJohannesburgMonthBoundsContainingYmd(ymd).periodStart);
   }
 
-  const [{ data: rosterRows, error: rosterErr }, { data: teamRows, error: teamErr }] = await Promise.all([
-    admin
-      .from("booking_roster_member_payouts")
-      .select("booking_id")
-      .eq("status", "pending")
-      .is("cleaner_payout_id", null),
-    admin
-      .from("team_job_member_payouts")
-      .select("booking_id")
-      .eq("status", "pending")
-      .is("cleaner_payout_id", null),
+  const [rosterRows, teamRows] = await Promise.all([
+    fetchAllPayoutRows((from, to) =>
+      admin
+        .from("booking_roster_member_payouts")
+        .select("id, booking_id")
+        .eq("status", "pending")
+        .is("cleaner_payout_id", null)
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+    fetchAllPayoutRows((from, to) =>
+      admin
+        .from("team_job_member_payouts")
+        .select("id, booking_id")
+        .eq("status", "pending")
+        .is("cleaner_payout_id", null)
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
   ]);
-  if (rosterErr) throw new Error(rosterErr.message);
-  if (teamErr) throw new Error(teamErr.message);
 
   const memberBookingIds = [
     ...new Set(
-      [...(rosterRows ?? []), ...(teamRows ?? [])]
+      [...rosterRows, ...teamRows]
         .map((row) => String((row as { booking_id?: string }).booking_id ?? "").trim())
         .filter(Boolean),
     ),
@@ -218,10 +243,10 @@ async function listUnbatchedCompletionMonths(admin: SupabaseClient): Promise<Arr
     }
   }
 
-  return [...monthStarts]
-    .sort()
-    .filter((periodStart) => isMonthlyPayoutPeriod(periodStart))
-    .map((periodStart) => getJohannesburgMonthBoundsContainingYmd(periodStart));
+  return closedCatchUpPayoutPeriods(
+    [...monthStarts].filter((periodStart) => isMonthlyPayoutPeriod(periodStart)),
+    now,
+  );
 }
 
 type GeneratePeriodResult = Omit<GenerateWeeklyPayoutsResult, "period">;
@@ -246,9 +271,17 @@ async function generateWeeklyPayoutsForPeriod(
   let jhbCutoffEdgeCaseBookings = 0;
   let batchCutoffUiVsBatchFridayMismatches = 0;
 
-  const { data: cleaners, error: cErr } = await admin.from("cleaners").select("id");
-  if (cErr || !cleaners?.length) {
-    await reportOperationalIssue("warn", "generateWeeklyPayouts", cErr?.message ?? "no cleaners", {});
+  let cleaners: Array<{ id?: string }> = [];
+  try {
+    cleaners = await fetchAllPayoutRows((from, to) =>
+      admin.from("cleaners").select("id").order("id", { ascending: true }).range(from, to),
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await reportOperationalIssue("warn", "generateWeeklyPayouts", msg || "no cleaners", {});
+    return { payoutsCreated: 0, bookingsLinked: 0, payoutsBackfilled: 0, skippedCleaners: 0 };
+  }
+  if (!cleaners.length) {
     return { payoutsCreated: 0, bookingsLinked: 0, payoutsBackfilled: 0, skippedCleaners: 0 };
   }
 
@@ -256,21 +289,27 @@ async function generateWeeklyPayoutsForPeriod(
     const cleanerId = String((row as { id?: string }).id ?? "");
     if (!cleanerId) continue;
 
-    const { data: rawBookings, error: bErr } = await admin
-      .from("bookings")
-      .select(BOOKING_SELECT_FIELDS_FOR_WEEKLY_BATCH_ELIGIBILITY)
-      .eq("cleaner_id", cleanerId)
-      .eq("status", "completed")
-      .eq("is_test", false)
-      .is("payout_id", null);
-
-    if (bErr) {
-      await reportOperationalIssue("warn", "generateWeeklyPayouts", bErr.message, { cleanerId });
+    let rawBookings: unknown[] = [];
+    try {
+      rawBookings = await fetchAllPayoutRows((from, to) =>
+        admin
+          .from("bookings")
+          .select(BOOKING_SELECT_FIELDS_FOR_WEEKLY_BATCH_ELIGIBILITY)
+          .eq("cleaner_id", cleanerId)
+          .eq("status", "completed")
+          .eq("is_test", false)
+          .is("payout_id", null)
+          .order("id", { ascending: true })
+          .range(from, to),
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await reportOperationalIssue("warn", "generateWeeklyPayouts", msg, { cleanerId });
       skippedCleaners += 1;
       continue;
     }
 
-    const candidateBookings = (rawBookings ?? []).filter((b) => {
+    const candidateBookings = rawBookings.filter((b) => {
       const br = b as BookingPayoutRow;
       const ymd = weeklyBatchDayYmd(br);
       if (!ymd || ymd < MONTHLY_PAYOUT_START_YMD) return false;
@@ -463,14 +502,84 @@ async function generateWeeklyPayoutsForPeriod(
 
     const existingStatus = String((existingBatch as { status?: string } | null)?.status ?? "").toLowerCase();
     const existingRunId = String((existingBatch as { payout_run_id?: string | null } | null)?.payout_run_id ?? "").trim();
-    if (existingBatch && (existingStatus !== "pending" || existingRunId)) {
+    let existingRunStatus = "";
+    if (existingRunId) {
+      const { data: runRow, error: runErr } = await admin
+        .from("cleaner_payout_runs")
+        .select("status")
+        .eq("id", existingRunId)
+        .maybeSingle();
+      if (runErr) {
+        await reportOperationalIssue("error", "generateWeeklyPayouts", runErr.message, {
+          cleanerId,
+          payoutId: (existingBatch as { id?: string } | null)?.id ?? null,
+          payoutRunId: existingRunId,
+        });
+        skippedCleaners += 1;
+        continue;
+      }
+      existingRunStatus = String((runRow as { status?: string } | null)?.status ?? "").toLowerCase();
+    }
+
+    const editablePendingBatch = existingStatus === "pending" && !existingRunId;
+    const editableFrozenDraftBatch =
+      existingStatus === "frozen" && Boolean(existingRunId) && existingRunStatus === "draft";
+
+    if (existingBatch && !editablePendingBatch && !editableFrozenDraftBatch) {
       await reportOperationalIssue(
         "warn",
         "generateWeeklyPayouts",
         "Eligible earnings found after the monthly payout batch was locked",
-        { cleanerId, periodStart, periodEnd, payoutId: (existingBatch as { id?: string }).id, existingStatus },
+        {
+          cleanerId,
+          periodStart,
+          periodEnd,
+          payoutId: (existingBatch as { id?: string }).id,
+          existingStatus,
+          existingRunStatus,
+        },
       );
       skippedCleaners += 1;
+      continue;
+    }
+
+    if (!editableFrozenDraftBatch) {
+      const pendingResult = await admin.rpc("upsert_pending_payout_earnings", {
+        p_payout_id: existingBatch ? String((existingBatch as { id?: string }).id ?? "") || null : null,
+        p_cleaner_id: cleanerId,
+        p_period_start: periodStart,
+        p_period_end: periodEnd,
+        p_direct_booking_ids: bookings.map((b) => b.id),
+        p_roster_ids: rosterMemberCandidates.map((row) => row.id),
+        p_team_ids: teamJobMemberCandidates.map((row) => row.id),
+        p_created_by: opts?.createdBy ?? null,
+      });
+
+      if (pendingResult.error) {
+        const errorCode = String((pendingResult.error as { code?: string }).code ?? "");
+        if (errorCode === "23505") {
+          metrics.increment("cleaner.weekly_payout_duplicate_creation_blocked", {
+            cleanerId,
+            period_start: periodStart,
+            period_end: periodEnd,
+            source: "generateWeeklyPayouts",
+          });
+          skippedCleaners += 1;
+          continue;
+        }
+        throw new Error(`Atomic pending payout append failed: ${pendingResult.error.message}`);
+      }
+
+      const pendingData = (pendingResult.data ?? {}) as {
+        created?: boolean;
+        linked_count?: number;
+        payout_id?: string | null;
+        total_amount_cents?: number;
+      };
+      const pendingLinkedCount = Math.max(0, Math.floor(Number(pendingData.linked_count) || 0));
+      if (pendingData.created === true) payoutsCreated += 1;
+      bookingsLinked += pendingLinkedCount;
+      if (pendingLinkedCount === 0) skippedCleaners += 1;
       continue;
     }
 
@@ -543,75 +652,163 @@ async function generateWeeklyPayoutsForPeriod(
 
     const payoutId = String((payout as { id: string }).id);
     const ids = bookings.map((b) => b.id);
+
+    if (editableFrozenDraftBatch) {
+      const result = await admin.rpc("append_draft_run_payout_earnings", {
+        p_payout_id: payoutId,
+        p_cleaner_id: cleanerId,
+        p_direct_booking_ids: ids,
+        p_roster_ids: rosterMemberCandidates.map((row) => row.id),
+        p_team_ids: teamJobMemberCandidates.map((row) => row.id),
+      });
+      if (result.error) throw new Error(`Atomic late-earnings append failed for ${payoutId}: ${result.error.message}`);
+      const atomicLinkedCount = Math.max(0, Math.floor(Number(result.data) || 0));
+      bookingsLinked += atomicLinkedCount;
+      if (atomicLinkedCount === 0) skippedCleaners += 1;
+      continue;
+    }
+
     let linkedCount = 0;
+    const linkedDirectIds: string[] = [];
+    const linkedRosterIds: string[] = [];
+    const linkedTeamIds: string[] = [];
+
+    const rollbackNewLinks = async (): Promise<string | null> => {
+      const failures: string[] = [];
+
+      for (const idChunk of payoutQueryChunks(linkedDirectIds)) {
+        const { error } = await admin
+          .from("bookings")
+          .update({ payout_id: null })
+          .in("id", idChunk)
+          .eq("payout_id", payoutId);
+        if (error) failures.push(`direct: ${error.message}`);
+      }
+
+      for (const idChunk of payoutQueryChunks(linkedRosterIds)) {
+        const { error } = await admin
+          .from("booking_roster_member_payouts")
+          .update({ cleaner_payout_id: null, status: "pending" })
+          .in("id", idChunk)
+          .eq("cleaner_payout_id", payoutId)
+          .eq("status", "batched");
+        if (error) failures.push(`roster: ${error.message}`);
+      }
+
+      for (const idChunk of payoutQueryChunks(linkedTeamIds)) {
+        const { error } = await admin
+          .from("team_job_member_payouts")
+          .update({ cleaner_payout_id: null, status: "pending" })
+          .in("id", idChunk)
+          .eq("cleaner_payout_id", payoutId)
+          .eq("status", "batched");
+        if (error) failures.push(`team: ${error.message}`);
+      }
+
+      return failures.length ? failures.join("; ") : null;
+    };
+
+    const syncAndAbortAfterPartialLinkFailure = async (reason: string): Promise<never> => {
+      if (linkedCount === 0 && createdNewBatch) {
+        await admin.from("cleaner_payouts").delete().eq("id", payoutId);
+        throw new Error(reason);
+      }
+
+      const reconciled = await syncPayoutBatchFromBookings(admin, payoutId);
+      if (!reconciled.ok) {
+        const rollbackError = await rollbackNewLinks();
+        if (createdNewBatch && !rollbackError) {
+          await admin.from("cleaner_payouts").delete().eq("id", payoutId);
+        }
+        throw new Error(
+          `${reason}; partial batch reconciliation failed: ${reconciled.error}` +
+            (rollbackError ? `; rollback failed: ${rollbackError}` : "; new links rolled back"),
+        );
+      }
+      throw new Error(reason);
+    };
 
     if (ids.length > 0) {
-      const { data: updated, error: upErr } = await admin
-        .from("bookings")
-        .update({ payout_id: payoutId })
-        .in("id", ids)
-        .eq("cleaner_id", cleanerId)
-        .is("payout_id", null)
-        .select("id");
-
-      if (upErr) {
-        await reportOperationalIssue("error", "generateWeeklyPayouts", `link bookings failed: ${upErr.message}`, {
-          cleanerId,
-          payoutId,
-        });
-        if (createdNewBatch) await admin.from("cleaner_payouts").delete().eq("id", payoutId);
-        skippedCleaners += 1;
-        continue;
+      let directLinkFailed = false;
+      for (const idChunk of payoutQueryChunks(ids)) {
+        const { data: updated, error: upErr } = await admin
+          .from("bookings")
+          .update({ payout_id: payoutId })
+          .in("id", idChunk)
+          .eq("cleaner_id", cleanerId)
+          .is("payout_id", null)
+          .select("id");
+        if (upErr) {
+          await reportOperationalIssue("error", "generateWeeklyPayouts", `link bookings failed: ${upErr.message}`, {
+            cleanerId,
+            payoutId,
+          });
+          directLinkFailed = true;
+          break;
+        }
+        const linkedIds = (updated ?? []).map((row) => String((row as { id?: string }).id ?? "")).filter(Boolean);
+        linkedDirectIds.push(...linkedIds);
+        linkedCount += linkedIds.length;
       }
-      linkedCount += updated?.length ?? 0;
+      if (directLinkFailed) {
+        await syncAndAbortAfterPartialLinkFailure("Direct payout linking failed after partial progress.");
+      }
     }
 
     if (rosterMemberCandidates.length > 0) {
-      const memberIds = rosterMemberCandidates.map((row) => row.id);
-      const { data: linkedMembers, error: memberUpErr } = await admin
-        .from("booking_roster_member_payouts")
-        .update({ cleaner_payout_id: payoutId, status: "batched" })
-        .in("id", memberIds)
-        .eq("cleaner_id", cleanerId)
-        .is("cleaner_payout_id", null)
-        .eq("status", "pending")
-        .select("id");
-      if (memberUpErr) {
-        await reportOperationalIssue("error", "generateWeeklyPayouts", `link roster member payouts failed: ${memberUpErr.message}`, {
-          cleanerId,
-          payoutId,
-        });
-        if (linkedCount === 0) {
-          if (createdNewBatch) await admin.from("cleaner_payouts").delete().eq("id", payoutId);
+      let rosterLinkFailed = false;
+      for (const memberIds of payoutQueryChunks(rosterMemberCandidates.map((row) => row.id))) {
+        const { data: linkedMembers, error: memberUpErr } = await admin
+          .from("booking_roster_member_payouts")
+          .update({ cleaner_payout_id: payoutId, status: "batched" })
+          .in("id", memberIds)
+          .eq("cleaner_id", cleanerId)
+          .is("cleaner_payout_id", null)
+          .eq("status", "pending")
+          .select("id");
+        if (memberUpErr) {
+          await reportOperationalIssue("error", "generateWeeklyPayouts", `link roster member payouts failed: ${memberUpErr.message}`, {
+            cleanerId,
+            payoutId,
+          });
+          rosterLinkFailed = true;
+          break;
         }
-        skippedCleaners += 1;
-        continue;
+        const linkedIds = (linkedMembers ?? []).map((row) => String((row as { id?: string }).id ?? "")).filter(Boolean);
+        linkedRosterIds.push(...linkedIds);
+        linkedCount += linkedIds.length;
       }
-      linkedCount += linkedMembers?.length ?? 0;
+      if (rosterLinkFailed) {
+        await syncAndAbortAfterPartialLinkFailure("Roster-member payout linking failed after partial progress.");
+      }
     }
 
     if (teamJobMemberCandidates.length > 0) {
-      const teamMemberIds = teamJobMemberCandidates.map((row) => row.id);
-      const { data: linkedTeamMembers, error: teamMemberUpErr } = await admin
-        .from("team_job_member_payouts")
-        .update({ status: "batched", cleaner_payout_id: payoutId })
-        .in("id", teamMemberIds)
-        .eq("cleaner_id", cleanerId)
-        .is("cleaner_payout_id", null)
-        .eq("status", "pending")
-        .select("id");
-      if (teamMemberUpErr) {
-        await reportOperationalIssue("error", "generateWeeklyPayouts", `link team job member payouts failed: ${teamMemberUpErr.message}`, {
-          cleanerId,
-          payoutId,
-        });
-        if (linkedCount === 0) {
-          if (createdNewBatch) await admin.from("cleaner_payouts").delete().eq("id", payoutId);
+      let teamLinkFailed = false;
+      for (const teamMemberIds of payoutQueryChunks(teamJobMemberCandidates.map((row) => row.id))) {
+        const { data: linkedTeamMembers, error: teamMemberUpErr } = await admin
+          .from("team_job_member_payouts")
+          .update({ status: "batched", cleaner_payout_id: payoutId })
+          .in("id", teamMemberIds)
+          .eq("cleaner_id", cleanerId)
+          .is("cleaner_payout_id", null)
+          .eq("status", "pending")
+          .select("id");
+        if (teamMemberUpErr) {
+          await reportOperationalIssue("error", "generateWeeklyPayouts", `link team job member payouts failed: ${teamMemberUpErr.message}`, {
+            cleanerId,
+            payoutId,
+          });
+          teamLinkFailed = true;
+          break;
         }
-        skippedCleaners += 1;
-        continue;
+        const linkedIds = (linkedTeamMembers ?? []).map((row) => String((row as { id?: string }).id ?? "")).filter(Boolean);
+        linkedTeamIds.push(...linkedIds);
+        linkedCount += linkedIds.length;
       }
-      linkedCount += linkedTeamMembers?.length ?? 0;
+      if (teamLinkFailed) {
+        await syncAndAbortAfterPartialLinkFailure("Team-member payout linking failed after partial progress.");
+      }
     }
 
     if (linkedCount === 0) {
@@ -626,8 +823,14 @@ async function generateWeeklyPayoutsForPeriod(
         cleanerId,
         payoutId,
       });
-      skippedCleaners += 1;
-      continue;
+      const rollbackError = await rollbackNewLinks();
+      if (createdNewBatch && !rollbackError) {
+        await admin.from("cleaner_payouts").delete().eq("id", payoutId);
+      }
+      throw new Error(
+        `Payout batch total sync failed for ${payoutId}: ${synced.error}` +
+          (rollbackError ? `; rollback failed: ${rollbackError}` : "; new links rolled back"),
+      );
     }
 
     if (createdNewBatch) payoutsCreated += 1;
@@ -726,10 +929,10 @@ export async function generateWeeklyPayouts(
  */
 export async function generateCatchUpWeeklyPayouts(
   admin: SupabaseClient,
-  opts?: { createdBy?: string | null },
+  opts?: { createdBy?: string | null; asOf?: Date },
 ): Promise<GenerateCatchUpWeeklyPayoutsResult> {
   const preflight = await ensureNoMissingCompletedPayouts(admin);
-  const months = await listUnbatchedCompletionMonths(admin);
+  const months = await listUnbatchedCompletionMonths(admin, opts?.asOf ?? new Date());
 
   let payoutsCreated = 0;
   let bookingsLinked = 0;

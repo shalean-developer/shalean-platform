@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
+import { fetchAllPayoutRows } from "@/lib/payout/payoutQueryPagination";
 
 export type PaystackTransferData = {
   transfer_code?: string | null;
@@ -78,9 +79,14 @@ async function maybeMarkPayoutPaid(supabase: SupabaseClient, payoutId: string) {
 
 /** When every child payout in the same disbursement run is `paid`, close the run. */
 export async function tryCloseDisbursementRunIfComplete(supabase: SupabaseClient, runId: string) {
-  const { data: siblings, error: sibErr } = await supabase.from("cleaner_payouts").select("id, status").eq("payout_run_id", runId);
-  if (sibErr) throw new Error(sibErr.message);
-  const rows = (siblings ?? []) as { id: string; status: string }[];
+  const rows = (await fetchAllPayoutRows((from, to) =>
+    supabase
+      .from("cleaner_payouts")
+      .select("id, status")
+      .eq("payout_run_id", runId)
+      .order("id", { ascending: true })
+      .range(from, to),
+  )) as { id: string; status: string }[];
   if (!rows.length) return;
   if (rows.some((r) => r.status !== "paid")) return;
 
