@@ -116,14 +116,16 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(detail).toContain('p.status === "approved" && canRelease');
   });
 
-  it("verifies uncertain Paystack references across every configured key before declaring absence", () => {
+  it("verifies uncertain Paystack references across every configured key without crossing settlement modes", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
 
-    expect(executor).toContain('getPaystackSecretKeyCandidates');
-    expect(executor).toContain('for (const candidate of candidates)');
+    expect(executor).toContain("getPaystackSecretKeyCandidates");
+    expect(executor).toContain("for (const candidate of candidates)");
     expect(executor).toContain('Authorization: `Bearer ${candidate.secret}`');
-    expect(executor).toContain('if (res.status === 404)');
-    expect(executor).toContain('Transfer reference was not found in any configured Paystack account');
+    expect(executor).toContain("primaryMode");
+    expect(executor).toContain("candidate.mode !== primaryMode");
+    expect(executor).toContain("manual reconciliation required");
+    expect(executor).toContain("Transfer reference was not found in any configured Paystack account");
   });
 
   it("has a dedicated bank-transfer API that requires a reference", () => {
@@ -406,29 +408,17 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("intent remains retryable");
   });
 
-  it("preserves a stable reconciliation grace-period clock while updated_at rotates", () => {
+  it("keeps provider-not-found transfer intents nonterminal and schema-backward-compatible", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
     const sql = read("../../supabase/migrations/20261010134000_master_03b_reconcile_absent_paystack_intent.sql");
 
-    expect(executor).toContain("reconcile_started_at");
-    expect(executor).toContain("const reconcileStart = outbox.reconcile_started_at ?? outbox.updated_at");
+    expect(executor).toContain("Never convert a provider 404 into terminal");
+    expect(executor).toContain('status: "needs_reconcile"');
+    expect(executor).not.toContain("reconcileAgeMs");
+    expect(executor).not.toContain("outbox.reconcile_started_at");
+    expect(executor).not.toContain("reconcile_started_at\")");
+    expect(executor).not.toContain("Paystack reference verified absent after reconciliation grace period");
     expect(sql).toContain("add column if not exists reconcile_started_at timestamptz");
-    expect(sql).toContain("trg_payout_transfer_reconcile_started_at");
-    expect(sql).toContain("new.reconcile_started_at := now()");
-    expect(sql).toContain("new.reconcile_started_at := null");
-    expect(sql).toContain("old.status is distinct from 'needs_reconcile'");
-    expect(sql).toContain("new.reconcile_started_at := old.reconcile_started_at");
-  });
-
-  it("terminally converges aged provider-verified absent cleaner payout intents", () => {
-    const executor = read("lib/payout/paystackTransferExecutor.ts");
-    const sql = read("../../supabase/migrations/20261010134000_master_03b_reconcile_absent_paystack_intent.sql");
-
-    expect(executor).toContain("reconcileAgeMs");
-    expect(executor).toContain("reconcileAgeMs >= 15 * 60 * 1000");
-    expect(executor).toContain('p_expected_status: "needs_reconcile"');
-    expect(executor).toContain("Paystack reference verified absent after reconciliation grace period");
-    expect(sql).toContain("'pending', 'sending', 'needs_reconcile'");
   });
 
   it("routes prior-attempt pending cleaner payouts to reconciliation before disabled cancellation", () => {
