@@ -126,6 +126,25 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     expect(src).toContain("return !runId && from && to");
   });
 
+  it("makes member payout edits atomic with payout reconciliation", () => {
+    const adjust = read("lib/payout/adjustBookingTeamMemberPayoutEarnings.ts");
+    const migration = read(
+      "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
+    );
+
+    expect(adjust).toContain('admin.rpc(\n      "adjust_unrun_member_payout_earnings"');
+    expect(adjust.indexOf("adjust_unrun_member_payout_earnings")).toBeLessThan(
+      adjust.indexOf('from("bookings")\n      .update(patch)'),
+    );
+    expect(migration).toContain("create or replace function public.adjust_unrun_member_payout_earnings");
+    expect(migration).toContain("for update");
+    expect(migration).toContain("p.payout_run_id is null");
+    expect(migration).toContain("update public.team_job_member_payouts");
+    expect(migration).toContain("update public.booking_roster_member_payouts");
+    expect(migration).toContain("update public.cleaner_payouts");
+    expect(migration).toContain("grant execute on function public.adjust_unrun_member_payout_earnings");
+  });
+
   it("keeps draft-run total recomputation paginated and draft-only", () => {
     const src = read("lib/payout/runs/reconcileDraftRunLateEarnings.ts");
     expect(src).toContain("fetchAllPayoutRows");
