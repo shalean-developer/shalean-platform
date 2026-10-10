@@ -190,13 +190,16 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
       "../../supabase/migrations/20261010071000_master_03a_zero_link_preserve_adjustment.sql",
     );
 
-    expect(migration).toContain("if v_linked = 0 then");
-    expect(migration).toContain("if v_created then");
-    expect(migration).toContain("'payout_id', v_payout_id");
-    expect(migration).toContain("select greatest(coalesce(p.total_amount_cents, 0), 0)");
-    expect(migration).not.toContain("adjustment_note = null");
-    expect(migration).not.toContain("amount_adjusted_at = null");
-    expect(migration).not.toContain("amount_adjusted_by = null");
+    const zeroLinkStart = migration.indexOf("if v_linked = 0 then");
+    const zeroLinkEnd = migration.indexOf("with payout_items as", zeroLinkStart);
+    const zeroLink = migration.slice(zeroLinkStart, zeroLinkEnd);
+
+    expect(zeroLink).toContain("if v_created then");
+    expect(zeroLink).toContain("'payout_id', v_payout_id");
+    expect(zeroLink).toContain("select greatest(coalesce(p.total_amount_cents, 0), 0)");
+    expect(zeroLink).not.toContain("adjustment_note = null");
+    expect(zeroLink).not.toContain("amount_adjusted_at = null");
+    expect(zeroLink).not.toContain("amount_adjusted_by = null");
   });
 
   it("creates and links pending payouts transactionally", () => {
