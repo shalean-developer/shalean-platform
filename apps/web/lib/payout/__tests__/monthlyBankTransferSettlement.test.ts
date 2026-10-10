@@ -340,6 +340,15 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(executor).toContain("use bank-transfer settlement");
   });
 
+  it("keeps unresolved duplicate/reference responses out of terminal failed state", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("Duplicate/reference rejection means Paystack may already own the immutable");
+    expect(executor).toContain('status: "needs_reconcile"');
+    expect(executor).toContain("Paystack reference may already exist; transfer left for reconciliation.");
+    expect(executor).toContain("verification unresolved");
+  });
+
   it("reconciles coded failed cleaner-payout retries before disabled cancellation", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
 
