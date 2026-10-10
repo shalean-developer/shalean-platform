@@ -185,7 +185,7 @@ export default function AdminPayoutRunDetailPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Button variant="ghost" size="sm" className="mb-2 -ml-2 h-8 px-2" asChild>
-            <Link href="/admin/payouts?tab=disbursements">← Payout runs</Link>
+            <Link href="/office/payout-runs">← Payout runs</Link>
           </Button>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Run detail</h1>
           <p className="mt-1 font-mono text-xs text-zinc-500">{runId}</p>
