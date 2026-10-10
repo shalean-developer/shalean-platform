@@ -425,3 +425,180 @@ grant execute on function public.append_draft_run_payout_earnings(uuid, uuid, uu
 
 comment on function public.append_draft_run_payout_earnings(uuid, uuid, uuid[], uuid[], uuid[]) is
   'Service-role-only MASTER-03A operation: atomically links late earning rows to a frozen payout in a DRAFT run, recomputes the authoritative payout total, and recomputes the run total.';
+
+
+create or replace function public.adjust_unrun_member_payout_earnings(
+  p_booking_id uuid,
+  p_cleaner_id uuid,
+  p_payout_cents bigint,
+  p_bonus_cents bigint
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+declare
+  v_payout_id uuid;
+  v_total bigint;
+  v_last_total bigint := null;
+  v_synced_ids uuid[] := array[]::uuid[];
+begin
+  if auth.role() <> 'service_role' then
+    raise exception 'service_role required' using errcode = '42501';
+  end if;
+
+  if p_payout_cents < 0 or p_bonus_cents < 0 then
+    raise exception 'payout and bonus must be non-negative' using errcode = '22003';
+  end if;
+
+  -- Lock every currently linked member payout first. If createPayoutRun won the
+  -- race, fail before any member mutation. If this transaction wins, the payout
+  -- rows remain locked until member updates and payout-total reconciliation commit.
+  for v_payout_id in
+    select distinct x.payout_id
+    from (
+      select t.cleaner_payout_id as payout_id
+      from public.team_job_member_payouts t
+      where t.booking_id = p_booking_id
+        and t.cleaner_id = p_cleaner_id
+        and t.cleaner_payout_id is not null
+      union
+      select r.cleaner_payout_id as payout_id
+      from public.booking_roster_member_payouts r
+      where r.booking_id = p_booking_id
+        and r.cleaner_id = p_cleaner_id
+        and r.cleaner_payout_id is not null
+    ) x
+    where x.payout_id is not null
+    order by x.payout_id
+  loop
+    perform 1
+    from public.cleaner_payouts p
+    where p.id = v_payout_id
+      and p.payout_run_id is null
+      and lower(coalesce(p.status::text, '')) in ('pending', 'frozen')
+    for update;
+
+    if not found then
+      raise exception 'member payout % is locked or attached to a disbursement run', v_payout_id
+        using errcode = '55000';
+    end if;
+  end loop;
+
+  update public.team_job_member_payouts t
+  set payout_cents = p_payout_cents
+  where t.booking_id = p_booking_id
+    and t.cleaner_id = p_cleaner_id
+    and lower(coalesce(t.status::text, '')) in ('pending', 'batched');
+
+  update public.booking_roster_member_payouts r
+  set payout_cents = p_payout_cents,
+      bonus_cents = p_bonus_cents
+  where r.booking_id = p_booking_id
+    and r.cleaner_id = p_cleaner_id
+    and lower(coalesce(r.status::text, '')) in ('pending', 'batched');
+
+  for v_payout_id in
+    select distinct x.payout_id
+    from (
+      select t.cleaner_payout_id as payout_id
+      from public.team_job_member_payouts t
+      where t.booking_id = p_booking_id
+        and t.cleaner_id = p_cleaner_id
+        and t.cleaner_payout_id is not null
+      union
+      select r.cleaner_payout_id as payout_id
+      from public.booking_roster_member_payouts r
+      where r.booking_id = p_booking_id
+        and r.cleaner_id = p_cleaner_id
+        and r.cleaner_payout_id is not null
+    ) x
+    where x.payout_id is not null
+    order by x.payout_id
+  loop
+    with payout_items as (
+      select
+        b.cleaner_id,
+        b.id as booking_id,
+        0 as source_rank,
+        case
+          when lower(coalesce(b.payout_status::text, '')) in ('eligible', 'paid')
+            and coalesce(b.payout_frozen_cents, 0) > 0
+          then greatest(coalesce(b.payout_frozen_cents, 0), 0)::bigint
+          else (
+            greatest(coalesce(b.cleaner_payout_cents, 0), 0)
+            + greatest(coalesce(b.cleaner_bonus_cents, 0), 0)
+          )::bigint
+        end as amount_cents
+      from public.bookings b
+      where b.payout_id = v_payout_id
+
+      union all
+
+      select
+        r.cleaner_id,
+        r.booking_id,
+        1 as source_rank,
+        (
+          greatest(coalesce(r.payout_cents, 0), 0)
+          + greatest(coalesce(r.bonus_cents, 0), 0)
+        )::bigint
+      from public.booking_roster_member_payouts r
+      where r.cleaner_payout_id = v_payout_id
+
+      union all
+
+      select
+        t.cleaner_id,
+        t.booking_id,
+        2 as source_rank,
+        greatest(coalesce(t.payout_cents, 0), 0)::bigint
+      from public.team_job_member_payouts t
+      where t.cleaner_payout_id = v_payout_id
+    ),
+    authoritative as (
+      select distinct on (cleaner_id, booking_id)
+        cleaner_id,
+        booking_id,
+        amount_cents
+      from payout_items
+      order by cleaner_id, booking_id, source_rank desc
+    )
+    select coalesce(sum(amount_cents), 0)::bigint
+      into v_total
+    from authoritative;
+
+    update public.cleaner_payouts
+    set total_amount_cents = v_total,
+        calculated_amount_cents = v_total,
+        adjustment_note = null,
+        amount_adjusted_at = null,
+        amount_adjusted_by = null
+    where id = v_payout_id
+      and payout_run_id is null
+      and lower(coalesce(status::text, '')) in ('pending', 'frozen');
+
+    if not found then
+      raise exception 'member payout % became locked before reconciliation', v_payout_id
+        using errcode = '40001';
+    end if;
+
+    v_last_total := v_total;
+    v_synced_ids := array_append(v_synced_ids, v_payout_id);
+  end loop;
+
+  return jsonb_build_object(
+    'batch_total_cents', v_last_total,
+    'synced_payout_ids', to_jsonb(v_synced_ids)
+  );
+end;
+$$;
+
+revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint) from public;
+revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint) from anon;
+revoke all on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint) from authenticated;
+grant execute on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint) to service_role;
+
+comment on function public.adjust_unrun_member_payout_earnings(uuid, uuid, bigint, bigint) is
+  'MASTER-03A: atomically locks unrun member payout batches, updates team/roster earnings, and reconciles payout totals so createPayoutRun cannot race the edit.';
