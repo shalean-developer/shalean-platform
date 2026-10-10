@@ -96,6 +96,23 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     expect(migration).toContain("grant execute on function public.append_draft_run_payout_earnings");
   });
 
+  it("revalidates late-earning eligibility transactionally before linking", () => {
+    const migration = read(
+      "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
+    );
+
+    expect(migration).toContain("lower(coalesce(b.status::text, '')) = 'completed'");
+    expect(migration).toContain("coalesce(b.is_test, false) = false");
+    expect(migration).toContain("b.refunded_at is null");
+    expect(migration).toContain("payout_attribution_removal_v1");
+    expect(migration).toContain("between v_period_start and v_period_end");
+    expect(migration).toContain("monthly_invoices mi");
+    expect(migration).toContain("b.payout_frozen_cents is not null");
+    expect(migration).toContain("cleaner_earnings ce");
+    expect(migration).toContain("greatest(coalesce(r.payout_cents, 0), 0)");
+    expect(migration).toContain("greatest(coalesce(t.payout_cents, 0), 0) > 0");
+  });
+
   it("chunks payout funding booking and invoice reads", () => {
     const src = read("lib/payout/payoutFunding.ts");
     expect(src).toContain("payoutQueryChunks");
