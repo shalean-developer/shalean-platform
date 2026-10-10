@@ -126,6 +126,55 @@ export async function adjustBookingTeamMemberPayoutEarnings(
   const editable = await assertBookingVisitPayoutEditable(admin, row);
   if (!editable.ok) return editable;
 
+  // Member rails can be linked to a payout even when bookings.payout_id is null.
+  // Validate every explicit member payout before any booking/member mutation so
+  // run-linked frozen payouts remain immutable through visit-edit flows.
+  const explicitMemberPayoutIds = [
+    String((memberRow as { cleaner_payout_id?: string | null } | null)?.cleaner_payout_id ?? "").trim(),
+    String((rosterPayRow as { cleaner_payout_id?: string | null } | null)?.cleaner_payout_id ?? "").trim(),
+  ].filter(Boolean);
+
+  if (explicitMemberPayoutIds.length > 0) {
+    const uniqueMemberPayoutIds = [...new Set(explicitMemberPayoutIds)];
+    const { data: memberBatches, error: memberBatchErr } = await admin
+      .from("cleaner_payouts")
+      .select("id, status, payout_run_id")
+      .in("id", uniqueMemberPayoutIds);
+    if (memberBatchErr) {
+      return { ok: false, error: memberBatchErr.message, code: "payout_lookup_failed" };
+    }
+
+    const batchById = new Map(
+      (memberBatches ?? []).map((batch) => [
+        String((batch as { id?: string }).id ?? "").trim(),
+        batch as { status?: string | null; payout_run_id?: string | null },
+      ]),
+    );
+
+    for (const payoutId of uniqueMemberPayoutIds) {
+      const batch = batchById.get(payoutId);
+      if (!batch) {
+        return { ok: false, error: "Linked member payout batch not found.", code: "payout_not_found" };
+      }
+      const runId = String(batch.payout_run_id ?? "").trim();
+      if (runId) {
+        return {
+          ok: false,
+          error: "Member payout is part of a disbursement run; edit the batch before freezing the run.",
+          code: "payout_run_locked",
+        };
+      }
+      const batchStatus = String(batch.status ?? "").trim().toLowerCase();
+      if (batchStatus !== "pending" && batchStatus !== "frozen") {
+        return {
+          ok: false,
+          error: "Member payout batch is approved or paid; visit earnings cannot be edited.",
+          code: "payout_batch_locked",
+        };
+      }
+    }
+  }
+
   // TJ/roster rows can be batched without bookings.payout_id — require an open batch in period.
   if (memberStatus === "batched" || rosterStatus === "batched") {
     const bookingDate = String(row.date ?? "").trim();
@@ -139,15 +188,21 @@ export async function adjustBookingTeamMemberPayoutEarnings(
     ).trim();
     const { data: openBatches, error: openErr } = await admin
       .from("cleaner_payouts")
-      .select("id, period_start, period_end")
+      .select("id, period_start, period_end, payout_run_id")
       .eq("cleaner_id", cleanerId)
       .eq(memberPayoutId ? "id" : "cleaner_id", memberPayoutId || cleanerId)
       .in("status", ["pending", "frozen"]);
     if (openErr) return { ok: false, error: openErr.message, code: "payout_lookup_failed" };
     const openInPeriod = (openBatches ?? []).some((raw) => {
-      const from = String((raw as { period_start?: string | null }).period_start ?? "").trim();
-      const to = String((raw as { period_end?: string | null }).period_end ?? "").trim();
-      return from && to && bookingDate >= from && bookingDate <= to;
+      const batch = raw as {
+        period_start?: string | null;
+        period_end?: string | null;
+        payout_run_id?: string | null;
+      };
+      const from = String(batch.period_start ?? "").trim();
+      const to = String(batch.period_end ?? "").trim();
+      const runId = String(batch.payout_run_id ?? "").trim();
+      return !runId && from && to && bookingDate >= from && bookingDate <= to;
     });
     if (!openInPeriod) {
       return {
