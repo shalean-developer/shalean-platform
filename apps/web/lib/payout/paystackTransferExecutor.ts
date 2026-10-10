@@ -670,6 +670,25 @@ export async function submitPaystackTransferViaOutbox(
     return safetyGate;
   }
 
+  // MASTER-03B: the final money-send boundary. Existing submitted/succeeded
+  // transfers are reconciled above even when cleaner Paystack payouts are disabled,
+  // but no fresh provider POST may occur for the cleaner_payout rail without
+  // explicit operational opt-in.
+  if (
+    params.rail === "cleaner_payout" &&
+    String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "").trim().toLowerCase() !== "true"
+  ) {
+    const released = await releaseOutboxSendLease(admin, outbox.id, outbox.attempts);
+    return {
+      ok: false,
+      error: released.ok
+        ? "Cleaner Paystack payouts are disabled. Use the bank-transfer settlement path."
+        : `Cleaner Paystack payouts are disabled, and the outbox lease could not be released: ${released.error}`,
+      status: released.ok ? 403 : 500,
+      ...(released.ok ? {} : { needsReconcile: true }),
+    };
+  }
+
   const transfer = await paystackPostTransfer({
     source: "balance",
     amount,
