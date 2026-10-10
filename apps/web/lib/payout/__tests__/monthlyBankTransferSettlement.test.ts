@@ -375,6 +375,8 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(sql).toContain("add column if not exists reconcile_started_at timestamptz");
     expect(sql).toContain("trg_payout_transfer_reconcile_started_at");
     expect(sql).toContain("new.reconcile_started_at := now()");
+    expect(sql).toContain("new.reconcile_started_at := null");
+    expect(sql).toContain("old.status is distinct from 'needs_reconcile'");
     expect(sql).toContain("new.reconcile_started_at := old.reconcile_started_at");
   });
 
