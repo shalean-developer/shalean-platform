@@ -839,7 +839,9 @@ export async function submitPaystackTransferViaOutbox(
   const table = auditTable(params.rail);
 
   if (!transfer.ok) {
-    // Duplicate reference often means Paystack already accepted — verify instead of failing hard.
+    // Duplicate/reference rejection means Paystack may already own the immutable
+    // reference. Verification failure is therefore uncertain, never a safe terminal
+    // failure. Keep the intent in needs_reconcile until the provider outcome is known.
     if (/duplicate|already|reference/i.test(transfer.error)) {
       const verified = await paystackGetTransferByReference(params.reference);
       if (verified.ok && verified.transferCode) {
@@ -868,6 +870,34 @@ export async function submitPaystackTransferViaOutbox(
           outboxId: outbox.id,
         };
       }
+
+      const { error: uncertainErr } = await admin
+        .from("payout_transfer_outbox")
+        .update({
+          status: "needs_reconcile",
+          last_error: `Duplicate/reference response; verification unresolved: ${
+            verified.ok ? "provider returned no transfer code" : verified.error
+          }`.slice(0, 2000),
+          updated_at: now,
+        })
+        .eq("id", outbox.id)
+        .eq("status", "sending")
+        .eq("attempts", outbox.attempts);
+
+      if (uncertainErr) {
+        return {
+          ok: false,
+          error: uncertainErr.message,
+          status: 500,
+          needsReconcile: true,
+        };
+      }
+
+      return {
+        ok: false,
+        error: "Paystack reference may already exist; transfer left for reconciliation.",
+        needsReconcile: true,
+      };
     }
 
     if (transfer.networkError) {
