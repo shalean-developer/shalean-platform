@@ -288,6 +288,8 @@ export async function adjustBookingTeamMemberPayoutEarnings(
         p_cleaner_id: cleanerId,
         p_payout_cents: payoutCents,
         p_bonus_cents: bonusCents,
+        p_booking_patch: patch,
+        p_direct_payout_id: editable.payoutId,
       },
     );
     if (atomicMemberErr) {
@@ -315,7 +317,7 @@ export async function adjustBookingTeamMemberPayoutEarnings(
       : [];
   }
 
-  if (Object.keys(patch).length > 0) {
+  if (!hasTj && !hasRosterPay && Object.keys(patch).length > 0) {
     const { data: updated, error: upErr } = await admin
       .from("bookings")
       .update(patch)
@@ -326,7 +328,9 @@ export async function adjustBookingTeamMemberPayoutEarnings(
   }
 
   const directPayoutNeedsSync =
-    editable.payoutId && !memberSyncedPayoutIds.includes(editable.payoutId) ? editable.payoutId : null;
+    !hasTj && !hasRosterPay && editable.payoutId && !memberSyncedPayoutIds.includes(editable.payoutId)
+      ? editable.payoutId
+      : null;
 
   let batchTotalCents = memberBatchTotalCents;
   let syncedPayoutIds = [...memberSyncedPayoutIds];
