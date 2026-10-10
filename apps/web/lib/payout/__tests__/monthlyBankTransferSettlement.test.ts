@@ -231,7 +231,9 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
 
   it("converges recovered sending leases before retiring the outbox", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
-    expect(executor).toContain('import { applyTransferSuccess } from "@/lib/payout/paystackTransferStatus"');
+    expect(executor).toContain('from "@/lib/payout/paystackTransferStatus"');
+    expect(executor).toContain("applyTransferSuccess");
+    expect(executor).toContain("applyTransferFailed");
     expect(executor).toContain("Recovered Paystack transfer could not update audit row");
     expect(executor).toContain("await applyTransferSuccess(admin");
     expect(executor).toContain("Recovered outbox lease changed before submission convergence.");
@@ -275,6 +277,15 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
       pay.indexOf("ENABLE_CLEANER_PAYSTACK_PAYOUTS"),
     );
     expect(pay).toContain("Existing successful transfers must always be allowed to converge above.");
+  });
+
+  it("isolates verified failure convergence errors per outbox row", () => {
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(executor).toContain("Verified transfer failure convergence failed.");
+    expect(executor).toContain("needsReconcile: true");
+    expect(executor).toContain("try {");
+    expect(executor).toContain("await applyTransferFailed(admin");
   });
 
   it("retires verified terminal-failure outboxes by id and immutable reference", () => {
