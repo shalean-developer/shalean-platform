@@ -39,6 +39,24 @@ begin
     raise exception 'service_role required' using errcode = '42501';
   end if;
 
+  -- Global lock order for payout mutation paths: booking(s) first, then run,
+  -- then child payout. This matches visit-edit flows and avoids deadlocks.
+  perform 1
+  from public.bookings b
+  where b.id in (
+    select unnest(coalesce(p_direct_booking_ids, array[]::uuid[]))
+    union
+    select r.booking_id
+    from public.booking_roster_member_payouts r
+    where r.id = any(coalesce(p_roster_ids, array[]::uuid[]))
+    union
+    select t.booking_id
+    from public.team_job_member_payouts t
+    where t.id = any(coalesce(p_team_ids, array[]::uuid[]))
+  )
+  order by b.id
+  for update;
+
   select p.payout_run_id
     into v_run_id
   from public.cleaner_payouts p
@@ -89,20 +107,6 @@ begin
 
   -- Revalidate the same authoritative eligibility boundary inside this transaction.
   -- JavaScript discovery is advisory; only rows still payable at mutation time may link.
-  perform 1
-  from public.bookings b
-  where b.id in (
-    select r.booking_id
-    from public.booking_roster_member_payouts r
-    where r.id = any(coalesce(p_roster_ids, array[]::uuid[]))
-    union
-    select t.booking_id
-    from public.team_job_member_payouts t
-    where t.id = any(coalesce(p_team_ids, array[]::uuid[]))
-  )
-  order by b.id
-  for update;
-
   update public.bookings b
   set payout_id = p_payout_id
   where b.id = any(coalesce(p_direct_booking_ids, array[]::uuid[]))
