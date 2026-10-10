@@ -38,7 +38,15 @@ export type SubmitPaystackTransferResult =
       needsReconcile?: boolean;
       outboxId: string;
     }
-  | { ok: false; error: string; status?: number; needsReconcile?: boolean };
+  | {
+      ok: false;
+      error: string;
+      status?: number;
+      needsReconcile?: boolean;
+      transferCode?: string | null;
+      reference?: string;
+      outboxId?: string;
+    };
 
 type PaystackJson = {
   status?: boolean;
