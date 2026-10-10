@@ -106,6 +106,11 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(route).not.toContain('redirect(');
     expect(detail).toContain('href="/office/payout-runs"');
     expect(detail).not.toContain('/admin/payouts?tab=disbursements');
+    expect(detail).toContain('/api/admin/security/my-permissions');
+    expect(detail).toContain('permissions.has("payout.approve")');
+    expect(detail).toContain('permissions.has("payout.release")');
+    expect(detail).toContain('runStatus === "draft" && canApprove');
+    expect(detail).toContain('p.status === "approved" && canRelease');
   });
 
   it("has a dedicated bank-transfer API that requires a reference", () => {
