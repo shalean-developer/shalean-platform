@@ -773,14 +773,26 @@ export async function submitPaystackTransferViaOutbox(
     params.rail === "cleaner_payout" &&
     String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "").trim().toLowerCase() !== "true"
   ) {
-    const released = await releaseOutboxSendLease(admin, outbox.id, outbox.attempts);
+    const { error: cancelErr } = await admin.rpc("fail_cleaner_payout_outbox_validation", {
+      p_outbox_id: outbox.id,
+      p_error: "Cleaner Paystack payouts disabled; use bank-transfer settlement.",
+      p_expected_status: "sending",
+      p_expected_attempts: outbox.attempts,
+    });
+
+    if (cancelErr) {
+      return {
+        ok: false,
+        error: cancelErr.message,
+        status: 500,
+        needsReconcile: true,
+      };
+    }
+
     return {
       ok: false,
-      error: released.ok
-        ? "Cleaner Paystack payouts are disabled. Use the bank-transfer settlement path."
-        : `Cleaner Paystack payouts are disabled, and the outbox lease could not be released: ${released.error}`,
-      status: released.ok ? 403 : 500,
-      ...(released.ok ? {} : { needsReconcile: true }),
+      error: "Cleaner Paystack payouts are disabled. Fresh transfer intent was cancelled before provider submission; use bank-transfer settlement.",
+      status: 403,
     };
   }
 
