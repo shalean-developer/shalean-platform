@@ -115,6 +115,17 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     expect(src).toContain("for (const idChunk of payoutQueryChunks(uniqueInvoiceIds))");
   });
 
+  it("rejects run-linked member payout edits before any mutation", () => {
+    const src = read("lib/payout/adjustBookingTeamMemberPayoutEarnings.ts");
+
+    expect(src).toContain("explicitMemberPayoutIds");
+    expect(src).toContain('select("id, status, payout_run_id")');
+    expect(src).toContain('code: "payout_run_locked"');
+    expect(src.indexOf("explicitMemberPayoutIds")).toBeLessThan(src.indexOf("const previousTotalCents"));
+    expect(src).toContain('select("id, period_start, period_end, payout_run_id")');
+    expect(src).toContain("return !runId && from && to");
+  });
+
   it("keeps draft-run total recomputation paginated and draft-only", () => {
     const src = read("lib/payout/runs/reconcileDraftRunLateEarnings.ts");
     expect(src).toContain("fetchAllPayoutRows");
