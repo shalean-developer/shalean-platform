@@ -298,16 +298,21 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
 
   it("keeps recovered sending 404s nonterminal and applies terminal failures", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
+    const sendingStart = executor.indexOf('if (outbox && outbox.status === "sending")');
+    const sendingEnd = executor.indexOf("// Failed outbox:", sendingStart);
+    expect(sendingStart).toBeGreaterThanOrEqual(0);
+    expect(sendingEnd).toBeGreaterThan(sendingStart);
+    const sendingRecovery = executor.slice(sendingStart, sendingEnd);
 
-    expect(executor).toContain("automatic retry is blocked pending provider confirmation or manual reconciliation");
-    expect(executor).toContain('status: "needs_reconcile"');
-    expect(executor).not.toContain("return submitPaystackTransferViaOutbox(admin, params)");
-    expect(executor).toContain("Recovered transfer failure reconciliation failed.");
-    expect(executor).toContain("recoveredProviderStatus");
-    expect(executor).toContain('"abandoned"');
-    expect(executor).toContain('"blocked"');
-    expect(executor).toContain('"rejected"');
-    expect(executor).toContain("await applyTransferFailed(admin");
+    expect(sendingRecovery).toContain("automatic retry is blocked pending provider confirmation or manual reconciliation");
+    expect(sendingRecovery).toContain('status: "needs_reconcile"');
+    expect(sendingRecovery).not.toContain("return submitPaystackTransferViaOutbox(admin, params)");
+    expect(sendingRecovery).toContain("Recovered transfer failure reconciliation failed.");
+    expect(sendingRecovery).toContain("recoveredProviderStatus");
+    expect(sendingRecovery).toContain('"abandoned"');
+    expect(sendingRecovery).toContain('"blocked"');
+    expect(sendingRecovery).toContain('"rejected"');
+    expect(sendingRecovery).toContain("await applyTransferFailed(admin");
   });
 
   it("converges recovered sending leases before retiring the outbox", () => {
