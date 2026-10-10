@@ -1398,6 +1398,7 @@ begin
           and (
             amount_adjusted_at is null
             or amount_adjusted_by is null
+            or amount_adjusted_by = p_approved_by
             or length(trim(coalesce(adjustment_note, ''))) < 3
           )
         )
@@ -1410,7 +1411,7 @@ begin
   end if;
 
   if v_mismatch_count > 0 then
-    raise exception 'Payout run contains an invalid calculated total or manual adjustment.' using errcode = '55000';
+    raise exception 'Payout run contains an invalid calculated total or manual adjustment, or the approver also made the adjustment.' using errcode = '55000';
   end if;
 
   update public.cleaner_payouts
