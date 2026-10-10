@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getPaystackBaseUrl } from "@/lib/payout/paystackOrigin";
+import { getPaystackSecretKeyCandidates } from "@/lib/paystack/paystackSecretKeys";
 import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
 import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
 import { applyTransferFailed, applyTransferSuccess } from "@/lib/payout/paystackTransferStatus";
@@ -232,36 +233,60 @@ async function paystackGetTransferByReference(
   | { ok: true; transferCode: string | null; status: string | null }
   | { ok: false; error: string; httpStatus?: number; networkError?: boolean }
 > {
-  const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
-  if (!secret) return { ok: false, error: "PAYSTACK_SECRET_KEY is not configured." };
+  const candidates = getPaystackSecretKeyCandidates();
+  if (candidates.length === 0) {
+    return { ok: false, error: "No Paystack secret key is configured for transfer reconciliation." };
+  }
+
   const origin = getPaystackBaseUrl();
-  try {
-    const res = await fetch(`${origin}/transfer/verify/${encodeURIComponent(reference)}`, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${secret}` },
-    });
-    const json = (await res.json().catch(() => ({}))) as PaystackJson & {
-      data?: { transfer_code?: string; status?: string };
-    };
-    if (!res.ok || json.status === false) {
+  const notFoundErrors: string[] = [];
+
+  for (const candidate of candidates) {
+    try {
+      const res = await fetch(`${origin}/transfer/verify/${encodeURIComponent(reference)}`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${candidate.secret}` },
+      });
+      const json = (await res.json().catch(() => ({}))) as PaystackJson & {
+        data?: { transfer_code?: string; status?: string };
+      };
+
+      if (res.ok && json.status !== false) {
+        return {
+          ok: true,
+          transferCode: json.data?.transfer_code?.trim() ?? null,
+          status: String(json.data?.status ?? "").trim().toLowerCase() || null,
+        };
+      }
+
+      const error = json.message ?? `Verify failed ${res.status}`;
+      if (res.status === 404) {
+        notFoundErrors.push(`${candidate.label}(${candidate.mode}): ${error}`);
+        continue;
+      }
+
       return {
         ok: false,
-        error: json.message ?? `Verify failed ${res.status}`,
+        error: `${candidate.label}(${candidate.mode}): ${error}`,
         httpStatus: res.status,
+        networkError: res.status >= 500,
+      };
+    } catch (e) {
+      return {
+        ok: false,
+        error: `${candidate.label}(${candidate.mode}): ${
+          e instanceof Error ? e.message : "Network error verifying transfer"
+        }`,
+        networkError: true,
       };
     }
-    return {
-      ok: true,
-      transferCode: json.data?.transfer_code?.trim() ?? null,
-      status: String(json.data?.status ?? "").trim().toLowerCase() || null,
-    };
-  } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : "Network error verifying transfer",
-      networkError: true,
-    };
   }
+
+  return {
+    ok: false,
+    error: `Transfer reference was not found in any configured Paystack account: ${notFoundErrors.join("; ")}`,
+    httpStatus: 404,
+  };
 }
 
 async function loadOutboxByReference(
