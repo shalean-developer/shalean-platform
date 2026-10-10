@@ -418,7 +418,7 @@ export async function GET(request: Request) {
   }
   if (adminGet) {
     const existing = await findBookingIdStatusForPaystackReference(adminGet, ref);
-    if (existing && existing.status !== "pending_payment") {
+    if (existing && !["pending_payment", "payment_expired"].includes(existing.status)) {
       const amountCentsGet =
         typeof tx.amount === "number" && Number.isFinite(tx.amount) ? tx.amount : 0;
       const emailFromCustomer = typeof tx.customer?.email === "string" ? tx.customer.email.trim() : "";
@@ -932,7 +932,7 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
   }
   if (adminPost) {
     const existingPost = await findBookingIdStatusForPaystackReference(adminPost, ref);
-    if (existingPost && existingPost.status !== "pending_payment") {
+    if (existingPost && !["pending_payment", "payment_expired"].includes(existingPost.status)) {
       const metadataShort = normalizePaystackMetadata(tx.metadata);
       const { snapshot: snapShort } = parseBookingSnapshot(metadataShort, { amountCents: txAmount });
       const emailFromCustomer = typeof tx.customer?.email === "string" ? tx.customer.email.trim() : "";
