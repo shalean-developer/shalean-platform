@@ -308,9 +308,20 @@ export async function submitPaystackTransferViaOutbox(
           reference: existingSuccess.reference?.trim() || params.reference,
         });
       } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Existing successful transfer reconciliation failed.";
+        await admin
+          .from("payout_transfer_outbox")
+          .update({
+            status: "needs_reconcile",
+            last_error: message.slice(0, 2000),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("reference", params.reference)
+          .neq("status", "succeeded");
         return {
           ok: false,
-          error: error instanceof Error ? error.message : "Existing successful transfer reconciliation failed.",
+          error: message,
           needsReconcile: true,
         };
       }
@@ -721,6 +732,49 @@ export async function submitPaystackTransferViaOutbox(
       reference: params.reference,
       context: { rail: params.rail, outboxId: outbox.id },
     });
+  }
+
+  // A pending cleaner-payout intent with prior attempts has crossed a send lease
+  // before. If Paystack is now disabled, its immutable reference must be verified
+  // before any terminal cancellation; it is not definitely unsent.
+  if (
+    outbox &&
+    outbox.status === "pending" &&
+    params.rail === "cleaner_payout" &&
+    String(process.env.ENABLE_CLEANER_PAYSTACK_PAYOUTS ?? "").trim().toLowerCase() !== "true" &&
+    Math.max(0, Math.round(Number(outbox.attempts ?? 0))) > 0
+  ) {
+    const { data: priorAttemptIntent, error: priorAttemptErr } = await admin
+      .from("payout_transfer_outbox")
+      .update({
+        status: "needs_reconcile",
+        last_error: "Prior send attempt requires provider verification before bank settlement.",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", outbox.id)
+      .eq("status", "pending")
+      .eq("attempts", outbox.attempts)
+      .select("id")
+      .maybeSingle();
+
+    if (priorAttemptErr) {
+      return {
+        ok: false,
+        error: priorAttemptErr.message,
+        status: 500,
+        needsReconcile: true,
+      };
+    }
+    if (!priorAttemptIntent) {
+      return {
+        ok: false,
+        error: "Pending payout intent changed before it could enter reconciliation.",
+        status: 409,
+        needsReconcile: true,
+      };
+    }
+
+    return submitPaystackTransferViaOutbox(admin, params);
   }
 
   // Claim outbox for send using an exclusive pending -> sending lease.
