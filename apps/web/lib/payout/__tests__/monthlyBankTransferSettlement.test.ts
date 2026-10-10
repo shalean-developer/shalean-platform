@@ -85,6 +85,9 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(detail).toContain("paid_at:");
     expect(detail).toContain("T12:00:00+02:00");
     expect(detail).toContain("Record paid");
+    expect(detail.indexOf('payment_status ?? "").toLowerCase() === "processing"')).toBeLessThan(
+      detail.indexOf('p.status === "approved"'),
+    );
     expect(detail).not.toContain("Send Paystack");
     expect(detail).not.toContain("Mark paid (manual)");
     expect(process).toContain("ENABLE_CLEANER_PAYSTACK_PAYOUTS");
