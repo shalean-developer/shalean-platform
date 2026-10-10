@@ -259,6 +259,15 @@ describe("MASTER-03A late earnings reconciliation safety boundary", () => {
     expect(migration).toContain("grant execute on function public.freeze_eligible_cleaner_payouts_atomic");
   });
 
+  it("enforces maker-checker for manually adjusted payouts at run approval", () => {
+    const migration = read(
+      "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
+    );
+
+    expect(migration).toContain("amount_adjusted_by = p_approved_by");
+    expect(migration).toContain("the approver also made the adjustment");
+  });
+
   it("preserves valid manual payout overrides during atomic approval", () => {
     const migration = read(
       "../../supabase/migrations/20261009225500_master_03a_draft_run_late_earnings_atomic_sync.sql",
