@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { AdminPayoutRunDetailPayout } from "@/lib/admin/payoutDisbursementRuns";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
@@ -22,12 +23,12 @@ function batchStatusBadge(status: string) {
   return <Badge variant="outline">{status}</Badge>;
 }
 
-function paystackBadge(paymentStatus: string | null | undefined, payoutStatus: string) {
+function settlementBadge(paymentStatus: string | null | undefined, payoutStatus: string) {
   const ps = String(paymentStatus ?? "pending").toLowerCase();
   if (payoutStatus === "paid" && ps === "success") return <span className="text-emerald-700 dark:text-emerald-400">Confirmed</span>;
   if (ps === "processing") return <Badge className="bg-amber-600 hover:bg-amber-600">Processing</Badge>;
-  if (ps === "failed" || ps === "partial_failed") return <Badge variant="destructive">Failed</Badge>;
-  return <span className="text-zinc-500">Pending / not sent</span>;
+  if (ps === "failed" || ps === "partial_failed") return <Badge variant="destructive">Needs review</Badge>;
+  return <span className="text-zinc-500">Pending</span>;
 }
 
 async function readJson<T>(res: Response): Promise<T & { error?: string }> {
@@ -49,6 +50,7 @@ export default function AdminPayoutRunDetailPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [bankReferences, setBankReferences] = useState<Record<string, string>>({});
 
   const getToken = useCallback(async () => {
     const sb = getSupabaseBrowser();
@@ -111,6 +113,37 @@ export default function AdminPayoutRunDetailPage() {
     }
   };
 
+  const recordBankTransfer = async (payoutId: string) => {
+    const reference = String(bankReferences[payoutId] ?? "").trim();
+    if (reference.length < 3) {
+      setToast({ kind: "error", text: "Enter the bank transfer reference before recording payment." });
+      return;
+    }
+    const path = `/api/admin/payouts/${encodeURIComponent(payoutId)}/bank-transfer`;
+    setBusy(path);
+    setToast(null);
+    try {
+      const token = await getToken();
+      const res = await fetch(path, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ reference }),
+      });
+      const json = await readJson<{ error?: string }>(res);
+      if (!res.ok) throw new Error(json.error ?? "Could not record bank transfer.");
+      setBankReferences((current) => ({ ...current, [payoutId]: "" }));
+      setToast({ kind: "success", text: "Bank transfer recorded and payout reconciled." });
+      await load();
+    } catch (e) {
+      setToast({ kind: "error", text: e instanceof Error ? e.message : "Could not record bank transfer." });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const downloadCsv = async () => {
     try {
       const token = await getToken();
@@ -136,8 +169,6 @@ export default function AdminPayoutRunDetailPage() {
 
   const base = `/api/admin/payouts/runs/${encodeURIComponent(runId)}`;
   const runStatus = String(run?.status ?? "");
-
-  const hasPaystackFailures = payouts.some((p) => ["failed", "partial_failed"].includes(String(p.payment_status ?? "").toLowerCase()));
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
@@ -181,7 +212,7 @@ export default function AdminPayoutRunDetailPage() {
             <CardHeader>
               <CardTitle className="text-lg">Summary</CardTitle>
               <CardDescription>
-                Batch ref: {String(run.paystack_batch_ref ?? "—")} · {payouts.length} cleaner payout(s)
+                Monthly bank-transfer run · {payouts.length} cleaner payout(s)
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-6 text-sm">
@@ -196,43 +227,17 @@ export default function AdminPayoutRunDetailPage() {
             </CardContent>
           </Card>
 
-          {hasPaystackFailures ? (
-            <Card className="border-amber-300 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base text-amber-950 dark:text-amber-100">Paystack failures</CardTitle>
-                <CardDescription className="text-amber-900/80 dark:text-amber-100/80">
-                  “Paid” in the batch column only appears after transfer success. Retry sends a new transfer for failed rows.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                <Button type="button" size="sm" disabled={busy !== null} onClick={() => void post(`${base}/retry`)}>
-                  Retry all failed
-                </Button>
-              </CardContent>
-            </Card>
-          ) : null}
-
           <Card>
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle className="text-base">Cleaners in run</CardTitle>
-                <CardDescription>Bank from saved payment details · Paystack column reflects webhook state.</CardDescription>
+                <CardDescription>Record the real bank transfer reference for each approved cleaner payout. The final child closes the run automatically.</CardDescription>
               </div>
               <div className="flex flex-wrap gap-2">
                 {runStatus === "draft" ? (
                   <Button size="sm" disabled={busy !== null} onClick={() => void post(`${base}/approve`)}>
                     Approve run
                   </Button>
-                ) : null}
-                {runStatus === "approved" || runStatus === "processing" ? (
-                  <>
-                    <Button size="sm" disabled={busy !== null} onClick={() => void post(`${base}/process`, {})}>
-                      Send Paystack
-                    </Button>
-                    <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void post(`${base}/process`, { mode: "manual" })}>
-                      Mark paid (manual)
-                    </Button>
-                  </>
                 ) : null}
               </div>
             </CardHeader>
@@ -243,14 +248,13 @@ export default function AdminPayoutRunDetailPage() {
                     <TableHead>Cleaner</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Batch</TableHead>
-                    <TableHead>Paystack</TableHead>
+                    <TableHead>Settlement</TableHead>
                     <TableHead>Bank</TableHead>
                     <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {payouts.map((p) => {
-                    const failed = ["failed", "partial_failed"].includes(String(p.payment_status ?? "").toLowerCase());
                     return (
                       <TableRow key={p.id}>
                         <TableCell>
@@ -259,19 +263,43 @@ export default function AdminPayoutRunDetailPage() {
                         </TableCell>
                         <TableCell className="tabular-nums font-semibold">{zar(p.total_amount_cents)}</TableCell>
                         <TableCell>{batchStatusBadge(p.status)}</TableCell>
-                        <TableCell>{paystackBadge(p.payment_status, p.status)}</TableCell>
+                        <TableCell>{settlementBadge(p.payment_status, p.status)}</TableCell>
                         <TableCell className="text-sm text-zinc-600 dark:text-zinc-400">
                           {p.bank_code ?? "—"}
                           {p.account_masked ? ` · ${p.account_masked}` : ""}
                         </TableCell>
                         <TableCell className="text-right">
-                          {failed ? (
-                            <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => void post(`${base}/retry`, { payoutId: p.id })}>
-                              Retry
-                            </Button>
+                          {p.status === "approved" ? (
+                            <div className="ml-auto flex max-w-sm items-center justify-end gap-2">
+                              <Input
+                                aria-label={`Bank reference for ${p.cleaner_name}`}
+                                placeholder="Bank reference"
+                                value={bankReferences[p.id] ?? ""}
+                                onChange={(e) =>
+                                  setBankReferences((current) => ({ ...current, [p.id]: e.target.value }))
+                                }
+                                className="h-8 min-w-36"
+                              />
+                              <Button
+                                size="sm"
+                                disabled={busy !== null || String(bankReferences[p.id] ?? "").trim().length < 3}
+                                onClick={() => void recordBankTransfer(p.id)}
+                              >
+                                Record paid
+                              </Button>
+                            </div>
                           ) : p.status === "paid" ? (
-                            <span className="text-emerald-600 dark:text-emerald-400">✓</span>
-                          ) : null}
+                            <div>
+                              <span className="text-emerald-600 dark:text-emerald-400">✓ Paid</span>
+                              {p.payment_reference ? (
+                                <div className="mt-1 font-mono text-[11px] text-zinc-500">{p.payment_reference}</div>
+                              ) : null}
+                            </div>
+                          ) : String(p.payment_status ?? "").toLowerCase() === "processing" ? (
+                            <span className="text-amber-700 dark:text-amber-400">Transfer in progress</span>
+                          ) : (
+                            <span className="text-zinc-500">Await approval</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
