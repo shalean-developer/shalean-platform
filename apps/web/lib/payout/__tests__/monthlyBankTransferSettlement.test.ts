@@ -270,15 +270,6 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     expect(pay.indexOf("existingSuccess")).toBeLessThan(pay.indexOf('payout.status !== "approved"'));
   });
 
-  it("keeps successful transfer reconciliation ahead of cleaner Paystack opt-in", () => {
-    const pay = read("lib/payout/paystackPayout.ts");
-
-    expect(pay.indexOf("existingSuccess")).toBeLessThan(
-      pay.indexOf("ENABLE_CLEANER_PAYSTACK_PAYOUTS"),
-    );
-    expect(pay).toContain("Existing successful transfers must always be allowed to converge above.");
-  });
-
   it("isolates verified success convergence errors per outbox row", () => {
     const executor = read("lib/payout/paystackTransferExecutor.ts");
 
@@ -364,11 +355,16 @@ describe("PAYOUT-E2E-002 monthly bank-transfer settlement contract", () => {
     );
   });
 
-  it("enforces cleaner Paystack opt-in at the shared payout send boundary", () => {
+  it("lets existing Paystack intents reach executor reconciliation before opt-in enforcement", () => {
     const pay = read("lib/payout/paystackPayout.ts");
-    expect(pay).toContain("ENABLE_CLEANER_PAYSTACK_PAYOUTS");
-    expect(pay).toContain("Cleaner Paystack payouts are disabled.");
-    expect(pay).toContain("status: 403");
+    const executor = read("lib/payout/paystackTransferExecutor.ts");
+
+    expect(pay).not.toContain("ENABLE_CLEANER_PAYSTACK_PAYOUTS");
+    expect(pay).toContain("submitPaystackTransferViaOutbox");
+    expect(executor).toContain("ENABLE_CLEANER_PAYSTACK_PAYOUTS");
+    expect(executor.indexOf("Already submitted — resume / verify")).toBeLessThan(
+      executor.indexOf("the final money-send boundary"),
+    );
 
     const directPayRoute = read("app/api/admin/payouts/[id]/pay/route.ts");
     const retryRoute = read("app/api/admin/payouts/runs/[id]/retry/route.ts");
