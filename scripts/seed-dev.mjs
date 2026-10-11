@@ -1472,47 +1472,27 @@ async function resetSeedRows(admin) {
     }
 
     // Reconcile Cleaning Credit before deleting seed-scoped reservations/transactions.
+    // The DB helper is retry-safe: any balance restoration and reservation release
+    // commit atomically, so an interrupted reset cannot credit the same booking twice.
     const reservations = await must(
       "load seed cleaning credit reservations",
       admin
         .from("cleaning_credit_reservations")
-        .select("id, booking_id, user_id, amount_zar, status")
+        .select("id, booking_id, status")
         .in("booking_id", seedBookingIds),
     );
     for (const reservation of reservations ?? []) {
-      const status = String(reservation.status ?? "");
-      if (status === "reserved") {
-        const released = await must(
-          `release Cleaning Credit reservation ${reservation.id}`,
-          admin.rpc("release_cleaning_credit_for_booking", {
-            p_booking_id: reservation.booking_id,
-          }),
+      const reconciled = await must(
+        `reconcile Cleaning Credit reservation ${reservation.id}`,
+        admin.rpc("reset_seed_cleaning_credit_for_booking", {
+          p_booking_id: reservation.booking_id,
+        }),
+      );
+      const result = Array.isArray(reconciled) ? reconciled[0] : reconciled;
+      if (!result?.ok) {
+        throw new Error(
+          `[seed-dev] Reset failed reconciling Cleaning Credit reservation ${reservation.id}: ${result?.error ?? "unknown"}`,
         );
-        const result = Array.isArray(released) ? released[0] : released;
-        if (!result?.ok) {
-          throw new Error(
-            `[seed-dev] Reset failed releasing Cleaning Credit reservation ${reservation.id}: ${result?.error_message ?? "unknown"}`,
-          );
-        }
-      } else if (status === "settled") {
-        const restored = await must(
-          `restore settled Cleaning Credit reservation ${reservation.id}`,
-          admin.rpc("apply_cleaning_credit_transaction", {
-            p_user_id: reservation.user_id,
-            p_amount_zar: Number(reservation.amount_zar ?? 0),
-            p_type: "admin_adjust",
-            p_referral_id: null,
-            p_booking_id: reservation.booking_id,
-            p_note: "DEV SEED RESET: restore settled Cleaning Credit",
-            p_created_by: "seed-dev-reset",
-          }),
-        );
-        const result = Array.isArray(restored) ? restored[0] : restored;
-        if (!result?.ok) {
-          throw new Error(
-            `[seed-dev] Reset failed restoring Cleaning Credit reservation ${reservation.id}: ${result?.error_message ?? "unknown"}`,
-          );
-        }
       }
     }
 
