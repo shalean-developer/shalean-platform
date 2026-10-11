@@ -449,11 +449,11 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).not.toContain("counterIncrementCommitted')::boolean");
   });
 
-  it("defers admin monthly completed state until canonical lines and earnings have persisted", () => {
+  it("defers admin monthly completed state until canonical lines and fail-closed earnings have persisted", () => {
     const src = read("app/api/admin/bookings/route.ts");
     const pipeline = read("lib/admin/adminBookingPostCreatePipeline.ts");
     const completedInsert = src.indexOf('source: "admin_monthly"');
-    const precompletionEarnings = src.indexOf('"admin_booking_create_monthly_precompletion"');
+    const precompletionEarnings = src.indexOf("persistAdminMonthlyPreCompletionEarnings({");
     const completionPromotionCall = src.indexOf("promoteAdminMonthlyBookingToCompleted({");
     const completionPromotionFailure = src.indexOf('code: "admin_monthly_completion_promotion_failed"');
     const completedEarnings = src.indexOf('"admin_booking_create_monthly_completed"');
@@ -461,17 +461,22 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain("Completed monthly bookings are inserted as assigned first");
     expect(src).toContain('let rowStatus: "assigned" | "pending" = adminMarkCompleted');
     expect(src).not.toContain('let rowStatus: "completed" | "assigned" | "pending"');
-    expect(src).toContain("promoteAdminMonthlyBookingToCompleted");
+    expect(src).toContain("persistAdminMonthlyPreCompletionEarnings");
+    expect(src).toContain('code: "admin_monthly_precompletion_earnings_failed"');
+    expect(src).toContain("cleaner_response_status: CLEANER_RESPONSE.PENDING");
     expect(precompletionEarnings).toBeGreaterThan(completedInsert);
     expect(completionPromotionCall).toBeGreaterThan(precompletionEarnings);
     expect(completionPromotionFailure).toBeGreaterThan(completionPromotionCall);
     expect(completedEarnings).toBeGreaterThan(completionPromotionCall);
-    expect(src).toContain("Booking created with canonical line items but could not be marked completed");
 
+    expect(pipeline).toContain("function persistAdminMonthlyPreCompletionEarnings");
+    expect(pipeline).toContain("forceDisplayRecompute: true");
+    expect(pipeline).toContain("precompletion_roster_member_payouts_missing");
+    expect(pipeline).toContain("precompletion_team_member_payouts_missing");
     expect(pipeline).toContain("function promoteAdminMonthlyBookingToCompleted");
     expect(pipeline).toContain('.eq("status", "assigned")');
     expect(pipeline).toContain('status: "completed"');
-    expect(pipeline).toContain("buildCompletionCoherencePatch");
+    expect(pipeline).toContain("cleaner_response_status: CLEANER_RESPONSE.COMPLETED");
   });
 
   it("stores and reverses the original promotion revenue instead of mutable booking total", () => {
