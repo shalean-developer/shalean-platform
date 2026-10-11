@@ -73,6 +73,14 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("old.payout_id is not null");
   });
 
+  it("keeps sales-document unpaid totals out of collected-cash fields", () => {
+    const src = read("lib/salesDocument/createBookingFromSalesQuoteInvoice.ts");
+
+    expect(src).toContain("const collectedTotalZar = invoicePaid ? quotedTotalZar : 0");
+    expect(src).toContain("total_paid_zar: collectedTotalZar");
+    expect(src).toContain("declaredTotalCents: quotedTotalZar * 100");
+  });
+
   it("keeps the sales-document cleanup inside one database transaction boundary", () => {
     const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
 
@@ -80,7 +88,6 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("for update");
     expect(sql).toContain("update public.bookings");
     expect(sql).toContain("set sales_document_id = null");
-    expect(sql).toContain("total_paid_zar = 0");
     expect(sql).toContain("delete from public.bookings where id = v.id");
     expect(sql.indexOf("set sales_document_id = null")).toBeLessThan(
       sql.indexOf("delete from public.bookings where id = v.id"),
@@ -193,7 +200,15 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
 
     expect(sql).toContain("coalesce(old.total_paid_zar, 0) > 0");
-    expect(sql).not.toContain("coalesce(v.total_paid_zar, 0) > 0");
+    expect(sql).toContain("coalesce(v.total_paid_zar, 0) > 0");
+  });
+
+  it("rejects a retained cancelled monthly requester when the sole active winner differs", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+
+    expect(sql).toContain("if p_our_id is distinct from v_winner then");
+    expect(sql).toContain("'action', 'reject'");
+    expect(sql).toContain("'rolled_back_self', true");
   });
 
   it("monthly duplicate resolver cancels losers instead of hard deleting financial-flow rows", () => {
@@ -202,6 +217,14 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("AUDIT-02A04: serializes monthly duplicate races");
     expect(sql).toContain("set status = 'cancelled'");
     expect(sql).toContain("if p_our_id = any(v_deleted)");
+  });
+
+  it("retains provisional unified rows as cancelled when line-item persistence fails", () => {
+    const src = read("lib/booking/createBookingUnified.ts");
+
+    expect(src).toContain('status: "cancelled"');
+    expect(src).toContain("rollback_failed:");
+    expect(src).not.toContain('admin.from("bookings").delete().eq("id", id)');
   });
 
   it("provides a guarded rollback for an unclaimed recurring prepaid occurrence", () => {
