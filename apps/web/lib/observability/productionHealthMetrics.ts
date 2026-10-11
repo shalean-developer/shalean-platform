@@ -284,6 +284,7 @@ export function detectPaymentFinalizationDrift(rows: readonly PaymentFinalizatio
         type !== "booking_finalize" &&
         type !== "booking_insert" &&
         type !== "payment_reconciliation" &&
+        type !== "payment_reconciliation_exhausted" &&
         type !== "payment_reconciliation_manual_review"
       ) {
         return false;
@@ -737,7 +738,7 @@ export async function runProductionHealthScan(
         query: admin
           .from("failed_jobs")
           .select("id, type, created_at, payload")
-          .in("type", ["booking_finalize", "booking_insert", "payment_reconciliation", "payment_reconciliation_manual_review"])
+          .in("type", ["booking_finalize", "booking_insert", "payment_reconciliation", "payment_reconciliation_exhausted", "payment_reconciliation_manual_review"])
           .order("created_at", { ascending: false })
           .limit(scanLimit),
       },
