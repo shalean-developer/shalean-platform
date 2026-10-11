@@ -606,7 +606,9 @@ begin
        where booking_id = v_booking.id
          and status = 'applied'
     loop
-      if jsonb_typeof(v_redemption.metadata -> 'bookingRevenueZar') <> 'number' then
+      if jsonb_typeof(v_redemption.metadata -> 'bookingRevenueZar') is distinct from 'number'
+         or coalesce((v_redemption.metadata ->> 'counterIncrementCommitted')::boolean, false) is distinct from true
+      then
         return jsonb_build_object(
           'ok', false,
           'error', 'promotion_original_revenue_unproven',
@@ -851,7 +853,9 @@ begin
        and status = 'applied'
      for update
   loop
-    if jsonb_typeof(v_redemption.metadata -> 'bookingRevenueZar') <> 'number' then
+    if jsonb_typeof(v_redemption.metadata -> 'bookingRevenueZar') is distinct from 'number'
+       or coalesce((v_redemption.metadata ->> 'counterIncrementCommitted')::boolean, false) is distinct from true
+    then
       return jsonb_build_object(
         'ok', false,
         'error', 'promotion_original_revenue_unproven',
@@ -1142,7 +1146,10 @@ begin
           from public.promotion_redemptions pr
           where pr.booking_id = r.id
             and pr.status = 'applied'
-            and jsonb_typeof(pr.metadata -> 'bookingRevenueZar') <> 'number'
+            and (
+              jsonb_typeof(pr.metadata -> 'bookingRevenueZar') is distinct from 'number'
+              or coalesce((pr.metadata ->> 'counterIncrementCommitted')::boolean, false) is distinct from true
+            )
         );
 
         if v_promotion_revenue_unproven then
