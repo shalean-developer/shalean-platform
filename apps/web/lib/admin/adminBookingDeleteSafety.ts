@@ -4,6 +4,7 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_refund_marker_present"
   | "admin_booking_delete_payout_paid_at_present"
   | "admin_booking_delete_payout_run_linked"
+  | "admin_booking_delete_external_payment_reference"
   | "admin_booking_delete_payment_completed"
   | "admin_booking_delete_paid_payment_status"
   | "admin_booking_delete_completed_status"
@@ -27,6 +28,7 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_inventory_cost_linked"
   | "admin_booking_delete_transport_cost_linked"
   | "admin_booking_delete_earnings_snapshot_linked"
+  | "admin_booking_delete_line_item_earnings_linked"
   | "admin_booking_delete_cleaner_earnings_linked"
   | "admin_booking_delete_cleaner_earnings_adjustment_linked"
   | "admin_booking_delete_cleaner_earnings_dispute_linked"
@@ -57,6 +59,7 @@ export type AdminBookingDeleteSafetyRow = {
   refund_status?: string | null;
   payout_paid_at?: string | null;
   payout_run_id?: string | null;
+  payment_reference_external?: string | null;
   payment_completed_at?: string | null;
   paid_at?: string | null;
   is_monthly_billing_booking?: boolean | null;
@@ -79,6 +82,7 @@ export type AdminBookingDeleteSafetyRow = {
   linked_inventory_cost_id?: string | null;
   linked_transport_cost_id?: string | null;
   linked_earnings_snapshot_booking_id?: string | null;
+  linked_line_item_earnings_id?: string | null;
   linked_cleaner_earning_id?: string | null;
   linked_cleaner_earnings_adjustment_id?: string | null;
   linked_cleaner_earnings_dispute_id?: string | null;
@@ -166,6 +170,13 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_payout_run_linked",
       message: "Bookings linked to a payout run cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.payment_reference_external)) {
+    blocks.push({
+      code: "admin_booking_delete_external_payment_reference",
+      message: "Bookings with an external settlement reference cannot be hard-deleted.",
     });
   }
 
@@ -327,6 +338,13 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_earnings_snapshot_linked",
       message: "Bookings linked to cleaner earnings snapshots cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_line_item_earnings_id)) {
+    blocks.push({
+      code: "admin_booking_delete_line_item_earnings_linked",
+      message: "Bookings with frozen cleaner line-item earnings cannot be hard-deleted.",
     });
   }
 
