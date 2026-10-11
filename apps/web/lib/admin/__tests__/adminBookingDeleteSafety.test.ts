@@ -65,6 +65,19 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_marked_paid_by_admin")).toBe(true);
   });
 
+  it("blocks hard delete when a partial deposit survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "pending_payment",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      deposit_paid_cents: 25000,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected deposit-backed booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_deposit_paid_present")).toBe(true);
+  });
+
   it("blocks hard delete when a refund marker survives", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "cancelled",
