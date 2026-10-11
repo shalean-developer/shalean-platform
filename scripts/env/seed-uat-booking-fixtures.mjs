@@ -508,24 +508,37 @@ async function ensureConflictBooking(admin, cleaners, locationBySlug) {
 }
 
 async function resetFixtures(admin) {
-  const emails = CLEANERS.map((c) => c.email);
-  const { data: cleaners } = await admin.from("cleaners").select("id").in("email", emails);
-  const cleanerIds = (cleaners ?? []).map((c) => c.id);
+  const { data: rows, error: loadError } = await admin
+    .from("bookings")
+    .select("id, paystack_reference, status, completed_at, payment_status, payment_completed_at, amount_paid_cents, deposit_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id")
+    .like("paystack_reference", `${MARKER}-%`);
+  if (loadError) throw new Error(`reset FARAI-UAT bookings read: ${loadError.message}`);
 
-  await admin.from("bookings").delete().like("paystack_reference", `${MARKER}-%`);
+  let deleted = 0;
+  let retainedFinancial = 0;
+  for (const row of rows ?? []) {
+    const financiallyProtected =
+      String(row.status ?? "").toLowerCase() === "completed" ||
+      Boolean(row.completed_at) ||
+      ["paid", "success", "succeeded", "pending_monthly"].includes(String(row.payment_status ?? "").toLowerCase()) ||
+      Boolean(row.payment_completed_at) ||
+      Number(row.amount_paid_cents ?? 0) > 0 ||
+      Number(row.deposit_paid_cents ?? 0) > 0 ||
+      Number(row.total_paid_cents ?? 0) > 0 ||
+      Number(row.total_paid_zar ?? 0) > 0 ||
+      Boolean(row.payment_transaction_id);
+    if (financiallyProtected) {
+      retainedFinancial += 1;
+      continue;
+    }
+    const { error } = await admin.from("bookings").delete().eq("id", row.id);
+    if (error) throw new Error(`reset FARAI-UAT booking ${row.paystack_reference}: ${error.message}`);
+    deleted += 1;
+  }
 
-  if (cleanerIds.length) {
-    await admin.from("team_members").delete().in("cleaner_id", cleanerIds);
-    await admin.from("cleaner_locations").delete().in("cleaner_id", cleanerIds);
-  }
-  await admin.from("teams").delete().in(
-    "id",
-    TEAMS.map((t) => t.id),
-  );
-  if (cleanerIds.length) {
-    await admin.from("cleaners").delete().in("id", cleanerIds);
-  }
-  console.log("Reset: removed prior FARAI-UAT booking fixtures (auth users retained).");
+  // Cleaner/team/location fixtures are idempotently upserted below. Do not delete
+  // identities still referenced by retained paid booking history.
+  console.log(`Reset: deleted=${deleted}; retained_financial_history=${retainedFinancial}; fixture identities will be refreshed by upsert.`);
 }
 
 async function main() {
