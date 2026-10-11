@@ -262,24 +262,21 @@ function applyCatalogSql(env) {
 async function resetFixtures(admin, env) {
   const { data: rows, error: loadError } = await admin
     .from("bookings")
-    .select("id, paystack_reference, status, completed_at, payment_status, payment_completed_at, amount_paid_cents, deposit_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id")
+    .select("id, paystack_reference")
     .like("paystack_reference", "ENV-03-STG-%");
   if (loadError) throw new Error(`reset bookings read: ${loadError.message}`);
 
   let deleted = 0;
   let retainedFinancial = 0;
   for (const row of rows ?? []) {
-    const financiallyProtected =
-      String(row.status ?? "").toLowerCase() === "completed" ||
-      Boolean(row.completed_at) ||
-      ["paid", "success", "succeeded", "pending_monthly"].includes(String(row.payment_status ?? "").toLowerCase()) ||
-      Boolean(row.payment_completed_at) ||
-      Number(row.amount_paid_cents ?? 0) > 0 ||
-      Number(row.deposit_paid_cents ?? 0) > 0 ||
-      Number(row.total_paid_cents ?? 0) > 0 ||
-      Number(row.total_paid_zar ?? 0) > 0 ||
-      Boolean(row.payment_transaction_id);
-    if (financiallyProtected) {
+    const { data: financiallyProtected, error: historyError } = await admin.rpc(
+      "booking_has_nonpromotion_financial_history",
+      { p_booking_id: row.id },
+    );
+    if (historyError) {
+      throw new Error(`reset financial-history probe ${row.paystack_reference}: ${historyError.message}`);
+    }
+    if (financiallyProtected === true) {
       retainedFinancial += 1;
       continue;
     }
