@@ -18,7 +18,8 @@ begin
      or old.payout_paid_at is not null
      or old.payout_run_id is not null
      or old.payment_completed_at is not null
-     or lower(trim(coalesce(old.payment_status, ''))) in ('paid', 'success', 'succeeded')
+     or lower(trim(coalesce(old.payment_status, ''))) in ('paid', 'success', 'succeeded', 'pending_monthly')
+     or coalesce(old.is_monthly_billing_booking, false)
      or coalesce(old.amount_paid_cents, 0) > 0
      or coalesce(old.total_paid_cents, 0) > 0
      or old.payment_transaction_id is not null
@@ -126,6 +127,11 @@ begin
        select 1
        from public.booking_roster_member_payouts brmp
        where brmp.booking_id = old.id
+     )
+     or exists (
+       select 1
+       from public.payout_audit_events pae
+       where old.id = any(coalesce(pae.booking_ids, '{}'::uuid[]))
      )
      or old.monthly_invoice_id is not null
      or old.sales_document_id is not null
