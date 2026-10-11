@@ -407,7 +407,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         bookingInDatabase: true,
         reason: "finalization_failed",
         error: "PAYMENT_NOT_PAYABLE",
-        recoveryEnqueue: false,
+        recoveryEnqueue: true,
       };
     }
 
@@ -456,6 +456,29 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         return {
           ok: false, skipped: true, bookingId: bidEarly, bookingInDatabase: true,
           error: "PAYMENT_FINALIZATION_REPLAY_MISMATCH", code: "PAYMENT_FINALIZATION_REPLAY_MISMATCH",
+        };
+      }
+
+      const { data: replayCreditReservation, error: replayCreditReservationError } = await supabase
+        .from("cleaning_credit_reservations")
+        .select("status")
+        .eq("booking_id", bidEarly)
+        .maybeSingle();
+      if (
+        replayCreditReservationError ||
+        (
+          replayCreditReservation &&
+          String(replayCreditReservation.status ?? "").trim().toLowerCase() !== "settled"
+        )
+      ) {
+        return {
+          ok: false,
+          skipped: true,
+          bookingId: bidEarly,
+          bookingInDatabase: true,
+          reason: "finalization_failed",
+          error: replayCreditReservationError?.message ?? "cleaning_credit_settlement_pending",
+          recoveryEnqueue: true,
         };
       }
 
