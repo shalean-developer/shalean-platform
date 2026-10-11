@@ -19,6 +19,7 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_cleaner_bonus_present"
   | "admin_booking_delete_payout_earnings_present"
   | "admin_booking_delete_cleaner_earnings_total_present"
+  | "admin_booking_delete_internal_earnings_present"
   | "admin_booking_delete_paid_at_present"
   | "admin_booking_delete_amount_paid_present"
   | "admin_booking_delete_deposit_paid_present"
@@ -73,6 +74,7 @@ export type AdminBookingDeleteSafetyRow = {
   cleaner_bonus_cents?: number | string | null;
   payout_earnings_cents?: number | string | null;
   cleaner_earnings_total_cents?: number | string | null;
+  internal_earnings_cents?: number | string | null;
   amount_paid_cents?: number | string | null;
   deposit_paid_cents?: number | string | null;
   total_paid_cents?: number | string | null;
@@ -275,6 +277,13 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_cleaner_earnings_total_present",
       message: "Bookings with positive cleaner_earnings_total_cents cannot be hard-deleted.",
+    });
+  }
+
+  if (positiveCents(row.internal_earnings_cents)) {
+    blocks.push({
+      code: "admin_booking_delete_internal_earnings_present",
+      message: "Bookings with positive internal_earnings_cents cannot be hard-deleted.",
     });
   }
 
