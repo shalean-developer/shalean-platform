@@ -1440,6 +1440,10 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     { data: linkedRosterMemberPayout, error: linkedRosterMemberPayoutErr },
     { data: linkedCleaningCreditTransaction, error: linkedCleaningCreditTransactionErr },
     { data: linkedInvoiceAdjustment, error: linkedInvoiceAdjustmentErr },
+    { data: linkedRefundRecord, error: linkedRefundRecordErr },
+    { data: linkedReferralRedemption, error: linkedReferralRedemptionErr },
+    { data: linkedReferralEvent, error: linkedReferralEventErr },
+    { data: linkedMoneyProposal, error: linkedMoneyProposalErr },
   ] = await Promise.all([
     admin.from("expenses").select("id").eq("booking_id", id).limit(1).maybeSingle(),
     admin
@@ -1491,6 +1495,31 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
       .eq("booking_id", id)
       .limit(1)
       .maybeSingle(),
+    admin
+      .from("refund_accounting_records")
+      .select("id")
+      .eq("entity_type", "booking")
+      .eq("entity_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("referral_discount_redemptions")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("referral_events")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("admin_money_action_proposals")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
   ]);
   const linkedReadError =
     linkedExpenseErr ??
@@ -1501,7 +1530,11 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     linkedTeamMemberPayoutErr ??
     linkedRosterMemberPayoutErr ??
     linkedCleaningCreditTransactionErr ??
-    linkedInvoiceAdjustmentErr;
+    linkedInvoiceAdjustmentErr ??
+    linkedRefundRecordErr ??
+    linkedReferralRedemptionErr ??
+    linkedReferralEventErr ??
+    linkedMoneyProposalErr;
   if (linkedReadError) {
     return NextResponse.json({ error: linkedReadError.message }, { status: 500 });
   }
@@ -1518,6 +1551,10 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     linked_roster_member_payout_id: linkedRosterMemberPayout?.id ?? null,
     linked_cleaning_credit_transaction_id: linkedCleaningCreditTransaction?.id ?? null,
     linked_invoice_adjustment_id: linkedInvoiceAdjustment?.id ?? null,
+    linked_refund_record_id: linkedRefundRecord?.id ?? null,
+    linked_referral_redemption_id: linkedReferralRedemption?.id ?? null,
+    linked_referral_event_id: linkedReferralEvent?.id ?? null,
+    linked_money_proposal_id: linkedMoneyProposal?.id ?? null,
   });
   if (!deleteSafety.ok) {
     return NextResponse.json(
