@@ -441,6 +441,27 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     );
   });
 
+  it("treats malformed promotion counter proof as unproven without boolean casts", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+
+    expect(sql).toContain("(v_redemption.metadata -> 'counterIncrementCommitted') is distinct from 'true'::jsonb");
+    expect(sql).toContain("(pr.metadata -> 'counterIncrementCommitted') is distinct from 'true'::jsonb");
+    expect(sql).not.toContain("counterIncrementCommitted')::boolean");
+  });
+
+  it("defers admin monthly completed state until canonical line items have persisted", () => {
+    const src = read("app/api/admin/bookings/route.ts");
+    const completedInsert = src.indexOf('source: "admin_monthly"');
+    const completionPromotion = src.indexOf('code: "admin_monthly_completion_promotion_failed"');
+
+    expect(src).toContain("Completed monthly bookings are inserted as assigned first");
+    expect(src).toContain('let rowStatus: "assigned" | "pending" = adminMarkCompleted');
+    expect(src).not.toContain('let rowStatus: "completed" | "assigned" | "pending"');
+    expect(src).toContain('.eq("status", "assigned")');
+    expect(completionPromotion).toBeGreaterThan(completedInsert);
+    expect(src).toContain("Booking created with canonical line items but could not be marked completed");
+  });
+
   it("stores and reverses the original promotion revenue instead of mutable booking total", () => {
     const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
     const promo = read("lib/promotions/server.ts");
