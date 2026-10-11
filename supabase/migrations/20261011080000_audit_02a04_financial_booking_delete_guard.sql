@@ -28,6 +28,17 @@ begin
        from public.expenses e
        where e.booking_id = old.id
      )
+     or exists (
+       select 1
+       from public.cleaner_earnings ce
+       where ce.booking_id = old.id
+         and lower(trim(coalesce(ce.status, ''))) in ('approved', 'processing', 'paid')
+     )
+     or exists (
+       select 1
+       from public.cleaner_earnings_adjustments cea
+       where cea.booking_id = old.id
+     )
      or old.monthly_invoice_id is not null
      or old.sales_document_id is not null
      or old.payout_id is not null
