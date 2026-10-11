@@ -74,6 +74,13 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("old.payout_id is not null");
   });
 
+  it("keeps homepage widget quotes out of collected cash", () => {
+    const src = read("lib/booking/insertWidgetServerBooking.ts");
+
+    expect(src).toContain("total_paid_zar: 0");
+    expect(src).toContain("total_price: totalPaidZar");
+  });
+
   it("keeps sales-document unpaid totals out of collected-cash fields", () => {
     const src = read("lib/salesDocument/createBookingFromSalesQuoteInvoice.ts");
 
@@ -255,6 +262,17 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).not.toContain('.in("status", ["approved", "processing", "paid"])');
   });
 
+  it("makes settled seed Cleaning Credit restoration retry-safe", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+    const seed = read("../../scripts/seed-dev.mjs");
+
+    expect(sql).toContain("function public.reset_seed_cleaning_credit_for_booking");
+    expect(sql).toContain("not like 'DEVSEED-%'");
+    expect(sql).toContain("if v.status = 'released' then");
+    expect(sql).toContain("set status = 'released'");
+    expect(seed).toContain('admin.rpc("reset_seed_cleaning_credit_for_booking"');
+  });
+
   it("keeps the governed non-production seed reset compatible without weakening production guards", () => {
     const seed = read("../../scripts/seed-dev.mjs");
 
@@ -271,8 +289,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(seed).toContain("mix seed and non-seed bookings");
     expect(seed).toContain("record_inventory_movement");
     expect(seed).toContain("DEV SEED RESET reversal");
-    expect(seed).toContain("release_cleaning_credit_for_booking");
-    expect(seed).toContain("apply_cleaning_credit_transaction");
+    expect(seed).toContain("reset_seed_cleaning_credit_for_booking");
+    expect(seed).not.toContain('admin.rpc("apply_cleaning_credit_transaction"');
     expect(seed).toContain("recurring_prepaid_allocations");
     expect(seed).toContain("recurring_prepaid_packages");
     expect(seed).toContain('admin.from("bookings").delete().in("id", seedBookingIds)');
