@@ -136,6 +136,23 @@ for (const mode of ["GET", "POST", "webhook"] as const) {
       await call(mode); expect(m.entityRecord).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ entityType: "sales_document" })); expect(m.monthly).toHaveBeenCalled();
       expect(reads.some((x) => x.includes("customer_email"))).toBe(false); noSuccess();
     });
+    it("passes expired payment to canonical finalization after verified Paystack success", async () => {
+      row.status = "payment_expired"; row.payment_status = "pending"; row.amount_paid_cents = 0;
+      const response = await call(mode);
+      expect(mode === "webhook" ? m.finalize : m.pipeline).toHaveBeenCalledTimes(1);
+      expect(m.replay).not.toHaveBeenCalled();
+      expect(m.record).not.toHaveBeenCalled();
+      expect(m.sync).not.toHaveBeenCalled();
+      if (mode !== "webhook") {
+        expect(response.status).toBe(409);
+        expect(await response.json()).toMatchObject({
+          ok: false,
+          success: false,
+          state: "payment_reconciliation_required",
+        });
+      }
+    });
+
     it("passes pending payment to canonical finalization", async () => {
       row.status = "pending_payment"; row.payment_status = "pending";
       await call(mode); expect(mode === "webhook" ? m.finalize : m.pipeline).toHaveBeenCalledTimes(1);
