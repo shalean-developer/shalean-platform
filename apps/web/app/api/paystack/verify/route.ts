@@ -687,7 +687,7 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
           .select("status")
           .eq("booking_id", settled.bookingId)
           .maybeSingle();
-        const zeroCreditReplaySafe =
+        let zeroCreditReplaySafe =
           !zeroCreditReservationError &&
           (
             !zeroCreditReservation ||
@@ -724,6 +724,8 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
             } satisfies PaystackVerifyPostResponse, { status: 409 });
           }
 
+          zeroCreditReplaySafe = true;
+
           const postPayment = await finalizeR0BookingPostPayment(adminPrePaystack, settled.bookingId);
           if (!postPayment.ok) {
             await reportOperationalIssue(
@@ -735,7 +737,7 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
           }
         }
 
-        if (zeroCreditReplaySafe || !zeroCreditReservationError) {
+        if (zeroCreditReplaySafe) {
           const amountCents = Number(
             (payRow as { amount_paid_cents?: number | null } | null)?.amount_paid_cents ?? 0,
           );
