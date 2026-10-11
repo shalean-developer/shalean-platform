@@ -24,6 +24,7 @@ begin
      or coalesce(old.amount_paid_cents, 0) > 0
      or coalesce(old.deposit_paid_cents, 0) > 0
      or coalesce(old.total_paid_cents, 0) > 0
+     or coalesce(old.total_paid_zar, 0) > 0
      or old.payment_transaction_id is not null
      or exists (
        select 1
@@ -236,7 +237,8 @@ begin
   end if;
 
   update public.bookings
-     set sales_document_id = null
+     set sales_document_id = null,
+         total_paid_zar = 0
    where id = v.id
      and sales_document_id = p_invoice_id;
 
@@ -280,6 +282,7 @@ as $financial_history$
         or coalesce(b.amount_paid_cents, 0) > 0
         or coalesce(b.deposit_paid_cents, 0) > 0
         or coalesce(b.total_paid_cents, 0) > 0
+        or coalesce(b.total_paid_zar, 0) > 0
         or b.payment_transaction_id is not null
         or b.monthly_invoice_id is not null
         or b.sales_document_id is not null
