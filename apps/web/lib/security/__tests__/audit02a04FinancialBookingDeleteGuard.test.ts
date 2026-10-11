@@ -243,6 +243,15 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(helper).toContain("$seed_credit_reset$;");
   });
 
+  it("reverses stale-purge promotion revenue from immutable redemption metadata", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+
+    expect(sql).toContain("v_redemption.metadata -> 'bookingRevenueZar'");
+    expect(sql).toContain("v_promotion_revenue_unproven");
+    expect(sql).toContain("Legacy redemption without original revenue evidence");
+    expect(sql).not.toContain("v_booking_revenue_zar := greatest(coalesce(v_total_price, 0), 0)");
+  });
+
   it("keeps protected rows from aborting the batch purge", () => {
     const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
 
@@ -347,6 +356,9 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(uat).toContain("Conflict booking retained unchanged");
     expect(uat).toContain('"booking_has_financial_history"');
     expect(uat).toContain("conflict booking financial-history probe");
+    expect(env03).toContain("retainedReferences.add(row.paystack_reference)");
+    expect(env03).toContain("retainedReferences.has(row.paystack_reference)");
+    expect(env03).toContain("retained financial fixture left unchanged");
   });
 
   it("clears completed_at only inside the governed seed reset before hard delete", () => {
