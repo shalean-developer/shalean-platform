@@ -10,6 +10,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
 
     expect(sql).toContain("before delete on public.bookings");
     expect(sql).toContain("booking_delete_blocked_financial_history");
+    expect(sql).toContain("old.marked_paid_by_admin_id is not null");
     expect(sql).toContain("old.payment_transaction_id is not null");
     expect(sql).toContain("from public.payment_transactions pt");
     expect(sql).toContain("pt.booking_id = old.id");
@@ -23,6 +24,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("from public.cleaner_earnings ce");
     expect(sql).toContain("('approved', 'processing', 'paid')");
     expect(sql).toContain("from public.cleaner_earnings_adjustments cea");
+    expect(sql).toContain("from public.cleaner_earnings_disputes ced");
     expect(sql).toContain("from public.team_job_member_payouts tjmp");
     expect(sql).toContain("from public.booking_roster_member_payouts brmp");
     expect(sql).toContain("coalesce(old.amount_paid_cents, 0) > 0");
@@ -55,11 +57,14 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain('.from("cleaner_earnings")');
     expect(src).toContain('["approved", "processing", "paid"]');
     expect(src).toContain('.from("cleaner_earnings_adjustments")');
+    expect(src).toContain('.from("cleaner_earnings_disputes")');
     expect(src).toContain('.from("cleaning_credit_transactions")');
     expect(src).toContain('.from("invoice_adjustments")');
     expect(src).toContain("payment_transaction_id: r.payment_transaction_id ?? linkedPayment?.id ?? null");
     expect(src).toContain("linked_cleaning_credit_transaction_id: linkedCleaningCreditTransaction?.id ?? null");
     expect(src).toContain("linked_invoice_adjustment_id: linkedInvoiceAdjustment?.id ?? null");
+    expect(src).toContain("marked_paid_by_admin_id");
+    expect(src).toContain("linked_cleaner_earnings_dispute_id: linkedCleanerDispute?.id ?? null");
   });
 
   it("keeps protected rows from aborting the batch purge", () => {
