@@ -407,6 +407,36 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_earnings_snapshot_linked")).toBe(true);
   });
 
+  it("blocks hard delete when an immutable booking change survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_booking_change_id: "22222222-2222-4222-8222-222222222223",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected booking-change-linked delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_booking_change_linked")).toBe(true);
+  });
+
+  it("blocks hard delete when paid conversion attribution survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_growth_attribution_id: "23232323-2323-4323-8323-232323232323",
+      linked_conversion_attribution_id: "24242424-2424-4424-8424-242424242424",
+      linked_email_attribution_id: "25252525-2525-4525-8525-252525252525",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected attribution-linked delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_growth_attribution_linked")).toBe(true);
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_conversion_attribution_linked")).toBe(true);
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_email_attribution_linked")).toBe(true);
+  });
+
   it("blocks hard delete when collected totals survive even if payment status drifted", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "cancelled",
