@@ -30,6 +30,7 @@ describe("BOOKING-E2E-13A Cleaning Credit settlement authority", () => {
     expect(route).toContain("zeroCreditReservation");
     expect(route).toContain('enqueueFailedJob("r0_credit_reconciliation"');
     expect(route).toContain("finalizeR0BookingPostPayment");
+    expect(route).toContain("r0_post_payment_recovery_failed:");
   });
 
   it("retries zero-cash Cleaning Credit reconciliation durably without Paystack", () => {
@@ -81,6 +82,17 @@ describe("BOOKING-E2E-13A Cleaning Credit settlement authority", () => {
     expect(recoveryPos).toBeGreaterThan(quarantinePos);
     expect(src).toContain("cleaning_credit_settlement_pending");
     expect(src).toContain('st === "payment_reconciliation_required" && input.paystackPersistSource === "retry"');
+  });
+
+  it("does not overwrite booking lifecycle when Cleaning Credit lookup fails", () => {
+    const src = read("lib/booking/upsertBookingFromPaystack.ts");
+    const lookupErrorPos = src.indexOf("cleaning_credit_lookup_failed:");
+    const quarantinePos = src.indexOf('update({ status: "payment_reconciliation_required" })', lookupErrorPos);
+
+    expect(lookupErrorPos).toBeGreaterThanOrEqual(0);
+    expect(quarantinePos).toBeGreaterThan(lookupErrorPos);
+    expect(src.slice(lookupErrorPos, quarantinePos)).not.toContain('update({ status: "payment_reconciliation_required" })');
+    expect(src).toContain("recoveryEnqueue: true");
   });
 
   it("quarantines the paid booking when Cleaning Credit settlement cannot complete", () => {
