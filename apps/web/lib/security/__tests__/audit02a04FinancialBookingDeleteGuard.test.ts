@@ -345,7 +345,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
       expect(src).not.toContain('"booking_has_nonpromotion_financial_history"');
     }
     expect(uat).toContain("Conflict booking retained unchanged");
-    expect(uat).toContain("existingIsFinancial");
+    expect(uat).toContain('"booking_has_financial_history"');
+    expect(uat).toContain("conflict booking financial-history probe");
   });
 
   it("clears completed_at only inside the governed seed reset before hard delete", () => {
@@ -390,6 +391,31 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("delete from public.inventory_movements where id = v_movement.id");
     expect(seed).toContain('admin.rpc("reset_seed_inventory_movement"');
     expect(seed).not.toContain('admin.rpc("record_inventory_movement"');
+  });
+
+  it("preflights referral reversibility before the first seed mutation", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+    const seed = read("../../scripts/seed-dev.mjs");
+
+    expect(sql).toContain("function public.preflight_seed_financial_reset");
+    expect(sql).toContain("referral_credit_already_spent");
+    expect(sql).toContain("promotion_original_revenue_unproven");
+    expect(seed).toContain('"preflight seed financial reset"');
+    expect(seed).toContain('admin.rpc("preflight_seed_financial_reset"');
+    expect(seed.indexOf('admin.rpc("preflight_seed_financial_reset"')).toBeLessThan(
+      seed.indexOf('"admin_money_action_proposals"'),
+    );
+  });
+
+  it("stores and reverses the original promotion revenue instead of mutable booking total", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+    const promo = read("lib/promotions/server.ts");
+
+    expect(promo).toContain("bookingRevenueZar: args.bookingRevenueZar");
+    expect(sql).toContain("v_original_revenue_zar");
+    expect(sql).toContain("v_redemption.metadata -> 'bookingRevenueZar'");
+    expect(sql).toContain("promotion_original_revenue_unproven");
+    expect(sql).not.toContain("coalesce(revenue_generated_zar, 0) - greatest(coalesce(v_total_price, 0), 0)");
   });
 
   it("reverses seed referral rewards before removing their ledger rows", () => {
