@@ -67,6 +67,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("coalesce(old.payout_earnings_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.cleaner_earnings_total_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.total_paid_cents, 0) > 0");
+    expect(sql).toContain("coalesce(old.total_paid_zar, 0) > 0");
     expect(sql).toContain("old.monthly_invoice_id is not null");
     expect(sql).toContain("old.sales_document_id is not null");
     expect(sql).toContain("old.payout_id is not null");
@@ -79,6 +80,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("for update");
     expect(sql).toContain("update public.bookings");
     expect(sql).toContain("set sales_document_id = null");
+    expect(sql).toContain("total_paid_zar = 0");
     expect(sql).toContain("delete from public.bookings where id = v.id");
     expect(sql.indexOf("set sales_document_id = null")).toBeLessThan(
       sql.indexOf("delete from public.bookings where id = v.id"),
@@ -158,6 +160,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     );
     expect(sql).toContain("from public.payment_transactions pt");
     expect(sql).toContain("coalesce(b.deposit_paid_cents, 0) > 0");
+    expect(sql).toContain("coalesce(b.total_paid_zar, 0) > 0");
     expect(sql).toContain("b.payment_reference_external");
     expect(sql).toContain("from public.booking_line_items bli");
   });
@@ -189,7 +192,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
   it("does not treat overloaded quoted total_paid_zar as standalone proof of payment", () => {
     const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
 
-    expect(sql).not.toContain("coalesce(old.total_paid_zar, 0) > 0");
+    expect(sql).toContain("coalesce(old.total_paid_zar, 0) > 0");
     expect(sql).not.toContain("coalesce(v.total_paid_zar, 0) > 0");
   });
 
