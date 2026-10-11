@@ -1366,29 +1366,168 @@ async function seedProposals(admin, userIdMap) {
 async function resetSeedRows(admin) {
   console.log("[seed-dev] Resetting dev seed rows...");
 
-  // Reverse dependency order
-  await admin.from("admin_money_action_proposals")
-    .delete().in("id", Object.values(PROPOSAL_IDS));
-  await admin.from("monthly_invoices")
-    .delete().in("id", Object.values(INVOICE_IDS));
-  await admin.from("cleaner_payouts")
-    .delete().in("id", Object.values(PAYOUT_IDS));
-  await admin.from("cleaner_payout_runs")
-    .delete().in("id", Object.values(PAYOUT_RUN_IDS));
-  await admin.from("cleaner_earnings")
-    .delete().in("id", Object.values(EARNING_IDS));
-  await admin.from("recurring_bookings")
-    .delete().in("id", Object.values(RECURRING_IDS));
-  await admin.from("bookings")
-    .delete().like("paystack_reference", `${SEED_TAG}-%`);
-  await admin.from("team_members")
-    .delete().in("team_id", Object.values(TEAM_IDS));
-  await admin.from("teams")
-    .delete().in("id", Object.values(TEAM_IDS));
+  const must = async (label, promise) => {
+    const { data, error } = await promise;
+    if (error) throw new Error(`[seed-dev] Reset failed at ${label}: ${error.message}`);
+    return data;
+  };
+
+  const seedBookings = await must(
+    "load seed bookings",
+    admin.from("bookings").select("id").like("paystack_reference", `${SEED_TAG}-%`),
+  );
+  const seedBookingIds = (seedBookings ?? []).map((row) => String(row.id)).filter(Boolean);
+
+  // Reverse dependency order. This command is already guarded by assertNonProductionSeed()
+  // before resetSeedRows() is called. Explicitly remove seed-scoped financial/audit
+  // children, then neutralize only the known seed booking mirrors before hard delete.
+  await must(
+    "admin_money_action_proposals",
+    admin.from("admin_money_action_proposals").delete().in("id", Object.values(PROPOSAL_IDS)),
+  );
+  await must(
+    "monthly_invoices",
+    admin.from("monthly_invoices").delete().in("id", Object.values(INVOICE_IDS)),
+  );
+  await must(
+    "cleaner_payouts",
+    admin.from("cleaner_payouts").delete().in("id", Object.values(PAYOUT_IDS)),
+  );
+  await must(
+    "cleaner_payout_runs",
+    admin.from("cleaner_payout_runs").delete().in("id", Object.values(PAYOUT_RUN_IDS)),
+  );
+  await must(
+    "cleaner_earnings",
+    admin.from("cleaner_earnings").delete().in("id", Object.values(EARNING_IDS)),
+  );
+
+  if (seedBookingIds.length > 0) {
+    const bookingScopedTables = [
+      "booking_changes",
+      "expenses",
+      "inventory_movements",
+      "transport_cost_entries",
+      "cleaning_credit_transactions",
+      "invoice_adjustments",
+      "referral_discount_redemptions",
+      "referral_events",
+      "admin_money_action_proposals",
+      "admin_earnings_actions",
+      "promotion_redemptions",
+      "booking_cleaner_earnings_snapshot",
+      "cleaner_earnings",
+      "cleaner_earnings_adjustments",
+      "cleaner_earnings_disputes",
+      "team_job_member_payouts",
+      "booking_roster_member_payouts",
+      "growth_action_outcomes",
+      "conversion_experiment_results",
+      "email_campaign_attributions",
+      "accounting_invoice_sync",
+    ];
+
+    for (const table of bookingScopedTables) {
+      await must(
+        `${table} seed booking children`,
+        admin.from(table).delete().in("booking_id", seedBookingIds),
+      );
+    }
+
+    await must(
+      "payment_transactions seed booking children",
+      admin.from("payment_transactions").delete().in("booking_id", seedBookingIds),
+    );
+    await must(
+      "refund_accounting_records seed booking children",
+      admin
+        .from("refund_accounting_records")
+        .delete()
+        .eq("entity_type", "booking")
+        .in("entity_id", seedBookingIds),
+    );
+    await must(
+      "accounting_sync_records seed booking children",
+      admin
+        .from("accounting_sync_records")
+        .delete()
+        .eq("entity_type", "booking")
+        .in("entity_id", seedBookingIds),
+    );
+
+    for (const bookingId of seedBookingIds) {
+      await must(
+        `payout_audit_events seed booking ${bookingId}`,
+        admin.from("payout_audit_events").delete().contains("booking_ids", [bookingId]),
+      );
+    }
+
+    await must(
+      "neutralize seed booking financial mirrors",
+      admin
+        .from("bookings")
+        .update({
+          status: "payment_expired",
+          payment_status: "pending",
+          is_monthly_billing_booking: false,
+          marked_paid_by_admin_id: null,
+          zoho_invoice_id: null,
+          refunded_at: null,
+          refund_status: null,
+          payout_paid_at: null,
+          payout_run_id: null,
+          payment_completed_at: null,
+          paid_at: null,
+          monthly_invoice_id: null,
+          sales_document_id: null,
+          payout_id: null,
+          payout_status: null,
+          payout_frozen_cents: 0,
+          display_earnings_cents: 0,
+          cleaner_payout_cents: 0,
+          cleaner_bonus_cents: 0,
+          payout_earnings_cents: 0,
+          amount_paid_cents: 0,
+          deposit_paid_cents: 0,
+          total_paid_cents: 0,
+          total_paid_zar: 0,
+          payment_transaction_id: null,
+        })
+        .in("id", seedBookingIds),
+    );
+
+    await must(
+      "delete seed bookings",
+      admin.from("bookings").delete().in("id", seedBookingIds),
+    );
+  }
+
+  await must(
+    "recurring_bookings",
+    admin.from("recurring_bookings").delete().in("id", Object.values(RECURRING_IDS)),
+  );
+  await must(
+    "team_members",
+    admin.from("team_members").delete().in("team_id", Object.values(TEAM_IDS)),
+  );
+  await must(
+    "teams",
+    admin.from("teams").delete().in("id", Object.values(TEAM_IDS)),
+  );
+
   for (const cleanerId of Object.values(CLEANER_IDS)) {
-    await admin.from("cleaner_availability").delete().eq("cleaner_id", cleanerId);
-    await admin.from("cleaner_locations").delete().eq("cleaner_id", cleanerId);
-    await admin.from("cleaners").delete().eq("id", cleanerId);
+    await must(
+      `cleaner_availability ${cleanerId}`,
+      admin.from("cleaner_availability").delete().eq("cleaner_id", cleanerId),
+    );
+    await must(
+      `cleaner_locations ${cleanerId}`,
+      admin.from("cleaner_locations").delete().eq("cleaner_id", cleanerId),
+    );
+    await must(
+      `cleaners ${cleanerId}`,
+      admin.from("cleaners").delete().eq("id", cleanerId),
+    );
   }
 
   console.log("[seed-dev] Reset complete.");
