@@ -67,6 +67,32 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_expense_linked")).toBe(true);
   });
 
+  it("blocks hard delete when approved cleaner earnings survive", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_cleaner_earning_id: "55555555-5555-4555-8555-555555555555",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected cleaner-earnings-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_cleaner_earnings_linked")).toBe(true);
+  });
+
+  it("blocks hard delete when a cleaner earnings adjustment survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_cleaner_earnings_adjustment_id: "66666666-6666-4666-8666-666666666666",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected cleaner adjustment-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_cleaner_earnings_adjustment_linked")).toBe(true);
+  });
+
   it("blocks hard delete when collected totals survive even if payment status drifted", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "cancelled",
