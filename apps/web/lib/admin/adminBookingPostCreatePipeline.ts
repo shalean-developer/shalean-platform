@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
+import { buildCompletionCoherencePatch } from "@/lib/booking/bookingCompletionIntegrity";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import {
   resolvePersistCleanerIdForBooking,
@@ -91,6 +92,58 @@ export async function ensureBookingAssignedStatusInvariant(
   if (uErr) {
     void reportOperationalIssue("warn", "ensureBookingAssignedStatusInvariant", uErr.message, { bookingId });
   }
+}
+
+/**
+ * Promote a newly-created admin monthly booking to completed only after canonical
+ * line items have persisted and duplicate-race resolution has succeeded.
+ *
+ * Keeping this write in the canonical admin post-create pipeline preserves the
+ * H-16 status-write boundary and prevents a child-write failure from leaving a
+ * completed booking without canonical pricing lines.
+ */
+export async function promoteAdminMonthlyBookingToCompleted(params: {
+  admin: SupabaseClient;
+  bookingId: string;
+  completedAtIso: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { admin, bookingId, completedAtIso } = params;
+  const { data: current, error: readErr } = await admin
+    .from("bookings")
+    .select("status, completed_at, dispatch_status")
+    .eq("id", bookingId)
+    .maybeSingle();
+
+  if (readErr || !current) {
+    return { ok: false, error: readErr?.message ?? "booking_missing" };
+  }
+
+  const status = String((current as { status?: string | null }).status ?? "").trim().toLowerCase();
+  if (status === "completed") return { ok: true };
+  if (status !== "assigned") {
+    return { ok: false, error: `unexpected_precompletion_status:${status || "empty"}` };
+  }
+
+  const { patch } = buildCompletionCoherencePatch({
+    beforeCompletedAt: (current as { completed_at?: string | null }).completed_at ?? null,
+    beforeDispatchStatus: (current as { dispatch_status?: string | null }).dispatch_status ?? null,
+    fillCompletedAtIfMissing: true,
+    nowIso: completedAtIso,
+  });
+
+  const { error: updateErr } = await admin
+    .from("bookings")
+    .update({
+      status: "completed",
+      ...patch,
+      cleaner_response_status: CLEANER_RESPONSE.COMPLETED,
+      updated_at: completedAtIso,
+    })
+    .eq("id", bookingId)
+    .eq("status", "assigned");
+
+  if (updateErr) return { ok: false, error: updateErr.message };
+  return { ok: true };
 }
 
 /**
