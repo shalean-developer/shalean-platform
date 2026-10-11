@@ -17,7 +17,8 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_cleaner_earnings_adjustment_linked"
   | "admin_booking_delete_team_member_payout_linked"
   | "admin_booking_delete_roster_member_payout_linked"
-  | "admin_booking_delete_cleaning_credit_transaction_linked";
+  | "admin_booking_delete_cleaning_credit_transaction_linked"
+  | "admin_booking_delete_invoice_adjustment_linked";
 
 export type AdminBookingDeleteSafetyRow = {
   status?: string | null;
@@ -40,6 +41,7 @@ export type AdminBookingDeleteSafetyRow = {
   linked_team_member_payout_id?: string | null;
   linked_roster_member_payout_id?: string | null;
   linked_cleaning_credit_transaction_id?: string | null;
+  linked_invoice_adjustment_id?: string | null;
 };
 
 export type AdminBookingDeleteBlock = {
@@ -205,6 +207,13 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_cleaning_credit_transaction_linked",
       message: "Bookings linked to Cleaning Credit transactions cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_invoice_adjustment_id)) {
+    blocks.push({
+      code: "admin_booking_delete_invoice_adjustment_linked",
+      message: "Bookings linked to invoice adjustments cannot be hard-deleted.",
     });
   }
 
