@@ -41,6 +41,9 @@ import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog"
 import { allowPaystackVerifyRequest, paystackVerifyRateLimitKey } from "@/lib/rateLimit/paystackVerifyIpLimit";
 import { replayPaymentConfirmedNotifyForPersistedBooking } from "@/lib/booking/paystackReplayPaymentConfirmedNotify";
 import { enqueuePaystackRecoveryFailedJobs } from "@/lib/booking/enqueuePaystackRecoveryFailedJobs";
+import { enqueueFailedJob } from "@/lib/booking/failedJobs";
+import { settleCleaningCreditForBooking } from "@/lib/referrals/creditReservations";
+import { finalizeR0BookingPostPayment } from "@/lib/booking/finalizeR0BookingPostPayment";
 import { loadBookingReferenceForId } from "@/lib/booking/loadBookingReference";
 import {
   paystackChargeDataFromRecord,
@@ -691,7 +694,48 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
             String(zeroCreditReservation.status ?? "").trim().toLowerCase() === "settled"
           );
 
-        if (zeroCreditReplaySafe) {
+        if (!zeroCreditReplaySafe) {
+          const creditSettlement = await settleCleaningCreditForBooking(adminPrePaystack, settled.bookingId);
+          if (!creditSettlement.ok && creditSettlement.error !== "reservation_not_found") {
+            const queued = await enqueueFailedJob("r0_credit_reconciliation", {
+              bookingId: settled.bookingId,
+              reference,
+            });
+            if (!queued) {
+              await reportOperationalIssue(
+                "critical",
+                "paystack/verify",
+                "R0 Cleaning Credit reconciliation enqueue failed",
+                { bookingId: settled.bookingId, reference },
+              );
+            }
+            return NextResponse.json({
+              success: false,
+              ok: false,
+              paymentStatus: "success",
+              reference,
+              bookingId: settled.bookingId,
+              bookingInDatabase: true,
+              state: "payment_reconciliation_required",
+              error: `cleaning_credit_settlement_failed:${creditSettlement.error}`,
+              upsertError: `cleaning_credit_settlement_failed:${creditSettlement.error}`,
+              alreadyExists: true,
+              skipped: true,
+            } satisfies PaystackVerifyPostResponse, { status: 409 });
+          }
+
+          const postPayment = await finalizeR0BookingPostPayment(adminPrePaystack, settled.bookingId);
+          if (!postPayment.ok) {
+            await reportOperationalIssue(
+              "error",
+              "paystack/verify",
+              `R0 post-payment recovery failed: ${postPayment.error}`,
+              { bookingId: settled.bookingId, reference },
+            );
+          }
+        }
+
+        if (zeroCreditReplaySafe || !zeroCreditReservationError) {
           const amountCents = Number(
             (payRow as { amount_paid_cents?: number | null } | null)?.amount_paid_cents ?? 0,
           );
