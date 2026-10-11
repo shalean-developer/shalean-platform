@@ -11,7 +11,8 @@ language plpgsql
 set search_path = pg_catalog, public
 as $$
 begin
-  if old.payment_completed_at is not null
+  if old.marked_paid_by_admin_id is not null
+     or old.payment_completed_at is not null
      or lower(trim(coalesce(old.payment_status, ''))) in ('paid', 'success', 'succeeded')
      or coalesce(old.amount_paid_cents, 0) > 0
      or coalesce(old.total_paid_cents, 0) > 0
@@ -47,6 +48,11 @@ begin
        select 1
        from public.cleaner_earnings_adjustments cea
        where cea.booking_id = old.id
+     )
+     or exists (
+       select 1
+       from public.cleaner_earnings_disputes ced
+       where ced.booking_id = old.id
      )
      or exists (
        select 1
