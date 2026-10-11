@@ -62,6 +62,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("coalesce(old.cleaner_payout_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.cleaner_bonus_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.payout_earnings_cents, 0) > 0");
+    expect(sql).toContain("coalesce(old.cleaner_earnings_total_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.total_paid_cents, 0) > 0");
     expect(sql).toContain("old.monthly_invoice_id is not null");
     expect(sql).toContain("old.sales_document_id is not null");
@@ -128,6 +129,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain("refund_status");
     expect(src).toContain("payout_paid_at");
     expect(src).toContain("payout_run_id");
+    expect(src).toContain("cleaner_earnings_total_cents");
     expect(src).toContain("linked_cleaner_earnings_dispute_id: linkedCleanerDispute?.id ?? null");
   });
 
