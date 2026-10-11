@@ -245,22 +245,28 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
 
   it("preflights every stale-purge redemption before mutating promotion state", () => {
     const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+    const purgeStart = sql.indexOf("create or replace function public.purge_stale_pending_payment_bookings");
+    const purgeEnd = sql.indexOf("revoke all on function public.purge_stale_pending_payment_bookings", purgeStart);
+    const purge = sql.slice(purgeStart, purgeEnd);
 
-    expect(sql).toContain("Validate every applied redemption before mutating any of them");
-    expect(sql).toContain("v_promotion_revenue_unproven := exists (");
-    expect(sql).toContain("jsonb_typeof(pr.metadata -> 'bookingRevenueZar') <> 'number'");
-    expect(sql.indexOf("v_promotion_revenue_unproven := exists (")).toBeLessThan(
-      sql.indexOf("update public.promotion_redemptions"),
+    expect(purge).toContain("Validate every applied redemption before mutating any of them");
+    expect(purge).toContain("v_promotion_revenue_unproven := exists (");
+    expect(purge).toContain("jsonb_typeof(pr.metadata -> 'bookingRevenueZar') <> 'number'");
+    expect(purge.indexOf("v_promotion_revenue_unproven := exists (")).toBeLessThan(
+      purge.indexOf("update public.promotion_redemptions"),
     );
   });
 
   it("reverses stale-purge promotion revenue from immutable redemption metadata", () => {
     const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+    const purgeStart = sql.indexOf("create or replace function public.purge_stale_pending_payment_bookings");
+    const purgeEnd = sql.indexOf("revoke all on function public.purge_stale_pending_payment_bookings", purgeStart);
+    const purge = sql.slice(purgeStart, purgeEnd);
 
-    expect(sql).toContain("v_redemption.metadata -> 'bookingRevenueZar'");
-    expect(sql).toContain("v_promotion_revenue_unproven");
-    expect(sql).toContain("Legacy redemption without original revenue evidence");
-    expect(sql).not.toContain("v_booking_revenue_zar := greatest(coalesce(v_total_price, 0), 0)");
+    expect(purge).toContain("v_redemption.metadata -> 'bookingRevenueZar'");
+    expect(purge).toContain("v_promotion_revenue_unproven");
+    expect(purge).toContain("single legacy row without original revenue evidence retains the");
+    expect(purge).not.toContain("v_booking_revenue_zar := greatest(coalesce(v_total_price, 0), 0)");
   });
 
   it("keeps protected rows from aborting the batch purge", () => {
