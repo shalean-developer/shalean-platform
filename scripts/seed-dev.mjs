@@ -1366,29 +1366,365 @@ async function seedProposals(admin, userIdMap) {
 async function resetSeedRows(admin) {
   console.log("[seed-dev] Resetting dev seed rows...");
 
-  // Reverse dependency order
-  await admin.from("admin_money_action_proposals")
-    .delete().in("id", Object.values(PROPOSAL_IDS));
-  await admin.from("monthly_invoices")
-    .delete().in("id", Object.values(INVOICE_IDS));
-  await admin.from("cleaner_payouts")
-    .delete().in("id", Object.values(PAYOUT_IDS));
-  await admin.from("cleaner_payout_runs")
-    .delete().in("id", Object.values(PAYOUT_RUN_IDS));
-  await admin.from("cleaner_earnings")
-    .delete().in("id", Object.values(EARNING_IDS));
-  await admin.from("recurring_bookings")
-    .delete().in("id", Object.values(RECURRING_IDS));
-  await admin.from("bookings")
-    .delete().like("paystack_reference", `${SEED_TAG}-%`);
-  await admin.from("team_members")
-    .delete().in("team_id", Object.values(TEAM_IDS));
-  await admin.from("teams")
-    .delete().in("id", Object.values(TEAM_IDS));
+  const must = async (label, promise) => {
+    const { data, error } = await promise;
+    if (error) throw new Error(`[seed-dev] Reset failed at ${label}: ${error.message}`);
+    return data;
+  };
+
+  const optional = async (label, promise) => {
+    const { data, error } = await promise;
+    if (!error) return data;
+    const code = String(error.code ?? "");
+    const message = String(error.message ?? "");
+    if (code === "42P01" || code === "PGRST205" || message.includes("Could not find the table")) {
+      console.log(`[seed-dev] Optional table absent at ${label}; skipping.`);
+      return [];
+    }
+    throw new Error(`[seed-dev] Reset failed at ${label}: ${message}`);
+  };
+
+  const taggedSeedBookings = await must(
+    "load tagged seed bookings",
+    admin.from("bookings").select("id").like("paystack_reference", `${SEED_TAG}-%`),
+  );
+  const recurringSeedOccurrences = await must(
+    "load generated seed recurring occurrences",
+    admin.from("bookings").select("id").in("recurring_id", Object.values(RECURRING_IDS)),
+  );
+  const seedBookingIds = Array.from(
+    new Set(
+      [...(taggedSeedBookings ?? []), ...(recurringSeedOccurrences ?? [])]
+        .map((row) => String(row.id))
+        .filter(Boolean),
+    ),
+  );
+  const seedBookingIdSet = new Set(seedBookingIds);
+
+  // Fail before any mutation if an append-only payout audit event mixes seed and
+  // non-seed bookings. Removing the whole event would erase non-seed financial history.
+  let seedOnlyPayoutAuditIds = [];
+  if (seedBookingIds.length > 0) {
+    const payoutAuditRows = await must(
+      "preflight payout_audit_events",
+      admin.from("payout_audit_events").select("id, booking_ids").overlaps("booking_ids", seedBookingIds),
+    );
+    const mixed = (payoutAuditRows ?? []).filter((row) => {
+      const ids = Array.isArray(row.booking_ids) ? row.booking_ids.map(String) : [];
+      return ids.some((id) => !seedBookingIdSet.has(id));
+    });
+    if (mixed.length > 0) {
+      throw new Error(
+        `[seed-dev] Reset blocked: ${mixed.length} payout audit event(s) mix seed and non-seed bookings.`,
+      );
+    }
+    seedOnlyPayoutAuditIds = (payoutAuditRows ?? []).map((row) => String(row.id)).filter(Boolean);
+  }
+
+  // Before the first mutation, prove that every seed financial reversal can
+  // complete. This prevents a spent referral reward or unprovable promotion
+  // revenue from leaving the seed dataset partially dismantled.
+  if (seedBookingIds.length > 0) {
+    const preflightData = await must(
+      "preflight seed financial reset",
+      admin.rpc("preflight_seed_financial_reset", {
+        p_booking_ids: seedBookingIds,
+        p_seed_recurring_ids: Object.values(RECURRING_IDS),
+      }),
+    );
+    const preflight = Array.isArray(preflightData) ? preflightData[0] : preflightData;
+    if (!preflight?.ok) {
+      throw new Error(
+        `[seed-dev] Reset blocked before mutation: ${preflight?.error ?? "seed_financial_preflight_failed"}`,
+      );
+    }
+  }
+
+  // Reverse dependency order. This command is already guarded by assertNonProductionSeed()
+  // before resetSeedRows() is called. Explicitly reconcile seed-scoped financial/audit
+  // children, then neutralize only known seed booking mirrors before hard delete.
+  await must(
+    "admin_money_action_proposals",
+    admin.from("admin_money_action_proposals").delete().in("id", Object.values(PROPOSAL_IDS)),
+  );
+  await must(
+    "monthly_invoices",
+    admin.from("monthly_invoices").delete().in("id", Object.values(INVOICE_IDS)),
+  );
+  await must(
+    "cleaner_payouts",
+    admin.from("cleaner_payouts").delete().in("id", Object.values(PAYOUT_IDS)),
+  );
+  await must(
+    "cleaner_payout_runs",
+    admin.from("cleaner_payout_runs").delete().in("id", Object.values(PAYOUT_RUN_IDS)),
+  );
+  await must(
+    "cleaner_earnings",
+    admin.from("cleaner_earnings").delete().in("id", Object.values(EARNING_IDS)),
+  );
+
+  if (seedBookingIds.length > 0) {
+    // Restore stock and remove each original seed movement atomically.
+    const inventoryMovements = await must(
+      "load seed inventory movements",
+      admin
+        .from("inventory_movements")
+        .select("id")
+        .in("booking_id", seedBookingIds),
+    );
+    for (const movement of inventoryMovements ?? []) {
+      const reversed = await must(
+        `reverse seed inventory movement ${movement.id}`,
+        admin.rpc("reset_seed_inventory_movement", {
+          p_movement_id: movement.id,
+          p_seed_recurring_ids: Object.values(RECURRING_IDS),
+        }),
+      );
+      const result = Array.isArray(reversed) ? reversed[0] : reversed;
+      if (!result?.ok) {
+        throw new Error(
+          `[seed-dev] Reset failed reversing inventory movement ${movement.id}: ${result?.error ?? "unknown"}`,
+        );
+      }
+    }
+
+    // Reconcile Cleaning Credit before deleting seed-scoped reservations/transactions.
+    // The DB helper restores/release state atomically and is retry-safe.
+    const reservations = await must(
+      "load seed cleaning credit reservations",
+      admin
+        .from("cleaning_credit_reservations")
+        .select("id, booking_id, status")
+        .in("booking_id", seedBookingIds),
+    );
+    for (const reservation of reservations ?? []) {
+      const reconciled = await must(
+        `reconcile Cleaning Credit reservation ${reservation.id}`,
+        admin.rpc("reset_seed_cleaning_credit_for_booking", {
+          p_booking_id: reservation.booking_id,
+          p_seed_recurring_ids: Object.values(RECURRING_IDS),
+        }),
+      );
+      const result = Array.isArray(reconciled) ? reconciled[0] : reconciled;
+      if (!result?.ok) {
+        throw new Error(
+          `[seed-dev] Reset failed reconciling Cleaning Credit reservation ${reservation.id}: ${result?.error ?? "unknown"}`,
+        );
+      }
+    }
+
+    // Reconcile any seed referral reward and promotion aggregates before their
+    // booking-scoped ledger rows are removed. Both helpers are transactional,
+    // seed-scoped, and retry-safe.
+    for (const bookingId of seedBookingIds) {
+      const referralReset = await must(
+        `reset seed referral reward ${bookingId}`,
+        admin.rpc("reset_seed_referral_credit_for_booking", {
+          p_booking_id: bookingId,
+          p_seed_recurring_ids: Object.values(RECURRING_IDS),
+        }),
+      );
+      const referralResult = Array.isArray(referralReset) ? referralReset[0] : referralReset;
+      if (!referralResult?.ok) {
+        throw new Error(
+          `[seed-dev] Reset failed reversing referral credit for ${bookingId}: ${referralResult?.error ?? "unknown"}`,
+        );
+      }
+
+      const promotionReset = await must(
+        `reset seed promotion redemptions ${bookingId}`,
+        admin.rpc("reset_seed_promotion_redemptions_for_booking", {
+          p_booking_id: bookingId,
+          p_seed_recurring_ids: Object.values(RECURRING_IDS),
+        }),
+      );
+      const promotionResult = Array.isArray(promotionReset) ? promotionReset[0] : promotionReset;
+      if (!promotionResult?.ok) {
+        throw new Error(
+          `[seed-dev] Reset failed reversing promotion redemptions for ${bookingId}: ${promotionResult?.error ?? "unknown"}`,
+        );
+      }
+    }
+
+    // Optional recurring-prepayment tables are present only on environments where
+    // that feature has been installed. Delete seed-scoped allocations before packages.
+    const seedPackages = await optional(
+      "load seed recurring prepaid packages",
+      admin
+        .from("recurring_prepaid_packages")
+        .select("id")
+        .in("source_booking_id", seedBookingIds),
+    );
+    const seedPackageIds = (seedPackages ?? []).map((row) => String(row.id)).filter(Boolean);
+    if (seedPackageIds.length > 0) {
+      await optional(
+        "delete seed recurring prepaid allocations by package",
+        admin.from("recurring_prepaid_allocations").delete().in("package_id", seedPackageIds),
+      );
+    }
+    await optional(
+      "delete seed recurring prepaid allocations by booking",
+      admin.from("recurring_prepaid_allocations").delete().in("booking_id", seedBookingIds),
+    );
+    if (seedPackageIds.length > 0) {
+      await optional(
+        "delete seed recurring prepaid packages",
+        admin.from("recurring_prepaid_packages").delete().in("id", seedPackageIds),
+      );
+    }
+
+    const bookingScopedTables = [
+      "booking_changes",
+      "expenses",
+      "inventory_equipment_issues",
+      "transport_cost_entries",
+      "cleaning_credit_transactions",
+      "cleaning_credit_reservations",
+      "invoice_adjustments",
+      "referral_discount_redemptions",
+      "referral_events",
+      "admin_money_action_proposals",
+      "admin_earnings_actions",
+      "promotion_redemptions",
+      "booking_cleaner_earnings_snapshot",
+      "booking_line_items",
+      "cleaner_earnings",
+      "cleaner_earnings_adjustments",
+      "cleaner_earnings_disputes",
+      "team_job_member_payouts",
+      "booking_roster_member_payouts",
+      "growth_action_outcomes",
+      "conversion_experiment_results",
+      "email_campaign_attributions",
+    ];
+
+    for (const table of bookingScopedTables) {
+      await must(
+        `${table} seed booking children`,
+        admin.from(table).delete().in("booking_id", seedBookingIds),
+      );
+    }
+
+    await must(
+      "payment_transactions seed booking_id children",
+      admin.from("payment_transactions").delete().in("booking_id", seedBookingIds),
+    );
+    await must(
+      "payment_transactions seed entity children",
+      admin
+        .from("payment_transactions")
+        .delete()
+        .eq("entity_type", "booking")
+        .in("entity_id", seedBookingIds),
+    );
+    await must(
+      "accounting_invoice_sync seed booking_id children",
+      admin.from("accounting_invoice_sync").delete().in("booking_id", seedBookingIds),
+    );
+    await must(
+      "accounting_invoice_sync seed entity children",
+      admin
+        .from("accounting_invoice_sync")
+        .delete()
+        .eq("entity_type", "booking")
+        .in("entity_id", seedBookingIds),
+    );
+    await must(
+      "refund_accounting_records seed booking children",
+      admin
+        .from("refund_accounting_records")
+        .delete()
+        .eq("entity_type", "booking")
+        .in("entity_id", seedBookingIds),
+    );
+    await must(
+      "accounting_sync_records seed booking children",
+      admin
+        .from("accounting_sync_records")
+        .delete()
+        .eq("entity_type", "booking")
+        .in("entity_id", seedBookingIds),
+    );
+
+    if (seedOnlyPayoutAuditIds.length > 0) {
+      await must(
+        "delete seed-only payout audit events",
+        admin.from("payout_audit_events").delete().in("id", seedOnlyPayoutAuditIds),
+      );
+    }
+
+    await must(
+      "neutralize seed booking financial mirrors",
+      admin
+        .from("bookings")
+        .update({
+          status: "payment_expired",
+          payment_status: "pending",
+          is_monthly_billing_booking: false,
+          marked_paid_by_admin_id: null,
+          zoho_invoice_id: null,
+          refunded_at: null,
+          refund_status: null,
+          payout_paid_at: null,
+          payout_run_id: null,
+          payment_completed_at: null,
+          completed_at: null,
+          cleaner_line_earnings_finalized_at: null,
+          payment_reference_external: null,
+          paid_at: null,
+          monthly_invoice_id: null,
+          sales_document_id: null,
+          payout_id: null,
+          payout_status: null,
+          payout_frozen_cents: 0,
+          display_earnings_cents: 0,
+          cleaner_payout_cents: 0,
+          cleaner_bonus_cents: 0,
+          payout_earnings_cents: 0,
+          cleaner_earnings_total_cents: 0,
+          internal_earnings_cents: 0,
+          amount_paid_cents: 0,
+          deposit_paid_cents: 0,
+          total_paid_cents: 0,
+          total_paid_zar: 0,
+          payment_transaction_id: null,
+        })
+        .in("id", seedBookingIds),
+    );
+
+    await must(
+      "delete seed bookings",
+      admin.from("bookings").delete().in("id", seedBookingIds),
+    );
+  }
+
+  await must(
+    "recurring_bookings",
+    admin.from("recurring_bookings").delete().in("id", Object.values(RECURRING_IDS)),
+  );
+  await must(
+    "team_members",
+    admin.from("team_members").delete().in("team_id", Object.values(TEAM_IDS)),
+  );
+  await must(
+    "teams",
+    admin.from("teams").delete().in("id", Object.values(TEAM_IDS)),
+  );
+
   for (const cleanerId of Object.values(CLEANER_IDS)) {
-    await admin.from("cleaner_availability").delete().eq("cleaner_id", cleanerId);
-    await admin.from("cleaner_locations").delete().eq("cleaner_id", cleanerId);
-    await admin.from("cleaners").delete().eq("id", cleanerId);
+    await must(
+      `cleaner_availability ${cleanerId}`,
+      admin.from("cleaner_availability").delete().eq("cleaner_id", cleanerId),
+    );
+    await must(
+      `cleaner_locations ${cleanerId}`,
+      admin.from("cleaner_locations").delete().eq("cleaner_id", cleanerId),
+    );
+    await must(
+      `cleaners ${cleanerId}`,
+      admin.from("cleaners").delete().eq("id", cleanerId),
+    );
   }
 
   console.log("[seed-dev] Reset complete.");

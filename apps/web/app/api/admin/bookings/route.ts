@@ -59,16 +59,17 @@ import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
 import { fetchTeamRosterByBookingIds } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 import { effectiveBookingCleanersForList } from "@/lib/admin/adminBookingAssignmentDisplay";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { runAdminBookingPostCreateNormalizationAndEarnings } from "@/lib/admin/adminBookingPostCreatePipeline";
+import {
+  persistAdminMonthlyPreCompletionEarnings,
+  promoteAdminMonthlyBookingToCompleted,
+  runAdminBookingPostCreateNormalizationAndEarnings,
+} from "@/lib/admin/adminBookingPostCreatePipeline";
 import { ensureUserProfileForAuthUser } from "@/lib/admin/ensureUserProfileForAuthUser";
 import { readCustomerProfileContact } from "@/lib/customer/readCustomerProfileContact";
 import { classifyAdminBookingListRow } from "@/lib/admin/adminBookingListClassify";
 import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
-import {
-  buildCompletionCoherencePatch,
-  validateAdminMonthlyCompletedAssignee,
-} from "@/lib/booking/bookingCompletionIntegrity";
+import { validateAdminMonthlyCompletedAssignee } from "@/lib/booking/bookingCompletionIntegrity";
 import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
 import type { AdminMarkPaidMethod } from "@/lib/booking/adminMarkBookingPaid";
 import { settleAdminBookingPaymentAlreadyReceived } from "@/lib/admin/settleAdminBookingPaymentAlreadyReceived";
@@ -1571,23 +1572,17 @@ export async function POST(request: Request) {
         ? "assigned"
         : "searching";
 
-    const completionCoherencePatch =
-      adminMarkCompleted && completedAtIso
-        ? buildCompletionCoherencePatch({
-            beforeCompletedAt: null,
-            beforeDispatchStatus: preliminaryDispatch,
-            fillCompletedAtIfMissing: true,
-            nowIso: completedAtIso,
-          }).patch
-        : {};
-
     const assignedAtIso =
       selectedCleanerId || (adminMarkCompleted && validatedMonthlyTeamId && !selectedCleanerId)
         ? new Date().toISOString()
         : null;
 
-    let rowStatus: "completed" | "assigned" | "pending" = adminMarkCompleted
-      ? "completed"
+    // Completed monthly bookings are inserted as assigned first. Canonical line
+    // items must persist and duplicate-race resolution must succeed before the
+    // row is promoted to completed. This prevents a child-write failure from
+    // stranding a financially material completed row without canonical lines.
+    let rowStatus: "assigned" | "pending" = adminMarkCompleted
+      ? "assigned"
       : selectedCleanerId
         ? "assigned"
         : "pending";
@@ -1649,7 +1644,6 @@ export async function POST(request: Request) {
         service_slug: serviceSlug,
         status: rowStatus,
         dispatch_status: preliminaryDispatch,
-        ...completionCoherencePatch,
         surge_multiplier: 1,
         surge_reason: null,
         service: getServiceLabel(serviceId),
@@ -1682,7 +1676,7 @@ export async function POST(request: Request) {
               is_team_job: true,
               team_id: validatedMonthlyTeamId,
               payout_owner_cleaner_id: monthlyTeamPayoutOwnerId,
-              cleaner_response_status: CLEANER_RESPONSE.COMPLETED,
+              cleaner_response_status: CLEANER_RESPONSE.PENDING,
               ...(assignedAtIso ? { assigned_at: assignedAtIso } : {}),
             }
           : {}),
@@ -1776,7 +1770,7 @@ export async function POST(request: Request) {
     }
     if (race.kind === "reject") {
       let winnerCreated = race.winnerCreatedAt ?? "";
-      if (!winnerCreated) {
+      if (!winnerCreated && race.winnerId) {
         const { data: winnerRow } = await admin
           .from("bookings")
           .select("created_at")
@@ -1830,9 +1824,11 @@ export async function POST(request: Request) {
       return bail(
         NextResponse.json(
           {
-            error: race.leftDuplicate
-              ? "Another booking kept this slot; open it to reconcile or use Create anyway if you need both."
-              : "Another booking for this slot was created at the same time. Open the existing row or try again.",
+            error: !race.winnerId
+              ? "The just-created booking was rolled back because the race no longer has an active winner. Please try again."
+              : race.leftDuplicate
+                ? "Another booking kept this slot; open it to reconcile or use Create anyway if you need both."
+                : "Another booking for this slot was created at the same time. Open the existing row or try again.",
             existing_booking_id: race.winnerId,
             existing_booking_created_at: winnerCreated || null,
             duplicate: true,
@@ -1867,6 +1863,53 @@ export async function POST(request: Request) {
       });
     }
 
+    // Persist roster + assigned/pre-completion earnings before any completed
+    // transition. The DB completion constraint requires display earnings to
+    // exist for current-model completed bookings.
+    await syncAdminPreferredCleanerRoster(admin, newBookingId, selectedCleanerIds);
+
+    if (adminMarkCompleted) {
+      const precompletionEarnings = await persistAdminMonthlyPreCompletionEarnings({
+        admin,
+        bookingId: newBookingId,
+        logSource: "admin_booking_create_monthly_precompletion",
+      });
+      if (!precompletionEarnings.ok) {
+        const failBody: Record<string, unknown> = {
+          ok: false,
+          error: `Booking created with canonical line items but pre-completion earnings persistence failed: ${precompletionEarnings.error}`,
+          code: "admin_monthly_precompletion_earnings_failed",
+          bookingId: newBookingId,
+        };
+        if (claimId) await finalizeAdminBookingCreateIdempotency(admin, claimId, 500, failBody);
+        return NextResponse.json(failBody, { status: 500 });
+      }
+    } else {
+      await runAdminBookingPostCreateNormalizationAndEarnings(
+        admin,
+        newBookingId,
+        "admin_booking_create_monthly_precompletion",
+      );
+    }
+
+    if (adminMarkCompleted && completedAtIso) {
+      const completed = await promoteAdminMonthlyBookingToCompleted({
+        admin,
+        bookingId: newBookingId,
+        completedAtIso,
+      });
+      if (!completed.ok) {
+        const failBody: Record<string, unknown> = {
+          ok: false,
+          error: `Booking created with canonical line items but could not be marked completed: ${completed.error}`,
+          code: "admin_monthly_completion_promotion_failed",
+          bookingId: newBookingId,
+        };
+        if (claimId) await finalizeAdminBookingCreateIdempotency(admin, claimId, 500, failBody);
+        return NextResponse.json(failBody, { status: 500 });
+      }
+    }
+
     if (!force) {
       const { count: activeSlotCount, error: invErr } = await applyActiveAdminBookingSlotFilters(
         admin.from("bookings").select("id", { count: "exact", head: true }),
@@ -1892,8 +1935,15 @@ export async function POST(request: Request) {
       }
     }
 
-    await runAdminBookingPostCreateNormalizationAndEarnings(admin, newBookingId, "admin_booking_create_monthly");
-    await syncAdminPreferredCleanerRoster(admin, newBookingId, selectedCleanerIds);
+    if (adminMarkCompleted) {
+      // After the guarded assigned→completed transition, run the completed
+      // earnings/ledger path now that the completion constraint is satisfied.
+      await runAdminBookingPostCreateNormalizationAndEarnings(
+        admin,
+        newBookingId,
+        "admin_booking_create_monthly_completed",
+      );
+    }
 
     if (adminMarkCompleted) {
       const { data: reviewBooking, error: reviewBookingErr } = await admin

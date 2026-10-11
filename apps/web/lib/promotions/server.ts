@@ -600,6 +600,7 @@ export async function applyPromotionRedemptions(
         source: discount.source,
         bundleId: discount.bundleId ?? null,
         description: discount.description,
+        bookingRevenueZar: args.bookingRevenueZar,
       },
     });
     if (error && !error.message.toLowerCase().includes("duplicate")) {
@@ -607,6 +608,7 @@ export async function applyPromotionRedemptions(
     }
     if (error) continue;
 
+    let counterIncrementCommitted = false;
     const { data: counterRaw, error: counterErr } = await admin.rpc(
       "increment_promotion_redemption_counters",
       {
@@ -649,6 +651,9 @@ export async function applyPromotionRedemptions(
         if (!updatedRows?.length) {
           throw new Error("Promotion counter race — retry checkout.");
         }
+        counterIncrementCommitted = true;
+      } else {
+        throw new Error("Promotion counter source missing.");
       }
     } else {
       const counter = counterRaw as { ok?: boolean; reason?: string } | null;
@@ -659,7 +664,31 @@ export async function applyPromotionRedemptions(
             : `Promotion counter update failed (${counter.reason ?? "unknown"}).`,
         );
       }
+      counterIncrementCommitted = true;
     }
+
+    if (!counterIncrementCommitted) {
+      throw new Error("Promotion counter increment was not proven.");
+    }
+
+    const { error: proofError } = await admin
+      .from("promotion_redemptions")
+      .update({
+        metadata: {
+          slug: discount.slug,
+          source: discount.source,
+          bundleId: discount.bundleId ?? null,
+          description: discount.description,
+          bookingRevenueZar: args.bookingRevenueZar,
+          counterIncrementCommitted: true,
+        },
+      })
+      .eq("idempotency_key", idempotencyKey)
+      .eq("status", "applied");
+    if (proofError) {
+      throw new Error(`Promotion counter proof persistence failed: ${proofError.message}`);
+    }
+
     await recordPromotionEvent(admin, {
       promotionId: discount.promotionId,
       eventType: "code_applied",
