@@ -1776,7 +1776,7 @@ export async function POST(request: Request) {
     }
     if (race.kind === "reject") {
       let winnerCreated = race.winnerCreatedAt ?? "";
-      if (!winnerCreated) {
+      if (!winnerCreated && race.winnerId) {
         const { data: winnerRow } = await admin
           .from("bookings")
           .select("created_at")
@@ -1830,9 +1830,11 @@ export async function POST(request: Request) {
       return bail(
         NextResponse.json(
           {
-            error: race.leftDuplicate
-              ? "Another booking kept this slot; open it to reconcile or use Create anyway if you need both."
-              : "Another booking for this slot was created at the same time. Open the existing row or try again.",
+            error: !race.winnerId
+              ? "The just-created booking was rolled back because the race no longer has an active winner. Please try again."
+              : race.leftDuplicate
+                ? "Another booking kept this slot; open it to reconcile or use Create anyway if you need both."
+                : "Another booking for this slot was created at the same time. Open the existing row or try again.",
             existing_booking_id: race.winnerId,
             existing_booking_created_at: winnerCreated || null,
             duplicate: true,
