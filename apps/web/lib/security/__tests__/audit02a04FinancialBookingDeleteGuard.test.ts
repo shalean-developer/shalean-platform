@@ -11,6 +11,9 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("before delete on public.bookings");
     expect(sql).toContain("booking_delete_blocked_financial_history");
     expect(sql).toContain("old.payment_transaction_id is not null");
+    expect(sql).toContain("from public.payment_transactions pt");
+    expect(sql).toContain("pt.booking_id = old.id");
+    expect(sql).toContain("pt.entity_type = 'booking' and pt.entity_id = old.id");
     expect(sql).toContain("coalesce(old.amount_paid_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.total_paid_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.total_paid_zar, 0) > 0");
