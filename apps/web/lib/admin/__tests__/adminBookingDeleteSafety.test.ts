@@ -223,6 +223,32 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_money_proposal_linked")).toBe(true);
   });
 
+  it("blocks hard delete when an admin earnings action survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_earnings_action_id: "13131313-1313-4313-8313-131313131313",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected earnings-action-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_earnings_action_linked")).toBe(true);
+  });
+
+  it("blocks hard delete when a promotion redemption survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_promotion_redemption_id: "14141414-1414-4414-8414-141414141414",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected promotion-redemption-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_promotion_redemption_linked")).toBe(true);
+  });
+
   it("blocks hard delete when collected totals survive even if payment status drifted", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "cancelled",
