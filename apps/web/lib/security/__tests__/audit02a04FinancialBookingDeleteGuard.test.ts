@@ -405,7 +405,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(seed).toContain('"preflight seed financial reset"');
     expect(seed).toContain('admin.rpc("preflight_seed_financial_reset"');
     expect(seed.indexOf('admin.rpc("preflight_seed_financial_reset"')).toBeLessThan(
-      seed.indexOf('"admin_money_action_proposals"'),
+      seed.indexOf('admin.from("admin_money_action_proposals").delete().in("id", Object.values(PROPOSAL_IDS))'),
     );
   });
 
