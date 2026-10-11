@@ -1,4 +1,5 @@
 export type AdminBookingDeleteBlockCode =
+  | "admin_booking_delete_marked_paid_by_admin"
   | "admin_booking_delete_payment_completed"
   | "admin_booking_delete_paid_payment_status"
   | "admin_booking_delete_completed_status"
@@ -15,6 +16,7 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_expense_linked"
   | "admin_booking_delete_cleaner_earnings_linked"
   | "admin_booking_delete_cleaner_earnings_adjustment_linked"
+  | "admin_booking_delete_cleaner_earnings_dispute_linked"
   | "admin_booking_delete_team_member_payout_linked"
   | "admin_booking_delete_roster_member_payout_linked"
   | "admin_booking_delete_cleaning_credit_transaction_linked"
@@ -23,6 +25,7 @@ export type AdminBookingDeleteBlockCode =
 export type AdminBookingDeleteSafetyRow = {
   status?: string | null;
   payment_status?: string | null;
+  marked_paid_by_admin_id?: string | null;
   payment_completed_at?: string | null;
   paid_at?: string | null;
   monthly_invoice_id?: string | null;
@@ -38,6 +41,7 @@ export type AdminBookingDeleteSafetyRow = {
   linked_expense_id?: string | null;
   linked_cleaner_earning_id?: string | null;
   linked_cleaner_earnings_adjustment_id?: string | null;
+  linked_cleaner_earnings_dispute_id?: string | null;
   linked_team_member_payout_id?: string | null;
   linked_roster_member_payout_id?: string | null;
   linked_cleaning_credit_transaction_id?: string | null;
@@ -76,6 +80,13 @@ function norm(value: unknown): string {
 
 export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): AdminBookingDeleteSafetyResult {
   const blocks: AdminBookingDeleteBlock[] = [];
+
+  if (hasText(row.marked_paid_by_admin_id)) {
+    blocks.push({
+      code: "admin_booking_delete_marked_paid_by_admin",
+      message: "Bookings marked paid by an admin cannot be hard-deleted.",
+    });
+  }
 
   if (hasText(row.payment_completed_at)) {
     blocks.push({
@@ -186,6 +197,13 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_cleaner_earnings_adjustment_linked",
       message: "Bookings linked to cleaner earnings adjustments cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_cleaner_earnings_dispute_id)) {
+    blocks.push({
+      code: "admin_booking_delete_cleaner_earnings_dispute_linked",
+      message: "Bookings linked to cleaner earnings disputes cannot be hard-deleted.",
     });
   }
 
