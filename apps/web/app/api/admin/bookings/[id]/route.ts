@@ -1401,7 +1401,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   const { data: row, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, payment_status, marked_paid_by_admin_id, zoho_invoice_id, refunded_at, refund_status, payout_paid_at, payout_run_id, payment_completed_at, paid_at, monthly_invoice_id, sales_document_id, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_payout_cents, cleaner_bonus_cents, payout_earnings_cents, amount_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id, cleaner_id, date, time",
+      "id, status, payment_status, is_monthly_billing_booking, marked_paid_by_admin_id, zoho_invoice_id, refunded_at, refund_status, payout_paid_at, payout_run_id, payment_completed_at, paid_at, monthly_invoice_id, sales_document_id, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_payout_cents, cleaner_bonus_cents, payout_earnings_cents, amount_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id, cleaner_id, date, time",
     )
     .eq("id", id)
     .maybeSingle();
@@ -1412,6 +1412,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   const r = row as {
     status?: string | null;
     payment_status?: string | null;
+    is_monthly_billing_booking?: boolean | null;
     marked_paid_by_admin_id?: string | null;
     zoho_invoice_id?: string | null;
     refunded_at?: string | null;
@@ -1449,6 +1450,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     { data: linkedCleanerDispute, error: linkedCleanerDisputeErr },
     { data: linkedTeamMemberPayout, error: linkedTeamMemberPayoutErr },
     { data: linkedRosterMemberPayout, error: linkedRosterMemberPayoutErr },
+    { data: linkedPayoutAuditEvent, error: linkedPayoutAuditEventErr },
     { data: linkedCleaningCreditTransaction, error: linkedCleaningCreditTransactionErr },
     { data: linkedInvoiceAdjustment, error: linkedInvoiceAdjustmentErr },
     { data: linkedRefundRecord, error: linkedRefundRecordErr },
@@ -1499,6 +1501,12 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
       .from("booking_roster_member_payouts")
       .select("id")
       .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("payout_audit_events")
+      .select("id")
+      .contains("booking_ids", [id])
       .limit(1)
       .maybeSingle(),
     admin
@@ -1575,6 +1583,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     linkedCleanerDisputeErr ??
     linkedTeamMemberPayoutErr ??
     linkedRosterMemberPayoutErr ??
+    linkedPayoutAuditEventErr ??
     linkedCleaningCreditTransactionErr ??
     linkedInvoiceAdjustmentErr ??
     linkedRefundRecordErr ??
@@ -1602,6 +1611,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     linked_cleaner_earnings_dispute_id: linkedCleanerDispute?.id ?? null,
     linked_team_member_payout_id: linkedTeamMemberPayout?.id ?? null,
     linked_roster_member_payout_id: linkedRosterMemberPayout?.id ?? null,
+    linked_payout_audit_event_id: linkedPayoutAuditEvent?.id ?? null,
     linked_cleaning_credit_transaction_id: linkedCleaningCreditTransaction?.id ?? null,
     linked_invoice_adjustment_id: linkedInvoiceAdjustment?.id ?? null,
     linked_refund_record_id: linkedRefundRecord?.id ?? null,
