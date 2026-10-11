@@ -109,12 +109,21 @@ function noSuccess() {
 }
 for (const mode of ["GET", "POST", "webhook"] as const) {
   describe(mode + " actual replay shortcut", () => {
-    it("blocks persisted replay while Cleaning Credit is not settled", async () => {
+    it("routes unsettled Cleaning Credit replay into canonical recovery", async () => {
       creditReservationStatus = "released";
       const response = await call(mode);
+      expect(mode === "webhook" ? m.finalize : m.pipeline).toHaveBeenCalledTimes(1);
+      expect(m.replay).not.toHaveBeenCalled();
+      expect(m.record).not.toHaveBeenCalled();
+      expect(m.sync).not.toHaveBeenCalled();
       expect(response.status).toBe(mode === "webhook" ? 200 : 409);
-      expect(await response.json()).toMatchObject({ ok: false, error: "PAYMENT_FINALIZATION_REPLAY_MISMATCH" });
-      noSuccess();
+      if (mode !== "webhook") {
+        expect(await response.json()).toMatchObject({
+          ok: false,
+          success: false,
+          state: "payment_reconciliation_required",
+        });
+      }
     });
 
     it("allows equivalent replay using verified identity only", async () => {
@@ -186,7 +195,7 @@ describe("POST exact-zero pre-verification gate", () => {
 describe("shared route proof canonical ownership resolution", () => {
   it("uses legacy user_id projection when resolved", async () => {
     ownershipColumn = "user_id"; delete row.customer_id; row.user_id = owner;
-    expect(await provePersistedPaystackReplay({ supabase: m.admin(), bookingId: id, reference: tx.reference, amountCents: tx.amount, customerEmail: tx.customer.email, metadata: tx.metadata })).toBe(true);
+    expect(await provePersistedPaystackReplay({ supabase: m.admin(), bookingId: id, reference: tx.reference, amountCents: tx.amount, customerEmail: tx.customer.email, metadata: tx.metadata })).toEqual({ ok: true });
     expect(reads).toContain("id, status, paystack_reference, customer_email, user_id");
   });
   it("uses canonical email-to-auth fallback", async () => {
