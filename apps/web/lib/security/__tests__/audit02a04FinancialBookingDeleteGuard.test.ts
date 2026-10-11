@@ -10,6 +10,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
 
     expect(sql).toContain("before delete on public.bookings");
     expect(sql).toContain("booking_delete_blocked_financial_history");
+    expect(sql).toContain("lower(trim(coalesce(old.status, ''))) = 'completed'");
     expect(sql).toContain("old.marked_paid_by_admin_id is not null");
     expect(sql).toContain("old.zoho_invoice_id is not null");
     expect(sql).toContain("old.refunded_at is not null");
@@ -180,6 +181,16 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("coalesce(b.total_paid_zar, 0) > 0");
     expect(sql).toContain("b.payment_reference_external");
     expect(sql).toContain("from public.booking_line_items bli");
+  });
+
+  it("uses valid tagged quoting for the seed Cleaning Credit reset helper", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+    const start = sql.indexOf("create or replace function public.reset_seed_cleaning_credit_for_booking");
+    const end = sql.indexOf("revoke all on function public.reset_seed_cleaning_credit_for_booking", start);
+    const helper = sql.slice(start, end);
+
+    expect(helper).toContain("as $seed_credit_reset$");
+    expect(helper).toContain("$seed_credit_reset$;");
   });
 
   it("keeps protected rows from aborting the batch purge", () => {
