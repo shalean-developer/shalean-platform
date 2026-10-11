@@ -473,6 +473,21 @@ async function ensureConflictBooking(admin, cleaners, locationBySlug) {
   const paystackRef = `${MARKER}-CONFLICT-${conflictCleaner._resolvedId.slice(0, 8)}`;
   const locationId = locationBySlug.get("claremont");
 
+  const { data: existing, error: existingError } = await admin
+    .from("bookings")
+    .select("id, payment_status, payment_completed_at, amount_paid_cents")
+    .eq("paystack_reference", paystackRef)
+    .maybeSingle();
+  if (existingError) throw new Error(`conflict booking lookup: ${existingError.message}`);
+  const existingIsFinancial =
+    Boolean(existing?.payment_completed_at) ||
+    ["paid", "success", "succeeded", "pending_monthly"].includes(String(existing?.payment_status ?? "").toLowerCase()) ||
+    Number(existing?.amount_paid_cents ?? 0) > 0;
+  if (existing?.id && existingIsFinancial) {
+    console.log(`Conflict booking retained unchanged → ${paystackRef}`);
+    return;
+  }
+
   const { error } = await admin.from("bookings").upsert(
     {
       paystack_reference: paystackRef,
@@ -510,24 +525,21 @@ async function ensureConflictBooking(admin, cleaners, locationBySlug) {
 async function resetFixtures(admin) {
   const { data: rows, error: loadError } = await admin
     .from("bookings")
-    .select("id, paystack_reference, status, completed_at, payment_status, payment_completed_at, amount_paid_cents, deposit_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id")
+    .select("id, paystack_reference")
     .like("paystack_reference", `${MARKER}-%`);
   if (loadError) throw new Error(`reset FARAI-UAT bookings read: ${loadError.message}`);
 
   let deleted = 0;
   let retainedFinancial = 0;
   for (const row of rows ?? []) {
-    const financiallyProtected =
-      String(row.status ?? "").toLowerCase() === "completed" ||
-      Boolean(row.completed_at) ||
-      ["paid", "success", "succeeded", "pending_monthly"].includes(String(row.payment_status ?? "").toLowerCase()) ||
-      Boolean(row.payment_completed_at) ||
-      Number(row.amount_paid_cents ?? 0) > 0 ||
-      Number(row.deposit_paid_cents ?? 0) > 0 ||
-      Number(row.total_paid_cents ?? 0) > 0 ||
-      Number(row.total_paid_zar ?? 0) > 0 ||
-      Boolean(row.payment_transaction_id);
-    if (financiallyProtected) {
+    const { data: financiallyProtected, error: historyError } = await admin.rpc(
+      "booking_has_nonpromotion_financial_history",
+      { p_booking_id: row.id },
+    );
+    if (historyError) {
+      throw new Error(`reset financial-history probe ${row.paystack_reference}: ${historyError.message}`);
+    }
+    if (financiallyProtected === true) {
       retainedFinancial += 1;
       continue;
     }
