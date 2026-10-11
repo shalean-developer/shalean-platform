@@ -638,20 +638,34 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     if (reference.startsWith("bps_")) {
       const persistedPaid = await findPersistedPaidBooking(adminPrePaystack, reference);
       if (persistedPaid) {
-        const amountCents = Number.isFinite(Number(persistedPaid.amount_paid_cents))
-          ? Math.max(0, Math.round(Number(persistedPaid.amount_paid_cents)))
-          : Math.max(0, Math.round(Number(persistedPaid.total_paid_zar ?? 0) * 100));
-        after(async () => {
-          await replayPaymentConfirmedNotifyForPersistedBooking({
-            supabase: adminPrePaystack,
-            bookingId: persistedPaid.id,
-            paystackReference: reference,
-            amountCents,
-            snapshot: persistedPaid.booking_snapshot as never,
-            customerEmailHint: persistedPaid.customer_email ?? undefined,
+        const { data: creditReservation, error: creditReservationError } = await adminPrePaystack
+          .from("cleaning_credit_reservations")
+          .select("status")
+          .eq("booking_id", persistedPaid.id)
+          .maybeSingle();
+        const creditReplaySafe =
+          !creditReservationError &&
+          (
+            !creditReservation ||
+            String(creditReservation.status ?? "").trim().toLowerCase() === "settled"
+          );
+
+        if (creditReplaySafe) {
+          const amountCents = Number.isFinite(Number(persistedPaid.amount_paid_cents))
+            ? Math.max(0, Math.round(Number(persistedPaid.amount_paid_cents)))
+            : Math.max(0, Math.round(Number(persistedPaid.total_paid_zar ?? 0) * 100));
+          after(async () => {
+            await replayPaymentConfirmedNotifyForPersistedBooking({
+              supabase: adminPrePaystack,
+              bookingId: persistedPaid.id,
+              paystackReference: reference,
+              amountCents,
+              snapshot: persistedPaid.booking_snapshot as never,
+              customerEmailHint: persistedPaid.customer_email ?? undefined,
+            });
           });
-        });
-        return persistedPaidBookingResponse(persistedPaid, reference, startedAt);
+          return persistedPaidBookingResponse(persistedPaid, reference, startedAt);
+        }
       }
     }
     const settled = await findBookingIdStatusForPaystackReference(adminPrePaystack, reference);
