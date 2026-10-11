@@ -6,6 +6,8 @@ import type { BookingInsertFailedPayload } from "@/lib/booking/failedJobs";
 import { formatFailedJobPayloadPreview } from "@/lib/booking/failedJobPayloadPreview";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
+import { settleCleaningCreditForBooking } from "@/lib/referrals/creditReservations";
+import { finalizeR0BookingPostPayment } from "@/lib/booking/finalizeR0BookingPostPayment";
 import { resolveInternalBookingIdFromPaystackReference } from "@/lib/booking/paystackBookingIdLookup";
 import { isPaymentEditSupersededSnapshot } from "@/lib/booking/abandonPendingPaymentForEdit";
 import { finalizePaidBooking, upsertResultFromFinalizePaidBookingOp } from "@/lib/booking/bookingOperations";
@@ -55,6 +57,8 @@ const FAILED_JOB_TYPE_BOOKING_INSERT_INVALID = "booking_insert_invalid_payload";
 const FAILED_JOB_TYPE_BOOKING_INSERT_EXHAUSTED = "booking_insert_exhausted";
 const FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED = "payment_reconciliation_exhausted";
 const FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_MANUAL_REVIEW = "payment_reconciliation_manual_review";
+const FAILED_JOB_TYPE_R0_CREDIT_RECONCILIATION = "r0_credit_reconciliation";
+const FAILED_JOB_TYPE_R0_CREDIT_RECONCILIATION_EXHAUSTED = "r0_credit_reconciliation_exhausted";
 const FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION = "recurring_roster_reconciliation";
 const FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION_EXHAUSTED =
   "recurring_roster_reconciliation_exhausted";
@@ -150,6 +154,8 @@ export async function POST(request: Request) {
       FAILED_JOB_TYPE_BOOKING_INSERT_EXHAUSTED,
       FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED,
       FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_MANUAL_REVIEW,
+      FAILED_JOB_TYPE_R0_CREDIT_RECONCILIATION,
+      FAILED_JOB_TYPE_R0_CREDIT_RECONCILIATION_EXHAUSTED,
       FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION,
       FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION_EXHAUSTED,
       FAILED_JOB_TYPE_GATEWAY_SETTLEMENT_RECONCILIATION,
@@ -450,6 +456,69 @@ export async function POST(request: Request) {
           .update({ attempts: nextAttempts })
           .eq("id", id);
       }
+    }
+  }
+
+  const { data: r0CreditJobs, error: r0CreditJobsError } = await supabase
+    .from("failed_jobs")
+    .select("id, payload, attempts")
+    .eq("type", FAILED_JOB_TYPE_R0_CREDIT_RECONCILIATION)
+    .lt("attempts", BOOKING_INSERT_MAX_ATTEMPTS)
+    .order("created_at", { ascending: true })
+    .limit(MAX_BOOKING_INSERT_BATCH);
+
+  if (r0CreditJobsError) {
+    await reportOperationalIssue("error", "cron/retry-failed-jobs", `R0 credit reconciliation select failed: ${r0CreditJobsError.message}`);
+  } else {
+    for (const row of r0CreditJobs ?? []) {
+      const id = typeof row.id === "string" ? row.id : null;
+      const payload =
+        row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+          ? row.payload as Record<string, unknown>
+          : null;
+      const bookingId = typeof payload?.bookingId === "string" ? payload.bookingId.trim() : "";
+      const reference = typeof payload?.reference === "string" ? payload.reference.trim() : "";
+      const attempts = typeof row.attempts === "number" ? row.attempts : 0;
+      if (!id || !bookingId) continue;
+
+      const creditSettlement = await settleCleaningCreditForBooking(supabase, bookingId);
+      if (!creditSettlement.ok && creditSettlement.error !== "reservation_not_found") {
+        const nextAttempts = attempts + 1;
+        const exhausted = nextAttempts >= BOOKING_INSERT_MAX_ATTEMPTS;
+        await supabase
+          .from("failed_jobs")
+          .update({
+            attempts: nextAttempts,
+            ...(exhausted ? { type: FAILED_JOB_TYPE_R0_CREDIT_RECONCILIATION_EXHAUSTED } : {}),
+          })
+          .eq("id", id);
+        await reportOperationalIssue(
+          exhausted ? "critical" : "error",
+          "cron/retry-failed-jobs",
+          exhausted
+            ? "R0 Cleaning Credit reconciliation attempts exhausted"
+            : `R0 Cleaning Credit reconciliation failed: ${creditSettlement.error}`,
+          {
+            failedJobId: id,
+            bookingId,
+            reference,
+            attempts: nextAttempts,
+            ...(exhausted ? { errorType: FAILED_JOB_TYPE_R0_CREDIT_RECONCILIATION_EXHAUSTED } : {}),
+          },
+        );
+        continue;
+      }
+
+      const postPayment = await finalizeR0BookingPostPayment(supabase, bookingId);
+      if (!postPayment.ok) {
+        await reportOperationalIssue(
+          "error",
+          "cron/retry-failed-jobs",
+          `R0 post-payment recovery failed: ${postPayment.error}`,
+          { failedJobId: id, bookingId, reference },
+        );
+      }
+      await supabase.from("failed_jobs").delete().eq("id", id);
     }
   }
 
