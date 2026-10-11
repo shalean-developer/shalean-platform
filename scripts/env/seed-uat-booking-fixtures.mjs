@@ -475,17 +475,20 @@ async function ensureConflictBooking(admin, cleaners, locationBySlug) {
 
   const { data: existing, error: existingError } = await admin
     .from("bookings")
-    .select("id, payment_status, payment_completed_at, amount_paid_cents")
+    .select("id")
     .eq("paystack_reference", paystackRef)
     .maybeSingle();
   if (existingError) throw new Error(`conflict booking lookup: ${existingError.message}`);
-  const existingIsFinancial =
-    Boolean(existing?.payment_completed_at) ||
-    ["paid", "success", "succeeded", "pending_monthly"].includes(String(existing?.payment_status ?? "").toLowerCase()) ||
-    Number(existing?.amount_paid_cents ?? 0) > 0;
-  if (existing?.id && existingIsFinancial) {
-    console.log(`Conflict booking retained unchanged → ${paystackRef}`);
-    return;
+  if (existing?.id) {
+    const { data: existingIsFinancial, error: historyError } = await admin.rpc(
+      "booking_has_financial_history",
+      { p_booking_id: existing.id },
+    );
+    if (historyError) throw new Error(`conflict booking financial-history probe: ${historyError.message}`);
+    if (existingIsFinancial === true) {
+      console.log(`Conflict booking retained unchanged → ${paystackRef}`);
+      return;
+    }
   }
 
   const { error } = await admin.from("bookings").upsert(
