@@ -233,6 +233,15 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("coalesce(v.total_paid_zar, 0) > 0");
   });
 
+  it("rejects a retained inactive monthly requester when no active winner remains", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+
+    expect(sql).toContain("if v_active_count = 0 then");
+    expect(sql).toContain("if v_our_exists then");
+    expect(sql).toContain("'action', 'reject'");
+    expect(sql).toContain("'rolled_back_self', true");
+  });
+
   it("rejects a retained cancelled monthly requester when the sole active winner differs", () => {
     const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
 
@@ -302,6 +311,15 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("if v.status = 'released' then");
     expect(sql).toContain("set status = 'released'");
     expect(seed).toContain('admin.rpc("reset_seed_cleaning_credit_for_booking"');
+  });
+
+  it("passes governed recurring IDs into seed helpers", () => {
+    const seed = read("../../scripts/seed-dev.mjs");
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+
+    expect(seed).toContain("p_seed_recurring_ids: Object.values(RECURRING_IDS)");
+    expect(sql).toContain("p_seed_recurring_ids uuid[]");
+    expect(sql).toContain("v_recurring_id = any(coalesce(p_seed_recurring_ids, '{}'::uuid[]))");
   });
 
   it("includes generated seed recurring occurrences in reset scope", () => {
