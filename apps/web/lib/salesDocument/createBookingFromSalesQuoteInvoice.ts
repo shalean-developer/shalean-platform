@@ -5,6 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getServiceLabel, parseBookingServiceId } from "@/components/booking/serviceCategories";
 import { bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
 import { insertBookingRowUnified } from "@/lib/booking/createBookingUnified";
+import { buildExactSourceLineItems } from "@/lib/booking/buildBookingLineItems";
+import { persistBookingLineItems } from "@/lib/booking/persistBookingLineItems";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { ensureSalesDocumentCustomer } from "@/lib/salesDocument/ensureSalesDocumentCustomer";
@@ -71,28 +73,12 @@ export async function createBookingFromSalesQuoteInvoice(
     .maybeSingle();
 
   if (existingErr) return { ok: false, error: existingErr.message };
-  if (existingBooking?.id) {
-    const existingStatus = String(existingBooking.status ?? "").trim().toLowerCase();
-    if (existingStatus === "cancelled") {
-      const { data: cleanupData, error: cleanupError } = await admin.rpc(
-        "delete_unpaid_sales_document_booking",
-        { p_invoice_id: invoiceId },
-      );
-      const cleanup =
-        cleanupData && typeof cleanupData === "object" && !Array.isArray(cleanupData)
-          ? (cleanupData as { ok?: unknown; error?: unknown })
-          : null;
-      if (cleanupError || cleanup?.ok !== true) {
-        return {
-          ok: false,
-          error:
-            cleanupError?.message ??
-            (typeof cleanup?.error === "string" ? cleanup.error : "cancelled_booking_cleanup_failed"),
-        };
-      }
-    } else {
-      return { ok: true, bookingId: String(existingBooking.id), alreadyExisted: true };
-    }
+  const retainedCancelledBookingId =
+    existingBooking?.id && String(existingBooking.status ?? "").trim().toLowerCase() === "cancelled"
+      ? String(existingBooking.id)
+      : null;
+  if (existingBooking?.id && !retainedCancelledBookingId) {
+    return { ok: true, bookingId: String(existingBooking.id), alreadyExisted: true };
   }
 
   const ensuredCustomer = await ensureSalesDocumentCustomer(admin, quoteId);
@@ -155,6 +141,55 @@ export async function createBookingFromSalesQuoteInvoice(
   const quotedTotalZar = Math.max(1, Math.round(totalCents / 100));
   const invoicePaid = String(inv.status ?? "").toLowerCase() === "paid";
   const collectedTotalZar = invoicePaid ? quotedTotalZar : 0;
+
+  if (retainedCancelledBookingId) {
+    if (invoicePaid) {
+      const repairItems = buildExactSourceLineItems({
+        declaredTotalCents: quotedTotalZar * 100,
+        source: "sales_document",
+        lines: lineItems.map((line) => ({
+          name: line.description,
+          quantity: line.quantity,
+          unitPriceCents: line.unit_price_cents,
+        })),
+      });
+      const repaired = await persistBookingLineItems(admin, retainedCancelledBookingId, repairItems);
+      if (!repaired.ok) {
+        return { ok: false, error: repaired.error || "paid_cancelled_booking_repair_failed" };
+      }
+      const { error: reactivateError } = await admin
+        .from("bookings")
+        .update({
+          status: "pending",
+          dispatch_status: "searching",
+          total_price: quotedTotalZar,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", retainedCancelledBookingId)
+        .eq("sales_document_id", invoiceId);
+      if (reactivateError) {
+        return { ok: false, error: `paid_cancelled_booking_reactivate_failed:${reactivateError.message}` };
+      }
+      return { ok: true, bookingId: retainedCancelledBookingId, alreadyExisted: true };
+    }
+
+    const { data: cleanupData, error: cleanupError } = await admin.rpc(
+      "delete_unpaid_sales_document_booking",
+      { p_invoice_id: invoiceId },
+    );
+    const cleanup =
+      cleanupData && typeof cleanupData === "object" && !Array.isArray(cleanupData)
+        ? (cleanupData as { ok?: unknown; error?: unknown })
+        : null;
+    if (cleanupError || cleanup?.ok !== true) {
+      return {
+        ok: false,
+        error:
+          cleanupError?.message ??
+          (typeof cleanup?.error === "string" ? cleanup.error : "cancelled_booking_cleanup_failed"),
+      };
+    }
+  }
 
   const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const paystackReference = `salesdoc_${invoiceId.replace(/-/g, "")}`;
