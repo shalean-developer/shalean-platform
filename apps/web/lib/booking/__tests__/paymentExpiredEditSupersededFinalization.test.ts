@@ -14,4 +14,14 @@ describe("payment-expired edit-superseded finalization guard", () => {
     expect(src).toContain('error: "PAYMENT_NOT_PAYABLE"');
     expect(src).toContain("recoveryEnqueue: true");
   });
+
+  it("persists the captured payment ledger before quarantining superseded bookings for manual review", () => {
+    const retry = read("app/api/cron/retry-failed-jobs/route.ts");
+
+    expect(retry).toContain("FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_MANUAL_REVIEW");
+    expect(retry).toContain("isPaymentEditSupersededSnapshot");
+    expect(retry).toContain("supersededPaymentPersisted = await recordPaystackBookingPayment");
+    expect(retry).toContain("payment_edit_superseded_captured");
+    expect(retry).toContain("manual reconciliation required");
+  });
 });
