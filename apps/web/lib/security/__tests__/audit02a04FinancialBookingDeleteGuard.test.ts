@@ -78,6 +78,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
 
     expect(src).toContain("const collectedTotalZar = invoicePaid ? quotedTotalZar : 0");
     expect(src).toContain("total_paid_zar: collectedTotalZar");
+    expect(src).toContain("total_price: quotedTotalZar");
     expect(src).toContain("declaredTotalCents: quotedTotalZar * 100");
   });
 
@@ -262,6 +263,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(seed).toContain("conversion_experiment_results");
     expect(seed).toContain("email_campaign_attributions");
     expect(seed).toContain("deposit_paid_cents: 0");
+    expect(seed).toContain("cleaner_earnings_total_cents: 0");
     expect(seed).toContain('admin.from("bookings").delete().in("id", seedBookingIds)');
     expect(seed).toContain("Reset failed at");
   });
