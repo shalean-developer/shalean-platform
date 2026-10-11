@@ -197,17 +197,26 @@ describe("Princess PR C — Paystack webhook contract", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.PAYSTACK_SECRET_KEY = SECRET;
-    const replayQuery = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
-      maybeSingle: vi.fn().mockResolvedValue({ data: {
-        id: BOOKING_ID, status: "pending", paystack_reference: REFERENCE,
-        customer_email: "prc-uat@example.com", customer_id: null,
-      }, error: null }),
-    };
     mocks.getSupabaseAdmin.mockReturnValue({
-      from: vi.fn().mockReturnValue(replayQuery),
+      from: vi.fn((table: string) => {
+        const replayQuery = {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+          maybeSingle: vi.fn().mockResolvedValue(
+            table === "cleaning_credit_reservations"
+              ? { data: null, error: null }
+              : {
+                  data: {
+                    id: BOOKING_ID, status: "pending", paystack_reference: REFERENCE,
+                    customer_email: "prc-uat@example.com", customer_id: null,
+                  },
+                  error: null,
+                },
+          ),
+        };
+        return replayQuery;
+      }),
       rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
     });
     mocks.routePaystackChargeForMonthlyInvoice.mockResolvedValue({ kind: "not_monthly" });
