@@ -533,7 +533,7 @@ async function resetFixtures(admin) {
   let retainedFinancial = 0;
   for (const row of rows ?? []) {
     const { data: financiallyProtected, error: historyError } = await admin.rpc(
-      "booking_has_nonpromotion_financial_history",
+      "booking_has_financial_history",
       { p_booking_id: row.id },
     );
     if (historyError) {
