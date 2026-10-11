@@ -26,6 +26,8 @@ describe("BOOKING-E2E-13A Cleaning Credit settlement authority", () => {
     expect(creditGatePos).toBeGreaterThan(fastPathPos);
     expect(responsePos).toBeGreaterThan(creditGatePos);
     expect(route).toContain("creditReplaySafe");
+    expect(route).toContain("zeroCreditReplaySafe");
+    expect(route).toContain("zeroCreditReservation");
   });
 
   it("keeps zero-balance settlement on the same Cleaning Credit RPC boundary", () => {
