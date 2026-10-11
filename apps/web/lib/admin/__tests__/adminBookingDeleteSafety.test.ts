@@ -288,6 +288,58 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_promotion_redemption_linked")).toBe(true);
   });
 
+  it("blocks hard delete when canonical payout earnings survive", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      payout_earnings_cents: 5000,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected canonical payout earnings to block delete");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_payout_earnings_present")).toBe(true);
+  });
+
+  it("blocks hard delete when inventory cost history survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_inventory_cost_id: "17171717-1717-4717-8717-171717171717",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected inventory-cost-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_inventory_cost_linked")).toBe(true);
+  });
+
+  it("blocks hard delete when transport cost history survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_transport_cost_id: "18181818-1818-4818-8818-181818181818",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected transport-cost-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_transport_cost_linked")).toBe(true);
+  });
+
+  it("blocks hard delete when a cleaner earnings snapshot survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_earnings_snapshot_booking_id: "19191919-1919-4919-8919-191919191919",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected earnings-snapshot-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_earnings_snapshot_linked")).toBe(true);
+  });
+
   it("blocks hard delete when collected totals survive even if payment status drifted", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "cancelled",
