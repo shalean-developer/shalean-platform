@@ -119,6 +119,19 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_zoho_invoice_linked")).toBe(true);
   });
 
+  it("blocks hard delete when an external settlement reference survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      payment_reference_external: "EFT-REF-123",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected external-reference booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_external_payment_reference")).toBe(true);
+  });
+
   it("blocks hard delete when a durable payment transaction link survives", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "cancelled",
@@ -145,6 +158,19 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected expense-linked booking delete to be blocked");
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_expense_linked")).toBe(true);
+  });
+
+  it("blocks hard delete when line-item cleaner earnings survive", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_line_item_earnings_id: "26262626-2626-4626-8626-262626262626",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected line-item-earnings-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_line_item_earnings_linked")).toBe(true);
   });
 
   it("blocks hard delete when approved cleaner earnings survive", () => {
