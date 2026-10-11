@@ -334,7 +334,19 @@ export async function insertBookingRowUnified(
   if (prebuiltLineItems && prebuiltLineItems.length > 0) {
     const persisted = await persistBookingLineItems(admin, id, prebuiltLineItems);
     if (!persisted.ok) {
-      await admin.from("bookings").delete().eq("id", id);
+      const { error: rollbackError } = await admin
+        .from("bookings")
+        .update({
+          status: "cancelled",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+      if (rollbackError) {
+        return {
+          ok: false,
+          error: `${persisted.error || "Could not save booking line items."}:rollback_failed:${rollbackError.message}`,
+        };
+      }
       return { ok: false, error: persisted.error || "Could not save booking line items." };
     }
   }
