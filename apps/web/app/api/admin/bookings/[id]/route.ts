@@ -1401,7 +1401,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   const { data: row, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, payment_status, payment_completed_at, paid_at, monthly_invoice_id, sales_document_id, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, amount_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id, cleaner_id, date, time",
+      "id, status, payment_status, marked_paid_by_admin_id, payment_completed_at, paid_at, monthly_invoice_id, sales_document_id, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, amount_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id, cleaner_id, date, time",
     )
     .eq("id", id)
     .maybeSingle();
@@ -1412,6 +1412,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   const r = row as {
     status?: string | null;
     payment_status?: string | null;
+    marked_paid_by_admin_id?: string | null;
     payment_completed_at?: string | null;
     paid_at?: string | null;
     monthly_invoice_id?: string | null;
@@ -1434,6 +1435,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     { data: linkedPayment, error: linkedPaymentErr },
     { data: linkedCleanerEarning, error: linkedCleanerEarningErr },
     { data: linkedCleanerAdjustment, error: linkedCleanerAdjustmentErr },
+    { data: linkedCleanerDispute, error: linkedCleanerDisputeErr },
     { data: linkedTeamMemberPayout, error: linkedTeamMemberPayoutErr },
     { data: linkedRosterMemberPayout, error: linkedRosterMemberPayoutErr },
     { data: linkedCleaningCreditTransaction, error: linkedCleaningCreditTransactionErr },
@@ -1455,6 +1457,12 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
       .maybeSingle(),
     admin
       .from("cleaner_earnings_adjustments")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("cleaner_earnings_disputes")
       .select("id")
       .eq("booking_id", id)
       .limit(1)
@@ -1489,6 +1497,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     linkedPaymentErr ??
     linkedCleanerEarningErr ??
     linkedCleanerAdjustmentErr ??
+    linkedCleanerDisputeErr ??
     linkedTeamMemberPayoutErr ??
     linkedRosterMemberPayoutErr ??
     linkedCleaningCreditTransactionErr ??
@@ -1504,6 +1513,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     linked_expense_id: linkedExpense?.id ?? null,
     linked_cleaner_earning_id: linkedCleanerEarning?.id ?? null,
     linked_cleaner_earnings_adjustment_id: linkedCleanerAdjustment?.id ?? null,
+    linked_cleaner_earnings_dispute_id: linkedCleanerDispute?.id ?? null,
     linked_team_member_payout_id: linkedTeamMemberPayout?.id ?? null,
     linked_roster_member_payout_id: linkedRosterMemberPayout?.id ?? null,
     linked_cleaning_credit_transaction_id: linkedCleaningCreditTransaction?.id ?? null,
