@@ -11,6 +11,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("before delete on public.bookings");
     expect(sql).toContain("booking_delete_blocked_financial_history");
     expect(sql).toContain("old.marked_paid_by_admin_id is not null");
+    expect(sql).toContain("old.zoho_invoice_id is not null");
     expect(sql).toContain("old.payment_transaction_id is not null");
     expect(sql).toContain("from public.payment_transactions pt");
     expect(sql).toContain("pt.booking_id = old.id");
@@ -28,6 +29,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("rdr.booking_id = old.id");
     expect(sql).toContain("from public.referral_events re");
     expect(sql).toContain("re.booking_id = old.id");
+    expect(sql).toContain("from public.accounting_invoice_sync ais");
+    expect(sql).toContain("from public.accounting_sync_records asr");
     expect(sql).toContain("from public.admin_money_action_proposals amap");
     expect(sql).toContain("amap.booking_id = old.id");
     expect(sql).toContain("from public.admin_earnings_actions aea");
@@ -76,6 +79,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain('.from("refund_accounting_records")');
     expect(src).toContain('.from("referral_discount_redemptions")');
     expect(src).toContain('.from("referral_events")');
+    expect(src).toContain('.from("accounting_invoice_sync")');
+    expect(src).toContain('.from("accounting_sync_records")');
     expect(src).toContain('.from("admin_money_action_proposals")');
     expect(src).toContain('.from("admin_earnings_actions")');
     expect(src).toContain('.from("promotion_redemptions")');
@@ -85,6 +90,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain("linked_refund_record_id: linkedRefundRecord?.id ?? null");
     expect(src).toContain("linked_referral_redemption_id: linkedReferralRedemption?.id ?? null");
     expect(src).toContain("linked_referral_event_id: linkedReferralEvent?.id ?? null");
+    expect(src).toContain("linked_accounting_invoice_sync_id: linkedAccountingInvoiceSync?.id ?? null");
+    expect(src).toContain("linked_accounting_sync_id: linkedAccountingSync?.id ?? null");
     expect(src).toContain("linked_money_proposal_id: linkedMoneyProposal?.id ?? null");
     expect(src).toContain("linked_earnings_action_id: linkedEarningsAction?.id ?? null");
     expect(src).toContain("linked_promotion_redemption_id: linkedPromotionRedemption?.id ?? null");
@@ -106,6 +113,10 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("redemptions_count = greatest(0");
     expect(sql).toContain("budget_spent_zar = greatest(0");
     expect(sql).toContain("revenue_generated_zar = greatest(0");
+    expect(sql).toContain("for update");
+    expect(sql).toContain("v_status is distinct from 'pending_payment'");
+    expect(sql).toContain("v_created_at >= now() - interval '2 hours'");
+    expect(sql).toContain("v_is_recurring");
     expect(sql).toContain("set status = 'payment_expired'");
     expect(sql).toContain("and status = 'pending_payment'");
     expect(sql).toContain("and created_at < now() - interval '2 hours'");
