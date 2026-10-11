@@ -22,6 +22,9 @@ describe("payment-expired edit-superseded finalization guard", () => {
     expect(retry).toContain("isPaymentEditSupersededSnapshot");
     expect(retry).toContain("resolveInternalBookingIdFromPaystackReference");
     expect(retry).toContain('.eq("id", metadataBookingId)');
+    expect(retry).toContain("paymentEditSupersededReference");
+    expect(retry).toContain("supersededBookingMatchedByIdFallback");
+    expect(retry).toContain("!== payload.paystackReference");
     expect(retry).toContain("supersededPaymentPersisted = await recordPaystackBookingPayment");
     expect(retry).toContain("payment_edit_superseded_captured");
     expect(retry).toContain("manual reconciliation required");
