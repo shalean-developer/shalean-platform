@@ -40,6 +40,27 @@ begin
      )
      or exists (
        select 1
+       from public.refund_accounting_records rar
+       where rar.entity_type = 'booking'
+         and rar.entity_id = old.id
+     )
+     or exists (
+       select 1
+       from public.referral_discount_redemptions rdr
+       where rdr.booking_id = old.id
+     )
+     or exists (
+       select 1
+       from public.referral_events re
+       where re.booking_id = old.id
+     )
+     or exists (
+       select 1
+       from public.admin_money_action_proposals amap
+       where amap.booking_id = old.id
+     )
+     or exists (
+       select 1
        from public.cleaner_earnings ce
        where ce.booking_id = old.id
          and lower(trim(coalesce(ce.status, ''))) in ('approved', 'processing', 'paid')
