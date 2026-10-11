@@ -1459,6 +1459,7 @@ async function resetSeedRows(admin) {
         `reverse seed inventory movement ${movement.id}`,
         admin.rpc("reset_seed_inventory_movement", {
           p_movement_id: movement.id,
+          p_seed_recurring_ids: Object.values(RECURRING_IDS),
         }),
       );
       const result = Array.isArray(reversed) ? reversed[0] : reversed;
@@ -1483,6 +1484,7 @@ async function resetSeedRows(admin) {
         `reconcile Cleaning Credit reservation ${reservation.id}`,
         admin.rpc("reset_seed_cleaning_credit_for_booking", {
           p_booking_id: reservation.booking_id,
+          p_seed_recurring_ids: Object.values(RECURRING_IDS),
         }),
       );
       const result = Array.isArray(reconciled) ? reconciled[0] : reconciled;
