@@ -1401,7 +1401,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   const { data: row, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, payment_status, payment_completed_at, paid_at, monthly_invoice_id, sales_document_id, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, amount_paid_cents, cleaner_id, date, time",
+      "id, status, completed_at, cleaner_line_earnings_finalized_at, payment_status, payment_reference_external, is_monthly_billing_booking, marked_paid_by_admin_id, zoho_invoice_id, refunded_at, refund_status, payout_paid_at, payout_run_id, payment_completed_at, paid_at, monthly_invoice_id, sales_document_id, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_payout_cents, cleaner_bonus_cents, payout_earnings_cents, cleaner_earnings_total_cents, internal_earnings_cents, amount_paid_cents, deposit_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id, cleaner_id, date, time",
     )
     .eq("id", id)
     .maybeSingle();
@@ -1411,7 +1411,17 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
 
   const r = row as {
     status?: string | null;
+    completed_at?: string | null;
+    cleaner_line_earnings_finalized_at?: string | null;
     payment_status?: string | null;
+    payment_reference_external?: string | null;
+    is_monthly_billing_booking?: boolean | null;
+    marked_paid_by_admin_id?: string | null;
+    zoho_invoice_id?: string | null;
+    refunded_at?: string | null;
+    refund_status?: string | null;
+    payout_paid_at?: string | null;
+    payout_run_id?: string | null;
     payment_completed_at?: string | null;
     paid_at?: string | null;
     monthly_invoice_id?: string | null;
@@ -1420,14 +1430,234 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     payout_status?: string | null;
     payout_frozen_cents?: number | string | null;
     display_earnings_cents?: number | string | null;
+    cleaner_payout_cents?: number | string | null;
+    cleaner_bonus_cents?: number | string | null;
+    payout_earnings_cents?: number | string | null;
+    cleaner_earnings_total_cents?: number | string | null;
+    internal_earnings_cents?: number | string | null;
     amount_paid_cents?: number | string | null;
+    deposit_paid_cents?: number | string | null;
+    total_paid_cents?: number | string | null;
+    total_paid_zar?: number | string | null;
+    payment_transaction_id?: string | null;
     cleaner_id?: string | null;
     date?: string | null;
     time?: string | null;
   };
 
+  const [
+    { data: linkedExpense, error: linkedExpenseErr },
+    { data: linkedInventoryCost, error: linkedInventoryCostErr },
+    { data: linkedTransportCost, error: linkedTransportCostErr },
+    { data: linkedEarningsSnapshot, error: linkedEarningsSnapshotErr },
+    { data: linkedEarningsSnapshotLine, error: linkedEarningsSnapshotLineErr },
+    { data: linkedLineItemEarnings, error: linkedLineItemEarningsErr },
+    { data: linkedPayment, error: linkedPaymentErr },
+    { data: linkedCleanerEarning, error: linkedCleanerEarningErr },
+    { data: linkedCleanerAdjustment, error: linkedCleanerAdjustmentErr },
+    { data: linkedCleanerDispute, error: linkedCleanerDisputeErr },
+    { data: linkedTeamMemberPayout, error: linkedTeamMemberPayoutErr },
+    { data: linkedRosterMemberPayout, error: linkedRosterMemberPayoutErr },
+    { data: linkedPayoutAuditEvent, error: linkedPayoutAuditEventErr },
+    { data: linkedCleaningCreditTransaction, error: linkedCleaningCreditTransactionErr },
+    { data: linkedInvoiceAdjustment, error: linkedInvoiceAdjustmentErr },
+    { data: linkedRefundRecord, error: linkedRefundRecordErr },
+    { data: linkedReferralRedemption, error: linkedReferralRedemptionErr },
+    { data: linkedReferralEvent, error: linkedReferralEventErr },
+    { data: linkedAccountingInvoiceSync, error: linkedAccountingInvoiceSyncErr },
+    { data: linkedAccountingSync, error: linkedAccountingSyncErr },
+    { data: linkedMoneyProposal, error: linkedMoneyProposalErr },
+    { data: linkedEarningsAction, error: linkedEarningsActionErr },
+    { data: linkedPromotionRedemption, error: linkedPromotionRedemptionErr },
+    { data: linkedBookingChange, error: linkedBookingChangeErr },
+    { data: linkedGrowthAttribution, error: linkedGrowthAttributionErr },
+    { data: linkedConversionAttribution, error: linkedConversionAttributionErr },
+    { data: linkedEmailAttribution, error: linkedEmailAttributionErr },
+  ] = await Promise.all([
+    admin.from("expenses").select("id").eq("booking_id", id).limit(1).maybeSingle(),
+    admin.from("inventory_movements").select("id").eq("booking_id", id).limit(1).maybeSingle(),
+    admin.from("transport_cost_entries").select("id").eq("booking_id", id).limit(1).maybeSingle(),
+    admin.from("booking_cleaner_earnings_snapshot").select("booking_id").eq("booking_id", id).limit(1).maybeSingle(),
+    admin.from("booking_cleaner_earnings_snapshot_lines").select("id").eq("booking_id", id).limit(1).maybeSingle(),
+    admin
+      .from("booking_line_items")
+      .select("id")
+      .eq("booking_id", id)
+      .gt("cleaner_earnings_cents", 0)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("payment_transactions")
+      .select("id")
+      .or(`booking_id.eq.${id},and(entity_type.eq.booking,entity_id.eq.${id})`)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("cleaner_earnings")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("cleaner_earnings_adjustments")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("cleaner_earnings_disputes")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("team_job_member_payouts")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("booking_roster_member_payouts")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("payout_audit_events")
+      .select("id")
+      .contains("booking_ids", [id])
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("cleaning_credit_transactions")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("invoice_adjustments")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("refund_accounting_records")
+      .select("id")
+      .eq("entity_type", "booking")
+      .eq("entity_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("referral_discount_redemptions")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("referral_events")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("accounting_invoice_sync")
+      .select("id")
+      .or(`booking_id.eq.${id},and(entity_type.eq.booking,entity_id.eq.${id})`)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("accounting_sync_records")
+      .select("id")
+      .eq("entity_type", "booking")
+      .eq("entity_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("admin_money_action_proposals")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("admin_earnings_actions")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("promotion_redemptions")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin.from("booking_changes").select("id").eq("booking_id", id).limit(1).maybeSingle(),
+    admin.from("growth_action_outcomes").select("id").eq("booking_id", id).limit(1).maybeSingle(),
+    admin.from("conversion_experiment_results").select("id").eq("booking_id", id).limit(1).maybeSingle(),
+    admin.from("email_campaign_attributions").select("id").eq("booking_id", id).limit(1).maybeSingle(),
+  ]);
+  const linkedReadError =
+    linkedExpenseErr ??
+    linkedInventoryCostErr ??
+    linkedTransportCostErr ??
+    linkedEarningsSnapshotErr ??
+    linkedEarningsSnapshotLineErr ??
+    linkedLineItemEarningsErr ??
+    linkedPaymentErr ??
+    linkedCleanerEarningErr ??
+    linkedCleanerAdjustmentErr ??
+    linkedCleanerDisputeErr ??
+    linkedTeamMemberPayoutErr ??
+    linkedRosterMemberPayoutErr ??
+    linkedPayoutAuditEventErr ??
+    linkedCleaningCreditTransactionErr ??
+    linkedInvoiceAdjustmentErr ??
+    linkedRefundRecordErr ??
+    linkedReferralRedemptionErr ??
+    linkedReferralEventErr ??
+    linkedAccountingInvoiceSyncErr ??
+    linkedAccountingSyncErr ??
+    linkedMoneyProposalErr ??
+    linkedEarningsActionErr ??
+    linkedPromotionRedemptionErr ??
+    linkedBookingChangeErr ??
+    linkedGrowthAttributionErr ??
+    linkedConversionAttributionErr ??
+    linkedEmailAttributionErr;
+  if (linkedReadError) {
+    return NextResponse.json({ error: linkedReadError.message }, { status: 500 });
+  }
+
   const st = String(r.status ?? "").toLowerCase();
-  const deleteSafety = assertAdminBookingDeleteSafe(r);
+  const deleteSafety = assertAdminBookingDeleteSafe({
+    ...r,
+    payment_transaction_id: r.payment_transaction_id ?? linkedPayment?.id ?? null,
+    linked_expense_id: linkedExpense?.id ?? null,
+    linked_inventory_cost_id: linkedInventoryCost?.id ?? null,
+    linked_transport_cost_id: linkedTransportCost?.id ?? null,
+    linked_earnings_snapshot_booking_id: linkedEarningsSnapshot?.booking_id ?? null,
+    linked_earnings_snapshot_line_id: linkedEarningsSnapshotLine?.id ?? null,
+    linked_line_item_earnings_id: linkedLineItemEarnings?.id ?? null,
+    linked_cleaner_earning_id: linkedCleanerEarning?.id ?? null,
+    linked_cleaner_earnings_adjustment_id: linkedCleanerAdjustment?.id ?? null,
+    linked_cleaner_earnings_dispute_id: linkedCleanerDispute?.id ?? null,
+    linked_team_member_payout_id: linkedTeamMemberPayout?.id ?? null,
+    linked_roster_member_payout_id: linkedRosterMemberPayout?.id ?? null,
+    linked_payout_audit_event_id: linkedPayoutAuditEvent?.id ?? null,
+    linked_cleaning_credit_transaction_id: linkedCleaningCreditTransaction?.id ?? null,
+    linked_invoice_adjustment_id: linkedInvoiceAdjustment?.id ?? null,
+    linked_refund_record_id: linkedRefundRecord?.id ?? null,
+    linked_referral_redemption_id: linkedReferralRedemption?.id ?? null,
+    linked_referral_event_id: linkedReferralEvent?.id ?? null,
+    linked_accounting_invoice_sync_id: linkedAccountingInvoiceSync?.id ?? null,
+    linked_accounting_sync_id: linkedAccountingSync?.id ?? null,
+    linked_money_proposal_id: linkedMoneyProposal?.id ?? null,
+    linked_earnings_action_id: linkedEarningsAction?.id ?? null,
+    linked_promotion_redemption_id: linkedPromotionRedemption?.id ?? null,
+    linked_booking_change_id: linkedBookingChange?.id ?? null,
+    linked_growth_attribution_id: linkedGrowthAttribution?.id ?? null,
+    linked_conversion_attribution_id: linkedConversionAttribution?.id ?? null,
+    linked_email_attribution_id: linkedEmailAttribution?.id ?? null,
+  });
   if (!deleteSafety.ok) {
     return NextResponse.json(
       buildAdminWarningPayload({

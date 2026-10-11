@@ -56,27 +56,17 @@ async function removeLinkedUnpaidBooking(
   admin: SupabaseClient,
   invoiceId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { data, error } = await admin
-    .from("bookings")
-    .select("id, payment_completed_at, amount_paid_cents")
-    .eq("sales_document_id", invoiceId)
-    .maybeSingle();
-
+  const { data, error } = await admin.rpc("delete_unpaid_sales_document_booking", {
+    p_invoice_id: invoiceId,
+  });
   if (error) return { ok: false, error: error.message };
-  if (!data?.id) return { ok: true };
 
-  const row = data as {
-    id: string;
-    payment_completed_at?: string | null;
-    amount_paid_cents?: number | null;
-  };
-
-  if (row.payment_completed_at || Math.max(0, Math.round(Number(row.amount_paid_cents ?? 0))) > 0) {
-    return { ok: false, error: "linked_paid_booking" };
+  const result = data && typeof data === "object" && !Array.isArray(data)
+    ? data as { ok?: unknown; error?: unknown }
+    : null;
+  if (result?.ok === false) {
+    return { ok: false, error: typeof result.error === "string" ? result.error : "linked_booking_delete_blocked" };
   }
-
-  const { error: delErr } = await admin.from("bookings").delete().eq("id", row.id);
-  if (delErr) return { ok: false, error: delErr.message };
   return { ok: true };
 }
 

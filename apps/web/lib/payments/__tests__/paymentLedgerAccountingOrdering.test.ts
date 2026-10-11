@@ -18,6 +18,15 @@ describe("payment ledger/accounting ordering", () => {
     expect(accountingQueue).toBeGreaterThan(bookingLink);
   });
 
+  it("fails closed on fee-expense persistence loss and retries existing ledger side effects", () => {
+    const src = read("lib/payments/recordGatewayPayment.ts");
+
+    expect(src).toContain("if (!raceExpense?.id) return { ok: false, error: expErr.message }");
+    expect(src).toContain('if (!expenseId) return { ok: false, error: "paystack_fee_expense_missing" }');
+    expect(src).toContain("const expenseQueue = await ensureExpenseAccountingQueue(admin, expenseId)");
+    expect(src).toContain("return completeSideEffects(existing.id, existing.expense_id ?? null, false)");
+  });
+
   it("seeds the canonical Paystack fee category and account idempotently", () => {
     const sql = read("../../supabase/migrations/20261010203500_payment_accounting_paystack_prerequisites.sql");
 
