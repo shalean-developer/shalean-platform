@@ -49,7 +49,6 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("from public.promotion_redemptions prd");
     expect(sql).toContain("prd.booking_id = old.id");
     expect(sql).toContain("from public.cleaner_earnings ce");
-    expect(sql).toContain("('approved', 'processing', 'paid')");
     expect(sql).toContain("from public.cleaner_earnings_adjustments cea");
     expect(sql).toContain("from public.cleaner_earnings_disputes ced");
     expect(sql).toContain("from public.team_job_member_payouts tjmp");
@@ -89,7 +88,6 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain('.from("transport_cost_entries")');
     expect(src).toContain('.from("booking_cleaner_earnings_snapshot")');
     expect(src).toContain('.from("cleaner_earnings")');
-    expect(src).toContain('["approved", "processing", "paid"]');
     expect(src).toContain('.from("cleaner_earnings_adjustments")');
     expect(src).toContain('.from("cleaner_earnings_disputes")');
     expect(src).toContain('.from("cleaning_credit_transactions")');
@@ -119,6 +117,17 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain("payout_paid_at");
     expect(src).toContain("payout_run_id");
     expect(src).toContain("linked_cleaner_earnings_dispute_id: linkedCleanerDispute?.id ?? null");
+  });
+
+  it("uses valid dollar quoting for the non-promotion financial-history helper", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+    const helperStart = sql.indexOf("create or replace function public.booking_has_nonpromotion_financial_history");
+    const helperEnd = sql.indexOf("revoke all on function public.booking_has_nonpromotion_financial_history", helperStart);
+    const helper = sql.slice(helperStart, helperEnd);
+
+    expect(helper).toContain("as $");
+    expect(helper).toContain("$;");
+    expect(helper).not.toContain("\nas $\n");
   });
 
   it("checks durable non-promotion financial history before reversing stale promotions", () => {
@@ -184,6 +193,17 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain('admin.rpc(\n        "rollback_unclaimed_recurring_prepaid_booking"');
     expect(src).toContain("p_allocation_id: prepaidAllocation.allocationId");
     expect(src).toContain("rollback_failed:");
+  });
+
+  it("preserves pending cleaner earnings rows as durable financial history", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+    const src = read("app/api/admin/bookings/[id]/route.ts");
+
+    expect(sql).toContain("from public.cleaner_earnings ce");
+    expect(sql).toContain("where ce.booking_id = old.id");
+    expect(sql).not.toContain("ce.status, ''))) in ('approved', 'processing', 'paid')");
+    expect(src).toContain('.from("cleaner_earnings")');
+    expect(src).not.toContain('.in("status", ["approved", "processing", "paid"])');
   });
 
   it("keeps unpaid financially-unlinked cleanup rows outside the block predicate", () => {
