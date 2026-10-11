@@ -1477,7 +1477,6 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
       .from("cleaner_earnings")
       .select("id")
       .eq("booking_id", id)
-      .in("status", ["approved", "processing", "paid"])
       .limit(1)
       .maybeSingle(),
     admin
