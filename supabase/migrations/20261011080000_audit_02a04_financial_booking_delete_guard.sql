@@ -365,7 +365,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public
-as $
+as $seed_credit_reset$
 declare
   v_booking_reference text;
   v public.cleaning_credit_reservations%rowtype;
@@ -445,7 +445,7 @@ begin
 
   return jsonb_build_object('ok', true, 'status', 'released', 'balance_after_zar', v_after);
 end;
-$;
+$seed_credit_reset$;
 
 revoke all on function public.reset_seed_cleaning_credit_for_booking(uuid) from public, anon, authenticated;
 grant execute on function public.reset_seed_cleaning_credit_for_booking(uuid) to service_role;
