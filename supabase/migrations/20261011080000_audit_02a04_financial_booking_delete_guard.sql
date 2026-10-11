@@ -171,6 +171,7 @@ begin
      or coalesce(old.cleaner_bonus_cents, 0) > 0
      or coalesce(old.payout_earnings_cents, 0) > 0
      or coalesce(old.cleaner_earnings_total_cents, 0) > 0
+     or coalesce(old.internal_earnings_cents, 0) > 0
      or old.paid_at is not null
   then
     raise exception 'booking_delete_blocked_financial_history'
@@ -294,6 +295,7 @@ as $financial_history$
         or coalesce(b.cleaner_bonus_cents, 0) > 0
         or coalesce(b.payout_earnings_cents, 0) > 0
         or coalesce(b.cleaner_earnings_total_cents, 0) > 0
+        or coalesce(b.internal_earnings_cents, 0) > 0
         or b.paid_at is not null
       )
   )
