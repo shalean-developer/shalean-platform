@@ -607,7 +607,7 @@ begin
          and status = 'applied'
     loop
       if jsonb_typeof(v_redemption.metadata -> 'bookingRevenueZar') is distinct from 'number'
-         or coalesce((v_redemption.metadata ->> 'counterIncrementCommitted')::boolean, false) is distinct from true
+         or (v_redemption.metadata -> 'counterIncrementCommitted') is distinct from 'true'::jsonb
       then
         return jsonb_build_object(
           'ok', false,
@@ -854,7 +854,7 @@ begin
      for update
   loop
     if jsonb_typeof(v_redemption.metadata -> 'bookingRevenueZar') is distinct from 'number'
-       or coalesce((v_redemption.metadata ->> 'counterIncrementCommitted')::boolean, false) is distinct from true
+       or (v_redemption.metadata -> 'counterIncrementCommitted') is distinct from 'true'::jsonb
     then
       return jsonb_build_object(
         'ok', false,
@@ -1148,7 +1148,7 @@ begin
             and pr.status = 'applied'
             and (
               jsonb_typeof(pr.metadata -> 'bookingRevenueZar') is distinct from 'number'
-              or coalesce((pr.metadata ->> 'counterIncrementCommitted')::boolean, false) is distinct from true
+              or (pr.metadata -> 'counterIncrementCommitted') is distinct from 'true'::jsonb
             )
         );
 
