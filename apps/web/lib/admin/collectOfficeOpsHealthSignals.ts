@@ -97,7 +97,7 @@ export async function collectOfficeOpsHealthSignals(
     admin
       .from("failed_jobs")
       .select("created_at, type")
-      .in("type", ["booking_finalize", "booking_insert", "payment_reconciliation", "payment_reconciliation_manual_review"])
+      .in("type", ["booking_finalize", "booking_insert", "payment_reconciliation", "payment_reconciliation_exhausted", "payment_reconciliation_manual_review"])
       .gte("created_at", sinceIso)
       .order("created_at", { ascending: false })
       .limit(5000),
