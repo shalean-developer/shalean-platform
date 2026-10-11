@@ -16,7 +16,8 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_cleaner_earnings_linked"
   | "admin_booking_delete_cleaner_earnings_adjustment_linked"
   | "admin_booking_delete_team_member_payout_linked"
-  | "admin_booking_delete_roster_member_payout_linked";
+  | "admin_booking_delete_roster_member_payout_linked"
+  | "admin_booking_delete_cleaning_credit_transaction_linked";
 
 export type AdminBookingDeleteSafetyRow = {
   status?: string | null;
@@ -38,6 +39,7 @@ export type AdminBookingDeleteSafetyRow = {
   linked_cleaner_earnings_adjustment_id?: string | null;
   linked_team_member_payout_id?: string | null;
   linked_roster_member_payout_id?: string | null;
+  linked_cleaning_credit_transaction_id?: string | null;
 };
 
 export type AdminBookingDeleteBlock = {
@@ -196,6 +198,13 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_roster_member_payout_linked",
       message: "Bookings linked to roster member payout allocations cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_cleaning_credit_transaction_id)) {
+    blocks.push({
+      code: "admin_booking_delete_cleaning_credit_transaction_linked",
+      message: "Bookings linked to Cleaning Credit transactions cannot be hard-deleted.",
     });
   }
 
