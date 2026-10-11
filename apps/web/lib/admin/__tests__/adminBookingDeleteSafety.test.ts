@@ -52,6 +52,34 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_marked_paid_by_admin")).toBe(true);
   });
 
+  it("blocks hard delete when a refund marker survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      refund_status: "chargeback",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected refund-marked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_refund_marker_present")).toBe(true);
+  });
+
+  it("blocks hard delete when payout reconciliation markers survive", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      payout_paid_at: "2026-10-11T00:00:00.000Z",
+      payout_run_id: "20202020-2020-4020-8020-202020202020",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected payout-marker booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_payout_paid_at_present")).toBe(true);
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_payout_run_linked")).toBe(true);
+  });
+
   it("blocks hard delete when a Zoho invoice survives", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "cancelled",
