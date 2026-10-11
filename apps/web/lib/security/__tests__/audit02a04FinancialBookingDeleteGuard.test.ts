@@ -251,7 +251,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
 
     expect(purge).toContain("Validate every applied redemption before mutating any of them");
     expect(purge).toContain("v_promotion_revenue_unproven := exists (");
-    expect(purge).toContain("jsonb_typeof(pr.metadata -> 'bookingRevenueZar') <> 'number'");
+    expect(purge).toContain("jsonb_typeof(pr.metadata -> 'bookingRevenueZar') is distinct from 'number'");
+    expect(purge).toContain("counterIncrementCommitted");
     expect(purge.indexOf("v_promotion_revenue_unproven := exists (")).toBeLessThan(
       purge.indexOf("update public.promotion_redemptions"),
     );
@@ -430,6 +431,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("referral_credit_already_spent");
     expect(sql).toContain("promotion_original_revenue_unproven");
     expect(sql).toContain("promotion_counter_reversal_unproven");
+    expect(sql).toContain("is distinct from 'number'");
+    expect(sql).toContain("counterIncrementCommitted");
     expect(sql).toContain("group by user_id");
     expect(seed).toContain('"preflight seed financial reset"');
     expect(seed).toContain('admin.rpc("preflight_seed_financial_reset"');
@@ -443,6 +446,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     const promo = read("lib/promotions/server.ts");
 
     expect(promo).toContain("bookingRevenueZar: args.bookingRevenueZar");
+    expect(promo).toContain("counterIncrementCommitted: true");
+    expect(promo).toContain("Promotion counter proof persistence failed");
     expect(sql).toContain("v_original_revenue_zar");
     expect(sql).toContain("v_redemption.metadata -> 'bookingRevenueZar'");
     expect(sql).toContain("promotion_original_revenue_unproven");
