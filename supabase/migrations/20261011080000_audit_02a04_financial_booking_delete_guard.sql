@@ -506,6 +506,218 @@ $financial_history$;
 revoke all on function public.booking_has_nonpromotion_financial_history(uuid) from public, anon, authenticated;
 grant execute on function public.booking_has_nonpromotion_financial_history(uuid) to service_role;
 
+-- Complete read-only financial-history probe for callers that must mirror the
+-- hard-delete trigger exactly. Unlike the purge-specific probe above, promotion
+-- redemptions are included here.
+create or replace function public.booking_has_financial_history(p_booking_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $full_financial_history$
+  select public.booking_has_nonpromotion_financial_history(p_booking_id)
+      or exists (
+        select 1
+        from public.promotion_redemptions pr
+        where pr.booking_id = p_booking_id
+      );
+$full_financial_history$;
+
+revoke all on function public.booking_has_financial_history(uuid) from public, anon, authenticated;
+grant execute on function public.booking_has_financial_history(uuid) to service_role;
+
+
+-- Governed non-production seed referral-reward reversal. It removes only an
+-- earn transaction tied to a known seed booking, restores the wallet balance,
+-- and returns the referral to pending in one transaction. The helper fails
+-- closed if the reward has already been spent or the referral state is not the
+-- expected rewarded state.
+create or replace function public.reset_seed_referral_credit_for_booking(
+  p_booking_id uuid,
+  p_seed_recurring_ids uuid[]
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $seed_referral_reset$
+declare
+  v_booking_reference text;
+  v_recurring_id uuid;
+  v_tx record;
+  v_referral public.referrals%rowtype;
+  v_balance numeric;
+  v_amount numeric;
+  v_reversed integer := 0;
+begin
+  select paystack_reference, recurring_id
+    into v_booking_reference, v_recurring_id
+    from public.bookings
+   where id = p_booking_id
+   for update;
+
+  if not found
+     or (
+       coalesce(v_booking_reference, '') not like 'DEVSEED-%'
+       and not (v_recurring_id is not null and v_recurring_id = any(coalesce(p_seed_recurring_ids, '{}'::uuid[])))
+     )
+  then
+    return jsonb_build_object('ok', false, 'error', 'not_devseed_booking');
+  end if;
+
+  for v_tx in
+    select id, user_id, referral_id, amount_zar
+      from public.cleaning_credit_transactions
+     where booking_id = p_booking_id
+       and type = 'earn'
+       and referral_id is not null
+     for update
+  loop
+    select *
+      into v_referral
+      from public.referrals
+     where id = v_tx.referral_id
+     for update;
+
+    if not found then
+      return jsonb_build_object('ok', false, 'error', 'referral_not_found', 'referral_id', v_tx.referral_id);
+    end if;
+
+    if v_referral.status <> 'rewarded' then
+      return jsonb_build_object(
+        'ok', false,
+        'error', 'unexpected_referral_status',
+        'referral_id', v_referral.id,
+        'status', v_referral.status
+      );
+    end if;
+
+    v_amount := greatest(round(coalesce(v_tx.amount_zar, 0)::numeric, 2), 0);
+
+    select coalesce(credit_balance_zar, 0)
+      into v_balance
+      from public.user_profiles
+     where id = v_tx.user_id
+     for update;
+
+    if not found then
+      return jsonb_build_object('ok', false, 'error', 'referrer_profile_not_found', 'user_id', v_tx.user_id);
+    end if;
+
+    if v_balance + 0.001 < v_amount then
+      return jsonb_build_object(
+        'ok', false,
+        'error', 'referral_credit_already_spent',
+        'referral_id', v_referral.id,
+        'balance_zar', v_balance,
+        'required_zar', v_amount
+      );
+    end if;
+
+    update public.user_profiles
+       set credit_balance_zar = round((v_balance - v_amount) * 100) / 100
+     where id = v_tx.user_id;
+
+    update public.referrals
+       set status = 'pending',
+           completed_at = null,
+           rewarded_at = null,
+           credit_expires_at = null,
+           admin_notes = 'DEV SEED RESET: referral reward reversed'
+     where id = v_referral.id
+       and status = 'rewarded';
+
+    if not found then
+      raise exception 'seed_referral_state_changed';
+    end if;
+
+    delete from public.cleaning_credit_transactions
+     where id = v_tx.id
+       and type = 'earn';
+
+    v_reversed := v_reversed + 1;
+  end loop;
+
+  return jsonb_build_object('ok', true, 'reversed', v_reversed);
+end;
+$seed_referral_reset$;
+
+revoke all on function public.reset_seed_referral_credit_for_booking(uuid, uuid[]) from public, anon, authenticated;
+grant execute on function public.reset_seed_referral_credit_for_booking(uuid, uuid[]) to service_role;
+
+
+-- Governed non-production seed promotion reversal. Applied redemption counters
+-- are reconciled before the seed ledger rows are removed. Setting each row to
+-- reversed first makes retries idempotent.
+create or replace function public.reset_seed_promotion_redemptions_for_booking(
+  p_booking_id uuid,
+  p_seed_recurring_ids uuid[]
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $seed_promotion_reset$
+declare
+  v_booking_reference text;
+  v_recurring_id uuid;
+  v_total_price numeric;
+  v_redemption record;
+  v_reversed integer := 0;
+begin
+  select paystack_reference, recurring_id, total_price
+    into v_booking_reference, v_recurring_id, v_total_price
+    from public.bookings
+   where id = p_booking_id
+   for update;
+
+  if not found
+     or (
+       coalesce(v_booking_reference, '') not like 'DEVSEED-%'
+       and not (v_recurring_id is not null and v_recurring_id = any(coalesce(p_seed_recurring_ids, '{}'::uuid[])))
+     )
+  then
+    return jsonb_build_object('ok', false, 'error', 'not_devseed_booking');
+  end if;
+
+  for v_redemption in
+    select id, promotion_id, discount_zar
+      from public.promotion_redemptions
+     where booking_id = p_booking_id
+       and status = 'applied'
+     for update
+  loop
+    update public.promotion_redemptions
+       set status = 'reversed'
+     where id = v_redemption.id
+       and status = 'applied';
+
+    if found then
+      update public.promotions
+         set redemptions_count = greatest(0, coalesce(redemptions_count, 0) - 1),
+             budget_spent_zar = greatest(
+               0,
+               coalesce(budget_spent_zar, 0) - greatest(coalesce(v_redemption.discount_zar, 0), 0)
+             ),
+             revenue_generated_zar = greatest(
+               0,
+               coalesce(revenue_generated_zar, 0) - greatest(coalesce(v_total_price, 0), 0)
+             ),
+             updated_at = now()
+       where id = v_redemption.promotion_id;
+
+      v_reversed := v_reversed + 1;
+    end if;
+  end loop;
+
+  return jsonb_build_object('ok', true, 'reversed', v_reversed);
+end;
+$seed_promotion_reset$;
+
+revoke all on function public.reset_seed_promotion_redemptions_for_booking(uuid, uuid[]) from public, anon, authenticated;
+grant execute on function public.reset_seed_promotion_redemptions_for_booking(uuid, uuid[]) to service_role;
+
 
 -- Governed non-production seed-reset helper. It is idempotent because the
 -- reservation status is changed to released in the same transaction as any
