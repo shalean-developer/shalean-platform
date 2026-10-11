@@ -29,6 +29,11 @@ begin
      )
      or exists (
        select 1
+       from public.cleaning_credit_transactions cct
+       where cct.booking_id = old.id
+     )
+     or exists (
+       select 1
        from public.cleaner_earnings ce
        where ce.booking_id = old.id
          and lower(trim(coalesce(ce.status, ''))) in ('approved', 'processing', 'paid')
@@ -164,7 +169,11 @@ begin
     order by created_at, id
   loop
     begin
-      delete from public.bookings where id = r.id;
+      delete from public.bookings
+       where id = r.id
+         and status = 'pending_payment'
+         and created_at < now() - interval '2 hours'
+         and coalesce(is_recurring_generated, false) = false;
       if found then
         v_deleted := v_deleted + 1;
       end if;
