@@ -1434,6 +1434,8 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     { data: linkedPayment, error: linkedPaymentErr },
     { data: linkedCleanerEarning, error: linkedCleanerEarningErr },
     { data: linkedCleanerAdjustment, error: linkedCleanerAdjustmentErr },
+    { data: linkedTeamMemberPayout, error: linkedTeamMemberPayoutErr },
+    { data: linkedRosterMemberPayout, error: linkedRosterMemberPayoutErr },
   ] = await Promise.all([
     admin.from("expenses").select("id").eq("booking_id", id).limit(1).maybeSingle(),
     admin
@@ -1455,9 +1457,26 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
       .eq("booking_id", id)
       .limit(1)
       .maybeSingle(),
+    admin
+      .from("team_job_member_payouts")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("booking_roster_member_payouts")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
   ]);
   const linkedReadError =
-    linkedExpenseErr ?? linkedPaymentErr ?? linkedCleanerEarningErr ?? linkedCleanerAdjustmentErr;
+    linkedExpenseErr ??
+    linkedPaymentErr ??
+    linkedCleanerEarningErr ??
+    linkedCleanerAdjustmentErr ??
+    linkedTeamMemberPayoutErr ??
+    linkedRosterMemberPayoutErr;
   if (linkedReadError) {
     return NextResponse.json({ error: linkedReadError.message }, { status: 500 });
   }
@@ -1469,6 +1488,8 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     linked_expense_id: linkedExpense?.id ?? null,
     linked_cleaner_earning_id: linkedCleanerEarning?.id ?? null,
     linked_cleaner_earnings_adjustment_id: linkedCleanerAdjustment?.id ?? null,
+    linked_team_member_payout_id: linkedTeamMemberPayout?.id ?? null,
+    linked_roster_member_payout_id: linkedRosterMemberPayout?.id ?? null,
   });
   if (!deleteSafety.ok) {
     return NextResponse.json(
