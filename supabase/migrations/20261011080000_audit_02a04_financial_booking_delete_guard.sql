@@ -61,6 +61,16 @@ begin
      )
      or exists (
        select 1
+       from public.admin_earnings_actions aea
+       where aea.booking_id = old.id
+     )
+     or exists (
+       select 1
+       from public.promotion_redemptions prd
+       where prd.booking_id = old.id
+     )
+     or exists (
+       select 1
        from public.cleaner_earnings ce
        where ce.booking_id = old.id
          and lower(trim(coalesce(ce.status, ''))) in ('approved', 'processing', 'paid')
@@ -183,7 +193,11 @@ declare
   v_deleted bigint := 0;
   v_recurring_protected bigint := 0;
   v_financially_protected bigint := 0;
+  v_fk_protected bigint := 0;
+  v_promotions_reversed bigint := 0;
   r record;
+  v_redemption record;
+  v_booking_revenue_zar numeric;
 begin
   select count(*)
     into v_recurring_protected
@@ -193,7 +207,7 @@ begin
     and coalesce(is_recurring_generated, false) = true;
 
   for r in
-    select id
+    select id, total_price
     from public.bookings
     where status = 'pending_payment'
       and created_at < now() - interval '2 hours'
@@ -201,6 +215,45 @@ begin
     order by created_at, id
   loop
     begin
+      -- Applied promotions are financial eligibility state, not disposable checkout
+      -- metadata. Reverse the abandoned checkout atomically and retain the booking
+      -- as payment_expired so redemption attribution remains auditable.
+      if exists (
+        select 1
+        from public.promotion_redemptions pr
+        where pr.booking_id = r.id
+          and pr.status = 'applied'
+      ) then
+        v_booking_revenue_zar := greatest(coalesce(r.total_price, 0), 0);
+
+        for v_redemption in
+          update public.promotion_redemptions
+             set status = 'reversed'
+           where booking_id = r.id
+             and status = 'applied'
+          returning promotion_id, discount_zar
+        loop
+          update public.promotions
+             set redemptions_count = greatest(0, coalesce(redemptions_count, 0) - 1),
+                 budget_spent_zar = greatest(0, coalesce(budget_spent_zar, 0) - greatest(coalesce(v_redemption.discount_zar, 0), 0)),
+                 revenue_generated_zar = greatest(0, coalesce(revenue_generated_zar, 0) - v_booking_revenue_zar),
+                 updated_at = now()
+           where id = v_redemption.promotion_id;
+
+          v_promotions_reversed := v_promotions_reversed + 1;
+        end loop;
+
+        update public.bookings
+           set status = 'payment_expired'
+         where id = r.id
+           and status = 'pending_payment'
+           and created_at < now() - interval '2 hours'
+           and coalesce(is_recurring_generated, false) = false;
+
+        v_financially_protected := v_financially_protected + 1;
+        continue;
+      end if;
+
       delete from public.bookings
        where id = r.id
          and status = 'pending_payment'
@@ -216,11 +269,16 @@ begin
         else
           raise;
         end if;
+      when foreign_key_violation then
+        -- Existing RESTRICT children (for example Cleaning Credit reservations
+        -- or recurring-prepayment package/allocation rows) protect their booking.
+        -- Count and continue so one protected checkout cannot roll back the batch.
+        v_fk_protected := v_fk_protected + 1;
     end;
   end loop;
 
-  raise log 'purge_stale_pending_payment_bookings: purged % checkout rows, protected % recurring rows, protected % financial rows',
-    v_deleted, v_recurring_protected, v_financially_protected;
+  raise log 'purge_stale_pending_payment_bookings: purged % checkout rows, protected % recurring rows, protected % financial rows, protected % FK rows, reversed % promotions',
+    v_deleted, v_recurring_protected, v_financially_protected, v_fk_protected, v_promotions_reversed;
 
   insert into public.dispatch_logs (source, level, message, context)
   values (
@@ -230,7 +288,9 @@ begin
     jsonb_build_object(
       'deleted', v_deleted,
       'recurring_protected', v_recurring_protected,
-      'financially_protected', v_financially_protected
+      'financially_protected', v_financially_protected,
+      'fk_protected', v_fk_protected,
+      'promotions_reversed', v_promotions_reversed
     )
   );
 
@@ -239,6 +299,8 @@ begin
     'deleted', v_deleted,
     'recurring_protected', v_recurring_protected,
     'financially_protected', v_financially_protected,
+    'fk_protected', v_fk_protected,
+    'promotions_reversed', v_promotions_reversed,
     'ran_at', to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
   );
 exception
