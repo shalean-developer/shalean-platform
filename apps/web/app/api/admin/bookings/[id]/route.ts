@@ -1401,7 +1401,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   const { data: row, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, payment_status, marked_paid_by_admin_id, zoho_invoice_id, payment_completed_at, paid_at, monthly_invoice_id, sales_document_id, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_payout_cents, cleaner_bonus_cents, payout_earnings_cents, amount_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id, cleaner_id, date, time",
+      "id, status, payment_status, marked_paid_by_admin_id, zoho_invoice_id, refunded_at, refund_status, payout_paid_at, payout_run_id, payment_completed_at, paid_at, monthly_invoice_id, sales_document_id, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_payout_cents, cleaner_bonus_cents, payout_earnings_cents, amount_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id, cleaner_id, date, time",
     )
     .eq("id", id)
     .maybeSingle();
@@ -1414,6 +1414,10 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     payment_status?: string | null;
     marked_paid_by_admin_id?: string | null;
     zoho_invoice_id?: string | null;
+    refunded_at?: string | null;
+    refund_status?: string | null;
+    payout_paid_at?: string | null;
+    payout_run_id?: string | null;
     payment_completed_at?: string | null;
     paid_at?: string | null;
     monthly_invoice_id?: string | null;
