@@ -11,7 +11,8 @@ language plpgsql
 set search_path = pg_catalog, public
 as $$
 begin
-  if old.marked_paid_by_admin_id is not null
+  if lower(trim(coalesce(old.status, ''))) = 'completed'
+     or old.marked_paid_by_admin_id is not null
      or old.zoho_invoice_id is not null
      or old.refunded_at is not null
      or nullif(trim(coalesce(old.refund_status, '')), '') is not null
@@ -270,7 +271,8 @@ as $financial_history$
     from public.bookings b
     where b.id = p_booking_id
       and (
-        b.marked_paid_by_admin_id is not null
+        lower(trim(coalesce(b.status, ''))) = 'completed'
+        or b.marked_paid_by_admin_id is not null
         or b.zoho_invoice_id is not null
         or b.refunded_at is not null
         or nullif(trim(coalesce(b.refund_status, '')), '') is not null
@@ -353,6 +355,100 @@ $financial_history$;
 
 revoke all on function public.booking_has_nonpromotion_financial_history(uuid) from public, anon, authenticated;
 grant execute on function public.booking_has_nonpromotion_financial_history(uuid) to service_role;
+
+
+-- Governed non-production seed-reset helper. It is idempotent because the
+-- reservation status is changed to released in the same transaction as any
+-- balance restoration. It is additionally scoped to DEVSEED booking references.
+create or replace function public.reset_seed_cleaning_credit_for_booking(p_booking_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  v_booking_reference text;
+  v public.cleaning_credit_reservations%rowtype;
+  v_balance numeric;
+  v_after numeric;
+begin
+  select paystack_reference
+    into v_booking_reference
+    from public.bookings
+   where id = p_booking_id
+   for update;
+
+  if not found or coalesce(v_booking_reference, '') not like 'DEVSEED-%' then
+    return jsonb_build_object('ok', false, 'error', 'not_devseed_booking');
+  end if;
+
+  select *
+    into v
+    from public.cleaning_credit_reservations
+   where booking_id = p_booking_id
+   for update;
+
+  if not found then
+    return jsonb_build_object('ok', true, 'status', 'reservation_not_found');
+  end if;
+
+  if v.status = 'released' then
+    return jsonb_build_object('ok', true, 'status', 'already_released');
+  end if;
+
+  if v.status not in ('reserved', 'settled') then
+    return jsonb_build_object('ok', false, 'error', 'unsupported_reservation_status', 'status', v.status);
+  end if;
+
+  select coalesce(credit_balance_zar, 0)
+    into v_balance
+    from public.user_profiles
+   where id = v.user_id
+   for update;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'user_not_found');
+  end if;
+
+  v_after := round((v_balance + v.amount_zar) * 100) / 100;
+
+  update public.user_profiles
+     set credit_balance_zar = v_after
+   where id = v.user_id;
+
+  if v.status = 'settled' then
+    insert into public.cleaning_credit_transactions(
+      user_id,
+      amount_zar,
+      balance_after_zar,
+      type,
+      booking_id,
+      note,
+      created_by
+    )
+    values (
+      v.user_id,
+      v.amount_zar,
+      v_after,
+      'admin_adjust',
+      v.booking_id,
+      'DEV SEED RESET: restore settled Cleaning Credit',
+      'seed-dev-reset'
+    );
+  end if;
+
+  update public.cleaning_credit_reservations
+     set status = 'released',
+         released_at = coalesce(released_at, now()),
+         updated_at = now()
+   where id = v.id;
+
+  return jsonb_build_object('ok', true, 'status', 'released', 'balance_after_zar', v_after);
+end;
+$;
+
+revoke all on function public.reset_seed_cleaning_credit_for_booking(uuid) from public, anon, authenticated;
+grant execute on function public.reset_seed_cleaning_credit_for_booking(uuid) to service_role;
 
 -- Keep the pending-payment purge healthy after adding the delete guard.
 -- Process candidates independently so one protected financial row cannot roll
