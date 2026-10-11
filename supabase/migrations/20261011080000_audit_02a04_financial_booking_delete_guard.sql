@@ -1134,7 +1134,21 @@ begin
         where pr.booking_id = r.id
           and pr.status = 'applied'
       ) then
-        v_promotion_revenue_unproven := false;
+        -- Validate every applied redemption before mutating any of them. A
+        -- single legacy row without original revenue evidence retains the
+        -- entire booking/redemption set untouched.
+        v_promotion_revenue_unproven := exists (
+          select 1
+          from public.promotion_redemptions pr
+          where pr.booking_id = r.id
+            and pr.status = 'applied'
+            and jsonb_typeof(pr.metadata -> 'bookingRevenueZar') <> 'number'
+        );
+
+        if v_promotion_revenue_unproven then
+          v_financially_protected := v_financially_protected + 1;
+          continue;
+        end if;
 
         for v_redemption in
           select id, promotion_id, discount_zar, metadata
@@ -1143,11 +1157,6 @@ begin
             and status = 'applied'
           for update
         loop
-          if jsonb_typeof(v_redemption.metadata -> 'bookingRevenueZar') <> 'number' then
-            v_promotion_revenue_unproven := true;
-            exit;
-          end if;
-
           v_booking_revenue_zar := greatest(
             coalesce((v_redemption.metadata ->> 'bookingRevenueZar')::numeric, 0),
             0
@@ -1169,13 +1178,6 @@ begin
             v_promotions_reversed := v_promotions_reversed + 1;
           end if;
         end loop;
-
-        if v_promotion_revenue_unproven then
-          -- Legacy redemption without original revenue evidence: retain the
-          -- booking/redemption untouched rather than corrupt shared counters.
-          v_financially_protected := v_financially_protected + 1;
-          continue;
-        end if;
 
         update public.bookings
            set status = 'payment_expired'
