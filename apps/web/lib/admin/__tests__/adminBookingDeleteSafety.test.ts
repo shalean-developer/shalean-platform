@@ -26,6 +26,19 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.code).toBe("admin_booking_delete_sales_document_child");
   });
 
+  it("blocks hard delete for monthly financial flow before invoice linkage", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "pending",
+      payment_status: "pending_monthly",
+      amount_paid_cents: 0,
+      is_monthly_billing_booking: true,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected monthly financial flow delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_monthly_financial_flow")).toBe(true);
+  });
+
   it("continues to block monthly-invoice children", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "payment_expired",
@@ -184,6 +197,19 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected roster-payout-linked booking delete to be blocked");
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_roster_member_payout_linked")).toBe(true);
+  });
+
+  it("blocks hard delete when a payout audit event survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_payout_audit_event_id: "21212121-2121-4212-8212-212121212121",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected payout-audit-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_payout_audit_linked")).toBe(true);
   });
 
   it("blocks hard delete when a Cleaning Credit transaction survives", () => {
