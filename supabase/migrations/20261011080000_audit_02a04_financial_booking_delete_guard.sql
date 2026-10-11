@@ -548,6 +548,7 @@ declare
   v_referral public.referrals%rowtype;
   v_balance numeric;
   v_redemption record;
+  v_promotion record;
 begin
   for v_booking in
     select id, paystack_reference, recurring_id
@@ -597,29 +598,6 @@ begin
           'status', v_referral.status
         );
       end if;
-
-      select coalesce(credit_balance_zar, 0)
-        into v_balance
-        from public.user_profiles
-       where id = v_tx.user_id;
-
-      if not found then
-        return jsonb_build_object(
-          'ok', false,
-          'error', 'referrer_profile_not_found',
-          'booking_id', v_booking.id,
-          'user_id', v_tx.user_id
-        );
-      end if;
-
-      if v_balance + 0.001 < greatest(round(coalesce(v_tx.amount_zar, 0)::numeric, 2), 0) then
-        return jsonb_build_object(
-          'ok', false,
-          'error', 'referral_credit_already_spent',
-          'booking_id', v_booking.id,
-          'referral_id', v_referral.id
-        );
-      end if;
     end loop;
 
     for v_redemption in
@@ -637,6 +615,71 @@ begin
         );
       end if;
     end loop;
+  end loop;
+
+  -- Check referral reversibility cumulatively per wallet. Individual checks can
+  -- miss the case where several seed rewards were partly spent from one balance.
+  for v_tx in
+    select user_id, sum(greatest(round(coalesce(amount_zar, 0)::numeric, 2), 0)) as amount_zar
+      from public.cleaning_credit_transactions
+     where booking_id = any(coalesce(p_booking_ids, '{}'::uuid[]))
+       and type = 'earn'
+       and referral_id is not null
+     group by user_id
+  loop
+    select coalesce(credit_balance_zar, 0)
+      into v_balance
+      from public.user_profiles
+     where id = v_tx.user_id;
+
+    if not found then
+      return jsonb_build_object(
+        'ok', false,
+        'error', 'referrer_profile_not_found',
+        'user_id', v_tx.user_id
+      );
+    end if;
+
+    if v_balance + 0.001 < coalesce(v_tx.amount_zar, 0) then
+      return jsonb_build_object(
+        'ok', false,
+        'error', 'referral_credit_already_spent',
+        'user_id', v_tx.user_id,
+        'balance_zar', v_balance,
+        'required_zar', v_tx.amount_zar
+      );
+    end if;
+  end loop;
+
+  -- Fail closed if shared promotion counters cannot support an exact reversal
+  -- of all selected seed redemptions. This avoids greatest(0) masking drift and
+  -- protects non-seed analytics on the same promotion.
+  for v_promotion in
+    select
+      pr.promotion_id,
+      count(*)::bigint as redemption_count,
+      sum(greatest(coalesce(pr.discount_zar, 0), 0))::numeric as discount_zar,
+      sum(greatest(coalesce((pr.metadata ->> 'bookingRevenueZar')::numeric, 0), 0))::numeric as revenue_zar
+    from public.promotion_redemptions pr
+    where pr.booking_id = any(coalesce(p_booking_ids, '{}'::uuid[]))
+      and pr.status = 'applied'
+      and jsonb_typeof(pr.metadata -> 'bookingRevenueZar') = 'number'
+    group by pr.promotion_id
+  loop
+    if not exists (
+      select 1
+      from public.promotions p
+      where p.id = v_promotion.promotion_id
+        and coalesce(p.redemptions_count, 0) >= v_promotion.redemption_count
+        and coalesce(p.budget_spent_zar, 0) + 0.001 >= coalesce(v_promotion.discount_zar, 0)
+        and coalesce(p.revenue_generated_zar, 0) + 0.001 >= coalesce(v_promotion.revenue_zar, 0)
+    ) then
+      return jsonb_build_object(
+        'ok', false,
+        'error', 'promotion_counter_reversal_unproven',
+        'promotion_id', v_promotion.promotion_id
+      );
+    end if;
   end loop;
 
   return jsonb_build_object('ok', true);
