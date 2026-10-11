@@ -132,8 +132,9 @@ export async function createBookingFromSalesQuoteInvoice(
   const location = resolveLocation(requestDetails, q.notes);
   const date = resolveBookingDate(requestDetails?.preferred_date, q.due_date);
   const totalCents = Math.max(0, Math.round(Number(inv.total_cents ?? q.total_cents ?? 0)));
-  const totalPaidZar = Math.max(1, Math.round(totalCents / 100));
+  const quotedTotalZar = Math.max(1, Math.round(totalCents / 100));
   const invoicePaid = String(inv.status ?? "").toLowerCase() === "paid";
+  const collectedTotalZar = invoicePaid ? quotedTotalZar : 0;
 
   const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const paystackReference = `salesdoc_${invoiceId.replace(/-/g, "")}`;
@@ -159,7 +160,7 @@ export async function createBookingFromSalesQuoteInvoice(
       city_id: null,
       date,
       time: DEFAULT_TIME,
-      total_paid_zar: totalPaidZar,
+      total_paid_zar: collectedTotalZar,
       pricing_version_id: null,
       price_breakdown: null,
       total_price: null,
@@ -184,7 +185,7 @@ export async function createBookingFromSalesQuoteInvoice(
       // The bookings table stores the canonical total in whole ZAR. Reconcile
       // source lines to that persisted value so cents on a sales document do
       // not fail unified booking validation.
-      declaredTotalCents: totalPaidZar * 100,
+      declaredTotalCents: quotedTotalZar * 100,
       source: "sales_document",
       lines: lineItems.map((line) => ({
         name: line.description,
