@@ -24,7 +24,7 @@ export async function provePersistedPaystackReplay(params: {
     .eq("id", bookingId).maybeSingle();
   const row = data as unknown as Record<string, unknown> | null;
   if (error || !row || row.id !== bookingId || typeof row.status !== "string" || !row.status ||
-    ["pending_payment", "payment_mismatch", "payment_reconciliation_required"].includes(row.status)) return false;
+    ["pending_payment", "payment_expired", "payment_mismatch", "payment_reconciliation_required"].includes(row.status)) return false;
   const metadata = normalizePaystackMetadata(params.metadata);
   const { snapshot } = parseBookingSnapshot(metadata, { amountCents: params.amountCents });
   const gatewayEmail = normalizeEmail(params.customerEmail);
