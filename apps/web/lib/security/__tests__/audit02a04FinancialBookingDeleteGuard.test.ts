@@ -45,6 +45,10 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("from public.admin_money_action_proposals amap");
     expect(sql).toContain("amap.booking_id = old.id");
     expect(sql).toContain("from public.admin_earnings_actions aea");
+    expect(sql).toContain("from public.booking_changes bc");
+    expect(sql).toContain("from public.growth_action_outcomes gao");
+    expect(sql).toContain("from public.conversion_experiment_results cer");
+    expect(sql).toContain("from public.email_campaign_attributions eca");
     expect(sql).toContain("aea.booking_id = old.id");
     expect(sql).toContain("from public.promotion_redemptions prd");
     expect(sql).toContain("prd.booking_id = old.id");
@@ -99,6 +103,10 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain('.from("accounting_sync_records")');
     expect(src).toContain('.from("admin_money_action_proposals")');
     expect(src).toContain('.from("admin_earnings_actions")');
+    expect(src).toContain('.from("booking_changes")');
+    expect(src).toContain('.from("growth_action_outcomes")');
+    expect(src).toContain('.from("conversion_experiment_results")');
+    expect(src).toContain('.from("email_campaign_attributions")');
     expect(src).toContain('.from("promotion_redemptions")');
     expect(src).toContain("payment_transaction_id: r.payment_transaction_id ?? linkedPayment?.id ?? null");
     expect(src).toContain("linked_cleaning_credit_transaction_id: linkedCleaningCreditTransaction?.id ?? null");
@@ -110,6 +118,10 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain("linked_accounting_sync_id: linkedAccountingSync?.id ?? null");
     expect(src).toContain("linked_money_proposal_id: linkedMoneyProposal?.id ?? null");
     expect(src).toContain("linked_earnings_action_id: linkedEarningsAction?.id ?? null");
+    expect(src).toContain("linked_booking_change_id: linkedBookingChange?.id ?? null");
+    expect(src).toContain("linked_growth_attribution_id: linkedGrowthAttribution?.id ?? null");
+    expect(src).toContain("linked_conversion_attribution_id: linkedConversionAttribution?.id ?? null");
+    expect(src).toContain("linked_email_attribution_id: linkedEmailAttribution?.id ?? null");
     expect(src).toContain("linked_promotion_redemption_id: linkedPromotionRedemption?.id ?? null");
     expect(src).toContain("marked_paid_by_admin_id");
     expect(src).toContain("refunded_at");
@@ -204,6 +216,20 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).not.toContain("ce.status, ''))) in ('approved', 'processing', 'paid')");
     expect(src).toContain('.from("cleaner_earnings")');
     expect(src).not.toContain('.in("status", ["approved", "processing", "paid"])');
+  });
+
+  it("keeps the governed non-production seed reset compatible without weakening production guards", () => {
+    const seed = read("../../scripts/seed-dev.mjs");
+
+    expect(seed).toContain("assertNonProductionSeed");
+    expect(seed).toContain("neutralize seed booking financial mirrors");
+    expect(seed).toContain("booking_changes");
+    expect(seed).toContain("growth_action_outcomes");
+    expect(seed).toContain("conversion_experiment_results");
+    expect(seed).toContain("email_campaign_attributions");
+    expect(seed).toContain("deposit_paid_cents: 0");
+    expect(seed).toContain('admin.from("bookings").delete().in("id", seedBookingIds)');
+    expect(seed).toContain("Reset failed at");
   });
 
   it("keeps unpaid financially-unlinked cleanup rows outside the block predicate", () => {
