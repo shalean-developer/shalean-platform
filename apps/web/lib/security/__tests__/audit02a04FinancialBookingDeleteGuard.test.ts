@@ -243,6 +243,17 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(helper).toContain("$seed_credit_reset$;");
   });
 
+  it("preflights every stale-purge redemption before mutating promotion state", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+
+    expect(sql).toContain("Validate every applied redemption before mutating any of them");
+    expect(sql).toContain("v_promotion_revenue_unproven := exists (");
+    expect(sql).toContain("jsonb_typeof(pr.metadata -> 'bookingRevenueZar') <> 'number'");
+    expect(sql.indexOf("v_promotion_revenue_unproven := exists (")).toBeLessThan(
+      sql.indexOf("update public.promotion_redemptions"),
+    );
+  });
+
   it("reverses stale-purge promotion revenue from immutable redemption metadata", () => {
     const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
 
