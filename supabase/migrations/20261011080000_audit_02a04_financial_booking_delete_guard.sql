@@ -384,3 +384,396 @@ $$;
 
 revoke all on function public.purge_stale_pending_payment_bookings() from public, anon, authenticated;
 grant execute on function public.purge_stale_pending_payment_bookings() to service_role;
+
+
+-- The financial hard-delete guard makes monthly duplicate cleanup retention-safe:
+-- losing duplicate rows are cancelled, not deleted. The payload keeps the legacy
+-- deleted_ids key for caller compatibility; those IDs are now cancelled losers.
+create or replace function public.resolve_admin_monthly_booking_race(
+  p_our_id uuid,
+  p_user_id uuid,
+  p_date text,
+  p_time text,
+  p_service_slug text,
+  p_force boolean
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_slug text := lower(trim(p_service_slug));
+  v_t0 timestamptz;
+  v_t1 timestamptz;
+  v_winner uuid;
+  v_winner_created timestamptz;
+  v_deleted uuid[] := '{}';
+  r_id uuid;
+  v_json_deleted jsonb;
+  v_active_count int;
+  v_our_exists boolean;
+  v_cluster_size int;
+begin
+  if p_force then
+    return jsonb_build_object(
+      'action', 'proceed',
+      'ok', true,
+      'winner_id', null,
+      'deleted_ids', '[]'::jsonb,
+      'cluster_start', null,
+      'cluster_end', null,
+      'cluster_size', null,
+      'winner_created_at', null,
+      'left_duplicate', false,
+      'rolled_back_self', false
+    );
+  end if;
+
+  perform 1
+  from public.bookings b
+  where public.booking_matches_active_admin_slot(b, p_user_id, p_date, p_time, v_slug)
+  for update;
+
+  select exists(select 1 from public.bookings b where b.id = p_our_id) into v_our_exists;
+
+  select count(*)::int into v_active_count
+  from public.bookings b
+  where public.booking_matches_active_admin_slot(b, p_user_id, p_date, p_time, v_slug);
+
+  if v_active_count = 0 then
+    return jsonb_build_object(
+      'action', 'proceed',
+      'ok', true,
+      'winner_id', null,
+      'deleted_ids', '[]'::jsonb,
+      'cluster_start', null,
+      'cluster_end', null,
+      'cluster_size', 0,
+      'winner_created_at', null,
+      'left_duplicate', false,
+      'rolled_back_self', false
+    );
+  end if;
+
+  if not v_our_exists then
+    select min(b.created_at) into v_t0
+    from public.bookings b
+    where public.booking_matches_active_admin_slot(b, p_user_id, p_date, p_time, v_slug);
+
+    if v_t0 is null then
+      return jsonb_build_object(
+        'action', 'reject',
+        'ok', false,
+        'winner_id', null,
+        'deleted_ids', '[]'::jsonb,
+        'cluster_start', null,
+        'cluster_end', null,
+        'cluster_size', v_active_count,
+        'winner_created_at', null,
+        'left_duplicate', false,
+        'rolled_back_self', true
+      );
+    end if;
+
+    v_t1 := v_t0 + interval '2 seconds';
+
+    select count(*)::int into v_cluster_size
+    from public.bookings b
+    where public.booking_matches_active_admin_slot(b, p_user_id, p_date, p_time, v_slug)
+      and b.created_at >= v_t0
+      and b.created_at <= v_t1;
+
+    select b.id, b.created_at into v_winner, v_winner_created
+    from public.bookings b
+    where public.booking_matches_active_admin_slot(b, p_user_id, p_date, p_time, v_slug)
+      and b.created_at >= v_t0
+      and b.created_at <= v_t1
+      and b.monthly_invoice_id is not null
+      and exists (
+        select 1 from public.monthly_invoices mi
+        where mi.id = b.monthly_invoice_id and lower(mi.status) is distinct from 'draft'
+      )
+    order by b.created_at asc, b.id asc
+    limit 1;
+
+    if v_winner is null then
+      select b.id, b.created_at into v_winner, v_winner_created
+      from public.bookings b
+      where public.booking_matches_active_admin_slot(b, p_user_id, p_date, p_time, v_slug)
+        and b.created_at >= v_t0
+        and b.created_at <= v_t1
+      order by b.created_at asc, b.id asc
+      limit 1;
+    end if;
+
+    return jsonb_build_object(
+      'action', 'reject',
+      'ok', false,
+      'winner_id', v_winner,
+      'deleted_ids', '[]'::jsonb,
+      'cluster_start', v_t0,
+      'cluster_end', v_t1,
+      'cluster_size', v_cluster_size,
+      'winner_created_at', v_winner_created,
+      'left_duplicate', false,
+      'rolled_back_self', true
+    );
+  end if;
+
+  if v_active_count = 1 then
+    select b.id, b.created_at into v_winner, v_winner_created
+    from public.bookings b
+    where public.booking_matches_active_admin_slot(b, p_user_id, p_date, p_time, v_slug)
+    order by b.created_at asc, b.id asc
+    limit 1;
+
+    v_t0 := v_winner_created;
+    v_t1 := coalesce(v_winner_created, now()) + interval '2 seconds';
+
+    return jsonb_build_object(
+      'action', 'proceed',
+      'ok', true,
+      'winner_id', v_winner,
+      'deleted_ids', '[]'::jsonb,
+      'cluster_start', v_t0,
+      'cluster_end', v_t1,
+      'cluster_size', 1,
+      'winner_created_at', v_winner_created,
+      'left_duplicate', false,
+      'rolled_back_self', false
+    );
+  end if;
+
+  select min(b.created_at) into v_t0
+  from public.bookings b
+  where public.booking_matches_active_admin_slot(b, p_user_id, p_date, p_time, v_slug);
+
+  if v_t0 is null then
+    return jsonb_build_object(
+      'action', 'proceed',
+      'ok', true,
+      'winner_id', null,
+      'deleted_ids', '[]'::jsonb,
+      'cluster_start', null,
+      'cluster_end', null,
+      'cluster_size', 0,
+      'winner_created_at', null,
+      'left_duplicate', false,
+      'rolled_back_self', false
+    );
+  end if;
+
+  v_t1 := v_t0 + interval '2 seconds';
+
+  select count(*)::int into v_cluster_size
+  from public.bookings b
+  where public.booking_matches_active_admin_slot(b, p_user_id, p_date, p_time, v_slug)
+    and b.created_at >= v_t0
+    and b.created_at <= v_t1;
+
+  select b.id, b.created_at into v_winner, v_winner_created
+  from public.bookings b
+  where public.booking_matches_active_admin_slot(b, p_user_id, p_date, p_time, v_slug)
+    and b.created_at >= v_t0
+    and b.created_at <= v_t1
+    and b.monthly_invoice_id is not null
+    and exists (
+      select 1 from public.monthly_invoices mi
+      where mi.id = b.monthly_invoice_id and lower(mi.status) is distinct from 'draft'
+    )
+  order by b.created_at asc, b.id asc
+  limit 1;
+
+  if v_winner is null then
+    select b.id, b.created_at into v_winner, v_winner_created
+    from public.bookings b
+    where public.booking_matches_active_admin_slot(b, p_user_id, p_date, p_time, v_slug)
+      and b.created_at >= v_t0
+      and b.created_at <= v_t1
+    order by b.created_at asc, b.id asc
+    limit 1;
+  end if;
+
+  if v_winner is null then
+    return jsonb_build_object(
+      'action', 'proceed',
+      'ok', true,
+      'winner_id', null,
+      'deleted_ids', '[]'::jsonb,
+      'cluster_start', v_t0,
+      'cluster_end', v_t1,
+      'cluster_size', v_cluster_size,
+      'winner_created_at', null,
+      'left_duplicate', false,
+      'rolled_back_self', false
+    );
+  end if;
+
+  for r_id in
+    select b.id
+    from public.bookings b
+    where public.booking_matches_active_admin_slot(b, p_user_id, p_date, p_time, v_slug)
+      and b.created_at >= v_t0
+      and b.created_at <= v_t1
+      and b.id <> v_winner
+    order by b.created_at asc, b.id asc
+  loop
+    if exists (
+      select 1 from public.bookings b
+      where b.id = r_id
+        and (
+          b.payment_status is null
+          or b.payment_status in ('pending', 'pending_monthly')
+        )
+        and (
+          b.monthly_invoice_id is null
+          or exists (
+            select 1 from public.monthly_invoices mi
+            where mi.id = b.monthly_invoice_id and lower(mi.status) = 'draft'
+          )
+        )
+    ) then
+      update public.bookings
+         set status = 'cancelled',
+             updated_at = now()
+       where id = r_id;
+      if found then
+        v_deleted := array_append(v_deleted, r_id);
+      end if;
+    end if;
+  end loop;
+
+  select coalesce(jsonb_agg(x::text), '[]'::jsonb) into v_json_deleted from unnest(v_deleted) as x;
+
+  if p_our_id = any(v_deleted) then
+    return jsonb_build_object(
+      'action', 'reject',
+      'ok', false,
+      'winner_id', v_winner,
+      'deleted_ids', v_json_deleted,
+      'cluster_start', v_t0,
+      'cluster_end', v_t1,
+      'cluster_size', v_cluster_size,
+      'winner_created_at', v_winner_created,
+      'left_duplicate', false,
+      'rolled_back_self', true
+    );
+  end if;
+
+  if p_our_id is distinct from v_winner then
+    return jsonb_build_object(
+      'action', 'reject',
+      'ok', false,
+      'winner_id', v_winner,
+      'deleted_ids', v_json_deleted,
+      'cluster_start', v_t0,
+      'cluster_end', v_t1,
+      'cluster_size', v_cluster_size,
+      'winner_created_at', v_winner_created,
+      'left_duplicate', true,
+      'rolled_back_self', false
+    );
+  end if;
+
+  return jsonb_build_object(
+    'action', 'proceed',
+    'ok', true,
+    'winner_id', v_winner,
+    'deleted_ids', v_json_deleted,
+    'cluster_start', v_t0,
+    'cluster_end', v_t1,
+    'cluster_size', v_cluster_size,
+    'winner_created_at', v_winner_created,
+    'left_duplicate', false,
+    'rolled_back_self', false
+  );
+end;
+$fn$;
+
+
+comment on function public.resolve_admin_monthly_booking_race(uuid, uuid, text, text, text, boolean) is
+  'AUDIT-02A04: serializes monthly duplicate races and cancels invoice-safe losers instead of hard deleting financial-flow rows.';
+
+-- Guarded rollback for a provisional recurring-prepaid occurrence whose allocation
+-- claim failed. This removes only an unclaimed reserved allocation booking. The
+-- recurring-prepayment tables are intentionally accessed dynamically because older
+-- production schemas may not have that feature installed yet.
+create or replace function public.rollback_unclaimed_recurring_prepaid_booking(
+  p_booking_id uuid,
+  p_allocation_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v public.bookings%rowtype;
+  v_alloc_status text;
+  v_alloc_booking_id uuid;
+begin
+  select *
+    into v
+    from public.bookings
+   where id = p_booking_id
+   for update;
+
+  if not found then
+    return jsonb_build_object('ok', true, 'already_absent', true);
+  end if;
+
+  if p_allocation_id is null
+     or v.recurring_id is null
+     or coalesce(v.paystack_reference, '') <> ('rpp_' || p_allocation_id::text)
+  then
+    return jsonb_build_object('ok', false, 'error', 'provisional_booking_identity_mismatch');
+  end if;
+
+  if to_regclass('public.recurring_prepaid_allocations') is null then
+    return jsonb_build_object('ok', false, 'error', 'recurring_prepaid_allocations_missing');
+  end if;
+
+  execute
+    'select status, booking_id
+       from public.recurring_prepaid_allocations
+      where id = $1
+      for update'
+    into v_alloc_status, v_alloc_booking_id
+    using p_allocation_id;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'allocation_not_found');
+  end if;
+
+  if coalesce(v_alloc_status, '') <> 'reserved' or v_alloc_booking_id is not null then
+    return jsonb_build_object('ok', false, 'error', 'allocation_not_unclaimed');
+  end if;
+
+  -- Neutralize only provisional settlement mirrors before invoking the normal
+  -- hard-delete guard. Any durable child financial history still blocks DELETE.
+  update public.bookings
+     set status = 'payment_expired',
+         payment_status = 'pending',
+         payment_completed_at = null,
+         amount_paid_cents = 0,
+         total_paid_cents = 0,
+         total_paid_zar = 0,
+         updated_at = now()
+   where id = p_booking_id;
+
+  delete from public.bookings where id = p_booking_id;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'provisional_booking_delete_failed');
+  end if;
+
+  return jsonb_build_object('ok', true, 'already_absent', false);
+exception
+  when check_violation or foreign_key_violation then
+    return jsonb_build_object('ok', false, 'error', sqlerrm, 'sqlstate', sqlstate);
+end;
+$$;
+
+revoke all on function public.rollback_unclaimed_recurring_prepaid_booking(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.rollback_unclaimed_recurring_prepaid_booking(uuid, uuid) to service_role;
