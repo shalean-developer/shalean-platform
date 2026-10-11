@@ -66,13 +66,33 @@ export async function createBookingFromSalesQuoteInvoice(
 
   const { data: existingBooking, error: existingErr } = await admin
     .from("bookings")
-    .select("id")
+    .select("id, status")
     .eq("sales_document_id", invoiceId)
     .maybeSingle();
 
   if (existingErr) return { ok: false, error: existingErr.message };
   if (existingBooking?.id) {
-    return { ok: true, bookingId: String(existingBooking.id), alreadyExisted: true };
+    const existingStatus = String(existingBooking.status ?? "").trim().toLowerCase();
+    if (existingStatus === "cancelled") {
+      const { data: cleanupData, error: cleanupError } = await admin.rpc(
+        "delete_unpaid_sales_document_booking",
+        { p_invoice_id: invoiceId },
+      );
+      const cleanup =
+        cleanupData && typeof cleanupData === "object" && !Array.isArray(cleanupData)
+          ? (cleanupData as { ok?: unknown; error?: unknown })
+          : null;
+      if (cleanupError || cleanup?.ok !== true) {
+        return {
+          ok: false,
+          error:
+            cleanupError?.message ??
+            (typeof cleanup?.error === "string" ? cleanup.error : "cancelled_booking_cleanup_failed"),
+        };
+      }
+    } else {
+      return { ok: true, bookingId: String(existingBooking.id), alreadyExisted: true };
+    }
   }
 
   const ensuredCustomer = await ensureSalesDocumentCustomer(admin, quoteId);
