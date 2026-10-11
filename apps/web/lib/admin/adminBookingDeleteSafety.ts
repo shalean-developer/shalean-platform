@@ -1,6 +1,9 @@
 export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_marked_paid_by_admin"
   | "admin_booking_delete_zoho_invoice_linked"
+  | "admin_booking_delete_refund_marker_present"
+  | "admin_booking_delete_payout_paid_at_present"
+  | "admin_booking_delete_payout_run_linked"
   | "admin_booking_delete_payment_completed"
   | "admin_booking_delete_paid_payment_status"
   | "admin_booking_delete_completed_status"
@@ -42,6 +45,10 @@ export type AdminBookingDeleteSafetyRow = {
   payment_status?: string | null;
   marked_paid_by_admin_id?: string | null;
   zoho_invoice_id?: string | null;
+  refunded_at?: string | null;
+  refund_status?: string | null;
+  payout_paid_at?: string | null;
+  payout_run_id?: string | null;
   payment_completed_at?: string | null;
   paid_at?: string | null;
   monthly_invoice_id?: string | null;
@@ -122,6 +129,27 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_zoho_invoice_linked",
       message: "Bookings linked to a Zoho invoice cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.refunded_at) || hasText(row.refund_status)) {
+    blocks.push({
+      code: "admin_booking_delete_refund_marker_present",
+      message: "Bookings with refund or chargeback markers cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.payout_paid_at)) {
+    blocks.push({
+      code: "admin_booking_delete_payout_paid_at_present",
+      message: "Bookings with payout_paid_at cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.payout_run_id)) {
+    blocks.push({
+      code: "admin_booking_delete_payout_run_linked",
+      message: "Bookings linked to a payout run cannot be hard-deleted.",
     });
   }
 
