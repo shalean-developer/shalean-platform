@@ -12,6 +12,6 @@ describe("payment-expired edit-superseded finalization guard", () => {
     expect(src).toContain("payment_edit_superseded");
     expect(src).toContain("late Paystack success targeted a payment-edit-superseded booking");
     expect(src).toContain('error: "PAYMENT_NOT_PAYABLE"');
-    expect(src).toContain("recoveryEnqueue: false");
+    expect(src).toContain("recoveryEnqueue: true");
   });
 });
