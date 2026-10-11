@@ -464,46 +464,36 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         .select("status")
         .eq("booking_id", bidEarly)
         .maybeSingle();
-      if (replayCreditReservationError) {
+      if (
+        replayCreditReservationError ||
+        (
+          replayCreditReservation &&
+          String(replayCreditReservation.status ?? "").trim().toLowerCase() !== "settled"
+        )
+      ) {
+        const { error: quarantineError } = await supabase
+          .from("bookings")
+          .update({ status: "payment_reconciliation_required" })
+          .eq("id", bidEarly);
+        if (quarantineError) {
+          await reportOperationalIssue(
+            "critical",
+            "upsertBookingFromPaystack",
+            `Unable to quarantine unresolved Cleaning Credit replay: ${quarantineError.message}`,
+            { bookingId: bidEarly, paystackReference: input.paystackReference },
+          );
+        }
         return {
           ok: false,
           skipped: true,
           bookingId: bidEarly,
           bookingInDatabase: true,
           reason: "finalization_failed",
-          error: replayCreditReservationError.message,
+          error:
+            replayCreditReservationError?.message ??
+            "cleaning_credit_settlement_pending",
           recoveryEnqueue: true,
         };
-      }
-
-      if (
-        replayCreditReservation &&
-        String(replayCreditReservation.status ?? "").trim().toLowerCase() !== "settled"
-      ) {
-        if (input.paystackPersistSource === "retry") {
-          const retryCreditSettlement = await settleCleaningCreditForBooking(supabase, bidEarly);
-          if (!retryCreditSettlement.ok && retryCreditSettlement.error !== "reservation_not_found") {
-            return {
-              ok: false,
-              skipped: true,
-              bookingId: bidEarly,
-              bookingInDatabase: true,
-              reason: "finalization_failed",
-              error: `cleaning_credit_settlement_failed:${retryCreditSettlement.error}`,
-              recoveryEnqueue: true,
-            };
-          }
-        } else {
-          return {
-            ok: false,
-            skipped: true,
-            bookingId: bidEarly,
-            bookingInDatabase: true,
-            reason: "finalization_failed",
-            error: "cleaning_credit_settlement_pending",
-            recoveryEnqueue: true,
-          };
-        }
       }
 
       logPaymentStructured("payment_finalize", {
@@ -1419,6 +1409,18 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       `Cleaning Credit settlement failed after verified payment: ${creditSettlement.error}`,
       { bookingId: id, paystackReference: input.paystackReference },
     );
+    const { error: quarantineError } = await supabase
+      .from("bookings")
+      .update({ status: "payment_reconciliation_required" })
+      .eq("id", id);
+    if (quarantineError) {
+      await reportOperationalIssue(
+        "critical",
+        "upsertBookingFromPaystack",
+        `Unable to quarantine Cleaning Credit settlement failure: ${quarantineError.message}`,
+        { bookingId: id, paystackReference: input.paystackReference },
+      );
+    }
     return {
       ok: false,
       skipped: false,
