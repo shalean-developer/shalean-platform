@@ -39,6 +39,19 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_monthly_invoice_child")).toBe(true);
   });
 
+  it("blocks hard delete when a booking was marked paid by an admin", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      marked_paid_by_admin_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected admin-paid booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_marked_paid_by_admin")).toBe(true);
+  });
+
   it("blocks hard delete when a durable payment transaction link survives", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "cancelled",
@@ -91,6 +104,19 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected cleaner adjustment-linked booking delete to be blocked");
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_cleaner_earnings_adjustment_linked")).toBe(true);
+  });
+
+  it("blocks hard delete when a cleaner earnings dispute survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_cleaner_earnings_dispute_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected cleaner-dispute-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_cleaner_earnings_dispute_linked")).toBe(true);
   });
 
   it("blocks hard delete when a team member payout allocation survives", () => {
