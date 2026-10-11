@@ -17,6 +17,9 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("pt.booking_id = old.id");
     expect(sql).toContain("pt.entity_type = 'booking' and pt.entity_id = old.id");
     expect(sql).toContain("from public.expenses e");
+    expect(sql).toContain("from public.inventory_movements im");
+    expect(sql).toContain("from public.transport_cost_entries tce");
+    expect(sql).toContain("from public.booking_cleaner_earnings_snapshot bces");
     expect(sql).toContain("e.booking_id = old.id");
     expect(sql).toContain("from public.cleaning_credit_transactions cct");
     expect(sql).toContain("cct.booking_id = old.id");
@@ -44,6 +47,9 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("from public.team_job_member_payouts tjmp");
     expect(sql).toContain("from public.booking_roster_member_payouts brmp");
     expect(sql).toContain("coalesce(old.amount_paid_cents, 0) > 0");
+    expect(sql).toContain("coalesce(old.cleaner_payout_cents, 0) > 0");
+    expect(sql).toContain("coalesce(old.cleaner_bonus_cents, 0) > 0");
+    expect(sql).toContain("coalesce(old.payout_earnings_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.total_paid_cents, 0) > 0");
     expect(sql).toContain("old.monthly_invoice_id is not null");
     expect(sql).toContain("old.sales_document_id is not null");
@@ -70,6 +76,9 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain("booking_id.eq.");
     expect(src).toContain("entity_type.eq.booking");
     expect(src).toContain('.from("expenses")');
+    expect(src).toContain('.from("inventory_movements")');
+    expect(src).toContain('.from("transport_cost_entries")');
+    expect(src).toContain('.from("booking_cleaner_earnings_snapshot")');
     expect(src).toContain('.from("cleaner_earnings")');
     expect(src).toContain('["approved", "processing", "paid"]');
     expect(src).toContain('.from("cleaner_earnings_adjustments")');
