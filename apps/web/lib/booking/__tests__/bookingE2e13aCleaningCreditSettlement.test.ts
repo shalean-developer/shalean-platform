@@ -45,6 +45,9 @@ describe("BOOKING-E2E-13A Cleaning Credit settlement authority", () => {
     expect(creditCheckPos).toBeLessThan(replayPos);
     expect(recoveryPos).toBeGreaterThan(creditCheckPos);
     expect(src).toContain("cleaning_credit_settlement_pending");
+    expect(src).toContain('input.paystackPersistSource === "retry"');
+    expect(src).toContain("retryCreditSettlement = await settleCleaningCreditForBooking");
+    expect(src).toContain("cleaning_credit_settlement_failed:");
   });
 
   it("quarantines the paid booking when Cleaning Credit settlement cannot complete", () => {
