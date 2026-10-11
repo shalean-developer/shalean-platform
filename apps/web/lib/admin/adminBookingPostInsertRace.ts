@@ -14,7 +14,7 @@ export type ResolveMonthlyRaceResult =
     }
   | {
       kind: "reject";
-      winnerId: string;
+      winnerId: string | null;
       deletedIds: string[];
       leftDuplicate: boolean;
       rolledBackSelf: boolean;
@@ -108,7 +108,7 @@ export async function resolveMonthlyBookingDuplicateRace(
       winnerCreatedAt,
     };
   }
-  if (action === "reject" && winnerId) {
+  if (action === "reject") {
     return {
       kind: "reject",
       winnerId,
