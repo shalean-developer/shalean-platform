@@ -34,6 +34,19 @@ describe("BOOKING-E2E-13A Cleaning Credit settlement authority", () => {
     expect(sql).toContain("status = 'settled'");
   });
 
+  it("blocks in-upsert persisted replay until Cleaning Credit is settled", () => {
+    const src = read("lib/booking/upsertBookingFromPaystack.ts");
+    const replayPos = src.indexOf("skipped_already_persisted");
+    const creditCheckPos = src.lastIndexOf('from("cleaning_credit_reservations")', replayPos);
+    const recoveryPos = src.lastIndexOf("recoveryEnqueue: true", replayPos);
+
+    expect(replayPos).toBeGreaterThanOrEqual(0);
+    expect(creditCheckPos).toBeGreaterThanOrEqual(0);
+    expect(creditCheckPos).toBeLessThan(replayPos);
+    expect(recoveryPos).toBeGreaterThan(creditCheckPos);
+    expect(src).toContain("cleaning_credit_settlement_pending");
+  });
+
   it("quarantines the paid booking when Cleaning Credit settlement cannot complete", () => {
     const src = read("lib/booking/upsertBookingFromPaystack.ts");
 
