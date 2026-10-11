@@ -528,6 +528,125 @@ revoke all on function public.booking_has_financial_history(uuid) from public, a
 grant execute on function public.booking_has_financial_history(uuid) to service_role;
 
 
+-- Read-only preflight for governed seed financial reset. This MUST run before
+-- the first mutation in scripts/seed-dev.mjs so irreversible/spent referral
+-- credit or unprovable promotion revenue cannot leave a partially dismantled
+-- seed dataset.
+create or replace function public.preflight_seed_financial_reset(
+  p_booking_ids uuid[],
+  p_seed_recurring_ids uuid[]
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $seed_financial_preflight$
+declare
+  v_booking record;
+  v_tx record;
+  v_referral public.referrals%rowtype;
+  v_balance numeric;
+  v_redemption record;
+begin
+  for v_booking in
+    select id, paystack_reference, recurring_id
+      from public.bookings
+     where id = any(coalesce(p_booking_ids, '{}'::uuid[]))
+  loop
+    if coalesce(v_booking.paystack_reference, '') not like 'DEVSEED-%'
+       and not (
+         v_booking.recurring_id is not null
+         and v_booking.recurring_id = any(coalesce(p_seed_recurring_ids, '{}'::uuid[]))
+       )
+    then
+      return jsonb_build_object(
+        'ok', false,
+        'error', 'not_devseed_booking',
+        'booking_id', v_booking.id
+      );
+    end if;
+
+    for v_tx in
+      select id, user_id, referral_id, amount_zar
+        from public.cleaning_credit_transactions
+       where booking_id = v_booking.id
+         and type = 'earn'
+         and referral_id is not null
+    loop
+      select *
+        into v_referral
+        from public.referrals
+       where id = v_tx.referral_id;
+
+      if not found then
+        return jsonb_build_object(
+          'ok', false,
+          'error', 'referral_not_found',
+          'booking_id', v_booking.id,
+          'referral_id', v_tx.referral_id
+        );
+      end if;
+
+      if v_referral.status <> 'rewarded' then
+        return jsonb_build_object(
+          'ok', false,
+          'error', 'unexpected_referral_status',
+          'booking_id', v_booking.id,
+          'referral_id', v_referral.id,
+          'status', v_referral.status
+        );
+      end if;
+
+      select coalesce(credit_balance_zar, 0)
+        into v_balance
+        from public.user_profiles
+       where id = v_tx.user_id;
+
+      if not found then
+        return jsonb_build_object(
+          'ok', false,
+          'error', 'referrer_profile_not_found',
+          'booking_id', v_booking.id,
+          'user_id', v_tx.user_id
+        );
+      end if;
+
+      if v_balance + 0.001 < greatest(round(coalesce(v_tx.amount_zar, 0)::numeric, 2), 0) then
+        return jsonb_build_object(
+          'ok', false,
+          'error', 'referral_credit_already_spent',
+          'booking_id', v_booking.id,
+          'referral_id', v_referral.id
+        );
+      end if;
+    end loop;
+
+    for v_redemption in
+      select id, metadata
+        from public.promotion_redemptions
+       where booking_id = v_booking.id
+         and status = 'applied'
+    loop
+      if jsonb_typeof(v_redemption.metadata -> 'bookingRevenueZar') <> 'number' then
+        return jsonb_build_object(
+          'ok', false,
+          'error', 'promotion_original_revenue_unproven',
+          'booking_id', v_booking.id,
+          'redemption_id', v_redemption.id
+        );
+      end if;
+    end loop;
+  end loop;
+
+  return jsonb_build_object('ok', true);
+end;
+$seed_financial_preflight$;
+
+revoke all on function public.preflight_seed_financial_reset(uuid[], uuid[]) from public, anon, authenticated;
+grant execute on function public.preflight_seed_financial_reset(uuid[], uuid[]) to service_role;
+
+
 -- Governed non-production seed referral-reward reversal. It removes only an
 -- earn transaction tied to a known seed booking, restores the wallet balance,
 -- and returns the referral to pending in one transaction. The helper fails
@@ -648,8 +767,9 @@ grant execute on function public.reset_seed_referral_credit_for_booking(uuid, uu
 
 
 -- Governed non-production seed promotion reversal. Applied redemption counters
--- are reconciled before the seed ledger rows are removed. Setting each row to
--- reversed first makes retries idempotent.
+-- are reconciled using the original revenue captured in redemption metadata,
+-- never the booking's mutable current total. Setting each row to reversed first
+-- makes retries idempotent.
 create or replace function public.reset_seed_promotion_redemptions_for_booking(
   p_booking_id uuid,
   p_seed_recurring_ids uuid[]
@@ -662,12 +782,12 @@ as $seed_promotion_reset$
 declare
   v_booking_reference text;
   v_recurring_id uuid;
-  v_total_price numeric;
   v_redemption record;
+  v_original_revenue_zar numeric;
   v_reversed integer := 0;
 begin
-  select paystack_reference, recurring_id, total_price
-    into v_booking_reference, v_recurring_id, v_total_price
+  select paystack_reference, recurring_id
+    into v_booking_reference, v_recurring_id
     from public.bookings
    where id = p_booking_id
    for update;
@@ -682,12 +802,25 @@ begin
   end if;
 
   for v_redemption in
-    select id, promotion_id, discount_zar
+    select id, promotion_id, discount_zar, metadata
       from public.promotion_redemptions
      where booking_id = p_booking_id
        and status = 'applied'
      for update
   loop
+    if jsonb_typeof(v_redemption.metadata -> 'bookingRevenueZar') <> 'number' then
+      return jsonb_build_object(
+        'ok', false,
+        'error', 'promotion_original_revenue_unproven',
+        'redemption_id', v_redemption.id
+      );
+    end if;
+
+    v_original_revenue_zar := greatest(
+      coalesce((v_redemption.metadata ->> 'bookingRevenueZar')::numeric, 0),
+      0
+    );
+
     update public.promotion_redemptions
        set status = 'reversed'
      where id = v_redemption.id
@@ -702,7 +835,7 @@ begin
              ),
              revenue_generated_zar = greatest(
                0,
-               coalesce(revenue_generated_zar, 0) - greatest(coalesce(v_total_price, 0), 0)
+               coalesce(revenue_generated_zar, 0) - v_original_revenue_zar
              ),
              updated_at = now()
        where id = v_redemption.promotion_id;
