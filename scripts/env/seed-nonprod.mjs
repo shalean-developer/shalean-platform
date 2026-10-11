@@ -260,8 +260,34 @@ function applyCatalogSql(env) {
 }
 
 async function resetFixtures(admin, env) {
-  const { error } = await admin.from("bookings").delete().like("paystack_reference", "ENV-03-STG-%");
-  if (error) throw new Error(`reset bookings: ${error.message}`);
+  const { data: rows, error: loadError } = await admin
+    .from("bookings")
+    .select("id, paystack_reference, status, completed_at, payment_status, payment_completed_at, amount_paid_cents, deposit_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id")
+    .like("paystack_reference", "ENV-03-STG-%");
+  if (loadError) throw new Error(`reset bookings read: ${loadError.message}`);
+
+  let deleted = 0;
+  let retainedFinancial = 0;
+  for (const row of rows ?? []) {
+    const financiallyProtected =
+      String(row.status ?? "").toLowerCase() === "completed" ||
+      Boolean(row.completed_at) ||
+      ["paid", "success", "succeeded", "pending_monthly"].includes(String(row.payment_status ?? "").toLowerCase()) ||
+      Boolean(row.payment_completed_at) ||
+      Number(row.amount_paid_cents ?? 0) > 0 ||
+      Number(row.deposit_paid_cents ?? 0) > 0 ||
+      Number(row.total_paid_cents ?? 0) > 0 ||
+      Number(row.total_paid_zar ?? 0) > 0 ||
+      Boolean(row.payment_transaction_id);
+    if (financiallyProtected) {
+      retainedFinancial += 1;
+      continue;
+    }
+    const { error } = await admin.from("bookings").delete().eq("id", row.id);
+    if (error) throw new Error(`reset booking ${row.paystack_reference}: ${error.message}`);
+    deleted += 1;
+  }
+  console.log(`[seed-nonprod] reset deleted=${deleted} retained_financial_history=${retainedFinancial}`);
 }
 
 async function main() {
