@@ -19,9 +19,10 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("from public.cleaner_earnings ce");
     expect(sql).toContain("('approved', 'processing', 'paid')");
     expect(sql).toContain("from public.cleaner_earnings_adjustments cea");
+    expect(sql).toContain("from public.team_job_member_payouts tjmp");
+    expect(sql).toContain("from public.booking_roster_member_payouts brmp");
     expect(sql).toContain("coalesce(old.amount_paid_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.total_paid_cents, 0) > 0");
-    expect(sql).toContain("coalesce(old.total_paid_zar, 0) > 0");
     expect(sql).toContain("old.monthly_invoice_id is not null");
     expect(sql).toContain("old.sales_document_id is not null");
     expect(sql).toContain("old.payout_id is not null");
@@ -51,6 +52,22 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain('["approved", "processing", "paid"]');
     expect(src).toContain('.from("cleaner_earnings_adjustments")');
     expect(src).toContain("payment_transaction_id: r.payment_transaction_id ?? linkedPayment?.id ?? null");
+  });
+
+  it("keeps protected rows from aborting the batch purge", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+
+    expect(sql).toContain("v_financially_protected bigint := 0");
+    expect(sql).toContain("for r in");
+    expect(sql).toContain("when check_violation then");
+    expect(sql).toContain("v_financially_protected := v_financially_protected + 1");
+  });
+
+  it("does not treat overloaded quoted total_paid_zar as standalone proof of payment", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+
+    expect(sql).not.toContain("coalesce(old.total_paid_zar, 0) > 0");
+    expect(sql).not.toContain("coalesce(v.total_paid_zar, 0) > 0");
   });
 
   it("keeps unpaid financially-unlinked cleanup rows outside the block predicate", () => {
