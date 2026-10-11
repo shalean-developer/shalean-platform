@@ -1544,7 +1544,6 @@ async function resetSeedRows(admin) {
       "growth_action_outcomes",
       "conversion_experiment_results",
       "email_campaign_attributions",
-      "accounting_invoice_sync",
     ];
 
     for (const table of bookingScopedTables) {
@@ -1555,8 +1554,28 @@ async function resetSeedRows(admin) {
     }
 
     await must(
-      "payment_transactions seed booking children",
+      "payment_transactions seed booking_id children",
       admin.from("payment_transactions").delete().in("booking_id", seedBookingIds),
+    );
+    await must(
+      "payment_transactions seed entity children",
+      admin
+        .from("payment_transactions")
+        .delete()
+        .eq("entity_type", "booking")
+        .in("entity_id", seedBookingIds),
+    );
+    await must(
+      "accounting_invoice_sync seed booking_id children",
+      admin.from("accounting_invoice_sync").delete().in("booking_id", seedBookingIds),
+    );
+    await must(
+      "accounting_invoice_sync seed entity children",
+      admin
+        .from("accounting_invoice_sync")
+        .delete()
+        .eq("entity_type", "booking")
+        .in("entity_id", seedBookingIds),
     );
     await must(
       "refund_accounting_records seed booking children",
