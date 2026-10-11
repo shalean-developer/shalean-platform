@@ -1586,8 +1586,12 @@ export async function POST(request: Request) {
         ? new Date().toISOString()
         : null;
 
-    let rowStatus: "completed" | "assigned" | "pending" = adminMarkCompleted
-      ? "completed"
+    // Completed monthly bookings are inserted as assigned first. Canonical line
+    // items must persist and duplicate-race resolution must succeed before the
+    // row is promoted to completed. This prevents a child-write failure from
+    // stranding a financially material completed row without canonical lines.
+    let rowStatus: "assigned" | "pending" = adminMarkCompleted
+      ? "assigned"
       : selectedCleanerId
         ? "assigned"
         : "pending";
@@ -1649,7 +1653,6 @@ export async function POST(request: Request) {
         service_slug: serviceSlug,
         status: rowStatus,
         dispatch_status: preliminaryDispatch,
-        ...completionCoherencePatch,
         surge_multiplier: 1,
         surge_reason: null,
         service: getServiceLabel(serviceId),
@@ -1673,7 +1676,7 @@ export async function POST(request: Request) {
               selected_cleaner_id: selectedCleanerId,
               assignment_type: "user_selected",
               cleaner_id: selectedCleanerId,
-              cleaner_response_status: CLEANER_RESPONSE.PENDING,
+              cleaner_response_status: adminMarkCompleted ? CLEANER_RESPONSE.COMPLETED : CLEANER_RESPONSE.PENDING,
               ...(assignedAtIso ? { assigned_at: assignedAtIso } : {}),
             }
           : {}),
@@ -1867,6 +1870,29 @@ export async function POST(request: Request) {
           cluster_end: race.clusterEnd,
         },
       });
+    }
+
+    if (adminMarkCompleted) {
+      const { error: completeErr } = await admin
+        .from("bookings")
+        .update({
+          status: "completed",
+          ...completionCoherencePatch,
+          cleaner_response_status: CLEANER_RESPONSE.COMPLETED,
+          updated_at: completedAtIso ?? new Date().toISOString(),
+        })
+        .eq("id", newBookingId)
+        .eq("status", "assigned");
+      if (completeErr) {
+        const failBody: Record<string, unknown> = {
+          ok: false,
+          error: `Booking created with canonical line items but could not be marked completed: ${completeErr.message}`,
+          code: "admin_monthly_completion_promotion_failed",
+          bookingId: newBookingId,
+        };
+        if (claimId) await finalizeAdminBookingCreateIdempotency(admin, claimId, 500, failBody);
+        return NextResponse.json(failBody, { status: 500 });
+      }
     }
 
     if (!force) {
