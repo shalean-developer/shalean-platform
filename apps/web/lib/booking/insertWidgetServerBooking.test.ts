@@ -101,6 +101,15 @@ describe("insertWidgetDraftBookingRow", () => {
     expect(args.rowBase.service_slug).toBe("standard");
   });
 
+  it("keeps quote in total_price while collected cash stays zero", async () => {
+    await insertWidgetDraftBookingRow(admin, intake, { guestEmail: "quote@example.com" });
+    const args = mocks.insertBookingRowUnified.mock.calls[0][1] as {
+      rowBase: { total_paid_zar: number; total_price: number };
+    };
+    expect(args.rowBase.total_paid_zar).toBe(0);
+    expect(args.rowBase.total_price).toBeGreaterThan(0);
+  });
+
   it("sets service_slug from widget service key (normalized)", async () => {
     await insertWidgetDraftBookingRow(
       admin,
