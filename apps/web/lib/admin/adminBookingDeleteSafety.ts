@@ -41,7 +41,11 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_accounting_sync_linked"
   | "admin_booking_delete_money_proposal_linked"
   | "admin_booking_delete_earnings_action_linked"
-  | "admin_booking_delete_promotion_redemption_linked";
+  | "admin_booking_delete_promotion_redemption_linked"
+  | "admin_booking_delete_booking_change_linked"
+  | "admin_booking_delete_growth_attribution_linked"
+  | "admin_booking_delete_conversion_attribution_linked"
+  | "admin_booking_delete_email_attribution_linked";
 
 export type AdminBookingDeleteSafetyRow = {
   status?: string | null;
@@ -89,6 +93,10 @@ export type AdminBookingDeleteSafetyRow = {
   linked_money_proposal_id?: string | null;
   linked_earnings_action_id?: string | null;
   linked_promotion_redemption_id?: string | null;
+  linked_booking_change_id?: string | null;
+  linked_growth_attribution_id?: string | null;
+  linked_conversion_attribution_id?: string | null;
+  linked_email_attribution_id?: string | null;
 };
 
 export type AdminBookingDeleteBlock = {
@@ -422,6 +430,34 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_promotion_redemption_linked",
       message: "Bookings linked to promotion redemptions cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_booking_change_id)) {
+    blocks.push({
+      code: "admin_booking_delete_booking_change_linked",
+      message: "Bookings linked to immutable booking-change audit rows cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_growth_attribution_id)) {
+    blocks.push({
+      code: "admin_booking_delete_growth_attribution_linked",
+      message: "Bookings linked to growth attribution history cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_conversion_attribution_id)) {
+    blocks.push({
+      code: "admin_booking_delete_conversion_attribution_linked",
+      message: "Bookings linked to conversion attribution history cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_email_attribution_id)) {
+    blocks.push({
+      code: "admin_booking_delete_email_attribution_linked",
+      message: "Bookings linked to email campaign attribution history cannot be hard-deleted.",
     });
   }
 
