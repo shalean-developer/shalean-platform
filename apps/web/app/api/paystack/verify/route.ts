@@ -422,14 +422,16 @@ export async function GET(request: Request) {
       const amountCentsGet =
         typeof tx.amount === "number" && Number.isFinite(tx.amount) ? tx.amount : 0;
       const emailFromCustomer = typeof tx.customer?.email === "string" ? tx.customer.email.trim() : "";
-      if (!await provePersistedPaystackReplay({
+      const replayProofGet = await provePersistedPaystackReplay({
         supabase: adminGet, bookingId: existing.bookingId, reference: ref,
         amountCents: amountCentsGet, customerEmail: typeof tx.customer?.email === "string" ? tx.customer.email : "",
         metadata: tx.metadata,
-      })) {
+      });
+      if (!replayProofGet.ok && replayProofGet.reason === "mismatch") {
         return NextResponse.json({ ok: false, success: false, paymentStatus: "unknown",
           reference: ref, error: "PAYMENT_FINALIZATION_REPLAY_MISMATCH" }, { status: 409 });
       }
+      if (replayProofGet.ok) {
       await replayPaymentConfirmedNotifyForPersistedBooking({
         supabase: adminGet,
         bookingId: existing.bookingId,
@@ -502,6 +504,7 @@ export async function GET(request: Request) {
         upsertError: null,
         skipped: true,
       });
+      }
     }
   }
 
@@ -943,14 +946,16 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
       const emailNorm = emailRaw ? normalizeEmail(emailRaw) : "";
       const userIdShort = resolvePaystackUserId(snapShort, metadataShort);
       const emailFromCustomerPost = typeof tx.customer?.email === "string" ? tx.customer.email.trim() : "";
-      if (!await provePersistedPaystackReplay({
+      const replayProofPost = await provePersistedPaystackReplay({
         supabase: adminPost, bookingId: existingPost.bookingId, reference: ref,
         amountCents: txAmount, customerEmail: typeof tx.customer?.email === "string" ? tx.customer.email : "",
         metadata: tx.metadata,
-      })) {
+      });
+      if (!replayProofPost.ok && replayProofPost.reason === "mismatch") {
         return NextResponse.json({ ok: false, success: false, paymentStatus: "unknown",
           reference: ref, error: "PAYMENT_FINALIZATION_REPLAY_MISMATCH" }, { status: 409 });
       }
+      if (replayProofPost.ok) {
       after(async () => {
         await replayPaymentConfirmedNotifyForPersistedBooking({
           supabase: adminPost,
@@ -1036,6 +1041,7 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
         assignedCleanerId: null,
         selectedCleanerId: null,
       });
+      }
     }
   }
 
