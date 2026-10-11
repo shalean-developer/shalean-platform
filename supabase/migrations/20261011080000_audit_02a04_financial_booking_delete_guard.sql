@@ -13,6 +13,10 @@ as $$
 begin
   if old.marked_paid_by_admin_id is not null
      or old.zoho_invoice_id is not null
+     or old.refunded_at is not null
+     or nullif(trim(coalesce(old.refund_status, '')), '') is not null
+     or old.payout_paid_at is not null
+     or old.payout_run_id is not null
      or old.payment_completed_at is not null
      or lower(trim(coalesce(old.payment_status, ''))) in ('paid', 'success', 'succeeded')
      or coalesce(old.amount_paid_cents, 0) > 0
