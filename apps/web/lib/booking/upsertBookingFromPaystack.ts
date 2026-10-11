@@ -464,22 +464,46 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         .select("status")
         .eq("booking_id", bidEarly)
         .maybeSingle();
-      if (
-        replayCreditReservationError ||
-        (
-          replayCreditReservation &&
-          String(replayCreditReservation.status ?? "").trim().toLowerCase() !== "settled"
-        )
-      ) {
+      if (replayCreditReservationError) {
         return {
           ok: false,
           skipped: true,
           bookingId: bidEarly,
           bookingInDatabase: true,
           reason: "finalization_failed",
-          error: replayCreditReservationError?.message ?? "cleaning_credit_settlement_pending",
+          error: replayCreditReservationError.message,
           recoveryEnqueue: true,
         };
+      }
+
+      if (
+        replayCreditReservation &&
+        String(replayCreditReservation.status ?? "").trim().toLowerCase() !== "settled"
+      ) {
+        if (input.paystackPersistSource === "retry") {
+          const retryCreditSettlement = await settleCleaningCreditForBooking(supabase, bidEarly);
+          if (!retryCreditSettlement.ok && retryCreditSettlement.error !== "reservation_not_found") {
+            return {
+              ok: false,
+              skipped: true,
+              bookingId: bidEarly,
+              bookingInDatabase: true,
+              reason: "finalization_failed",
+              error: `cleaning_credit_settlement_failed:${retryCreditSettlement.error}`,
+              recoveryEnqueue: true,
+            };
+          }
+        } else {
+          return {
+            ok: false,
+            skipped: true,
+            bookingId: bidEarly,
+            bookingInDatabase: true,
+            reason: "finalization_failed",
+            error: "cleaning_credit_settlement_pending",
+            recoveryEnqueue: true,
+          };
+        }
       }
 
       logPaymentStructured("payment_finalize", {
