@@ -54,6 +54,14 @@ export type CreateBookingFromSalesQuoteInvoiceResult =
   | { ok: true; bookingId: string; alreadyExisted: boolean }
   | { ok: false; error: string };
 
+function isSalesDocumentLineItemRollbackMarker(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return false;
+  const marker = (metadata as Record<string, unknown>).audit02a04_provisional_rollback;
+  if (!marker || typeof marker !== "object" || Array.isArray(marker)) return false;
+  const m = marker as Record<string, unknown>;
+  return m.kind === "line_item_persist_failed" && m.source === "sales_document_quote";
+}
+
 /**
  * Creates (idempotently) a booking when a sales quote becomes an invoice.
  * Payment is collected on the sales document; the booking starts as `pending_payment`
@@ -67,13 +75,15 @@ export async function createBookingFromSalesQuoteInvoice(
 
   const { data: existingBooking, error: existingErr } = await admin
     .from("bookings")
-    .select("id, status")
+    .select("id, status, metadata")
     .eq("sales_document_id", invoiceId)
     .maybeSingle();
 
   if (existingErr) return { ok: false, error: existingErr.message };
   const retainedCancelledBookingId =
-    existingBooking?.id && String(existingBooking.status ?? "").trim().toLowerCase() === "cancelled"
+    existingBooking?.id &&
+    String(existingBooking.status ?? "").trim().toLowerCase() === "cancelled" &&
+    isSalesDocumentLineItemRollbackMarker(existingBooking.metadata)
       ? String(existingBooking.id)
       : null;
   if (existingBooking?.id && !retainedCancelledBookingId) {
