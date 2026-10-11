@@ -1436,6 +1436,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     { data: linkedCleanerAdjustment, error: linkedCleanerAdjustmentErr },
     { data: linkedTeamMemberPayout, error: linkedTeamMemberPayoutErr },
     { data: linkedRosterMemberPayout, error: linkedRosterMemberPayoutErr },
+    { data: linkedCleaningCreditTransaction, error: linkedCleaningCreditTransactionErr },
   ] = await Promise.all([
     admin.from("expenses").select("id").eq("booking_id", id).limit(1).maybeSingle(),
     admin
@@ -1469,6 +1470,12 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
       .eq("booking_id", id)
       .limit(1)
       .maybeSingle(),
+    admin
+      .from("cleaning_credit_transactions")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
   ]);
   const linkedReadError =
     linkedExpenseErr ??
@@ -1476,7 +1483,8 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     linkedCleanerEarningErr ??
     linkedCleanerAdjustmentErr ??
     linkedTeamMemberPayoutErr ??
-    linkedRosterMemberPayoutErr;
+    linkedRosterMemberPayoutErr ??
+    linkedCleaningCreditTransactionErr;
   if (linkedReadError) {
     return NextResponse.json({ error: linkedReadError.message }, { status: 500 });
   }
@@ -1490,6 +1498,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     linked_cleaner_earnings_adjustment_id: linkedCleanerAdjustment?.id ?? null,
     linked_team_member_payout_id: linkedTeamMemberPayout?.id ?? null,
     linked_roster_member_payout_id: linkedRosterMemberPayout?.id ?? null,
+    linked_cleaning_credit_transaction_id: linkedCleaningCreditTransaction?.id ?? null,
   });
   if (!deleteSafety.ok) {
     return NextResponse.json(
