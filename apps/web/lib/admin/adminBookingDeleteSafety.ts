@@ -1,5 +1,6 @@
 export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_marked_paid_by_admin"
+  | "admin_booking_delete_zoho_invoice_linked"
   | "admin_booking_delete_payment_completed"
   | "admin_booking_delete_paid_payment_status"
   | "admin_booking_delete_completed_status"
@@ -24,6 +25,8 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_refund_record_linked"
   | "admin_booking_delete_referral_redemption_linked"
   | "admin_booking_delete_referral_event_linked"
+  | "admin_booking_delete_accounting_invoice_sync_linked"
+  | "admin_booking_delete_accounting_sync_linked"
   | "admin_booking_delete_money_proposal_linked"
   | "admin_booking_delete_earnings_action_linked"
   | "admin_booking_delete_promotion_redemption_linked";
@@ -32,6 +35,7 @@ export type AdminBookingDeleteSafetyRow = {
   status?: string | null;
   payment_status?: string | null;
   marked_paid_by_admin_id?: string | null;
+  zoho_invoice_id?: string | null;
   payment_completed_at?: string | null;
   paid_at?: string | null;
   monthly_invoice_id?: string | null;
@@ -55,6 +59,8 @@ export type AdminBookingDeleteSafetyRow = {
   linked_refund_record_id?: string | null;
   linked_referral_redemption_id?: string | null;
   linked_referral_event_id?: string | null;
+  linked_accounting_invoice_sync_id?: string | null;
+  linked_accounting_sync_id?: string | null;
   linked_money_proposal_id?: string | null;
   linked_earnings_action_id?: string | null;
   linked_promotion_redemption_id?: string | null;
@@ -97,6 +103,13 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_marked_paid_by_admin",
       message: "Bookings marked paid by an admin cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.zoho_invoice_id)) {
+    blocks.push({
+      code: "admin_booking_delete_zoho_invoice_linked",
+      message: "Bookings linked to a Zoho invoice cannot be hard-deleted.",
     });
   }
 
@@ -265,6 +278,20 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_referral_event_linked",
       message: "Bookings linked to referral events cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_accounting_invoice_sync_id)) {
+    blocks.push({
+      code: "admin_booking_delete_accounting_invoice_sync_linked",
+      message: "Bookings linked to accounting invoice sync history cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_accounting_sync_id)) {
+    blocks.push({
+      code: "admin_booking_delete_accounting_sync_linked",
+      message: "Bookings linked to accounting sync history cannot be hard-deleted.",
     });
   }
 
