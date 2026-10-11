@@ -3,6 +3,7 @@ import crypto from "crypto";
 const m = vi.hoisted(() => ({
   admin: vi.fn(), replay: vi.fn(), record: vi.fn(), sync: vi.fn(), pipeline: vi.fn(), finalize: vi.fn(),
   monthly: vi.fn(), sales: vi.fn(), monthlyRecord: vi.fn(), salesRecord: vi.fn(), entityRecord: vi.fn(),
+  settleCredit: vi.fn(), r0Finalize: vi.fn(), enqueueFailed: vi.fn(),
 }));
 vi.mock("next/server", async (importOriginal) => {
   const actual = await importOriginal<typeof import("next/server")>();
@@ -36,6 +37,9 @@ vi.mock("@/lib/logging/systemLog", () => ({ logSystemEvent: vi.fn(), reportOpera
 vi.mock("@/lib/observability/paymentStructuredLog", () => ({ logPaymentStructured: vi.fn() }));
 vi.mock("@/lib/rateLimit/paystackVerifyIpLimit", () => ({ allowPaystackVerifyRequest: () => true, paystackVerifyRateLimitKey: () => "test" }));
 vi.mock("@/lib/booking/enqueuePaystackRecoveryFailedJobs", () => ({ enqueuePaystackRecoveryFailedJobs: vi.fn() }));
+vi.mock("@/lib/booking/failedJobs", () => ({ enqueueFailedJob: m.enqueueFailed }));
+vi.mock("@/lib/referrals/creditReservations", () => ({ settleCleaningCreditForBooking: m.settleCredit }));
+vi.mock("@/lib/booking/finalizeR0BookingPostPayment", () => ({ finalizeR0BookingPostPayment: m.r0Finalize }));
 vi.mock("@/lib/ops/dispatchControlWebhook", () => ({ postDispatchControlAlert: vi.fn() }));
 vi.mock("@/lib/payments/routePaystackRefundEvent", () => ({ routeSuccessfulPaystackRefund: vi.fn() }));
 import { GET, POST } from "../verify/route";
@@ -69,6 +73,9 @@ beforeEach(() => {
     paymentTransactionId: "paytx-entity-test",
     expenseId: null,
   });
+  m.settleCredit.mockResolvedValue({ ok: true, status: "settled" });
+  m.r0Finalize.mockResolvedValue({ ok: true, action: "no_assignment_needed" });
+  m.enqueueFailed.mockResolvedValue(true);
   resetBookingOwnershipColumnCacheForTests();
   ownershipColumn = "customer_id"; lookupError = false; rpcOwner = null; reads = []; creditReservationStatus = null;
   row = { id, status: "pending", paystack_reference: "pay_current", customer_email: "payer@example.com", customer_id: owner, payment_status: "success", amount_paid_cents: 12550 };
@@ -182,10 +189,29 @@ for (const mode of ["GET", "POST", "webhook"] as const) {
   });
 }
 describe("POST exact-zero pre-verification gate", () => {
-  it.each(["success", "paid"])("preserves %s with numeric zero", async (status) => {
-    row.payment_status = status; row.amount_paid_cents = 0;
+  it.each(["success", "paid"])("preserves %s with numeric zero after R0 post-payment convergence", async (status) => {
+    row.payment_status = status; row.amount_paid_cents = 0; row.payment_completed_at = "2026-10-11T00:00:00.000Z";
     expect(await (await call("POST")).json()).toMatchObject({ ok: true, state: "already_processed", amountCents: 0 });
+    expect(m.r0Finalize).toHaveBeenCalledWith(expect.anything(), id);
+    expect(m.enqueueFailed).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled(); noSuccess();
+  });
+  it("quarantines R0 replay when a released Cleaning Credit reservation cannot be reclaimed", async () => {
+    row.payment_status = "success"; row.amount_paid_cents = 0; row.payment_completed_at = "2026-10-11T00:00:00.000Z";
+    creditReservationStatus = "released";
+    m.settleCredit.mockResolvedValue({ ok: false, error: "released_credit_reclaim_insufficient_balance" });
+    const response = await call("POST");
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      success: false,
+      state: "payment_reconciliation_required",
+      error: "cleaning_credit_settlement_failed:released_credit_reclaim_insufficient_balance",
+    });
+    expect(m.settleCredit).toHaveBeenCalledWith(expect.anything(), id);
+    expect(m.r0Finalize).not.toHaveBeenCalled();
+    expect(m.enqueueFailed).toHaveBeenCalledWith("r0_credit_reconciliation", { bookingId: id, reference: "pay_current" });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
   it.each([12550, -1, null, undefined, "0", NaN, Infinity, 0.5])("verifies remotely for unproven zero %s", async (amount) => {
     row.amount_paid_cents = amount; if (amount === undefined) delete row.amount_paid_cents;
