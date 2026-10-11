@@ -200,7 +200,7 @@ describe("shared route proof canonical ownership resolution", () => {
   });
   it("uses canonical email-to-auth fallback", async () => {
     delete tx.metadata.user_id; rpcOwner = owner;
-    expect(await provePersistedPaystackReplay({ supabase: m.admin(), bookingId: id, reference: tx.reference, amountCents: tx.amount, customerEmail: tx.customer.email, metadata: tx.metadata })).toBe(true);
+    expect(await provePersistedPaystackReplay({ supabase: m.admin(), bookingId: id, reference: tx.reference, amountCents: tx.amount, customerEmail: tx.customer.email, metadata: tx.metadata })).toEqual({ ok: true });
     expect(m.admin().rpc).toHaveBeenCalledWith("resolve_auth_user_id_by_email", { p_email: "payer@example.com" });
   });
 });
