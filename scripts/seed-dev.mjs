@@ -1372,15 +1372,48 @@ async function resetSeedRows(admin) {
     return data;
   };
 
+  const optional = async (label, promise) => {
+    const { data, error } = await promise;
+    if (!error) return data;
+    const code = String(error.code ?? "");
+    const message = String(error.message ?? "");
+    if (code === "42P01" || code === "PGRST205" || message.includes("Could not find the table")) {
+      console.log(`[seed-dev] Optional table absent at ${label}; skipping.`);
+      return [];
+    }
+    throw new Error(`[seed-dev] Reset failed at ${label}: ${message}`);
+  };
+
   const seedBookings = await must(
     "load seed bookings",
     admin.from("bookings").select("id").like("paystack_reference", `${SEED_TAG}-%`),
   );
   const seedBookingIds = (seedBookings ?? []).map((row) => String(row.id)).filter(Boolean);
+  const seedBookingIdSet = new Set(seedBookingIds);
+
+  // Fail before any mutation if an append-only payout audit event mixes seed and
+  // non-seed bookings. Removing the whole event would erase non-seed financial history.
+  let seedOnlyPayoutAuditIds = [];
+  if (seedBookingIds.length > 0) {
+    const payoutAuditRows = await must(
+      "preflight payout_audit_events",
+      admin.from("payout_audit_events").select("id, booking_ids").overlaps("booking_ids", seedBookingIds),
+    );
+    const mixed = (payoutAuditRows ?? []).filter((row) => {
+      const ids = Array.isArray(row.booking_ids) ? row.booking_ids.map(String) : [];
+      return ids.some((id) => !seedBookingIdSet.has(id));
+    });
+    if (mixed.length > 0) {
+      throw new Error(
+        `[seed-dev] Reset blocked: ${mixed.length} payout audit event(s) mix seed and non-seed bookings.`,
+      );
+    }
+    seedOnlyPayoutAuditIds = (payoutAuditRows ?? []).map((row) => String(row.id)).filter(Boolean);
+  }
 
   // Reverse dependency order. This command is already guarded by assertNonProductionSeed()
-  // before resetSeedRows() is called. Explicitly remove seed-scoped financial/audit
-  // children, then neutralize only the known seed booking mirrors before hard delete.
+  // before resetSeedRows() is called. Explicitly reconcile seed-scoped financial/audit
+  // children, then neutralize only known seed booking mirrors before hard delete.
   await must(
     "admin_money_action_proposals",
     admin.from("admin_money_action_proposals").delete().in("id", Object.values(PROPOSAL_IDS)),
@@ -1403,12 +1436,120 @@ async function resetSeedRows(admin) {
   );
 
   if (seedBookingIds.length > 0) {
+    // Restore stock through the canonical inventory RPC before deleting seed movements.
+    const inventoryMovements = await must(
+      "load seed inventory movements",
+      admin
+        .from("inventory_movements")
+        .select("id, item_id, quantity_delta")
+        .in("booking_id", seedBookingIds),
+    );
+    for (const movement of inventoryMovements ?? []) {
+      const delta = Number(movement.quantity_delta ?? 0);
+      if (!Number.isFinite(delta) || delta === 0) continue;
+      await must(
+        `reverse inventory movement ${movement.id}`,
+        admin.rpc("record_inventory_movement", {
+          p_item_id: movement.item_id,
+          p_movement_type: delta < 0 ? "adjustment_in" : "adjustment_out",
+          p_quantity: Math.abs(delta),
+          p_booking_id: null,
+          p_cleaner_id: null,
+          p_team_id: null,
+          p_notes: `DEV SEED RESET reversal for ${movement.id}`,
+          p_actor: null,
+        }),
+      );
+    }
+    if ((inventoryMovements ?? []).length > 0) {
+      await must(
+        "delete reversed seed inventory movements",
+        admin.from("inventory_movements").delete().in(
+          "id",
+          inventoryMovements.map((row) => row.id),
+        ),
+      );
+    }
+
+    // Reconcile Cleaning Credit before deleting seed-scoped reservations/transactions.
+    const reservations = await must(
+      "load seed cleaning credit reservations",
+      admin
+        .from("cleaning_credit_reservations")
+        .select("id, booking_id, user_id, amount_zar, status")
+        .in("booking_id", seedBookingIds),
+    );
+    for (const reservation of reservations ?? []) {
+      const status = String(reservation.status ?? "");
+      if (status === "reserved") {
+        const released = await must(
+          `release Cleaning Credit reservation ${reservation.id}`,
+          admin.rpc("release_cleaning_credit_for_booking", {
+            p_booking_id: reservation.booking_id,
+          }),
+        );
+        const result = Array.isArray(released) ? released[0] : released;
+        if (!result?.ok) {
+          throw new Error(
+            `[seed-dev] Reset failed releasing Cleaning Credit reservation ${reservation.id}: ${result?.error_message ?? "unknown"}`,
+          );
+        }
+      } else if (status === "settled") {
+        const restored = await must(
+          `restore settled Cleaning Credit reservation ${reservation.id}`,
+          admin.rpc("apply_cleaning_credit_transaction", {
+            p_user_id: reservation.user_id,
+            p_amount_zar: Number(reservation.amount_zar ?? 0),
+            p_type: "admin_adjust",
+            p_referral_id: null,
+            p_booking_id: reservation.booking_id,
+            p_note: "DEV SEED RESET: restore settled Cleaning Credit",
+            p_created_by: "seed-dev-reset",
+          }),
+        );
+        const result = Array.isArray(restored) ? restored[0] : restored;
+        if (!result?.ok) {
+          throw new Error(
+            `[seed-dev] Reset failed restoring Cleaning Credit reservation ${reservation.id}: ${result?.error_message ?? "unknown"}`,
+          );
+        }
+      }
+    }
+
+    // Optional recurring-prepayment tables are present only on environments where
+    // that feature has been installed. Delete seed-scoped allocations before packages.
+    const seedPackages = await optional(
+      "load seed recurring prepaid packages",
+      admin
+        .from("recurring_prepaid_packages")
+        .select("id")
+        .in("source_booking_id", seedBookingIds),
+    );
+    const seedPackageIds = (seedPackages ?? []).map((row) => String(row.id)).filter(Boolean);
+    if (seedPackageIds.length > 0) {
+      await optional(
+        "delete seed recurring prepaid allocations by package",
+        admin.from("recurring_prepaid_allocations").delete().in("package_id", seedPackageIds),
+      );
+    }
+    await optional(
+      "delete seed recurring prepaid allocations by booking",
+      admin.from("recurring_prepaid_allocations").delete().in("booking_id", seedBookingIds),
+    );
+    if (seedPackageIds.length > 0) {
+      await optional(
+        "delete seed recurring prepaid packages",
+        admin.from("recurring_prepaid_packages").delete().in("id", seedPackageIds),
+      );
+    }
+
     const bookingScopedTables = [
       "booking_changes",
       "expenses",
-      "inventory_movements",
+      "inventory_equipment_issues",
       "transport_cost_entries",
       "cleaning_credit_transactions",
+      "cleaning_credit_reservations",
       "invoice_adjustments",
       "referral_discount_redemptions",
       "referral_events",
@@ -1455,10 +1596,10 @@ async function resetSeedRows(admin) {
         .in("entity_id", seedBookingIds),
     );
 
-    for (const bookingId of seedBookingIds) {
+    if (seedOnlyPayoutAuditIds.length > 0) {
       await must(
-        `payout_audit_events seed booking ${bookingId}`,
-        admin.from("payout_audit_events").delete().contains("booking_ids", [bookingId]),
+        "delete seed-only payout audit events",
+        admin.from("payout_audit_events").delete().in("id", seedOnlyPayoutAuditIds),
       );
     }
 
@@ -1477,6 +1618,7 @@ async function resetSeedRows(admin) {
           payout_paid_at: null,
           payout_run_id: null,
           payment_completed_at: null,
+          payment_reference_external: null,
           paid_at: null,
           monthly_invoice_id: null,
           sales_document_id: null,
@@ -1488,6 +1630,7 @@ async function resetSeedRows(admin) {
           cleaner_bonus_cents: 0,
           payout_earnings_cents: 0,
           cleaner_earnings_total_cents: 0,
+          internal_earnings_cents: 0,
           amount_paid_cents: 0,
           deposit_paid_cents: 0,
           total_paid_cents: 0,
