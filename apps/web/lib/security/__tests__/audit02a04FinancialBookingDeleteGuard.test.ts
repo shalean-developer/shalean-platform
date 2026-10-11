@@ -451,15 +451,21 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
 
   it("defers admin monthly completed state until canonical line items have persisted", () => {
     const src = read("app/api/admin/bookings/route.ts");
+    const pipeline = read("lib/admin/adminBookingPostCreatePipeline.ts");
     const completedInsert = src.indexOf('source: "admin_monthly"');
     const completionPromotion = src.indexOf('code: "admin_monthly_completion_promotion_failed"');
 
     expect(src).toContain("Completed monthly bookings are inserted as assigned first");
     expect(src).toContain('let rowStatus: "assigned" | "pending" = adminMarkCompleted');
     expect(src).not.toContain('let rowStatus: "completed" | "assigned" | "pending"');
-    expect(src).toContain('.eq("status", "assigned")');
+    expect(src).toContain("promoteAdminMonthlyBookingToCompleted");
     expect(completionPromotion).toBeGreaterThan(completedInsert);
     expect(src).toContain("Booking created with canonical line items but could not be marked completed");
+
+    expect(pipeline).toContain("function promoteAdminMonthlyBookingToCompleted");
+    expect(pipeline).toContain('.eq("status", "assigned")');
+    expect(pipeline).toContain('status: "completed"');
+    expect(pipeline).toContain("buildCompletionCoherencePatch");
   });
 
   it("stores and reverses the original promotion revenue instead of mutable booking total", () => {
