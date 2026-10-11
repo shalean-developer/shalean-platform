@@ -67,6 +67,17 @@ const BOOKING_INSERT_MAX_ATTEMPTS = 25;
 
 const ROUTE = "/api/cron/retry-failed-jobs";
 
+function paymentEditSupersededReference(snapshot: unknown): string | null {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return null;
+  const marker = (snapshot as Record<string, unknown>).payment_edit_superseded;
+  if (!marker || typeof marker !== "object" || Array.isArray(marker)) return null;
+  const record = marker as Record<string, unknown>;
+  if (record.reason !== "customer_edit_after_checkout") return null;
+  const reference =
+    typeof record.paystack_reference === "string" ? record.paystack_reference.trim() : "";
+  return reference || null;
+}
+
 /**
  * Cron: `Authorization: Bearer CRON_SECRET` (Vercel) or `x-cron-secret: CRON_SECRET` (Supabase pg_net).
  * Schedule: every minute via Supabase pg_cron (see migration `20260655_supabase_cron_dispatch_http_minute.sql`).
@@ -514,6 +525,7 @@ export async function POST(request: Request) {
 
         let supersededBooking = byReference.data;
         let supersededBookingError = byReference.error;
+        let supersededBookingMatchedByIdFallback = false;
 
         if (!supersededBooking && !supersededBookingError && metadataBookingId) {
           const byId = await supabase
@@ -523,6 +535,15 @@ export async function POST(request: Request) {
             .maybeSingle();
           supersededBooking = byId.data;
           supersededBookingError = byId.error;
+          supersededBookingMatchedByIdFallback = Boolean(byId.data);
+        }
+
+        if (
+          supersededBookingMatchedByIdFallback &&
+          supersededBooking &&
+          paymentEditSupersededReference(supersededBooking.booking_snapshot) !== payload.paystackReference
+        ) {
+          supersededBooking = null;
         }
 
         if (supersededBookingError) {
