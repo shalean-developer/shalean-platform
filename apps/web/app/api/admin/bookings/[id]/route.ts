@@ -1429,8 +1429,21 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     time?: string | null;
   };
 
+  const { data: linkedExpense, error: linkedExpenseErr } = await admin
+    .from("expenses")
+    .select("id")
+    .eq("booking_id", id)
+    .limit(1)
+    .maybeSingle();
+  if (linkedExpenseErr) {
+    return NextResponse.json({ error: linkedExpenseErr.message }, { status: 500 });
+  }
+
   const st = String(r.status ?? "").toLowerCase();
-  const deleteSafety = assertAdminBookingDeleteSafe(r);
+  const deleteSafety = assertAdminBookingDeleteSafe({
+    ...r,
+    linked_expense_id: linkedExpense?.id ?? null,
+  });
   if (!deleteSafety.ok) {
     return NextResponse.json(
       buildAdminWarningPayload({
