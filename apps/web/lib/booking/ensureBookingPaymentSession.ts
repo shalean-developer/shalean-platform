@@ -22,6 +22,7 @@ import { runPaystackVerifyFinalizePipeline } from "@/lib/booking/runPaystackVeri
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncRecurringPrepaymentReference } from "@/lib/recurring/recurringPrepaymentLedger";
 import { resolveDeploymentEnvironment } from "@/lib/env/deploymentEnvironment";
+import { bookingIsCustomerPaymentSettled } from "@/lib/booking/bookingPaymentSettlementState";
 
 export type BookingPaymentSessionAccess =
   | { kind: "paystack_ref"; reference: string }
@@ -69,7 +70,10 @@ type BookingPayRow = {
   customer_id: string | null;
   user_id: string | null;
   total_price: number | string | null;
+  amount_paid_cents: number | string | null;
+  total_paid_cents: number | string | null;
   total_paid_zar: number | string | null;
+  paid_at: string | null;
   price_snapshot: unknown;
   booking_snapshot: unknown;
   service: string | null;
@@ -78,7 +82,7 @@ type BookingPayRow = {
 };
 
 const SELECT_BASE_COLS =
-  "id, status, payment_status, payment_completed_at, paystack_reference, payment_link, payment_link_expires_at, customer_email, total_price, total_paid_zar, price_snapshot, booking_snapshot, service, date, time";
+  "id, status, payment_status, payment_completed_at, paid_at, paystack_reference, payment_link, payment_link_expires_at, customer_email, total_price, amount_paid_cents, total_paid_cents, total_paid_zar, price_snapshot, booking_snapshot, service, date, time";
 
 const PAYSTACK_INITIALIZE_TIMEOUT_MS = 12_000;
 
@@ -139,17 +143,25 @@ export function trustedBookingPayableZar(row: {
   return null;
 }
 
-function isAlreadyPaid(row: BookingPayRow): boolean {
-  if (String(row.payment_completed_at ?? "").trim()) return true;
-  const ps = String(row.payment_status ?? "").trim().toLowerCase();
-  if (ps === "success" || ps === "paid") return true;
-  const st = String(row.status ?? "").trim().toLowerCase();
-  if (st === "pending_payment" || st === "payment_expired") return false;
-  // Lifecycle statuses after successful checkout
-  if (["pending", "confirmed", "assigned", "in_progress", "completed", "cleaner_assigned"].includes(st)) {
-    return true;
+function settlementNumber(raw: number | string | null): number | null {
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string" && raw.trim() !== "") {
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
   }
-  return false;
+  return null;
+}
+
+function isAlreadyPaid(row: BookingPayRow): boolean {
+  return bookingIsCustomerPaymentSettled({
+    payment_status: row.payment_status,
+    status: row.status,
+    payment_completed_at: row.payment_completed_at,
+    paid_at: row.paid_at,
+    amount_paid_cents: settlementNumber(row.amount_paid_cents),
+    total_paid_cents: settlementNumber(row.total_paid_cents),
+    total_paid_zar: settlementNumber(row.total_paid_zar),
+  });
 }
 
 function accessAllowed(row: BookingPayRow, access: BookingPaymentSessionAccess): boolean {
