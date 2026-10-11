@@ -1384,11 +1384,21 @@ async function resetSeedRows(admin) {
     throw new Error(`[seed-dev] Reset failed at ${label}: ${message}`);
   };
 
-  const seedBookings = await must(
-    "load seed bookings",
+  const taggedSeedBookings = await must(
+    "load tagged seed bookings",
     admin.from("bookings").select("id").like("paystack_reference", `${SEED_TAG}-%`),
   );
-  const seedBookingIds = (seedBookings ?? []).map((row) => String(row.id)).filter(Boolean);
+  const recurringSeedOccurrences = await must(
+    "load generated seed recurring occurrences",
+    admin.from("bookings").select("id").in("recurring_id", Object.values(RECURRING_IDS)),
+  );
+  const seedBookingIds = Array.from(
+    new Set(
+      [...(taggedSeedBookings ?? []), ...(recurringSeedOccurrences ?? [])]
+        .map((row) => String(row.id))
+        .filter(Boolean),
+    ),
+  );
   const seedBookingIdSet = new Set(seedBookingIds);
 
   // Fail before any mutation if an append-only payout audit event mixes seed and
@@ -1436,39 +1446,27 @@ async function resetSeedRows(admin) {
   );
 
   if (seedBookingIds.length > 0) {
-    // Restore stock through the canonical inventory RPC before deleting seed movements.
+    // Restore stock and remove each original seed movement atomically.
     const inventoryMovements = await must(
       "load seed inventory movements",
       admin
         .from("inventory_movements")
-        .select("id, item_id, quantity_delta")
+        .select("id")
         .in("booking_id", seedBookingIds),
     );
     for (const movement of inventoryMovements ?? []) {
-      const delta = Number(movement.quantity_delta ?? 0);
-      if (!Number.isFinite(delta) || delta === 0) continue;
-      await must(
-        `reverse inventory movement ${movement.id}`,
-        admin.rpc("record_inventory_movement", {
-          p_item_id: movement.item_id,
-          p_movement_type: delta < 0 ? "adjustment_in" : "adjustment_out",
-          p_quantity: Math.abs(delta),
-          p_booking_id: null,
-          p_cleaner_id: null,
-          p_team_id: null,
-          p_notes: `DEV SEED RESET reversal for ${movement.id}`,
-          p_actor: null,
+      const reversed = await must(
+        `reverse seed inventory movement ${movement.id}`,
+        admin.rpc("reset_seed_inventory_movement", {
+          p_movement_id: movement.id,
         }),
       );
-    }
-    if ((inventoryMovements ?? []).length > 0) {
-      await must(
-        "delete reversed seed inventory movements",
-        admin.from("inventory_movements").delete().in(
-          "id",
-          inventoryMovements.map((row) => row.id),
-        ),
-      );
+      const result = Array.isArray(reversed) ? reversed[0] : reversed;
+      if (!result?.ok) {
+        throw new Error(
+          `[seed-dev] Reset failed reversing inventory movement ${movement.id}: ${result?.error ?? "unknown"}`,
+        );
+      }
     }
 
     // Reconcile Cleaning Credit before deleting seed-scoped reservations/transactions.
