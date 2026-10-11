@@ -55,6 +55,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("from public.team_job_member_payouts tjmp");
     expect(sql).toContain("from public.booking_roster_member_payouts brmp");
     expect(sql).toContain("coalesce(old.amount_paid_cents, 0) > 0");
+    expect(sql).toContain("coalesce(old.deposit_paid_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.cleaner_payout_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.cleaner_bonus_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.payout_earnings_cents, 0) > 0");
@@ -118,6 +119,18 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain("payout_paid_at");
     expect(src).toContain("payout_run_id");
     expect(src).toContain("linked_cleaner_earnings_dispute_id: linkedCleanerDispute?.id ?? null");
+  });
+
+  it("checks durable non-promotion financial history before reversing stale promotions", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+
+    expect(sql).toContain("function public.booking_has_nonpromotion_financial_history");
+    expect(sql).toContain("if public.booking_has_nonpromotion_financial_history(r.id) then");
+    expect(sql.indexOf("if public.booking_has_nonpromotion_financial_history(r.id) then")).toBeLessThan(
+      sql.indexOf("Applied promotions are financial eligibility state"),
+    );
+    expect(sql).toContain("from public.payment_transactions pt");
+    expect(sql).toContain("coalesce(b.deposit_paid_cents, 0) > 0");
   });
 
   it("keeps protected rows from aborting the batch purge", () => {
