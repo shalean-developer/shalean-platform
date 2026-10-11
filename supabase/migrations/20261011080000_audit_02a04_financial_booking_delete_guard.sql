@@ -360,7 +360,10 @@ grant execute on function public.booking_has_nonpromotion_financial_history(uuid
 -- Governed non-production seed-reset helper. It is idempotent because the
 -- reservation status is changed to released in the same transaction as any
 -- balance restoration. It is additionally scoped to DEVSEED booking references.
-create or replace function public.reset_seed_cleaning_credit_for_booking(p_booking_id uuid)
+create or replace function public.reset_seed_cleaning_credit_for_booking(
+  p_booking_id uuid,
+  p_seed_recurring_ids uuid[]
+)
 returns jsonb
 language plpgsql
 security definer
@@ -368,17 +371,23 @@ set search_path = public
 as $seed_credit_reset$
 declare
   v_booking_reference text;
+  v_recurring_id uuid;
   v public.cleaning_credit_reservations%rowtype;
   v_balance numeric;
   v_after numeric;
 begin
-  select paystack_reference
-    into v_booking_reference
+  select paystack_reference, recurring_id
+    into v_booking_reference, v_recurring_id
     from public.bookings
    where id = p_booking_id
    for update;
 
-  if not found or coalesce(v_booking_reference, '') not like 'DEVSEED-%' then
+  if not found
+     or (
+       coalesce(v_booking_reference, '') not like 'DEVSEED-%'
+       and not (v_recurring_id is not null and v_recurring_id = any(coalesce(p_seed_recurring_ids, '{}'::uuid[])))
+     )
+  then
     return jsonb_build_object('ok', false, 'error', 'not_devseed_booking');
   end if;
 
@@ -447,13 +456,16 @@ begin
 end;
 $seed_credit_reset$;
 
-revoke all on function public.reset_seed_cleaning_credit_for_booking(uuid) from public, anon, authenticated;
-grant execute on function public.reset_seed_cleaning_credit_for_booking(uuid) to service_role;
+revoke all on function public.reset_seed_cleaning_credit_for_booking(uuid, uuid[]) from public, anon, authenticated;
+grant execute on function public.reset_seed_cleaning_credit_for_booking(uuid, uuid[]) to service_role;
 
 
 -- Governed non-production seed-reset inventory helper. The original movement
 -- and stock quantity are reconciled in one transaction, making retries idempotent.
-create or replace function public.reset_seed_inventory_movement(p_movement_id uuid)
+create or replace function public.reset_seed_inventory_movement(
+  p_movement_id uuid,
+  p_seed_recurring_ids uuid[]
+)
 returns jsonb
 language plpgsql
 security definer
@@ -462,6 +474,7 @@ as $seed_inventory_reset$
 declare
   v_movement public.inventory_movements%rowtype;
   v_booking_reference text;
+  v_recurring_id uuid;
 begin
   select *
     into v_movement
@@ -477,13 +490,18 @@ begin
     return jsonb_build_object('ok', false, 'error', 'movement_not_booking_scoped');
   end if;
 
-  select paystack_reference
-    into v_booking_reference
+  select paystack_reference, recurring_id
+    into v_booking_reference, v_recurring_id
     from public.bookings
    where id = v_movement.booking_id
    for update;
 
-  if not found or coalesce(v_booking_reference, '') not like 'DEVSEED-%' then
+  if not found
+     or (
+       coalesce(v_booking_reference, '') not like 'DEVSEED-%'
+       and not (v_recurring_id is not null and v_recurring_id = any(coalesce(p_seed_recurring_ids, '{}'::uuid[])))
+     )
+  then
     return jsonb_build_object('ok', false, 'error', 'not_devseed_booking');
   end if;
 
@@ -507,8 +525,8 @@ begin
 end;
 $seed_inventory_reset$;
 
-revoke all on function public.reset_seed_inventory_movement(uuid) from public, anon, authenticated;
-grant execute on function public.reset_seed_inventory_movement(uuid) to service_role;
+revoke all on function public.reset_seed_inventory_movement(uuid, uuid[]) from public, anon, authenticated;
+grant execute on function public.reset_seed_inventory_movement(uuid, uuid[]) to service_role;
 
 -- Keep the pending-payment purge healthy after adding the delete guard.
 -- Process candidates independently so one protected financial row cannot roll
@@ -736,6 +754,21 @@ begin
   where public.booking_matches_active_admin_slot(b, p_user_id, p_date, p_time, v_slug);
 
   if v_active_count = 0 then
+    if v_our_exists then
+      return jsonb_build_object(
+        'action', 'reject',
+        'ok', false,
+        'winner_id', null,
+        'deleted_ids', '[]'::jsonb,
+        'cluster_start', null,
+        'cluster_end', null,
+        'cluster_size', 0,
+        'winner_created_at', null,
+        'left_duplicate', false,
+        'rolled_back_self', true
+      );
+    end if;
+
     return jsonb_build_object(
       'action', 'proceed',
       'ok', true,
