@@ -68,10 +68,7 @@ import { readCustomerProfileContact } from "@/lib/customer/readCustomerProfileCo
 import { classifyAdminBookingListRow } from "@/lib/admin/adminBookingListClassify";
 import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
-import {
-  buildCompletionCoherencePatch,
-  validateAdminMonthlyCompletedAssignee,
-} from "@/lib/booking/bookingCompletionIntegrity";
+import { validateAdminMonthlyCompletedAssignee } from "@/lib/booking/bookingCompletionIntegrity";
 import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
 import type { AdminMarkPaidMethod } from "@/lib/booking/adminMarkBookingPaid";
 import { settleAdminBookingPaymentAlreadyReceived } from "@/lib/admin/settleAdminBookingPaymentAlreadyReceived";
@@ -1573,16 +1570,6 @@ export async function POST(request: Request) {
       : selectedCleanerId
         ? "assigned"
         : "searching";
-
-    const completionCoherencePatch =
-      adminMarkCompleted && completedAtIso
-        ? buildCompletionCoherencePatch({
-            beforeCompletedAt: null,
-            beforeDispatchStatus: preliminaryDispatch,
-            fillCompletedAtIfMissing: true,
-            nowIso: completedAtIso,
-          }).patch
-        : {};
 
     const assignedAtIso =
       selectedCleanerId || (adminMarkCompleted && validatedMonthlyTeamId && !selectedCleanerId)
