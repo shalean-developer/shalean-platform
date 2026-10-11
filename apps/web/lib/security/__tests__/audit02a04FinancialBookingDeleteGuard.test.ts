@@ -30,6 +30,10 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("re.booking_id = old.id");
     expect(sql).toContain("from public.admin_money_action_proposals amap");
     expect(sql).toContain("amap.booking_id = old.id");
+    expect(sql).toContain("from public.admin_earnings_actions aea");
+    expect(sql).toContain("aea.booking_id = old.id");
+    expect(sql).toContain("from public.promotion_redemptions prd");
+    expect(sql).toContain("prd.booking_id = old.id");
     expect(sql).toContain("from public.cleaner_earnings ce");
     expect(sql).toContain("('approved', 'processing', 'paid')");
     expect(sql).toContain("from public.cleaner_earnings_adjustments cea");
@@ -73,6 +77,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain('.from("referral_discount_redemptions")');
     expect(src).toContain('.from("referral_events")');
     expect(src).toContain('.from("admin_money_action_proposals")');
+    expect(src).toContain('.from("admin_earnings_actions")');
+    expect(src).toContain('.from("promotion_redemptions")');
     expect(src).toContain("payment_transaction_id: r.payment_transaction_id ?? linkedPayment?.id ?? null");
     expect(src).toContain("linked_cleaning_credit_transaction_id: linkedCleaningCreditTransaction?.id ?? null");
     expect(src).toContain("linked_invoice_adjustment_id: linkedInvoiceAdjustment?.id ?? null");
@@ -80,6 +86,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain("linked_referral_redemption_id: linkedReferralRedemption?.id ?? null");
     expect(src).toContain("linked_referral_event_id: linkedReferralEvent?.id ?? null");
     expect(src).toContain("linked_money_proposal_id: linkedMoneyProposal?.id ?? null");
+    expect(src).toContain("linked_earnings_action_id: linkedEarningsAction?.id ?? null");
+    expect(src).toContain("linked_promotion_redemption_id: linkedPromotionRedemption?.id ?? null");
     expect(src).toContain("marked_paid_by_admin_id");
     expect(src).toContain("linked_cleaner_earnings_dispute_id: linkedCleanerDispute?.id ?? null");
   });
@@ -91,6 +99,14 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("for r in");
     expect(sql).toContain("when check_violation then");
     expect(sql).toContain("v_financially_protected := v_financially_protected + 1");
+    expect(sql).toContain("when foreign_key_violation then");
+    expect(sql).toContain("v_fk_protected := v_fk_protected + 1");
+    expect(sql).toContain("from public.promotion_redemptions");
+    expect(sql).toContain("set status = 'reversed'");
+    expect(sql).toContain("redemptions_count = greatest(0");
+    expect(sql).toContain("budget_spent_zar = greatest(0");
+    expect(sql).toContain("revenue_generated_zar = greatest(0");
+    expect(sql).toContain("set status = 'payment_expired'");
     expect(sql).toContain("and status = 'pending_payment'");
     expect(sql).toContain("and created_at < now() - interval '2 hours'");
     expect(sql).toContain("and coalesce(is_recurring_generated, false) = false");
