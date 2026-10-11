@@ -65,6 +65,32 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_marked_paid_by_admin")).toBe(true);
   });
 
+  it("blocks hard delete when completed_at survives even if status drifted", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      completed_at: "2026-10-11T00:00:00.000Z",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected completed_at booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_completed_at_present")).toBe(true);
+  });
+
+  it("blocks hard delete when frozen cleaner earnings allocation lines survive", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_earnings_snapshot_line_id: "30303030-3030-4030-8030-303030303030",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected snapshot-line-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_earnings_snapshot_line_linked")).toBe(true);
+  });
+
   it("blocks hard delete when a partial deposit survives", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "pending_payment",
