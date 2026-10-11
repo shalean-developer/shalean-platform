@@ -1444,6 +1444,8 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     { data: linkedReferralRedemption, error: linkedReferralRedemptionErr },
     { data: linkedReferralEvent, error: linkedReferralEventErr },
     { data: linkedMoneyProposal, error: linkedMoneyProposalErr },
+    { data: linkedEarningsAction, error: linkedEarningsActionErr },
+    { data: linkedPromotionRedemption, error: linkedPromotionRedemptionErr },
   ] = await Promise.all([
     admin.from("expenses").select("id").eq("booking_id", id).limit(1).maybeSingle(),
     admin
@@ -1520,6 +1522,18 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
       .eq("booking_id", id)
       .limit(1)
       .maybeSingle(),
+    admin
+      .from("admin_earnings_actions")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("promotion_redemptions")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
   ]);
   const linkedReadError =
     linkedExpenseErr ??
@@ -1534,7 +1548,9 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     linkedRefundRecordErr ??
     linkedReferralRedemptionErr ??
     linkedReferralEventErr ??
-    linkedMoneyProposalErr;
+    linkedMoneyProposalErr ??
+    linkedEarningsActionErr ??
+    linkedPromotionRedemptionErr;
   if (linkedReadError) {
     return NextResponse.json({ error: linkedReadError.message }, { status: 500 });
   }
@@ -1555,6 +1571,8 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     linked_referral_redemption_id: linkedReferralRedemption?.id ?? null,
     linked_referral_event_id: linkedReferralEvent?.id ?? null,
     linked_money_proposal_id: linkedMoneyProposal?.id ?? null,
+    linked_earnings_action_id: linkedEarningsAction?.id ?? null,
+    linked_promotion_redemption_id: linkedPromotionRedemption?.id ?? null,
   });
   if (!deleteSafety.ok) {
     return NextResponse.json(
