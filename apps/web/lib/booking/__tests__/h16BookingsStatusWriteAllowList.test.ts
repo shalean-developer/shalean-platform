@@ -86,10 +86,11 @@ import { describe, expect, it } from "vitest";
  *       earnings revert path).
  *
  *   Note: `app/api/admin/bookings/route.ts` (POST) is intentionally NOT on
- *   the direct-write allow-list. The monthly branch sets `status` via
- *   `insertBookingRowUnified` (an INSERT, not an UPDATE) using a value
- *   derived from `buildCompletionCoherencePatch`, and the per-booking
- *   Paystack branch is hard-rejected by the
+ *   the direct-write allow-list. The monthly branch inserts completed-intent
+ *   rows as `assigned`, persists canonical line items, resolves duplicate races,
+ *   then delegates the `assigned → completed` transition to
+ *   `adminBookingPostCreatePipeline.promoteAdminMonthlyBookingToCompleted`.
+ *   The per-booking Paystack branch is hard-rejected by the
  *   `admin_mark_completed_unsafe_for_payment_link` guard before any write.
  *   M-1 removed a previously-present, statically-unreachable
  *   `bookings.update({ status: "completed" })` block from the per-booking
@@ -211,11 +212,11 @@ const APPROVED_BOOKINGS_STATUS_WRITERS: ReadonlySet<string> = new Set([
 
   // Admin HTTP endpoints (validated allowed-set + completion coherence patch).
   "app/api/admin/bookings/[id]/route.ts",
-  // M-1: `app/api/admin/bookings/route.ts` was removed from the allow-list
-  // when a dead `bookings.update({ status: "completed" })` block was deleted
-  // from its per-booking Paystack branch. The monthly branch still sets
-  // `status` at INSERT time (not UPDATE) via `buildCompletionCoherencePatch`,
-  // and the per-booking branch is hard-rejected by the
+  // M-1: `app/api/admin/bookings/route.ts` remains outside this allow-list.
+  // Admin monthly completed-intent rows are inserted as assigned and the guarded
+  // post-create completion transition is owned by
+  // `adminBookingPostCreatePipeline.promoteAdminMonthlyBookingToCompleted`.
+  // The per-booking branch is hard-rejected by the
   // `admin_mark_completed_unsafe_for_payment_link` guard. See
   // `app/api/admin/bookings/__tests__/adminMarkCompletedPaystackGuard.test.ts`.
 
