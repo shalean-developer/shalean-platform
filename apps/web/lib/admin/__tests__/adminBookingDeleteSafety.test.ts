@@ -355,6 +355,19 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_promotion_redemption_linked")).toBe(true);
   });
 
+  it("blocks hard delete when finalized cleaner earnings total survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      cleaner_earnings_total_cents: 5000,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected finalized cleaner earnings to block delete");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_cleaner_earnings_total_present")).toBe(true);
+  });
+
   it("blocks hard delete when canonical payout earnings survive", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "cancelled",
