@@ -26,7 +26,7 @@ const require = createRequire(resolve(root, "apps/web/package.json"));
 const { createClient } = require("@supabase/supabase-js");
 
 const REFS = {
-  staging: "jhubpsbwmjgydkzztxeu",
+  staging: "uwvnmluiqbczeduzjgse",
 };
 const PRODUCTION_REF = "paqjwfulwywtsyyvdxrq";
 const MARKER = "FARAI-UAT-BOOK";
@@ -473,6 +473,24 @@ async function ensureConflictBooking(admin, cleaners, locationBySlug) {
   const paystackRef = `${MARKER}-CONFLICT-${conflictCleaner._resolvedId.slice(0, 8)}`;
   const locationId = locationBySlug.get("claremont");
 
+  const { data: existing, error: existingError } = await admin
+    .from("bookings")
+    .select("id")
+    .eq("paystack_reference", paystackRef)
+    .maybeSingle();
+  if (existingError) throw new Error(`conflict booking lookup: ${existingError.message}`);
+  if (existing?.id) {
+    const { data: existingIsFinancial, error: historyError } = await admin.rpc(
+      "booking_has_financial_history",
+      { p_booking_id: existing.id },
+    );
+    if (historyError) throw new Error(`conflict booking financial-history probe: ${historyError.message}`);
+    if (existingIsFinancial === true) {
+      console.log(`Conflict booking retained unchanged → ${paystackRef}`);
+      return;
+    }
+  }
+
   const { error } = await admin.from("bookings").upsert(
     {
       paystack_reference: paystackRef,
@@ -508,24 +526,34 @@ async function ensureConflictBooking(admin, cleaners, locationBySlug) {
 }
 
 async function resetFixtures(admin) {
-  const emails = CLEANERS.map((c) => c.email);
-  const { data: cleaners } = await admin.from("cleaners").select("id").in("email", emails);
-  const cleanerIds = (cleaners ?? []).map((c) => c.id);
+  const { data: rows, error: loadError } = await admin
+    .from("bookings")
+    .select("id, paystack_reference")
+    .like("paystack_reference", `${MARKER}-%`);
+  if (loadError) throw new Error(`reset FARAI-UAT bookings read: ${loadError.message}`);
 
-  await admin.from("bookings").delete().like("paystack_reference", `${MARKER}-%`);
+  let deleted = 0;
+  let retainedFinancial = 0;
+  for (const row of rows ?? []) {
+    const { data: financiallyProtected, error: historyError } = await admin.rpc(
+      "booking_has_financial_history",
+      { p_booking_id: row.id },
+    );
+    if (historyError) {
+      throw new Error(`reset financial-history probe ${row.paystack_reference}: ${historyError.message}`);
+    }
+    if (financiallyProtected === true) {
+      retainedFinancial += 1;
+      continue;
+    }
+    const { error } = await admin.from("bookings").delete().eq("id", row.id);
+    if (error) throw new Error(`reset FARAI-UAT booking ${row.paystack_reference}: ${error.message}`);
+    deleted += 1;
+  }
 
-  if (cleanerIds.length) {
-    await admin.from("team_members").delete().in("cleaner_id", cleanerIds);
-    await admin.from("cleaner_locations").delete().in("cleaner_id", cleanerIds);
-  }
-  await admin.from("teams").delete().in(
-    "id",
-    TEAMS.map((t) => t.id),
-  );
-  if (cleanerIds.length) {
-    await admin.from("cleaners").delete().in("id", cleanerIds);
-  }
-  console.log("Reset: removed prior FARAI-UAT booking fixtures (auth users retained).");
+  // Cleaner/team/location fixtures are idempotently upserted below. Do not delete
+  // identities still referenced by retained paid booking history.
+  console.log(`Reset: deleted=${deleted}; retained_financial_history=${retainedFinancial}; fixture identities will be refreshed by upsert.`);
 }
 
 async function main() {

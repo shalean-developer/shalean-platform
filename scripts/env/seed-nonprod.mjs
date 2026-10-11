@@ -24,7 +24,7 @@ const require = createRequire(resolve(root, "apps/web/package.json"));
 const { createClient } = require("@supabase/supabase-js");
 
 const REFS = {
-  staging: "jhubpsbwmjgydkzztxeu",
+  staging: "uwvnmluiqbczeduzjgse",
 };
 
 const USERS = {
@@ -154,7 +154,7 @@ async function ensureUsers(admin, env) {
   return { created, users: USERS[env] };
 }
 
-async function seedBookings(admin, env, isolationMarker) {
+async function seedBookings(admin, env, isolationMarker, retainedReferences = new Set()) {
   const customerEmail = "staging-customer@shalean.test";
   const { data: listed } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
   const customer = listed?.users?.find((x) => x.email === customerEmail);
@@ -218,6 +218,10 @@ async function seedBookings(admin, env, isolationMarker) {
   ];
 
   for (const row of fixtures) {
+    if (retainedReferences.has(row.paystack_reference)) {
+      console.log(`[seed-nonprod] retained financial fixture left unchanged: ${row.paystack_reference}`);
+      continue;
+    }
     const { error } = await admin.from("bookings").upsert(row, {
       onConflict: "paystack_reference",
     });
@@ -260,8 +264,34 @@ function applyCatalogSql(env) {
 }
 
 async function resetFixtures(admin, env) {
-  const { error } = await admin.from("bookings").delete().like("paystack_reference", "ENV-03-STG-%");
-  if (error) throw new Error(`reset bookings: ${error.message}`);
+  const { data: rows, error: loadError } = await admin
+    .from("bookings")
+    .select("id, paystack_reference")
+    .like("paystack_reference", "ENV-03-STG-%");
+  if (loadError) throw new Error(`reset bookings read: ${loadError.message}`);
+
+  let deleted = 0;
+  let retainedFinancial = 0;
+  const retainedReferences = new Set();
+  for (const row of rows ?? []) {
+    const { data: financiallyProtected, error: historyError } = await admin.rpc(
+      "booking_has_financial_history",
+      { p_booking_id: row.id },
+    );
+    if (historyError) {
+      throw new Error(`reset financial-history probe ${row.paystack_reference}: ${historyError.message}`);
+    }
+    if (financiallyProtected === true) {
+      retainedFinancial += 1;
+      retainedReferences.add(row.paystack_reference);
+      continue;
+    }
+    const { error } = await admin.from("bookings").delete().eq("id", row.id);
+    if (error) throw new Error(`reset booking ${row.paystack_reference}: ${error.message}`);
+    deleted += 1;
+  }
+  console.log(`[seed-nonprod] reset deleted=${deleted} retained_financial_history=${retainedFinancial}`);
+  return retainedReferences;
 }
 
 async function main() {
@@ -277,14 +307,14 @@ async function main() {
   console.log(`[seed-nonprod] env=${env} ref=${REFS[env]}`);
   applyCatalogSql(env);
 
+  const retainedReferences = reset ? await resetFixtures(admin, env) : new Set();
   if (reset) {
-    await resetFixtures(admin, env);
     console.log("[seed-nonprod] reset ENV-03 booking fixtures");
   }
 
   const users = await ensureUsers(admin, env);
   const isolationMarker = marker(env);
-  const refs = await seedBookings(admin, env, isolationMarker);
+  const refs = await seedBookings(admin, env, isolationMarker, retainedReferences);
 
   const evidencePath = resolve(
     root,
