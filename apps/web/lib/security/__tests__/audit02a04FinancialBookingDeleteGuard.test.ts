@@ -18,6 +18,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("e.booking_id = old.id");
     expect(sql).toContain("from public.cleaning_credit_transactions cct");
     expect(sql).toContain("cct.booking_id = old.id");
+    expect(sql).toContain("from public.invoice_adjustments ia");
+    expect(sql).toContain("ia.booking_id = old.id");
     expect(sql).toContain("from public.cleaner_earnings ce");
     expect(sql).toContain("('approved', 'processing', 'paid')");
     expect(sql).toContain("from public.cleaner_earnings_adjustments cea");
@@ -54,8 +56,10 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain('["approved", "processing", "paid"]');
     expect(src).toContain('.from("cleaner_earnings_adjustments")');
     expect(src).toContain('.from("cleaning_credit_transactions")');
+    expect(src).toContain('.from("invoice_adjustments")');
     expect(src).toContain("payment_transaction_id: r.payment_transaction_id ?? linkedPayment?.id ?? null");
     expect(src).toContain("linked_cleaning_credit_transaction_id: linkedCleaningCreditTransaction?.id ?? null");
+    expect(src).toContain("linked_invoice_adjustment_id: linkedInvoiceAdjustment?.id ?? null");
   });
 
   it("keeps protected rows from aborting the batch purge", () => {
