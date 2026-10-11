@@ -41,6 +41,8 @@ describe("BOOKING-E2E-13A Cleaning Credit settlement authority", () => {
     expect(retry).toContain("settleCleaningCreditForBooking(supabase, bookingId)");
     expect(retry).toContain("finalizeR0BookingPostPayment(supabase, bookingId)");
     expect(retry).toContain("FAILED_JOB_TYPE_R0_CREDIT_RECONCILIATION_EXHAUSTED");
+    expect(retry).toContain("R0 post-payment recovery attempts exhausted");
+    expect(retry).toContain("continue;");
     expect(productionHealth).toContain('"r0_credit_reconciliation"');
     expect(productionHealth).toContain('"r0_credit_reconciliation_exhausted"');
     expect(officeHealth).toContain('"r0_credit_reconciliation"');
