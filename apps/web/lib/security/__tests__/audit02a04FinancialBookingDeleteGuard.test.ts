@@ -332,12 +332,17 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
   it("keeps active non-production resets compatible without deleting financial history", () => {
     const env03 = read("../../scripts/env/seed-nonprod.mjs");
     const uat = read("../../scripts/env/seed-uat-booking-fixtures.mjs");
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+
+    expect(sql).toContain("function public.booking_has_financial_history");
+    expect(sql).toContain("from public.promotion_redemptions pr");
 
     for (const src of [env03, uat]) {
       expect(src).toContain("retainedFinancial");
-      expect(src).toContain('"booking_has_nonpromotion_financial_history"');
+      expect(src).toContain('"booking_has_financial_history"');
       expect(src).toContain("p_booking_id: row.id");
       expect(src).toContain("historyError");
+      expect(src).not.toContain('"booking_has_nonpromotion_financial_history"');
     }
     expect(uat).toContain("Conflict booking retained unchanged");
     expect(uat).toContain("existingIsFinancial");
@@ -385,6 +390,34 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("delete from public.inventory_movements where id = v_movement.id");
     expect(seed).toContain('admin.rpc("reset_seed_inventory_movement"');
     expect(seed).not.toContain('admin.rpc("record_inventory_movement"');
+  });
+
+  it("reverses seed referral rewards before removing their ledger rows", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+    const seed = read("../../scripts/seed-dev.mjs");
+
+    expect(sql).toContain("function public.reset_seed_referral_credit_for_booking");
+    expect(sql).toContain("referral_credit_already_spent");
+    expect(sql).toContain("set status = 'pending'");
+    expect(sql).toContain("delete from public.cleaning_credit_transactions");
+    expect(seed).toContain('admin.rpc("reset_seed_referral_credit_for_booking"');
+    expect(seed.indexOf('admin.rpc("reset_seed_referral_credit_for_booking"')).toBeLessThan(
+      seed.indexOf('"cleaning_credit_transactions",'),
+    );
+  });
+
+  it("reconciles seed promotion counters before deleting redemption rows", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+    const seed = read("../../scripts/seed-dev.mjs");
+
+    expect(sql).toContain("function public.reset_seed_promotion_redemptions_for_booking");
+    expect(sql).toContain("redemptions_count = greatest(0");
+    expect(sql).toContain("budget_spent_zar = greatest(");
+    expect(sql).toContain("revenue_generated_zar = greatest(");
+    expect(seed).toContain('admin.rpc("reset_seed_promotion_redemptions_for_booking"');
+    expect(seed.indexOf('admin.rpc("reset_seed_promotion_redemptions_for_booking"')).toBeLessThan(
+      seed.indexOf('"promotion_redemptions",'),
+    );
   });
 
   it("makes settled seed Cleaning Credit restoration retry-safe", () => {
