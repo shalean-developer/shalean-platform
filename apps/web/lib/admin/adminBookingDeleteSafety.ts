@@ -9,6 +9,7 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_paid_payment_status"
   | "admin_booking_delete_completed_status"
   | "admin_booking_delete_completed_at_present"
+  | "admin_booking_delete_line_earnings_finalized"
   | "admin_booking_delete_monthly_financial_flow"
   | "admin_booking_delete_monthly_invoice_child"
   | "admin_booking_delete_sales_document_child"
@@ -56,6 +57,7 @@ export type AdminBookingDeleteBlockCode =
 export type AdminBookingDeleteSafetyRow = {
   status?: string | null;
   completed_at?: string | null;
+  cleaner_line_earnings_finalized_at?: string | null;
   payment_status?: string | null;
   marked_paid_by_admin_id?: string | null;
   zoho_invoice_id?: string | null;
@@ -218,6 +220,13 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_completed_at_present",
       message: "Bookings with completed_at cannot be hard-deleted even if status drifted.",
+    });
+  }
+
+  if (hasText(row.cleaner_line_earnings_finalized_at)) {
+    blocks.push({
+      code: "admin_booking_delete_line_earnings_finalized",
+      message: "Bookings with finalized cleaner line earnings cannot be hard-deleted.",
     });
   }
 
