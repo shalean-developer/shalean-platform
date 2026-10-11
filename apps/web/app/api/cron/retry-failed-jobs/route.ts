@@ -6,6 +6,7 @@ import type { BookingInsertFailedPayload } from "@/lib/booking/failedJobs";
 import { formatFailedJobPayloadPreview } from "@/lib/booking/failedJobPayloadPreview";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
+import { resolveInternalBookingIdFromPaystackReference } from "@/lib/booking/paystackBookingIdLookup";
 import { isPaymentEditSupersededSnapshot } from "@/lib/booking/abandonPendingPaymentForEdit";
 import { finalizePaidBooking, upsertResultFromFinalizePaidBookingOp } from "@/lib/booking/bookingOperations";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
@@ -499,11 +500,30 @@ export async function POST(request: Request) {
       const snapshot = (payload.snapshot ?? null) as BookingSnapshotV1 | null;
 
       if (jobType === FAILED_JOB_TYPE_PAYMENT_RECONCILIATION) {
-        const { data: supersededBooking, error: supersededBookingError } = await supabase
+        const queuedMetadata = normalizePaystackMetadata(payload.paystackMetadata ?? null);
+        const metadataBookingId = resolveInternalBookingIdFromPaystackReference(
+          payload.paystackReference,
+          queuedMetadata,
+        );
+
+        const byReference = await supabase
           .from("bookings")
           .select("id, status, booking_snapshot")
           .eq("paystack_reference", payload.paystackReference)
           .maybeSingle();
+
+        let supersededBooking = byReference.data;
+        let supersededBookingError = byReference.error;
+
+        if (!supersededBooking && !supersededBookingError && metadataBookingId) {
+          const byId = await supabase
+            .from("bookings")
+            .select("id, status, booking_snapshot")
+            .eq("id", metadataBookingId)
+            .maybeSingle();
+          supersededBooking = byId.data;
+          supersededBookingError = byId.error;
+        }
 
         if (supersededBookingError) {
           await reportOperationalIssue(
