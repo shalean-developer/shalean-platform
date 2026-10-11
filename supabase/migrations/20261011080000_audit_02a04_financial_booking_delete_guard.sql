@@ -17,6 +17,12 @@ begin
      or coalesce(old.total_paid_cents, 0) > 0
      or coalesce(old.total_paid_zar, 0) > 0
      or old.payment_transaction_id is not null
+     or exists (
+       select 1
+       from public.payment_transactions pt
+       where pt.booking_id = old.id
+          or (pt.entity_type = 'booking' and pt.entity_id = old.id)
+     )
      or old.monthly_invoice_id is not null
      or old.sales_document_id is not null
      or old.payout_id is not null
