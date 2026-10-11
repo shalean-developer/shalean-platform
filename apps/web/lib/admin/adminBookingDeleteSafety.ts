@@ -8,6 +8,7 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_payment_completed"
   | "admin_booking_delete_paid_payment_status"
   | "admin_booking_delete_completed_status"
+  | "admin_booking_delete_completed_at_present"
   | "admin_booking_delete_monthly_financial_flow"
   | "admin_booking_delete_monthly_invoice_child"
   | "admin_booking_delete_sales_document_child"
@@ -29,6 +30,7 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_inventory_cost_linked"
   | "admin_booking_delete_transport_cost_linked"
   | "admin_booking_delete_earnings_snapshot_linked"
+  | "admin_booking_delete_earnings_snapshot_line_linked"
   | "admin_booking_delete_line_item_earnings_linked"
   | "admin_booking_delete_cleaner_earnings_linked"
   | "admin_booking_delete_cleaner_earnings_adjustment_linked"
@@ -53,6 +55,7 @@ export type AdminBookingDeleteBlockCode =
 
 export type AdminBookingDeleteSafetyRow = {
   status?: string | null;
+  completed_at?: string | null;
   payment_status?: string | null;
   marked_paid_by_admin_id?: string | null;
   zoho_invoice_id?: string | null;
@@ -84,6 +87,7 @@ export type AdminBookingDeleteSafetyRow = {
   linked_inventory_cost_id?: string | null;
   linked_transport_cost_id?: string | null;
   linked_earnings_snapshot_booking_id?: string | null;
+  linked_earnings_snapshot_line_id?: string | null;
   linked_line_item_earnings_id?: string | null;
   linked_cleaner_earning_id?: string | null;
   linked_cleaner_earnings_adjustment_id?: string | null;
@@ -207,6 +211,13 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_completed_status",
       message: "Completed bookings cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.completed_at)) {
+    blocks.push({
+      code: "admin_booking_delete_completed_at_present",
+      message: "Bookings with completed_at cannot be hard-deleted even if status drifted.",
     });
   }
 
@@ -347,6 +358,13 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_earnings_snapshot_linked",
       message: "Bookings linked to cleaner earnings snapshots cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_earnings_snapshot_line_id)) {
+    blocks.push({
+      code: "admin_booking_delete_earnings_snapshot_line_linked",
+      message: "Bookings with frozen cleaner earnings allocation lines cannot be hard-deleted.",
     });
   }
 
