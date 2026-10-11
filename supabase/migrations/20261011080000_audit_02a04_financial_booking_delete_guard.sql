@@ -1084,6 +1084,7 @@ declare
   r record;
   v_redemption record;
   v_booking_revenue_zar numeric;
+  v_promotion_revenue_unproven boolean;
   v_status text;
   v_created_at timestamptz;
   v_is_recurring boolean;
@@ -1133,15 +1134,25 @@ begin
         where pr.booking_id = r.id
           and pr.status = 'applied'
       ) then
-        v_booking_revenue_zar := greatest(coalesce(v_total_price, 0), 0);
+        v_promotion_revenue_unproven := false;
 
         for v_redemption in
-          select id, promotion_id, discount_zar
+          select id, promotion_id, discount_zar, metadata
           from public.promotion_redemptions
           where booking_id = r.id
             and status = 'applied'
           for update
         loop
+          if jsonb_typeof(v_redemption.metadata -> 'bookingRevenueZar') <> 'number' then
+            v_promotion_revenue_unproven := true;
+            exit;
+          end if;
+
+          v_booking_revenue_zar := greatest(
+            coalesce((v_redemption.metadata ->> 'bookingRevenueZar')::numeric, 0),
+            0
+          );
+
           update public.promotion_redemptions
              set status = 'reversed'
            where id = v_redemption.id
@@ -1158,6 +1169,13 @@ begin
             v_promotions_reversed := v_promotions_reversed + 1;
           end if;
         end loop;
+
+        if v_promotion_revenue_unproven then
+          -- Legacy redemption without original revenue evidence: retain the
+          -- booking/redemption untouched rather than corrupt shared counters.
+          v_financially_protected := v_financially_protected + 1;
+          continue;
+        end if;
 
         update public.bookings
            set status = 'payment_expired'
