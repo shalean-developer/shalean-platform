@@ -1617,6 +1617,7 @@ async function resetSeedRows(admin) {
           payout_paid_at: null,
           payout_run_id: null,
           payment_completed_at: null,
+          completed_at: null,
           payment_reference_external: null,
           paid_at: null,
           monthly_invoice_id: null,
