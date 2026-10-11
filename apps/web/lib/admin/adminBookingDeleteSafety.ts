@@ -24,7 +24,9 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_refund_record_linked"
   | "admin_booking_delete_referral_redemption_linked"
   | "admin_booking_delete_referral_event_linked"
-  | "admin_booking_delete_money_proposal_linked";
+  | "admin_booking_delete_money_proposal_linked"
+  | "admin_booking_delete_earnings_action_linked"
+  | "admin_booking_delete_promotion_redemption_linked";
 
 export type AdminBookingDeleteSafetyRow = {
   status?: string | null;
@@ -54,6 +56,8 @@ export type AdminBookingDeleteSafetyRow = {
   linked_referral_redemption_id?: string | null;
   linked_referral_event_id?: string | null;
   linked_money_proposal_id?: string | null;
+  linked_earnings_action_id?: string | null;
+  linked_promotion_redemption_id?: string | null;
 };
 
 export type AdminBookingDeleteBlock = {
@@ -268,6 +272,20 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_money_proposal_linked",
       message: "Bookings linked to money-action proposals cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_earnings_action_id)) {
+    blocks.push({
+      code: "admin_booking_delete_earnings_action_linked",
+      message: "Bookings linked to admin earnings actions cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_promotion_redemption_id)) {
+    blocks.push({
+      code: "admin_booking_delete_promotion_redemption_linked",
+      message: "Bookings linked to promotion redemptions cannot be hard-deleted.",
     });
   }
 
