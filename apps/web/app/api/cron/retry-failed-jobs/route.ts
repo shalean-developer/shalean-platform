@@ -511,12 +511,30 @@ export async function POST(request: Request) {
 
       const postPayment = await finalizeR0BookingPostPayment(supabase, bookingId);
       if (!postPayment.ok) {
+        const nextAttempts = attempts + 1;
+        const exhausted = nextAttempts >= BOOKING_INSERT_MAX_ATTEMPTS;
+        await supabase
+          .from("failed_jobs")
+          .update({
+            attempts: nextAttempts,
+            ...(exhausted ? { type: FAILED_JOB_TYPE_R0_CREDIT_RECONCILIATION_EXHAUSTED } : {}),
+          })
+          .eq("id", id);
         await reportOperationalIssue(
-          "error",
+          exhausted ? "critical" : "error",
           "cron/retry-failed-jobs",
-          `R0 post-payment recovery failed: ${postPayment.error}`,
-          { failedJobId: id, bookingId, reference },
+          exhausted
+            ? "R0 post-payment recovery attempts exhausted"
+            : `R0 post-payment recovery failed: ${postPayment.error}`,
+          {
+            failedJobId: id,
+            bookingId,
+            reference,
+            attempts: nextAttempts,
+            ...(exhausted ? { errorType: FAILED_JOB_TYPE_R0_CREDIT_RECONCILIATION_EXHAUSTED } : {}),
+          },
         );
+        continue;
       }
       await supabase.from("failed_jobs").delete().eq("id", id);
     }
