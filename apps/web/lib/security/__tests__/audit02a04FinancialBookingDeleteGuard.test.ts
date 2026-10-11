@@ -16,6 +16,10 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("old.refund_status");
     expect(sql).toContain("old.payout_paid_at is not null");
     expect(sql).toContain("old.payout_run_id is not null");
+    expect(sql).toContain("pending_monthly");
+    expect(sql).toContain("old.is_monthly_billing_booking");
+    expect(sql).toContain("from public.payout_audit_events pae");
+    expect(sql).toContain("old.id = any");
     expect(sql).toContain("old.payment_transaction_id is not null");
     expect(sql).toContain("from public.payment_transactions pt");
     expect(sql).toContain("pt.booking_id = old.id");
