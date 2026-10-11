@@ -334,11 +334,35 @@ export async function insertBookingRowUnified(
   if (prebuiltLineItems && prebuiltLineItems.length > 0) {
     const persisted = await persistBookingLineItems(admin, id, prebuiltLineItems);
     if (!persisted.ok) {
+      const nowIso = new Date().toISOString();
+      const { data: rollbackSource, error: rollbackSourceError } = await admin
+        .from("bookings")
+        .select("metadata")
+        .eq("id", id)
+        .maybeSingle();
+      if (rollbackSourceError) {
+        return {
+          ok: false,
+          error: `${persisted.error || "Could not save booking line items."}:rollback_marker_read_failed:${rollbackSourceError.message}`,
+        };
+      }
+      const existingMetadata =
+        rollbackSource?.metadata && typeof rollbackSource.metadata === "object" && !Array.isArray(rollbackSource.metadata)
+          ? (rollbackSource.metadata as Record<string, unknown>)
+          : {};
       const { error: rollbackError } = await admin
         .from("bookings")
         .update({
           status: "cancelled",
-          updated_at: new Date().toISOString(),
+          metadata: {
+            ...existingMetadata,
+            audit02a04_provisional_rollback: {
+              kind: "line_item_persist_failed",
+              source: args.source,
+              marked_at: nowIso,
+            },
+          },
+          updated_at: nowIso,
         })
         .eq("id", id);
       if (rollbackError) {
