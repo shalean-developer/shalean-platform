@@ -12,6 +12,7 @@ set search_path = pg_catalog, public
 as $$
 begin
   if old.marked_paid_by_admin_id is not null
+     or old.zoho_invoice_id is not null
      or old.payment_completed_at is not null
      or lower(trim(coalesce(old.payment_status, ''))) in ('paid', 'success', 'succeeded')
      or coalesce(old.amount_paid_cents, 0) > 0
@@ -58,6 +59,18 @@ begin
        select 1
        from public.admin_money_action_proposals amap
        where amap.booking_id = old.id
+     )
+     or exists (
+       select 1
+       from public.accounting_invoice_sync ais
+       where ais.booking_id = old.id
+          or (ais.entity_type = 'booking' and ais.entity_id = old.id)
+     )
+     or exists (
+       select 1
+       from public.accounting_sync_records asr
+       where asr.entity_type = 'booking'
+         and asr.entity_id = old.id
      )
      or exists (
        select 1
@@ -198,6 +211,10 @@ declare
   r record;
   v_redemption record;
   v_booking_revenue_zar numeric;
+  v_status text;
+  v_created_at timestamptz;
+  v_is_recurring boolean;
+  v_total_price numeric;
 begin
   select count(*)
     into v_recurring_protected
@@ -215,6 +232,20 @@ begin
     order by created_at, id
   loop
     begin
+      select status, created_at, coalesce(is_recurring_generated, false), total_price
+        into v_status, v_created_at, v_is_recurring, v_total_price
+        from public.bookings
+       where id = r.id
+       for update;
+
+      if not found
+         or v_status is distinct from 'pending_payment'
+         or v_created_at >= now() - interval '2 hours'
+         or v_is_recurring
+      then
+        continue;
+      end if;
+
       -- Applied promotions are financial eligibility state, not disposable checkout
       -- metadata. Reverse the abandoned checkout atomically and retain the booking
       -- as payment_expired so redemption attribution remains auditable.
@@ -224,7 +255,7 @@ begin
         where pr.booking_id = r.id
           and pr.status = 'applied'
       ) then
-        v_booking_revenue_zar := greatest(coalesce(r.total_price, 0), 0);
+        v_booking_revenue_zar := greatest(coalesce(v_total_price, 0), 0);
 
         for v_redemption in
           select id, promotion_id, discount_zar
