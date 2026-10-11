@@ -679,38 +679,52 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
       const rawAmountCents = (payRow as { amount_paid_cents?: unknown } | null)?.amount_paid_cents;
       if ((paymentStatus === "success" || paymentStatus === "paid") &&
         typeof rawAmountCents === "number" && Number.isInteger(rawAmountCents) && rawAmountCents === 0) {
-        const amountCents = Number(
-          (payRow as { amount_paid_cents?: number | null } | null)?.amount_paid_cents ?? 0,
-        );
-        const bookingReference = await loadBookingReferenceForId(
-          adminPrePaystack,
-          settled.bookingId,
-        );
-        return NextResponse.json({
-          success: true,
-          ok: true,
-          paymentStatus: "success",
-          reference,
-          amountCents: Number.isFinite(amountCents) ? amountCents : 0,
-          currency: "ZAR",
-          customerEmail: "",
-          customerName: null,
-          userId: null,
-          bookingSnapshot: null,
-          bookingInDatabase: true,
-          bookingId: settled.bookingId,
-          bookingReference,
-          state: "already_processed",
-          alreadyExists: true,
-          skipped: true,
-          upsertError: null,
-          assignmentType: null,
-          fallbackReason: null,
-          showCleanerSubstitutionNotice: false,
-          attemptedCleanerId: null,
-          assignedCleanerId: null,
-          selectedCleanerId: null,
-        } satisfies PaystackVerifyPostResponse);
+        const { data: zeroCreditReservation, error: zeroCreditReservationError } = await adminPrePaystack
+          .from("cleaning_credit_reservations")
+          .select("status")
+          .eq("booking_id", settled.bookingId)
+          .maybeSingle();
+        const zeroCreditReplaySafe =
+          !zeroCreditReservationError &&
+          (
+            !zeroCreditReservation ||
+            String(zeroCreditReservation.status ?? "").trim().toLowerCase() === "settled"
+          );
+
+        if (zeroCreditReplaySafe) {
+          const amountCents = Number(
+            (payRow as { amount_paid_cents?: number | null } | null)?.amount_paid_cents ?? 0,
+          );
+          const bookingReference = await loadBookingReferenceForId(
+            adminPrePaystack,
+            settled.bookingId,
+          );
+          return NextResponse.json({
+            success: true,
+            ok: true,
+            paymentStatus: "success",
+            reference,
+            amountCents: Number.isFinite(amountCents) ? amountCents : 0,
+            currency: "ZAR",
+            customerEmail: "",
+            customerName: null,
+            userId: null,
+            bookingSnapshot: null,
+            bookingInDatabase: true,
+            bookingId: settled.bookingId,
+            bookingReference,
+            state: "already_processed",
+            alreadyExists: true,
+            skipped: true,
+            upsertError: null,
+            assignmentType: null,
+            fallbackReason: null,
+            showCleanerSubstitutionNotice: false,
+            attemptedCleanerId: null,
+            assignedCleanerId: null,
+            selectedCleanerId: null,
+          } satisfies PaystackVerifyPostResponse);
+        }
       }
     }
   }
