@@ -11,6 +11,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("before delete on public.bookings");
     expect(sql).toContain("booking_delete_blocked_financial_history");
     expect(sql).toContain("lower(trim(coalesce(old.status, ''))) = 'completed'");
+    expect(sql).toContain("old.completed_at is not null");
     expect(sql).toContain("old.marked_paid_by_admin_id is not null");
     expect(sql).toContain("old.zoho_invoice_id is not null");
     expect(sql).toContain("old.refunded_at is not null");
@@ -30,6 +31,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("from public.inventory_movements im");
     expect(sql).toContain("from public.transport_cost_entries tce");
     expect(sql).toContain("from public.booking_cleaner_earnings_snapshot bces");
+    expect(sql).toContain("from public.booking_cleaner_earnings_snapshot_lines bcesl");
     expect(sql).toContain("from public.booking_line_items bli");
     expect(sql).toContain("coalesce(bli.cleaner_earnings_cents, 0) > 0");
     expect(sql).toContain("e.booking_id = old.id");
@@ -85,8 +87,9 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
   it("cleans retained cancelled sales-document provisional rows before retry", () => {
     const src = read("lib/salesDocument/createBookingFromSalesQuoteInvoice.ts");
 
-    expect(src).toContain('select("id, status")');
+    expect(src).toContain('select("id, status, metadata")');
     expect(src).toContain("retainedCancelledBookingId");
+    expect(src).toContain("isSalesDocumentLineItemRollbackMarker");
     expect(src).toContain('"delete_unpaid_sales_document_booking"');
     expect(src).toContain("cancelled_booking_cleanup_failed");
   });
@@ -106,6 +109,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
 
     expect(sql).toContain("function public.repair_paid_cancelled_sales_document_booking");
     expect(sql).toContain("for update");
+    expect(sql).toContain("not_provisional_line_item_rollback");
+    expect(sql).toContain("audit02a04_provisional_rollback");
     expect(sql).toContain("delete from public.booking_line_items where booking_id = v.id");
     expect(sql).toContain("insert into public.booking_line_items");
     expect(sql).toContain("set status = 'pending'");
@@ -143,6 +148,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain('.from("inventory_movements")');
     expect(src).toContain('.from("transport_cost_entries")');
     expect(src).toContain('.from("booking_cleaner_earnings_snapshot")');
+    expect(src).toContain('.from("booking_cleaner_earnings_snapshot_lines")');
     expect(src).toContain('.from("booking_line_items")');
     expect(src).toContain('.from("cleaner_earnings")');
     expect(src).toContain('.from("cleaner_earnings_adjustments")');
@@ -183,6 +189,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain("payout_run_id");
     expect(src).toContain("cleaner_earnings_total_cents");
     expect(src).toContain("internal_earnings_cents");
+    expect(src).toContain("completed_at");
+    expect(src).toContain("linked_earnings_snapshot_line_id: linkedEarningsSnapshotLine?.id ?? null");
     expect(src).toContain("linked_cleaner_earnings_dispute_id: linkedCleanerDispute?.id ?? null");
   });
 
@@ -209,6 +217,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("coalesce(b.deposit_paid_cents, 0) > 0");
     expect(sql).toContain("coalesce(b.total_paid_zar, 0) > 0");
     expect(sql).toContain("b.payment_reference_external");
+    expect(sql).toContain("b.completed_at is not null");
+    expect(sql).toContain("from public.booking_cleaner_earnings_snapshot_lines bcesl");
     expect(sql).toContain("from public.booking_line_items bli");
   });
 
@@ -288,12 +298,38 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("if p_our_id = any(v_deleted)");
   });
 
-  it("retains provisional unified rows as cancelled when line-item persistence fails", () => {
+  it("retains provisional unified rows as cancelled with an explicit rollback marker when line-item persistence fails", () => {
     const src = read("lib/booking/createBookingUnified.ts");
 
     expect(src).toContain('status: "cancelled"');
+    expect(src).toContain("audit02a04_provisional_rollback");
+    expect(src).toContain('kind: "line_item_persist_failed"');
+    expect(src).toContain("source: args.source");
     expect(src).toContain("rollback_failed:");
     expect(src).not.toContain('admin.from("bookings").delete().eq("id", id)');
+  });
+
+  it("does not treat legitimate cancelled sales-document bookings as rollback remnants", () => {
+    const src = read("lib/salesDocument/createBookingFromSalesQuoteInvoice.ts");
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+
+    expect(src).toContain("isSalesDocumentLineItemRollbackMarker(existingBooking.metadata)");
+    expect(sql).toContain("not_provisional_line_item_rollback");
+    expect(sql).toContain("audit02a04_provisional_rollback");
+  });
+
+  it("keeps active non-production resets compatible without deleting financial history", () => {
+    const env03 = read("../../scripts/env/seed-nonprod.mjs");
+    const uat = read("../../scripts/env/seed-uat-booking-fixtures.mjs");
+
+    for (const src of [env03, uat]) {
+      expect(src).toContain("retainedFinancial");
+      expect(src).toContain("financiallyProtected");
+      expect(src).toContain("completed_at");
+      expect(src).toContain("payment_completed_at");
+      expect(src).toContain("payment_transaction_id");
+    }
+    expect(uat).toContain("fixture identities will be refreshed by upsert");
   });
 
   it("provides a guarded rollback for an unclaimed recurring prepaid occurrence", () => {
