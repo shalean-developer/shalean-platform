@@ -17,6 +17,7 @@ begin
      or nullif(trim(coalesce(old.refund_status, '')), '') is not null
      or old.payout_paid_at is not null
      or old.payout_run_id is not null
+     or nullif(trim(coalesce(old.payment_reference_external, '')), '') is not null
      or old.payment_completed_at is not null
      or lower(trim(coalesce(old.payment_status, ''))) in ('paid', 'success', 'succeeded', 'pending_monthly')
      or coalesce(old.is_monthly_billing_booking, false)
@@ -122,6 +123,12 @@ begin
        select 1
        from public.booking_cleaner_earnings_snapshot bces
        where bces.booking_id = old.id
+     )
+     or exists (
+       select 1
+       from public.booking_line_items bli
+       where bli.booking_id = old.id
+         and coalesce(bli.cleaner_earnings_cents, 0) > 0
      )
      or exists (
        select 1
@@ -266,6 +273,7 @@ as $financial_history$
         or nullif(trim(coalesce(b.refund_status, '')), '') is not null
         or b.payout_paid_at is not null
         or b.payout_run_id is not null
+        or nullif(trim(coalesce(b.payment_reference_external, '')), '') is not null
         or b.payment_completed_at is not null
         or lower(trim(coalesce(b.payment_status, ''))) in ('paid', 'success', 'succeeded', 'pending_monthly')
         or coalesce(b.is_monthly_billing_booking, false)
@@ -318,6 +326,12 @@ as $financial_history$
   or exists (select 1 from public.conversion_experiment_results cer where cer.booking_id = p_booking_id)
   or exists (select 1 from public.email_campaign_attributions eca where eca.booking_id = p_booking_id)
   or exists (select 1 from public.booking_cleaner_earnings_snapshot bces where bces.booking_id = p_booking_id)
+  or exists (
+    select 1
+    from public.booking_line_items bli
+    where bli.booking_id = p_booking_id
+      and coalesce(bli.cleaner_earnings_cents, 0) > 0
+  )
   or exists (
     select 1 from public.cleaner_earnings ce
     where ce.booking_id = p_booking_id
