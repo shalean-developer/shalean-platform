@@ -78,6 +78,20 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_completed_at_present")).toBe(true);
   });
 
+  it("blocks hard delete when cleaner line earnings were finalized even at zero", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      cleaner_line_earnings_finalized_at: "2026-10-11T00:00:00.000Z",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      cleaner_earnings_total_cents: 0,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected finalized line earnings marker to block delete");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_line_earnings_finalized")).toBe(true);
+  });
+
   it("blocks hard delete when frozen cleaner earnings allocation lines survive", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "cancelled",
