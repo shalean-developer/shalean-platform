@@ -91,6 +91,16 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain("cancelled_booking_cleanup_failed");
   });
 
+  it("repairs retained paid sales-document bookings after line-item failure", () => {
+    const src = read("lib/salesDocument/createBookingFromSalesQuoteInvoice.ts");
+
+    expect(src).toContain("retainedCancelledBookingId");
+    expect(src).toContain("buildExactSourceLineItems");
+    expect(src).toContain("persistBookingLineItems");
+    expect(src).toContain('status: "pending"');
+    expect(src).toContain("paid_cancelled_booking_reactivate_failed");
+  });
+
   it("keeps sales-document unpaid totals out of collected-cash fields", () => {
     const src = read("lib/salesDocument/createBookingFromSalesQuoteInvoice.ts");
 
@@ -233,6 +243,16 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("coalesce(v.total_paid_zar, 0) > 0");
   });
 
+  it("accepts an intentional zero-winner race rejection", () => {
+    const wrapper = read("lib/admin/adminBookingPostInsertRace.ts");
+    const route = read("app/api/admin/bookings/route.ts");
+
+    expect(wrapper).toContain("winnerId: string | null");
+    expect(wrapper).toContain('if (action === "reject")');
+    expect(route).toContain("if (!winnerCreated && race.winnerId)");
+    expect(route).toContain("because the race no longer has an active winner");
+  });
+
   it("rejects a retained inactive monthly requester when no active winner remains", () => {
     const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
 
@@ -328,6 +348,17 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(seed).toContain("load generated seed recurring occurrences");
     expect(seed).toContain('.in("recurring_id", Object.values(RECURRING_IDS))');
     expect(seed).toContain("new Set(");
+  });
+
+  it("clears both generic and direct booking ledger links during seed reset", () => {
+    const seed = read("../../scripts/seed-dev.mjs");
+
+    expect(seed).toContain("payment_transactions seed booking_id children");
+    expect(seed).toContain("payment_transactions seed entity children");
+    expect(seed).toContain("accounting_invoice_sync seed booking_id children");
+    expect(seed).toContain("accounting_invoice_sync seed entity children");
+    expect(seed).toContain('.eq("entity_type", "booking")');
+    expect(seed).toContain('.in("entity_id", seedBookingIds)');
   });
 
   it("keeps the governed non-production seed reset compatible without weakening production guards", () => {
