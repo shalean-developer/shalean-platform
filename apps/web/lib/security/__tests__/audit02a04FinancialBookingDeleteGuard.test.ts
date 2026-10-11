@@ -326,8 +326,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(seed).toContain("internal_earnings_cents: 0");
     expect(seed).toContain("preflight payout_audit_events");
     expect(seed).toContain("mix seed and non-seed bookings");
-    expect(seed).toContain("record_inventory_movement");
-    expect(seed).toContain("DEV SEED RESET reversal");
+    expect(seed).toContain("reset_seed_inventory_movement");
+    expect(seed).not.toContain('admin.rpc("record_inventory_movement"');
     expect(seed).toContain("reset_seed_cleaning_credit_for_booking");
     expect(seed).not.toContain('admin.rpc("apply_cleaning_credit_transaction"');
     expect(seed).toContain("recurring_prepaid_allocations");
