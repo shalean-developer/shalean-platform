@@ -16,6 +16,18 @@ describe("BOOKING-E2E-13A Cleaning Credit settlement authority", () => {
     expect(src).toContain('creditSettlement.error !== "reservation_not_found"');
   });
 
+  it("gates the pre-Paystack persisted fast path on settled Cleaning Credit", () => {
+    const route = read("app/api/paystack/verify/route.ts");
+    const fastPathPos = route.indexOf("findPersistedPaidBooking(adminPrePaystack, reference)");
+    const creditGatePos = route.indexOf('from("cleaning_credit_reservations")', fastPathPos);
+    const responsePos = route.indexOf("persistedPaidBookingResponse(persistedPaid, reference, startedAt)", fastPathPos);
+
+    expect(fastPathPos).toBeGreaterThanOrEqual(0);
+    expect(creditGatePos).toBeGreaterThan(fastPathPos);
+    expect(responsePos).toBeGreaterThan(creditGatePos);
+    expect(route).toContain("creditReplaySafe");
+  });
+
   it("keeps zero-balance settlement on the same Cleaning Credit RPC boundary", () => {
     const src = read("app/api/booking-v2/confirm/route.ts");
     expect(src).toContain("await settleCleaningCreditForBooking(supabase, bookingId)");
