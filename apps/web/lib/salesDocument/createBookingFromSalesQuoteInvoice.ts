@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getServiceLabel, parseBookingServiceId } from "@/components/booking/serviceCategories";
 import { bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
 import { insertBookingRowUnified } from "@/lib/booking/createBookingUnified";
+import { buildExactSourceLineItems } from "@/lib/booking/buildBookingLineItems";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { ensureSalesDocumentCustomer } from "@/lib/salesDocument/ensureSalesDocumentCustomer";
@@ -53,6 +54,14 @@ export type CreateBookingFromSalesQuoteInvoiceResult =
   | { ok: true; bookingId: string; alreadyExisted: boolean }
   | { ok: false; error: string };
 
+function isSalesDocumentLineItemRollbackMarker(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return false;
+  const marker = (metadata as Record<string, unknown>).audit02a04_provisional_rollback;
+  if (!marker || typeof marker !== "object" || Array.isArray(marker)) return false;
+  const m = marker as Record<string, unknown>;
+  return m.kind === "line_item_persist_failed" && m.source === "sales_document_quote";
+}
+
 /**
  * Creates (idempotently) a booking when a sales quote becomes an invoice.
  * Payment is collected on the sales document; the booking starts as `pending_payment`
@@ -66,12 +75,18 @@ export async function createBookingFromSalesQuoteInvoice(
 
   const { data: existingBooking, error: existingErr } = await admin
     .from("bookings")
-    .select("id")
+    .select("id, status, metadata")
     .eq("sales_document_id", invoiceId)
     .maybeSingle();
 
   if (existingErr) return { ok: false, error: existingErr.message };
-  if (existingBooking?.id) {
+  const retainedCancelledBookingId =
+    existingBooking?.id &&
+    String(existingBooking.status ?? "").trim().toLowerCase() === "cancelled" &&
+    isSalesDocumentLineItemRollbackMarker(existingBooking.metadata)
+      ? String(existingBooking.id)
+      : null;
+  if (existingBooking?.id && !retainedCancelledBookingId) {
     return { ok: true, bookingId: String(existingBooking.id), alreadyExisted: true };
   }
 
@@ -132,8 +147,68 @@ export async function createBookingFromSalesQuoteInvoice(
   const location = resolveLocation(requestDetails, q.notes);
   const date = resolveBookingDate(requestDetails?.preferred_date, q.due_date);
   const totalCents = Math.max(0, Math.round(Number(inv.total_cents ?? q.total_cents ?? 0)));
-  const totalPaidZar = Math.max(1, Math.round(totalCents / 100));
+  const quotedTotalZar = Math.max(1, Math.round(totalCents / 100));
   const invoicePaid = String(inv.status ?? "").toLowerCase() === "paid";
+  const collectedTotalZar = invoicePaid ? quotedTotalZar : 0;
+
+  if (retainedCancelledBookingId) {
+    if (invoicePaid) {
+      const repairItems = buildExactSourceLineItems({
+        declaredTotalCents: quotedTotalZar * 100,
+        source: "sales_document",
+        lines: lineItems.map((line) => ({
+          name: line.description,
+          quantity: line.quantity,
+          unitPriceCents: line.unit_price_cents,
+        })),
+      });
+      const { data: repairData, error: repairError } = await admin.rpc(
+        "repair_paid_cancelled_sales_document_booking",
+        {
+          p_invoice_id: invoiceId,
+          p_line_items: repairItems,
+          p_total_price: quotedTotalZar,
+        },
+      );
+      const repair =
+        repairData && typeof repairData === "object" && !Array.isArray(repairData)
+          ? (repairData as { ok?: unknown; error?: unknown; booking_id?: unknown })
+          : null;
+      if (repairError || repair?.ok !== true) {
+        return {
+          ok: false,
+          error:
+            repairError?.message ??
+            (typeof repair?.error === "string" ? repair.error : "paid_cancelled_booking_repair_failed"),
+        };
+      }
+      return {
+        ok: true,
+        bookingId:
+          typeof repair.booking_id === "string" && repair.booking_id
+            ? repair.booking_id
+            : retainedCancelledBookingId,
+        alreadyExisted: true,
+      };
+    }
+
+    const { data: cleanupData, error: cleanupError } = await admin.rpc(
+      "delete_unpaid_sales_document_booking",
+      { p_invoice_id: invoiceId },
+    );
+    const cleanup =
+      cleanupData && typeof cleanupData === "object" && !Array.isArray(cleanupData)
+        ? (cleanupData as { ok?: unknown; error?: unknown })
+        : null;
+    if (cleanupError || cleanup?.ok !== true) {
+      return {
+        ok: false,
+        error:
+          cleanupError?.message ??
+          (typeof cleanup?.error === "string" ? cleanup.error : "cancelled_booking_cleanup_failed"),
+      };
+    }
+  }
 
   const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const paystackReference = `salesdoc_${invoiceId.replace(/-/g, "")}`;
@@ -159,10 +234,10 @@ export async function createBookingFromSalesQuoteInvoice(
       city_id: null,
       date,
       time: DEFAULT_TIME,
-      total_paid_zar: totalPaidZar,
+      total_paid_zar: collectedTotalZar,
       pricing_version_id: null,
       price_breakdown: null,
-      total_price: null,
+      total_price: quotedTotalZar,
       booking_source: "sales_document",
       sales_document_id: invoiceId,
       ...(invoicePaid ? { payment_completed_at: new Date().toISOString(), payment_status: "success" } : {}),
@@ -184,7 +259,7 @@ export async function createBookingFromSalesQuoteInvoice(
       // The bookings table stores the canonical total in whole ZAR. Reconcile
       // source lines to that persisted value so cents on a sales document do
       // not fail unified booking validation.
-      declaredTotalCents: totalPaidZar * 100,
+      declaredTotalCents: quotedTotalZar * 100,
       source: "sales_document",
       lines: lineItems.map((line) => ({
         name: line.description,

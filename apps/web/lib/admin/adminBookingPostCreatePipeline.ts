@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
+import { buildCompletionCoherencePatch } from "@/lib/booking/bookingCompletionIntegrity";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import {
   resolvePersistCleanerIdForBooking,
@@ -91,6 +92,58 @@ export async function ensureBookingAssignedStatusInvariant(
   if (uErr) {
     void reportOperationalIssue("warn", "ensureBookingAssignedStatusInvariant", uErr.message, { bookingId });
   }
+}
+
+/**
+ * Promote a newly-created admin monthly booking to completed only after canonical
+ * line items have persisted and duplicate-race resolution has succeeded.
+ *
+ * Keeping this write in the canonical admin post-create pipeline preserves the
+ * H-16 status-write boundary and prevents a child-write failure from leaving a
+ * completed booking without canonical pricing lines.
+ */
+export async function promoteAdminMonthlyBookingToCompleted(params: {
+  admin: SupabaseClient;
+  bookingId: string;
+  completedAtIso: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { admin, bookingId, completedAtIso } = params;
+  const { data: current, error: readErr } = await admin
+    .from("bookings")
+    .select("status, completed_at, dispatch_status")
+    .eq("id", bookingId)
+    .maybeSingle();
+
+  if (readErr || !current) {
+    return { ok: false, error: readErr?.message ?? "booking_missing" };
+  }
+
+  const status = String((current as { status?: string | null }).status ?? "").trim().toLowerCase();
+  if (status === "completed") return { ok: true };
+  if (status !== "assigned") {
+    return { ok: false, error: `unexpected_precompletion_status:${status || "empty"}` };
+  }
+
+  const { patch } = buildCompletionCoherencePatch({
+    beforeCompletedAt: (current as { completed_at?: string | null }).completed_at ?? null,
+    beforeDispatchStatus: (current as { dispatch_status?: string | null }).dispatch_status ?? null,
+    fillCompletedAtIfMissing: true,
+    nowIso: completedAtIso,
+  });
+
+  const { error: updateErr } = await admin
+    .from("bookings")
+    .update({
+      status: "completed",
+      ...patch,
+      cleaner_response_status: CLEANER_RESPONSE.COMPLETED,
+      updated_at: completedAtIso,
+    })
+    .eq("id", bookingId)
+    .eq("status", "assigned");
+
+  if (updateErr) return { ok: false, error: updateErr.message };
+  return { ok: true };
 }
 
 /**
@@ -208,6 +261,123 @@ export async function triggerPersistPreCompletionAssignmentDisplayEarnings(
       context: { bookingId, cleanerId, skipReason: payout.skipReason },
     });
   }
+}
+
+export async function persistAdminMonthlyPreCompletionEarnings(params: {
+  admin: SupabaseClient;
+  bookingId: string;
+  logSource: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { admin, bookingId, logSource } = params;
+
+  await ensureBookingAssignedStatusInvariant(admin, bookingId);
+
+  const { data: b, error: readErr } = await admin
+    .from("bookings")
+    .select(
+      "status, cleaner_id, payout_owner_cleaner_id, is_team_job, team_id, billing_type, is_monthly_billing_booking, monthly_invoice_id, total_paid_zar, total_paid_cents, amount_paid_cents, payment_needs_follow_up, payment_status, paid_at, refunded_at, refund_status, display_earnings_cents",
+    )
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (readErr || !b) {
+    return { ok: false, error: readErr?.message ?? "booking_missing" };
+  }
+
+  const st = String((b as { status?: string | null }).status ?? "").trim().toLowerCase();
+  if (st !== "assigned") {
+    return { ok: false, error: `unexpected_precompletion_status:${st || "empty"}` };
+  }
+
+  const eligibility = evaluatePersistCleanerPayoutEligibility(b as Record<string, unknown>);
+  if (!eligibility.allowed || eligibility.mode !== "pre_completion_assignment_basis") {
+    return {
+      ok: false,
+      error: eligibility.allowed
+        ? `unexpected_earnings_mode:${eligibility.mode}`
+        : `precompletion_earnings_ineligible:${eligibility.skipReason}`,
+    };
+  }
+
+  const cleanerId = resolvePersistCleanerIdForBooking(b as BookingPersistIdsRow);
+  if (!cleanerId) return { ok: false, error: "precompletion_earnings_missing_cleaner" };
+
+  const payout = await persistCleanerPayoutIfUnset({
+    admin,
+    bookingId,
+    cleanerId,
+    forceDisplayRecompute: true,
+  });
+  if (!payout.ok) {
+    await reportOperationalIssue("error", logSource, payout.error ?? "pre_completion_assignment_persist_failed", {
+      bookingId,
+      cleanerId,
+    });
+    return { ok: false, error: payout.error ?? "pre_completion_assignment_persist_failed" };
+  }
+  if (payout.skipped) {
+    return { ok: false, error: `precompletion_earnings_skipped:${payout.skipReason}` };
+  }
+
+  const { data: verifiedBooking, error: verifyErr } = await admin
+    .from("bookings")
+    .select("display_earnings_cents, is_team_job, payout_owner_cleaner_id")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (verifyErr || !verifiedBooking) {
+    return { ok: false, error: verifyErr?.message ?? "precompletion_earnings_verify_missing" };
+  }
+  const display = Number((verifiedBooking as { display_earnings_cents?: number | null }).display_earnings_cents);
+  if (!Number.isFinite(display) || display < 0) {
+    return { ok: false, error: "precompletion_display_earnings_missing" };
+  }
+
+  const { data: rosterRows, error: rosterErr } = await admin
+    .from("booking_cleaners")
+    .select("cleaner_id, role")
+    .eq("booking_id", bookingId);
+  if (rosterErr) return { ok: false, error: rosterErr.message };
+
+  const roster = (rosterRows ?? [])
+    .map((row) => ({
+      cleanerId: String((row as { cleaner_id?: string | null }).cleaner_id ?? "").trim(),
+      role: String((row as { role?: string | null }).role ?? "").trim().toLowerCase(),
+    }))
+    .filter((row) => row.cleanerId);
+
+  if ((verifiedBooking as { is_team_job?: boolean | null }).is_team_job === true) {
+    const { data: teamRows, error: teamErr } = await admin
+      .from("team_job_member_payouts")
+      .select("cleaner_id")
+      .eq("booking_id", bookingId);
+    if (teamErr) return { ok: false, error: teamErr.message };
+    if ((teamRows ?? []).length === 0) {
+      return { ok: false, error: "precompletion_team_member_payouts_missing" };
+    }
+  } else if (roster.length > 1) {
+    const payoutOwner = String(
+      (verifiedBooking as { payout_owner_cleaner_id?: string | null }).payout_owner_cleaner_id ?? cleanerId,
+    ).trim();
+    const nonLeadIds = roster
+      .filter((row) => row.cleanerId !== payoutOwner && row.role !== "lead")
+      .map((row) => row.cleanerId);
+    if (nonLeadIds.length > 0) {
+      const { data: memberRows, error: memberErr } = await admin
+        .from("booking_roster_member_payouts")
+        .select("cleaner_id")
+        .eq("booking_id", bookingId)
+        .in("cleaner_id", nonLeadIds);
+      if (memberErr) return { ok: false, error: memberErr.message };
+      const actual = new Set(
+        (memberRows ?? []).map((row) => String((row as { cleaner_id?: string | null }).cleaner_id ?? "").trim()),
+      );
+      const missing = nonLeadIds.filter((id) => !actual.has(id));
+      if (missing.length > 0) {
+        return { ok: false, error: `precompletion_roster_member_payouts_missing:${missing.join(",")}` };
+      }
+    }
+  }
+
+  return { ok: true };
 }
 
 /**

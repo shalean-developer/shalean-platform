@@ -325,7 +325,23 @@ export async function insertRecurringOccurrenceBooking(
       bookingId: id,
     });
     if (!claim.ok) {
-      await admin.from("bookings").delete().eq("id", id);
+      const { data: rollbackData, error: rollbackError } = await admin.rpc(
+        "rollback_unclaimed_recurring_prepaid_booking",
+        {
+          p_booking_id: id,
+          p_allocation_id: prepaidAllocation.allocationId,
+        },
+      );
+      const rollback =
+        rollbackData && typeof rollbackData === "object" && !Array.isArray(rollbackData)
+          ? (rollbackData as { ok?: unknown; error?: unknown })
+          : null;
+      if (rollbackError || rollback?.ok !== true) {
+        const detail =
+          rollbackError?.message ??
+          (typeof rollback?.error === "string" ? rollback.error : "unknown");
+        return { ok: false, error: `${claim.error}:rollback_failed:${detail}` };
+      }
       return { ok: false, error: claim.error };
     }
   }
