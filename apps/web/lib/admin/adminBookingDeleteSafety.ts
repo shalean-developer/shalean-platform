@@ -19,6 +19,7 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_payout_earnings_present"
   | "admin_booking_delete_paid_at_present"
   | "admin_booking_delete_amount_paid_present"
+  | "admin_booking_delete_deposit_paid_present"
   | "admin_booking_delete_total_paid_present"
   | "admin_booking_delete_payment_transaction_linked"
   | "admin_booking_delete_expense_linked"
@@ -64,6 +65,7 @@ export type AdminBookingDeleteSafetyRow = {
   cleaner_bonus_cents?: number | string | null;
   payout_earnings_cents?: number | string | null;
   amount_paid_cents?: number | string | null;
+  deposit_paid_cents?: number | string | null;
   total_paid_cents?: number | string | null;
   total_paid_zar?: number | string | null;
   payment_transaction_id?: string | null;
@@ -259,6 +261,13 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_amount_paid_present",
       message: "Bookings with positive amount_paid_cents cannot be hard-deleted.",
+    });
+  }
+
+  if (positiveCents(row.deposit_paid_cents)) {
+    blocks.push({
+      code: "admin_booking_delete_deposit_paid_present",
+      message: "Bookings with a recorded deposit cannot be hard-deleted.",
     });
   }
 
