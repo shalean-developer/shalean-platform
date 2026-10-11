@@ -9,7 +9,9 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_payout_frozen"
   | "admin_booking_delete_display_earnings_present"
   | "admin_booking_delete_paid_at_present"
-  | "admin_booking_delete_amount_paid_present";
+  | "admin_booking_delete_amount_paid_present"
+  | "admin_booking_delete_total_paid_present"
+  | "admin_booking_delete_payment_transaction_linked";
 
 export type AdminBookingDeleteSafetyRow = {
   status?: string | null;
@@ -23,6 +25,9 @@ export type AdminBookingDeleteSafetyRow = {
   payout_frozen_cents?: number | string | null;
   display_earnings_cents?: number | string | null;
   amount_paid_cents?: number | string | null;
+  total_paid_cents?: number | string | null;
+  total_paid_zar?: number | string | null;
+  payment_transaction_id?: string | null;
 };
 
 export type AdminBookingDeleteBlock = {
@@ -132,6 +137,20 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_amount_paid_present",
       message: "Bookings with positive amount_paid_cents cannot be hard-deleted.",
+    });
+  }
+
+  if (positiveCents(row.total_paid_cents) || Number(row.total_paid_zar ?? 0) > 0) {
+    blocks.push({
+      code: "admin_booking_delete_total_paid_present",
+      message: "Bookings with collected total_paid value cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.payment_transaction_id)) {
+    blocks.push({
+      code: "admin_booking_delete_payment_transaction_linked",
+      message: "Bookings linked to a payment transaction cannot be hard-deleted.",
     });
   }
 
