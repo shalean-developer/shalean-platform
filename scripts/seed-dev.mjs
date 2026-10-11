@@ -1421,6 +1421,25 @@ async function resetSeedRows(admin) {
     seedOnlyPayoutAuditIds = (payoutAuditRows ?? []).map((row) => String(row.id)).filter(Boolean);
   }
 
+  // Before the first mutation, prove that every seed financial reversal can
+  // complete. This prevents a spent referral reward or unprovable promotion
+  // revenue from leaving the seed dataset partially dismantled.
+  if (seedBookingIds.length > 0) {
+    const preflightData = await must(
+      "preflight seed financial reset",
+      admin.rpc("preflight_seed_financial_reset", {
+        p_booking_ids: seedBookingIds,
+        p_seed_recurring_ids: Object.values(RECURRING_IDS),
+      }),
+    );
+    const preflight = Array.isArray(preflightData) ? preflightData[0] : preflightData;
+    if (!preflight?.ok) {
+      throw new Error(
+        `[seed-dev] Reset blocked before mutation: ${preflight?.error ?? "seed_financial_preflight_failed"}`,
+      );
+    }
+  }
+
   // Reverse dependency order. This command is already guarded by assertNonProductionSeed()
   // before resetSeedRows() is called. Explicitly reconcile seed-scoped financial/audit
   // children, then neutralize only known seed booking mirrors before hard delete.
