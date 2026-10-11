@@ -12,6 +12,7 @@ set search_path = pg_catalog, public
 as $$
 begin
   if lower(trim(coalesce(old.status, ''))) = 'completed'
+     or old.completed_at is not null
      or old.marked_paid_by_admin_id is not null
      or old.zoho_invoice_id is not null
      or old.refunded_at is not null
@@ -128,6 +129,11 @@ begin
      )
      or exists (
        select 1
+       from public.booking_cleaner_earnings_snapshot_lines bcesl
+       where bcesl.booking_id = old.id
+     )
+     or exists (
+       select 1
        from public.booking_line_items bli
        where bli.booking_id = old.id
          and coalesce(bli.cleaner_earnings_cents, 0) > 0
@@ -214,6 +220,13 @@ begin
     return jsonb_build_object('ok', true, 'booking_id', null);
   end if;
 
+  if lower(trim(coalesce(v.status, ''))) <> 'cancelled'
+     or coalesce(v.metadata -> 'audit02a04_provisional_rollback' ->> 'kind', '') <> 'line_item_persist_failed'
+     or coalesce(v.metadata -> 'audit02a04_provisional_rollback' ->> 'source', '') <> 'sales_document_quote'
+  then
+    return jsonb_build_object('ok', false, 'booking_id', v.id, 'error', 'not_provisional_line_item_rollback');
+  end if;
+
   if v.payment_completed_at is not null
      or lower(trim(coalesce(v.payment_status, ''))) in ('paid', 'success', 'succeeded')
      or coalesce(v.amount_paid_cents, 0) > 0
@@ -283,6 +296,12 @@ begin
 
   if lower(trim(coalesce(v.status, ''))) <> 'cancelled' then
     return jsonb_build_object('ok', false, 'error', 'booking_not_cancelled', 'booking_id', v.id);
+  end if;
+
+  if coalesce(v.metadata -> 'audit02a04_provisional_rollback' ->> 'kind', '') <> 'line_item_persist_failed'
+     or coalesce(v.metadata -> 'audit02a04_provisional_rollback' ->> 'source', '') <> 'sales_document_quote'
+  then
+    return jsonb_build_object('ok', false, 'error', 'not_provisional_line_item_rollback', 'booking_id', v.id);
   end if;
 
   if not (
@@ -358,6 +377,7 @@ begin
      set status = 'pending',
          dispatch_status = 'searching',
          total_price = p_total_price,
+         metadata = coalesce(metadata, '{}'::jsonb) - 'audit02a04_provisional_rollback',
          updated_at = now()
    where id = v.id;
 
@@ -389,6 +409,7 @@ as $financial_history$
     where b.id = p_booking_id
       and (
         lower(trim(coalesce(b.status, ''))) = 'completed'
+        or b.completed_at is not null
         or b.marked_paid_by_admin_id is not null
         or b.zoho_invoice_id is not null
         or b.refunded_at is not null
@@ -450,6 +471,10 @@ as $financial_history$
   or exists (select 1 from public.conversion_experiment_results cer where cer.booking_id = p_booking_id)
   or exists (select 1 from public.email_campaign_attributions eca where eca.booking_id = p_booking_id)
   or exists (select 1 from public.booking_cleaner_earnings_snapshot bces where bces.booking_id = p_booking_id)
+  or exists (
+    select 1 from public.booking_cleaner_earnings_snapshot_lines bcesl
+    where bcesl.booking_id = p_booking_id
+  )
   or exists (
     select 1
     from public.booking_line_items bli
