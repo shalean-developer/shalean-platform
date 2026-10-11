@@ -14,7 +14,9 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_payment_transaction_linked"
   | "admin_booking_delete_expense_linked"
   | "admin_booking_delete_cleaner_earnings_linked"
-  | "admin_booking_delete_cleaner_earnings_adjustment_linked";
+  | "admin_booking_delete_cleaner_earnings_adjustment_linked"
+  | "admin_booking_delete_team_member_payout_linked"
+  | "admin_booking_delete_roster_member_payout_linked";
 
 export type AdminBookingDeleteSafetyRow = {
   status?: string | null;
@@ -34,6 +36,8 @@ export type AdminBookingDeleteSafetyRow = {
   linked_expense_id?: string | null;
   linked_cleaner_earning_id?: string | null;
   linked_cleaner_earnings_adjustment_id?: string | null;
+  linked_team_member_payout_id?: string | null;
+  linked_roster_member_payout_id?: string | null;
 };
 
 export type AdminBookingDeleteBlock = {
@@ -146,10 +150,10 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     });
   }
 
-  if (positiveCents(row.total_paid_cents) || Number(row.total_paid_zar ?? 0) > 0) {
+  if (positiveCents(row.total_paid_cents)) {
     blocks.push({
       code: "admin_booking_delete_total_paid_present",
-      message: "Bookings with collected total_paid value cannot be hard-deleted.",
+      message: "Bookings with positive total_paid_cents cannot be hard-deleted.",
     });
   }
 
@@ -178,6 +182,20 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_cleaner_earnings_adjustment_linked",
       message: "Bookings linked to cleaner earnings adjustments cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_team_member_payout_id)) {
+    blocks.push({
+      code: "admin_booking_delete_team_member_payout_linked",
+      message: "Bookings linked to team member payout allocations cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_roster_member_payout_id)) {
+    blocks.push({
+      code: "admin_booking_delete_roster_member_payout_linked",
+      message: "Bookings linked to roster member payout allocations cannot be hard-deleted.",
     });
   }
 
