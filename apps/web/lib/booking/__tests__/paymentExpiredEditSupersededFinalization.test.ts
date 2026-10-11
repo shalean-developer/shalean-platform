@@ -24,4 +24,17 @@ describe("payment-expired edit-superseded finalization guard", () => {
     expect(retry).toContain("payment_edit_superseded_captured");
     expect(retry).toContain("manual reconciliation required");
   });
+
+  it("terminalizes repeated superseded ledger failures and keeps manual-review rows visible to health scans", () => {
+    const retry = read("app/api/cron/retry-failed-jobs/route.ts");
+    const productionHealth = read("lib/observability/productionHealthMetrics.ts");
+    const officeHealth = read("lib/admin/collectOfficeOpsHealthSignals.ts");
+
+    expect(retry).toContain("superseded payment ledger persistence attempts exhausted");
+    expect(retry).toContain("FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED");
+    expect(retry).toContain("nextAttempts >= BOOKING_INSERT_MAX_ATTEMPTS");
+    expect(retry).toContain("FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_MANUAL_REVIEW");
+    expect(productionHealth).toContain('"payment_reconciliation_manual_review"');
+    expect(officeHealth).toContain('"payment_reconciliation_manual_review"');
+  });
 });
