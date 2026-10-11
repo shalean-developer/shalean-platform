@@ -1472,8 +1472,7 @@ async function resetSeedRows(admin) {
     }
 
     // Reconcile Cleaning Credit before deleting seed-scoped reservations/transactions.
-    // The DB helper is retry-safe: any balance restoration and reservation release
-    // commit atomically, so an interrupted reset cannot credit the same booking twice.
+    // The DB helper restores/release state atomically and is retry-safe.
     const reservations = await must(
       "load seed cleaning credit reservations",
       admin
