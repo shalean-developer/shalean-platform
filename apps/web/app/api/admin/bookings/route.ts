@@ -59,7 +59,10 @@ import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
 import { fetchTeamRosterByBookingIds } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 import { effectiveBookingCleanersForList } from "@/lib/admin/adminBookingAssignmentDisplay";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { runAdminBookingPostCreateNormalizationAndEarnings } from "@/lib/admin/adminBookingPostCreatePipeline";
+import {
+  promoteAdminMonthlyBookingToCompleted,
+  runAdminBookingPostCreateNormalizationAndEarnings,
+} from "@/lib/admin/adminBookingPostCreatePipeline";
 import { ensureUserProfileForAuthUser } from "@/lib/admin/ensureUserProfileForAuthUser";
 import { readCustomerProfileContact } from "@/lib/customer/readCustomerProfileContact";
 import { classifyAdminBookingListRow } from "@/lib/admin/adminBookingListClassify";
@@ -1872,21 +1875,16 @@ export async function POST(request: Request) {
       });
     }
 
-    if (adminMarkCompleted) {
-      const { error: completeErr } = await admin
-        .from("bookings")
-        .update({
-          status: "completed",
-          ...completionCoherencePatch,
-          cleaner_response_status: CLEANER_RESPONSE.COMPLETED,
-          updated_at: completedAtIso ?? new Date().toISOString(),
-        })
-        .eq("id", newBookingId)
-        .eq("status", "assigned");
-      if (completeErr) {
+    if (adminMarkCompleted && completedAtIso) {
+      const completed = await promoteAdminMonthlyBookingToCompleted({
+        admin,
+        bookingId: newBookingId,
+        completedAtIso,
+      });
+      if (!completed.ok) {
         const failBody: Record<string, unknown> = {
           ok: false,
-          error: `Booking created with canonical line items but could not be marked completed: ${completeErr.message}`,
+          error: `Booking created with canonical line items but could not be marked completed: ${completed.error}`,
           code: "admin_monthly_completion_promotion_failed",
           bookingId: newBookingId,
         };
