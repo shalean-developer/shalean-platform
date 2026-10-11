@@ -93,12 +93,38 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_cleaner_earnings_adjustment_linked")).toBe(true);
   });
 
+  it("blocks hard delete when a team member payout allocation survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_team_member_payout_id: "77777777-7777-4777-8777-777777777777",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected team-payout-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_team_member_payout_linked")).toBe(true);
+  });
+
+  it("blocks hard delete when a roster member payout allocation survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_roster_member_payout_id: "88888888-8888-4888-8888-888888888888",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected roster-payout-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_roster_member_payout_linked")).toBe(true);
+  });
+
   it("blocks hard delete when collected totals survive even if payment status drifted", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "cancelled",
       payment_status: "pending",
       amount_paid_cents: 0,
-      total_paid_zar: 1885,
+      total_paid_cents: 188500,
     });
 
     expect(result.ok).toBe(false);
