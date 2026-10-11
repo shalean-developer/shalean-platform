@@ -6,6 +6,7 @@ import type { BookingInsertFailedPayload } from "@/lib/booking/failedJobs";
 import { formatFailedJobPayloadPreview } from "@/lib/booking/failedJobPayloadPreview";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
+import { isPaymentEditSupersededSnapshot } from "@/lib/booking/abandonPendingPaymentForEdit";
 import { finalizePaidBooking, upsertResultFromFinalizePaidBookingOp } from "@/lib/booking/bookingOperations";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import type { UpsertBookingFromPaystackResult } from "@/lib/booking/upsertBookingFromPaystack";
@@ -52,6 +53,7 @@ const FAILED_JOB_TYPE_BOOKING_INSERT_INVALID = "booking_insert_invalid_payload";
 /** Terminal: retries exhausted; excluded from cron selector (payload includes last_error / reference / attempts). */
 const FAILED_JOB_TYPE_BOOKING_INSERT_EXHAUSTED = "booking_insert_exhausted";
 const FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED = "payment_reconciliation_exhausted";
+const FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_MANUAL_REVIEW = "payment_reconciliation_manual_review";
 const FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION = "recurring_roster_reconciliation";
 const FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION_EXHAUSTED =
   "recurring_roster_reconciliation_exhausted";
@@ -494,6 +496,94 @@ export async function POST(request: Request) {
 
       bookingInsertRetried++;
       const snapshot = (payload.snapshot ?? null) as BookingSnapshotV1 | null;
+
+      if (jobType === FAILED_JOB_TYPE_PAYMENT_RECONCILIATION) {
+        const { data: supersededBooking, error: supersededBookingError } = await supabase
+          .from("bookings")
+          .select("id, status, booking_snapshot")
+          .eq("paystack_reference", payload.paystackReference)
+          .maybeSingle();
+
+        if (supersededBookingError) {
+          await reportOperationalIssue(
+            "error",
+            "cron/retry-failed-jobs",
+            `superseded payment reconciliation lookup failed: ${supersededBookingError.message}`,
+            { failedJobId: id, paystackReference: payload.paystackReference },
+          );
+        } else if (
+          supersededBooking?.id &&
+          supersededBooking.status === "payment_expired" &&
+          isPaymentEditSupersededSnapshot(supersededBooking.booking_snapshot)
+        ) {
+          let supersededPaymentPersisted;
+          try {
+            supersededPaymentPersisted = await recordPaystackBookingPayment(supabase, {
+              reference: payload.paystackReference,
+              amountCents: payload.amountCents,
+              bookingId: supersededBooking.id,
+              currency: typeof payload.currency === "string" ? payload.currency : "ZAR",
+              paidAtIso: typeof payload.paidAtIso === "string" ? payload.paidAtIso : null,
+              chargeData:
+                payload.paystackChargeData && typeof payload.paystackChargeData === "object"
+                  ? payload.paystackChargeData
+                  : undefined,
+            });
+          } catch (settlementErr) {
+            supersededPaymentPersisted = {
+              ok: false as const,
+              error: settlementErr instanceof Error ? settlementErr.message : String(settlementErr),
+            };
+          }
+
+          if (!supersededPaymentPersisted.ok) {
+            const nextAttempts = attempts + 1;
+            await supabase.from("failed_jobs").update({ attempts: nextAttempts }).eq("id", id);
+            await reportOperationalIssue(
+              "error",
+              "cron/retry-failed-jobs",
+              `superseded payment ledger persistence failed: ${supersededPaymentPersisted.error}`,
+              {
+                failedJobId: id,
+                bookingId: supersededBooking.id,
+                paystackReference: payload.paystackReference,
+                attempts: nextAttempts,
+              },
+            );
+            continue;
+          }
+
+          const manualReviewPayload = {
+            ...payload,
+            _paymentReconciliationManualReview: {
+              reason: "payment_edit_superseded_captured",
+              booking_id: supersededBooking.id,
+              payment_transaction_id: supersededPaymentPersisted.paymentTransactionId,
+              at: new Date().toISOString(),
+            },
+          };
+          await supabase
+            .from("failed_jobs")
+            .update({
+              type: FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_MANUAL_REVIEW,
+              payload: manualReviewPayload,
+            })
+            .eq("id", id);
+          await reportOperationalIssue(
+            "critical",
+            "cron/retry-failed-jobs",
+            "captured payment belongs to edit-superseded booking; ledger persisted and manual reconciliation required",
+            {
+              failedJobId: id,
+              bookingId: supersededBooking.id,
+              paystackReference: payload.paystackReference,
+              paymentTransactionId: supersededPaymentPersisted.paymentTransactionId,
+              errorType: FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_MANUAL_REVIEW,
+            },
+          );
+          continue;
+        }
+      }
 
       const emRetry =
         typeof payload.customerEmail === "string" ? normalizeEmail(payload.customerEmail) : "";
