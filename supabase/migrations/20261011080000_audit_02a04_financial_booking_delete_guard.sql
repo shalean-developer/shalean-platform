@@ -21,6 +21,7 @@ begin
      or lower(trim(coalesce(old.payment_status, ''))) in ('paid', 'success', 'succeeded', 'pending_monthly')
      or coalesce(old.is_monthly_billing_booking, false)
      or coalesce(old.amount_paid_cents, 0) > 0
+     or coalesce(old.deposit_paid_cents, 0) > 0
      or coalesce(old.total_paid_cents, 0) > 0
      or old.payment_transaction_id is not null
      or exists (
@@ -186,6 +187,7 @@ begin
   if v.payment_completed_at is not null
      or lower(trim(coalesce(v.payment_status, ''))) in ('paid', 'success', 'succeeded')
      or coalesce(v.amount_paid_cents, 0) > 0
+     or coalesce(v.deposit_paid_cents, 0) > 0
      or coalesce(v.total_paid_cents, 0) > 0
      or v.payment_transaction_id is not null
      or exists (
@@ -220,6 +222,94 @@ $$;
 revoke all on function public.delete_unpaid_sales_document_booking(uuid) from public, anon, authenticated;
 grant execute on function public.delete_unpaid_sales_document_booking(uuid) to service_role;
 
+
+
+-- Read-only source-of-truth probe used before reversing an applied promotion.
+-- Promotion redemption itself is intentionally excluded because the purge may
+-- reverse an abandoned checkout promotion; every other protected financial
+-- signal keeps the booking untouched for recovery/reconciliation.
+create or replace function public.booking_has_nonpromotion_financial_history(p_booking_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $
+  select exists (
+    select 1
+    from public.bookings b
+    where b.id = p_booking_id
+      and (
+        b.marked_paid_by_admin_id is not null
+        or b.zoho_invoice_id is not null
+        or b.refunded_at is not null
+        or nullif(trim(coalesce(b.refund_status, '')), '') is not null
+        or b.payout_paid_at is not null
+        or b.payout_run_id is not null
+        or b.payment_completed_at is not null
+        or lower(trim(coalesce(b.payment_status, ''))) in ('paid', 'success', 'succeeded', 'pending_monthly')
+        or coalesce(b.is_monthly_billing_booking, false)
+        or coalesce(b.amount_paid_cents, 0) > 0
+        or coalesce(b.deposit_paid_cents, 0) > 0
+        or coalesce(b.total_paid_cents, 0) > 0
+        or b.payment_transaction_id is not null
+        or b.monthly_invoice_id is not null
+        or b.sales_document_id is not null
+        or b.payout_id is not null
+        or lower(trim(coalesce(b.payout_status, ''))) in ('eligible', 'approved', 'processing', 'paid')
+        or coalesce(b.payout_frozen_cents, 0) > 0
+        or coalesce(b.display_earnings_cents, 0) > 0
+        or coalesce(b.cleaner_payout_cents, 0) > 0
+        or coalesce(b.cleaner_bonus_cents, 0) > 0
+        or coalesce(b.payout_earnings_cents, 0) > 0
+        or b.paid_at is not null
+      )
+  )
+  or exists (
+    select 1 from public.payment_transactions pt
+    where pt.booking_id = p_booking_id
+       or (pt.entity_type = 'booking' and pt.entity_id = p_booking_id)
+  )
+  or exists (select 1 from public.expenses e where e.booking_id = p_booking_id)
+  or exists (select 1 from public.inventory_movements im where im.booking_id = p_booking_id)
+  or exists (select 1 from public.transport_cost_entries tce where tce.booking_id = p_booking_id)
+  or exists (select 1 from public.cleaning_credit_transactions cct where cct.booking_id = p_booking_id)
+  or exists (select 1 from public.invoice_adjustments ia where ia.booking_id = p_booking_id)
+  or exists (
+    select 1 from public.refund_accounting_records rar
+    where rar.entity_type = 'booking' and rar.entity_id = p_booking_id
+  )
+  or exists (select 1 from public.referral_discount_redemptions rdr where rdr.booking_id = p_booking_id)
+  or exists (select 1 from public.referral_events re where re.booking_id = p_booking_id)
+  or exists (select 1 from public.admin_money_action_proposals amap where amap.booking_id = p_booking_id)
+  or exists (
+    select 1 from public.accounting_invoice_sync ais
+    where ais.booking_id = p_booking_id
+       or (ais.entity_type = 'booking' and ais.entity_id = p_booking_id)
+  )
+  or exists (
+    select 1 from public.accounting_sync_records asr
+    where asr.entity_type = 'booking' and asr.entity_id = p_booking_id
+  )
+  or exists (select 1 from public.admin_earnings_actions aea where aea.booking_id = p_booking_id)
+  or exists (select 1 from public.booking_cleaner_earnings_snapshot bces where bces.booking_id = p_booking_id)
+  or exists (
+    select 1 from public.cleaner_earnings ce
+    where ce.booking_id = p_booking_id
+      and lower(trim(coalesce(ce.status, ''))) in ('approved', 'processing', 'paid')
+  )
+  or exists (select 1 from public.cleaner_earnings_adjustments cea where cea.booking_id = p_booking_id)
+  or exists (select 1 from public.cleaner_earnings_disputes ced where ced.booking_id = p_booking_id)
+  or exists (select 1 from public.team_job_member_payouts tjmp where tjmp.booking_id = p_booking_id)
+  or exists (select 1 from public.booking_roster_member_payouts brmp where brmp.booking_id = p_booking_id)
+  or exists (
+    select 1 from public.payout_audit_events pae
+    where p_booking_id = any(coalesce(pae.booking_ids, '{}'::uuid[]))
+  );
+$;
+
+revoke all on function public.booking_has_nonpromotion_financial_history(uuid) from public, anon, authenticated;
+grant execute on function public.booking_has_nonpromotion_financial_history(uuid) to service_role;
 
 -- Keep the pending-payment purge healthy after adding the delete guard.
 -- Process candidates independently so one protected financial row cannot roll
@@ -271,6 +361,11 @@ begin
          or v_created_at >= now() - interval '2 hours'
          or v_is_recurring
       then
+        continue;
+      end if;
+
+      if public.booking_has_nonpromotion_financial_history(r.id) then
+        v_financially_protected := v_financially_protected + 1;
         continue;
       end if;
 
