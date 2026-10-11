@@ -44,8 +44,9 @@ function parseClusterSize(raw: unknown): number | null {
 
 /**
  * DB-side race cleanup: one transaction, FOR UPDATE on the active-slot set, cluster
- * [min(created_at), min + 2s], invoice-safe deletes. See resolve_admin_monthly_booking_race.
- * Idempotent: single active row → proceed; requester row already gone → reject + winner (no re-delete).
+ * [min(created_at), min + 2s]. Financial-flow losers are retained as cancelled rows.
+ * The legacy deleted_ids payload key now carries resolved/cancelled loser IDs for compatibility.
+ * Idempotent: single active row → proceed; previously resolved requester → reject + winner.
  */
 export async function resolveMonthlyBookingDuplicateRace(
   admin: SupabaseClient,
