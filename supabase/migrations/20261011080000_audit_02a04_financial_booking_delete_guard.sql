@@ -15,7 +15,6 @@ begin
      or lower(trim(coalesce(old.payment_status, ''))) in ('paid', 'success', 'succeeded')
      or coalesce(old.amount_paid_cents, 0) > 0
      or coalesce(old.total_paid_cents, 0) > 0
-     or coalesce(old.total_paid_zar, 0) > 0
      or old.payment_transaction_id is not null
      or exists (
        select 1
@@ -38,6 +37,16 @@ begin
        select 1
        from public.cleaner_earnings_adjustments cea
        where cea.booking_id = old.id
+     )
+     or exists (
+       select 1
+       from public.team_job_member_payouts tjmp
+       where tjmp.booking_id = old.id
+     )
+     or exists (
+       select 1
+       from public.booking_roster_member_payouts brmp
+       where brmp.booking_id = old.id
      )
      or old.monthly_invoice_id is not null
      or old.sales_document_id is not null
@@ -90,7 +99,6 @@ begin
      or lower(trim(coalesce(v.payment_status, ''))) in ('paid', 'success', 'succeeded')
      or coalesce(v.amount_paid_cents, 0) > 0
      or coalesce(v.total_paid_cents, 0) > 0
-     or coalesce(v.total_paid_zar, 0) > 0
      or v.payment_transaction_id is not null
      or exists (
        select 1
@@ -123,3 +131,87 @@ $$;
 
 revoke all on function public.delete_unpaid_sales_document_booking(uuid) from public, anon, authenticated;
 grant execute on function public.delete_unpaid_sales_document_booking(uuid) to service_role;
+
+
+-- Keep the pending-payment purge healthy after adding the delete guard.
+-- Process candidates independently so one protected financial row cannot roll
+-- back deletion of unrelated abandoned checkout rows.
+create or replace function public.purge_stale_pending_payment_bookings()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_deleted bigint := 0;
+  v_recurring_protected bigint := 0;
+  v_financially_protected bigint := 0;
+  r record;
+begin
+  select count(*)
+    into v_recurring_protected
+  from public.bookings
+  where status = 'pending_payment'
+    and created_at < now() - interval '2 hours'
+    and coalesce(is_recurring_generated, false) = true;
+
+  for r in
+    select id
+    from public.bookings
+    where status = 'pending_payment'
+      and created_at < now() - interval '2 hours'
+      and coalesce(is_recurring_generated, false) = false
+    order by created_at, id
+  loop
+    begin
+      delete from public.bookings where id = r.id;
+      if found then
+        v_deleted := v_deleted + 1;
+      end if;
+    exception
+      when check_violation then
+        if sqlerrm = 'booking_delete_blocked_financial_history' then
+          v_financially_protected := v_financially_protected + 1;
+        else
+          raise;
+        end if;
+    end;
+  end loop;
+
+  raise log 'purge_stale_pending_payment_bookings: purged % checkout rows, protected % recurring rows, protected % financial rows',
+    v_deleted, v_recurring_protected, v_financially_protected;
+
+  insert into public.dispatch_logs (source, level, message, context)
+  values (
+    'purge_stale_pending_payment_bookings',
+    'info',
+    'purged stale pending_payment checkout bookings',
+    jsonb_build_object(
+      'deleted', v_deleted,
+      'recurring_protected', v_recurring_protected,
+      'financially_protected', v_financially_protected
+    )
+  );
+
+  return jsonb_build_object(
+    'ok', true,
+    'deleted', v_deleted,
+    'recurring_protected', v_recurring_protected,
+    'financially_protected', v_financially_protected,
+    'ran_at', to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+  );
+exception
+  when others then
+    insert into public.dispatch_logs (source, level, message, context)
+    values (
+      'purge_stale_pending_payment_bookings',
+      'error',
+      sqlerrm,
+      jsonb_build_object('sqlstate', sqlstate)
+    );
+    return jsonb_build_object('ok', false, 'error', sqlerrm, 'sqlstate', sqlstate);
+end;
+$$;
+
+revoke all on function public.purge_stale_pending_payment_bookings() from public, anon, authenticated;
+grant execute on function public.purge_stale_pending_payment_bookings() to service_role;
