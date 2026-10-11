@@ -1462,6 +1462,10 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     { data: linkedMoneyProposal, error: linkedMoneyProposalErr },
     { data: linkedEarningsAction, error: linkedEarningsActionErr },
     { data: linkedPromotionRedemption, error: linkedPromotionRedemptionErr },
+    { data: linkedBookingChange, error: linkedBookingChangeErr },
+    { data: linkedGrowthAttribution, error: linkedGrowthAttributionErr },
+    { data: linkedConversionAttribution, error: linkedConversionAttributionErr },
+    { data: linkedEmailAttribution, error: linkedEmailAttributionErr },
   ] = await Promise.all([
     admin.from("expenses").select("id").eq("booking_id", id).limit(1).maybeSingle(),
     admin.from("inventory_movements").select("id").eq("booking_id", id).limit(1).maybeSingle(),
@@ -1571,6 +1575,10 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
       .eq("booking_id", id)
       .limit(1)
       .maybeSingle(),
+    admin.from("booking_changes").select("id").eq("booking_id", id).limit(1).maybeSingle(),
+    admin.from("growth_action_outcomes").select("id").eq("booking_id", id).limit(1).maybeSingle(),
+    admin.from("conversion_experiment_results").select("id").eq("booking_id", id).limit(1).maybeSingle(),
+    admin.from("email_campaign_attributions").select("id").eq("booking_id", id).limit(1).maybeSingle(),
   ]);
   const linkedReadError =
     linkedExpenseErr ??
@@ -1593,7 +1601,11 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     linkedAccountingSyncErr ??
     linkedMoneyProposalErr ??
     linkedEarningsActionErr ??
-    linkedPromotionRedemptionErr;
+    linkedPromotionRedemptionErr ??
+    linkedBookingChangeErr ??
+    linkedGrowthAttributionErr ??
+    linkedConversionAttributionErr ??
+    linkedEmailAttributionErr;
   if (linkedReadError) {
     return NextResponse.json({ error: linkedReadError.message }, { status: 500 });
   }
@@ -1622,6 +1634,10 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     linked_money_proposal_id: linkedMoneyProposal?.id ?? null,
     linked_earnings_action_id: linkedEarningsAction?.id ?? null,
     linked_promotion_redemption_id: linkedPromotionRedemption?.id ?? null,
+    linked_booking_change_id: linkedBookingChange?.id ?? null,
+    linked_growth_attribution_id: linkedGrowthAttribution?.id ?? null,
+    linked_conversion_attribution_id: linkedConversionAttribution?.id ?? null,
+    linked_email_attribution_id: linkedEmailAttribution?.id ?? null,
   });
   if (!deleteSafety.ok) {
     return NextResponse.json(
