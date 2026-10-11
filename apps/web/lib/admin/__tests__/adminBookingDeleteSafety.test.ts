@@ -171,6 +171,58 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_invoice_adjustment_linked")).toBe(true);
   });
 
+  it("blocks hard delete when a refund accounting record survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_refund_record_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected refund-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_refund_record_linked")).toBe(true);
+  });
+
+  it("blocks hard delete when a referral redemption survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_referral_redemption_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected referral-redemption-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_referral_redemption_linked")).toBe(true);
+  });
+
+  it("blocks hard delete when a referral event survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_referral_event_id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected referral-event-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_referral_event_linked")).toBe(true);
+  });
+
+  it("blocks hard delete when a money-action proposal survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_money_proposal_id: "12121212-1212-4212-8212-121212121212",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected proposal-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_money_proposal_linked")).toBe(true);
+  });
+
   it("blocks hard delete when collected totals survive even if payment status drifted", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "cancelled",
