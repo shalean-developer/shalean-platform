@@ -1536,6 +1536,7 @@ async function resetSeedRows(admin) {
       "admin_earnings_actions",
       "promotion_redemptions",
       "booking_cleaner_earnings_snapshot",
+      "booking_line_items",
       "cleaner_earnings",
       "cleaner_earnings_adjustments",
       "cleaner_earnings_disputes",
