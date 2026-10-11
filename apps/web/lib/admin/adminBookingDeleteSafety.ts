@@ -299,10 +299,10 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     });
   }
 
-  if (positiveCents(row.total_paid_cents)) {
+  if (positiveCents(row.total_paid_cents) || Number(row.total_paid_zar ?? 0) > 0) {
     blocks.push({
       code: "admin_booking_delete_total_paid_present",
-      message: "Bookings with positive total_paid_cents cannot be hard-deleted.",
+      message: "Bookings with collected total-paid value cannot be hard-deleted.",
     });
   }
 
