@@ -28,6 +28,13 @@ describe("BOOKING-E2E-14B.1 R0 post-payment operational convergence", () => {
     expect(src).toContain('"preferred_offer_already_exists"');
   });
 
+  it("accepts both canonical and legacy paid R0 payment statuses", () => {
+    const src = read("lib/booking/finalizeR0BookingPostPayment.ts");
+
+    expect(src).toContain('paymentStatus === "success" || paymentStatus === "paid"');
+    expect(src).toContain('error: "booking_not_settled_r0"');
+  });
+
   it("does not re-settle money or invent cash inside the operational helper", () => {
     const src = read("lib/booking/finalizeR0BookingPostPayment.ts");
 
