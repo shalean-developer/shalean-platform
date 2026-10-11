@@ -107,7 +107,6 @@ begin
        select 1
        from public.cleaner_earnings ce
        where ce.booking_id = old.id
-         and lower(trim(coalesce(ce.status, ''))) in ('approved', 'processing', 'paid')
      )
      or exists (
        select 1
@@ -296,7 +295,6 @@ as $
   or exists (
     select 1 from public.cleaner_earnings ce
     where ce.booking_id = p_booking_id
-      and lower(trim(coalesce(ce.status, ''))) in ('approved', 'processing', 'paid')
   )
   or exists (select 1 from public.cleaner_earnings_adjustments cea where cea.booking_id = p_booking_id)
   or exists (select 1 from public.cleaner_earnings_disputes ced where ced.booking_id = p_booking_id)
@@ -306,7 +304,7 @@ as $
     select 1 from public.payout_audit_events pae
     where p_booking_id = any(coalesce(pae.booking_ids, '{}'::uuid[]))
   );
-$;
+$$;
 
 revoke all on function public.booking_has_nonpromotion_financial_history(uuid) from public, anon, authenticated;
 grant execute on function public.booking_has_nonpromotion_financial_history(uuid) to service_role;
