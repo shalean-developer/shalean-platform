@@ -52,6 +52,19 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_marked_paid_by_admin")).toBe(true);
   });
 
+  it("blocks hard delete when a Zoho invoice survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      zoho_invoice_id: "zoho-invoice-1",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected Zoho-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_zoho_invoice_linked")).toBe(true);
+  });
+
   it("blocks hard delete when a durable payment transaction link survives", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "cancelled",
@@ -221,6 +234,32 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected proposal-linked booking delete to be blocked");
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_money_proposal_linked")).toBe(true);
+  });
+
+  it("blocks hard delete when accounting invoice sync survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_accounting_invoice_sync_id: "15151515-1515-4515-8515-151515151515",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected accounting-invoice-sync-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_accounting_invoice_sync_linked")).toBe(true);
+  });
+
+  it("blocks hard delete when accounting sync history survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_accounting_sync_id: "16161616-1616-4616-8616-161616161616",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected accounting-sync-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_accounting_sync_linked")).toBe(true);
   });
 
   it("blocks hard delete when an admin earnings action survives", () => {
