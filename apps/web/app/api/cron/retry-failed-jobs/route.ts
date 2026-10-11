@@ -137,6 +137,7 @@ export async function POST(request: Request) {
       FAILED_JOB_TYPE_BOOKING_INSERT_INVALID,
       FAILED_JOB_TYPE_BOOKING_INSERT_EXHAUSTED,
       FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED,
+      FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_MANUAL_REVIEW,
       FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION,
       FAILED_JOB_TYPE_RECURRING_ROSTER_RECONCILIATION_EXHAUSTED,
       FAILED_JOB_TYPE_GATEWAY_SETTLEMENT_RECONCILIATION,
@@ -538,16 +539,40 @@ export async function POST(request: Request) {
 
           if (!supersededPaymentPersisted.ok) {
             const nextAttempts = attempts + 1;
-            await supabase.from("failed_jobs").update({ attempts: nextAttempts }).eq("id", id);
+            const nextType =
+              nextAttempts >= BOOKING_INSERT_MAX_ATTEMPTS
+                ? FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED
+                : FAILED_JOB_TYPE_PAYMENT_RECONCILIATION;
+            const terminalPayload =
+              nextAttempts >= BOOKING_INSERT_MAX_ATTEMPTS
+                ? {
+                    ...payload,
+                    _bookingInsertExhausted: {
+                      last_error: String(supersededPaymentPersisted.error).slice(0, 4000),
+                      paystack_reference: payload.paystackReference,
+                      attempts: nextAttempts,
+                      at: new Date().toISOString(),
+                    },
+                  }
+                : payload;
+            await supabase
+              .from("failed_jobs")
+              .update({ attempts: nextAttempts, type: nextType, payload: terminalPayload })
+              .eq("id", id);
             await reportOperationalIssue(
-              "error",
+              nextAttempts >= BOOKING_INSERT_MAX_ATTEMPTS ? "critical" : "error",
               "cron/retry-failed-jobs",
-              `superseded payment ledger persistence failed: ${supersededPaymentPersisted.error}`,
+              nextAttempts >= BOOKING_INSERT_MAX_ATTEMPTS
+                ? "superseded payment ledger persistence attempts exhausted"
+                : `superseded payment ledger persistence failed: ${supersededPaymentPersisted.error}`,
               {
                 failedJobId: id,
                 bookingId: supersededBooking.id,
                 paystackReference: payload.paystackReference,
                 attempts: nextAttempts,
+                ...(nextAttempts >= BOOKING_INSERT_MAX_ATTEMPTS
+                  ? { errorType: FAILED_JOB_TYPE_PAYMENT_RECONCILIATION_EXHAUSTED }
+                  : {}),
               },
             );
             continue;
