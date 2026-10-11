@@ -1429,20 +1429,46 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     time?: string | null;
   };
 
-  const { data: linkedExpense, error: linkedExpenseErr } = await admin
-    .from("expenses")
-    .select("id")
-    .eq("booking_id", id)
-    .limit(1)
-    .maybeSingle();
-  if (linkedExpenseErr) {
-    return NextResponse.json({ error: linkedExpenseErr.message }, { status: 500 });
+  const [
+    { data: linkedExpense, error: linkedExpenseErr },
+    { data: linkedPayment, error: linkedPaymentErr },
+    { data: linkedCleanerEarning, error: linkedCleanerEarningErr },
+    { data: linkedCleanerAdjustment, error: linkedCleanerAdjustmentErr },
+  ] = await Promise.all([
+    admin.from("expenses").select("id").eq("booking_id", id).limit(1).maybeSingle(),
+    admin
+      .from("payment_transactions")
+      .select("id")
+      .or(`booking_id.eq.${id},and(entity_type.eq.booking,entity_id.eq.${id})`)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("cleaner_earnings")
+      .select("id")
+      .eq("booking_id", id)
+      .in("status", ["approved", "processing", "paid"])
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("cleaner_earnings_adjustments")
+      .select("id")
+      .eq("booking_id", id)
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  const linkedReadError =
+    linkedExpenseErr ?? linkedPaymentErr ?? linkedCleanerEarningErr ?? linkedCleanerAdjustmentErr;
+  if (linkedReadError) {
+    return NextResponse.json({ error: linkedReadError.message }, { status: 500 });
   }
 
   const st = String(r.status ?? "").toLowerCase();
   const deleteSafety = assertAdminBookingDeleteSafe({
     ...r,
+    payment_transaction_id: r.payment_transaction_id ?? linkedPayment?.id ?? null,
     linked_expense_id: linkedExpense?.id ?? null,
+    linked_cleaner_earning_id: linkedCleanerEarning?.id ?? null,
+    linked_cleaner_earnings_adjustment_id: linkedCleanerAdjustment?.id ?? null,
   });
   if (!deleteSafety.ok) {
     return NextResponse.json(
