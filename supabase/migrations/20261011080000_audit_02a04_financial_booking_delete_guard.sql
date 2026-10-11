@@ -34,6 +34,11 @@ begin
      )
      or exists (
        select 1
+       from public.invoice_adjustments ia
+       where ia.booking_id = old.id
+     )
+     or exists (
+       select 1
        from public.cleaner_earnings ce
        where ce.booking_id = old.id
          and lower(trim(coalesce(ce.status, ''))) in ('approved', 'processing', 'paid')
