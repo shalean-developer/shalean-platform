@@ -1395,7 +1395,15 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       `Cleaning Credit settlement failed after verified payment: ${creditSettlement.error}`,
       { bookingId: id, paystackReference: input.paystackReference },
     );
-    throw new Error(`cleaning_credit_settlement_failed:${creditSettlement.error}`);
+    return {
+      ok: false,
+      skipped: false,
+      bookingId: id,
+      bookingInDatabase: true,
+      reason: "finalization_failed",
+      error: `cleaning_credit_settlement_failed:${creditSettlement.error}`,
+      recoveryEnqueue: true,
+    };
   }
 
   const runPostPersistSideEffects = async (): Promise<void> => {
