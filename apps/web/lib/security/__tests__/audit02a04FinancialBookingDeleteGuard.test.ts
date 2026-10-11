@@ -16,6 +16,9 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("pt.entity_type = 'booking' and pt.entity_id = old.id");
     expect(sql).toContain("from public.expenses e");
     expect(sql).toContain("e.booking_id = old.id");
+    expect(sql).toContain("from public.cleaner_earnings ce");
+    expect(sql).toContain("('approved', 'processing', 'paid')");
+    expect(sql).toContain("from public.cleaner_earnings_adjustments cea");
     expect(sql).toContain("coalesce(old.amount_paid_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.total_paid_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.total_paid_zar, 0) > 0");
@@ -35,6 +38,19 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql.indexOf("set sales_document_id = null")).toBeLessThan(
       sql.indexOf("delete from public.bookings where id = v.id"),
     );
+  });
+
+  it("preflights child financial ledgers in the admin route for structured blocking", () => {
+    const src = read("app/api/admin/bookings/[id]/route.ts");
+
+    expect(src).toContain('.from("payment_transactions")');
+    expect(src).toContain("booking_id.eq.");
+    expect(src).toContain("entity_type.eq.booking");
+    expect(src).toContain('.from("expenses")');
+    expect(src).toContain('.from("cleaner_earnings")');
+    expect(src).toContain('["approved", "processing", "paid"]');
+    expect(src).toContain('.from("cleaner_earnings_adjustments")');
+    expect(src).toContain("payment_transaction_id: r.payment_transaction_id ?? linkedPayment?.id ?? null");
   });
 
   it("keeps unpaid financially-unlinked cleanup rows outside the block predicate", () => {
