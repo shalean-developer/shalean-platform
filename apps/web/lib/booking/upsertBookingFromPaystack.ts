@@ -30,6 +30,7 @@ import {
 } from "@/lib/logging/bookingPaymentDebug";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { cancelUnsentBookingPaymentRecoveryJobs } from "@/lib/booking/cancelUnsentBookingPaymentRecoveryJobs";
+import { isPaymentEditSupersededSnapshot } from "@/lib/booking/abandonPendingPaymentForEdit";
 import { recordBookingSideEffects } from "@/lib/booking/recordBookingSideEffects";
 import { resolveBookingUserId } from "@/lib/booking/resolveBookingUserId";
 import {
@@ -389,6 +390,27 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   if (existing && typeof existing === "object" && "id" in existing) {
     const st = String((existing as { status?: string }).status ?? "");
     const bidEarly = String((existing as { id: string }).id);
+    if (
+      st === "payment_expired" &&
+      isPaymentEditSupersededSnapshot((existing as { booking_snapshot?: unknown }).booking_snapshot)
+    ) {
+      await reportOperationalIssue(
+        "critical",
+        "upsertBookingFromPaystack",
+        "late Paystack success targeted a payment-edit-superseded booking",
+        { bookingId: bidEarly, paystackReference: input.paystackReference, errorType: "payment_edit_superseded" },
+      );
+      return {
+        ok: false,
+        skipped: true,
+        bookingId: bidEarly,
+        bookingInDatabase: true,
+        reason: "finalization_failed",
+        error: "PAYMENT_NOT_PAYABLE",
+        recoveryEnqueue: false,
+      };
+    }
+
     if (st === "payment_mismatch") {
       return {
         ok: false,
