@@ -163,7 +163,7 @@ export async function createBookingFromSalesQuoteInvoice(
       total_paid_zar: collectedTotalZar,
       pricing_version_id: null,
       price_breakdown: null,
-      total_price: null,
+      total_price: quotedTotalZar,
       booking_source: "sales_document",
       sales_document_id: invoiceId,
       ...(invoicePaid ? { payment_completed_at: new Date().toISOString(), payment_status: "success" } : {}),
