@@ -53,6 +53,7 @@ let reads: string[];
 let rpcOwner: string | null;
 let lookupError: boolean;
 let ownershipColumn: "customer_id" | "user_id";
+let creditReservationStatus: string | null;
 const secret = "test-only-paystack-signing-key";
 beforeEach(() => {
   vi.clearAllMocks();
@@ -69,18 +70,21 @@ beforeEach(() => {
     expenseId: null,
   });
   resetBookingOwnershipColumnCacheForTests();
-  ownershipColumn = "customer_id"; lookupError = false; rpcOwner = null; reads = [];
+  ownershipColumn = "customer_id"; lookupError = false; rpcOwner = null; reads = []; creditReservationStatus = null;
   row = { id, status: "pending", paystack_reference: "pay_current", customer_email: "payer@example.com", customer_id: owner, payment_status: "success", amount_paid_cents: 12550 };
   tx = { status: "success", reference: "pay_current", amount: 12550, currency: "ZAR", customer: { email: "payer@example.com" }, metadata: { booking_id: id, user_id: owner } };
   m.admin.mockReturnValue({
     rpc: vi.fn(async () => ({ data: rpcOwner, error: null })),
-    from: () => {
+    from: (table: string) => {
       let columns = "";
       const q = {
         select: (s: string) => { columns = s; return q; }, eq: () => q,
         limit: async () => ({ data: [], error: ownershipColumn === "user_id" && columns === "customer_id" ? { code: "42703", message: 'column "customer_id" does not exist' } : null }),
         maybeSingle: async () => {
           reads.push(columns);
+          if (table === "cleaning_credit_reservations") {
+            return { data: creditReservationStatus ? { status: creditReservationStatus } : null, error: null };
+          }
           return { data: { ...row }, error: lookupError && columns.includes("customer_email") ? { message: "read failed" } : null };
         },
       }; return q;
@@ -105,6 +109,14 @@ function noSuccess() {
 }
 for (const mode of ["GET", "POST", "webhook"] as const) {
   describe(mode + " actual replay shortcut", () => {
+    it("blocks persisted replay while Cleaning Credit is not settled", async () => {
+      creditReservationStatus = "released";
+      const response = await call(mode);
+      expect(response.status).toBe(mode === "webhook" ? 200 : 409);
+      expect(await response.json()).toMatchObject({ ok: false, error: "PAYMENT_FINALIZATION_REPLAY_MISMATCH" });
+      noSuccess();
+    });
+
     it("allows equivalent replay using verified identity only", async () => {
       const response = await call(mode); const data = await response.json();
       expect(response.status).toBe(200);
