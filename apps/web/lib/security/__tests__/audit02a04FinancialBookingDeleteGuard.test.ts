@@ -86,7 +86,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     const src = read("lib/salesDocument/createBookingFromSalesQuoteInvoice.ts");
 
     expect(src).toContain('select("id, status")');
-    expect(src).toContain('existingStatus === "cancelled"');
+    expect(src).toContain("retainedCancelledBookingId");
     expect(src).toContain('admin.rpc(\n        "delete_unpaid_sales_document_booking"');
     expect(src).toContain("cancelled_booking_cleanup_failed");
   });
@@ -96,9 +96,19 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
 
     expect(src).toContain("retainedCancelledBookingId");
     expect(src).toContain("buildExactSourceLineItems");
-    expect(src).toContain("persistBookingLineItems");
-    expect(src).toContain('status: "pending"');
-    expect(src).toContain("paid_cancelled_booking_reactivate_failed");
+    expect(src).toContain('"repair_paid_cancelled_sales_document_booking"');
+    expect(src).toContain("p_line_items: repairItems");
+    expect(src).toContain("paid_cancelled_booking_repair_failed");
+  });
+
+  it("repairs paid sales-document lines atomically in the database", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+
+    expect(sql).toContain("function public.repair_paid_cancelled_sales_document_booking");
+    expect(sql).toContain("for update");
+    expect(sql).toContain("delete from public.booking_line_items where booking_id = v.id");
+    expect(sql).toContain("insert into public.booking_line_items");
+    expect(sql).toContain("set status = 'pending'");
   });
 
   it("keeps sales-document unpaid totals out of collected-cash fields", () => {
@@ -367,6 +377,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(seed).toContain("assertNonProductionSeed");
     expect(seed).toContain("neutralize seed booking financial mirrors");
     expect(seed).toContain("booking_changes");
+    expect(seed).toContain("booking_line_items");
     expect(seed).toContain("growth_action_outcomes");
     expect(seed).toContain("conversion_experiment_results");
     expect(seed).toContain("email_campaign_attributions");
