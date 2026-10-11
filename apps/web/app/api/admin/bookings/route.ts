@@ -60,6 +60,7 @@ import { fetchTeamRosterByBookingIds } from "@/lib/cleaner/fetchTeamRosterByBook
 import { effectiveBookingCleanersForList } from "@/lib/admin/adminBookingAssignmentDisplay";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
+  persistAdminMonthlyPreCompletionEarnings,
   promoteAdminMonthlyBookingToCompleted,
   runAdminBookingPostCreateNormalizationAndEarnings,
 } from "@/lib/admin/adminBookingPostCreatePipeline";
@@ -1666,7 +1667,7 @@ export async function POST(request: Request) {
               selected_cleaner_id: selectedCleanerId,
               assignment_type: "user_selected",
               cleaner_id: selectedCleanerId,
-              cleaner_response_status: adminMarkCompleted ? CLEANER_RESPONSE.COMPLETED : CLEANER_RESPONSE.PENDING,
+              cleaner_response_status: CLEANER_RESPONSE.PENDING,
               ...(assignedAtIso ? { assigned_at: assignedAtIso } : {}),
             }
           : {}),
@@ -1675,7 +1676,7 @@ export async function POST(request: Request) {
               is_team_job: true,
               team_id: validatedMonthlyTeamId,
               payout_owner_cleaner_id: monthlyTeamPayoutOwnerId,
-              cleaner_response_status: CLEANER_RESPONSE.COMPLETED,
+              cleaner_response_status: CLEANER_RESPONSE.PENDING,
               ...(assignedAtIso ? { assigned_at: assignedAtIso } : {}),
             }
           : {}),
@@ -1866,11 +1867,30 @@ export async function POST(request: Request) {
     // transition. The DB completion constraint requires display earnings to
     // exist for current-model completed bookings.
     await syncAdminPreferredCleanerRoster(admin, newBookingId, selectedCleanerIds);
-    await runAdminBookingPostCreateNormalizationAndEarnings(
-      admin,
-      newBookingId,
-      "admin_booking_create_monthly_precompletion",
-    );
+
+    if (adminMarkCompleted) {
+      const precompletionEarnings = await persistAdminMonthlyPreCompletionEarnings({
+        admin,
+        bookingId: newBookingId,
+        logSource: "admin_booking_create_monthly_precompletion",
+      });
+      if (!precompletionEarnings.ok) {
+        const failBody: Record<string, unknown> = {
+          ok: false,
+          error: `Booking created with canonical line items but pre-completion earnings persistence failed: ${precompletionEarnings.error}`,
+          code: "admin_monthly_precompletion_earnings_failed",
+          bookingId: newBookingId,
+        };
+        if (claimId) await finalizeAdminBookingCreateIdempotency(admin, claimId, 500, failBody);
+        return NextResponse.json(failBody, { status: 500 });
+      }
+    } else {
+      await runAdminBookingPostCreateNormalizationAndEarnings(
+        admin,
+        newBookingId,
+        "admin_booking_create_monthly_precompletion",
+      );
+    }
 
     if (adminMarkCompleted && completedAtIso) {
       const completed = await promoteAdminMonthlyBookingToCompleted({
