@@ -600,6 +600,7 @@ export async function applyPromotionRedemptions(
         source: discount.source,
         bundleId: discount.bundleId ?? null,
         description: discount.description,
+        bookingRevenueZar: args.bookingRevenueZar,
       },
     });
     if (error && !error.message.toLowerCase().includes("duplicate")) {
