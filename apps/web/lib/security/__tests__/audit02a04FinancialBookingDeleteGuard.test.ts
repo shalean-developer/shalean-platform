@@ -324,12 +324,19 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
 
     for (const src of [env03, uat]) {
       expect(src).toContain("retainedFinancial");
-      expect(src).toContain("financiallyProtected");
-      expect(src).toContain("completed_at");
-      expect(src).toContain("payment_completed_at");
-      expect(src).toContain("payment_transaction_id");
+      expect(src).toContain('"booking_has_nonpromotion_financial_history"');
+      expect(src).toContain("p_booking_id: row.id");
+      expect(src).toContain("historyError");
     }
-    expect(uat).toContain("fixture identities will be refreshed by upsert");
+    expect(uat).toContain("Conflict booking retained unchanged");
+    expect(uat).toContain("existingIsFinancial");
+  });
+
+  it("clears completed_at only inside the governed seed reset before hard delete", () => {
+    const seed = read("../../scripts/seed-dev.mjs");
+
+    expect(seed).toContain('"neutralize seed booking financial mirrors"');
+    expect(seed).toContain("completed_at: null");
   });
 
   it("provides a guarded rollback for an unclaimed recurring prepaid occurrence", () => {
