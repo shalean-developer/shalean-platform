@@ -28,6 +28,23 @@ describe("BOOKING-E2E-13A Cleaning Credit settlement authority", () => {
     expect(route).toContain("creditReplaySafe");
     expect(route).toContain("zeroCreditReplaySafe");
     expect(route).toContain("zeroCreditReservation");
+    expect(route).toContain('enqueueFailedJob("r0_credit_reconciliation"');
+    expect(route).toContain("finalizeR0BookingPostPayment");
+  });
+
+  it("retries zero-cash Cleaning Credit reconciliation durably without Paystack", () => {
+    const retry = read("app/api/cron/retry-failed-jobs/route.ts");
+    const productionHealth = read("lib/observability/productionHealthMetrics.ts");
+    const officeHealth = read("lib/admin/collectOfficeOpsHealthSignals.ts");
+
+    expect(retry).toContain('FAILED_JOB_TYPE_R0_CREDIT_RECONCILIATION = "r0_credit_reconciliation"');
+    expect(retry).toContain("settleCleaningCreditForBooking(supabase, bookingId)");
+    expect(retry).toContain("finalizeR0BookingPostPayment(supabase, bookingId)");
+    expect(retry).toContain("FAILED_JOB_TYPE_R0_CREDIT_RECONCILIATION_EXHAUSTED");
+    expect(productionHealth).toContain('"r0_credit_reconciliation"');
+    expect(productionHealth).toContain('"r0_credit_reconciliation_exhausted"');
+    expect(officeHealth).toContain('"r0_credit_reconciliation"');
+    expect(officeHealth).toContain('"r0_credit_reconciliation_exhausted"');
   });
 
   it("keeps zero-balance settlement on the same Cleaning Credit RPC boundary", () => {
