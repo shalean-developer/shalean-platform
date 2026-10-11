@@ -25,6 +25,21 @@ export async function provePersistedPaystackReplay(params: {
   const row = data as unknown as Record<string, unknown> | null;
   if (error || !row || row.id !== bookingId || typeof row.status !== "string" || !row.status ||
     ["pending_payment", "payment_expired", "payment_mismatch", "payment_reconciliation_required"].includes(row.status)) return false;
+
+  // A persisted booking is replay-safe only after any Cleaning Credit reservation
+  // has reached its terminal settled state. This closes the race where the booking
+  // row is finalized before synchronous credit settlement either succeeds or
+  // quarantines the booking for reconciliation.
+  const { data: creditReservation, error: creditReservationError } = await supabase
+    .from("cleaning_credit_reservations")
+    .select("status")
+    .eq("booking_id", bookingId)
+    .maybeSingle();
+  if (creditReservationError) return false;
+  if (creditReservation && String(creditReservation.status ?? "").trim().toLowerCase() !== "settled") {
+    return false;
+  }
+
   const metadata = normalizePaystackMetadata(params.metadata);
   const { snapshot } = parseBookingSnapshot(metadata, { amountCents: params.amountCents });
   const gatewayEmail = normalizeEmail(params.customerEmail);
