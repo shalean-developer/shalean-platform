@@ -7,6 +7,7 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_payment_completed"
   | "admin_booking_delete_paid_payment_status"
   | "admin_booking_delete_completed_status"
+  | "admin_booking_delete_monthly_financial_flow"
   | "admin_booking_delete_monthly_invoice_child"
   | "admin_booking_delete_sales_document_child"
   | "admin_booking_delete_payout_linked"
@@ -29,6 +30,7 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_cleaner_earnings_dispute_linked"
   | "admin_booking_delete_team_member_payout_linked"
   | "admin_booking_delete_roster_member_payout_linked"
+  | "admin_booking_delete_payout_audit_linked"
   | "admin_booking_delete_cleaning_credit_transaction_linked"
   | "admin_booking_delete_invoice_adjustment_linked"
   | "admin_booking_delete_refund_record_linked"
@@ -51,6 +53,7 @@ export type AdminBookingDeleteSafetyRow = {
   payout_run_id?: string | null;
   payment_completed_at?: string | null;
   paid_at?: string | null;
+  is_monthly_billing_booking?: boolean | null;
   monthly_invoice_id?: string | null;
   sales_document_id?: string | null;
   payout_id?: string | null;
@@ -73,6 +76,7 @@ export type AdminBookingDeleteSafetyRow = {
   linked_cleaner_earnings_dispute_id?: string | null;
   linked_team_member_payout_id?: string | null;
   linked_roster_member_payout_id?: string | null;
+  linked_payout_audit_event_id?: string | null;
   linked_cleaning_credit_transaction_id?: string | null;
   linked_invoice_adjustment_id?: string | null;
   linked_refund_record_id?: string | null;
@@ -164,6 +168,13 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_paid_payment_status",
       message: "Booking has a paid/success payment_status and cannot be hard-deleted.",
+    });
+  }
+
+  if (norm(row.payment_status) === "pending_monthly" || row.is_monthly_billing_booking === true) {
+    blocks.push({
+      code: "admin_booking_delete_monthly_financial_flow",
+      message: "Monthly-billing bookings awaiting invoice settlement cannot be hard-deleted.",
     });
   }
 
@@ -325,6 +336,13 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_roster_member_payout_linked",
       message: "Bookings linked to roster member payout allocations cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_payout_audit_event_id)) {
+    blocks.push({
+      code: "admin_booking_delete_payout_audit_linked",
+      message: "Bookings referenced by payout audit events cannot be hard-deleted.",
     });
   }
 
