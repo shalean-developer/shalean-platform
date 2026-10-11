@@ -464,12 +464,21 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         .select("status")
         .eq("booking_id", bidEarly)
         .maybeSingle();
+      if (replayCreditReservationError) {
+        return {
+          ok: false,
+          skipped: true,
+          bookingId: bidEarly,
+          bookingInDatabase: true,
+          reason: "finalization_failed",
+          error: `cleaning_credit_lookup_failed:${replayCreditReservationError.message}`,
+          recoveryEnqueue: true,
+        };
+      }
+
       if (
-        replayCreditReservationError ||
-        (
-          replayCreditReservation &&
-          String(replayCreditReservation.status ?? "").trim().toLowerCase() !== "settled"
-        )
+        replayCreditReservation &&
+        String(replayCreditReservation.status ?? "").trim().toLowerCase() !== "settled"
       ) {
         const { error: quarantineError } = await supabase
           .from("bookings")
@@ -489,9 +498,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
           bookingId: bidEarly,
           bookingInDatabase: true,
           reason: "finalization_failed",
-          error:
-            replayCreditReservationError?.message ??
-            "cleaning_credit_settlement_pending",
+          error: "cleaning_credit_settlement_pending",
           recoveryEnqueue: true,
         };
       }
