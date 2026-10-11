@@ -60,6 +60,13 @@ export type PaystackVerifyPostFailure = {
   paymentStatus: "failed" | "pending" | "unknown" | "success";
   reference?: string;
   error?: string;
+  /** Optional persisted-booking context for reconciliation-required failures. */
+  bookingId?: string | null;
+  bookingInDatabase?: boolean;
+  state?: string;
+  upsertError?: string | null;
+  alreadyExists?: boolean;
+  skipped?: boolean;
 };
 
 export type PaystackVerifyPostResponse = PaystackVerifyPostSuccess | PaystackVerifyPostFailure;

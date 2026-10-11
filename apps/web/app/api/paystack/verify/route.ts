@@ -41,6 +41,9 @@ import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog"
 import { allowPaystackVerifyRequest, paystackVerifyRateLimitKey } from "@/lib/rateLimit/paystackVerifyIpLimit";
 import { replayPaymentConfirmedNotifyForPersistedBooking } from "@/lib/booking/paystackReplayPaymentConfirmedNotify";
 import { enqueuePaystackRecoveryFailedJobs } from "@/lib/booking/enqueuePaystackRecoveryFailedJobs";
+import { enqueueFailedJob } from "@/lib/booking/failedJobs";
+import { settleCleaningCreditForBooking } from "@/lib/referrals/creditReservations";
+import { finalizeR0BookingPostPayment } from "@/lib/booking/finalizeR0BookingPostPayment";
 import { loadBookingReferenceForId } from "@/lib/booking/loadBookingReference";
 import {
   paystackChargeDataFromRecord,
@@ -418,18 +421,20 @@ export async function GET(request: Request) {
   }
   if (adminGet) {
     const existing = await findBookingIdStatusForPaystackReference(adminGet, ref);
-    if (existing && existing.status !== "pending_payment") {
+    if (existing && !["pending_payment", "payment_expired"].includes(existing.status)) {
       const amountCentsGet =
         typeof tx.amount === "number" && Number.isFinite(tx.amount) ? tx.amount : 0;
       const emailFromCustomer = typeof tx.customer?.email === "string" ? tx.customer.email.trim() : "";
-      if (!await provePersistedPaystackReplay({
+      const replayProofGet = await provePersistedPaystackReplay({
         supabase: adminGet, bookingId: existing.bookingId, reference: ref,
         amountCents: amountCentsGet, customerEmail: typeof tx.customer?.email === "string" ? tx.customer.email : "",
         metadata: tx.metadata,
-      })) {
+      });
+      if (!replayProofGet.ok && replayProofGet.reason === "mismatch") {
         return NextResponse.json({ ok: false, success: false, paymentStatus: "unknown",
           reference: ref, error: "PAYMENT_FINALIZATION_REPLAY_MISMATCH" }, { status: 409 });
       }
+      if (replayProofGet.ok) {
       await replayPaymentConfirmedNotifyForPersistedBooking({
         supabase: adminGet,
         bookingId: existing.bookingId,
@@ -502,6 +507,7 @@ export async function GET(request: Request) {
         upsertError: null,
         skipped: true,
       });
+      }
     }
   }
 
@@ -635,20 +641,34 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     if (reference.startsWith("bps_")) {
       const persistedPaid = await findPersistedPaidBooking(adminPrePaystack, reference);
       if (persistedPaid) {
-        const amountCents = Number.isFinite(Number(persistedPaid.amount_paid_cents))
-          ? Math.max(0, Math.round(Number(persistedPaid.amount_paid_cents)))
-          : Math.max(0, Math.round(Number(persistedPaid.total_paid_zar ?? 0) * 100));
-        after(async () => {
-          await replayPaymentConfirmedNotifyForPersistedBooking({
-            supabase: adminPrePaystack,
-            bookingId: persistedPaid.id,
-            paystackReference: reference,
-            amountCents,
-            snapshot: persistedPaid.booking_snapshot as never,
-            customerEmailHint: persistedPaid.customer_email ?? undefined,
+        const { data: creditReservation, error: creditReservationError } = await adminPrePaystack
+          .from("cleaning_credit_reservations")
+          .select("status")
+          .eq("booking_id", persistedPaid.id)
+          .maybeSingle();
+        const creditReplaySafe =
+          !creditReservationError &&
+          (
+            !creditReservation ||
+            String(creditReservation.status ?? "").trim().toLowerCase() === "settled"
+          );
+
+        if (creditReplaySafe) {
+          const amountCents = Number.isFinite(Number(persistedPaid.amount_paid_cents))
+            ? Math.max(0, Math.round(Number(persistedPaid.amount_paid_cents)))
+            : Math.max(0, Math.round(Number(persistedPaid.total_paid_zar ?? 0) * 100));
+          after(async () => {
+            await replayPaymentConfirmedNotifyForPersistedBooking({
+              supabase: adminPrePaystack,
+              bookingId: persistedPaid.id,
+              paystackReference: reference,
+              amountCents,
+              snapshot: persistedPaid.booking_snapshot as never,
+              customerEmailHint: persistedPaid.customer_email ?? undefined,
+            });
           });
-        });
-        return persistedPaidBookingResponse(persistedPaid, reference, startedAt);
+          return persistedPaidBookingResponse(persistedPaid, reference, startedAt);
+        }
       }
     }
     const settled = await findBookingIdStatusForPaystackReference(adminPrePaystack, reference);
@@ -662,38 +682,115 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
       const rawAmountCents = (payRow as { amount_paid_cents?: unknown } | null)?.amount_paid_cents;
       if ((paymentStatus === "success" || paymentStatus === "paid") &&
         typeof rawAmountCents === "number" && Number.isInteger(rawAmountCents) && rawAmountCents === 0) {
-        const amountCents = Number(
-          (payRow as { amount_paid_cents?: number | null } | null)?.amount_paid_cents ?? 0,
-        );
-        const bookingReference = await loadBookingReferenceForId(
-          adminPrePaystack,
-          settled.bookingId,
-        );
-        return NextResponse.json({
-          success: true,
-          ok: true,
-          paymentStatus: "success",
-          reference,
-          amountCents: Number.isFinite(amountCents) ? amountCents : 0,
-          currency: "ZAR",
-          customerEmail: "",
-          customerName: null,
-          userId: null,
-          bookingSnapshot: null,
-          bookingInDatabase: true,
-          bookingId: settled.bookingId,
-          bookingReference,
-          state: "already_processed",
-          alreadyExists: true,
-          skipped: true,
-          upsertError: null,
-          assignmentType: null,
-          fallbackReason: null,
-          showCleanerSubstitutionNotice: false,
-          attemptedCleanerId: null,
-          assignedCleanerId: null,
-          selectedCleanerId: null,
-        } satisfies PaystackVerifyPostResponse);
+        const { data: zeroCreditReservation, error: zeroCreditReservationError } = await adminPrePaystack
+          .from("cleaning_credit_reservations")
+          .select("status")
+          .eq("booking_id", settled.bookingId)
+          .maybeSingle();
+        let zeroCreditReplaySafe =
+          !zeroCreditReservationError &&
+          (
+            !zeroCreditReservation ||
+            String(zeroCreditReservation.status ?? "").trim().toLowerCase() === "settled"
+          );
+
+        if (!zeroCreditReplaySafe) {
+          const creditSettlement = await settleCleaningCreditForBooking(adminPrePaystack, settled.bookingId);
+          if (!creditSettlement.ok && creditSettlement.error !== "reservation_not_found") {
+            const queued = await enqueueFailedJob("r0_credit_reconciliation", {
+              bookingId: settled.bookingId,
+              reference,
+            });
+            if (!queued) {
+              await reportOperationalIssue(
+                "critical",
+                "paystack/verify",
+                "R0 Cleaning Credit reconciliation enqueue failed",
+                { bookingId: settled.bookingId, reference },
+              );
+            }
+            return NextResponse.json({
+              success: false,
+              ok: false,
+              paymentStatus: "success",
+              reference,
+              bookingId: settled.bookingId,
+              bookingInDatabase: true,
+              state: "payment_reconciliation_required",
+              error: `cleaning_credit_settlement_failed:${creditSettlement.error}`,
+              upsertError: `cleaning_credit_settlement_failed:${creditSettlement.error}`,
+              alreadyExists: true,
+              skipped: true,
+            } satisfies PaystackVerifyPostResponse, { status: 409 });
+          }
+
+          zeroCreditReplaySafe = true;
+        }
+
+        if (zeroCreditReplaySafe) {
+          const postPayment = await finalizeR0BookingPostPayment(adminPrePaystack, settled.bookingId);
+          if (!postPayment.ok) {
+            const queued = await enqueueFailedJob("r0_credit_reconciliation", {
+              bookingId: settled.bookingId,
+              reference,
+            });
+            await reportOperationalIssue(
+              queued ? "error" : "critical",
+              "paystack/verify",
+              queued
+                ? `R0 post-payment recovery failed and was queued: ${postPayment.error}`
+                : `R0 post-payment recovery failed and enqueue failed: ${postPayment.error}`,
+              { bookingId: settled.bookingId, reference },
+            );
+            return NextResponse.json({
+              success: false,
+              ok: false,
+              paymentStatus: "success",
+              reference,
+              bookingId: settled.bookingId,
+              bookingInDatabase: true,
+              state: "payment_reconciliation_required",
+              error: `r0_post_payment_recovery_failed:${postPayment.error}`,
+              upsertError: `r0_post_payment_recovery_failed:${postPayment.error}`,
+              alreadyExists: true,
+              skipped: true,
+            } satisfies PaystackVerifyPostResponse, { status: 409 });
+          }
+
+
+          const amountCents = Number(
+            (payRow as { amount_paid_cents?: number | null } | null)?.amount_paid_cents ?? 0,
+          );
+          const bookingReference = await loadBookingReferenceForId(
+            adminPrePaystack,
+            settled.bookingId,
+          );
+          return NextResponse.json({
+            success: true,
+            ok: true,
+            paymentStatus: "success",
+            reference,
+            amountCents: Number.isFinite(amountCents) ? amountCents : 0,
+            currency: "ZAR",
+            customerEmail: "",
+            customerName: null,
+            userId: null,
+            bookingSnapshot: null,
+            bookingInDatabase: true,
+            bookingId: settled.bookingId,
+            bookingReference,
+            state: "already_processed",
+            alreadyExists: true,
+            skipped: true,
+            upsertError: null,
+            assignmentType: null,
+            fallbackReason: null,
+            showCleanerSubstitutionNotice: false,
+            attemptedCleanerId: null,
+            assignedCleanerId: null,
+            selectedCleanerId: null,
+          } satisfies PaystackVerifyPostResponse);
+        }
       }
     }
   }
@@ -932,7 +1029,7 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
   }
   if (adminPost) {
     const existingPost = await findBookingIdStatusForPaystackReference(adminPost, ref);
-    if (existingPost && existingPost.status !== "pending_payment") {
+    if (existingPost && !["pending_payment", "payment_expired"].includes(existingPost.status)) {
       const metadataShort = normalizePaystackMetadata(tx.metadata);
       const { snapshot: snapShort } = parseBookingSnapshot(metadataShort, { amountCents: txAmount });
       const emailFromCustomer = typeof tx.customer?.email === "string" ? tx.customer.email.trim() : "";
@@ -943,14 +1040,16 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
       const emailNorm = emailRaw ? normalizeEmail(emailRaw) : "";
       const userIdShort = resolvePaystackUserId(snapShort, metadataShort);
       const emailFromCustomerPost = typeof tx.customer?.email === "string" ? tx.customer.email.trim() : "";
-      if (!await provePersistedPaystackReplay({
+      const replayProofPost = await provePersistedPaystackReplay({
         supabase: adminPost, bookingId: existingPost.bookingId, reference: ref,
         amountCents: txAmount, customerEmail: typeof tx.customer?.email === "string" ? tx.customer.email : "",
         metadata: tx.metadata,
-      })) {
+      });
+      if (!replayProofPost.ok && replayProofPost.reason === "mismatch") {
         return NextResponse.json({ ok: false, success: false, paymentStatus: "unknown",
           reference: ref, error: "PAYMENT_FINALIZATION_REPLAY_MISMATCH" }, { status: 409 });
       }
+      if (replayProofPost.ok) {
       after(async () => {
         await replayPaymentConfirmedNotifyForPersistedBooking({
           supabase: adminPost,
@@ -1036,6 +1135,7 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
         assignedCleanerId: null,
         selectedCleanerId: null,
       });
+      }
     }
   }
 

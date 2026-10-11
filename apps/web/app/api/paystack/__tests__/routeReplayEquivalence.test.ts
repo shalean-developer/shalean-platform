@@ -3,6 +3,7 @@ import crypto from "crypto";
 const m = vi.hoisted(() => ({
   admin: vi.fn(), replay: vi.fn(), record: vi.fn(), sync: vi.fn(), pipeline: vi.fn(), finalize: vi.fn(),
   monthly: vi.fn(), sales: vi.fn(), monthlyRecord: vi.fn(), salesRecord: vi.fn(), entityRecord: vi.fn(),
+  settleCredit: vi.fn(), r0Finalize: vi.fn(), enqueueFailed: vi.fn(),
 }));
 vi.mock("next/server", async (importOriginal) => {
   const actual = await importOriginal<typeof import("next/server")>();
@@ -36,6 +37,9 @@ vi.mock("@/lib/logging/systemLog", () => ({ logSystemEvent: vi.fn(), reportOpera
 vi.mock("@/lib/observability/paymentStructuredLog", () => ({ logPaymentStructured: vi.fn() }));
 vi.mock("@/lib/rateLimit/paystackVerifyIpLimit", () => ({ allowPaystackVerifyRequest: () => true, paystackVerifyRateLimitKey: () => "test" }));
 vi.mock("@/lib/booking/enqueuePaystackRecoveryFailedJobs", () => ({ enqueuePaystackRecoveryFailedJobs: vi.fn() }));
+vi.mock("@/lib/booking/failedJobs", () => ({ enqueueFailedJob: m.enqueueFailed }));
+vi.mock("@/lib/referrals/creditReservations", () => ({ settleCleaningCreditForBooking: m.settleCredit }));
+vi.mock("@/lib/booking/finalizeR0BookingPostPayment", () => ({ finalizeR0BookingPostPayment: m.r0Finalize }));
 vi.mock("@/lib/ops/dispatchControlWebhook", () => ({ postDispatchControlAlert: vi.fn() }));
 vi.mock("@/lib/payments/routePaystackRefundEvent", () => ({ routeSuccessfulPaystackRefund: vi.fn() }));
 import { GET, POST } from "../verify/route";
@@ -53,6 +57,7 @@ let reads: string[];
 let rpcOwner: string | null;
 let lookupError: boolean;
 let ownershipColumn: "customer_id" | "user_id";
+let creditReservationStatus: string | null;
 const secret = "test-only-paystack-signing-key";
 beforeEach(() => {
   vi.clearAllMocks();
@@ -68,19 +73,25 @@ beforeEach(() => {
     paymentTransactionId: "paytx-entity-test",
     expenseId: null,
   });
+  m.settleCredit.mockResolvedValue({ ok: true, status: "settled" });
+  m.r0Finalize.mockResolvedValue({ ok: true, action: "no_assignment_needed" });
+  m.enqueueFailed.mockResolvedValue(true);
   resetBookingOwnershipColumnCacheForTests();
-  ownershipColumn = "customer_id"; lookupError = false; rpcOwner = null; reads = [];
+  ownershipColumn = "customer_id"; lookupError = false; rpcOwner = null; reads = []; creditReservationStatus = null;
   row = { id, status: "pending", paystack_reference: "pay_current", customer_email: "payer@example.com", customer_id: owner, payment_status: "success", amount_paid_cents: 12550 };
   tx = { status: "success", reference: "pay_current", amount: 12550, currency: "ZAR", customer: { email: "payer@example.com" }, metadata: { booking_id: id, user_id: owner } };
   m.admin.mockReturnValue({
     rpc: vi.fn(async () => ({ data: rpcOwner, error: null })),
-    from: () => {
+    from: (table: string) => {
       let columns = "";
       const q = {
         select: (s: string) => { columns = s; return q; }, eq: () => q,
         limit: async () => ({ data: [], error: ownershipColumn === "user_id" && columns === "customer_id" ? { code: "42703", message: 'column "customer_id" does not exist' } : null }),
         maybeSingle: async () => {
           reads.push(columns);
+          if (table === "cleaning_credit_reservations") {
+            return { data: creditReservationStatus ? { status: creditReservationStatus } : null, error: null };
+          }
           return { data: { ...row }, error: lookupError && columns.includes("customer_email") ? { message: "read failed" } : null };
         },
       }; return q;
@@ -105,6 +116,23 @@ function noSuccess() {
 }
 for (const mode of ["GET", "POST", "webhook"] as const) {
   describe(mode + " actual replay shortcut", () => {
+    it("routes unsettled Cleaning Credit replay into canonical recovery", async () => {
+      creditReservationStatus = "released";
+      const response = await call(mode);
+      expect(mode === "webhook" ? m.finalize : m.pipeline).toHaveBeenCalledTimes(1);
+      expect(m.replay).not.toHaveBeenCalled();
+      expect(m.record).not.toHaveBeenCalled();
+      expect(m.sync).not.toHaveBeenCalled();
+      expect(response.status).toBe(mode === "webhook" ? 200 : 409);
+      if (mode !== "webhook") {
+        expect(await response.json()).toMatchObject({
+          ok: false,
+          success: false,
+          state: "payment_reconciliation_required",
+        });
+      }
+    });
+
     it("allows equivalent replay using verified identity only", async () => {
       const response = await call(mode); const data = await response.json();
       expect(response.status).toBe(200);
@@ -136,6 +164,23 @@ for (const mode of ["GET", "POST", "webhook"] as const) {
       await call(mode); expect(m.entityRecord).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ entityType: "sales_document" })); expect(m.monthly).toHaveBeenCalled();
       expect(reads.some((x) => x.includes("customer_email"))).toBe(false); noSuccess();
     });
+    it("passes expired payment to canonical finalization after verified Paystack success", async () => {
+      row.status = "payment_expired"; row.payment_status = "pending"; row.amount_paid_cents = 0;
+      const response = await call(mode);
+      expect(mode === "webhook" ? m.finalize : m.pipeline).toHaveBeenCalledTimes(1);
+      expect(m.replay).not.toHaveBeenCalled();
+      expect(m.record).not.toHaveBeenCalled();
+      expect(m.sync).not.toHaveBeenCalled();
+      if (mode !== "webhook") {
+        expect(response.status).toBe(409);
+        expect(await response.json()).toMatchObject({
+          ok: false,
+          success: false,
+          state: "payment_reconciliation_required",
+        });
+      }
+    });
+
     it("passes pending payment to canonical finalization", async () => {
       row.status = "pending_payment"; row.payment_status = "pending";
       await call(mode); expect(mode === "webhook" ? m.finalize : m.pipeline).toHaveBeenCalledTimes(1);
@@ -144,10 +189,29 @@ for (const mode of ["GET", "POST", "webhook"] as const) {
   });
 }
 describe("POST exact-zero pre-verification gate", () => {
-  it.each(["success", "paid"])("preserves %s with numeric zero", async (status) => {
-    row.payment_status = status; row.amount_paid_cents = 0;
+  it.each(["success", "paid"])("preserves %s with numeric zero after R0 post-payment convergence", async (status) => {
+    row.payment_status = status; row.amount_paid_cents = 0; row.payment_completed_at = "2026-10-11T00:00:00.000Z";
     expect(await (await call("POST")).json()).toMatchObject({ ok: true, state: "already_processed", amountCents: 0 });
+    expect(m.r0Finalize).toHaveBeenCalledWith(expect.anything(), id);
+    expect(m.enqueueFailed).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled(); noSuccess();
+  });
+  it("quarantines R0 replay when a released Cleaning Credit reservation cannot be reclaimed", async () => {
+    row.payment_status = "success"; row.amount_paid_cents = 0; row.payment_completed_at = "2026-10-11T00:00:00.000Z";
+    creditReservationStatus = "released";
+    m.settleCredit.mockResolvedValue({ ok: false, error: "released_credit_reclaim_insufficient_balance" });
+    const response = await call("POST");
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      success: false,
+      state: "payment_reconciliation_required",
+      error: "cleaning_credit_settlement_failed:released_credit_reclaim_insufficient_balance",
+    });
+    expect(m.settleCredit).toHaveBeenCalledWith(expect.anything(), id);
+    expect(m.r0Finalize).not.toHaveBeenCalled();
+    expect(m.enqueueFailed).toHaveBeenCalledWith("r0_credit_reconciliation", { bookingId: id, reference: "pay_current" });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
   it.each([12550, -1, null, undefined, "0", NaN, Infinity, 0.5])("verifies remotely for unproven zero %s", async (amount) => {
     row.amount_paid_cents = amount; if (amount === undefined) delete row.amount_paid_cents;
@@ -157,12 +221,12 @@ describe("POST exact-zero pre-verification gate", () => {
 describe("shared route proof canonical ownership resolution", () => {
   it("uses legacy user_id projection when resolved", async () => {
     ownershipColumn = "user_id"; delete row.customer_id; row.user_id = owner;
-    expect(await provePersistedPaystackReplay({ supabase: m.admin(), bookingId: id, reference: tx.reference, amountCents: tx.amount, customerEmail: tx.customer.email, metadata: tx.metadata })).toBe(true);
+    expect(await provePersistedPaystackReplay({ supabase: m.admin(), bookingId: id, reference: tx.reference, amountCents: tx.amount, customerEmail: tx.customer.email, metadata: tx.metadata })).toEqual({ ok: true });
     expect(reads).toContain("id, status, paystack_reference, customer_email, user_id");
   });
   it("uses canonical email-to-auth fallback", async () => {
     delete tx.metadata.user_id; rpcOwner = owner;
-    expect(await provePersistedPaystackReplay({ supabase: m.admin(), bookingId: id, reference: tx.reference, amountCents: tx.amount, customerEmail: tx.customer.email, metadata: tx.metadata })).toBe(true);
+    expect(await provePersistedPaystackReplay({ supabase: m.admin(), bookingId: id, reference: tx.reference, amountCents: tx.amount, customerEmail: tx.customer.email, metadata: tx.metadata })).toEqual({ ok: true });
     expect(m.admin().rpc).toHaveBeenCalledWith("resolve_auth_user_id_by_email", { p_email: "payer@example.com" });
   });
 });

@@ -8,6 +8,10 @@ import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsFo
 import { resolveBookingUserId } from "@/lib/booking/resolveBookingUserId";
 import { paymentFinalizationReplayEquivalent } from "@/lib/booking/paymentCustomerIdentityGuard";
 
+export type PersistedPaystackReplayProof =
+  | { ok: true }
+  | { ok: false; reason: "mismatch" | "credit_unsettled" };
+
 /** Call only with verified gateway transaction data or an authenticated webhook payload. */
 export async function provePersistedPaystackReplay(params: {
   supabase: SupabaseClient;
@@ -16,7 +20,7 @@ export async function provePersistedPaystackReplay(params: {
   amountCents: number;
   customerEmail: string;
   metadata?: Record<string, unknown> | null;
-}): Promise<boolean> {
+}): Promise<PersistedPaystackReplayProof> {
   const { supabase, bookingId, reference } = params;
   const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
   const { data, error } = await supabase.from("bookings")
@@ -24,14 +28,31 @@ export async function provePersistedPaystackReplay(params: {
     .eq("id", bookingId).maybeSingle();
   const row = data as unknown as Record<string, unknown> | null;
   if (error || !row || row.id !== bookingId || typeof row.status !== "string" || !row.status ||
-    ["pending_payment", "payment_mismatch", "payment_reconciliation_required"].includes(row.status)) return false;
+    ["pending_payment", "payment_expired", "payment_mismatch", "payment_reconciliation_required"].includes(row.status)) {
+    return { ok: false, reason: "mismatch" };
+  }
+
+  // A persisted booking is replay-safe only after any Cleaning Credit reservation
+  // has reached its terminal settled state. This closes the race where the booking
+  // row is finalized before synchronous credit settlement either succeeds or
+  // quarantines the booking for reconciliation.
+  const { data: creditReservation, error: creditReservationError } = await supabase
+    .from("cleaning_credit_reservations")
+    .select("status")
+    .eq("booking_id", bookingId)
+    .maybeSingle();
+  if (creditReservationError) return { ok: false, reason: "credit_unsettled" };
+  if (creditReservation && String(creditReservation.status ?? "").trim().toLowerCase() !== "settled") {
+    return { ok: false, reason: "credit_unsettled" };
+  }
+
   const metadata = normalizePaystackMetadata(params.metadata);
   const { snapshot } = parseBookingSnapshot(metadata, { amountCents: params.amountCents });
   const gatewayEmail = normalizeEmail(params.customerEmail);
   const email = gatewayEmail || normalizeEmail(metadata.customer_email || "");
   const owner = await resolveBookingUserId(supabase, snapshot, metadata, email);
   const resolvedId = resolveInternalBookingIdFromPaystackReference(reference, metadata);
-  return paymentFinalizationReplayEquivalent({
+  const equivalent = paymentFinalizationReplayEquivalent({
     id: bookingId,
     paystackReference: typeof row.paystack_reference === "string" ? row.paystack_reference : null,
     customerEmail: typeof row.customer_email === "string" ? row.customer_email : null,
@@ -41,4 +62,5 @@ export async function provePersistedPaystackReplay(params: {
       .filter((id): id is string => typeof id === "string" && id.trim().length > 0),
     paystackReference: reference, customerEmail: email, customerAuthId: owner,
   });
+  return equivalent ? { ok: true } : { ok: false, reason: "mismatch" };
 }

@@ -280,7 +280,15 @@ export function detectPaymentFinalizationDrift(rows: readonly PaymentFinalizatio
   const ids = rows
     .filter((row) => {
       const type = norm(row.type);
-      if (type !== "booking_finalize" && type !== "booking_insert" && type !== "payment_reconciliation") {
+      if (
+        type !== "booking_finalize" &&
+        type !== "booking_insert" &&
+        type !== "payment_reconciliation" &&
+        type !== "payment_reconciliation_exhausted" &&
+        type !== "payment_reconciliation_manual_review" &&
+        type !== "r0_credit_reconciliation" &&
+        type !== "r0_credit_reconciliation_exhausted"
+      ) {
         return false;
       }
       if (isTerminalPaymentFinalizationJob(row)) return false;
@@ -732,7 +740,7 @@ export async function runProductionHealthScan(
         query: admin
           .from("failed_jobs")
           .select("id, type, created_at, payload")
-          .in("type", ["booking_finalize", "booking_insert", "payment_reconciliation"])
+          .in("type", ["booking_finalize", "booking_insert", "payment_reconciliation", "payment_reconciliation_exhausted", "payment_reconciliation_manual_review", "r0_credit_reconciliation", "r0_credit_reconciliation_exhausted"])
           .order("created_at", { ascending: false })
           .limit(scanLimit),
       },

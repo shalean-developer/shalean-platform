@@ -419,11 +419,12 @@ export async function POST(request: Request) {
 
   if (supabase) {
     const persistedHead = await findBookingIdStatusForPaystackReference(supabase, reference);
-    if (persistedHead && persistedHead.status !== "pending_payment") {
-      if (!await provePersistedPaystackReplay({
+    if (persistedHead && !["pending_payment", "payment_expired"].includes(persistedHead.status)) {
+      const replayProof = await provePersistedPaystackReplay({
         supabase, bookingId: persistedHead.bookingId, reference, amountCents: amount,
         customerEmail: email, metadata,
-      })) {
+      });
+      if (!replayProof.ok && replayProof.reason === "mismatch") {
         logPaymentStructured("payment_webhook_outcome", {
           outcome: "rejected", rejection_reason: "PAYMENT_FINALIZATION_REPLAY_MISMATCH",
           event: "charge.success", reference_masked: maskPaystackReference(reference),
@@ -431,6 +432,7 @@ export async function POST(request: Request) {
         });
         return NextResponse.json({ received: true, ok: false, error: "PAYMENT_FINALIZATION_REPLAY_MISMATCH" });
       }
+      if (replayProof.ok) {
       await replayPaymentConfirmedNotifyForPersistedBooking({
         supabase,
         bookingId: persistedHead.bookingId,
@@ -511,6 +513,7 @@ export async function POST(request: Request) {
         });
       }
       return NextResponse.json({ received: true });
+      }
     }
   }
 

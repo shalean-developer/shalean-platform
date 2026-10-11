@@ -65,7 +65,7 @@ const getSupabaseAdminMock = vi.mocked(getSupabaseAdmin);
 
 function bookingSelectOnce(data: unknown, error: { message: string } | null = null) {
   return {
-    from: vi.fn(() => ({
+    from: vi.fn((table: string) => ({
       select: vi.fn((columns: string) => {
         if (columns === "customer_id") {
           return {
@@ -74,7 +74,11 @@ function bookingSelectOnce(data: unknown, error: { message: string } | null = nu
         }
         return {
           eq: vi.fn(() => ({
-            maybeSingle: vi.fn(async () => ({ data, error })),
+            maybeSingle: vi.fn(async () => (
+              table === "cleaning_credit_reservations"
+                ? { data: null, error: null }
+                : { data, error }
+            )),
           })),
         };
       }),

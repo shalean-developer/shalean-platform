@@ -112,7 +112,8 @@ export async function finalizeR0BookingPostPayment(
   const row = data as unknown as R0BookingRow;
   const paymentStatus = String(row.payment_status ?? "").trim().toLowerCase();
   const paidCents = Number(row.amount_paid_cents ?? 0);
-  if (paymentStatus !== "success" || !row.payment_completed_at || !Number.isFinite(paidCents) || paidCents !== 0) {
+  const paymentSettled = paymentStatus === "success" || paymentStatus === "paid";
+  if (!paymentSettled || !row.payment_completed_at || !Number.isFinite(paidCents) || paidCents !== 0) {
     return { ok: false, error: "booking_not_settled_r0" };
   }
 
