@@ -151,6 +151,28 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).not.toContain("coalesce(v.total_paid_zar, 0) > 0");
   });
 
+  it("monthly duplicate resolver cancels losers instead of hard deleting financial-flow rows", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+
+    expect(sql).toContain("AUDIT-02A04: serializes monthly duplicate races");
+    expect(sql).toContain("set status = 'cancelled'");
+    expect(sql).toContain("if p_our_id = any(v_deleted)");
+  });
+
+  it("provides a guarded rollback for an unclaimed recurring prepaid occurrence", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+    const src = read("lib/recurring/insertRecurringOccurrenceBooking.ts");
+
+    expect(sql).toContain("function public.rollback_unclaimed_recurring_prepaid_booking");
+    expect(sql).toContain("provisional_booking_identity_mismatch");
+    expect(sql).toContain("allocation_not_unclaimed");
+    expect(sql).toContain("to_regclass('public.recurring_prepaid_allocations')");
+    expect(sql).toContain("payment_completed_at = null");
+    expect(src).toContain('admin.rpc(\n        "rollback_unclaimed_recurring_prepaid_booking"');
+    expect(src).toContain("p_allocation_id: prepaidAllocation.allocationId");
+    expect(src).toContain("rollback_failed:");
+  });
+
   it("keeps unpaid financially-unlinked cleanup rows outside the block predicate", () => {
     const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
 
