@@ -132,6 +132,19 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_cleaning_credit_transaction_linked")).toBe(true);
   });
 
+  it("blocks hard delete when an invoice adjustment survives", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_invoice_adjustment_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected invoice-adjustment-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_invoice_adjustment_linked")).toBe(true);
+  });
+
   it("blocks hard delete when collected totals survive even if payment status drifted", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "cancelled",
