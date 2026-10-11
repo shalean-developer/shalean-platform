@@ -6,7 +6,6 @@ import { getServiceLabel, parseBookingServiceId } from "@/components/booking/ser
 import { bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
 import { insertBookingRowUnified } from "@/lib/booking/createBookingUnified";
 import { buildExactSourceLineItems } from "@/lib/booking/buildBookingLineItems";
-import { persistBookingLineItems } from "@/lib/booking/persistBookingLineItems";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { ensureSalesDocumentCustomer } from "@/lib/salesDocument/ensureSalesDocumentCustomer";
@@ -153,24 +152,34 @@ export async function createBookingFromSalesQuoteInvoice(
           unitPriceCents: line.unit_price_cents,
         })),
       });
-      const repaired = await persistBookingLineItems(admin, retainedCancelledBookingId, repairItems);
-      if (!repaired.ok) {
-        return { ok: false, error: repaired.error || "paid_cancelled_booking_repair_failed" };
+      const { data: repairData, error: repairError } = await admin.rpc(
+        "repair_paid_cancelled_sales_document_booking",
+        {
+          p_invoice_id: invoiceId,
+          p_line_items: repairItems,
+          p_total_price: quotedTotalZar,
+        },
+      );
+      const repair =
+        repairData && typeof repairData === "object" && !Array.isArray(repairData)
+          ? (repairData as { ok?: unknown; error?: unknown; booking_id?: unknown })
+          : null;
+      if (repairError || repair?.ok !== true) {
+        return {
+          ok: false,
+          error:
+            repairError?.message ??
+            (typeof repair?.error === "string" ? repair.error : "paid_cancelled_booking_repair_failed"),
+        };
       }
-      const { error: reactivateError } = await admin
-        .from("bookings")
-        .update({
-          status: "pending",
-          dispatch_status: "searching",
-          total_price: quotedTotalZar,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", retainedCancelledBookingId)
-        .eq("sales_document_id", invoiceId);
-      if (reactivateError) {
-        return { ok: false, error: `paid_cancelled_booking_reactivate_failed:${reactivateError.message}` };
-      }
-      return { ok: true, bookingId: retainedCancelledBookingId, alreadyExisted: true };
+      return {
+        ok: true,
+        bookingId:
+          typeof repair.booking_id === "string" && repair.booking_id
+            ? repair.booking_id
+            : retainedCancelledBookingId,
+        alreadyExisted: true,
+      };
     }
 
     const { data: cleanupData, error: cleanupError } = await admin.rpc(
