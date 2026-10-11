@@ -5,14 +5,14 @@ import path from "node:path";
 const read = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
 
 describe("BOOKING-E2E-13A Cleaning Credit settlement authority", () => {
-  it("settles reserved Cleaning Credit from authoritative Paystack success finalization", () => {
+  it("settles reserved Cleaning Credit synchronously before deferred post-persist work", () => {
     const src = read("lib/booking/upsertBookingFromPaystack.ts");
-    const sideEffectsPos = src.indexOf("await recordBookingSideEffects");
-    const settlePos = src.indexOf("await settleCleaningCreditForBooking(supabase, id)", sideEffectsPos);
-    const referralPos = src.indexOf("processCustomerReferralAfterFirstPaidBooking", settlePos);
-    expect(sideEffectsPos).toBeGreaterThanOrEqual(0);
-    expect(settlePos).toBeGreaterThan(sideEffectsPos);
-    expect(referralPos).toBeGreaterThan(settlePos);
+    const requiredRecoveryPos = src.indexOf("await runRequiredPostPersistRecovery()");
+    const settlePos = src.indexOf("await settleCleaningCreditForBooking(supabase, id)", requiredRecoveryPos);
+    const deferredPos = src.indexOf("const runPostPersistSideEffects", requiredRecoveryPos);
+    expect(requiredRecoveryPos).toBeGreaterThanOrEqual(0);
+    expect(settlePos).toBeGreaterThan(requiredRecoveryPos);
+    expect(deferredPos).toBeGreaterThan(settlePos);
     expect(src).toContain('creditSettlement.error !== "reservation_not_found"');
   });
 
@@ -20,6 +20,27 @@ describe("BOOKING-E2E-13A Cleaning Credit settlement authority", () => {
     const src = read("app/api/booking-v2/confirm/route.ts");
     expect(src).toContain("await settleCleaningCreditForBooking(supabase, bookingId)");
     expect(src).toContain("await settleFullyCoveredBooking(supabase, { bookingId, payAmountZar })");
+  });
+
+  it("reclaims a released Cleaning Credit reservation when late Paystack success is finalized", () => {
+    const sql = read("../../supabase/migrations/20261010213000_payment_finalize_reclaim_released_cleaning_credit.sql");
+
+    expect(sql).toContain("if v.status = 'released' then");
+    expect(sql).toContain("if v_balance < v.amount_zar then");
+    expect(sql).toContain("released_credit_reclaim_insufficient_balance");
+    expect(sql).toContain("credit_balance_zar = v_after");
+    expect(sql).toContain("v_balance - v.amount_zar");
+    expect(sql).toContain("Settled Cleaning Credit reservation after late verified payment");
+    expect(sql).toContain("status = 'settled'");
+  });
+
+  it("quarantines the paid booking when Cleaning Credit settlement cannot complete", () => {
+    const src = read("lib/booking/upsertBookingFromPaystack.ts");
+
+    expect(src).toContain("cleaning_credit_settlement_failed:");
+    expect(src).toContain('status: "payment_reconciliation_required"');
+    expect(src).toContain('reason: "finalization_failed"');
+    expect(src).toContain("recoveryEnqueue: true");
   });
 
   it("terminal expiration remains release-not-settle", () => {
