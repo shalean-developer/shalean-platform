@@ -725,7 +725,9 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
           }
 
           zeroCreditReplaySafe = true;
+        }
 
+        if (zeroCreditReplaySafe) {
           const postPayment = await finalizeR0BookingPostPayment(adminPrePaystack, settled.bookingId);
           if (!postPayment.ok) {
             const queued = await enqueueFailedJob("r0_credit_reconciliation", {
@@ -754,9 +756,8 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
               skipped: true,
             } satisfies PaystackVerifyPostResponse, { status: 409 });
           }
-        }
 
-        if (zeroCreditReplaySafe) {
+
           const amountCents = Number(
             (payRow as { amount_paid_cents?: number | null } | null)?.amount_paid_cents ?? 0,
           );
