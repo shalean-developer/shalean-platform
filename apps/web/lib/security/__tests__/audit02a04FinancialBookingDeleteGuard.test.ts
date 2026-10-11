@@ -66,6 +66,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("coalesce(old.cleaner_bonus_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.payout_earnings_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.cleaner_earnings_total_cents, 0) > 0");
+    expect(sql).toContain("coalesce(old.internal_earnings_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.total_paid_cents, 0) > 0");
     expect(sql).toContain("coalesce(old.total_paid_zar, 0) > 0");
     expect(sql).toContain("old.monthly_invoice_id is not null");
@@ -144,6 +145,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain("payout_paid_at");
     expect(src).toContain("payout_run_id");
     expect(src).toContain("cleaner_earnings_total_cents");
+    expect(src).toContain("internal_earnings_cents");
     expect(src).toContain("linked_cleaner_earnings_dispute_id: linkedCleanerDispute?.id ?? null");
   });
 
@@ -264,6 +266,15 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(seed).toContain("email_campaign_attributions");
     expect(seed).toContain("deposit_paid_cents: 0");
     expect(seed).toContain("cleaner_earnings_total_cents: 0");
+    expect(seed).toContain("internal_earnings_cents: 0");
+    expect(seed).toContain("preflight payout_audit_events");
+    expect(seed).toContain("mix seed and non-seed bookings");
+    expect(seed).toContain("record_inventory_movement");
+    expect(seed).toContain("DEV SEED RESET reversal");
+    expect(seed).toContain("release_cleaning_credit_for_booking");
+    expect(seed).toContain("apply_cleaning_credit_transaction");
+    expect(seed).toContain("recurring_prepaid_allocations");
+    expect(seed).toContain("recurring_prepaid_packages");
     expect(seed).toContain('admin.from("bookings").delete().in("id", seedBookingIds)');
     expect(seed).toContain("Reset failed at");
   });
