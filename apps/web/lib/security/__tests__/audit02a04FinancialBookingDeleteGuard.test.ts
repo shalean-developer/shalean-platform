@@ -21,6 +21,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("from public.payout_audit_events pae");
     expect(sql).toContain("old.id = any");
     expect(sql).toContain("old.payment_transaction_id is not null");
+    expect(sql).toContain("old.payment_reference_external");
     expect(sql).toContain("from public.payment_transactions pt");
     expect(sql).toContain("pt.booking_id = old.id");
     expect(sql).toContain("pt.entity_type = 'booking' and pt.entity_id = old.id");
@@ -28,6 +29,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("from public.inventory_movements im");
     expect(sql).toContain("from public.transport_cost_entries tce");
     expect(sql).toContain("from public.booking_cleaner_earnings_snapshot bces");
+    expect(sql).toContain("from public.booking_line_items bli");
+    expect(sql).toContain("coalesce(bli.cleaner_earnings_cents, 0) > 0");
     expect(sql).toContain("e.booking_id = old.id");
     expect(sql).toContain("from public.cleaning_credit_transactions cct");
     expect(sql).toContain("cct.booking_id = old.id");
@@ -92,6 +95,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain('.from("inventory_movements")');
     expect(src).toContain('.from("transport_cost_entries")');
     expect(src).toContain('.from("booking_cleaner_earnings_snapshot")');
+    expect(src).toContain('.from("booking_line_items")');
     expect(src).toContain('.from("cleaner_earnings")');
     expect(src).toContain('.from("cleaner_earnings_adjustments")');
     expect(src).toContain('.from("cleaner_earnings_disputes")');
@@ -154,6 +158,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     );
     expect(sql).toContain("from public.payment_transactions pt");
     expect(sql).toContain("coalesce(b.deposit_paid_cents, 0) > 0");
+    expect(sql).toContain("b.payment_reference_external");
+    expect(sql).toContain("from public.booking_line_items bli");
   });
 
   it("keeps protected rows from aborting the batch purge", () => {
