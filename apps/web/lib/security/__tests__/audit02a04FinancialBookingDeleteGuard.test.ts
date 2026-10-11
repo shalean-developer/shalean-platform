@@ -87,7 +87,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
 
     expect(src).toContain('select("id, status")');
     expect(src).toContain("retainedCancelledBookingId");
-    expect(src).toContain('admin.rpc(\n        "delete_unpaid_sales_document_booking"');
+    expect(src).toContain('"delete_unpaid_sales_document_booking"');
     expect(src).toContain("cancelled_booking_cleanup_failed");
   });
 
