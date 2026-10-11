@@ -217,6 +217,7 @@ begin
      or coalesce(v.amount_paid_cents, 0) > 0
      or coalesce(v.deposit_paid_cents, 0) > 0
      or coalesce(v.total_paid_cents, 0) > 0
+     or coalesce(v.total_paid_zar, 0) > 0
      or v.payment_transaction_id is not null
      or exists (
        select 1
@@ -237,8 +238,7 @@ begin
   end if;
 
   update public.bookings
-     set sales_document_id = null,
-         total_paid_zar = 0
+     set sales_document_id = null
    where id = v.id
      and sales_document_id = p_invoice_id;
 
@@ -666,6 +666,21 @@ begin
 
     v_t0 := v_winner_created;
     v_t1 := coalesce(v_winner_created, now()) + interval '2 seconds';
+
+    if p_our_id is distinct from v_winner then
+      return jsonb_build_object(
+        'action', 'reject',
+        'ok', false,
+        'winner_id', v_winner,
+        'deleted_ids', '[]'::jsonb,
+        'cluster_start', v_t0,
+        'cluster_end', v_t1,
+        'cluster_size', 1,
+        'winner_created_at', v_winner_created,
+        'left_duplicate', false,
+        'rolled_back_self', true
+      );
+    end if;
 
     return jsonb_build_object(
       'action', 'proceed',
