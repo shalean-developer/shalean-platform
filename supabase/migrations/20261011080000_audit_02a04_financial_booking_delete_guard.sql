@@ -233,7 +233,7 @@ language sql
 stable
 security definer
 set search_path = public
-as $
+as $financial_history$
   select exists (
     select 1
     from public.bookings b
@@ -304,7 +304,7 @@ as $
     select 1 from public.payout_audit_events pae
     where p_booking_id = any(coalesce(pae.booking_ids, '{}'::uuid[]))
   );
-$$;
+$financial_history$;
 
 revoke all on function public.booking_has_nonpromotion_financial_history(uuid) from public, anon, authenticated;
 grant execute on function public.booking_has_nonpromotion_financial_history(uuid) to service_role;
