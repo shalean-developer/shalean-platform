@@ -10,11 +10,17 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_payout_status_locked"
   | "admin_booking_delete_payout_frozen"
   | "admin_booking_delete_display_earnings_present"
+  | "admin_booking_delete_cleaner_payout_present"
+  | "admin_booking_delete_cleaner_bonus_present"
+  | "admin_booking_delete_payout_earnings_present"
   | "admin_booking_delete_paid_at_present"
   | "admin_booking_delete_amount_paid_present"
   | "admin_booking_delete_total_paid_present"
   | "admin_booking_delete_payment_transaction_linked"
   | "admin_booking_delete_expense_linked"
+  | "admin_booking_delete_inventory_cost_linked"
+  | "admin_booking_delete_transport_cost_linked"
+  | "admin_booking_delete_earnings_snapshot_linked"
   | "admin_booking_delete_cleaner_earnings_linked"
   | "admin_booking_delete_cleaner_earnings_adjustment_linked"
   | "admin_booking_delete_cleaner_earnings_dispute_linked"
@@ -44,11 +50,17 @@ export type AdminBookingDeleteSafetyRow = {
   payout_status?: string | null;
   payout_frozen_cents?: number | string | null;
   display_earnings_cents?: number | string | null;
+  cleaner_payout_cents?: number | string | null;
+  cleaner_bonus_cents?: number | string | null;
+  payout_earnings_cents?: number | string | null;
   amount_paid_cents?: number | string | null;
   total_paid_cents?: number | string | null;
   total_paid_zar?: number | string | null;
   payment_transaction_id?: string | null;
   linked_expense_id?: string | null;
+  linked_inventory_cost_id?: string | null;
+  linked_transport_cost_id?: string | null;
+  linked_earnings_snapshot_booking_id?: string | null;
   linked_cleaner_earning_id?: string | null;
   linked_cleaner_earnings_adjustment_id?: string | null;
   linked_cleaner_earnings_dispute_id?: string | null;
@@ -176,6 +188,27 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     });
   }
 
+  if (positiveCents(row.cleaner_payout_cents)) {
+    blocks.push({
+      code: "admin_booking_delete_cleaner_payout_present",
+      message: "Bookings with positive cleaner_payout_cents cannot be hard-deleted.",
+    });
+  }
+
+  if (positiveCents(row.cleaner_bonus_cents)) {
+    blocks.push({
+      code: "admin_booking_delete_cleaner_bonus_present",
+      message: "Bookings with positive cleaner_bonus_cents cannot be hard-deleted.",
+    });
+  }
+
+  if (positiveCents(row.payout_earnings_cents)) {
+    blocks.push({
+      code: "admin_booking_delete_payout_earnings_present",
+      message: "Bookings with positive payout_earnings_cents cannot be hard-deleted.",
+    });
+  }
+
   if (hasText(row.paid_at)) {
     blocks.push({
       code: "admin_booking_delete_paid_at_present",
@@ -208,6 +241,27 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_expense_linked",
       message: "Bookings linked to an expense cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_inventory_cost_id)) {
+    blocks.push({
+      code: "admin_booking_delete_inventory_cost_linked",
+      message: "Bookings linked to inventory cost movements cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_transport_cost_id)) {
+    blocks.push({
+      code: "admin_booking_delete_transport_cost_linked",
+      message: "Bookings linked to transport cost entries cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_earnings_snapshot_booking_id)) {
+    blocks.push({
+      code: "admin_booking_delete_earnings_snapshot_linked",
+      message: "Bookings linked to cleaner earnings snapshots cannot be hard-deleted.",
     });
   }
 
