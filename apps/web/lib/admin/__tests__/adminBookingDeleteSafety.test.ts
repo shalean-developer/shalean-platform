@@ -38,6 +38,7 @@ describe("assertAdminBookingDeleteSafe", () => {
     if (result.ok) throw new Error("expected monthly invoice booking delete to be blocked");
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_monthly_invoice_child")).toBe(true);
   });
+
   it("blocks hard delete when a durable payment transaction link survives", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "cancelled",
@@ -53,6 +54,19 @@ describe("assertAdminBookingDeleteSafe", () => {
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_payment_transaction_linked")).toBe(true);
   });
 
+  it("blocks hard delete when an expense still references the booking", () => {
+    const result = assertAdminBookingDeleteSafe({
+      status: "cancelled",
+      payment_status: "pending",
+      amount_paid_cents: 0,
+      linked_expense_id: "44444444-4444-4444-8444-444444444444",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected expense-linked booking delete to be blocked");
+    expect(result.blocks.some((block) => block.code === "admin_booking_delete_expense_linked")).toBe(true);
+  });
+
   it("blocks hard delete when collected totals survive even if payment status drifted", () => {
     const result = assertAdminBookingDeleteSafe({
       status: "cancelled",
@@ -65,5 +79,4 @@ describe("assertAdminBookingDeleteSafe", () => {
     if (result.ok) throw new Error("expected collected-value booking delete to be blocked");
     expect(result.blocks.some((block) => block.code === "admin_booking_delete_total_paid_present")).toBe(true);
   });
-
 });
