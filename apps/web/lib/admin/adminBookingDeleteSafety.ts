@@ -20,7 +20,11 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_team_member_payout_linked"
   | "admin_booking_delete_roster_member_payout_linked"
   | "admin_booking_delete_cleaning_credit_transaction_linked"
-  | "admin_booking_delete_invoice_adjustment_linked";
+  | "admin_booking_delete_invoice_adjustment_linked"
+  | "admin_booking_delete_refund_record_linked"
+  | "admin_booking_delete_referral_redemption_linked"
+  | "admin_booking_delete_referral_event_linked"
+  | "admin_booking_delete_money_proposal_linked";
 
 export type AdminBookingDeleteSafetyRow = {
   status?: string | null;
@@ -46,6 +50,10 @@ export type AdminBookingDeleteSafetyRow = {
   linked_roster_member_payout_id?: string | null;
   linked_cleaning_credit_transaction_id?: string | null;
   linked_invoice_adjustment_id?: string | null;
+  linked_refund_record_id?: string | null;
+  linked_referral_redemption_id?: string | null;
+  linked_referral_event_id?: string | null;
+  linked_money_proposal_id?: string | null;
 };
 
 export type AdminBookingDeleteBlock = {
@@ -232,6 +240,34 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_invoice_adjustment_linked",
       message: "Bookings linked to invoice adjustments cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_refund_record_id)) {
+    blocks.push({
+      code: "admin_booking_delete_refund_record_linked",
+      message: "Bookings linked to refund accounting records cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_referral_redemption_id)) {
+    blocks.push({
+      code: "admin_booking_delete_referral_redemption_linked",
+      message: "Bookings linked to referral discount redemptions cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_referral_event_id)) {
+    blocks.push({
+      code: "admin_booking_delete_referral_event_linked",
+      message: "Bookings linked to referral events cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_money_proposal_id)) {
+    blocks.push({
+      code: "admin_booking_delete_money_proposal_linked",
+      message: "Bookings linked to money-action proposals cannot be hard-deleted.",
     });
   }
 
