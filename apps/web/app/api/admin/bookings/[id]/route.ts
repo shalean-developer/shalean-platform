@@ -1401,7 +1401,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   const { data: row, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, completed_at, payment_status, payment_reference_external, is_monthly_billing_booking, marked_paid_by_admin_id, zoho_invoice_id, refunded_at, refund_status, payout_paid_at, payout_run_id, payment_completed_at, paid_at, monthly_invoice_id, sales_document_id, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_payout_cents, cleaner_bonus_cents, payout_earnings_cents, cleaner_earnings_total_cents, internal_earnings_cents, amount_paid_cents, deposit_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id, cleaner_id, date, time",
+      "id, status, completed_at, cleaner_line_earnings_finalized_at, payment_status, payment_reference_external, is_monthly_billing_booking, marked_paid_by_admin_id, zoho_invoice_id, refunded_at, refund_status, payout_paid_at, payout_run_id, payment_completed_at, paid_at, monthly_invoice_id, sales_document_id, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_payout_cents, cleaner_bonus_cents, payout_earnings_cents, cleaner_earnings_total_cents, internal_earnings_cents, amount_paid_cents, deposit_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id, cleaner_id, date, time",
     )
     .eq("id", id)
     .maybeSingle();
@@ -1412,6 +1412,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   const r = row as {
     status?: string | null;
     completed_at?: string | null;
+    cleaner_line_earnings_finalized_at?: string | null;
     payment_status?: string | null;
     payment_reference_external?: string | null;
     is_monthly_billing_booking?: boolean | null;
