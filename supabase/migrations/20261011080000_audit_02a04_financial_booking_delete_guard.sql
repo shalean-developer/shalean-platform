@@ -95,6 +95,26 @@ begin
      )
      or exists (
        select 1
+       from public.booking_changes bc
+       where bc.booking_id = old.id
+     )
+     or exists (
+       select 1
+       from public.growth_action_outcomes gao
+       where gao.booking_id = old.id
+     )
+     or exists (
+       select 1
+       from public.conversion_experiment_results cer
+       where cer.booking_id = old.id
+     )
+     or exists (
+       select 1
+       from public.email_campaign_attributions eca
+       where eca.booking_id = old.id
+     )
+     or exists (
+       select 1
        from public.promotion_redemptions prd
        where prd.booking_id = old.id
      )
@@ -291,6 +311,10 @@ as $financial_history$
     where asr.entity_type = 'booking' and asr.entity_id = p_booking_id
   )
   or exists (select 1 from public.admin_earnings_actions aea where aea.booking_id = p_booking_id)
+  or exists (select 1 from public.booking_changes bc where bc.booking_id = p_booking_id)
+  or exists (select 1 from public.growth_action_outcomes gao where gao.booking_id = p_booking_id)
+  or exists (select 1 from public.conversion_experiment_results cer where cer.booking_id = p_booking_id)
+  or exists (select 1 from public.email_campaign_attributions eca where eca.booking_id = p_booking_id)
   or exists (select 1 from public.booking_cleaner_earnings_snapshot bces where bces.booking_id = p_booking_id)
   or exists (
     select 1 from public.cleaner_earnings ce
