@@ -1495,6 +1495,39 @@ async function resetSeedRows(admin) {
       }
     }
 
+    // Reconcile any seed referral reward and promotion aggregates before their
+    // booking-scoped ledger rows are removed. Both helpers are transactional,
+    // seed-scoped, and retry-safe.
+    for (const bookingId of seedBookingIds) {
+      const referralReset = await must(
+        `reset seed referral reward ${bookingId}`,
+        admin.rpc("reset_seed_referral_credit_for_booking", {
+          p_booking_id: bookingId,
+          p_seed_recurring_ids: Object.values(RECURRING_IDS),
+        }),
+      );
+      const referralResult = Array.isArray(referralReset) ? referralReset[0] : referralReset;
+      if (!referralResult?.ok) {
+        throw new Error(
+          `[seed-dev] Reset failed reversing referral credit for ${bookingId}: ${referralResult?.error ?? "unknown"}`,
+        );
+      }
+
+      const promotionReset = await must(
+        `reset seed promotion redemptions ${bookingId}`,
+        admin.rpc("reset_seed_promotion_redemptions_for_booking", {
+          p_booking_id: bookingId,
+          p_seed_recurring_ids: Object.values(RECURRING_IDS),
+        }),
+      );
+      const promotionResult = Array.isArray(promotionReset) ? promotionReset[0] : promotionReset;
+      if (!promotionResult?.ok) {
+        throw new Error(
+          `[seed-dev] Reset failed reversing promotion redemptions for ${bookingId}: ${promotionResult?.error ?? "unknown"}`,
+        );
+      }
+    }
+
     // Optional recurring-prepayment tables are present only on environments where
     // that feature has been installed. Delete seed-scoped allocations before packages.
     const seedPackages = await optional(
