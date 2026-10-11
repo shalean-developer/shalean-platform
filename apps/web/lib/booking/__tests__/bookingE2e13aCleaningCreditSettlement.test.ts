@@ -31,6 +31,12 @@ describe("BOOKING-E2E-13A Cleaning Credit settlement authority", () => {
     expect(route).toContain('enqueueFailedJob("r0_credit_reconciliation"');
     expect(route).toContain("finalizeR0BookingPostPayment");
     expect(route).toContain("r0_post_payment_recovery_failed:");
+    const zeroSafePos = route.indexOf("if (zeroCreditReplaySafe)");
+    const r0PostPaymentPos = route.indexOf("finalizeR0BookingPostPayment(adminPrePaystack, settled.bookingId)", zeroSafePos);
+    const persistedSuccessPos = route.indexOf("state: \"already_processed\"", r0PostPaymentPos);
+    expect(zeroSafePos).toBeGreaterThanOrEqual(0);
+    expect(r0PostPaymentPos).toBeGreaterThan(zeroSafePos);
+    expect(persistedSuccessPos).toBeGreaterThan(r0PostPaymentPos);
   });
 
   it("retries zero-cash Cleaning Credit reconciliation durably without Paystack", () => {
