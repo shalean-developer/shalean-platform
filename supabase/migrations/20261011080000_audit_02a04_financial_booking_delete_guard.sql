@@ -13,6 +13,7 @@ as $$
 begin
   if lower(trim(coalesce(old.status, ''))) = 'completed'
      or old.completed_at is not null
+     or old.cleaner_line_earnings_finalized_at is not null
      or old.marked_paid_by_admin_id is not null
      or old.zoho_invoice_id is not null
      or old.refunded_at is not null
@@ -220,9 +221,15 @@ begin
     return jsonb_build_object('ok', true, 'booking_id', null);
   end if;
 
-  if lower(trim(coalesce(v.status, ''))) <> 'cancelled'
-     or coalesce(v.metadata -> 'audit02a04_provisional_rollback' ->> 'kind', '') <> 'line_item_persist_failed'
-     or coalesce(v.metadata -> 'audit02a04_provisional_rollback' ->> 'source', '') <> 'sales_document_quote'
+  if lower(trim(coalesce(v.status, ''))) not in ('pending_payment', 'pending', 'cancelled') then
+    return jsonb_build_object('ok', false, 'booking_id', v.id, 'error', 'booking_not_unpaid_deletable_state');
+  end if;
+
+  if lower(trim(coalesce(v.status, ''))) = 'cancelled'
+     and (
+       coalesce(v.metadata -> 'audit02a04_provisional_rollback' ->> 'kind', '') <> 'line_item_persist_failed'
+       or coalesce(v.metadata -> 'audit02a04_provisional_rollback' ->> 'source', '') <> 'sales_document_quote'
+     )
   then
     return jsonb_build_object('ok', false, 'booking_id', v.id, 'error', 'not_provisional_line_item_rollback');
   end if;
@@ -410,6 +417,7 @@ as $financial_history$
       and (
         lower(trim(coalesce(b.status, ''))) = 'completed'
         or b.completed_at is not null
+        or b.cleaner_line_earnings_finalized_at is not null
         or b.marked_paid_by_admin_id is not null
         or b.zoho_invoice_id is not null
         or b.refunded_at is not null
