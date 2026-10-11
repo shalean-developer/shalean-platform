@@ -227,20 +227,27 @@ begin
         v_booking_revenue_zar := greatest(coalesce(r.total_price, 0), 0);
 
         for v_redemption in
+          select id, promotion_id, discount_zar
+          from public.promotion_redemptions
+          where booking_id = r.id
+            and status = 'applied'
+          for update
+        loop
           update public.promotion_redemptions
              set status = 'reversed'
-           where booking_id = r.id
-             and status = 'applied'
-          returning promotion_id, discount_zar
-        loop
-          update public.promotions
-             set redemptions_count = greatest(0, coalesce(redemptions_count, 0) - 1),
-                 budget_spent_zar = greatest(0, coalesce(budget_spent_zar, 0) - greatest(coalesce(v_redemption.discount_zar, 0), 0)),
-                 revenue_generated_zar = greatest(0, coalesce(revenue_generated_zar, 0) - v_booking_revenue_zar),
-                 updated_at = now()
-           where id = v_redemption.promotion_id;
+           where id = v_redemption.id
+             and status = 'applied';
 
-          v_promotions_reversed := v_promotions_reversed + 1;
+          if found then
+            update public.promotions
+               set redemptions_count = greatest(0, coalesce(redemptions_count, 0) - 1),
+                   budget_spent_zar = greatest(0, coalesce(budget_spent_zar, 0) - greatest(coalesce(v_redemption.discount_zar, 0), 0)),
+                   revenue_generated_zar = greatest(0, coalesce(revenue_generated_zar, 0) - v_booking_revenue_zar),
+                   updated_at = now()
+             where id = v_redemption.promotion_id;
+
+            v_promotions_reversed := v_promotions_reversed + 1;
+          end if;
         end loop;
 
         update public.bookings
