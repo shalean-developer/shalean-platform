@@ -12,6 +12,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("booking_delete_blocked_financial_history");
     expect(sql).toContain("lower(trim(coalesce(old.status, ''))) = 'completed'");
     expect(sql).toContain("old.completed_at is not null");
+    expect(sql).toContain("old.cleaner_line_earnings_finalized_at is not null");
     expect(sql).toContain("old.marked_paid_by_admin_id is not null");
     expect(sql).toContain("old.zoho_invoice_id is not null");
     expect(sql).toContain("old.refunded_at is not null");
@@ -125,6 +126,15 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain("declaredTotalCents: quotedTotalZar * 100");
   });
 
+  it("allows ordinary unpaid invoice bookings through the atomic cleanup boundary", () => {
+    const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
+
+    expect(sql).toContain("not in ('pending_payment', 'pending', 'cancelled')");
+    expect(sql).toContain("booking_not_unpaid_deletable_state");
+    expect(sql).toContain("lower(trim(coalesce(v.status, ''))) = 'cancelled'");
+    expect(sql).toContain("not_provisional_line_item_rollback");
+  });
+
   it("keeps the sales-document cleanup inside one database transaction boundary", () => {
     const sql = read("../../supabase/migrations/20261011080000_audit_02a04_financial_booking_delete_guard.sql");
 
@@ -218,6 +228,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("coalesce(b.total_paid_zar, 0) > 0");
     expect(sql).toContain("b.payment_reference_external");
     expect(sql).toContain("b.completed_at is not null");
+    expect(sql).toContain("b.cleaner_line_earnings_finalized_at is not null");
     expect(sql).toContain("from public.booking_cleaner_earnings_snapshot_lines bcesl");
     expect(sql).toContain("from public.booking_line_items bli");
   });
@@ -337,6 +348,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
 
     expect(seed).toContain('"neutralize seed booking financial mirrors"');
     expect(seed).toContain("completed_at: null");
+    expect(seed).toContain("cleaner_line_earnings_finalized_at: null");
   });
 
   it("provides a guarded rollback for an unclaimed recurring prepaid occurrence", () => {
