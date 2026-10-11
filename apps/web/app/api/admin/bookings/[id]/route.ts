@@ -1401,7 +1401,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   const { data: row, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, payment_status, is_monthly_billing_booking, marked_paid_by_admin_id, zoho_invoice_id, refunded_at, refund_status, payout_paid_at, payout_run_id, payment_completed_at, paid_at, monthly_invoice_id, sales_document_id, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_payout_cents, cleaner_bonus_cents, payout_earnings_cents, cleaner_earnings_total_cents, amount_paid_cents, deposit_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id, cleaner_id, date, time",
+      "id, status, payment_status, payment_reference_external, is_monthly_billing_booking, marked_paid_by_admin_id, zoho_invoice_id, refunded_at, refund_status, payout_paid_at, payout_run_id, payment_completed_at, paid_at, monthly_invoice_id, sales_document_id, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_payout_cents, cleaner_bonus_cents, payout_earnings_cents, cleaner_earnings_total_cents, amount_paid_cents, deposit_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id, cleaner_id, date, time",
     )
     .eq("id", id)
     .maybeSingle();
@@ -1412,6 +1412,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   const r = row as {
     status?: string | null;
     payment_status?: string | null;
+    payment_reference_external?: string | null;
     is_monthly_billing_booking?: boolean | null;
     marked_paid_by_admin_id?: string | null;
     zoho_invoice_id?: string | null;
@@ -1446,6 +1447,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     { data: linkedInventoryCost, error: linkedInventoryCostErr },
     { data: linkedTransportCost, error: linkedTransportCostErr },
     { data: linkedEarningsSnapshot, error: linkedEarningsSnapshotErr },
+    { data: linkedLineItemEarnings, error: linkedLineItemEarningsErr },
     { data: linkedPayment, error: linkedPaymentErr },
     { data: linkedCleanerEarning, error: linkedCleanerEarningErr },
     { data: linkedCleanerAdjustment, error: linkedCleanerAdjustmentErr },
@@ -1472,6 +1474,13 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     admin.from("inventory_movements").select("id").eq("booking_id", id).limit(1).maybeSingle(),
     admin.from("transport_cost_entries").select("id").eq("booking_id", id).limit(1).maybeSingle(),
     admin.from("booking_cleaner_earnings_snapshot").select("booking_id").eq("booking_id", id).limit(1).maybeSingle(),
+    admin
+      .from("booking_line_items")
+      .select("id")
+      .eq("booking_id", id)
+      .gt("cleaner_earnings_cents", 0)
+      .limit(1)
+      .maybeSingle(),
     admin
       .from("payment_transactions")
       .select("id")
@@ -1586,6 +1595,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     linkedInventoryCostErr ??
     linkedTransportCostErr ??
     linkedEarningsSnapshotErr ??
+    linkedLineItemEarningsErr ??
     linkedPaymentErr ??
     linkedCleanerEarningErr ??
     linkedCleanerAdjustmentErr ??
@@ -1619,6 +1629,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     linked_inventory_cost_id: linkedInventoryCost?.id ?? null,
     linked_transport_cost_id: linkedTransportCost?.id ?? null,
     linked_earnings_snapshot_booking_id: linkedEarningsSnapshot?.booking_id ?? null,
+    linked_line_item_earnings_id: linkedLineItemEarnings?.id ?? null,
     linked_cleaner_earning_id: linkedCleanerEarning?.id ?? null,
     linked_cleaner_earnings_adjustment_id: linkedCleanerAdjustment?.id ?? null,
     linked_cleaner_earnings_dispute_id: linkedCleanerDispute?.id ?? null,
