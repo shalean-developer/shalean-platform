@@ -253,6 +253,123 @@ $$;
 revoke all on function public.delete_unpaid_sales_document_booking(uuid) from public, anon, authenticated;
 grant execute on function public.delete_unpaid_sales_document_booking(uuid) to service_role;
 
+-- Atomic repair for a paid sales-document booking whose first line-item persistence
+-- failed and left the retained booking cancelled. Replacement line items and
+-- reactivation happen under the same booking row lock/transaction, so retries
+-- cannot duplicate financial lines.
+create or replace function public.repair_paid_cancelled_sales_document_booking(
+  p_invoice_id uuid,
+  p_line_items jsonb,
+  p_total_price numeric
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $paid_sales_repair$
+declare
+  v public.bookings%rowtype;
+  v_inserted integer := 0;
+begin
+  select *
+    into v
+    from public.bookings
+   where sales_document_id = p_invoice_id
+   for update;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'booking_not_found');
+  end if;
+
+  if lower(trim(coalesce(v.status, ''))) <> 'cancelled' then
+    return jsonb_build_object('ok', false, 'error', 'booking_not_cancelled', 'booking_id', v.id);
+  end if;
+
+  if not (
+    v.payment_completed_at is not null
+    or lower(trim(coalesce(v.payment_status, ''))) in ('paid', 'success', 'succeeded')
+    or coalesce(v.amount_paid_cents, 0) > 0
+    or coalesce(v.deposit_paid_cents, 0) > 0
+    or coalesce(v.total_paid_cents, 0) > 0
+    or coalesce(v.total_paid_zar, 0) > 0
+    or v.payment_transaction_id is not null
+    or exists (
+      select 1
+      from public.payment_transactions pt
+      where pt.booking_id = v.id
+         or (pt.entity_type = 'booking' and pt.entity_id = v.id)
+    )
+  ) then
+    return jsonb_build_object('ok', false, 'error', 'booking_not_paid', 'booking_id', v.id);
+  end if;
+
+  if jsonb_typeof(p_line_items) <> 'array' or jsonb_array_length(p_line_items) = 0 then
+    return jsonb_build_object('ok', false, 'error', 'line_items_required', 'booking_id', v.id);
+  end if;
+
+  delete from public.booking_line_items where booking_id = v.id;
+
+  insert into public.booking_line_items(
+    booking_id,
+    item_type,
+    slug,
+    name,
+    quantity,
+    unit_price_cents,
+    total_price_cents,
+    pricing_source,
+    metadata,
+    earns_cleaner,
+    cleaner_earnings_cents
+  )
+  select
+    v.id,
+    x.item_type,
+    x.slug,
+    x.name,
+    x.quantity,
+    x.unit_price_cents,
+    x.total_price_cents,
+    x.pricing_source,
+    coalesce(x.metadata, '{}'::jsonb),
+    coalesce(x.earns_cleaner, x.item_type <> 'adjustment'),
+    x.cleaner_earnings_cents
+  from jsonb_to_recordset(p_line_items) as x(
+    item_type text,
+    slug text,
+    name text,
+    quantity integer,
+    unit_price_cents integer,
+    total_price_cents integer,
+    pricing_source text,
+    metadata jsonb,
+    earns_cleaner boolean,
+    cleaner_earnings_cents integer
+  );
+
+  get diagnostics v_inserted = row_count;
+
+  if v_inserted = 0 then
+    raise exception 'paid_sales_document_repair_inserted_zero_lines'
+      using errcode = '23514';
+  end if;
+
+  update public.bookings
+     set status = 'pending',
+         dispatch_status = 'searching',
+         total_price = p_total_price,
+         updated_at = now()
+   where id = v.id;
+
+  return jsonb_build_object('ok', true, 'booking_id', v.id, 'line_items', v_inserted);
+end;
+$paid_sales_repair$;
+
+revoke all on function public.repair_paid_cancelled_sales_document_booking(uuid, jsonb, numeric)
+  from public, anon, authenticated;
+grant execute on function public.repair_paid_cancelled_sales_document_booking(uuid, jsonb, numeric)
+  to service_role;
+
 
 
 -- Read-only source-of-truth probe used before reversing an applied promotion.
