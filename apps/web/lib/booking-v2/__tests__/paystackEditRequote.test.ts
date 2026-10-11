@@ -61,10 +61,8 @@ describe("BOOKING-PAYSTACK-EDIT-REQUote — cancel/edit/reprice lifecycle", () =
     expect(replaySource).toContain("if (!settled) return false");
   });
 
-  it("rejects finalization of an intentionally edit-superseded expired booking", () => {
-    expect(upsertSource).toContain("isPaymentEditSupersededSnapshot");
-    expect(upsertSource).toContain("payment_edit_superseded");
+  it("rejects finalization of an unpaid terminal booking even when old metadata still names it", () => {
     expect(upsertSource).toContain("PAYMENT_NOT_PAYABLE");
-    expect(upsertSource).toContain("recoveryEnqueue: false");
+    expect(upsertSource).toContain("payment_completed_at");
   });
 });
