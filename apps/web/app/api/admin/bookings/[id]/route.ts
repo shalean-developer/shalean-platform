@@ -1401,7 +1401,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   const { data: row, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, payment_status, marked_paid_by_admin_id, payment_completed_at, paid_at, monthly_invoice_id, sales_document_id, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, amount_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id, cleaner_id, date, time",
+      "id, status, payment_status, marked_paid_by_admin_id, zoho_invoice_id, payment_completed_at, paid_at, monthly_invoice_id, sales_document_id, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, amount_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id, cleaner_id, date, time",
     )
     .eq("id", id)
     .maybeSingle();
@@ -1413,6 +1413,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     status?: string | null;
     payment_status?: string | null;
     marked_paid_by_admin_id?: string | null;
+    zoho_invoice_id?: string | null;
     payment_completed_at?: string | null;
     paid_at?: string | null;
     monthly_invoice_id?: string | null;
@@ -1443,6 +1444,8 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     { data: linkedRefundRecord, error: linkedRefundRecordErr },
     { data: linkedReferralRedemption, error: linkedReferralRedemptionErr },
     { data: linkedReferralEvent, error: linkedReferralEventErr },
+    { data: linkedAccountingInvoiceSync, error: linkedAccountingInvoiceSyncErr },
+    { data: linkedAccountingSync, error: linkedAccountingSyncErr },
     { data: linkedMoneyProposal, error: linkedMoneyProposalErr },
     { data: linkedEarningsAction, error: linkedEarningsActionErr },
     { data: linkedPromotionRedemption, error: linkedPromotionRedemptionErr },
@@ -1517,6 +1520,19 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
       .limit(1)
       .maybeSingle(),
     admin
+      .from("accounting_invoice_sync")
+      .select("id")
+      .or(`booking_id.eq.${id},and(entity_type.eq.booking,entity_id.eq.${id})`)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("accounting_sync_records")
+      .select("id")
+      .eq("entity_type", "booking")
+      .eq("entity_id", id)
+      .limit(1)
+      .maybeSingle(),
+    admin
       .from("admin_money_action_proposals")
       .select("id")
       .eq("booking_id", id)
@@ -1548,6 +1564,8 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     linkedRefundRecordErr ??
     linkedReferralRedemptionErr ??
     linkedReferralEventErr ??
+    linkedAccountingInvoiceSyncErr ??
+    linkedAccountingSyncErr ??
     linkedMoneyProposalErr ??
     linkedEarningsActionErr ??
     linkedPromotionRedemptionErr;
@@ -1570,6 +1588,8 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     linked_refund_record_id: linkedRefundRecord?.id ?? null,
     linked_referral_redemption_id: linkedReferralRedemption?.id ?? null,
     linked_referral_event_id: linkedReferralEvent?.id ?? null,
+    linked_accounting_invoice_sync_id: linkedAccountingInvoiceSync?.id ?? null,
+    linked_accounting_sync_id: linkedAccountingSync?.id ?? null,
     linked_money_proposal_id: linkedMoneyProposal?.id ?? null,
     linked_earnings_action_id: linkedEarningsAction?.id ?? null,
     linked_promotion_redemption_id: linkedPromotionRedemption?.id ?? null,
