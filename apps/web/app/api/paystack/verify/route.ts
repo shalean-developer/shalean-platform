@@ -728,12 +728,31 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
 
           const postPayment = await finalizeR0BookingPostPayment(adminPrePaystack, settled.bookingId);
           if (!postPayment.ok) {
+            const queued = await enqueueFailedJob("r0_credit_reconciliation", {
+              bookingId: settled.bookingId,
+              reference,
+            });
             await reportOperationalIssue(
-              "error",
+              queued ? "error" : "critical",
               "paystack/verify",
-              `R0 post-payment recovery failed: ${postPayment.error}`,
+              queued
+                ? `R0 post-payment recovery failed and was queued: ${postPayment.error}`
+                : `R0 post-payment recovery failed and enqueue failed: ${postPayment.error}`,
               { bookingId: settled.bookingId, reference },
             );
+            return NextResponse.json({
+              success: false,
+              ok: false,
+              paymentStatus: "success",
+              reference,
+              bookingId: settled.bookingId,
+              bookingInDatabase: true,
+              state: "payment_reconciliation_required",
+              error: `r0_post_payment_recovery_failed:${postPayment.error}`,
+              upsertError: `r0_post_payment_recovery_failed:${postPayment.error}`,
+              alreadyExists: true,
+              skipped: true,
+            } satisfies PaystackVerifyPostResponse, { status: 409 });
           }
         }
 
