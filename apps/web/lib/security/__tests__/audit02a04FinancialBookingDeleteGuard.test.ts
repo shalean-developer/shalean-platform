@@ -12,6 +12,10 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("booking_delete_blocked_financial_history");
     expect(sql).toContain("old.marked_paid_by_admin_id is not null");
     expect(sql).toContain("old.zoho_invoice_id is not null");
+    expect(sql).toContain("old.refunded_at is not null");
+    expect(sql).toContain("old.refund_status");
+    expect(sql).toContain("old.payout_paid_at is not null");
+    expect(sql).toContain("old.payout_run_id is not null");
     expect(sql).toContain("old.payment_transaction_id is not null");
     expect(sql).toContain("from public.payment_transactions pt");
     expect(sql).toContain("pt.booking_id = old.id");
@@ -105,6 +109,10 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(src).toContain("linked_earnings_action_id: linkedEarningsAction?.id ?? null");
     expect(src).toContain("linked_promotion_redemption_id: linkedPromotionRedemption?.id ?? null");
     expect(src).toContain("marked_paid_by_admin_id");
+    expect(src).toContain("refunded_at");
+    expect(src).toContain("refund_status");
+    expect(src).toContain("payout_paid_at");
+    expect(src).toContain("payout_run_id");
     expect(src).toContain("linked_cleaner_earnings_dispute_id: linkedCleanerDispute?.id ?? null");
   });
 
