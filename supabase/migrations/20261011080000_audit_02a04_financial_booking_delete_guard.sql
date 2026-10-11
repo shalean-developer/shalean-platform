@@ -31,6 +31,16 @@ begin
      )
      or exists (
        select 1
+       from public.inventory_movements im
+       where im.booking_id = old.id
+     )
+     or exists (
+       select 1
+       from public.transport_cost_entries tce
+       where tce.booking_id = old.id
+     )
+     or exists (
+       select 1
        from public.cleaning_credit_transactions cct
        where cct.booking_id = old.id
      )
@@ -84,6 +94,11 @@ begin
      )
      or exists (
        select 1
+       from public.booking_cleaner_earnings_snapshot bces
+       where bces.booking_id = old.id
+     )
+     or exists (
+       select 1
        from public.cleaner_earnings ce
        where ce.booking_id = old.id
          and lower(trim(coalesce(ce.status, ''))) in ('approved', 'processing', 'paid')
@@ -114,6 +129,9 @@ begin
      or lower(trim(coalesce(old.payout_status, ''))) in ('eligible', 'approved', 'processing', 'paid')
      or coalesce(old.payout_frozen_cents, 0) > 0
      or coalesce(old.display_earnings_cents, 0) > 0
+     or coalesce(old.cleaner_payout_cents, 0) > 0
+     or coalesce(old.cleaner_bonus_cents, 0) > 0
+     or coalesce(old.payout_earnings_cents, 0) > 0
      or old.paid_at is not null
   then
     raise exception 'booking_delete_blocked_financial_history'
