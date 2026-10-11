@@ -263,7 +263,7 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     const purgeEnd = sql.indexOf("revoke all on function public.purge_stale_pending_payment_bookings", purgeStart);
     const purge = sql.slice(purgeStart, purgeEnd);
 
-    expect(purge).toContain("v_redemption.metadata -> 'bookingRevenueZar'");
+    expect(purge).toContain("v_redemption.metadata ->> 'bookingRevenueZar'");
     expect(purge).toContain("v_promotion_revenue_unproven");
     expect(purge).toContain("single legacy row without original revenue evidence retains the");
     expect(purge).not.toContain("v_booking_revenue_zar := greatest(coalesce(v_total_price, 0), 0)");
