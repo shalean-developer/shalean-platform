@@ -34,27 +34,27 @@ describe("BOOKING-E2E-13A Cleaning Credit settlement authority", () => {
     expect(sql).toContain("status = 'settled'");
   });
 
-  it("blocks in-upsert persisted replay until Cleaning Credit is settled", () => {
+  it("quarantines unresolved replay credit so retry resumes the full post-persist pipeline", () => {
     const src = read("lib/booking/upsertBookingFromPaystack.ts");
     const replayPos = src.indexOf("skipped_already_persisted");
     const creditCheckPos = src.lastIndexOf('from("cleaning_credit_reservations")', replayPos);
+    const quarantinePos = src.lastIndexOf('update({ status: "payment_reconciliation_required" })', replayPos);
     const recoveryPos = src.lastIndexOf("recoveryEnqueue: true", replayPos);
 
     expect(replayPos).toBeGreaterThanOrEqual(0);
     expect(creditCheckPos).toBeGreaterThanOrEqual(0);
     expect(creditCheckPos).toBeLessThan(replayPos);
-    expect(recoveryPos).toBeGreaterThan(creditCheckPos);
+    expect(quarantinePos).toBeGreaterThan(creditCheckPos);
+    expect(recoveryPos).toBeGreaterThan(quarantinePos);
     expect(src).toContain("cleaning_credit_settlement_pending");
-    expect(src).toContain('input.paystackPersistSource === "retry"');
-    expect(src).toContain("retryCreditSettlement = await settleCleaningCreditForBooking");
-    expect(src).toContain("cleaning_credit_settlement_failed:");
+    expect(src).toContain('st === "payment_reconciliation_required" && input.paystackPersistSource === "retry"');
   });
 
   it("quarantines the paid booking when Cleaning Credit settlement cannot complete", () => {
     const src = read("lib/booking/upsertBookingFromPaystack.ts");
 
     expect(src).toContain("cleaning_credit_settlement_failed:");
-    expect(src).toContain('status: "payment_reconciliation_required"');
+    expect(src).toContain('update({ status: "payment_reconciliation_required" })');
     expect(src).toContain('reason: "finalization_failed"');
     expect(src).toContain("recoveryEnqueue: true");
   });
