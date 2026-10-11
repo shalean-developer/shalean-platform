@@ -294,7 +294,7 @@ export async function persistAdminMonthlyPreCompletionEarnings(params: {
       ok: false,
       error: eligibility.allowed
         ? `unexpected_earnings_mode:${eligibility.mode}`
-        : `precompletion_earnings_ineligible:${eligibility.reason}`,
+        : `precompletion_earnings_ineligible:${eligibility.skipReason}`,
     };
   }
 
