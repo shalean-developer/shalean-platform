@@ -1487,6 +1487,7 @@ async function resetSeedRows(admin) {
           cleaner_payout_cents: 0,
           cleaner_bonus_cents: 0,
           payout_earnings_cents: 0,
+          cleaner_earnings_total_cents: 0,
           amount_paid_cents: 0,
           deposit_paid_cents: 0,
           total_paid_cents: 0,
