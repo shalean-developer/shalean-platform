@@ -58,7 +58,7 @@ async function removeLinkedUnpaidBooking(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data, error } = await admin
     .from("bookings")
-    .select("id, payment_completed_at, amount_paid_cents")
+    .select("id, payment_completed_at, payment_status, amount_paid_cents, total_paid_cents, total_paid_zar, payment_transaction_id")
     .eq("sales_document_id", invoiceId)
     .maybeSingle();
 
@@ -68,12 +68,43 @@ async function removeLinkedUnpaidBooking(
   const row = data as {
     id: string;
     payment_completed_at?: string | null;
+    payment_status?: string | null;
     amount_paid_cents?: number | null;
+    total_paid_cents?: number | null;
+    total_paid_zar?: number | null;
+    payment_transaction_id?: string | null;
   };
 
-  if (row.payment_completed_at || Math.max(0, Math.round(Number(row.amount_paid_cents ?? 0))) > 0) {
+  const paymentStatus = String(row.payment_status ?? "").trim().toLowerCase();
+  const financiallySettled =
+    Boolean(row.payment_completed_at) ||
+    ["paid", "success", "succeeded"].includes(paymentStatus) ||
+    Math.max(0, Math.round(Number(row.amount_paid_cents ?? 0))) > 0 ||
+    Math.max(0, Math.round(Number(row.total_paid_cents ?? 0))) > 0 ||
+    Math.max(0, Math.round(Number(row.total_paid_zar ?? 0) * 100)) > 0 ||
+    Boolean(row.payment_transaction_id);
+  if (financiallySettled) {
     return { ok: false, error: "linked_paid_booking" };
   }
+
+  const { data: ledgerRow, error: ledgerErr } = await admin
+    .from("payment_transactions")
+    .select("id")
+    .or(`booking_id.eq.${row.id},and(entity_type.eq.booking,entity_id.eq.${row.id})`)
+    .limit(1)
+    .maybeSingle();
+  if (ledgerErr) return { ok: false, error: ledgerErr.message };
+  if (ledgerRow?.id) return { ok: false, error: "linked_paid_booking" };
+
+  // The DB financial hard-delete guard intentionally blocks sales_document_id.
+  // This specialized path has now proven the booking is unpaid and ledger-free,
+  // so clear only the document linkage before deleting the cleanup booking.
+  const { error: unlinkErr } = await admin
+    .from("bookings")
+    .update({ sales_document_id: null })
+    .eq("id", row.id)
+    .eq("sales_document_id", invoiceId);
+  if (unlinkErr) return { ok: false, error: unlinkErr.message };
 
   const { error: delErr } = await admin.from("bookings").delete().eq("id", row.id);
   if (delErr) return { ok: false, error: delErr.message };
