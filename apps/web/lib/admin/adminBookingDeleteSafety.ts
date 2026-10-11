@@ -12,7 +12,9 @@ export type AdminBookingDeleteBlockCode =
   | "admin_booking_delete_amount_paid_present"
   | "admin_booking_delete_total_paid_present"
   | "admin_booking_delete_payment_transaction_linked"
-  | "admin_booking_delete_expense_linked";
+  | "admin_booking_delete_expense_linked"
+  | "admin_booking_delete_cleaner_earnings_linked"
+  | "admin_booking_delete_cleaner_earnings_adjustment_linked";
 
 export type AdminBookingDeleteSafetyRow = {
   status?: string | null;
@@ -30,6 +32,8 @@ export type AdminBookingDeleteSafetyRow = {
   total_paid_zar?: number | string | null;
   payment_transaction_id?: string | null;
   linked_expense_id?: string | null;
+  linked_cleaner_earning_id?: string | null;
+  linked_cleaner_earnings_adjustment_id?: string | null;
 };
 
 export type AdminBookingDeleteBlock = {
@@ -160,6 +164,20 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
     blocks.push({
       code: "admin_booking_delete_expense_linked",
       message: "Bookings linked to an expense cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_cleaner_earning_id)) {
+    blocks.push({
+      code: "admin_booking_delete_cleaner_earnings_linked",
+      message: "Bookings linked to approved/processing/paid cleaner earnings cannot be hard-deleted.",
+    });
+  }
+
+  if (hasText(row.linked_cleaner_earnings_adjustment_id)) {
+    blocks.push({
+      code: "admin_booking_delete_cleaner_earnings_adjustment_linked",
+      message: "Bookings linked to cleaner earnings adjustments cannot be hard-deleted.",
     });
   }
 
