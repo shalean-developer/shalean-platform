@@ -1862,6 +1862,16 @@ export async function POST(request: Request) {
       });
     }
 
+    // Persist roster + assigned/pre-completion earnings before any completed
+    // transition. The DB completion constraint requires display earnings to
+    // exist for current-model completed bookings.
+    await syncAdminPreferredCleanerRoster(admin, newBookingId, selectedCleanerIds);
+    await runAdminBookingPostCreateNormalizationAndEarnings(
+      admin,
+      newBookingId,
+      "admin_booking_create_monthly_precompletion",
+    );
+
     if (adminMarkCompleted && completedAtIso) {
       const completed = await promoteAdminMonthlyBookingToCompleted({
         admin,
@@ -1905,8 +1915,15 @@ export async function POST(request: Request) {
       }
     }
 
-    await runAdminBookingPostCreateNormalizationAndEarnings(admin, newBookingId, "admin_booking_create_monthly");
-    await syncAdminPreferredCleanerRoster(admin, newBookingId, selectedCleanerIds);
+    if (adminMarkCompleted) {
+      // After the guarded assigned→completed transition, run the completed
+      // earnings/ledger path now that the completion constraint is satisfied.
+      await runAdminBookingPostCreateNormalizationAndEarnings(
+        admin,
+        newBookingId,
+        "admin_booking_create_monthly_completed",
+      );
+    }
 
     if (adminMarkCompleted) {
       const { data: reviewBooking, error: reviewBookingErr } = await admin
