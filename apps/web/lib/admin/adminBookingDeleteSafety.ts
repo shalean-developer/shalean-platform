@@ -316,7 +316,7 @@ export function assertAdminBookingDeleteSafe(row: AdminBookingDeleteSafetyRow): 
   if (hasText(row.linked_cleaner_earning_id)) {
     blocks.push({
       code: "admin_booking_delete_cleaner_earnings_linked",
-      message: "Bookings linked to approved/processing/paid cleaner earnings cannot be hard-deleted.",
+      message: "Bookings linked to cleaner earnings ledger rows cannot be hard-deleted.",
     });
   }
 
