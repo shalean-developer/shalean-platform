@@ -450,6 +450,66 @@ $seed_credit_reset$;
 revoke all on function public.reset_seed_cleaning_credit_for_booking(uuid) from public, anon, authenticated;
 grant execute on function public.reset_seed_cleaning_credit_for_booking(uuid) to service_role;
 
+
+-- Governed non-production seed-reset inventory helper. The original movement
+-- and stock quantity are reconciled in one transaction, making retries idempotent.
+create or replace function public.reset_seed_inventory_movement(p_movement_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $seed_inventory_reset$
+declare
+  v_movement public.inventory_movements%rowtype;
+  v_booking_reference text;
+begin
+  select *
+    into v_movement
+    from public.inventory_movements
+   where id = p_movement_id
+   for update;
+
+  if not found then
+    return jsonb_build_object('ok', true, 'status', 'already_removed');
+  end if;
+
+  if v_movement.booking_id is null then
+    return jsonb_build_object('ok', false, 'error', 'movement_not_booking_scoped');
+  end if;
+
+  select paystack_reference
+    into v_booking_reference
+    from public.bookings
+   where id = v_movement.booking_id
+   for update;
+
+  if not found or coalesce(v_booking_reference, '') not like 'DEVSEED-%' then
+    return jsonb_build_object('ok', false, 'error', 'not_devseed_booking');
+  end if;
+
+  perform 1
+    from public.inventory_items
+   where id = v_movement.item_id
+   for update;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'inventory_item_not_found');
+  end if;
+
+  update public.inventory_items
+     set quantity_on_hand = quantity_on_hand - v_movement.quantity_delta,
+         updated_at = now()
+   where id = v_movement.item_id;
+
+  delete from public.inventory_movements where id = v_movement.id;
+
+  return jsonb_build_object('ok', true, 'status', 'reversed_and_removed');
+end;
+$seed_inventory_reset$;
+
+revoke all on function public.reset_seed_inventory_movement(uuid) from public, anon, authenticated;
+grant execute on function public.reset_seed_inventory_movement(uuid) to service_role;
+
 -- Keep the pending-payment purge healthy after adding the delete guard.
 -- Process candidates independently so one protected financial row cannot roll
 -- back deletion of unrelated abandoned checkout rows.
