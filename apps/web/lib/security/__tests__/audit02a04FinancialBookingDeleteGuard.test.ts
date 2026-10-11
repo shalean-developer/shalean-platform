@@ -400,6 +400,8 @@ describe("AUDIT-02A04 financial booking hard-delete guard", () => {
     expect(sql).toContain("function public.preflight_seed_financial_reset");
     expect(sql).toContain("referral_credit_already_spent");
     expect(sql).toContain("promotion_original_revenue_unproven");
+    expect(sql).toContain("promotion_counter_reversal_unproven");
+    expect(sql).toContain("group by user_id");
     expect(seed).toContain('"preflight seed financial reset"');
     expect(seed).toContain('admin.rpc("preflight_seed_financial_reset"');
     expect(seed.indexOf('admin.rpc("preflight_seed_financial_reset"')).toBeLessThan(
