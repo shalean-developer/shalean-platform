@@ -74,6 +74,15 @@ describe("AUDIT-02A07 historical Booking V2 line-item repair", () => {
     expect(built.items.every((item) => item.earns_cleaner === false)).toBe(true);
   });
 
+  it("fails closed for unfinalized solo targets unless they are cancelled with no earnings history", () => {
+    const root = path.resolve(process.cwd(), "../..");
+    const source = readFileSync(path.join(root, "apps/web/scripts/audit02a07HistoricalLineItems.ts"), "utf8");
+    expect(source).toContain('status !== "cancelled" || hasEarningsState');
+    expect(source).toContain("solo historical repair requires cancelled booking with no earnings/payout history");
+    expect(source).toContain('historicalSafetyClass:');
+    expect(source).toContain('"cancelled_solo_no_earnings_history"');
+  });
+
   it("keeps the R19 mismatch repair additive and earnings-neutral", () => {
     const root = path.resolve(process.cwd(), "../..");
     const source = readFileSync(path.join(root, "apps/web/scripts/audit02a07HistoricalLineItems.ts"), "utf8");

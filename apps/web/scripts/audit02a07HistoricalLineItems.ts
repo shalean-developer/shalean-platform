@@ -58,7 +58,7 @@ const admin = createClient(url, key, { auth: { persistSession: false } });
 for (const bookingId of ids) {
   const { data: booking, error } = await admin
     .from("bookings")
-    .select("id, total_price, booking_snapshot, pricing_summary, price_breakdown, is_team_job, cleaner_earnings_total_cents, cleaner_line_earnings_finalized_at")
+    .select("id, status, total_price, booking_snapshot, pricing_summary, price_breakdown, is_team_job, cleaner_earnings_total_cents, display_earnings_cents, payout_earnings_cents, internal_earnings_cents, cleaner_line_earnings_finalized_at, payout_status, payout_paid_at, payout_frozen_cents")
     .eq("id", bookingId)
     .maybeSingle();
   if (error || !booking) throw new Error(`${bookingId}: ${error?.message ?? "not found"}`);
@@ -115,6 +115,24 @@ for (const bookingId of ids) {
     throw new Error(`${bookingId}: expected zero existing line items`);
   }
 
+  if (booking.is_team_job !== true) {
+    const status = String(booking.status ?? "").trim().toLowerCase();
+    const hasEarningsState =
+      booking.cleaner_line_earnings_finalized_at != null ||
+      Number(booking.cleaner_earnings_total_cents ?? 0) !== 0 ||
+      Number(booking.display_earnings_cents ?? 0) !== 0 ||
+      Number(booking.payout_earnings_cents ?? 0) !== 0 ||
+      Number(booking.internal_earnings_cents ?? 0) !== 0 ||
+      String(booking.payout_status ?? "").trim().toLowerCase() !== "pending" ||
+      booking.payout_paid_at != null ||
+      booking.payout_frozen_cents != null;
+    if (status !== "cancelled" || hasEarningsState) {
+      throw new Error(
+        `${bookingId}: solo historical repair requires cancelled booking with no earnings/payout history`,
+      );
+    }
+  }
+
   const built = buildAudit02A07BookingLineItems({
     bookingId,
     declaredTotalCents,
@@ -144,5 +162,9 @@ for (const bookingId of ids) {
     declaredTotalCents,
     deltaAfterCents: afterTotalCents - declaredTotalCents,
     cleanerEarningsDeltaCents: 0,
+    historicalSafetyClass:
+      booking.is_team_job === true
+        ? "team_existing_payout_history_preserved"
+        : "cancelled_solo_no_earnings_history",
   }));
 }
