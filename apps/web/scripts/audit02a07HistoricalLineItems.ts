@@ -42,30 +42,40 @@ const TARGET_IDS = new Set([
 ]);
 
 const MISMATCH_ID = "e6a876b3-81fa-4da4-95d5-9f9a467ae970";
-const CANONICAL_PRODUCTION_PROJECT_REF = "paqjwfulwywtsyyvdxrq";
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !key) throw new Error("Missing Supabase URL/service role configuration.");
 
 const apply = process.argv.includes("--apply");
 if (apply) {
-  let configuredProjectRef = "";
-  try {
-    configuredProjectRef = new URL(url).hostname.split(".")[0]?.trim().toLowerCase() ?? "";
-  } catch {
-    throw new Error("AUDIT-02A07 apply blocked: invalid Supabase URL.");
-  }
+  const productionProjectRef = String(process.env.AUDIT_02A07_PRODUCTION_PROJECT_REF ?? "")
+    .trim()
+    .toLowerCase();
   const expectedProjectRef = String(process.env.AUDIT_02A07_EXPECTED_PROJECT_REF ?? "")
     .trim()
     .toLowerCase();
-  if (expectedProjectRef !== CANONICAL_PRODUCTION_PROJECT_REF) {
+
+  if (!/^[a-z0-9-]+$/.test(productionProjectRef)) {
     throw new Error(
-      `AUDIT-02A07 apply blocked: set AUDIT_02A07_EXPECTED_PROJECT_REF=${CANONICAL_PRODUCTION_PROJECT_REF}.`,
+      "AUDIT-02A07 apply blocked: AUDIT_02A07_PRODUCTION_PROJECT_REF is missing or invalid.",
     );
   }
-  if (configuredProjectRef !== CANONICAL_PRODUCTION_PROJECT_REF) {
+  if (expectedProjectRef !== productionProjectRef) {
     throw new Error(
-      `AUDIT-02A07 apply blocked: configured Supabase project ${configuredProjectRef || "<unknown>"} is not production ${CANONICAL_PRODUCTION_PROJECT_REF}.`,
+      "AUDIT-02A07 apply blocked: expected project confirmation does not match configured production project.",
+    );
+  }
+
+  let configuredHostname = "";
+  try {
+    configuredHostname = new URL(url).hostname.trim().toLowerCase();
+  } catch {
+    throw new Error("AUDIT-02A07 apply blocked: invalid Supabase URL.");
+  }
+  const trustedHostname = `${productionProjectRef}.supabase.co`;
+  if (configuredHostname !== trustedHostname) {
+    throw new Error(
+      `AUDIT-02A07 apply blocked: configured Supabase hostname ${configuredHostname || "<unknown>"} does not match trusted production host.`,
     );
   }
 }

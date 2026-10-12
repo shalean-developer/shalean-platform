@@ -100,9 +100,11 @@ describe("AUDIT-02A07 historical Booking V2 line-item repair", () => {
     expect((source.match(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi) ?? []).length).toBeGreaterThanOrEqual(26);
     expect(source).toContain("AUDIT-02A07 apply requires exactly one --booking-id=<uuid>.");
     expect(source).toContain("AUDIT-02A07 apply blocked. Set AUDIT_02A07_APPLY=YES.");
-    expect(source).toContain('CANONICAL_PRODUCTION_PROJECT_REF = "paqjwfulwywtsyyvdxrq"');
+    expect(source).not.toMatch(/paqjwfulwywtsyyvdxrq/);
+    expect(source).toContain("AUDIT_02A07_PRODUCTION_PROJECT_REF");
     expect(source).toContain("AUDIT_02A07_EXPECTED_PROJECT_REF");
-    expect(source).toContain("configured Supabase project");
+    expect(source).toContain('const trustedHostname = `${productionProjectRef}.supabase.co`');
+    expect(source).toContain("configured Supabase hostname");
     expect(source).toContain('admin.rpc("apply_audit_02a07_historical_line_items"');
   });
 
