@@ -6,6 +6,7 @@ import {
 } from "@/lib/payout/bookingPayableForWeeklyBatch";
 import { isYmdInInclusiveRange, weeklyBatchDayYmd } from "@/lib/payout/weekBounds";
 import { fetchAllPayoutRows, payoutQueryChunks } from "@/lib/payout/payoutQueryPagination";
+import { hydrateMissingMemberInvoiceStatuses } from "@/lib/payout/memberCandidateInvoiceStatuses";
 
 export type RosterMemberWeeklyPayoutCandidate = {
   id: string;
@@ -69,6 +70,13 @@ export async function listRosterMemberWeeklyPayoutCandidates(params: {
     if (row.id) bookingById.set(row.id, row);
   }
 
+  const effectiveInvoiceStatusById = await hydrateMissingMemberInvoiceStatuses(
+    admin,
+    [...bookingById.values()],
+    invoiceStatusById,
+  );
+  if (effectiveInvoiceStatusById === null) return [];
+
   const out: RosterMemberWeeklyPayoutCandidate[] = [];
   for (const raw of memberRows) {
     const member = raw as {
@@ -87,7 +95,7 @@ export async function listRosterMemberWeeklyPayoutCandidates(params: {
     const ymd = weeklyBatchDayYmd(booking);
     if (!ymd || !isYmdInInclusiveRange(ymd, periodStart, periodEnd)) continue;
 
-    const gate = bookingPayableForWeeklyBatch(booking, invoiceStatusById);
+    const gate = bookingPayableForWeeklyBatch(booking, effectiveInvoiceStatusById);
     if (!gate.payable) continue;
 
     const payoutCents = Math.max(0, Math.floor(Number(member.payout_cents) || 0));
