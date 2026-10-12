@@ -22,6 +22,8 @@ describe("AUDIT-03A02-04 viewer payout read-model convergence", () => {
       "app/api/cleaner/earnings/route.ts",
       "app/api/cleaner/completed-jobs-month/route.ts",
       "app/api/cleaner/jobs/[id]/route.ts",
+      "lib/cleaner/applyPreviewEarningsToCleanerJobRows.ts",
+      "app/api/cleaner/dashboard/route.ts",
     ]) {
       const source = read(path);
       expect(source).toContain("fetchViewerPayoutByBookingIds");
@@ -42,4 +44,22 @@ describe("AUDIT-03A02-04 viewer payout read-model convergence", () => {
     );
     expect(source).toContain("viewer_payout_cents: viewerPayoutByBooking.get(bookingId) ?? null");
   });
+
+  it("jobs feed hydrates paired-roster payouts through the shared preview helper, including lite mode", () => {
+    const helper = read("lib/cleaner/applyPreviewEarningsToCleanerJobRows.ts");
+    const jobs = read("app/api/cleaner/jobs/route.ts");
+    expect(helper).toContain("fetchViewerPayoutByBookingIds");
+    expect(helper).not.toContain('from("team_job_member_payouts")');
+    expect(jobs).toContain("const liteOut = await applyPreviewEarningsToCleanerJobRows");
+    expect(jobs).toContain("maxPreviews: 0");
+  });
+
+  it("dashboard summary totals use canonical viewer payouts and suppress removed attribution", () => {
+    const source = read("app/api/cleaner/dashboard/route.ts");
+    expect(source).toContain("fetchViewerPayoutByBookingIds");
+    expect(source).toContain("bookingHasActivePayoutAttributionRemoval(row)");
+    expect(source).toContain("viewer_payout_cents: viewerPayoutByBooking.get(bookingId) ?? null");
+    expect(source).toContain("summaryRows");
+  });
+
 });

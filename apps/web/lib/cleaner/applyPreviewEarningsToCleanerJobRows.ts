@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveCleanerDashboardEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { previewDisplayEarningsCentsForCleanerJob } from "@/lib/payout/persistCleanerPayout";
 import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
+import { fetchViewerPayoutByBookingIds } from "@/lib/cleaner/fetchViewerPayoutByBookingIds";
 
 /** Default cap for sequential `previewDisplayEarningsCentsForCleanerJob` calls per HTTP request. */
 export const DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP = 50;
@@ -53,31 +54,14 @@ export async function applyPreviewEarningsToCleanerJobRows(
   let used = 0;
   const out: Record<string, unknown>[] = [];
 
-  const teamBookingIds = [
+  const bookingIds = [
     ...new Set(
       params.rows
-        .filter((row) => row.is_team_job === true)
         .map((row) => String(row.id ?? "").trim())
         .filter(Boolean),
     ),
   ];
-  const viewerTeamPayoutByBooking = new Map<string, number>();
-  if (teamBookingIds.length > 0) {
-    const { data: viewerRows, error: viewerRowsError } = await admin
-      .from("team_job_member_payouts")
-      .select("booking_id, payout_cents")
-      .eq("cleaner_id", cleanerId)
-      .in("booking_id", teamBookingIds);
-    if (!viewerRowsError) {
-      for (const raw of viewerRows ?? []) {
-        const bid = String((raw as { booking_id?: string | null }).booking_id ?? "").trim();
-        const cents = Number((raw as { payout_cents?: number | null }).payout_cents);
-        if (bid && Number.isFinite(cents) && cents >= 0) {
-          viewerTeamPayoutByBooking.set(bid, Math.round(cents));
-        }
-      }
-    }
-  }
+  const viewerPayoutByBooking = await fetchViewerPayoutByBookingIds(admin, cleanerId, bookingIds);
 
   for (const j of params.rows) {
     const id = String(j.id ?? "").trim();
@@ -95,7 +79,7 @@ export async function applyPreviewEarningsToCleanerJobRows(
       });
       continue;
     }
-    const viewerPayoutCents = id ? viewerTeamPayoutByBooking.get(id) : undefined;
+    const viewerPayoutCents = id ? viewerPayoutByBooking.get(id) : undefined;
     const resolved = resolvedEarningsCentsFromWireRow(
       viewerPayoutCents == null ? j : { ...j, viewer_payout_cents: viewerPayoutCents },
       cleanerId,

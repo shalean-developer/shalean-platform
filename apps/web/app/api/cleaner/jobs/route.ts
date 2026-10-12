@@ -372,5 +372,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ jobs: stripInternalMetadata(out) });
   }
 
-  return NextResponse.json({ jobs: stripInternalMetadata(jobsWithPairedContext) });
+  const liteOut = await applyPreviewEarningsToCleanerJobRows(admin, {
+    cleanerId: viewerCleanerId,
+    rows: jobsWithPairedContext,
+    maxPreviews: 0,
+  });
+  return NextResponse.json({ jobs: stripInternalMetadata(liteOut) });
 }
