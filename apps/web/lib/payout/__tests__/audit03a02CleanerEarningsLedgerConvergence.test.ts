@@ -1,0 +1,59 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+
+describe("AUDIT-03A02-02 cleaner earnings ledger convergence", () => {
+  const source = readFileSync(
+    join(
+      process.cwd(),
+      "../../supabase/migrations/20261012133000_audit_03a02_02_cleaner_earnings_ledger_convergence.sql",
+    ),
+    "utf8",
+  );
+
+  it("atomically syncs only existing pending undisbursemented ledger rows", () => {
+    expect(source).toContain("trg_sync_pending_cleaner_earnings_from_booking_update");
+    expect(source).toContain("v_ledger_status = 'pending'");
+    expect(source).toContain("v_disbursement_id is null");
+    expect(source).toContain("amount_cents = greatest(coalesce(new.cleaner_earnings_total_cents, 0), 0)");
+  });
+
+  it("checks locked ledger history before finalized-earnings early returns", () => {
+    const lockCheck = source.indexOf("v_ledger_status <> 'pending'");
+    const finalizedReturn = source.indexOf("new.cleaner_line_earnings_finalized_at is null");
+    expect(lockCheck).toBeGreaterThan(-1);
+    expect(finalizedReturn).toBeGreaterThan(-1);
+    expect(lockCheck).toBeLessThan(finalizedReturn);
+    expect(source).toContain("locked cleaner earnings ledger conflicts with booking");
+  });
+
+  it("fails closed for paid/run-locked or locked child payout rails", () => {
+    expect(source).toContain("v_payout_locked :=");
+    expect(source).toContain("v_payout_run_id is not null");
+    expect(source).toContain("v_payout_paid_at is not null");
+    expect(source).toContain("v_child_payout_run_id is not null");
+    expect(source).toContain("v_child_payout_status not in ('pending', 'frozen')");
+  });
+
+  it("hard-allowlists only the two proven current-model repair bookings", () => {
+    expect(source).toContain("c98cd9e2-e295-47af-8bcf-faf90120d751");
+    expect(source).toContain("39a26e1d-b8ba-433e-9427-ed61c96fbe6c");
+    expect(source).toContain("booking outside AUDIT-03A02-02 allowlist");
+  });
+
+  it("requires independent Aug 23 summary and earnings-snapshot evidence", () => {
+    expect(source).toContain("jsonb_array_length(v_booking.earnings_summary -> 'per_cleaner_earnings') <> 1");
+    expect(source).toContain("booking_cleaner_earnings_snapshot");
+    expect(source).toContain("v_summary_total is distinct from 30000");
+    expect(source).toContain("v_snapshot_display is distinct from 30000");
+    expect(source).toContain("Aug 23 independent ownership/earnings evidence no longer converges");
+  });
+
+  it("does not mutate payout batches and keeps the repair service-role only", () => {
+    expect(source).not.toMatch(/update\s+public\.cleaner_payouts/i);
+    expect(source).not.toMatch(/update\s+public\.cleaner_payout_runs/i);
+    expect(source).toContain("service_role required");
+    expect(source).toContain("grant execute on function public.apply_audit_03a02_02_ledger_repair(uuid) to service_role");
+    expect(source).toContain("revoke all on function public.apply_audit_03a02_02_ledger_repair(uuid) from authenticated");
+  });
+});
