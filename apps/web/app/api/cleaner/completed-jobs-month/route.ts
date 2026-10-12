@@ -7,6 +7,7 @@ import {
 import { resolveCleanerDashboardEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { fetchViewerPayoutByBookingIds } from "@/lib/cleaner/fetchViewerPayoutByBookingIds";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -94,14 +95,31 @@ export async function GET(request: Request) {
     unique.set(id, raw);
   }
 
+  let viewerPayoutByBooking: Map<string, number>;
+  try {
+    viewerPayoutByBooking = await fetchViewerPayoutByBookingIds(admin, cleanerId, [...unique.keys()]);
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Could not load cleaner payout allocations." },
+      { status: 500 },
+    );
+  }
+
   let weeklyEarningsCents = 0;
   let monthlyEarningsCents = 0;
 
   for (const row of unique.values()) {
     const date = String(row.date ?? "").slice(0, 10);
+    const bookingId = String(row.id ?? "").trim();
     const cents = Math.max(
       0,
-      resolveCleanerDashboardEarningsCents(row as Record<string, unknown>, cleanerId),
+      resolveCleanerDashboardEarningsCents(
+        {
+          ...(row as Record<string, unknown>),
+          viewer_payout_cents: viewerPayoutByBooking.get(bookingId) ?? null,
+        },
+        cleanerId,
+      ),
     );
     monthlyEarningsCents += cents;
     if (date >= ranges.weekFrom && date < ranges.weekTo) {
