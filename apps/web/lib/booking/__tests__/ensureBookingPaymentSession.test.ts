@@ -168,6 +168,75 @@ describe("ensureBookingPaymentSession", () => {
     __resetEnsureBookingPaymentSessionInflightForTests();
   });
 
+  it("does not treat lifecycle status alone as paid", async () => {
+    const { admin } = buildAdmin({
+      id: BOOKING_ID,
+      status: "completed",
+      payment_status: "pending",
+      payment_completed_at: null,
+      paid_at: null,
+      paystack_reference: "legacy_unsettled",
+      payment_link: null,
+      payment_link_expires_at: null,
+      customer_email: "a@b.co.za",
+      customer_id: "22222222-2222-4222-8222-222222222222",
+      user_id: "22222222-2222-4222-8222-222222222222",
+      total_price: 400,
+      amount_paid_cents: 0,
+      total_paid_cents: 0,
+      total_paid_zar: 0,
+      price_snapshot: null,
+      booking_snapshot: {},
+      service: "Standard",
+      date: "2026-07-20",
+      time: "10:00",
+    });
+
+    const result = await ensureBookingPaymentSession(admin, {
+      bookingId: BOOKING_ID,
+      access: { kind: "owner", userId: "22222222-2222-4222-8222-222222222222" },
+    });
+
+    expect(result.status).toBe("failed");
+    if (result.status === "failed") {
+      expect(result.errorCode).toBe(PAYMENT_ERROR_CODES.PAYMENT_NOT_PAYABLE);
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps legacy compatibility when lifecycle rows have real collected cash", async () => {
+    const { admin } = buildAdmin({
+      id: BOOKING_ID,
+      status: "completed",
+      payment_status: null,
+      payment_completed_at: null,
+      paid_at: null,
+      paystack_reference: "legacy_cash",
+      payment_link: null,
+      payment_link_expires_at: null,
+      customer_email: "a@b.co.za",
+      customer_id: "22222222-2222-4222-8222-222222222222",
+      user_id: "22222222-2222-4222-8222-222222222222",
+      total_price: 400,
+      amount_paid_cents: 40000,
+      total_paid_cents: 40000,
+      total_paid_zar: 400,
+      price_snapshot: null,
+      booking_snapshot: {},
+      service: "Standard",
+      date: "2026-07-20",
+      time: "10:00",
+    });
+
+    const result = await ensureBookingPaymentSession(admin, {
+      bookingId: BOOKING_ID,
+      access: { kind: "owner", userId: "22222222-2222-4222-8222-222222222222" },
+    });
+
+    expect(result.status).toBe("paid");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("returns paid without initializing when booking already paid", async () => {
     const { admin } = buildAdmin({
       id: BOOKING_ID,
