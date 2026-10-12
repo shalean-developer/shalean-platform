@@ -66,7 +66,6 @@ jobs:
         run: |
           set -euo pipefail
           npm ci
-          npm install --no-save --package-lock=false --package-lock-only=false --ignore-scripts @tailwindcss/postcss@4.1.14
 
       - name: Build standalone staging runtime
         working-directory: apps/web

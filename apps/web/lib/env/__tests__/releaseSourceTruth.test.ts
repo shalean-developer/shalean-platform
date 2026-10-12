@@ -35,6 +35,16 @@ describe("MASTER-00A release source truth", () => {
     expect(workflow).not.toContain("git push --force origin HEAD:refs/heads/deploy/staging");
   });
 
+  it.each([
+    ".github/workflows/prebuilt-plesk-staging.yml",
+    ".github/workflows/prebuilt-plesk-production.yml",
+  ])("keeps governed prebuilt dependency installs lockfile-only in %s", (relativePath) => {
+    const workflow = readRepositoryFile(relativePath);
+    expect(workflow).toContain("npm ci");
+    expect(workflow).not.toContain("npm install --no-save");
+    expect(workflow).not.toContain("@tailwindcss/postcss@4.1.14");
+  });
+
   it("keeps production as the production build source and deploy/production as its artifact branch", () => {
     const workflow = readRepositoryFile(".github/workflows/prebuilt-plesk-production.yml");
     expect(workflow).toContain("- production");
