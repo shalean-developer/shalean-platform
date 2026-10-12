@@ -12,6 +12,7 @@ type BuildInput = {
   pricingSummary?: unknown;
   priceBreakdown?: unknown;
   isTeamJob?: boolean | null;
+  suppressCleanerEarnings?: boolean;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -89,7 +90,10 @@ export function buildAudit02A07BookingLineItems(
     return {
       ...item,
       pricing_source: AUDIT_02A07_PRICING_SOURCE,
-      earns_cleaner: input.isTeamJob === true ? false : !(isAdjustment || isCompanyOnly),
+      earns_cleaner:
+        input.suppressCleanerEarnings === true || input.isTeamJob === true
+          ? false
+          : !(isAdjustment || isCompanyOnly),
       metadata: {
         ...(item.metadata ?? {}),
         audit: "AUDIT-02A07",

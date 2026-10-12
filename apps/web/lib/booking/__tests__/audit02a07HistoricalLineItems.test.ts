@@ -49,6 +49,51 @@ describe("AUDIT-02A07 historical Booking V2 line-item repair", () => {
     expect(built.items.reduce((s, x) => s + x.total_price_cents, 0)).toBe(180200);
   });
 
+  it("can suppress cleaner earnings for historical detail reconstruction", () => {
+    const built = buildAudit02A07BookingLineItems({
+      bookingId: "33333333-3333-4333-8333-333333333333",
+      declaredTotalCents: 48600,
+      bookingSnapshot: {
+        pricingSummary: {
+          lineItems: [
+            { label: "Regular Cleaning (base)", amountZar: 250 },
+            { label: "3 bedrooms", amountZar: 90 },
+            { label: "3 bathrooms", amountZar: 105 },
+            { label: "Interior walls", amountZar: 35 },
+            { label: "VIP loyalty discount", amountZar: -24 },
+            { label: "Service fee", amountZar: 30 },
+          ],
+        },
+      },
+      isTeamJob: false,
+      suppressCleanerEarnings: true,
+    });
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    expect(built.items.reduce((sum, item) => sum + item.total_price_cents, 0)).toBe(48600);
+    expect(built.items.every((item) => item.earns_cleaner === false)).toBe(true);
+  });
+
+  it("fails closed for unfinalized solo targets unless they are cancelled with no earnings history", () => {
+    const root = path.resolve(process.cwd(), "../..");
+    const source = readFileSync(path.join(root, "apps/web/scripts/audit02a07HistoricalLineItems.ts"), "utf8");
+    expect(source).toContain('status !== "cancelled" || hasEarningsState');
+    expect(source).toContain("solo historical repair requires cancelled booking with no earnings/payout history");
+    expect(source).toContain('historicalSafetyClass:');
+    expect(source).toContain('"cancelled_solo_no_earnings_history"');
+  });
+
+  it("keeps the R19 mismatch repair additive and earnings-neutral", () => {
+    const root = path.resolve(process.cwd(), "../..");
+    const source = readFileSync(path.join(root, "apps/web/scripts/audit02a07HistoricalLineItems.ts"), "utf8");
+    expect(source).toContain('existingLine?.name !== "Recurring service"');
+    expect(source).toContain('existingLine?.pricing_source !== "exact_source_lines_v1"');
+    expect(source).toContain("cleaner_earnings_cents ?? 0) !== 30000");
+    expect(source).toContain("reconciliationCents !== 1900");
+    expect(source).toContain("plannedInsertEarnsCleaner: false");
+    expect(source).toContain("cleanerEarningsDeltaCents: 0");
+  });
+
   it("keeps the historical repair allowlist fixed at 26 and blocks apply before staging closeout", () => {
     const root = path.resolve(process.cwd(), "../..");
     const source = readFileSync(path.join(root, "apps/web/scripts/audit02a07HistoricalLineItems.ts"), "utf8");

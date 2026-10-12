@@ -58,28 +58,81 @@ const admin = createClient(url, key, { auth: { persistSession: false } });
 for (const bookingId of ids) {
   const { data: booking, error } = await admin
     .from("bookings")
-    .select("id, total_price, booking_snapshot, pricing_summary, price_breakdown, is_team_job")
+    .select("id, status, total_price, booking_snapshot, pricing_summary, price_breakdown, is_team_job, cleaner_earnings_total_cents, display_earnings_cents, payout_earnings_cents, internal_earnings_cents, cleaner_line_earnings_finalized_at, payout_status, payout_paid_at, payout_frozen_cents")
     .eq("id", bookingId)
     .maybeSingle();
   if (error || !booking) throw new Error(`${bookingId}: ${error?.message ?? "not found"}`);
 
   const { data: existing, error: lineError } = await admin
     .from("booking_line_items")
-    .select("id, total_price_cents")
+    .select("id, item_type, name, total_price_cents, pricing_source, earns_cleaner, cleaner_earnings_cents")
     .eq("booking_id", bookingId);
   if (lineError) throw new Error(`${bookingId}: ${lineError.message}`);
   const existingRows = existing ?? [];
   const existingTotalCents = existingRows.reduce((sum, row) => sum + Number(row.total_price_cents ?? 0), 0);
 
+  const declaredTotalCents = Math.round(Number(booking.total_price ?? 0) * 100);
+
   if (bookingId === MISMATCH_ID) {
-    if (existingRows.length !== 1 || existingTotalCents !== 46700) {
-      throw new Error(`${bookingId}: audited mismatch before-state changed`);
+    const existingLine = existingRows[0];
+    if (
+      existingRows.length !== 1 ||
+      existingTotalCents !== 46700 ||
+      existingLine?.item_type !== "base" ||
+      existingLine?.name !== "Recurring service" ||
+      existingLine?.pricing_source !== "exact_source_lines_v1" ||
+      existingLine?.earns_cleaner !== true ||
+      Number(existingLine?.cleaner_earnings_cents ?? 0) !== 30000 ||
+      Number(booking.cleaner_earnings_total_cents ?? 0) !== 30000 ||
+      !booking.cleaner_line_earnings_finalized_at
+    ) {
+      throw new Error(`${bookingId}: audited mismatch earnings before-state changed`);
     }
-  } else if (existingRows.length !== 0) {
+    const reconciliationCents = declaredTotalCents - existingTotalCents;
+    if (reconciliationCents !== 1900) {
+      throw new Error(`${bookingId}: audited mismatch delta changed`);
+    }
+    console.log(JSON.stringify({
+      mode: "dry-run",
+      bookingId,
+      evidenceKind: "preserve_finalized_earning_line_plus_adjustment",
+      beforeCount: 1,
+      beforeTotalCents: existingTotalCents,
+      beforeCleanerEarningsCents: 30000,
+      plannedInsertCount: 1,
+      plannedInsertTotalCents: reconciliationCents,
+      plannedInsertEarnsCleaner: false,
+      afterCount: 2,
+      afterTotalCents: declaredTotalCents,
+      declaredTotalCents,
+      deltaAfterCents: 0,
+      cleanerEarningsDeltaCents: 0,
+    }));
+    continue;
+  }
+
+  if (existingRows.length !== 0) {
     throw new Error(`${bookingId}: expected zero existing line items`);
   }
 
-  const declaredTotalCents = Math.round(Number(booking.total_price ?? 0) * 100);
+  if (booking.is_team_job !== true) {
+    const status = String(booking.status ?? "").trim().toLowerCase();
+    const hasEarningsState =
+      booking.cleaner_line_earnings_finalized_at != null ||
+      Number(booking.cleaner_earnings_total_cents ?? 0) !== 0 ||
+      Number(booking.display_earnings_cents ?? 0) !== 0 ||
+      Number(booking.payout_earnings_cents ?? 0) !== 0 ||
+      Number(booking.internal_earnings_cents ?? 0) !== 0 ||
+      String(booking.payout_status ?? "").trim().toLowerCase() !== "pending" ||
+      booking.payout_paid_at != null ||
+      booking.payout_frozen_cents != null;
+    if (status !== "cancelled" || hasEarningsState) {
+      throw new Error(
+        `${bookingId}: solo historical repair requires cancelled booking with no earnings/payout history`,
+      );
+    }
+  }
+
   const built = buildAudit02A07BookingLineItems({
     bookingId,
     declaredTotalCents,
@@ -87,19 +140,31 @@ for (const bookingId of ids) {
     pricingSummary: booking.pricing_summary,
     priceBreakdown: booking.price_breakdown,
     isTeamJob: booking.is_team_job,
+    suppressCleanerEarnings: true,
   });
   if (!built.ok) throw new Error(built.error);
+  if (built.items.some((item) => item.earns_cleaner !== false)) {
+    throw new Error(`${bookingId}: historical repair line may affect cleaner earnings`);
+  }
   const afterTotalCents = built.items.reduce((sum, item) => sum + item.total_price_cents, 0);
 
   console.log(JSON.stringify({
     mode: "dry-run",
     bookingId,
     evidenceKind: built.evidenceKind,
-    beforeCount: existingRows.length,
-    beforeTotalCents: existingTotalCents,
+    beforeCount: 0,
+    beforeTotalCents: 0,
+    plannedInsertCount: built.items.length,
+    plannedInsertTotalCents: afterTotalCents,
+    plannedInsertEarnsCleaner: false,
     afterCount: built.items.length,
     afterTotalCents,
     declaredTotalCents,
     deltaAfterCents: afterTotalCents - declaredTotalCents,
+    cleanerEarningsDeltaCents: 0,
+    historicalSafetyClass:
+      booking.is_team_job === true
+        ? "team_existing_payout_history_preserved"
+        : "cancelled_solo_no_earnings_history",
   }));
 }
