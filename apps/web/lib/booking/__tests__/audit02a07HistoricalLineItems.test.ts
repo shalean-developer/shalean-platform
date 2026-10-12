@@ -136,12 +136,14 @@ describe("AUDIT-02A07 historical Booking V2 line-item repair", () => {
     expect(migration).toContain("booking_outside_allowlist");
     expect(migration).toContain("solo_booking_not_earnings_safe");
     expect(migration).toContain("historical_line_must_not_earn_cleaner");
+    expect(migration).toContain("mismatch_booking_total_changed");
     expect(migration).toContain("mismatch_booking_financial_state_changed");
     expect(migration).toContain("mismatch_existing_line_state_changed");
     expect(migration).toContain("already_repaired");
     expect(migration).toContain("grant execute on function public.apply_audit_02a07_historical_line_items");
     expect(migration).toContain("to service_role");
     expect(source).toContain("earnings/payout state changed during repair");
+    expect(source).toContain("booking total changed during repair");
     expect(source).toContain('reconciliation: "PASS"');
   });
 

@@ -84,7 +84,7 @@ async function verifyApply(
 ): Promise<void> {
   const { data: bookingAfter, error: bookingAfterError } = await admin
     .from("bookings")
-    .select("cleaner_earnings_total_cents, display_earnings_cents, payout_earnings_cents, internal_earnings_cents, cleaner_line_earnings_finalized_at, payout_status, payout_paid_at, payout_frozen_cents")
+    .select("total_price, cleaner_earnings_total_cents, display_earnings_cents, payout_earnings_cents, internal_earnings_cents, cleaner_line_earnings_finalized_at, payout_status, payout_paid_at, payout_frozen_cents")
     .eq("id", bookingId)
     .maybeSingle();
   if (bookingAfterError || !bookingAfter) {
@@ -92,6 +92,10 @@ async function verifyApply(
   }
   if (bookingFinancialState(bookingAfter as Record<string, unknown>) !== beforeFinancialState) {
     throw new Error(`${bookingId}: earnings/payout state changed during repair`);
+  }
+  const afterDeclaredTotalCents = Math.round(Number((bookingAfter as { total_price?: number | string | null }).total_price ?? 0) * 100);
+  if (afterDeclaredTotalCents !== declaredTotalCents) {
+    throw new Error(`${bookingId}: booking total changed during repair`);
   }
 
   const { data: linesAfter, error: linesAfterError } = await admin

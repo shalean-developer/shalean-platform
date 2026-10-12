@@ -99,6 +99,10 @@ begin
       return jsonb_build_object('ok', true, 'already_repaired', true, 'line_count', 2, 'total_cents', 48600);
     end if;
 
+    if round(coalesce(v_booking.total_price,0)*100)::bigint <> 48600 then
+      return jsonb_build_object('ok', false, 'error', 'mismatch_booking_total_changed');
+    end if;
+
     if lower(coalesce(v_booking.status,'')) <> 'completed'
        or v_booking.is_team_job = true
        or coalesce(v_booking.cleaner_earnings_total_cents,0) <> 30000
