@@ -1,8 +1,12 @@
 # AUDIT-02A06 — Historical pricing-version provenance
 
-Status: **Closeout pending governance merge and review-thread resolution**
+Status: **Closed — PASS (governed historical exception)**
 
 Date: 2026-10-12
+
+Governance closeout merge: `da3ddfc199da7c2408bf8423d30112a581b53c8c`
+
+Staging pipeline recovery: `bb6c4415944944ccee17a0b01178a92a784d4f77` (lockfile-only Plesk dependency install; live staging verified)
 
 ## Disposition
 
