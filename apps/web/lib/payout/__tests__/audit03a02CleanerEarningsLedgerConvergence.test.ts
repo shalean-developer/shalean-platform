@@ -18,10 +18,21 @@ describe("AUDIT-03A02-02 cleaner earnings ledger convergence", () => {
     expect(source).toContain("amount_cents = greatest(coalesce(new.cleaner_earnings_total_cents, 0), 0)");
   });
 
-  it("fails closed when booking changes conflict with locked ledger history", () => {
+  it("checks locked ledger history before finalized-earnings early returns", () => {
+    const lockCheck = source.indexOf("v_ledger_status <> 'pending'");
+    const finalizedReturn = source.indexOf("new.cleaner_line_earnings_finalized_at is null");
+    expect(lockCheck).toBeGreaterThan(-1);
+    expect(finalizedReturn).toBeGreaterThan(-1);
+    expect(lockCheck).toBeLessThan(finalizedReturn);
     expect(source).toContain("locked cleaner earnings ledger conflicts with booking");
-    expect(source).toContain("raise exception");
-    expect(source).toContain("using errcode = '55000'");
+  });
+
+  it("fails closed for paid/run-locked or locked child payout rails", () => {
+    expect(source).toContain("v_payout_locked :=");
+    expect(source).toContain("v_payout_run_id is not null");
+    expect(source).toContain("v_payout_paid_at is not null");
+    expect(source).toContain("v_child_payout_run_id is not null");
+    expect(source).toContain("v_child_payout_status not in ('pending', 'frozen')");
   });
 
   it("hard-allowlists only the two proven current-model repair bookings", () => {
@@ -33,6 +44,8 @@ describe("AUDIT-03A02-02 cleaner earnings ledger convergence", () => {
   it("requires independent Aug 23 summary and earnings-snapshot evidence", () => {
     expect(source).toContain("jsonb_array_length(v_booking.earnings_summary -> 'per_cleaner_earnings') <> 1");
     expect(source).toContain("booking_cleaner_earnings_snapshot");
+    expect(source).toContain("v_summary_total is distinct from 30000");
+    expect(source).toContain("v_snapshot_display is distinct from 30000");
     expect(source).toContain("Aug 23 independent ownership/earnings evidence no longer converges");
   });
 

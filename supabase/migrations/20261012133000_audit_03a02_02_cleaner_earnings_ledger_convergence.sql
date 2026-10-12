@@ -23,14 +23,16 @@ declare
   v_ledger_amount integer;
   v_disbursement_id uuid;
   v_owner uuid;
+  v_payout_status text;
+  v_payout_run_id uuid;
+  v_payout_paid_at timestamptz;
+  v_child_payout_status text;
+  v_child_payout_run_id uuid;
+  v_child_payout_paid_at timestamptz;
+  v_payout_locked boolean := false;
 begin
-  if lower(coalesce(new.status::text, '')) <> 'completed'
-     or coalesce(new.is_team_job, false)
-     or new.cleaner_line_earnings_finalized_at is null
-     or new.cleaner_earnings_total_cents is null then
-    return new;
-  end if;
-
+  -- Inspect ledger/settlement locks before any eligibility return. Reset paths can
+  -- clear finalized earnings in the same UPDATE; locked history must still fail closed.
   select
     ce.id,
     lower(coalesce(ce.status::text, '')),
@@ -59,6 +61,59 @@ begin
   end if;
 
   v_owner := coalesce(new.cleaner_id, new.payout_owner_cleaner_id);
+  v_payout_status := lower(coalesce(new.payout_status::text, ''));
+  v_payout_run_id := new.payout_run_id;
+  v_payout_paid_at := new.payout_paid_at;
+
+  if new.payout_id is not null then
+    select
+      lower(coalesce(cp.status::text, '')),
+      cp.payout_run_id,
+      cp.paid_at
+    into
+      v_child_payout_status,
+      v_child_payout_run_id,
+      v_child_payout_paid_at
+    from public.cleaner_payouts cp
+    where cp.id = new.payout_id
+    for update;
+
+    if not found then
+      raise exception 'linked cleaner payout missing for booking %', new.id
+        using errcode = '55000';
+    end if;
+  end if;
+
+  v_payout_locked :=
+    v_payout_status = 'paid'
+    or v_payout_run_id is not null
+    or v_payout_paid_at is not null
+    or (
+      new.payout_id is not null
+      and (
+        v_child_payout_run_id is not null
+        or v_child_payout_paid_at is not null
+        or v_child_payout_status not in ('pending', 'frozen')
+      )
+    );
+
+  if v_ledger_status <> 'pending'
+     or v_disbursement_id is not null
+     or v_payout_locked then
+    if v_ledger_amount is distinct from greatest(coalesce(new.cleaner_earnings_total_cents, 0), 0)
+       or (v_owner is not null and v_ledger_cleaner_id is distinct from v_owner) then
+      raise exception 'locked cleaner earnings ledger conflicts with booking %', new.id
+        using errcode = '55000';
+    end if;
+    return new;
+  end if;
+
+  if lower(coalesce(new.status::text, '')) <> 'completed'
+     or coalesce(new.is_team_job, false)
+     or new.cleaner_line_earnings_finalized_at is null
+     or new.cleaner_earnings_total_cents is null then
+    return new;
+  end if;
 
   if v_ledger_status = 'pending' and v_disbursement_id is null then
     update public.cleaner_earnings ce
@@ -67,12 +122,6 @@ begin
       amount_cents = greatest(coalesce(new.cleaner_earnings_total_cents, 0), 0)
     where ce.id = v_ledger_id;
     return new;
-  end if;
-
-  if v_ledger_amount is distinct from greatest(coalesce(new.cleaner_earnings_total_cents, 0), 0)
-     or (v_owner is not null and v_ledger_cleaner_id is distinct from v_owner) then
-    raise exception 'locked cleaner earnings ledger conflicts with booking %', new.id
-      using errcode = '55000';
   end if;
 
   return new;
@@ -269,10 +318,10 @@ begin
     if not found
        or v_summary_cleaner is distinct from v_expected_owner
        or v_snapshot_cleaner is distinct from v_expected_owner
-       or v_summary_total <> 30000
-       or v_snapshot_display <> 30000
-       or v_snapshot_payout <> 30000
-       or v_snapshot_internal <> 30000 then
+       or v_summary_total is distinct from 30000
+       or v_snapshot_display is distinct from 30000
+       or v_snapshot_payout is distinct from 30000
+       or v_snapshot_internal is distinct from 30000 then
       raise exception 'Aug 23 independent ownership/earnings evidence no longer converges'
         using errcode = '55000';
     end if;
