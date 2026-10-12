@@ -34,7 +34,27 @@ describe("SALES-BOOKING-CONVERSION-01", () => {
     expect(declaredCents).toBe(lineItemTotalCents);
   });
 
-  it("compensates a newly created invoice when booking creation fails", () => {
+  it("delays Zoho invoice creation until after booking creation succeeds", () => {
+    const src = readFileSync(
+      join(root, "lib/salesDocument/salesDocumentMutations.ts"),
+      "utf8",
+    );
+
+    const createdStart = src.indexOf("const created = await createSalesDocument");
+    const delayedZohoFlag = src.indexOf("sync_zoho: false", createdStart);
+    const bookingCall = src.indexOf("createBookingFromSalesQuoteInvoice", createdStart);
+    const zohoSync = src.indexOf("syncSalesDocumentToZoho(admin, created.id)", bookingCall);
+    const acceptUpdate = src.indexOf('.update({ status: "accepted" })', zohoSync);
+
+    expect(createdStart).toBeGreaterThanOrEqual(0);
+    expect(delayedZohoFlag).toBeGreaterThan(createdStart);
+    expect(bookingCall).toBeGreaterThan(delayedZohoFlag);
+    expect(zohoSync).toBeGreaterThan(bookingCall);
+    expect(acceptUpdate).toBeGreaterThan(zohoSync);
+    expect(src).toContain("zoho_sync_failed_before_accept");
+  });
+
+  it("compensates a newly created local invoice when booking creation fails", () => {
     const src = readFileSync(
       join(root, "lib/salesDocument/salesDocumentMutations.ts"),
       "utf8",
