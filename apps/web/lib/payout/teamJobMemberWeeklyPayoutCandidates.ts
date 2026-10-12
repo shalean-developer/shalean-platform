@@ -6,6 +6,7 @@ import {
 } from "@/lib/payout/bookingPayableForWeeklyBatch";
 import { isYmdInInclusiveRange, weeklyBatchDayYmd } from "@/lib/payout/weekBounds";
 import { fetchAllPayoutRows, payoutQueryChunks } from "@/lib/payout/payoutQueryPagination";
+import { hydrateMissingMemberInvoiceStatuses } from "@/lib/payout/memberCandidateInvoiceStatuses";
 
 export type TeamJobMemberWeeklyPayoutCandidate = {
   id: string;
@@ -72,6 +73,11 @@ export async function listTeamJobMemberWeeklyPayoutCandidates(params: {
     if (row.id) bookingById.set(row.id, row);
   }
 
+  const effectiveInvoiceStatusById = await hydrateMissingMemberInvoiceStatuses(
+    admin,
+    [...bookingById.values()],
+    invoiceStatusById,
+  );
   const out: TeamJobMemberWeeklyPayoutCandidate[] = [];
   for (const raw of memberRows) {
     const member = raw as {
@@ -98,7 +104,7 @@ export async function listTeamJobMemberWeeklyPayoutCandidates(params: {
      * Reuse the shared payment/refund/accrual gate, but provide this member row
      * as the payout basis instead of inventing a booking-level solo payout.
      */
-    const gate = bookingPayableForWeeklyBatch(booking, invoiceStatusById, {
+    const gate = bookingPayableForWeeklyBatch(booking, effectiveInvoiceStatusById, {
       payoutBasisCents: payoutCents,
     });
     if (!gate.payable) continue;
