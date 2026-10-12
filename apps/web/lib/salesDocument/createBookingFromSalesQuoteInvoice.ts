@@ -234,7 +234,7 @@ export async function createBookingFromSalesQuoteInvoice(
       city_id: null,
       date,
       time: DEFAULT_TIME,
-      total_paid_zar: collectedTotalZar,
+      ...(invoicePaid ? { total_paid_zar: collectedTotalZar } : {}),
       pricing_version_id: null,
       price_breakdown: null,
       total_price: quotedTotalZar,
