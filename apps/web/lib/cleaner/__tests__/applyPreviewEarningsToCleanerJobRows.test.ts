@@ -14,7 +14,25 @@ import { applyPreviewEarningsToCleanerJobRows } from "@/lib/cleaner/applyPreview
 
 const BID = "aaaaaaaa-bbbb-4ccc-dddd-eeeeeeeeeeee";
 const CID = "cccccccc-cccc-4ccc-cccc-cccccccccccc";
-const admin = {} as never;
+function emptyQuery() {
+  return {
+    select() {
+      return this;
+    },
+    eq() {
+      return this;
+    },
+    in() {
+      return Promise.resolve({ data: [], error: null });
+    },
+  };
+}
+
+const admin = {
+  from() {
+    return emptyQuery();
+  },
+} as never;
 
 describe("applyPreviewEarningsToCleanerJobRows", () => {
   it("sets earnings_basis_pending when no cents resolved and previews are exhausted", async () => {
