@@ -63,6 +63,7 @@ import { resolveCheckoutPromoEligibilityExtras } from "@/lib/promotions/resolveC
 import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
 import { settleFullyCoveredBooking } from "@/lib/payments/settleFullyCoveredBooking";
 import { finalizeR0BookingPostPayment } from "@/lib/booking/finalizeR0BookingPostPayment";
+import { ensureBookingV2R0LineItems } from "@/lib/booking/ensureBookingV2R0LineItems";
 import { createFreshPaymentPreparationToken } from "@/lib/booking/freshPaymentPreparationToken";
 import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
 import { upsertPendingRecurringPrepayment } from "@/lib/recurring/recurringPrepaymentLedger";
@@ -95,6 +96,21 @@ async function trySettleFullyCoveredOrError(
     return {
       errorResponse: NextResponse.json(
         { error: "Could not settle Cleaning Credit. Please try again or contact support." },
+        { status: 503 },
+      ),
+    };
+  }
+
+  // AUDIT-02A07: R0 bypasses Paystack initialization, so materialize the
+  // immutable booking snapshot into normalized line items before settlement.
+  // Fail closed here: a paid R0 booking must never exist without a reconciled
+  // line-item ledger.
+  const lineItems = await ensureBookingV2R0LineItems(supabase, bookingId);
+  if (!lineItems.ok) {
+    console.error("[booking-v2/confirm] R0 line-item persistence failed:", lineItems.error);
+    return {
+      errorResponse: NextResponse.json(
+        { error: "Could not finalize zero-balance pricing detail. Please try again or contact support." },
         { status: 503 },
       ),
     };
