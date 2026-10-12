@@ -443,21 +443,35 @@ async function generateWeeklyPayoutsForPeriod(
       bookings.push(...filtered);
     }
 
-    const rosterMemberCandidates = await listRosterMemberWeeklyPayoutCandidates({
-      admin,
-      cleanerId,
-      periodStart,
-      periodEnd,
-      invoiceStatusById: invoiceMap,
-    });
+    let rosterMemberCandidates: Awaited<ReturnType<typeof listRosterMemberWeeklyPayoutCandidates>>;
+    let teamJobMemberCandidates: Awaited<ReturnType<typeof listTeamJobMemberWeeklyPayoutCandidates>>;
+    try {
+      rosterMemberCandidates = await listRosterMemberWeeklyPayoutCandidates({
+        admin,
+        cleanerId,
+        periodStart,
+        periodEnd,
+        invoiceStatusById: invoiceMap,
+      });
 
-    const teamJobMemberCandidates = await listTeamJobMemberWeeklyPayoutCandidates({
-      admin,
-      cleanerId,
-      periodStart,
-      periodEnd,
-      invoiceStatusById: invoiceMap,
-    });
+      teamJobMemberCandidates = await listTeamJobMemberWeeklyPayoutCandidates({
+        admin,
+        cleanerId,
+        periodStart,
+        periodEnd,
+        invoiceStatusById: invoiceMap,
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      await reportOperationalIssue(
+        "error",
+        "generateWeeklyPayouts",
+        `member payout candidate loading failed: ${message}`,
+        { cleanerId, periodStart, periodEnd },
+      );
+      skippedCleaners += 1;
+      continue;
+    }
 
     // A member allocation is authoritative when the same cleaner/visit is also
     // present on bookings.cleaner_id (common after roster repairs). Do not link

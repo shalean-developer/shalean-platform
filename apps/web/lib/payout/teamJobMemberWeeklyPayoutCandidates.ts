@@ -78,8 +78,6 @@ export async function listTeamJobMemberWeeklyPayoutCandidates(params: {
     [...bookingById.values()],
     invoiceStatusById,
   );
-  if (effectiveInvoiceStatusById === null) return [];
-
   const out: TeamJobMemberWeeklyPayoutCandidate[] = [];
   for (const raw of memberRows) {
     const member = raw as {

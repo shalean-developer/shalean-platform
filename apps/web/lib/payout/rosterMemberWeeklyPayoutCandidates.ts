@@ -75,8 +75,6 @@ export async function listRosterMemberWeeklyPayoutCandidates(params: {
     [...bookingById.values()],
     invoiceStatusById,
   );
-  if (effectiveInvoiceStatusById === null) return [];
-
   const out: RosterMemberWeeklyPayoutCandidate[] = [];
   for (const raw of memberRows) {
     const member = raw as {

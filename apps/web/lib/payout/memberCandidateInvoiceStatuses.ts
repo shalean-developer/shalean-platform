@@ -11,7 +11,7 @@ export async function hydrateMissingMemberInvoiceStatuses(
   admin: SupabaseClient,
   bookingRows: readonly (BookingRowForWeeklyBatchEligibility & { id?: string })[],
   invoiceStatusById: Map<string, string>,
-): Promise<Map<string, string> | null> {
+): Promise<Map<string, string>> {
   const out = new Map(invoiceStatusById);
   const missing = [
     ...new Set(
@@ -25,7 +25,9 @@ export async function hydrateMissingMemberInvoiceStatuses(
 
   for (const idChunk of payoutQueryChunks(missing)) {
     const { data, error } = await admin.from("monthly_invoices").select("id, status").in("id", idChunk);
-    if (error) return null;
+    if (error) {
+      throw new Error(`member monthly_invoices lookup failed: ${error.message}`);
+    }
 
     for (const raw of data ?? []) {
       const row = raw as { id?: string | null; status?: string | null };

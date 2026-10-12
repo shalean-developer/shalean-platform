@@ -92,4 +92,37 @@ describe("AUDIT-03B01 member monthly-invoice status hydration", () => {
       expect(source).toContain("bookingPayableForWeeklyBatch(booking, effectiveInvoiceStatusById");
     }
   });
+  it("fails closed when the missing monthly-invoice lookup errors", async () => {
+    const admin = {
+      from() {
+        return {
+          select() {
+            return this;
+          },
+          async in() {
+            return {
+              data: null,
+              error: { message: "transient monthly invoice lookup failure" },
+            };
+          },
+        };
+      },
+    } as never;
+
+    await expect(
+      hydrateMissingMemberInvoiceStatuses(admin, [monthlyBooking], new Map()),
+    ).rejects.toThrow("member monthly_invoices lookup failed");
+  });
+
+  it("generator catches member-candidate failures before payout mutation", () => {
+    const source = readFileSync(join(process.cwd(), "lib/payout/generateWeeklyPayouts.ts"), "utf8");
+    const load = source.indexOf("rosterMemberCandidates = await listRosterMemberWeeklyPayoutCandidates");
+    const failure = source.indexOf("member payout candidate loading failed");
+    const payoutMutation = source.indexOf('admin.rpc("upsert_pending_payout_earnings"');
+
+    expect(load).toBeGreaterThan(-1);
+    expect(failure).toBeGreaterThan(load);
+    expect(payoutMutation).toBeGreaterThan(failure);
+  });
+
 });
