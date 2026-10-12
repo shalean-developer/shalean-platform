@@ -25,6 +25,8 @@ import {
   maybeLogStuckNullEarnings,
 } from "@/lib/cleaner/cleanerPayoutInvariantLogging";
 import { augmentCleanerJobsWithViewerRosterContext } from "@/lib/cleaner/pairedRosterMemberLifecycle";
+import { fetchViewerPayoutByBookingIds } from "@/lib/cleaner/fetchViewerPayoutByBookingIds";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -137,13 +139,36 @@ export async function GET(request: Request) {
     maybeLogStuckNullEarnings(id, j);
   }
 
+  const viewerPayoutByBooking = await fetchViewerPayoutByBookingIds(
+    admin,
+    cleanerId,
+    rawList.map((row) => String(row.id ?? "").trim()).filter(Boolean),
+  );
+  const summaryRows = rawList.map((row) => {
+    const bookingId = String(row.id ?? "").trim();
+    if (bookingHasActivePayoutAttributionRemoval(row)) {
+      return {
+        ...row,
+        viewer_payout_cents: null,
+        cleaner_earnings_total_cents: null,
+        payout_frozen_cents: null,
+        display_earnings_cents: null,
+        earnings_summary: null,
+      };
+    }
+    return {
+      ...row,
+      viewer_payout_cents: viewerPayoutByBooking.get(bookingId) ?? null,
+    };
+  }) as unknown as CleanerDashboardEarningsWireRow[];
+
   const { today_cents, today_breakdown } = todayCentsAndBreakdownFromBookings(
-    rawList as unknown as CleanerDashboardEarningsWireRow[],
+    summaryRows,
     now,
     cleanerId,
   );
   const suggested_daily_goal_cents = suggestedDailyGoalCentsFromWireRows(
-    rawList as unknown as CleanerDashboardEarningsWireRow[],
+    summaryRows,
     now,
     cleanerId,
   );
