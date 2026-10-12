@@ -47,6 +47,38 @@ const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !key) throw new Error("Missing Supabase URL/service role configuration.");
 
 const apply = process.argv.includes("--apply");
+if (apply) {
+  const productionProjectRef = String(process.env.AUDIT_02A07_PRODUCTION_PROJECT_REF ?? "")
+    .trim()
+    .toLowerCase();
+  const expectedProjectRef = String(process.env.AUDIT_02A07_EXPECTED_PROJECT_REF ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (!/^[a-z0-9-]+$/.test(productionProjectRef)) {
+    throw new Error(
+      "AUDIT-02A07 apply blocked: AUDIT_02A07_PRODUCTION_PROJECT_REF is missing or invalid.",
+    );
+  }
+  if (expectedProjectRef !== productionProjectRef) {
+    throw new Error(
+      "AUDIT-02A07 apply blocked: expected project confirmation does not match configured production project.",
+    );
+  }
+
+  let configuredHostname = "";
+  try {
+    configuredHostname = new URL(url).hostname.trim().toLowerCase();
+  } catch {
+    throw new Error("AUDIT-02A07 apply blocked: invalid Supabase URL.");
+  }
+  const trustedHostname = `${productionProjectRef}.supabase.co`;
+  if (configuredHostname !== trustedHostname) {
+    throw new Error(
+      `AUDIT-02A07 apply blocked: configured Supabase hostname ${configuredHostname || "<unknown>"} does not match trusted production host.`,
+    );
+  }
+}
 const requested = process.argv
   .filter((arg) => arg.startsWith("--booking-id="))
   .map((arg) => arg.slice("--booking-id=".length).trim().toLowerCase());
