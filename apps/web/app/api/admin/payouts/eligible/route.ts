@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
-import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
+import {
+  loadRosterByBookingIds,
+  loadRosterMemberPayoutsByBookingIds,
+  loadTeamJobMemberPayoutsByBookingIds,
+  perCleanerAllocationsForBooking,
+} from "@/lib/admin/payouts/officePayoutPeriodReport";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -16,21 +21,9 @@ type BookingEligibleRow = {
   cleaner_earnings_total_cents: number | null;
   cleaner_payout_cents: number | null;
   is_team_job: boolean | null;
+  earnings_summary?: unknown;
+  metadata?: unknown;
 };
-
-function payrollKey(row: BookingEligibleRow): string {
-  return String(row.cleaner_id ?? "").trim() || String(row.payout_owner_cleaner_id ?? "").trim();
-}
-
-function amountCents(row: BookingEligibleRow): number {
-  return (
-    resolveCleanerEarningsCents({
-      cleaner_earnings_total_cents: row.cleaner_earnings_total_cents,
-      payout_frozen_cents: row.payout_frozen_cents,
-      display_earnings_cents: row.display_earnings_cents,
-    }) ?? 0
-  );
-}
 
 export async function GET(request: Request) {
   const auth = await requireAdminApi(request);
@@ -42,7 +35,7 @@ export async function GET(request: Request) {
   const { data: rows, error } = await admin
     .from("bookings")
     .select(
-      "id, date, cleaner_id, payout_owner_cleaner_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job",
+      "id, date, cleaner_id, payout_owner_cleaner_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job, earnings_summary, metadata",
     )
     .eq("payout_status", "eligible")
     .order("date", { ascending: true });
@@ -50,7 +43,33 @@ export async function GET(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const list = (rows ?? []) as BookingEligibleRow[];
-  const cleanerIds = [...new Set(list.map((r) => payrollKey(r)).filter(Boolean))];
+  const bookingIds = list.map((row) => row.id).filter(Boolean);
+  const [rosterByBooking, rosterPayoutsByBooking, teamPayoutsByBooking] = await Promise.all([
+    loadRosterByBookingIds(admin, bookingIds),
+    loadRosterMemberPayoutsByBookingIds(admin, bookingIds),
+    loadTeamJobMemberPayoutsByBookingIds(admin, bookingIds),
+  ]);
+
+  const allocationsByBooking = new Map<
+    string,
+    ReturnType<typeof perCleanerAllocationsForBooking>
+  >();
+  const cleanerIdSet = new Set<string>();
+  for (const booking of list) {
+    const allocations = perCleanerAllocationsForBooking(
+      booking,
+      rosterByBooking.get(booking.id) ?? [],
+      [
+        ...(rosterPayoutsByBooking.get(booking.id) ?? []),
+        ...(teamPayoutsByBooking.get(booking.id) ?? []),
+      ],
+    );
+    allocationsByBooking.set(booking.id, allocations);
+    for (const allocation of allocations) {
+      if (allocation.cleaner_id) cleanerIdSet.add(allocation.cleaner_id);
+    }
+  }
+  const cleanerIds = [...cleanerIdSet];
 
   const cleanersById = new Map<string, { full_name: string | null; phone: string | null }>();
   if (cleanerIds.length > 0) {
@@ -75,29 +94,32 @@ export async function GET(request: Request) {
     { cleaner_id: string; cleaner_name: string; cleaner_phone: string; total_cents: number; bookings: { booking_id: string; date: string | null; amount_cents: number }[] }
   >();
 
-  for (const b of list) {
-    const cid = payrollKey(b);
-    if (!cid) continue;
-    const cents = amountCents(b);
-    const meta = cleanersById.get(cid);
-    const name = meta?.full_name?.trim() || "Cleaner";
-    const phone = meta?.phone?.trim() || "";
-    if (!byCleaner.has(cid)) {
-      byCleaner.set(cid, {
-        cleaner_id: cid,
-        cleaner_name: name,
-        cleaner_phone: phone,
-        total_cents: 0,
-        bookings: [],
+  for (const booking of list) {
+    const allocations = allocationsByBooking.get(booking.id) ?? [];
+    for (const allocation of allocations) {
+      const cid = allocation.cleaner_id;
+      if (!cid) continue;
+      const cents = Math.max(0, Math.round(Number(allocation.cents) || 0));
+      const meta = cleanersById.get(cid);
+      const name = meta?.full_name?.trim() || "Cleaner";
+      const phone = meta?.phone?.trim() || "";
+      if (!byCleaner.has(cid)) {
+        byCleaner.set(cid, {
+          cleaner_id: cid,
+          cleaner_name: name,
+          cleaner_phone: phone,
+          total_cents: 0,
+          bookings: [],
+        });
+      }
+      const group = byCleaner.get(cid)!;
+      group.bookings.push({
+        booking_id: booking.id,
+        date: booking.date,
+        amount_cents: cents,
       });
+      group.total_cents += cents;
     }
-    const g = byCleaner.get(cid)!;
-    g.bookings.push({
-      booking_id: b.id,
-      date: b.date,
-      amount_cents: cents,
-    });
-    g.total_cents += cents;
   }
 
   const grouped = [...byCleaner.values()].sort((a, b) => b.total_cents - a.total_cents || a.cleaner_name.localeCompare(b.cleaner_name));
