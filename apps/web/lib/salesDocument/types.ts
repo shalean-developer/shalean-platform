@@ -85,10 +85,8 @@ const MANUAL_PAYMENT_STATUSES = new Set(["draft", "sent", "accepted"]);
 export function salesDocumentCanRecordManualPayment(params: {
   document_type: SalesDocumentType;
   status: string;
-  amount_paid_cents: number;
 }): boolean {
   if (params.document_type !== "invoice") return false;
-  if (Math.max(0, Math.round(Number(params.amount_paid_cents ?? 0))) > 0) return false;
   const st = String(params.status ?? "").toLowerCase();
   return MANUAL_PAYMENT_STATUSES.has(st);
 }
