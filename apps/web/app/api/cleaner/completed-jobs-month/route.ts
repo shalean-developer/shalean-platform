@@ -8,6 +8,7 @@ import { resolveCleanerDashboardEarningsCents } from "@/lib/cleaner/resolveClean
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { fetchViewerPayoutByBookingIds } from "@/lib/cleaner/fetchViewerPayoutByBookingIds";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ type SummaryRow = {
   cleaner_earnings_total_cents?: unknown;
   cleaner_payout_cents?: unknown;
   earnings_summary?: unknown;
+  metadata?: unknown;
 };
 
 function ymdInJohannesburg(date: Date): string {
@@ -71,7 +73,7 @@ export async function GET(request: Request) {
   const ranges = johannesburgRanges();
   const { data, error } = await fetchCleanerVisibleBookingsMerged(admin, cleanerId, {
     select:
-      "id, date, status, cleaner_id, payout_owner_cleaner_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, earnings_summary",
+      "id, date, status, cleaner_id, payout_owner_cleaner_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, earnings_summary, metadata",
     perBranchLimit: 1000,
     applyEachBranch: (query) =>
       query.eq("status", "completed").gte("date", ranges.monthFrom).lt("date", ranges.monthTo),
@@ -89,7 +91,11 @@ export async function GET(request: Request) {
   for (const raw of (data ?? []) as SummaryRow[]) {
     const id = String(raw.id ?? "").trim();
     if (!id || unique.has(id)) continue;
-    if (!isExplicitCleanerBookingAttribution(raw as Record<string, unknown>, cleanerId, explicitRosterBookingIds)) {
+    const record = raw as Record<string, unknown>;
+    if (!isExplicitCleanerBookingAttribution(record, cleanerId, explicitRosterBookingIds)) {
+      continue;
+    }
+    if (bookingHasActivePayoutAttributionRemoval(record)) {
       continue;
     }
     unique.set(id, raw);

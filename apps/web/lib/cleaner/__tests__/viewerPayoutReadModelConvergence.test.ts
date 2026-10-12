@@ -33,8 +33,13 @@ describe("AUDIT-03A02-04 viewer payout read-model convergence", () => {
     expect(source).toContain("viewerPayoutCents ?? cleanerFacing?.job_earning_cents ?? displayEarningsCents");
   });
 
-  it("completed-jobs month injects viewer_payout_cents before resolving earnings", () => {
+  it("completed-jobs month honors payout attribution removal before member payout hydration", () => {
     const source = read("app/api/cleaner/completed-jobs-month/route.ts");
+    expect(source).toContain("earnings_summary, metadata");
+    expect(source).toContain("bookingHasActivePayoutAttributionRemoval(record)");
+    expect(source.indexOf("bookingHasActivePayoutAttributionRemoval(record)")).toBeLessThan(
+      source.indexOf("fetchViewerPayoutByBookingIds"),
+    );
     expect(source).toContain("viewer_payout_cents: viewerPayoutByBooking.get(bookingId) ?? null");
   });
 });
