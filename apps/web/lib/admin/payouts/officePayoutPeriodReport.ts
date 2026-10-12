@@ -423,6 +423,45 @@ export function cleanerHasPayoutAllocationOnBooking(
   return perCleanerAllocationsForBooking(booking, roster).some((alloc) => alloc.cleaner_id === target);
 }
 
+export async function loadRosterMemberPayoutsByBookingIds(
+  admin: SupabaseClient,
+  bookingIds: string[],
+): Promise<Map<string, { cleaner_id: string; payout_cents: number; cleaner_payout_id?: string | null }[]>> {
+  const map = new Map<string, { cleaner_id: string; payout_cents: number; cleaner_payout_id?: string | null }[]>();
+  if (!bookingIds.length) return map;
+
+  for (let i = 0; i < bookingIds.length; i += 120) {
+    const slice = bookingIds.slice(i, i + 120);
+    const { data, error } = await admin
+      .from("booking_roster_member_payouts")
+      .select("booking_id, cleaner_id, payout_cents, bonus_cents, cleaner_payout_id")
+      .in("booking_id", slice);
+    if (error) throw new Error(error.message);
+    for (const raw of data ?? []) {
+      const row = raw as {
+        booking_id?: string;
+        cleaner_id?: string;
+        payout_cents?: number | null;
+        bonus_cents?: number | null;
+        cleaner_payout_id?: string | null;
+      };
+      const bid = String(row.booking_id ?? "").trim();
+      const cid = String(row.cleaner_id ?? "").trim();
+      if (!bid || !cid) continue;
+      const list = map.get(bid) ?? [];
+      list.push({
+        cleaner_id: cid,
+        payout_cents:
+          Math.max(0, Math.floor(Number(row.payout_cents) || 0)) +
+          Math.max(0, Math.floor(Number(row.bonus_cents) || 0)),
+        cleaner_payout_id: row.cleaner_payout_id ?? null,
+      });
+      map.set(bid, list);
+    }
+  }
+  return map;
+}
+
 export async function loadTeamJobMemberPayoutsByBookingIds(
   admin: SupabaseClient,
   bookingIds: string[],
@@ -518,14 +557,12 @@ export async function loadOfficePayoutPeriodReport(
   const payoutsRaw = (payoutRows ?? []).filter((p) =>
     isMonthlyPayoutBatchPeriod(String((p as PayoutDbRow).period_start), String((p as PayoutDbRow).period_end)),
   ) as PayoutDbRow[];
-  const rosterByBooking = await loadRosterByBookingIds(
-    admin,
-    bookings.map((b) => b.id),
-  );
-  const teamPayoutsByBooking = await loadTeamJobMemberPayoutsByBookingIds(
-    admin,
-    bookings.map((b) => b.id),
-  );
+  const bookingIds = bookings.map((b) => b.id);
+  const [rosterByBooking, rosterPayoutsByBooking, teamPayoutsByBooking] = await Promise.all([
+    loadRosterByBookingIds(admin, bookingIds),
+    loadRosterMemberPayoutsByBookingIds(admin, bookingIds),
+    loadTeamJobMemberPayoutsByBookingIds(admin, bookingIds),
+  ]);
   const batchStatusById = new Map<string, string>();
   for (const p of payoutsRaw) {
     if (p.id) batchStatusById.set(p.id, String(p.status ?? ""));
@@ -554,7 +591,10 @@ export async function loadOfficePayoutPeriodReport(
     for (const alloc of perCleanerAllocationsForBooking(
       b,
       rosterByBooking.get(b.id) ?? [],
-      teamPayoutsByBooking.get(b.id),
+      [
+        ...(rosterPayoutsByBooking.get(b.id) ?? []),
+        ...(teamPayoutsByBooking.get(b.id) ?? []),
+      ],
     )) {
       cleanerIds.add(alloc.cleaner_id);
     }
@@ -579,7 +619,10 @@ export async function loadOfficePayoutPeriodReport(
 
   for (const b of bookings) {
     const roster = rosterByBooking.get(b.id) ?? [];
-    const allocations = perCleanerAllocationsForBooking(b, roster, teamPayoutsByBooking.get(b.id));
+    const allocations = perCleanerAllocationsForBooking(b, roster, [
+      ...(rosterPayoutsByBooking.get(b.id) ?? []),
+      ...(teamPayoutsByBooking.get(b.id) ?? []),
+    ]);
     if (!allocations.length) continue;
 
     totals.visit_count += 1;
