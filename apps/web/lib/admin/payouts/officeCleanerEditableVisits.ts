@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   classifyBookingPayoutBucket,
   loadRosterByBookingIds,
+  loadRosterMemberPayoutsByBookingIds,
   loadTeamJobMemberPayoutsByBookingIds,
   normalizeOfficePayoutPeriodRange,
   perCleanerAllocationsForBooking,
@@ -119,19 +120,18 @@ export async function loadOfficeCleanerEditableVisits(
   if (bErr) return { error: bErr.message };
 
   const bookings = (bookingRows ?? []) as BookingVisitRow[];
-  const rosterByBooking = await loadRosterByBookingIds(
-    admin,
-    bookings.map((b) => b.id),
-  );
-  const teamPayoutsByBooking = await loadTeamJobMemberPayoutsByBookingIds(
-    admin,
-    bookings.map((b) => b.id),
-  );
+  const bookingIds = bookings.map((b) => b.id);
+  const [rosterByBooking, rosterPayoutsByBooking, teamPayoutsByBooking] = await Promise.all([
+    loadRosterByBookingIds(admin, bookingIds),
+    loadRosterMemberPayoutsByBookingIds(admin, bookingIds),
+    loadTeamJobMemberPayoutsByBookingIds(admin, bookingIds),
+  ]);
 
   const payoutIds = [
     ...new Set(
       [
         ...bookings.map((b) => String(b.payout_id ?? "").trim()),
+        ...[...rosterPayoutsByBooking.values()].flat().map((row) => String(row.cleaner_payout_id ?? "").trim()),
         ...[...teamPayoutsByBooking.values()].flat().map((row) => String(row.cleaner_payout_id ?? "").trim()),
       ].filter(Boolean),
     ),
@@ -160,7 +160,12 @@ export async function loadOfficeCleanerEditableVisits(
 
   for (const b of bookings) {
     const roster = rosterByBooking.get(b.id) ?? [];
-    const allocations = perCleanerAllocationsForBooking(b, roster, teamPayoutsByBooking.get(b.id));
+    const rosterPayouts = rosterPayoutsByBooking.get(b.id) ?? [];
+    const teamPayouts = teamPayoutsByBooking.get(b.id) ?? [];
+    const allocations = perCleanerAllocationsForBooking(b, roster, [
+      ...rosterPayouts,
+      ...teamPayouts,
+    ]);
     const alloc = allocations.find((a) => a.cleaner_id === targetCleanerId);
     if (!alloc) continue;
 
@@ -172,8 +177,13 @@ export async function loadOfficeCleanerEditableVisits(
     const bucket = classifyBookingPayoutBucket(b.payout_status, allocationPayoutId, batchStatusById);
     const blockedReason = resolveVisitEditBlockedReason({ ...b, payout_id: allocationPayoutId || null }, batchStatusById);
     const editable = blockedReason == null;
-    const payoutCents = Math.max(0, Math.round(Number(b.cleaner_payout_cents ?? 0)));
-    const bonusCents = Math.max(0, Math.round(Number(b.cleaner_bonus_cents ?? 0)));
+    const rosterPayout = rosterPayouts.find((row) => row.cleaner_id === targetCleanerId);
+    const payoutCents = rosterPayout
+      ? rosterPayout.base_payout_cents
+      : Math.max(0, Math.round(Number(b.cleaner_payout_cents ?? 0)));
+    const bonusCents = rosterPayout
+      ? rosterPayout.bonus_cents
+      : Math.max(0, Math.round(Number(b.cleaner_bonus_cents ?? 0)));
     const earningsCents = alloc.cents;
 
     visits.push({
