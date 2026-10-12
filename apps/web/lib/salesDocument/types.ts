@@ -79,6 +79,20 @@ export type SalesDocumentRow = {
 
 const NON_EDITABLE_STATUSES = new Set(["paid", "refunded", "void", "expired"]);
 
+const MANUAL_PAYMENT_STATUSES = new Set(["draft", "sent", "accepted"]);
+
+/** Manual EFT/cash settlement is allowed only for unpaid invoices in a payable lifecycle state. */
+export function salesDocumentCanRecordManualPayment(params: {
+  document_type: SalesDocumentType;
+  status: string;
+  amount_paid_cents: number;
+}): boolean {
+  if (params.document_type !== "invoice") return false;
+  if (Math.max(0, Math.round(Number(params.amount_paid_cents ?? 0))) > 0) return false;
+  const st = String(params.status ?? "").toLowerCase();
+  return MANUAL_PAYMENT_STATUSES.has(st);
+}
+
 /** Draft/sent quotes and unpaid invoices may be edited. Accepted quotes are immutable. */
 export function salesDocumentIsEditableWithoutPayment(params: {
   document_type: SalesDocumentType;
