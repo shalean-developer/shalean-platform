@@ -19,13 +19,15 @@ describe("SALES-BOOKING-CONVERSION-01", () => {
   it("keeps an unpaid R550 conversion compatible with the booking pricing invariant", () => {
     const quotedTotalZar = 550;
     const lineItemTotalCents = 55_000;
-    const unpaidRowBase = { total_price: quotedTotalZar };
+    const unpaidRowBase: { total_price: number; total_paid_zar?: number } = {
+      total_price: quotedTotalZar,
+    };
 
     // Mirrors the shared invariant's declared-total precedence after the sales
     // document path deliberately omits total_paid_zar for unpaid invoices.
     const declaredCents =
-      typeof (unpaidRowBase as { total_paid_zar?: number }).total_paid_zar === "number"
-        ? Math.round((unpaidRowBase as { total_paid_zar: number }).total_paid_zar * 100)
+      typeof unpaidRowBase.total_paid_zar === "number"
+        ? Math.round(unpaidRowBase.total_paid_zar * 100)
         : Math.round(unpaidRowBase.total_price * 100);
 
     expect(declaredCents).toBe(55_000);
