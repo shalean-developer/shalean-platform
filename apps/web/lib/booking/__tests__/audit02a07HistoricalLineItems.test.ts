@@ -56,6 +56,16 @@ describe("AUDIT-02A07 historical Booking V2 line-item repair", () => {
     expect(source).toContain('throw new Error("AUDIT-02A07 apply is blocked until staging fixture verification closes.")');
   });
 
+  it("requires R0 line items before zero-balance settlement", () => {
+    const root = path.resolve(process.cwd(), "../..");
+    const source = readFileSync(path.join(root, "apps/web/app/api/booking-v2/confirm/route.ts"), "utf8");
+    const ensureIndex = source.indexOf("ensureBookingV2R0LineItems(supabase, bookingId)");
+    const settleIndex = source.indexOf("settleFullyCoveredBooking(supabase, { bookingId, payAmountZar })");
+    expect(ensureIndex).toBeGreaterThan(-1);
+    expect(settleIndex).toBeGreaterThan(ensureIndex);
+    expect(source).toContain("R0 line-item persistence failed");
+  });
+
   it("retains the current Paystack line-item fail-closed invariant", () => {
     const root = path.resolve(process.cwd(), "../..");
     const source = readFileSync(path.join(root, "apps/web/lib/booking/paystackInitializeCore.ts"), "utf8");
