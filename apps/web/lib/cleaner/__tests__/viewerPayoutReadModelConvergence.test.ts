@@ -38,7 +38,7 @@ describe("AUDIT-03A02-04 viewer payout read-model convergence", () => {
     expect(source).toContain("earnings_summary, metadata");
     expect(source).toContain("bookingHasActivePayoutAttributionRemoval(record)");
     expect(source.indexOf("bookingHasActivePayoutAttributionRemoval(record)")).toBeLessThan(
-      source.indexOf("fetchViewerPayoutByBookingIds"),
+      source.indexOf("fetchViewerPayoutByBookingIds(admin"),
     );
     expect(source).toContain("viewer_payout_cents: viewerPayoutByBooking.get(bookingId) ?? null");
   });
