@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { notifyAdminSalesDocumentInvoicePaid } from "@/lib/salesDocument/notifySalesDocumentAdmin";
 import { syncBookingPaymentFromSalesDocumentInvoice } from "@/lib/salesDocument/createBookingFromSalesQuoteInvoice";
+import { salesDocumentCanRecordManualPayment } from "@/lib/salesDocument/types";
 import { markZohoInvoicePaid, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
 
 export async function markSalesDocumentPaidManual(
@@ -35,9 +36,19 @@ export async function markSalesDocumentPaidManual(
   if (row.document_type !== "invoice") return { ok: false, error: "not_an_invoice" };
   const st = String(row.status ?? "").toLowerCase();
   if (st === "paid") return { ok: false, error: "already_paid" };
-  if (!["sent", "accepted"].includes(st)) return { ok: false, error: "invalid_status" };
+  if (
+    !salesDocumentCanRecordManualPayment({
+      document_type: "invoice",
+      status: st,
+    })
+  ) {
+    return { ok: false, error: "invalid_status" };
+  }
 
   const total = Math.max(0, Math.round(Number(row.total_cents ?? 0)));
+  const balance = Math.max(0, Math.round(Number(row.balance_cents ?? 0)));
+  if (total <= 0 || balance <= 0) return { ok: false, error: "invalid_payment_amount" };
+
   const nowIso = new Date().toISOString();
 
   const { error: updErr } = await admin
