@@ -63,6 +63,7 @@ import { resolveCheckoutPromoEligibilityExtras } from "@/lib/promotions/resolveC
 import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
 import { settleFullyCoveredBooking } from "@/lib/payments/settleFullyCoveredBooking";
 import { finalizeR0BookingPostPayment } from "@/lib/booking/finalizeR0BookingPostPayment";
+import { ensureBookingV2R0LineItems } from "@/lib/booking/ensureBookingV2R0LineItems";
 import { createFreshPaymentPreparationToken } from "@/lib/booking/freshPaymentPreparationToken";
 import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
 import { upsertPendingRecurringPrepayment } from "@/lib/recurring/recurringPrepaymentLedger";
@@ -84,6 +85,20 @@ async function trySettleFullyCoveredOrError(
   payAmountZar: number,
 ): Promise<{ requiresPayment: true } | { requiresPayment: false } | { errorResponse: NextResponse }> {
   if (payAmountZar > 0) return { requiresPayment: true };
+
+  // AUDIT-02A07: R0 bypasses Paystack initialization. Materialize and
+  // atomically reconcile its normalized line-item ledger before any irreversible
+  // Cleaning Credit settlement.
+  const lineItems = await ensureBookingV2R0LineItems(supabase, bookingId);
+  if (!lineItems.ok) {
+    console.error("[booking-v2/confirm] R0 line-item persistence failed:", lineItems.error);
+    return {
+      errorResponse: NextResponse.json(
+        { error: "Could not finalize zero-balance pricing detail. Please try again or contact support." },
+        { status: 503 },
+      ),
+    };
+  }
 
   // A zero-cash booking can be covered by promotions/referrals alone or by a
   // Cleaning Credit reservation. Settle the reservation first when present so

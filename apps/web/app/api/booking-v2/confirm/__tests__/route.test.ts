@@ -86,6 +86,10 @@ vi.mock("@/lib/promotions/resolveCheckoutPromoEligibilityExtras", () => ({
     customerSegments: [],
   }),
 }));
+vi.mock("@/lib/booking/ensureBookingV2R0LineItems", () => ({
+  ensureBookingV2R0LineItems: vi.fn().mockResolvedValue({ ok: true, created: true }),
+}));
+
 vi.mock("@/lib/payments/settleFullyCoveredBooking", () => ({
   settleFullyCoveredBooking: vi.fn().mockResolvedValue({
     ok: true,
