@@ -86,4 +86,28 @@ describe("SALES-BOOKING-CONVERSION-01", () => {
     expect(existingBlock).not.toContain("deleteSalesDocument");
     expect(existingBlock).toContain("booking_create_failed:");
   });
+  it("routes existing invoice acceptance retries through canonical conversion recovery", () => {
+    const src = readFileSync(
+      join(root, "lib/salesDocument/acceptSalesQuote.ts"),
+      "utf8",
+    );
+
+    expect(src).toContain("const existing = await findInvoiceForQuote");
+    expect(src).toContain("const converted = await convertSalesQuoteToInvoice(admin, quoteId, null)");
+    expect(src).toContain("alreadyExisted: Boolean(existing)");
+    expect(src).not.toContain("createBookingFromSalesQuoteInvoice(admin");
+    expect(src).not.toContain('.update({ status: "accepted" })');
+  });
+
+  it("does not duplicate acceptance notifications or invoice email for an already accepted retry", () => {
+    const src = readFileSync(
+      join(root, "lib/salesDocument/acceptSalesQuote.ts"),
+      "utf8",
+    );
+
+    expect(src).toContain('const wasAccepted = String(q.status ?? "").toLowerCase() === "accepted"');
+    expect(src).toContain("if (!wasAccepted) {");
+    expect(src).toContain("notifyAdminSalesQuoteAccepted");
+    expect(src).toContain("sendSalesDocumentToCustomer");
+  });
 });
