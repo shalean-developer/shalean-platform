@@ -423,11 +423,20 @@ export function cleanerHasPayoutAllocationOnBooking(
   return perCleanerAllocationsForBooking(booking, roster).some((alloc) => alloc.cleaner_id === target);
 }
 
+export type RosterMemberPayoutAllocationRow = {
+  cleaner_id: string;
+  /** Canonical per-cleaner total used by payout allocation reads (base + bonus). */
+  payout_cents: number;
+  base_payout_cents: number;
+  bonus_cents: number;
+  cleaner_payout_id?: string | null;
+};
+
 export async function loadRosterMemberPayoutsByBookingIds(
   admin: SupabaseClient,
   bookingIds: string[],
-): Promise<Map<string, { cleaner_id: string; payout_cents: number; cleaner_payout_id?: string | null }[]>> {
-  const map = new Map<string, { cleaner_id: string; payout_cents: number; cleaner_payout_id?: string | null }[]>();
+): Promise<Map<string, RosterMemberPayoutAllocationRow[]>> {
+  const map = new Map<string, RosterMemberPayoutAllocationRow[]>();
   if (!bookingIds.length) return map;
 
   for (let i = 0; i < bookingIds.length; i += 120) {
@@ -449,11 +458,13 @@ export async function loadRosterMemberPayoutsByBookingIds(
       const cid = String(row.cleaner_id ?? "").trim();
       if (!bid || !cid) continue;
       const list = map.get(bid) ?? [];
+      const basePayoutCents = Math.max(0, Math.floor(Number(row.payout_cents) || 0));
+      const bonusCents = Math.max(0, Math.floor(Number(row.bonus_cents) || 0));
       list.push({
         cleaner_id: cid,
-        payout_cents:
-          Math.max(0, Math.floor(Number(row.payout_cents) || 0)) +
-          Math.max(0, Math.floor(Number(row.bonus_cents) || 0)),
+        payout_cents: basePayoutCents + bonusCents,
+        base_payout_cents: basePayoutCents,
+        bonus_cents: bonusCents,
         cleaner_payout_id: row.cleaner_payout_id ?? null,
       });
       map.set(bid, list);
