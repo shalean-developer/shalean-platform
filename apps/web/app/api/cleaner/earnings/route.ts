@@ -33,6 +33,7 @@ import type { CleanerPayoutSummaryRow } from "@/lib/cleaner/cleanerPayoutSummary
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
 import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { fetchViewerPayoutByBookingIds } from "@/lib/cleaner/fetchViewerPayoutByBookingIds";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
@@ -238,24 +239,14 @@ export async function GET(request: Request) {
   const as_of = new Date().toISOString();
 
   const bookingIds = bookings.map((b) => String(b.id ?? "").trim()).filter(Boolean);
-  const viewerPayoutByBooking = new Map<string, number>();
-  if (bookingIds.length > 0) {
-    const { data: memberPayoutRows, error: memberPayoutError } = await admin
-      .from("team_job_member_payouts")
-      .select("booking_id, payout_cents")
-      .eq("cleaner_id", cleanerId)
-      .in("booking_id", bookingIds);
-    if (memberPayoutError) {
-      return NextResponse.json({ error: memberPayoutError.message }, { status: 500 });
-    }
-    for (const raw of memberPayoutRows ?? []) {
-      const row = raw as { booking_id?: string | null; payout_cents?: number | null };
-      const bookingId = String(row.booking_id ?? "").trim();
-      const payoutCents = Number(row.payout_cents);
-      if (bookingId && Number.isFinite(payoutCents) && !viewerPayoutByBooking.has(bookingId)) {
-        viewerPayoutByBooking.set(bookingId, Math.max(0, Math.round(payoutCents)));
-      }
-    }
+  let viewerPayoutByBooking: Map<string, number>;
+  try {
+    viewerPayoutByBooking = await fetchViewerPayoutByBookingIds(admin, cleanerId, bookingIds);
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Could not load cleaner payout allocations." },
+      { status: 500 },
+    );
   }
 
   const rows = bookings.map((booking) => ({

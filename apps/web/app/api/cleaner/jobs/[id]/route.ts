@@ -21,6 +21,7 @@ import {
   type CleanerLifecycleResult,
 } from "@/lib/cleaner/runCleanerBookingLifecycleAction";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { fetchViewerPayoutByBookingIds } from "@/lib/cleaner/fetchViewerPayoutByBookingIds";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import {
   parseBookingEarningsSummary,
@@ -389,7 +390,21 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const earningsSummary = parseBookingEarningsSummary(record.earnings_summary);
   const cleanerFacing = resolveCleanerFacingEarnings(earningsSummary, session.cleanerId);
-  const jobEarningCents = attributionRemoved ? null : (cleanerFacing?.job_earning_cents ?? displayEarningsCents);
+  let viewerPayoutCents: number | null = null;
+  if (!attributionRemoved) {
+    try {
+      viewerPayoutCents =
+        (await fetchViewerPayoutByBookingIds(admin, session.cleanerId, [bookingId])).get(bookingId) ?? null;
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "Could not load cleaner payout allocation." },
+        { status: 500 },
+      );
+    }
+  }
+  const jobEarningCents = attributionRemoved
+    ? null
+    : (viewerPayoutCents ?? cleanerFacing?.job_earning_cents ?? displayEarningsCents);
   const bonusCents = attributionRemoved ? 0 : (cleanerFacing?.bonus_cents ?? 0);
 
   const jobPayload = {

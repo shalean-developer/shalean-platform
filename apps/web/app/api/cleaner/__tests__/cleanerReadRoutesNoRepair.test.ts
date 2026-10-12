@@ -41,7 +41,9 @@ describe("cleaner read routes do not schedule earnings repair", () => {
     expect(source).toContain("admin_recurring_unpaid_completion_override_by, metadata");
     expect(source).toContain("const attributionRemoved = bookingHasActivePayoutAttributionRemoval(record)");
     expect(source).toContain("if (!persistedIsPositive && !attributionRemoved)");
-    expect(source).toContain("const jobEarningCents = attributionRemoved ? null");
+    expect(source).toContain("const jobEarningCents = attributionRemoved");
+    expect(source).toContain("? null");
+    expect(source).toContain("viewerPayoutCents ?? cleanerFacing?.job_earning_cents ?? displayEarningsCents");
     expect(source).toContain("metadata: _omitMetadata");
   });
 });
