@@ -42,11 +42,33 @@ const TARGET_IDS = new Set([
 ]);
 
 const MISMATCH_ID = "e6a876b3-81fa-4da4-95d5-9f9a467ae970";
+const CANONICAL_PRODUCTION_PROJECT_REF = "paqjwfulwywtsyyvdxrq";
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !key) throw new Error("Missing Supabase URL/service role configuration.");
 
 const apply = process.argv.includes("--apply");
+if (apply) {
+  let configuredProjectRef = "";
+  try {
+    configuredProjectRef = new URL(url).hostname.split(".")[0]?.trim().toLowerCase() ?? "";
+  } catch {
+    throw new Error("AUDIT-02A07 apply blocked: invalid Supabase URL.");
+  }
+  const expectedProjectRef = String(process.env.AUDIT_02A07_EXPECTED_PROJECT_REF ?? "")
+    .trim()
+    .toLowerCase();
+  if (expectedProjectRef !== CANONICAL_PRODUCTION_PROJECT_REF) {
+    throw new Error(
+      `AUDIT-02A07 apply blocked: set AUDIT_02A07_EXPECTED_PROJECT_REF=${CANONICAL_PRODUCTION_PROJECT_REF}.`,
+    );
+  }
+  if (configuredProjectRef !== CANONICAL_PRODUCTION_PROJECT_REF) {
+    throw new Error(
+      `AUDIT-02A07 apply blocked: configured Supabase project ${configuredProjectRef || "<unknown>"} is not production ${CANONICAL_PRODUCTION_PROJECT_REF}.`,
+    );
+  }
+}
 const requested = process.argv
   .filter((arg) => arg.startsWith("--booking-id="))
   .map((arg) => arg.slice("--booking-id=".length).trim().toLowerCase());

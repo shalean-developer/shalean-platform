@@ -100,6 +100,9 @@ describe("AUDIT-02A07 historical Booking V2 line-item repair", () => {
     expect((source.match(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi) ?? []).length).toBeGreaterThanOrEqual(26);
     expect(source).toContain("AUDIT-02A07 apply requires exactly one --booking-id=<uuid>.");
     expect(source).toContain("AUDIT-02A07 apply blocked. Set AUDIT_02A07_APPLY=YES.");
+    expect(source).toContain('CANONICAL_PRODUCTION_PROJECT_REF = "paqjwfulwywtsyyvdxrq"');
+    expect(source).toContain("AUDIT_02A07_EXPECTED_PROJECT_REF");
+    expect(source).toContain("configured Supabase project");
     expect(source).toContain('admin.rpc("apply_audit_02a07_historical_line_items"');
   });
 
@@ -124,6 +127,10 @@ describe("AUDIT-02A07 historical Booking V2 line-item repair", () => {
     expect(migration).toContain("for update");
     expect(migration).toContain("pricing_evidence_changed");
     expect(migration).toContain("existing_line_items_conflict");
+    const retryMigration = readFileSync(path.join(root, "supabase/migrations/20261012063000_audit_02a07_r0_retry_line_items.sql"), "utf8");
+    expect(retryMigration).toContain("'checkout_lock_catalog_v1'");
+    expect(retryMigration).toContain("'checkout_payable_reconciliation_v1'");
+    expect(retryMigration).toContain("pending_line_items_financial_state_changed");
     expect(migration).toContain("grant execute on function public.replace_pending_r0_booking_line_items");
     expect(migration).toContain("to service_role");
     expect(migration).toContain("revoke all on function public.replace_pending_r0_booking_line_items");
