@@ -564,12 +564,12 @@ describe("GET /api/cleaner/jobs — team visibility", { timeout: 60_000 }, () =>
       cleaners: [{ id: "cleaner-1" }],
       team_members: [],
       booking_cleaners: [
-        { booking_id: "b-paired-pay", cleaner_id: "cleaner-1", role: "member" },
-        { booking_id: "b-paired-pay", cleaner_id: "cleaner-2", role: "lead" },
+        { booking_id: "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa", cleaner_id: "cleaner-1", role: "member" },
+        { booking_id: "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa", cleaner_id: "cleaner-2", role: "lead" },
       ],
       booking_roster_member_payouts: [
         {
-          booking_id: "b-paired-pay",
+          booking_id: "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa",
           cleaner_id: "cleaner-1",
           payout_cents: 25_000,
           bonus_cents: 1_000,
@@ -578,7 +578,7 @@ describe("GET /api/cleaner/jobs — team visibility", { timeout: 60_000 }, () =>
       ],
       bookings: [
         {
-          id: "b-paired-pay",
+          id: "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa",
           cleaner_id: "cleaner-2",
           payout_owner_cleaner_id: "cleaner-2",
           team_id: null,
