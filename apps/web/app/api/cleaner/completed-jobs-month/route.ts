@@ -7,6 +7,8 @@ import {
 import { resolveCleanerDashboardEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { fetchViewerPayoutByBookingIds } from "@/lib/cleaner/fetchViewerPayoutByBookingIds";
+import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +25,7 @@ type SummaryRow = {
   cleaner_earnings_total_cents?: unknown;
   cleaner_payout_cents?: unknown;
   earnings_summary?: unknown;
+  metadata?: unknown;
 };
 
 function ymdInJohannesburg(date: Date): string {
@@ -70,7 +73,7 @@ export async function GET(request: Request) {
   const ranges = johannesburgRanges();
   const { data, error } = await fetchCleanerVisibleBookingsMerged(admin, cleanerId, {
     select:
-      "id, date, status, cleaner_id, payout_owner_cleaner_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, earnings_summary",
+      "id, date, status, cleaner_id, payout_owner_cleaner_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, earnings_summary, metadata",
     perBranchLimit: 1000,
     applyEachBranch: (query) =>
       query.eq("status", "completed").gte("date", ranges.monthFrom).lt("date", ranges.monthTo),
@@ -88,10 +91,24 @@ export async function GET(request: Request) {
   for (const raw of (data ?? []) as SummaryRow[]) {
     const id = String(raw.id ?? "").trim();
     if (!id || unique.has(id)) continue;
-    if (!isExplicitCleanerBookingAttribution(raw as Record<string, unknown>, cleanerId, explicitRosterBookingIds)) {
+    const record = raw as Record<string, unknown>;
+    if (!isExplicitCleanerBookingAttribution(record, cleanerId, explicitRosterBookingIds)) {
+      continue;
+    }
+    if (bookingHasActivePayoutAttributionRemoval(record)) {
       continue;
     }
     unique.set(id, raw);
+  }
+
+  let viewerPayoutByBooking: Map<string, number>;
+  try {
+    viewerPayoutByBooking = await fetchViewerPayoutByBookingIds(admin, cleanerId, [...unique.keys()]);
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Could not load cleaner payout allocations." },
+      { status: 500 },
+    );
   }
 
   let weeklyEarningsCents = 0;
@@ -99,9 +116,16 @@ export async function GET(request: Request) {
 
   for (const row of unique.values()) {
     const date = String(row.date ?? "").slice(0, 10);
+    const bookingId = String(row.id ?? "").trim();
     const cents = Math.max(
       0,
-      resolveCleanerDashboardEarningsCents(row as Record<string, unknown>, cleanerId),
+      resolveCleanerDashboardEarningsCents(
+        {
+          ...(row as Record<string, unknown>),
+          viewer_payout_cents: viewerPayoutByBooking.get(bookingId) ?? null,
+        },
+        cleanerId,
+      ),
     );
     monthlyEarningsCents += cents;
     if (date >= ranges.weekFrom && date < ranges.weekTo) {
