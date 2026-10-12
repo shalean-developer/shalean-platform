@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import {
   loadRosterByBookingIds,
+  loadRosterMemberPayoutsByBookingIds,
   loadTeamJobMemberPayoutsByBookingIds,
   perCleanerAllocationsForBooking,
 } from "@/lib/admin/payouts/officePayoutPeriodReport";
@@ -43,8 +44,9 @@ export async function GET(request: Request) {
 
   const list = (rows ?? []) as BookingEligibleRow[];
   const bookingIds = list.map((row) => row.id).filter(Boolean);
-  const [rosterByBooking, teamPayoutsByBooking] = await Promise.all([
+  const [rosterByBooking, rosterPayoutsByBooking, teamPayoutsByBooking] = await Promise.all([
     loadRosterByBookingIds(admin, bookingIds),
+    loadRosterMemberPayoutsByBookingIds(admin, bookingIds),
     loadTeamJobMemberPayoutsByBookingIds(admin, bookingIds),
   ]);
 
@@ -57,7 +59,10 @@ export async function GET(request: Request) {
     const allocations = perCleanerAllocationsForBooking(
       booking,
       rosterByBooking.get(booking.id) ?? [],
-      teamPayoutsByBooking.get(booking.id),
+      [
+        ...(rosterPayoutsByBooking.get(booking.id) ?? []),
+        ...(teamPayoutsByBooking.get(booking.id) ?? []),
+      ],
     );
     allocationsByBooking.set(booking.id, allocations);
     for (const allocation of allocations) {

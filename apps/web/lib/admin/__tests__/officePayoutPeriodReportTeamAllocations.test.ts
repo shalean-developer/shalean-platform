@@ -150,4 +150,54 @@ describe("perCleanerAllocationsForBooking team_job_member_payouts fallback", () 
     expect(allocs).toEqual([{ cleaner_id: THANDEKA, cents: 30000 }]);
   });
 
+
+  it("uses canonical paired-roster payout rows over a booking-wide freeze", () => {
+    const allocs = perCleanerAllocationsForBooking(
+      {
+        earnings_summary: {
+          per_cleaner_earnings: [
+            {
+              cleaner_id: LORRAINE,
+              role: "lead",
+              base_earning_cents: 26000,
+              bonus_cents: 0,
+              deduction_cents: 0,
+              total_cents: 26000,
+            },
+            {
+              cleaner_id: THANDEKA,
+              role: "member",
+              base_earning_cents: 26000,
+              bonus_cents: 0,
+              deduction_cents: 0,
+              total_cents: 26000,
+            },
+          ],
+        },
+        cleaner_id: LORRAINE,
+        payout_owner_cleaner_id: LORRAINE,
+        display_earnings_cents: 26000,
+        cleaner_payout_cents: 26000,
+        cleaner_earnings_total_cents: 52000,
+        payout_frozen_cents: 52000,
+      },
+      [
+        { cleaner_id: LORRAINE, role: "lead" },
+        { cleaner_id: THANDEKA, role: "member" },
+      ],
+      [
+        { cleaner_id: LORRAINE, payout_cents: 26000 },
+        { cleaner_id: THANDEKA, payout_cents: 26000 },
+      ],
+    );
+
+    expect(allocs).toEqual(
+      expect.arrayContaining([
+        { cleaner_id: LORRAINE, cents: 26000 },
+        { cleaner_id: THANDEKA, cents: 26000 },
+      ]),
+    );
+    expect(allocs.reduce((sum, row) => sum + row.cents, 0)).toBe(52000);
+  });
+
 });
