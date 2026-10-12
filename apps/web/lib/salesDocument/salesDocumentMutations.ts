@@ -11,6 +11,7 @@ import {
 } from "@/lib/salesDocument/types";
 import { createBookingFromSalesQuoteInvoice } from "@/lib/salesDocument/createBookingFromSalesQuoteInvoice";
 import { ensureSalesDocumentCustomer } from "@/lib/salesDocument/ensureSalesDocumentCustomer";
+import { deleteSalesDocument } from "@/lib/salesDocument/deleteSalesDocument";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { syncSalesDocumentToZoho } from "@/lib/salesDocument/syncSalesDocumentToZoho";
 import { recordSalesQuoteAcceptanceSnapshot } from "@/lib/salesDocument/recordSalesQuoteAcceptanceSnapshot";
@@ -27,6 +28,8 @@ export type CreateSalesDocumentInput = {
   notes?: string | null;
   created_by?: string | null;
   converted_from_id?: string | null;
+  /** Internal conversion option: delay Zoho creation until booking creation succeeds. */
+  sync_zoho?: boolean;
 };
 
 export async function createSalesDocument(
@@ -67,7 +70,9 @@ export async function createSalesDocument(
   if (error || !data) return { ok: false, error: error?.message ?? "insert_failed" };
 
   const id = String((data as { id: string }).id);
-  await syncSalesDocumentToZoho(admin, id);
+  if (input.sync_zoho !== false) {
+    await syncSalesDocumentToZoho(admin, id);
+  }
   return { ok: true, id };
 }
 
@@ -243,6 +248,17 @@ export async function convertSalesQuoteToInvoice(
       return { ok: false, error: `booking_create_failed:${bookingResult.error}` };
     }
 
+    const zohoSync = await syncSalesDocumentToZoho(admin, invoiceId);
+    if (!zohoSync.ok) {
+      await logSystemEvent({
+        level: "error",
+        source: "sales_document/convert",
+        message: "zoho_sync_failed_before_accept",
+        context: { quoteId, invoiceId, error: zohoSync.error },
+      });
+      return { ok: false, error: `zoho_sync_failed:${zohoSync.error}` };
+    }
+
     const snapshot = await recordSalesQuoteAcceptanceSnapshot(admin, { quoteId, invoiceId });
     if (!snapshot.ok) return snapshot;
 
@@ -307,6 +323,7 @@ export async function convertSalesQuoteToInvoice(
     notes: q.notes,
     created_by: createdBy ?? q.created_by,
     converted_from_id: quoteId,
+    sync_zoho: false,
   });
 
   if (!created.ok) return created;
@@ -322,7 +339,38 @@ export async function convertSalesQuoteToInvoice(
       message: "booking_create_failed_before_accept",
       context: { quoteId, invoiceId: created.id, error: bookingResult.error },
     });
+
+    const compensation = await deleteSalesDocument(admin, created.id);
+    if (!compensation.ok) {
+      await logSystemEvent({
+        level: "error",
+        source: "sales_document/convert",
+        message: "booking_create_failed_invoice_compensation_failed",
+        context: {
+          quoteId,
+          invoiceId: created.id,
+          bookingError: bookingResult.error,
+          compensationError: compensation.error,
+        },
+      });
+      return {
+        ok: false,
+        error: `booking_create_failed:${bookingResult.error}:invoice_compensation_failed:${compensation.error}`,
+      };
+    }
+
     return { ok: false, error: `booking_create_failed:${bookingResult.error}` };
+  }
+
+  const zohoSync = await syncSalesDocumentToZoho(admin, created.id);
+  if (!zohoSync.ok) {
+    await logSystemEvent({
+      level: "error",
+      source: "sales_document/convert",
+      message: "zoho_sync_failed_before_accept",
+      context: { quoteId, invoiceId: created.id, error: zohoSync.error },
+    });
+    return { ok: false, error: `zoho_sync_failed:${zohoSync.error}` };
   }
 
   const snapshot = await recordSalesQuoteAcceptanceSnapshot(admin, {
