@@ -86,6 +86,20 @@ async function trySettleFullyCoveredOrError(
 ): Promise<{ requiresPayment: true } | { requiresPayment: false } | { errorResponse: NextResponse }> {
   if (payAmountZar > 0) return { requiresPayment: true };
 
+  // AUDIT-02A07: R0 bypasses Paystack initialization. Materialize and
+  // atomically reconcile its normalized line-item ledger before any irreversible
+  // Cleaning Credit settlement.
+  const lineItems = await ensureBookingV2R0LineItems(supabase, bookingId);
+  if (!lineItems.ok) {
+    console.error("[booking-v2/confirm] R0 line-item persistence failed:", lineItems.error);
+    return {
+      errorResponse: NextResponse.json(
+        { error: "Could not finalize zero-balance pricing detail. Please try again or contact support." },
+        { status: 503 },
+      ),
+    };
+  }
+
   // A zero-cash booking can be covered by promotions/referrals alone or by a
   // Cleaning Credit reservation. Settle the reservation first when present so
   // the booking can never become payment-success while its spent credit remains
@@ -96,21 +110,6 @@ async function trySettleFullyCoveredOrError(
     return {
       errorResponse: NextResponse.json(
         { error: "Could not settle Cleaning Credit. Please try again or contact support." },
-        { status: 503 },
-      ),
-    };
-  }
-
-  // AUDIT-02A07: R0 bypasses Paystack initialization, so materialize the
-  // immutable booking snapshot into normalized line items before settlement.
-  // Fail closed here: a paid R0 booking must never exist without a reconciled
-  // line-item ledger.
-  const lineItems = await ensureBookingV2R0LineItems(supabase, bookingId);
-  if (!lineItems.ok) {
-    console.error("[booking-v2/confirm] R0 line-item persistence failed:", lineItems.error);
-    return {
-      errorResponse: NextResponse.json(
-        { error: "Could not finalize zero-balance pricing detail. Please try again or contact support." },
         { status: 503 },
       ),
     };

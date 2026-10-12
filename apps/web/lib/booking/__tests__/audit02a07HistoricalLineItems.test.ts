@@ -60,10 +60,26 @@ describe("AUDIT-02A07 historical Booking V2 line-item repair", () => {
     const root = path.resolve(process.cwd(), "../..");
     const source = readFileSync(path.join(root, "apps/web/app/api/booking-v2/confirm/route.ts"), "utf8");
     const ensureIndex = source.indexOf("ensureBookingV2R0LineItems(supabase, bookingId)");
+    const creditIndex = source.indexOf("settleCleaningCreditForBooking(supabase, bookingId)");
     const settleIndex = source.indexOf("settleFullyCoveredBooking(supabase, { bookingId, payAmountZar })");
     expect(ensureIndex).toBeGreaterThan(-1);
-    expect(settleIndex).toBeGreaterThan(ensureIndex);
+    expect(creditIndex).toBeGreaterThan(ensureIndex);
+    expect(settleIndex).toBeGreaterThan(creditIndex);
     expect(source).toContain("R0 line-item persistence failed");
+  });
+
+  it("uses the atomic snapshot-bound R0 line-item RPC", () => {
+    const root = path.resolve(process.cwd(), "../..");
+    const helper = readFileSync(path.join(root, "apps/web/lib/booking/ensureBookingV2R0LineItems.ts"), "utf8");
+    const migration = readFileSync(path.join(root, "supabase/migrations/20261012014500_audit_02a07_atomic_r0_line_items.sql"), "utf8");
+    expect(helper).toContain('admin.rpc("replace_pending_r0_booking_line_items"');
+    expect(helper).toContain("p_expected_evidence");
+    expect(migration).toContain("for update");
+    expect(migration).toContain("pricing_evidence_changed");
+    expect(migration).toContain("existing_line_items_conflict");
+    expect(migration).toContain("grant execute on function public.replace_pending_r0_booking_line_items");
+    expect(migration).toContain("to service_role");
+    expect(migration).toContain("revoke all on function public.replace_pending_r0_booking_line_items");
   });
 
   it("retains the current Paystack line-item fail-closed invariant", () => {
