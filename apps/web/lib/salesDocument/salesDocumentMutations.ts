@@ -11,6 +11,7 @@ import {
 } from "@/lib/salesDocument/types";
 import { createBookingFromSalesQuoteInvoice } from "@/lib/salesDocument/createBookingFromSalesQuoteInvoice";
 import { ensureSalesDocumentCustomer } from "@/lib/salesDocument/ensureSalesDocumentCustomer";
+import { deleteSalesDocument } from "@/lib/salesDocument/deleteSalesDocument";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { syncSalesDocumentToZoho } from "@/lib/salesDocument/syncSalesDocumentToZoho";
 import { recordSalesQuoteAcceptanceSnapshot } from "@/lib/salesDocument/recordSalesQuoteAcceptanceSnapshot";
@@ -322,6 +323,26 @@ export async function convertSalesQuoteToInvoice(
       message: "booking_create_failed_before_accept",
       context: { quoteId, invoiceId: created.id, error: bookingResult.error },
     });
+
+    const compensation = await deleteSalesDocument(admin, created.id);
+    if (!compensation.ok) {
+      await logSystemEvent({
+        level: "error",
+        source: "sales_document/convert",
+        message: "booking_create_failed_invoice_compensation_failed",
+        context: {
+          quoteId,
+          invoiceId: created.id,
+          bookingError: bookingResult.error,
+          compensationError: compensation.error,
+        },
+      });
+      return {
+        ok: false,
+        error: `booking_create_failed:${bookingResult.error}:invoice_compensation_failed:${compensation.error}`,
+      };
+    }
+
     return { ok: false, error: `booking_create_failed:${bookingResult.error}` };
   }
 
