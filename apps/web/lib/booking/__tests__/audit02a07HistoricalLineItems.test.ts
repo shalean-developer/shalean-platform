@@ -98,7 +98,9 @@ describe("AUDIT-02A07 historical Booking V2 line-item repair", () => {
     const root = path.resolve(process.cwd(), "../..");
     const source = readFileSync(path.join(root, "apps/web/scripts/audit02a07HistoricalLineItems.ts"), "utf8");
     expect((source.match(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi) ?? []).length).toBeGreaterThanOrEqual(26);
-    expect(source).toContain('throw new Error("AUDIT-02A07 apply is blocked until staging fixture verification closes.")');
+    expect(source).toContain("AUDIT-02A07 apply requires exactly one --booking-id=<uuid>.");
+    expect(source).toContain("AUDIT-02A07 apply blocked. Set AUDIT_02A07_APPLY=YES.");
+    expect(source).toContain('admin.rpc("apply_audit_02a07_historical_line_items"');
   });
 
   it("requires R0 line items before zero-balance settlement", () => {
@@ -125,6 +127,24 @@ describe("AUDIT-02A07 historical Booking V2 line-item repair", () => {
     expect(migration).toContain("grant execute on function public.replace_pending_r0_booking_line_items");
     expect(migration).toContain("to service_role");
     expect(migration).toContain("revoke all on function public.replace_pending_r0_booking_line_items");
+  });
+
+  it("governs production historical apply with an allowlisted service-role RPC", () => {
+    const root = path.resolve(process.cwd(), "../..");
+    const migration = readFileSync(path.join(root, "supabase/migrations/20261012054000_audit_02a07_historical_line_items_apply.sql"), "utf8");
+    const source = readFileSync(path.join(root, "apps/web/scripts/audit02a07HistoricalLineItems.ts"), "utf8");
+    expect(migration).toContain("booking_outside_allowlist");
+    expect(migration).toContain("solo_booking_not_earnings_safe");
+    expect(migration).toContain("historical_line_must_not_earn_cleaner");
+    expect(migration).toContain("mismatch_booking_total_changed");
+    expect(migration).toContain("mismatch_booking_financial_state_changed");
+    expect(migration).toContain("mismatch_existing_line_state_changed");
+    expect(migration).toContain("already_repaired");
+    expect(migration).toContain("grant execute on function public.apply_audit_02a07_historical_line_items");
+    expect(migration).toContain("to service_role");
+    expect(source).toContain("earnings/payout state changed during repair");
+    expect(source).toContain("booking total changed during repair");
+    expect(source).toContain('reconciliation: "PASS"');
   });
 
   it("retains the current Paystack line-item fail-closed invariant", () => {
