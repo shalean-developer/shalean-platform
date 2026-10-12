@@ -40,7 +40,6 @@ export async function markSalesDocumentPaidManual(
     !salesDocumentCanRecordManualPayment({
       document_type: "invoice",
       status: st,
-      amount_paid_cents: 0,
     })
   ) {
     return { ok: false, error: "invalid_status" };
