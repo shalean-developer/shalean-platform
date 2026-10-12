@@ -46,6 +46,9 @@ export async function markSalesDocumentPaidManual(
   }
 
   const total = Math.max(0, Math.round(Number(row.total_cents ?? 0)));
+  const balance = Math.max(0, Math.round(Number(row.balance_cents ?? 0)));
+  if (total <= 0 || balance <= 0) return { ok: false, error: "invalid_payment_amount" };
+
   const nowIso = new Date().toISOString();
 
   const { error: updErr } = await admin
