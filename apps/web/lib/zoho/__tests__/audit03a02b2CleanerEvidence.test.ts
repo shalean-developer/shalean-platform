@@ -42,38 +42,42 @@ describe("AUDIT-03A-02B.2 Zoho read-only candidate matching", () => {
     expect(candidateCleanerMatches({source:"banktransactions",payee:"Example"},cleaners)).toEqual([]);
   });
 
-  it("paginates GET-only expenses with strict date filters and completes", async () => {
+  it("accepts Zoho expense array page_context and stops on a short page", async () => {
     const called: string[] = [];
     const get = async (path: string) => {
       called.push(path);
-      return called.length === 1
-        ? { expenses: [{expense_id:"e1",date:"2026-06-20"}], page_context:{has_more_page:true} }
-        : { expenses: [{expense_id:"e2",date:"2026-07-01"}], page_context:{has_more_page:false} };
+      return {expenses:[{expense_id:"e1",date:"2026-06-20"}],page_context:[{page:1,per_page:200}]};
     };
     const rows = await listZohoEvidencePages("expenses",get);
-    expect(rows).toHaveLength(2);
-    expect(rows.every(row=>row.source==="expenses")).toBe(true);
-    expect(called).toEqual([
-      "/expenses?date_start=2026-06-01&date_end=2026-07-31&per_page=200&page=1",
-      "/expenses?date_start=2026-06-01&date_end=2026-07-31&per_page=200&page=2",
-    ]);
+    expect(rows).toHaveLength(1);
+    expect(called).toEqual(["/expenses?date_start=2026-06-01&date_end=2026-07-31&per_page=200&page=1"]);
   });
-  it("fails closed on incomplete bank pagination and malformed response", async () => {
+  it("accepts documented bank list without page_context and correct date filters", async () => {
+    const paths: string[] = [];
+    const result = await listZohoEvidencePages("banktransactions",async path => {
+      paths.push(path);
+      return {banktransactions:[{transaction_id:"b1",date:"2026-06-20"}]};
+    });
+    expect(result).toHaveLength(1);
+    expect(paths).toEqual(["/banktransactions?date_after=2026-05-31&date_before=2026-08-01&per_page=200&page=1"]);
+  });
+  it("rejects missing arrays, malformed row and oversized pages", async () => {
     await expect(listZohoEvidencePages("banktransactions",async()=>({
-      banktransactions:[],page_context:{}
-    }))).rejects.toThrow("pagination shape unknown");
-    await expect(listZohoEvidencePages("banktransactions",async()=>({
-      banktransactions:null,page_context:{has_more_page:false}
+      banktransactions:null
     }))).rejects.toThrow("missing array");
     await expect(listZohoEvidencePages("expenses",async()=>({
-      expenses:[null],page_context:{has_more_page:false}
+      expenses:[null]
     }))).rejects.toThrow("malformed row");
+    await expect(listZohoEvidencePages("expenses",async()=>({
+      expenses:Array.from({length:201},()=>({date:"2026-06-20"}))
+    }))).rejects.toThrow("oversized page");
   });
-  it("rejects an endless pagination feed instead of emitting incomplete results", async () => {
+  it("rejects endless full pages instead of reporting partial evidence", async () => {
     let calls = 0;
+    const records = Array.from({length:200},(_,i)=>({expense_id:String(i),date:"2026-06-20"}));
     await expect(listZohoEvidencePages("expenses",async()=>{
       calls++;
-      return {expenses:[],page_context:{has_more_page:true}};
+      return {expenses:records};
     })).rejects.toThrow("exceeded 20 pages");
     expect(calls).toBe(20);
   });
