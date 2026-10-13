@@ -44,6 +44,13 @@ async function main() {
   if (String(process.env.ZOHO_ORGANIZATION_ID ?? "").trim() !== EXPECTED_ZOHO_ORG) {
     throw new Error("Unexpected Zoho production organization ID");
   }
+  // Shalean's production Zoho connection uses the US data-center pair.
+  // A production audit must not send OAuth tokens to arbitrary configured hosts.
+  const accountsDomain = process.env.ZOHO_ACCOUNTS_DOMAIN ?? "accounts.zoho.com";
+  const apiDomain = process.env.ZOHO_API_DOMAIN ?? "www.zohoapis.com";
+  if (accountsDomain !== "accounts.zoho.com" || apiDomain !== "www.zohoapis.com") {
+    throw new Error("Unexpected Zoho OAuth/API domain; audit refuses production credentials");
+  }
   const db = createClient(url,key,{auth:{persistSession:false}});
   const {data:bookings,error} = await db.from("bookings").select(
     "id,cleaner_id,cleaner_earnings_total_cents,completed_at"
