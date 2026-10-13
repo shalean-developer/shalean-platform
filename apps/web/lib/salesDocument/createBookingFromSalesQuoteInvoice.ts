@@ -234,7 +234,7 @@ export async function createBookingFromSalesQuoteInvoice(
       city_id: null,
       date,
       time: DEFAULT_TIME,
-      total_paid_zar: collectedTotalZar,
+      ...(invoicePaid ? { total_paid_zar: collectedTotalZar } : {}),
       pricing_version_id: null,
       price_breakdown: null,
       total_price: quotedTotalZar,
@@ -269,7 +269,30 @@ export async function createBookingFromSalesQuoteInvoice(
     },
   });
 
-  if (!ins.ok) return ins;
+  if (!ins.ok) {
+    // Any insert failure can race with another conversion request that has just
+    // established the unique sales_document_id booking. Re-read before failing;
+    // only a valid non-rollback booking converts the failure into idempotent success.
+    const { data: racedBooking, error: racedErr } = await admin
+      .from("bookings")
+      .select("id, status, metadata")
+      .eq("sales_document_id", invoiceId)
+      .maybeSingle();
+
+    if (!racedErr && racedBooking?.id) {
+      const racedCancelledRollback =
+        String(racedBooking.status ?? "").trim().toLowerCase() === "cancelled" &&
+        isSalesDocumentLineItemRollbackMarker(racedBooking.metadata);
+      if (!racedCancelledRollback) {
+        return {
+          ok: true,
+          bookingId: String(racedBooking.id),
+          alreadyExisted: true,
+        };
+      }
+    }
+    return ins;
+  }
 
   await logSystemEvent({
     level: "info",
