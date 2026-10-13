@@ -77,7 +77,11 @@ function adminWithExistingInvoice() {
 describe("convertSalesQuoteToInvoice booking invariant", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(recordSalesQuoteAcceptanceSnapshot).mockResolvedValue({ ok: true });
+    vi.mocked(recordSalesQuoteAcceptanceSnapshot).mockResolvedValue({
+      ok: true,
+      snapshotId: "44444444-4444-4444-8444-444444444444",
+      alreadyExisted: false,
+    });
   });
 
   it("returns failure when an existing invoice cannot recover its linked booking", async () => {
