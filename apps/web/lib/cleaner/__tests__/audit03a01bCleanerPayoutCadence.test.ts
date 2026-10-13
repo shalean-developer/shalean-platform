@@ -26,10 +26,12 @@ const LIVE_PAYOUT_COPY_FILES = [
   "apps/web/lib/cleaner/applyPageContent.ts",
   "apps/web/lib/seo/cleanerApplyLandingSeo.ts",
   "apps/web/lib/cleaner/earningsInsightsSeries.ts",
+  "apps/web/components/cleaner/CleanerApplyLanding.tsx",
 ];
 
 const FORBIDDEN_PROMISES = [
   "weekly payouts",
+  "earn weekly",
   "weekly payout",
   "paid weekly",
   "paid every week",
