@@ -62,6 +62,17 @@ describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D/01E/01F/01G", () => {
     expect(src).toContain("booking_create_failed_invoice_compensation_failed");
   });
 
+  it("waits through normal conversion contention before returning busy", () => {
+    const src = readFileSync(
+      join(root, "lib/salesDocument/salesDocumentMutations.ts"),
+      "utf8",
+    );
+
+    expect(src).toContain("attempt < 120");
+    expect(src).toContain("await delay(500)");
+    expect(src).toContain('error: "conversion_busy"');
+  });
+
   it("re-reads Zoho linkage under the lease and skips already-linked replays", () => {
     const src = readFileSync(
       join(root, "lib/salesDocument/salesDocumentMutations.ts"),
