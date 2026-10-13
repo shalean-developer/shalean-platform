@@ -257,4 +257,16 @@ describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D/01E/01F/01G", () => {
     expect(sql).toContain("a.metadata->>'to' = 'won'");
     expect(sql).toContain("create or replace function public.mark_sales_quote_opportunity_won_atomic");
   });
+  it("recognizes the legacy full UUID Zoho identity marker", () => {
+    const src = readFileSync(
+      join(root, "lib/zoho/zohoBooksService.ts"),
+      "utf8",
+    );
+
+    expect(src).toContain("const canonicalTrace");
+    expect(src).toContain("const legacyTrace");
+    expect(src).toContain("Shalean sales document");
+    expect(src).toContain("notes.includes(canonicalTrace) || notes.includes(legacyTrace)");
+    expect(src).toContain('error: "ambiguous_full_identity_match"');
+  });
 });
