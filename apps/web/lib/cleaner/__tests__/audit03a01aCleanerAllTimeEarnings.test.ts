@@ -72,6 +72,8 @@ describe("AUDIT-03A-01A cleaner all-time earnings source of truth", () => {
     expect(source).toContain("fetchCleanerAllTimeEarningsCents");
     expect(source).toContain("const total_all_time = useLedgerTotals ? ledger_total_all_time : bookingAllTimeResult.total;");
     expect(source).toContain('const source_of_truth = useLedgerTotals ? ("ledger" as const) : ("booking" as const);');
+    expect(source).toContain("useLedgerTotals");
+    expect(source).toContain("Promise.resolve({ total: 0, error: null as string | null })");
   });
 
 });
