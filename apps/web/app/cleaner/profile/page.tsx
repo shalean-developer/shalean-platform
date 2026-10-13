@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,12 +22,12 @@ import { reportSignOutFailure, signOut } from "@/lib/auth/authClient";
 import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { accountHealthBadge, mapCleanerAccountHealthTier } from "@/lib/cleaner/mapCleanerAccountHealth";
-import { payoutArrivalSummaryJohannesburg } from "@/lib/cleaner/earnings/nextPayoutFriday";
 import { bankDisplayNameFromCode } from "@/lib/cleaner/southAfricanPaystackBanks";
 import { formatZarFromCents } from "@/lib/cleaner/cleanerZarFormat";
 import { CleanerDashboardInfoHint } from "@/components/cleaner-dashboard/CleanerDashboardInfoHint";
 import type { CleanerProfileSummaryJson } from "@/lib/cleaner/cleanerProfileSummaryTypes";
 import { CUSTOMER_SUPPORT_EMAIL } from "@/lib/site/customerSupport";
+import { CLEANER_PAYOUT_BANK_READY_COPY } from "@shalean/utils/cleanerPayoutCadence";
 
 type PaymentDetailsJson = {
   details?: {
@@ -228,19 +228,6 @@ export default function CleanerProfilePage() {
 
   const supportMailto = `mailto:${CUSTOMER_SUPPORT_EMAIL}?subject=${encodeURIComponent("Shalean cleaner — account help")}`;
 
-  const nextPayoutDateLine = useMemo(() => {
-    if (!summary) return "";
-    const p = payoutArrivalSummaryJohannesburg(new Date());
-    const ymd = p.payoutTargetFridayYmd;
-    const d = new Date(`${ymd}T12:00:00+02:00`);
-    return d.toLocaleDateString("en-ZA", {
-      timeZone: "Africa/Johannesburg",
-      weekday: "long",
-      month: "short",
-      day: "2-digit",
-    });
-  }, [summary]);
-
   return (
     <div className="mx-auto w-full max-w-lg space-y-4 bg-background px-4 pt-4">
       <Button asChild variant="ghost" size="sm" className="-ml-2 h-11 rounded-xl px-3 text-muted-foreground">
@@ -263,7 +250,7 @@ export default function CleanerProfilePage() {
                 <div className="min-w-0 space-y-1">
                   <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-50">Bank details saved</p>
                   <p className="text-sm text-emerald-900/90 dark:text-emerald-100/90">
-                    You&apos;re set for weekly payouts.
+                    {CLEANER_PAYOUT_BANK_READY_COPY}
                   </p>
                 </div>
               </div>
@@ -350,13 +337,13 @@ export default function CleanerProfilePage() {
           {summary ? (
             <Card className="rounded-2xl border border-border p-4 shadow-sm">
               <div className="flex items-center gap-1">
-                <h3 className="font-medium text-foreground">Next payout</h3>
+                <h3 className="font-medium text-foreground">Payout schedule</h3>
                 <CleanerDashboardInfoHint
-                  label="Next payout details"
+                  label="Payout schedule details"
                   text={`${summary.payout_schedule_headline}\n\n${summary.payout_schedule_sub}`}
                 />
               </div>
-              <p className="mt-2 text-sm font-semibold text-foreground">{nextPayoutDateLine}</p>
+              <p className="mt-2 text-sm font-semibold text-foreground">{summary.payout_schedule_headline}</p>
             </Card>
           ) : null}
 

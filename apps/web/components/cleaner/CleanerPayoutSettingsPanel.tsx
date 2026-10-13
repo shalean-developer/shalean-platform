@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,9 +16,9 @@ import { Label } from "@/components/ui/label";
 import { CleanerBankSearchCombobox } from "@/components/cleaner-profile/CleanerBankSearchCombobox";
 import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
-import { payoutArrivalSummaryJohannesburg } from "@/lib/cleaner/earnings/nextPayoutFriday";
 import { bankDisplayNameFromCode } from "@/lib/cleaner/southAfricanPaystackBanks";
 import type { CleanerProfileSummaryJson } from "@/lib/cleaner/cleanerProfileSummaryTypes";
+import { CLEANER_PAYOUT_BANK_READY_COPY } from "@shalean/utils/cleanerPayoutCadence";
 
 type PaymentDetailsJson = {
   details?: {
@@ -174,18 +174,6 @@ export function CleanerPayoutSettingsPanel() {
   const hasFailedTransfer = Boolean(summary?.has_failed_transfer);
   const bankLabel = bankDisplayNameFromCode(displayPayment?.bankCode ?? null);
 
-  const nextPayoutDateLine = useMemo(() => {
-    if (!summary) return "";
-    const p = payoutArrivalSummaryJohannesburg(new Date());
-    const d = new Date(`${p.payoutTargetFridayYmd}T12:00:00+02:00`);
-    return d.toLocaleDateString("en-ZA", {
-      timeZone: "Africa/Johannesburg",
-      weekday: "long",
-      month: "short",
-      day: "2-digit",
-    });
-  }, [summary]);
-
   if (loading) {
     return <div className="h-40 animate-pulse rounded-2xl bg-gray-200" />;
   }
@@ -201,7 +189,7 @@ export function CleanerPayoutSettingsPanel() {
           <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-green-600" aria-hidden />
           <div>
             <p className="text-sm font-semibold text-green-900">Bank details saved</p>
-            <p className="text-sm text-green-800">You&apos;re set for weekly payouts.</p>
+            <p className="text-sm text-green-800">{CLEANER_PAYOUT_BANK_READY_COPY}</p>
           </div>
         </div>
       ) : null}
@@ -228,8 +216,8 @@ export function CleanerPayoutSettingsPanel() {
 
       {summary ? (
         <div className="rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Next payout</p>
-          <p className="mt-1 text-sm font-semibold text-slate-800">{nextPayoutDateLine}</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Payout schedule</p>
+          <p className="mt-1 text-sm font-semibold text-slate-800">{summary.payout_schedule_headline}</p>
           <p className="mt-1 text-xs text-slate-400">{summary.payout_schedule_sub}</p>
         </div>
       ) : null}

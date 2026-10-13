@@ -11,11 +11,12 @@ import {
   CUSTOMER_SUPPORT_WHATSAPP_URL,
 } from "@/lib/site/customerSupport";
 import { cn } from "@/lib/utils";
+import { CLEANER_PAYOUT_HELP_COPY } from "@shalean/utils/cleanerPayoutCadence";
 
 const CLEANER_FAQS = [
   {
     q: "When do I get paid?",
-    a: "Payouts run weekly on Fridays for completed jobs. Make sure your bank details are saved before the payout cut-off.",
+    a: CLEANER_PAYOUT_HELP_COPY,
   },
   {
     q: "How do I change my working days?",

@@ -9,6 +9,7 @@ import {
   CLEANER_APPLY_WORK_TYPES,
 } from "@/lib/cleaner/applyPageContent";
 import { CleanerApplyHeader } from "./CleanerApplyHeader";
+import { CLEANER_PAYOUT_RECRUITMENT_SEO_PHRASE } from "@shalean/utils/cleanerPayoutCadence";
 
 export function CleanerApplyLanding() {
   return (
@@ -25,8 +26,7 @@ export function CleanerApplyLanding() {
             Why become a Shalean cleaner?
           </h1>
           <p className="mx-auto mt-3 max-w-2xl text-base leading-relaxed text-slate-600">
-            Work with a professional cleaning company trusted across Cape Town. Get regular jobs, choose your
-            schedule, and earn weekly — apply on your phone in under two minutes.
+            {`Work with a professional cleaning company trusted across Cape Town. Get regular jobs, choose your schedule, and receive ${CLEANER_PAYOUT_RECRUITMENT_SEO_PHRASE} — apply on your phone in under two minutes.`}
           </p>
           <ul className="mx-auto mt-6 flex max-w-2xl flex-col gap-3 text-left sm:grid sm:grid-cols-2">
             {CLEANER_APPLY_WHY_JOIN.map(({ Icon, text }) => (
