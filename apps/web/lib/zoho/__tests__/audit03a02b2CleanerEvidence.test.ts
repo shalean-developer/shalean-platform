@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { candidateCleanerMatches, withinWindow, zarCents, uniqueEvidence, potentiallySettled, listZohoEvidencePages } from "../../../scripts/zohoCleanerEvidenceMatching";
 
@@ -7,6 +9,14 @@ const cleaners = [
 ];
 
 describe("AUDIT-03A-02B.2 Zoho read-only candidate matching", () => {
+  it("guards exact Zoho production hosts before the first external read", () => {
+    const script = readFileSync(join(process.cwd(), "scripts/auditZohoCleanerSettlements03a02b2.ts"), "utf8");
+    expect(script).toContain('accountsDomain !== "accounts.zoho.com"');
+    expect(script).toContain('apiDomain !== "www.zohoapis.com"');
+    expect(script.indexOf("Unexpected Zoho OAuth/API domain")).toBeLessThan(script.indexOf("createClient(url,key"));
+    expect(script.indexOf("Unexpected Zoho OAuth/API domain")).toBeLessThan(script.indexOf('listZohoEvidencePages("expenses"'));
+  });
+
   it("matches full cleaner names but never a first-name-only reference", () => {
     expect(candidateCleanerMatches({source:"expenses", description:"EFT EXAMPLE CLEANER ONE June"},cleaners)).toEqual(["a"]);
     expect(candidateCleanerMatches({source:"expenses", description:"EFT Example June"},cleaners)).toEqual([]);
