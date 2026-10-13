@@ -54,7 +54,7 @@ export function candidateCleanerMatches(
 }
 
 export function zarCents(e: ZohoEvidence): number | null {
-  if (e.currency_code && e.currency_code !== "ZAR") return null;
+  if (e.currency_code !== "ZAR") return null;
   const amount = e.total ?? e.amount;
   if (amount === null || amount === undefined || amount === "") return null;
   const n = Number(amount);
