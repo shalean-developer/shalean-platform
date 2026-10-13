@@ -157,7 +157,7 @@ describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D/01E/01F/01G", () => {
     expect(zohoSrc).toContain("/invoices?reference_number=");
     expect(zohoSrc).toContain("sameShortReference");
     expect(zohoSrc).toContain("fullIdentityMatches");
-    expect(zohoSrc).toContain("if (!notes.includes(trace)) continue");
+    expect(zohoSrc).toContain("if (!hasFullIdentity) continue");
     expect(zohoSrc).toContain("candidateCustomerId !== contactResult.contactId");
     expect(zohoSrc).toContain('error: "full_identity_customer_conflict"');
     expect(zohoSrc).toContain("candidateTotalCents !== expectedTotalCents");
@@ -236,7 +236,7 @@ describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D/01E/01F/01G", () => {
 
     expect(src).toContain("sameShortReference");
     expect(src).toContain("fullIdentityMatches");
-    expect(src).toContain("if (!notes.includes(trace)) continue");
+    expect(src).toContain("if (!hasFullIdentity) continue");
     expect(src).toContain("candidateCustomerId !== contactResult.contactId");
     expect(src).toContain("candidateTotalCents !== expectedTotalCents");
     expect(src).toContain("fullIdentityMatches.length === 0");
