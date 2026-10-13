@@ -194,4 +194,22 @@ describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D/01E/01F", () => {
     expect(sql).toContain("grant execute on function public.mark_sales_quote_opportunity_won_atomic");
     expect(sql).toContain("to service_role");
   });
+  it("normalizes Won metadata even when the stage is already won", () => {
+    const sql = readFileSync(
+      join(
+        root,
+        "../../supabase/migrations/20261013063500_sales_booking_conversion_01f_crm_won_atomic.sql",
+      ),
+      "utf8",
+    );
+
+    expect(sql).toContain("v_changed := v_previous_stage is distinct from 'won'");
+    expect(sql).toContain("crm_stage = 'won'");
+    expect(sql).toContain("crm_won_at = coalesce(crm_won_at, now())");
+    expect(sql).toContain("crm_lost_at = null");
+    expect(sql).toContain("crm_lost_reason = null");
+    expect(sql).toContain("crm_next_follow_up_at = null");
+    expect(sql).toContain("crm_won_at is null");
+    expect(sql).toContain("crm_lost_at is not null");
+  });
 });
