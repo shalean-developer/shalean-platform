@@ -425,6 +425,8 @@ export async function convertSalesQuoteToInvoice(
     }
   }
 
+  if (!invoice) return { ok: false, error: "invoice_not_found" };
+
   const invoiceId = invoice.id;
   const leaseToken = randomUUID();
   const lease = await acquireSalesDocumentConversionLease(admin, invoiceId, leaseToken);
