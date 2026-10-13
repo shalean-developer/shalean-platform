@@ -33,6 +33,7 @@ describe("AUDIT-03A-02B.2 Zoho read-only candidate matching", () => {
     expect(withinWindow("2026-08-01")).toBe(false);
     expect(withinWindow("2026-06-99")).toBe(false);
     expect(withinWindow("2026-06-31")).toBe(false);
+    expect(withinWindow("2026-02-30")).toBe(false);
     expect(withinWindow("2026-07-00")).toBe(false);
     expect(withinWindow(undefined)).toBe(false);
   });
@@ -41,6 +42,10 @@ describe("AUDIT-03A-02B.2 Zoho read-only candidate matching", () => {
       expenses:[{expense_id:"bad-date",date:"2026-06-99"}],
       page_context:{has_more_page:false}
     }))).rejects.toThrow("impossible provider date");
+  });
+  it("rejects provider records with no date or a non-calendar date outside the window", async () => {
+    await expect(listZohoEvidencePages("expenses",async()=>({expenses:[{expense_id:"e1"}]}))).rejects.toThrow("impossible provider date");
+    await expect(listZohoEvidencePages("banktransactions",async()=>({banktransactions:[{transaction_id:"b1",date:"2026-02-30"}]}))).rejects.toThrow("impossible provider date");
   });
   it("deduplicates only source-specific provider IDs", () => {
     const expense = {source:"expenses" as const,expense_id:"e1",date:"2026-06-20"};
@@ -91,17 +96,17 @@ describe("AUDIT-03A-02B.2 Zoho read-only candidate matching", () => {
     const data = await listZohoEvidencePages("expenses", async () => {
       calls++;
       return calls === 1
-        ? {expenses:[{expense_id:"one"}],page_context:[{page:1,per_page:200,has_more_page:true}]}
-        : {expenses:[{expense_id:"two"}],page_context:{page:2,has_more_page:false}};
+        ? {expenses:[{expense_id:"one",date:"2026-06-20"}],page_context:[{page:1,per_page:200,has_more_page:true}]}
+        : {expenses:[{expense_id:"two",date:"2026-06-20"}],page_context:{page:2,has_more_page:false}};
     });
     expect(data).toHaveLength(2);
     expect(calls).toBe(2);
     await expect(listZohoEvidencePages("expenses",async()=>({
-      expenses:[{expense_id:"one"}],page_context:{page:2,has_more_page:false}
+      expenses:[{expense_id:"one",date:"2026-06-20"}],page_context:{page:2,has_more_page:false}
     }))).rejects.toThrow("page mismatch");
   });
   it("fails closed on replayed pages and repeated provider IDs", async () => {
-    const page = Array.from({length:200},(_,i)=>({expense_id:String(i)}));
+    const page = Array.from({length:200},(_,i)=>({expense_id:String(i),date:"2026-06-20"}));
     await expect(listZohoEvidencePages("expenses",async()=>({
       expenses:page,page_context:{has_more_page:true}
     }))).rejects.toThrow("replayed page");
@@ -109,7 +114,7 @@ describe("AUDIT-03A-02B.2 Zoho read-only candidate matching", () => {
     await expect(listZohoEvidencePages("expenses",async()=>{
       calls++;
       return calls === 1
-        ? {expenses:[{expense_id:"same"}],page_context:{has_more_page:true}}
+        ? {expenses:[{expense_id:"same",date:"2026-06-20"}],page_context:{has_more_page:true}}
         : {expenses:[{expense_id:"same",date:"2026-07-01"}],page_context:{has_more_page:false}};
     })).rejects.toThrow("repeated provider ID");
   });
