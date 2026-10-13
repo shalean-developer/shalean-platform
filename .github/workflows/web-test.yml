@@ -93,7 +93,7 @@ jobs:
 
       - name: AUDIT-03A02B.2 Zoho settlement evidence regression
         if: steps.filter.outputs.run_suite == 'true'
-        run: npm run test -- scripts/__tests__/zohoCleanerEvidenceMatching.test.ts
+        run: npm run test -- lib/zoho/__tests__/audit03a02b2CleanerEvidence.test.ts
 
       - name: Mandatory privileged Office email verification security contract
         if: steps.filter.outputs.run_suite == 'true'
