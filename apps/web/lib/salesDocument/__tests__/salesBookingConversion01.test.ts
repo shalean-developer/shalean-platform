@@ -155,10 +155,13 @@ describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D/01E/01F/01G", () => {
     expect(syncSrc).toContain('formatZohoOrderReference(row.id, "sales")');
     expect(syncSrc).toContain(".is(\"zoho_invoice_id\", null)");
     expect(zohoSrc).toContain("/invoices?reference_number=");
-    expect(zohoSrc).toContain('error: "ambiguous_reference_number"');
-    expect(zohoSrc).toContain("Shalean id:");
-    expect(zohoSrc).toContain("reference_candidate_customer_mismatch");
-    expect(zohoSrc).toContain("reference_candidate_total_mismatch");
+    expect(zohoSrc).toContain("sameShortReference");
+    expect(zohoSrc).toContain("fullIdentityMatches");
+    expect(zohoSrc).toContain("if (!notes.includes(trace)) continue");
+    expect(zohoSrc).toContain("candidateCustomerId !== contactResult.contactId");
+    expect(zohoSrc).toContain("candidateTotalCents !== expectedTotalCents");
+    expect(zohoSrc).toContain("fullIdentityMatches.length === 0");
+    expect(zohoSrc).toContain('error: "ambiguous_full_identity_match"');
     expect(syncSrc).toContain("zoho_invoice_linked_elsewhere");
     expect(syncSrc).toContain("zoho_reference_refresh");
     expect(syncSrc).toContain("updateZohoInvoice({");
