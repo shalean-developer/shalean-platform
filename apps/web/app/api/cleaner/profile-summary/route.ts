@@ -39,7 +39,7 @@ export async function GET(request: Request) {
     { data: cleaner, error: cleanerErr },
     { data: paymentRow, error: payErr },
     { data: failedRows, error: failedErr },
-    total_all_time_cents,
+    allTimeEarnings,
   ] = await Promise.all([
     fetchCleanerMeRow(admin, cleanerId),
     admin
@@ -54,7 +54,12 @@ export async function GET(request: Request) {
       .eq("status", "approved")
       .in("payment_status", ["failed", "partial_failed"])
       .limit(1),
-    fetchCleanerAllTimeEarningsCents(admin, cleanerId),
+    fetchCleanerAllTimeEarningsCents(admin, cleanerId)
+      .then((total) => ({ total, error: null as string | null }))
+      .catch((error: unknown) => ({
+        total: 0,
+        error: error instanceof Error ? error.message : "Could not load cleaner earnings.",
+      })),
   ]);
 
   if (cleanerErr) {
@@ -63,11 +68,12 @@ export async function GET(request: Request) {
   if (!cleaner) {
     return NextResponse.json({ error: "Cleaner not found." }, { status: 404, headers: { "Cache-Control": "no-store" } });
   }
-  if (payErr || failedErr) {
-    const msg = payErr?.message ?? failedErr?.message ?? "Query failed.";
+  if (payErr || failedErr || allTimeEarnings.error) {
+    const msg = payErr?.message ?? failedErr?.message ?? allTimeEarnings.error ?? "Query failed.";
     return NextResponse.json({ error: msg }, { status: 500, headers: { "Cache-Control": "no-store" } });
   }
 
+  const total_all_time_cents = allTimeEarnings.total;
   const c = cleaner as Record<string, unknown>;
   const name = String(c.full_name ?? "").trim() || "—";
   const phone = String(c.phone_number ?? c.phone ?? "").trim();
