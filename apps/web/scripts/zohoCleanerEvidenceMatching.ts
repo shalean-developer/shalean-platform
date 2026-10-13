@@ -81,3 +81,29 @@ export function potentiallySettled(e: ZohoEvidence): boolean {
   return ["cleared", "reconciled"].includes(status) &&
     ["withdrawal", "expense", "payment", "bank transfer"].includes(type);
 }
+
+/** Injectable GET-only transport allows deterministic pagination tests without OAuth or network. */
+export async function listZohoEvidencePages(
+  endpoint: "expenses" | "banktransactions",
+  get: (path: string) => Promise<Record<string, unknown>>,
+): Promise<ZohoEvidence[]> {
+  const all: ZohoEvidence[] = [];
+  for (let page = 1; page <= 20; page++) {
+    const path = `/${endpoint}?date_start=2026-06-01&date_end=2026-07-31&per_page=200&page=${page}`;
+    const response = await get(path);
+    const rows = response[endpoint];
+    if (!Array.isArray(rows)) throw new Error(`Zoho ${endpoint} response missing array`);
+    const context = response.page_context as { has_more_page?: unknown } | undefined;
+    if (typeof context?.has_more_page !== "boolean") {
+      throw new Error(`Zoho ${endpoint} pagination shape unknown; fail closed`);
+    }
+    for (const row of rows) {
+      if (!row || typeof row !== "object" || Array.isArray(row)) {
+        throw new Error(`Zoho ${endpoint} malformed row`);
+      }
+      all.push({ ...(row as ZohoEvidence), source: endpoint });
+    }
+    if (!context.has_more_page) return all;
+  }
+  throw new Error(`Zoho ${endpoint} exceeded 20 pages; incomplete audit refused`);
+}
