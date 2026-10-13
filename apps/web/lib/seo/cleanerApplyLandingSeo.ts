@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CLEANER_PAYOUT_RECRUITMENT_SEO_PHRASE } from "@shalean/utils/cleanerPayoutCadence";
 import { buildMarketingSocialMetadata } from "@/lib/seo/marketingPageSocialMeta";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW, SEO_NOINDEX_FOLLOW } from "@/lib/site/seoRobots";
@@ -17,7 +18,7 @@ export const CLEANER_APPLY_LANDING_ROBOTS_ALLOW = "/cleaner/apply$" as const;
 
 export const CLEANER_APPLY_LANDING_TITLE = "Apply as a Cleaner | Shalean Cape Town";
 export const CLEANER_APPLY_LANDING_DESCRIPTION =
-  "Join Shalean as a cleaner in Cape Town. Flexible hours, monthly bank-transfer payouts, and jobs near you. Learn more and apply online.";
+  `Join Shalean as a cleaner in Cape Town. Flexible hours, ${CLEANER_PAYOUT_RECRUITMENT_SEO_PHRASE}, and jobs near you. Learn more and apply online.`;
 
 export const CLEANER_APPLY_FORM_TITLE = "Cleaner Application Form | Shalean";
 export const CLEANER_APPLY_FORM_DESCRIPTION =
