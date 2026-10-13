@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 const helper=readFileSync(new URL("./auditZohoCleanerSettlements03a02b2.ts",import.meta.url),"utf8");
-const ci=readFileSync(new URL("../../.github/workflows/web-test.yml",import.meta.url),"utf8");
+const ci=readFileSync(new URL("../../../.github/workflows/web-test.yml",import.meta.url),"utf8");
 test("No remotely repeatable financial audit route or HTTP feature toggle",()=>{
  assert.doesNotMatch(helper,/AUDIT_03A02B2_HTTP_ENABLED/);
  assert.match(helper,/AUDIT_03A02B2_READ_ONLY !== "YES"/);
