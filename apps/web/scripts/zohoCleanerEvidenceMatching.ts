@@ -73,13 +73,9 @@ export function uniqueEvidence(rows: ZohoEvidence[]): { rows: ZohoEvidence[]; un
   }
   return { rows: output, unknownIdentity };
 }
-export function potentiallySettled(e: ZohoEvidence): boolean {
-  // An expense is never proof of a completed bank transfer.
-  if (e.source !== "banktransactions") return false;
-  const status = normalizeName(e.status ?? "");
-  const type = normalizeName(e.transaction_type ?? "");
-  return ["cleared", "reconciled"].includes(status) &&
-    ["withdrawal", "expense", "payment", "bank transfer"].includes(type);
+export function potentiallySettled(_e: ZohoEvidence): boolean {
+  // Zoho categorization or matching is not proof of bank settlement.
+  return false;
 }
 
 /** Injectable GET-only transport allows deterministic pagination tests without OAuth or network. */
@@ -89,12 +85,18 @@ export async function listZohoEvidencePages(
 ): Promise<ZohoEvidence[]> {
   const all: ZohoEvidence[] = [];
   for (let page = 1; page <= 20; page++) {
-    const path = `/${endpoint}?date_start=2026-06-01&date_end=2026-07-31&per_page=200&page=${page}`;
+    const filters = endpoint === "expenses" ? "date_start=2026-06-01&date_end=2026-07-31" : "date_after=2026-05-31&date_before=2026-08-01";
+    const path = `/${endpoint}?${filters}&per_page=200&page=${page}`;
     const response = await get(path);
     const rows = response[endpoint];
     if (!Array.isArray(rows)) throw new Error(`Zoho ${endpoint} response missing array`);
-    const context = response.page_context as { has_more_page?: unknown } | undefined;
-    if (typeof context?.has_more_page !== "boolean") {
+    const context = response.page_context;
+    // Some Zoho endpoints have no pagination context; fail closed rather than guess.
+    const hasMore = !Array.isArray(context) && context && typeof context === "object" &&
+      typeof (context as { has_more_page?: unknown }).has_more_page === "boolean"
+      ? (context as { has_more_page: boolean }).has_more_page
+      : undefined;
+    if (hasMore === undefined) {
       throw new Error(`Zoho ${endpoint} pagination shape unknown; fail closed`);
     }
     for (const row of rows) {
@@ -103,7 +105,7 @@ export async function listZohoEvidencePages(
       }
       all.push({ ...(row as ZohoEvidence), source: endpoint });
     }
-    if (!context.has_more_page) return all;
+    if (!hasMore) return all;
   }
   throw new Error(`Zoho ${endpoint} exceeded 20 pages; incomplete audit refused`);
 }
