@@ -1,4 +1,5 @@
 import { johannesburgCalendarMonthDateRangeYmd, johannesburgCalendarYmd } from "@/lib/dashboard/johannesburgMonth";
+import { cleanerMonthlyPayoutCadenceJohannesburg } from "@shalean/utils/cleanerPayoutCadence";
 import { getPreviousMonthDateBoundsJhb } from "@/lib/payout/monthBounds";
 import { addDaysYmd, isoWeekdayFromYmd } from "@/lib/recurring/johannesburgCalendar";
 
@@ -38,25 +39,13 @@ export function payoutArrivalSummaryJohannesburg(now = new Date()): {
   /** @deprecated Weekly field retained for API compatibility. */
   payoutTargetFridayYmd: string;
 } {
-  const todayYmd = johannesburgCalendarYmd(now);
-  const { startYmd, endYmd } = johannesburgCalendarMonthDateRangeYmd(now);
+  const { endYmd } = johannesburgCalendarMonthDateRangeYmd(now);
   const endMs = new Date(`${endYmd}T23:59:59.999+02:00`).getTime();
   const nowMs = now.getTime();
-  const daysUntil = Math.max(
-    0,
-    Math.round((endMs - new Date(`${todayYmd}T12:00:00+02:00`).getTime()) / 86_400_000),
-  );
-  const monthLabel = new Date(`${startYmd}T12:00:00+02:00`).toLocaleDateString("en-ZA", {
-    timeZone: "Africa/Johannesburg",
-    month: "long",
-    year: "numeric",
-  });
-  const headline =
-    daysUntil === 0
-      ? `Monthly payout period ends today (${monthLabel})`
-      : `Monthly payout — ${monthLabel} (${daysUntil} day${daysUntil === 1 ? "" : "s"} left)`;
-  const sub =
-    "Cleaner payouts are batched monthly (1st to last day of the month, Johannesburg time). Pay runs after the month closes once invoices are settled.";
+  const cadence = cleanerMonthlyPayoutCadenceJohannesburg(now);
+  const daysUntil = cadence.daysRemaining;
+  const headline = cadence.headline;
+  const sub = cadence.sub;
 
   const calendarFridayYmd = nextFridayYmdJohannesburg(now);
   const payoutTargetFridayYmd = calendarFridayYmd;

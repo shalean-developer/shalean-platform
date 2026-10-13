@@ -15,7 +15,8 @@
     "./cleanerDisplayFirstName": "./src/cleanerDisplayFirstName.ts",
     "./shaleanBillingContactEmail": "./src/shaleanBillingContactEmail.ts",
     "./customerProfileContactFields": "./src/customerProfileContactFields.ts",
-    "./customerSupport": "./src/customerSupport.ts"
+    "./customerSupport": "./src/customerSupport.ts",
+    "./cleanerPayoutCadence": "./src/cleanerPayoutCadence.ts"
   },
   "types": "./src/index.ts",
   "files": [

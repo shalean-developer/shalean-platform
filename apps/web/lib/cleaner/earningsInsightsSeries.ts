@@ -80,7 +80,7 @@ export function buildEarningsInsightMessages(params: {
     msgs.push("Some recent earnings are still being finalised for payout.");
   }
   if (queued > 0) {
-    msgs.push("You have money scheduled for the next weekly payout batch.");
+    msgs.push("You have money queued for a monthly payout after the period closes and eligibility checks are complete.");
   }
   if (points.length >= 2) {
     const oldest = points[0]?.cents ?? 0;

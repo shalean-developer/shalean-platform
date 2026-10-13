@@ -42,6 +42,11 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cleanerDisplayFirstName } from "@/lib/cleaner/cleanerDisplayFirstName";
 import { cn } from "@/lib/utils";
+import {
+  CLEANER_PAYOUT_AVAILABLE_COPY,
+  CLEANER_PAYOUT_HELP_COPY,
+  CLEANER_PAYOUT_PROCESSING_COPY,
+} from "@shalean/utils/cleanerPayoutCadence";
 import { CleanerDashboardInfoHint } from "./CleanerDashboardInfoHint";
 import { Header } from "./Header";
 import { CleanerEarningsWeeklyBarChart } from "./CleanerEarningsWeeklyBarChart";
@@ -569,11 +574,11 @@ export function CleanerEarningsScreen() {
                 <CleanerDashboardInfoHint
                   label="How payouts work"
                   text={
-                    "Your earnings are paid weekly.\n\n" +
-                    "Jobs must be completed before Thursday 23:59 SAST to be included in the next payout.\n\n" +
-                    "Available pays on the next weekly batch once your bank details are ready. " +
-                    "Processing includes amounts still finalising or locked in a batch.\n\n" +
-                    payoutArrival.sub
+                    CLEANER_PAYOUT_HELP_COPY +
+                    "\n\n" +
+                    CLEANER_PAYOUT_AVAILABLE_COPY +
+                    "\n\n" +
+                    CLEANER_PAYOUT_PROCESSING_COPY
                   }
                 />
               </div>
@@ -588,7 +593,7 @@ export function CleanerEarningsScreen() {
                     <span>Processing</span>
                     <CleanerDashboardInfoHint
                       label="About processing"
-                      text="These earnings are being reviewed and will be included in your next payout."
+                      text={CLEANER_PAYOUT_PROCESSING_COPY}
                     />
                   </span>
                   <span className="tabular-nums text-foreground">{formatZarFromCents(processingPipeline)}</span>
@@ -622,16 +627,16 @@ export function CleanerEarningsScreen() {
                   <DialogHeader>
                     <DialogTitle>How payouts work</DialogTitle>
                     <DialogDescription>
-                      Cleaners are paid on Shalean&apos;s weekly schedule. Eligible amounts move into the next batch
-                      automatically — there is no self-serve instant withdrawal in the app yet.
+                      Cleaner earnings are grouped into monthly payout periods. Eligible closed-month amounts are
+                      reviewed and released by bank transfer — there is no self-serve instant withdrawal in the app.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-2 text-sm text-foreground">
                     <p className="font-medium">{payoutArrival.headline}</p>
                     <p>
-                      <span className="font-medium">Available for payout</span> ({formatZarFromCents(availableForPayout)}
-                      ) is ready for the next weekly transfer once your bank details are on file.
+                      <span className="font-medium">Available for payout</span> ({formatZarFromCents(availableForPayout)})
                     </p>
+                    <p className="text-muted-foreground">{CLEANER_PAYOUT_AVAILABLE_COPY}</p>
                     {paymentDetails?.missingBankDetails ? (
                       <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-950 dark:text-amber-100">
                         We don&apos;t have verified bank details on file yet. Contact your coordinator or support so a
