@@ -14,6 +14,8 @@ describe("AUDIT-03A-02B.2 Zoho read-only candidate matching", () => {
   it("does not treat currency other than ZAR as comparable", () => {
     expect(zarCents({source:"expenses",total:250,currency_code:"USD"})).toBeNull();
     expect(zarCents({source:"expenses",total:250,currency_code:"ZAR"})).toBe(25000);
+    expect(zarCents({source:"expenses",total:250})).toBeNull();
+    expect(zarCents({source:"banktransactions",total:250,currency_code:""})).toBeNull();
   });
   it("keeps the audit window closed", () => {
     expect(withinWindow("2026-06-20")).toBe(true);
