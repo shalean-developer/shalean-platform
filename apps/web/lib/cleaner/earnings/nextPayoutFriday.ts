@@ -39,8 +39,7 @@ export function payoutArrivalSummaryJohannesburg(now = new Date()): {
   /** @deprecated Weekly field retained for API compatibility. */
   payoutTargetFridayYmd: string;
 } {
-  const todayYmd = johannesburgCalendarYmd(now);
-  const { startYmd, endYmd } = johannesburgCalendarMonthDateRangeYmd(now);
+  const { endYmd } = johannesburgCalendarMonthDateRangeYmd(now);
   const endMs = new Date(`${endYmd}T23:59:59.999+02:00`).getTime();
   const nowMs = now.getTime();
   const cadence = cleanerMonthlyPayoutCadenceJohannesburg(now);
