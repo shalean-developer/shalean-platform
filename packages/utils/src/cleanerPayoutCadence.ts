@@ -6,6 +6,9 @@ import {
 export const CLEANER_PAYOUT_CADENCE_LABEL = "Monthly";
 export const CLEANER_PAYOUT_METHOD_LABEL = "Bank transfer";
 
+export const CLEANER_PAYOUT_RECRUITMENT_COPY =
+  "Monthly bank-transfer payouts for eligible completed jobs";
+
 export const CLEANER_PAYOUT_BANK_READY_COPY =
   "You're set for monthly bank-transfer payouts.";
 
