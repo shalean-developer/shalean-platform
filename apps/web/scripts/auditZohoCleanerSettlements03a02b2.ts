@@ -114,8 +114,8 @@ export async function runZohoCleanerSettlementEvidence03a02b2() {
     results:names.map((c,index)=>{
       const matches = all.filter(e=>candidateCleanerMatches(e,[c]).length>0);
       return {
-        cleaner_alias:`cleaner_${index+1}`, bookings:bookings.filter(b=>b.cleaner_id===c.id).length,
-        expected_earnings_cents:bookings.filter(b=>b.cleaner_id===c.id)
+        cleaner_alias:`cleaner_${index+1}`, bookings:bookings.filter(b=>(b.cleaner_id ?? b.payout_owner_cleaner_id)===c.id).length,
+        expected_earnings_cents:bookings.filter(b=>(b.cleaner_id ?? b.payout_owner_cleaner_id)===c.id)
           .reduce((sum,b)=>sum+Number(b.cleaner_earnings_total_cents??0),0),
         possible_zoho_matches:matches.length,
         comparable_zar_matches:matches.filter(e=>zarCents(e)!==null).length,
@@ -128,7 +128,7 @@ export async function runZohoCleanerSettlementEvidence03a02b2() {
   };
 }
 
-// Explicit CLI-only entry point; safe to import from the protected admin audit route.
+// Explicit CLI-only entry point; not imported by any HTTP route.
 if (process.argv[1]?.replace(/\\\\/g, "/").endsWith("/auditZohoCleanerSettlements03a02b2.ts")) {
   runZohoCleanerSettlementEvidence03a02b2()
     .then(result => console.log(JSON.stringify(result, null, 2)))
