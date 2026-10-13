@@ -163,4 +163,29 @@ describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D", () => {
     expect(syncSrc).toContain("zoho_reference_refresh");
     expect(syncSrc).toContain("updateZohoInvoice({");
   });
+  it("retries CRM Won convergence on accepted replays while delivery remains winner-only", () => {
+    const mutations = readFileSync(
+      join(root, "lib/salesDocument/salesDocumentMutations.ts"),
+      "utf8",
+    );
+    const accept = readFileSync(
+      join(root, "lib/salesDocument/acceptSalesQuote.ts"),
+      "utf8",
+    );
+
+    const acceptance = mutations.indexOf("const accepted = await acceptQuoteTransition");
+    const crm = mutations.indexOf(
+      'await markQuoteOpportunityWon(admin, quoteId, "quote_accepted")',
+      acceptance,
+    );
+    const result = mutations.indexOf("acceptedNow: accepted.acceptedNow", crm);
+
+    expect(acceptance).toBeGreaterThanOrEqual(0);
+    expect(crm).toBeGreaterThan(acceptance);
+    expect(result).toBeGreaterThan(crm);
+    expect(mutations.slice(acceptance, result)).not.toContain(
+      "if (accepted.acceptedNow)",
+    );
+    expect(accept).toContain("if (converted.acceptedNow) {");
+  });
 });
