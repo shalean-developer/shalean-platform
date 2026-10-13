@@ -269,7 +269,29 @@ export async function createBookingFromSalesQuoteInvoice(
     },
   });
 
-  if (!ins.ok) return ins;
+  if (!ins.ok) {
+    if (ins.pgCode === "23505") {
+      const { data: racedBooking, error: racedErr } = await admin
+        .from("bookings")
+        .select("id, status, metadata")
+        .eq("sales_document_id", invoiceId)
+        .maybeSingle();
+
+      if (!racedErr && racedBooking?.id) {
+        const racedCancelledRollback =
+          String(racedBooking.status ?? "").trim().toLowerCase() === "cancelled" &&
+          isSalesDocumentLineItemRollbackMarker(racedBooking.metadata);
+        if (!racedCancelledRollback) {
+          return {
+            ok: true,
+            bookingId: String(racedBooking.id),
+            alreadyExisted: true,
+          };
+        }
+      }
+    }
+    return ins;
+  }
 
   await logSystemEvent({
     level: "info",
