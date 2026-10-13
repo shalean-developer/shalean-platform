@@ -95,6 +95,10 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/zoho/__tests__/audit03a02b2CleanerEvidence.test.ts
 
+      - name: AUDIT-03A02B.2 Plesk credential-free preflight regression
+        if: steps.filter.outputs.run_suite == 'true'
+        run: node --test scripts/audit03a02b2PleskEnvPreflight.test.mjs
+
       - name: AUDIT-03A02B.2 staging-mode mocked execution (no credentials)
         if: steps.filter.outputs.run_suite == 'true'
         env:
