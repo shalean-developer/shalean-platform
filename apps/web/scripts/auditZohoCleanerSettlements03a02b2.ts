@@ -31,7 +31,7 @@ const ids = [
   "76b1eee2-bd8b-42e9-b9e1-17e3f9a19cb0",
 ] as const;
 
-async function main() {
+export async function runZohoCleanerSettlementEvidence03a02b2() {
   if (process.env.AUDIT_03A02B2_READ_ONLY !== "YES") {
     throw new Error("Explicit AUDIT_03A02B2_READ_ONLY=YES required");
   }
@@ -67,7 +67,7 @@ async function main() {
   const expenses = await listZohoEvidencePages("expenses", path => zohoBooksClient.get<Record<string,unknown>>(path));
   const bank = await listZohoEvidencePages("banktransactions", path => zohoBooksClient.get<Record<string,unknown>>(path));
   const { rows: all, unknownIdentity } = uniqueEvidence([...expenses,...bank].filter(x=>withinWindow(x.date)));
-  console.log(JSON.stringify({
+  return {
     audit:"AUDIT-03A-02B.2",read_only:true,
     window:"2026-06-01..2026-07-31",bookings:11,cleaners:6,
     zoho_expense_rows:expenses.length,zoho_bank_rows:bank.length,
@@ -88,7 +88,12 @@ async function main() {
       };
     }),
     caveat:"Zoho candidate matching cannot prove an EFT was made or absent. Independently verify bank settlement before repair."
-  },null,2));
+  };
 }
 
-main().catch(error=>{console.error("Audit blocked:",error instanceof Error?error.message:String(error));process.exitCode=1;});
+// Explicit CLI-only entry point; safe to import from the protected admin audit route.
+if (process.argv[1]?.replace(/\\\\/g, "/").endsWith("/auditZohoCleanerSettlements03a02b2.ts")) {
+  runZohoCleanerSettlementEvidence03a02b2()
+    .then(result => console.log(JSON.stringify(result, null, 2)))
+    .catch(() => { console.error("Audit blocked; see secure operator evidence."); process.exitCode = 1; });
+}
