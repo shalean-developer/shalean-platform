@@ -11,7 +11,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { zohoBooksClient } from "../lib/zoho/zohoBooksClient";
 import {
-  candidateCleanerMatches, withinWindow, zarCents, uniqueEvidence, potentiallySettled,
+  candidateCleanerMatches, withinWindow, zarCents, uniqueEvidence, potentiallySettled, listZohoEvidencePages,
   type ZohoEvidence,
 } from "./zohoCleanerEvidenceMatching";
 
@@ -29,25 +29,6 @@ const ids = [
   "e2fb83a5-fcd3-4183-8f2b-7473b32b0389",
   "76b1eee2-bd8b-42e9-b9e1-17e3f9a19cb0",
 ] as const;
-
-type Page = { expenses?: ZohoEvidence[]; banktransactions?: ZohoEvidence[];
-  page_context?: {has_more_page?: boolean} };
-
-async function pages(endpoint: "expenses" | "banktransactions") {
-  const all: ZohoEvidence[] = [];
-  for (let page = 1; page <= 20; page++) {
-    const path = `/${endpoint}?date_start=2026-06-01&date_end=2026-07-31&per_page=200&page=${page}`;
-    const result = await zohoBooksClient.get<Page>(path);
-    const rows = result[endpoint];
-    if (!Array.isArray(rows)) throw new Error(`Zoho response missing ${endpoint} array`);
-    all.push(...rows.map((r) => ({...r, source: endpoint})));
-    if (!result.page_context || typeof result.page_context.has_more_page !== "boolean") {
-      throw new Error(`Zoho ${endpoint} pagination shape unknown; fail closed`);
-    }
-    if (!result.page_context.has_more_page) return all;
-  }
-  throw new Error(`Zoho ${endpoint} exceeded 20 pages; incomplete audit refused`);
-}
 
 async function main() {
   if (process.env.AUDIT_03A02B2_READ_ONLY !== "YES") {
@@ -72,8 +53,8 @@ async function main() {
   const names = cleaners.map(c=>({id:c.id,name:c.full_name ?? ""}));
   if (names.some(c=>!c.name.trim())) throw new Error("Missing cleaner identity");
   // Make both Zoho GET calls before printing any results. Errors fail closed.
-  const expenses = await pages("expenses");
-  const bank = await pages("banktransactions");
+  const expenses = await listZohoEvidencePages("expenses", path => zohoBooksClient.get<Record<string,unknown>>(path));
+  const bank = await listZohoEvidencePages("banktransactions", path => zohoBooksClient.get<Record<string,unknown>>(path));
   const { rows: all, unknownIdentity } = uniqueEvidence([...expenses,...bank].filter(x=>withinWindow(x.date)));
   console.log(JSON.stringify({
     audit:"AUDIT-03A-02B.2",read_only:true,
