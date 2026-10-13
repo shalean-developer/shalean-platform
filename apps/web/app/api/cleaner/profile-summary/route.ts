@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchCleanerMeRow } from "@/lib/cleaner/cleanerMeDb";
+import { fetchCleanerAllTimeEarningsCents } from "@/lib/cleaner/fetchCleanerAllTimeEarningsCents";
 import type { CleanerProfileSummaryJson } from "@/lib/cleaner/cleanerProfileSummaryTypes";
 import { payoutArrivalSummaryJohannesburg } from "@/lib/cleaner/earnings/nextPayoutFriday";
 import { resolveCleanerFromRequest } from "@/lib/cleaner/resolveCleanerFromRequest";
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
     { data: cleaner, error: cleanerErr },
     { data: paymentRow, error: payErr },
     { data: failedRows, error: failedErr },
-    { data: earningsRows, error: earnErr },
+    allTimeEarnings,
   ] = await Promise.all([
     fetchCleanerMeRow(admin, cleanerId),
     admin
@@ -53,7 +54,12 @@ export async function GET(request: Request) {
       .eq("status", "approved")
       .in("payment_status", ["failed", "partial_failed"])
       .limit(1),
-    admin.from("cleaner_earnings").select("amount_cents").eq("cleaner_id", cleanerId).limit(10_000),
+    fetchCleanerAllTimeEarningsCents(admin, cleanerId)
+      .then((total) => ({ total, error: null as string | null }))
+      .catch((error: unknown) => ({
+        total: 0,
+        error: error instanceof Error ? error.message : "Could not load cleaner earnings.",
+      })),
   ]);
 
   if (cleanerErr) {
@@ -62,8 +68,8 @@ export async function GET(request: Request) {
   if (!cleaner) {
     return NextResponse.json({ error: "Cleaner not found." }, { status: 404, headers: { "Cache-Control": "no-store" } });
   }
-  if (payErr || failedErr || earnErr) {
-    const msg = payErr?.message ?? failedErr?.message ?? earnErr?.message ?? "Query failed.";
+  if (payErr || failedErr || allTimeEarnings.error) {
+    const msg = payErr?.message ?? failedErr?.message ?? allTimeEarnings.error ?? "Query failed.";
     return NextResponse.json({ error: msg }, { status: 500, headers: { "Cache-Control": "no-store" } });
   }
 
@@ -88,11 +94,7 @@ export async function GET(request: Request) {
 
   const has_failed_transfer = (failedRows ?? []).length > 0;
 
-  let total_all_time_cents = 0;
-  for (const row of earningsRows ?? []) {
-    const r = row as { amount_cents?: unknown };
-    total_all_time_cents += Math.max(0, Math.round(Number(r.amount_cents) || 0));
-  }
+  const total_all_time_cents = allTimeEarnings.total;
 
   const asOf = new Date();
   const payout = payoutArrivalSummaryJohannesburg(asOf);
