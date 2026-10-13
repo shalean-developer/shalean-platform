@@ -16,6 +16,7 @@ import {
 } from "./zohoCleanerEvidenceMatching";
 
 const EXPECTED_REF = "paqjwfulwywtsyyvdxrq";
+const EXPECTED_ZOHO_ORG = "927500285";
 const ids = [
   "ecb13764-01f7-490a-bd06-aacaf992c5f5",
   "9c87c65f-e847-4157-b0dd-ea4f14edb6e9",
@@ -36,10 +37,13 @@ async function main() {
   }
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-  if (new URL(url).hostname !== `${EXPECTED_REF}.supabase.co` || !key) {
+  const parsedUrl = new URL(url);
+  if (parsedUrl.protocol !== "https:" || parsedUrl.hostname !== `${EXPECTED_REF}.supabase.co` || !key) {
     throw new Error("Production Supabase project ref mismatch / no service role key");
   }
-  if (!process.env.ZOHO_ORGANIZATION_ID) throw new Error("Missing Zoho organization ID");
+  if (String(process.env.ZOHO_ORGANIZATION_ID ?? "").trim() !== EXPECTED_ZOHO_ORG) {
+    throw new Error("Unexpected Zoho production organization ID");
+  }
   const db = createClient(url,key,{auth:{persistSession:false}});
   const {data:bookings,error} = await db.from("bookings").select(
     "id,cleaner_id,cleaner_earnings_total_cents,completed_at"
