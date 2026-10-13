@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   createZohoEstimate,
   createZohoInvoice,
+  lookupZohoInvoiceByReferenceNumber,
   markZohoEstimateSent,
   markZohoInvoiceSent,
   updateZohoEstimate,
@@ -169,27 +170,44 @@ export async function syncSalesDocumentToZoho(
       .update({ zoho_invoice_number: upd.invoiceNumber })
       .eq("id", documentId);
   } else if (!linkedInv) {
-    const invoicedEstimateId = await resolveSourceZohoEstimateId(admin, row.converted_from_id);
-    const created = await createZohoInvoice({
-      referenceId: row.id,
-      orderKind: "sales",
-      ...contact,
-      lineItems: zohoLineItems,
-      invoiceDate,
-      dueDate,
-      notes,
-      currencyCode: row.currency,
-      invoicedEstimateId,
-    });
-    if (!created.ok) return { ok: false, error: created.error };
-    invoiceId = created.zohoInvoiceId;
-    await admin
-      .from("sales_documents")
-      .update({
-        zoho_invoice_id: created.zohoInvoiceId,
-        zoho_invoice_number: created.invoiceNumber,
-      })
-      .eq("id", documentId);
+    const referenceNumber = formatZohoOrderReference(row.id, "sales");
+    const reconciled = await lookupZohoInvoiceByReferenceNumber(referenceNumber);
+    if (!reconciled.ok) return { ok: false, error: `zoho_reference_lookup:${reconciled.error}` };
+
+    if (reconciled.found) {
+      invoiceId = reconciled.zohoInvoiceId;
+      const { error: linkErr } = await admin
+        .from("sales_documents")
+        .update({
+          zoho_invoice_id: reconciled.zohoInvoiceId,
+          zoho_invoice_number: reconciled.invoiceNumber,
+        })
+        .eq("id", documentId)
+        .is("zoho_invoice_id", null);
+      if (linkErr) return { ok: false, error: `zoho_reference_link:${linkErr.message}` };
+    } else {
+      const invoicedEstimateId = await resolveSourceZohoEstimateId(admin, row.converted_from_id);
+      const created = await createZohoInvoice({
+        referenceId: row.id,
+        orderKind: "sales",
+        ...contact,
+        lineItems: zohoLineItems,
+        invoiceDate,
+        dueDate,
+        notes,
+        currencyCode: row.currency,
+        invoicedEstimateId,
+      });
+      if (!created.ok) return { ok: false, error: created.error };
+      invoiceId = created.zohoInvoiceId;
+      await admin
+        .from("sales_documents")
+        .update({
+          zoho_invoice_id: created.zohoInvoiceId,
+          zoho_invoice_number: created.invoiceNumber,
+        })
+        .eq("id", documentId);
+    }
   }
 
   if (opts?.markSent && invoiceId) {
