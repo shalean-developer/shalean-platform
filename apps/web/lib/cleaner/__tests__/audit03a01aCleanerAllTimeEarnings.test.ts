@@ -63,4 +63,15 @@ describe("AUDIT-03A-01A cleaner all-time earnings source of truth", () => {
     expect(source).not.toContain('.from("cleaner_earnings")');
     expect(source).not.toContain("earningsRows");
   });
+  it("earnings API aligns total_all_time with the active source_of_truth", () => {
+    const source = readFileSync(
+      join(process.cwd(), "app/api/cleaner/earnings/route.ts"),
+      "utf8",
+    );
+
+    expect(source).toContain("fetchCleanerAllTimeEarningsCents");
+    expect(source).toContain("const total_all_time = useLedgerTotals ? ledger_total_all_time : bookingAllTimeResult.total;");
+    expect(source).toContain('const source_of_truth = useLedgerTotals ? ("ledger" as const) : ("booking" as const);');
+  });
+
 });
