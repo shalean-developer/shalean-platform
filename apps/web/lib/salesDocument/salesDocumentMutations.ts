@@ -512,9 +512,9 @@ export async function convertSalesQuoteToInvoice(
     const accepted = await acceptQuoteTransition(admin, quoteId);
     if (!accepted.ok) return accepted;
 
-    if (accepted.acceptedNow) {
-      await markQuoteOpportunityWon(admin, quoteId, "quote_accepted");
-    }
+    // CRM convergence is replay-safe because the helper delegates to an
+    // atomic database function that also guarantees the Won audit activity.
+    await markQuoteOpportunityWon(admin, quoteId, "quote_accepted");
 
     return {
       ok: true,

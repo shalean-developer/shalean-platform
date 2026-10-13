@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const root = process.cwd();
 
-describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D", () => {
+describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D/01E/01F", () => {
   it("uses quoted total rather than unpaid collected amount for pending-payment bookings", () => {
     const src = readFileSync(
       join(root, "lib/salesDocument/createBookingFromSalesQuoteInvoice.ts"),
@@ -162,5 +162,54 @@ describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D", () => {
     expect(syncSrc).toContain("zoho_invoice_linked_elsewhere");
     expect(syncSrc).toContain("zoho_reference_refresh");
     expect(syncSrc).toContain("updateZohoInvoice({");
+  });
+  it("converges CRM Won state and audit activity atomically on replay", () => {
+    const lifecycle = readFileSync(
+      join(root, "lib/salesDocument/salesOpportunityLifecycle.ts"),
+      "utf8",
+    );
+    const mutations = readFileSync(
+      join(root, "lib/salesDocument/salesDocumentMutations.ts"),
+      "utf8",
+    );
+    const sql = readFileSync(
+      join(
+        root,
+        "../../supabase/migrations/20261013063500_sales_booking_conversion_01f_crm_won_atomic.sql",
+      ),
+      "utf8",
+    );
+
+    expect(lifecycle).toContain('admin.rpc("mark_sales_quote_opportunity_won_atomic"');
+    expect(mutations).toContain(
+      'await markQuoteOpportunityWon(admin, quoteId, "quote_accepted")',
+    );
+    expect(mutations).not.toContain("if (accepted.acceptedNow) {\n      await markQuoteOpportunityWon");
+
+    expect(sql).toContain("for update");
+    expect(sql).toContain("crm_stage = 'won'");
+    expect(sql).toContain("crm_won_at = coalesce(crm_won_at, now())");
+    expect(sql).toContain("a.metadata->>'to' = 'won'");
+    expect(sql).toContain("sales_opportunity_activities");
+    expect(sql).toContain("grant execute on function public.mark_sales_quote_opportunity_won_atomic");
+    expect(sql).toContain("to service_role");
+  });
+  it("normalizes Won metadata even when the stage is already won", () => {
+    const sql = readFileSync(
+      join(
+        root,
+        "../../supabase/migrations/20261013063500_sales_booking_conversion_01f_crm_won_atomic.sql",
+      ),
+      "utf8",
+    );
+
+    expect(sql).toContain("v_changed := v_previous_stage is distinct from 'won'");
+    expect(sql).toContain("crm_stage = 'won'");
+    expect(sql).toContain("crm_won_at = coalesce(crm_won_at, now())");
+    expect(sql).toContain("crm_lost_at = null");
+    expect(sql).toContain("crm_lost_reason = null");
+    expect(sql).toContain("crm_next_follow_up_at = null");
+    expect(sql).toContain("crm_won_at is null");
+    expect(sql).toContain("crm_lost_at is not null");
   });
 });
