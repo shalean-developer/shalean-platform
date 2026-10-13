@@ -68,6 +68,8 @@ class QueryBuilder {
   private single = false;
   private selectedColumns: string[] | null = null;
   private orExpr: string | null = null;
+  private rangeStart: number | null = null;
+  private rangeEnd: number | null = null;
 
   constructor(
     private table: string,
@@ -117,6 +119,12 @@ class QueryBuilder {
     return this;
   }
 
+  range(start: number, end: number) {
+    this.rangeStart = Math.max(0, Math.floor(start));
+    this.rangeEnd = Math.max(this.rangeStart, Math.floor(end));
+    return this;
+  }
+
   maybeSingle() {
     this.single = true;
     return this.execute();
@@ -132,7 +140,11 @@ class QueryBuilder {
   private async execute(): Promise<{ data: unknown; error: null }> {
     const rows = (this.db.tables[this.table] as Row[] | undefined) ?? [];
     const filtered = rows.filter((row) => this.matches(row)).map((row) => this.projectRow(row));
-    return { data: this.single ? filtered[0] ?? null : filtered, error: null };
+    const ranged =
+      this.rangeStart == null || this.rangeEnd == null
+        ? filtered
+        : filtered.slice(this.rangeStart, this.rangeEnd + 1);
+    return { data: this.single ? ranged[0] ?? null : ranged, error: null };
   }
 
   private matches(row: Row): boolean {
