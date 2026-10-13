@@ -216,12 +216,14 @@ export async function GET(request: Request) {
         .maybeSingle(),
       ledgerTotalsQuery,
       ledgerFilteredQuery,
-      fetchCleanerAllTimeEarningsCents(admin, cleanerId)
-        .then((total) => ({ total, error: null as string | null }))
-        .catch((err: unknown) => ({
-          total: 0,
-          error: err instanceof Error ? err.message : "Could not load cleaner all-time earnings.",
-        })),
+      useLedgerTotals
+        ? Promise.resolve({ total: 0, error: null as string | null })
+        : fetchCleanerAllTimeEarningsCents(admin, cleanerId)
+            .then((total) => ({ total, error: null as string | null }))
+            .catch((err: unknown) => ({
+              total: 0,
+              error: err instanceof Error ? err.message : "Could not load cleaner all-time earnings.",
+            })),
     ]);
 
   if (error) {
