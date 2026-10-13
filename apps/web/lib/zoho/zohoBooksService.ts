@@ -225,11 +225,16 @@ export async function lookupZohoInvoiceByShaleanIdentity(params: {
       const candidateCustomerId = String(invoice?.customer_id ?? "").trim();
       const candidateTotalCents = Math.round(Number(invoice?.total ?? 0) * 100);
 
-      // A short-reference collision is unrelated unless the full Shalean
-      // identity, customer and financial total all match.
+      // A short-reference collision is unrelated only when the full Shalean
+      // trace is absent. Once the authoritative full trace matches, any
+      // customer/financial drift must fail closed to avoid creating a duplicate.
       if (!notes.includes(trace)) continue;
-      if (!candidateCustomerId || candidateCustomerId !== contactResult.contactId) continue;
-      if (candidateTotalCents !== expectedTotalCents) continue;
+      if (!candidateCustomerId || candidateCustomerId !== contactResult.contactId) {
+        return { ok: false, error: "full_identity_customer_conflict" };
+      }
+      if (candidateTotalCents !== expectedTotalCents) {
+        return { ok: false, error: "full_identity_total_conflict" };
+      }
 
       fullIdentityMatches.push({
         zohoInvoiceId: candidateId,
