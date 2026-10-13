@@ -283,12 +283,38 @@ export async function createBookingFromSalesQuoteInvoice(
       const racedCancelledRollback =
         String(racedBooking.status ?? "").trim().toLowerCase() === "cancelled" &&
         isSalesDocumentLineItemRollbackMarker(racedBooking.metadata);
+
       if (!racedCancelledRollback) {
-        return {
-          ok: true,
-          bookingId: String(racedBooking.id),
-          alreadyExisted: true,
-        };
+        const { data: racedLineItems, error: racedLineItemsErr } = await admin
+          .from("booking_line_items")
+          .select("total_price_cents")
+          .eq("booking_id", racedBooking.id);
+
+        const racedLineItemsTotalCents = (racedLineItems ?? []).reduce(
+          (sum, row) =>
+            sum +
+            Math.max(
+              0,
+              Math.round(
+                Number(
+                  (row as { total_price_cents?: number | null }).total_price_cents ?? 0,
+                ),
+              ),
+            ),
+          0,
+        );
+
+        if (
+          !racedLineItemsErr &&
+          (racedLineItems?.length ?? 0) > 0 &&
+          racedLineItemsTotalCents === quotedTotalZar * 100
+        ) {
+          return {
+            ok: true,
+            bookingId: String(racedBooking.id),
+            alreadyExisted: true,
+          };
+        }
       }
     }
     return ins;
