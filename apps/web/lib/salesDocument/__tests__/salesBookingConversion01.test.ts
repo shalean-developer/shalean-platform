@@ -110,4 +110,30 @@ describe("SALES-BOOKING-CONVERSION-01", () => {
     expect(src).toContain("notifyAdminSalesQuoteAccepted");
     expect(src).toContain("sendSalesDocumentToCustomer");
   });
+  it("treats a concurrent unique booking insert as idempotent success only after re-read", () => {
+    const src = readFileSync(
+      join(root, "lib/salesDocument/createBookingFromSalesQuoteInvoice.ts"),
+      "utf8",
+    );
+
+    expect(src).toContain('ins.pgCode === "23505"');
+    expect(src).toContain('.eq("sales_document_id", invoiceId)');
+    expect(src).toContain("alreadyExisted: true");
+    expect(src).toContain("isSalesDocumentLineItemRollbackMarker(racedBooking.metadata)");
+  });
+
+  it("skips Zoho invoice edits on completed acceptance replays with existing Zoho linkage", () => {
+    const src = readFileSync(
+      join(root, "lib/salesDocument/salesDocumentMutations.ts"),
+      "utf8",
+    );
+
+    const existingLookup = src.indexOf("const { data: existingInvoice");
+    const existingLookupEnd = src.indexOf("if (existingLookupErr)", existingLookup);
+    const existingLookupBlock = src.slice(existingLookup, existingLookupEnd);
+    expect(existingLookupBlock).toContain('.select("id, zoho_invoice_id")');
+    expect(src).toContain("const existingZohoInvoiceId");
+    expect(src).toContain("if (!existingZohoInvoiceId) {");
+    expect(src).toContain("syncSalesDocumentToZoho(admin, invoiceId)");
+  });
 });
