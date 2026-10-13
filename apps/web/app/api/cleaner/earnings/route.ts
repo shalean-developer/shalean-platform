@@ -34,6 +34,7 @@ import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
 import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { fetchViewerPayoutByBookingIds } from "@/lib/cleaner/fetchViewerPayoutByBookingIds";
+import { fetchCleanerAllTimeEarningsCents } from "@/lib/cleaner/fetchCleanerAllTimeEarningsCents";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
@@ -191,8 +192,13 @@ export async function GET(request: Request) {
     ledgerFilteredQuery = ledgerFilteredQuery.eq("status", statusFilter);
   }
 
-  const [{ data: bookingsMerged, error }, { data: paymentDetails, error: paymentDetailsError }, { data: ledgerTotalsRows, error: ledgerTotalsErr }, { data: ledgerRows, error: ledgerErr }] =
-    await Promise.all([
+  const [
+    { data: bookingsMerged, error },
+    { data: paymentDetails, error: paymentDetailsError },
+    { data: ledgerTotalsRows, error: ledgerTotalsErr },
+    { data: ledgerRows, error: ledgerErr },
+    bookingAllTimeResult,
+  ] = await Promise.all([
       fetchCleanerVisibleBookingsMerged(admin, session.cleanerId, {
         select:
           "id, status, service, date, completed_at, cleaner_id, payout_owner_cleaner_id, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job, payout_paid_at, payout_run_id, total_paid_zar, amount_paid_cents, earnings_summary, admin_recurring_unpaid_completion_override_at, metadata",
@@ -210,6 +216,12 @@ export async function GET(request: Request) {
         .maybeSingle(),
       ledgerTotalsQuery,
       ledgerFilteredQuery,
+      fetchCleanerAllTimeEarningsCents(admin, cleanerId)
+        .then((total) => ({ total, error: null as string | null }))
+        .catch((err: unknown) => ({
+          total: 0,
+          error: err instanceof Error ? err.message : "Could not load cleaner all-time earnings.",
+        })),
     ]);
 
   if (error) {
@@ -233,6 +245,9 @@ export async function GET(request: Request) {
   }
   if (ledgerErr) {
     return NextResponse.json({ error: ledgerErr.message }, { status: 500 });
+  }
+  if (bookingAllTimeResult.error) {
+    return NextResponse.json({ error: bookingAllTimeResult.error }, { status: 500 });
   }
 
   /** Wall-clock when this response bundle was assembled (bookings + ledger queries already completed). */
@@ -416,10 +431,10 @@ export async function GET(request: Request) {
   let total_pending = 0;
   let total_approved = 0;
   let total_paid = 0;
-  let total_all_time = 0;
+  let ledger_total_all_time = 0;
   for (const le of totalsAll) {
     const c = Math.max(0, Math.round(Number(le.amount_cents) || 0));
-    total_all_time += c;
+    ledger_total_all_time += c;
     const st = String(le.status ?? "").toLowerCase();
     if (st === "pending") total_pending += c;
     else if (st === "approved") total_approved += c;
@@ -587,6 +602,7 @@ export async function GET(request: Request) {
   });
 
   const source_of_truth = useLedgerTotals ? ("ledger" as const) : ("booking" as const);
+  const total_all_time = useLedgerTotals ? ledger_total_all_time : bookingAllTimeResult.total;
   const summaryPayload = {
     pending_cents: useLedgerTotals ? total_pending : pending_cents,
     eligible_cents: useLedgerTotals ? total_approved : eligible_cents,
