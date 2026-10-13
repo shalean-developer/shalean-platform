@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const root = process.cwd();
 
-describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D/01E/01F", () => {
+describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D/01E/01F/01G", () => {
   it("uses quoted total rather than unpaid collected amount for pending-payment bookings", () => {
     const src = readFileSync(
       join(root, "lib/salesDocument/createBookingFromSalesQuoteInvoice.ts"),
@@ -211,5 +211,44 @@ describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D/01E/01F", () => {
     expect(sql).toContain("crm_next_follow_up_at = null");
     expect(sql).toContain("crm_won_at is null");
     expect(sql).toContain("crm_lost_at is not null");
+  });
+  it("preserves the full Zoho identity marker on invoice refresh", () => {
+    const src = readFileSync(
+      join(root, "lib/salesDocument/syncSalesDocumentToZoho.ts"),
+      "utf8",
+    );
+
+    expect(src).toContain("const invoiceNotes");
+    expect(src).toContain("Shalean id:");
+    expect(src).toContain("notes: invoiceNotes");
+  });
+
+  it("treats unrelated short-reference Zoho collisions as not found", () => {
+    const src = readFileSync(
+      join(root, "lib/zoho/zohoBooksService.ts"),
+      "utf8",
+    );
+
+    expect(src).toContain("sameShortReference");
+    expect(src).toContain("fullIdentityMatches");
+    expect(src).toContain("if (!notes.includes(trace)) continue");
+    expect(src).toContain("candidateCustomerId !== contactResult.contactId");
+    expect(src).toContain("candidateTotalCents !== expectedTotalCents");
+    expect(src).toContain("fullIdentityMatches.length === 0");
+    expect(src).toContain('error: "ambiguous_full_identity_match"');
+  });
+
+  it("records every real transition back to Won while keeping harmless replay repair idempotent", () => {
+    const sql = readFileSync(
+      join(
+        root,
+        "../../supabase/migrations/20261013063500_sales_booking_conversion_01f_crm_won_atomic.sql",
+      ),
+      "utf8",
+    );
+
+    expect(sql).toContain("if v_changed");
+    expect(sql).toContain("or not exists (");
+    expect(sql).toContain("a.metadata->>'to' = 'won'");
   });
 });
