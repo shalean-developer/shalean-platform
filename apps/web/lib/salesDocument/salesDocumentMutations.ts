@@ -64,7 +64,7 @@ export async function createSalesDocument(
       created_by: input.created_by ?? null,
       converted_from_id: input.converted_from_id ?? null,
     })
-    .select("id, zoho_invoice_id")
+    .select("id")
     .single();
 
   if (error || !data) return { ok: false, error: error?.message ?? "insert_failed" };
@@ -227,7 +227,7 @@ export async function convertSalesQuoteToInvoice(
 ): Promise<{ ok: true; invoiceId: string } | { ok: false; error: string }> {
   const { data: existingInvoice, error: existingLookupErr } = await admin
     .from("sales_documents")
-    .select("id")
+    .select("id, zoho_invoice_id")
     .eq("converted_from_id", quoteId)
     .eq("document_type", "invoice")
     .order("created_at", { ascending: false })
