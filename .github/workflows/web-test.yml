@@ -91,6 +91,10 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test:critical
 
+      - name: AUDIT-03A02B.2 isolated Plesk preflight regression
+        if: steps.filter.outputs.run_suite == 'true'
+        run: node --test scripts/audit03a02b2PleskEnvPreflight.test.mjs
+
       - name: Mandatory privileged Office email verification security contract
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/security/__tests__/p0MandatoryAal2Contract.test.ts lib/security/__tests__/p0PrivilegedMfaRolloutContract.test.ts
