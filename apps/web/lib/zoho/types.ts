@@ -35,6 +35,7 @@ export type ZohoInvoice = {
   invoice_id: string;
   invoice_number: string;
   reference_number?: string;
+  notes?: string;
   status: string;
   total: number;
   balance: number;
