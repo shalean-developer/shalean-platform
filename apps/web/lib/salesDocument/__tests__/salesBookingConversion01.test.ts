@@ -128,7 +128,10 @@ describe("SALES-BOOKING-CONVERSION-01", () => {
       "utf8",
     );
 
-    expect(src).toContain('.select("id, zoho_invoice_id")');
+    const existingLookup = src.indexOf("const { data: existingInvoice");
+    const existingLookupEnd = src.indexOf("if (existingLookupErr)", existingLookup);
+    const existingLookupBlock = src.slice(existingLookup, existingLookupEnd);
+    expect(existingLookupBlock).toContain('.select("id, zoho_invoice_id")');
     expect(src).toContain("const existingZohoInvoiceId");
     expect(src).toContain("if (!existingZohoInvoiceId) {");
     expect(src).toContain("syncSalesDocumentToZoho(admin, invoiceId)");
