@@ -34,6 +34,8 @@ export type ZohoInvoiceInput = {
 export type ZohoInvoice = {
   invoice_id: string;
   invoice_number: string;
+  reference_number?: string;
+  notes?: string;
   status: string;
   total: number;
   balance: number;
@@ -119,6 +121,12 @@ export type ZohoContactCreateResponse = {
   code: number;
   message: string;
   contact: ZohoContact;
+};
+
+export type ZohoInvoiceListResponse = {
+  code: number;
+  message: string;
+  invoices: ZohoInvoice[];
 };
 
 export type ZohoInvoiceCreateResponse = {
