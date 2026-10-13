@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import { CLEANER_PAYOUT_RECRUITMENT_COPY } from "@shalean/utils/cleanerPayoutCadence";
 import { googleReviewsCountPlusDisplay } from "@/lib/seo/googleReviews";
 import {
   Banknote,
@@ -15,7 +16,7 @@ export const CLEANER_APPLY_FORM_PATH = "/cleaner/apply/form";
 
 export const CLEANER_APPLY_WHY_JOIN: ReadonlyArray<{ Icon: LucideIcon; text: string }> = [
   { Icon: CalendarClock, text: "Choose when and where you work" },
-  { Icon: Banknote, text: "Weekly payouts for completed jobs" },
+  { Icon: Banknote, text: CLEANER_PAYOUT_RECRUITMENT_COPY },
   { Icon: Smartphone, text: "Cleaner app for job offers on your phone" },
   { Icon: Star, text: "Fair pay — earn more as you build experience" },
 ];
@@ -70,7 +71,7 @@ export const CLEANER_APPLY_REQUIREMENTS: readonly string[] = [
 export const CLEANER_APPLY_TESTIMONIALS: ReadonlyArray<{ quote: string; name: string; area: string }> = [
   {
     quote:
-      "I can pick jobs near my home and get paid every week. The app makes it easy to see what's available.",
+      "I can pick jobs near my home and track my earnings in the app. The app makes it easy to see what's available.",
     name: "Thandi",
     area: "Cape Town",
   },
