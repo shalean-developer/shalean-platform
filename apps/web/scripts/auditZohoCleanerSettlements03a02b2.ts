@@ -11,7 +11,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { zohoBooksClient } from "../lib/zoho/zohoBooksClient";
 import {
-  candidateCleanerMatches, withinWindow, zarCents, uniqueEvidence, potentiallySettled, listZohoEvidencePages,
+  candidateCleanerMatches, withinWindow, zarCents, uniqueEvidence, listZohoEvidencePages,
   type ZohoEvidence,
 } from "./zohoCleanerEvidenceMatching";
 
@@ -71,7 +71,6 @@ async function main() {
           .reduce((sum,b)=>sum+Number(b.cleaner_earnings_total_cents??0),0),
         possible_zoho_matches:matches.length,
         comparable_zar_matches:matches.filter(e=>zarCents(e)!==null).length,
-        possible_cleared_bank_records:matches.filter(e=>potentiallySettled(e)).length,
         expense_only_records:matches.filter(e=>e.source==="expenses").length,
         // These are candidate counts, NOT paid/unpaid classifications.
         classification:"UNPROVEN_EXTERNAL_SETTLEMENT"
