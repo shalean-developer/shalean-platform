@@ -159,7 +159,9 @@ describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D/01E/01F/01G", () => {
     expect(zohoSrc).toContain("fullIdentityMatches");
     expect(zohoSrc).toContain("if (!notes.includes(trace)) continue");
     expect(zohoSrc).toContain("candidateCustomerId !== contactResult.contactId");
+    expect(zohoSrc).toContain('error: "full_identity_customer_conflict"');
     expect(zohoSrc).toContain("candidateTotalCents !== expectedTotalCents");
+    expect(zohoSrc).toContain('error: "full_identity_total_conflict"');
     expect(zohoSrc).toContain("fullIdentityMatches.length === 0");
     expect(zohoSrc).toContain('error: "ambiguous_full_identity_match"');
     expect(syncSrc).toContain("zoho_invoice_linked_elsewhere");
@@ -245,7 +247,7 @@ describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D/01E/01F/01G", () => {
     const sql = readFileSync(
       join(
         root,
-        "../../supabase/migrations/20261013063500_sales_booking_conversion_01f_crm_won_atomic.sql",
+        "../../supabase/migrations/20261013102000_sales_booking_conversion_01g_crm_won_audit_forward.sql",
       ),
       "utf8",
     );
@@ -253,5 +255,6 @@ describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D/01E/01F/01G", () => {
     expect(sql).toContain("if v_changed");
     expect(sql).toContain("or not exists (");
     expect(sql).toContain("a.metadata->>'to' = 'won'");
+    expect(sql).toContain("create or replace function public.mark_sales_quote_opportunity_won_atomic");
   });
 });
