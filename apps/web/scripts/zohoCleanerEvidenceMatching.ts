@@ -62,13 +62,17 @@ export function zarCents(e: ZohoEvidence): number | null {
   return Math.round(n * 100);
 }
 
-export function withinWindow(date: string | undefined): boolean {
+export function isRealCalendarDate(date: string | undefined): boolean {
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
   const [year, month, day] = date.split("-").map(Number);
   const parsed = new Date(Date.UTC(year, month - 1, day));
   if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 ||
       parsed.getUTCDate() !== day) return false;
-  return date >= "2026-06-01" && date <= "2026-07-31";
+  return true;
+}
+
+export function withinWindow(date: string | undefined): boolean {
+  return isRealCalendarDate(date) && date! >= "2026-06-01" && date! <= "2026-07-31";
 }
 
 /** Keep provider records distinct across sources; no inference that an expense was settled. */
@@ -127,8 +131,8 @@ export async function listZohoEvidencePages(
       if (!row || typeof row !== "object" || Array.isArray(row))
         throw new Error(`Zoho ${endpoint} malformed row`);
       const evidence: ZohoEvidence = { ...(row as ZohoEvidence), source: endpoint };
-      if (typeof evidence.date === "string" &&
-          /^2026-(06|07)-/.test(evidence.date) && !withinWindow(evidence.date))
+      if (typeof evidence.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(evidence.date) ||
+          !isRealCalendarDate(evidence.date))
         throw new Error(`Zoho ${endpoint} impossible provider date`);
       const id = evidenceKey(evidence);
       if (id && seenIds.has(id)) throw new Error(`Zoho ${endpoint} repeated provider ID across pages`);
