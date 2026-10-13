@@ -4,12 +4,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { trustDocPageUrl } from "@/lib/pay/trustPayPageUrl";
 import { convertSalesQuoteToInvoice } from "@/lib/salesDocument/salesDocumentMutations";
-import { createBookingFromSalesQuoteInvoice } from "@/lib/salesDocument/createBookingFromSalesQuoteInvoice";
 import { notifyAdminSalesQuoteAccepted } from "@/lib/salesDocument/notifySalesDocumentAdmin";
 import { sendSalesDocumentToCustomer } from "@/lib/salesDocument/sendSalesDocumentToCustomer";
 import { logSystemEvent } from "@/lib/logging/systemLog";
-import { recordSalesQuoteAcceptanceSnapshot } from "@/lib/salesDocument/recordSalesQuoteAcceptanceSnapshot";
-import { markQuoteOpportunityWon } from "@/lib/salesDocument/salesOpportunityLifecycle";
 
 export async function findInvoiceForQuote(
   admin: SupabaseClient,
@@ -49,60 +46,28 @@ export async function acceptSalesQuoteAndCreateInvoice(
   quoteId: string,
 ): Promise<AcceptSalesQuoteResult> {
   const existing = await findInvoiceForQuote(admin, quoteId);
-  if (existing) {
-    const bookingResult = await createBookingFromSalesQuoteInvoice(admin, {
-      quoteId,
-      invoiceId: existing.id,
-    });
-    if (!bookingResult.ok) {
-      await logSystemEvent({
-        level: "error",
-        source: "sales_document/accept_quote",
-        message: "booking_create_failed_before_accept",
-        context: { quoteId, invoiceId: existing.id, error: bookingResult.error },
-      });
-      return { ok: false, error: `booking_create_failed:${bookingResult.error}` };
-    }
 
-    const snapshot = await recordSalesQuoteAcceptanceSnapshot(admin, {
-      quoteId,
-      invoiceId: existing.id,
-    });
-    if (!snapshot.ok) return snapshot;
-
-    const { error: acceptErr } = await admin
-      .from("sales_documents")
-      .update({ status: "accepted" })
-      .eq("id", quoteId)
-      .neq("status", "accepted");
-    if (acceptErr) return { ok: false, error: acceptErr.message };
-
-    await markQuoteOpportunityWon(admin, quoteId, "quote_accepted");
-
-    return {
-      ok: true,
-      invoiceId: existing.id,
-      viewUrl: trustDocPageUrl(existing.id, existing.public_token),
-      alreadyExisted: true,
-      emailSent: false,
-    };
-  }
-
-  const converted = await convertSalesQuoteToInvoice(admin, quoteId, null);
-  if (!converted.ok) return converted;
-
-  const { data: quoteRow } = await admin
+  const { data: quoteRow, error: quoteErr } = await admin
     .from("sales_documents")
-    .select("customer_name, customer_email, total_cents")
+    .select("status, customer_name, customer_email, total_cents")
     .eq("id", quoteId)
     .maybeSingle();
 
-  if (quoteRow) {
-    const q = quoteRow as {
-      customer_name?: string;
-      customer_email?: string;
-      total_cents?: number | null;
-    };
+  if (quoteErr) return { ok: false, error: quoteErr.message };
+  if (!quoteRow) return { ok: false, error: "quote_not_found" };
+
+  const q = quoteRow as {
+    customer_name?: string;
+    customer_email?: string;
+    total_cents?: number | null;
+  };
+
+  // Always route through the canonical conversion/recovery path. For an
+  // existing partial invoice this retries booking + Zoho sync before acceptance.
+  const converted = await convertSalesQuoteToInvoice(admin, quoteId, null);
+  if (!converted.ok) return converted;
+
+  if (converted.acceptedNow) {
     await notifyAdminSalesQuoteAccepted(admin, {
       quoteId,
       invoiceId: converted.invoiceId,
@@ -113,16 +78,18 @@ export async function acceptSalesQuoteAndCreateInvoice(
   }
 
   let emailSent = false;
-  const sent = await sendSalesDocumentToCustomer(admin, converted.invoiceId);
-  if (sent.ok) {
-    emailSent = true;
-  } else {
-    await logSystemEvent({
-      level: "warn",
-      source: "sales_document/accept_quote",
-      message: "invoice_send_after_accept_failed",
-      context: { quoteId, invoiceId: converted.invoiceId, error: sent.error },
-    });
+  if (converted.acceptedNow) {
+    const sent = await sendSalesDocumentToCustomer(admin, converted.invoiceId);
+    if (sent.ok) {
+      emailSent = true;
+    } else {
+      await logSystemEvent({
+        level: "warn",
+        source: "sales_document/accept_quote",
+        message: "invoice_send_after_accept_failed",
+        context: { quoteId, invoiceId: converted.invoiceId, error: sent.error },
+      });
+    }
   }
 
   const { data: inv, error: invErr } = await admin
@@ -140,7 +107,7 @@ export async function acceptSalesQuoteAndCreateInvoice(
     ok: true,
     invoiceId: row.id,
     viewUrl: trustDocPageUrl(row.id, row.public_token),
-    alreadyExisted: false,
+    alreadyExisted: Boolean(existing),
     emailSent,
   };
 }
