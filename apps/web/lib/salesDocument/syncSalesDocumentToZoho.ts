@@ -7,7 +7,7 @@ import { formatZohoOrderReference } from "@/lib/zoho/zohoOrderReference";
 import {
   createZohoEstimate,
   createZohoInvoice,
-  lookupZohoInvoiceByReferenceNumber,
+  lookupZohoInvoiceByShaleanIdentity,
   markZohoEstimateSent,
   markZohoInvoiceSent,
   updateZohoEstimate,
@@ -173,16 +173,46 @@ export async function syncSalesDocumentToZoho(
       .eq("id", documentId);
   } else if (!linkedInv) {
     const referenceNumber = formatZohoOrderReference(row.id, "sales");
-    const reconciled = await lookupZohoInvoiceByReferenceNumber(referenceNumber);
+    const reconciled = await lookupZohoInvoiceByShaleanIdentity({
+      referenceNumber,
+      referenceId: row.id,
+      ...contact,
+      totalZar,
+    });
     if (!reconciled.ok) return { ok: false, error: `zoho_reference_lookup:${reconciled.error}` };
 
     if (reconciled.found) {
-      invoiceId = reconciled.zohoInvoiceId;
+      const { data: conflictingLink, error: conflictErr } = await admin
+        .from("sales_documents")
+        .select("id")
+        .eq("zoho_invoice_id", reconciled.zohoInvoiceId)
+        .neq("id", documentId)
+        .limit(1)
+        .maybeSingle();
+      if (conflictErr) return { ok: false, error: `zoho_reference_conflict_lookup:${conflictErr.message}` };
+      if (conflictingLink?.id) return { ok: false, error: "zoho_invoice_linked_elsewhere" };
+
+      // Refresh the recovered draft from current Shalean source-of-truth before
+      // restoring the local link. If Zoho no longer permits editing, fail closed.
+      const refreshed = await updateZohoInvoice({
+        zohoInvoiceId: reconciled.zohoInvoiceId,
+        ...contact,
+        lineItems: zohoLineItems,
+        invoiceDate,
+        dueDate,
+        notes,
+        currencyCode: row.currency,
+      });
+      if (!refreshed.ok) {
+        return { ok: false, error: `zoho_reference_refresh:${refreshed.error}` };
+      }
+
+      invoiceId = refreshed.zohoInvoiceId;
       const { error: linkErr } = await admin
         .from("sales_documents")
         .update({
-          zoho_invoice_id: reconciled.zohoInvoiceId,
-          zoho_invoice_number: reconciled.invoiceNumber,
+          zoho_invoice_id: refreshed.zohoInvoiceId,
+          zoho_invoice_number: refreshed.invoiceNumber,
         })
         .eq("id", documentId)
         .is("zoho_invoice_id", null);
