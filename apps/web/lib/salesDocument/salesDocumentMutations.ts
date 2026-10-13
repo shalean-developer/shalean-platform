@@ -267,9 +267,11 @@ async function acquireSalesDocumentConversionLease(
   invoiceId: string,
   token: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  // A second acceptance request should normally observe the first request's
-  // release within a few seconds and then complete as an idempotent replay.
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  // A second acceptance request should wait long enough for a normal Zoho
+  // round trip and then complete as an idempotent replay. Keep this bounded
+  // below the 180-second lease while allowing multiple sequential 10-second
+  // external calls to finish.
+  for (let attempt = 0; attempt < 120; attempt += 1) {
     const { data, error } = await admin.rpc("claim_sales_document_conversion", {
       p_invoice_id: invoiceId,
       p_token: token,
@@ -282,7 +284,7 @@ async function acquireSalesDocumentConversionLease(
       : (data as ConversionLeaseClaimRow | null);
     if (row?.claimed === true) return { ok: true };
 
-    await delay(200);
+    await delay(500);
   }
 
   return { ok: false, error: "conversion_busy" };
