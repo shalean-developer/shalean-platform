@@ -33,19 +33,24 @@ begin
 
   v_previous_stage := nullif(trim(coalesce(v_quote.crm_stage, '')), '');
 
-  if v_previous_stage is distinct from 'won' then
-    update public.sales_documents
-    set
-      crm_stage = 'won',
-      crm_won_at = coalesce(crm_won_at, now()),
-      crm_lost_at = null,
-      crm_lost_reason = null,
-      crm_next_follow_up_at = null,
-      updated_at = now()
-    where id = p_quote_id;
+  v_changed := v_previous_stage is distinct from 'won';
 
-    v_changed := true;
-  end if;
+  update public.sales_documents
+  set
+    crm_stage = 'won',
+    crm_won_at = coalesce(crm_won_at, now()),
+    crm_lost_at = null,
+    crm_lost_reason = null,
+    crm_next_follow_up_at = null,
+    updated_at = now()
+  where id = p_quote_id
+    and (
+      crm_stage is distinct from 'won'
+      or crm_won_at is null
+      or crm_lost_at is not null
+      or crm_lost_reason is not null
+      or crm_next_follow_up_at is not null
+    );
 
   if not exists (
     select 1
