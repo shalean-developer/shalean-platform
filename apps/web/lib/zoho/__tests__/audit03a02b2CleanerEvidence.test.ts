@@ -31,7 +31,16 @@ describe("AUDIT-03A-02B.2 Zoho read-only candidate matching", () => {
     expect(withinWindow("2026-06-20")).toBe(true);
     expect(withinWindow("2026-07-31")).toBe(true);
     expect(withinWindow("2026-08-01")).toBe(false);
+    expect(withinWindow("2026-06-99")).toBe(false);
+    expect(withinWindow("2026-06-31")).toBe(false);
+    expect(withinWindow("2026-07-00")).toBe(false);
     expect(withinWindow(undefined)).toBe(false);
+  });
+  it("fails closed on impossible provider dates in the audit window", async () => {
+    await expect(listZohoEvidencePages("expenses", async () => ({
+      expenses:[{expense_id:"bad-date",date:"2026-06-99"}],
+      page_context:{has_more_page:false}
+    }))).rejects.toThrow("impossible provider date");
   });
   it("deduplicates only source-specific provider IDs", () => {
     const expense = {source:"expenses" as const,expense_id:"e1",date:"2026-06-20"};
