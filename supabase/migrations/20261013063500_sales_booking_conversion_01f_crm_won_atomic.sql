@@ -52,13 +52,14 @@ begin
       or crm_next_follow_up_at is not null
     );
 
-  if not exists (
-    select 1
-    from public.sales_opportunity_activities a
-    where a.sales_document_id = p_quote_id
-      and a.activity_type = 'stage_change'
-      and a.metadata->>'to' = 'won'
-  ) then
+  if v_changed
+     or not exists (
+       select 1
+       from public.sales_opportunity_activities a
+       where a.sales_document_id = p_quote_id
+         and a.activity_type = 'stage_change'
+         and a.metadata->>'to' = 'won'
+     ) then
     insert into public.sales_opportunity_activities (
       sales_document_id,
       activity_type,
