@@ -26,9 +26,18 @@ describe("AUDIT-03A02B unlocked missing cleaner earnings backfill", () => {
   ];
 
   it("hard-allowlists exactly the 11 independently proven missing-ledger bookings", () => {
-    for (const id of allowlisted) expect(source).toContain(id);
-    expect(source).not.toContain("c7c3166b-46c3-4939-b8f2-bee0060159ee");
-    expect(source).not.toContain("25524de8-ae00-4a4d-b14c-878b66658ae0");
+    const arrayMatch = source.match(/v_allowlist uuid\[\] := array\[([\s\S]*?)\];/);
+    expect(arrayMatch).not.toBeNull();
+
+    const actual = [
+      ...(arrayMatch?.[1].matchAll(/'([0-9a-f-]{36})'::uuid/g) ?? []),
+    ].map((match) => match[1]);
+
+    expect(actual).toEqual(allowlisted);
+    expect(actual).toHaveLength(11);
+    expect(new Set(actual).size).toBe(11);
+    expect(actual).not.toContain("c7c3166b-46c3-4939-b8f2-bee0060159ee");
+    expect(actual).not.toContain("25524de8-ae00-4a4d-b14c-878b66658ae0");
   });
 
   it("requires booking, snapshot, and single-cleaner summary convergence", () => {
