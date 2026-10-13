@@ -28,10 +28,10 @@ describe("AUDIT-03A-02B.2 Zoho read-only candidate matching", () => {
     expect(result.rows).toHaveLength(2);
     expect(result.unknownIdentity).toBe(0);
   });
-  it("never treats an expense or uncleared transfer as proven settlement", () => {
+  it("never treats an expense or Zoho status as proven bank settlement", () => {
     expect(potentiallySettled({source:"expenses",status:"paid",transaction_type:"expense"})).toBe(false);
     expect(potentiallySettled({source:"banktransactions",status:"pending",transaction_type:"withdrawal"})).toBe(false);
-    expect(potentiallySettled({source:"banktransactions",status:"reconciled",transaction_type:"withdrawal"})).toBe(true);
+    expect(potentiallySettled({source:"banktransactions",status:"reconciled",transaction_type:"withdrawal"})).toBe(false);
   });
   it("counts unidentified evidence as unresolved instead of silently dropping it", () => {
     const result = uniqueEvidence([{source:"expenses",date:"2026-06-20"}]);
