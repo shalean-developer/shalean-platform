@@ -12,7 +12,6 @@ import { createClient } from "@supabase/supabase-js";
 import { zohoBooksClient } from "../lib/zoho/zohoBooksClient";
 import {
   candidateCleanerMatches, withinWindow, zarCents, uniqueEvidence, listZohoEvidencePages,
-  type ZohoEvidence,
 } from "./zohoCleanerEvidenceMatching";
 
 const EXPECTED_REF = "paqjwfulwywtsyyvdxrq";
@@ -53,10 +52,48 @@ export async function runZohoCleanerSettlementEvidence03a02b2() {
   }
   const db = createClient(url,key,{auth:{persistSession:false}});
   const {data:bookings,error} = await db.from("bookings").select(
-    "id,cleaner_id,cleaner_earnings_total_cents,completed_at"
+    "id,status,is_team_job,cleaner_id,payout_owner_cleaner_id,cleaner_earnings_total_cents,cleaner_line_earnings_finalized_at,display_earnings_cents,payout_status,payout_id,payout_run_id,payout_paid_at,payout_frozen_cents,earnings_summary"
   ).in("id",[...ids]);
-  if (error || bookings?.length !== 11) throw new Error("Allowlist DB query incomplete");
-  const cleanerIds = [...new Set(bookings.map(b => b.cleaner_id).filter(Boolean))];
+  if (error || bookings?.length !== 11 || new Set(bookings.map(b => b.id)).size !== ids.length)
+    throw new Error("Allowlist DB query incomplete");
+  for (const b of bookings) {
+    const owner = b.cleaner_id ?? b.payout_owner_cleaner_id;
+    const amount = b.cleaner_earnings_total_cents;
+    if (String(b.status ?? "").toLowerCase() !== "completed" ||
+        b.is_team_job || !b.cleaner_line_earnings_finalized_at ||
+        !Number.isSafeInteger(amount) || amount <= 0 ||
+        !owner || (b.cleaner_id && b.payout_owner_cleaner_id && b.cleaner_id !== b.payout_owner_cleaner_id) ||
+        b.payout_id || b.payout_run_id || b.payout_paid_at ||
+        String(b.payout_status ?? "").toLowerCase() === "paid" ||
+        b.display_earnings_cents !== amount ||
+        (String(b.payout_status ?? "").toLowerCase() === "eligible" && b.payout_frozen_cents !== amount) ||
+        (String(b.payout_status ?? "").toLowerCase() === "pending" && b.payout_frozen_cents !== null && b.payout_frozen_cents !== amount)) {
+      throw new Error("Booking eligibility or settlement evidence drift; Zoho read blocked");
+    }
+    const summary = b.earnings_summary?.per_cleaner_earnings;
+    if (!Array.isArray(summary) || summary.length !== 1 ||
+        summary[0]?.cleaner_id !== owner || summary[0]?.total_cents !== amount) {
+      throw new Error("Booking earnings summary drift; Zoho read blocked");
+    }
+  }
+  const {data:snapshots,error:snapshotError} = await db.from("booking_cleaner_earnings_snapshot")
+    .select("booking_id,cleaner_id,display_earnings_cents,payout_earnings_cents,internal_earnings_cents")
+    .in("booking_id",[...ids]);
+  if (snapshotError || snapshots?.length !== 11 || new Set(snapshots.map(s=>s.booking_id)).size !== 11)
+    throw new Error("Booking snapshot evidence incomplete");
+  for (const b of bookings) {
+    const s = snapshots.find(s=>s.booking_id===b.id);
+    if (!s || s.cleaner_id !== (b.cleaner_id ?? b.payout_owner_cleaner_id) ||
+        s.display_earnings_cents !== b.cleaner_earnings_total_cents ||
+        s.payout_earnings_cents !== b.cleaner_earnings_total_cents ||
+        s.internal_earnings_cents !== b.cleaner_earnings_total_cents)
+      throw new Error("Booking snapshot no longer converges");
+  }
+  const {data:ledger,error:ledgerError} = await db.from("cleaner_earnings")
+    .select("booking_id").in("booking_id",[...ids]);
+  if (ledgerError || !Array.isArray(ledger) || ledger.length !== 0)
+    throw new Error("Booking ledger state changed; Zoho read blocked");
+  const cleanerIds = [...new Set(bookings.map(b => b.cleaner_id ?? b.payout_owner_cleaner_id).filter(Boolean))];
   if (cleanerIds.length !== 6) throw new Error("Expected six cleaner IDs");
   const {data:cleaners,error:cleanerError} = await db.from("cleaners")
     .select("id,full_name").in("id",cleanerIds);
