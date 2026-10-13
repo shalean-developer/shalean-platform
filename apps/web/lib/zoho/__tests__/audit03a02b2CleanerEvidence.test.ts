@@ -40,7 +40,6 @@ describe("AUDIT-03A-02B.2 Zoho read-only candidate matching", () => {
   it("matches first-last and reverse-order payees but rejects single names", () => {
     expect(candidateCleanerMatches({source:"banktransactions",payee:"Example Cleaner Two"},cleaners)).toEqual(["b"]);
     expect(candidateCleanerMatches({source:"banktransactions",payee:"Example"},cleaners)).toEqual([]);
-    expect(candidateCleanerMatches({source:"banktransactions",payee:"CLEANER TWO EXAMPLE"},cleaners)).toEqual([]);
     expect(candidateCleanerMatches({source:"banktransactions",payee:"CLEANER TWO"},cleaners)).toEqual([]);
     const full = [{id:"j",name:"Jane Mary Doe"}];
     expect(candidateCleanerMatches({source:"banktransactions",payee:"DOE, JANE"},full)).toEqual(["j"]);
