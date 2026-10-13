@@ -57,19 +57,17 @@ export async function acceptSalesQuoteAndCreateInvoice(
   if (!quoteRow) return { ok: false, error: "quote_not_found" };
 
   const q = quoteRow as {
-    status?: string | null;
     customer_name?: string;
     customer_email?: string;
     total_cents?: number | null;
   };
-  const wasAccepted = String(q.status ?? "").toLowerCase() === "accepted";
 
   // Always route through the canonical conversion/recovery path. For an
   // existing partial invoice this retries booking + Zoho sync before acceptance.
   const converted = await convertSalesQuoteToInvoice(admin, quoteId, null);
   if (!converted.ok) return converted;
 
-  if (!wasAccepted) {
+  if (converted.acceptedNow) {
     await notifyAdminSalesQuoteAccepted(admin, {
       quoteId,
       invoiceId: converted.invoiceId,
@@ -80,7 +78,7 @@ export async function acceptSalesQuoteAndCreateInvoice(
   }
 
   let emailSent = false;
-  if (!wasAccepted) {
+  if (converted.acceptedNow) {
     const sent = await sendSalesDocumentToCustomer(admin, converted.invoiceId);
     if (sent.ok) {
       emailSent = true;
