@@ -90,14 +90,13 @@ export async function listZohoEvidencePages(
     const response = await get(path);
     const rows = response[endpoint];
     if (!Array.isArray(rows)) throw new Error(`Zoho ${endpoint} response missing array`);
+    // Documented Zoho list envelopes are inconsistent across endpoints.
+    // Fetch until a short page, always bounding requests and checking replay.
+    // Never accept explicit contradictory pagination metadata.
     const context = response.page_context;
-    // Some Zoho endpoints have no pagination context; fail closed rather than guess.
-    const hasMore = !Array.isArray(context) && context && typeof context === "object" &&
-      typeof (context as { has_more_page?: unknown }).has_more_page === "boolean"
-      ? (context as { has_more_page: boolean }).has_more_page
-      : undefined;
-    if (hasMore === undefined) {
-      throw new Error(`Zoho ${endpoint} pagination shape unknown; fail closed`);
+    if (context !== undefined && !Array.isArray(context) &&
+        (typeof context !== "object" || context === null)) {
+      throw new Error(`Zoho ${endpoint} malformed page_context`);
     }
     for (const row of rows) {
       if (!row || typeof row !== "object" || Array.isArray(row)) {
@@ -105,7 +104,8 @@ export async function listZohoEvidencePages(
       }
       all.push({ ...(row as ZohoEvidence), source: endpoint });
     }
-    if (!hasMore) return all;
+    if (rows.length > 200) throw new Error(`Zoho ${endpoint} oversized page`);
+    if (rows.length < 200) return all;
   }
   throw new Error(`Zoho ${endpoint} exceeded 20 pages; incomplete audit refused`);
 }
