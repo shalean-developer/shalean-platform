@@ -88,34 +88,52 @@ export function potentiallySettled(_e: ZohoEvidence): boolean {
   return false;
 }
 
-/** Injectable GET-only transport allows deterministic pagination tests without OAuth or network. */
+/** Injectable GET-only transport: reject contradictory pagination and replayed evidence. */
 export async function listZohoEvidencePages(
   endpoint: "expenses" | "banktransactions",
   get: (path: string) => Promise<Record<string, unknown>>,
 ): Promise<ZohoEvidence[]> {
   const all: ZohoEvidence[] = [];
+  const seenIds = new Set<string>();
+  const seenPages = new Set<string>();
   for (let page = 1; page <= 20; page++) {
-    const filters = endpoint === "expenses" ? "date_start=2026-06-01&date_end=2026-07-31" : "date_after=2026-05-31&date_before=2026-08-01";
-    const path = `/${endpoint}?${filters}&per_page=200&page=${page}`;
+    const path = `/${endpoint}?date_start=2026-06-01&date_end=2026-07-31&per_page=200&page=${page}`;
     const response = await get(path);
     const rows = response[endpoint];
     if (!Array.isArray(rows)) throw new Error(`Zoho ${endpoint} response missing array`);
-    // Documented Zoho list envelopes are inconsistent across endpoints.
-    // Fetch until a short page, always bounding requests and checking replay.
-    // Never accept explicit contradictory pagination metadata.
-    const context = response.page_context;
-    if (context !== undefined && !Array.isArray(context) &&
-        (typeof context !== "object" || context === null)) {
+    if (rows.length > 200) throw new Error(`Zoho ${endpoint} oversized page`);
+    const ctx = response.page_context;
+    const metadata = Array.isArray(ctx) ? (ctx.length === 1 ? ctx[0] : undefined) : ctx;
+    if (ctx !== undefined && (!metadata || typeof metadata !== "object" || Array.isArray(metadata))) {
       throw new Error(`Zoho ${endpoint} malformed page_context`);
     }
+    const pageMeta = metadata as { has_more_page?: unknown; page?: unknown; per_page?: unknown } | undefined;
+    if (pageMeta?.has_more_page !== undefined && typeof pageMeta.has_more_page !== "boolean")
+      throw new Error(`Zoho ${endpoint} malformed has_more_page`);
+    if (pageMeta?.page !== undefined && Number(pageMeta.page) !== page)
+      throw new Error(`Zoho ${endpoint} page mismatch`);
+    const limit = pageMeta?.per_page === undefined ? 200 : Number(pageMeta.per_page);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200)
+      throw new Error(`Zoho ${endpoint} invalid per_page`);
+    if (rows.length > limit) throw new Error(`Zoho ${endpoint} page exceeds effective limit`);
+    const fingerprint = JSON.stringify(rows);
+    if (rows.length && seenPages.has(fingerprint)) throw new Error(`Zoho ${endpoint} replayed page`);
+    seenPages.add(fingerprint);
     for (const row of rows) {
-      if (!row || typeof row !== "object" || Array.isArray(row)) {
+      if (!row || typeof row !== "object" || Array.isArray(row))
         throw new Error(`Zoho ${endpoint} malformed row`);
-      }
-      all.push({ ...(row as ZohoEvidence), source: endpoint });
+      const evidence: ZohoEvidence = { ...(row as ZohoEvidence), source: endpoint };
+      const id = evidenceKey(evidence);
+      if (id && seenIds.has(id)) throw new Error(`Zoho ${endpoint} repeated provider ID across pages`);
+      if (id) seenIds.add(id);
+      all.push(evidence);
     }
-    if (rows.length > 200) throw new Error(`Zoho ${endpoint} oversized page`);
-    if (rows.length < 200) return all;
+    if (pageMeta?.has_more_page === false) return all;
+    if (pageMeta?.has_more_page === true) {
+      if (rows.length === 0) throw new Error(`Zoho ${endpoint} empty page before completion`);
+      continue;
+    }
+    if (rows.length < limit) return all;
   }
   throw new Error(`Zoho ${endpoint} exceeded 20 pages; incomplete audit refused`);
 }
