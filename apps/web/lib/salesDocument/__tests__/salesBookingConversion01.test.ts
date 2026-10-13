@@ -147,7 +147,7 @@ describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D", () => {
       "utf8",
     );
 
-    const lookup = syncSrc.indexOf("lookupZohoInvoiceByReferenceNumber");
+    const lookup = syncSrc.indexOf("lookupZohoInvoiceByShaleanIdentity");
     const create = syncSrc.indexOf("createZohoInvoice({", lookup);
 
     expect(lookup).toBeGreaterThanOrEqual(0);
@@ -155,6 +155,12 @@ describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D", () => {
     expect(syncSrc).toContain('formatZohoOrderReference(row.id, "sales")');
     expect(syncSrc).toContain(".is(\"zoho_invoice_id\", null)");
     expect(zohoSrc).toContain("/invoices?reference_number=");
-    expect(zohoSrc).toContain("invoice.reference_number");
+    expect(zohoSrc).toContain('error: "ambiguous_reference_number"');
+    expect(zohoSrc).toContain("Shalean id:");
+    expect(zohoSrc).toContain("reference_candidate_customer_mismatch");
+    expect(zohoSrc).toContain("reference_candidate_total_mismatch");
+    expect(syncSrc).toContain("zoho_invoice_linked_elsewhere");
+    expect(syncSrc).toContain("zoho_reference_refresh");
+    expect(syncSrc).toContain("updateZohoInvoice({");
   });
 });
