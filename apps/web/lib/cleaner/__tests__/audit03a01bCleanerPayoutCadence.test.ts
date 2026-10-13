@@ -25,6 +25,7 @@ const LIVE_PAYOUT_COPY_FILES = [
   "apps/mobile/constants/helpContent.ts",
   "apps/web/lib/cleaner/applyPageContent.ts",
   "apps/web/lib/seo/cleanerApplyLandingSeo.ts",
+  "apps/web/lib/cleaner/earningsInsightsSeries.ts",
 ];
 
 const FORBIDDEN_PROMISES = [
@@ -36,6 +37,7 @@ const FORBIDDEN_PROMISES = [
   "company Friday schedule",
   "Payouts run weekly on Fridays",
   "next weekly transfer",
+  "next weekly payout batch",
   "Jobs must be completed before Thursday 23:59",
 ];
 
