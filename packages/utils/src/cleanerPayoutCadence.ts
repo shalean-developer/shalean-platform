@@ -9,6 +9,9 @@ export const CLEANER_PAYOUT_METHOD_LABEL = "Bank transfer";
 export const CLEANER_PAYOUT_RECRUITMENT_COPY =
   "Monthly bank-transfer payouts for eligible completed jobs";
 
+export const CLEANER_PAYOUT_RECRUITMENT_SEO_PHRASE =
+  "monthly bank-transfer payouts";
+
 export const CLEANER_PAYOUT_BANK_READY_COPY =
   "You're set for monthly bank-transfer payouts.";
 
