@@ -63,33 +63,19 @@ export async function markQuoteOpportunityWon(
   quoteId: string,
   source: "quote_accepted",
 ): Promise<void> {
-  const { data } = await admin
-    .from("sales_documents")
-    .select("id, document_type, converted_from_id, crm_stage")
-    .eq("id", quoteId)
-    .maybeSingle();
-
-  if (!data || String(data.document_type) !== "quote" || data.converted_from_id) return;
-
-  const previousStage = data.crm_stage ? String(data.crm_stage) : null;
-  if (previousStage === "won") return;
-
-  const nowIso = new Date().toISOString();
-  await admin
-    .from("sales_documents")
-    .update({
-      crm_stage: "won",
-      crm_won_at: nowIso,
-      crm_lost_at: null,
-      crm_lost_reason: null,
-      crm_next_follow_up_at: null,
-    })
-    .eq("id", quoteId);
-
-  await recordStageChange(admin, {
-    quoteId,
-    fromStage: previousStage,
-    toStage: "won",
-    source,
+  const { data, error } = await admin.rpc("mark_sales_quote_opportunity_won_atomic", {
+    p_quote_id: quoteId,
+    p_source: source,
   });
+
+  const result =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? (data as { ok?: unknown; error?: unknown })
+      : null;
+
+  if (error || result?.ok !== true) {
+    // Keep acceptance replayable: the conversion can succeed while a later
+    // replay retries this atomic CRM convergence.
+    return;
+  }
 }
