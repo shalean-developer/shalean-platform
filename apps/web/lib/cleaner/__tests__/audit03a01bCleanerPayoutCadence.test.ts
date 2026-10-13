@@ -6,6 +6,7 @@ import {
   CLEANER_PAYOUT_BANK_READY_COPY,
   CLEANER_PAYOUT_HELP_COPY,
   CLEANER_PAYOUT_RECRUITMENT_COPY,
+  CLEANER_PAYOUT_RECRUITMENT_SEO_PHRASE,
   cleanerMonthlyPayoutCadenceJohannesburg,
 } from "@shalean/utils/cleanerPayoutCadence";
 
@@ -52,6 +53,7 @@ describe("AUDIT-03A-01B cleaner payout cadence convergence", () => {
     expect(CLEANER_PAYOUT_HELP_COPY).toContain("released by bank transfer");
     expect(CLEANER_PAYOUT_BANK_READY_COPY).toContain("monthly bank-transfer payouts");
     expect(CLEANER_PAYOUT_RECRUITMENT_COPY).toContain("Monthly bank-transfer payouts");
+    expect(CLEANER_PAYOUT_RECRUITMENT_SEO_PHRASE).toBe("monthly bank-transfer payouts");
   });
 
   it("removes weekly/Monday/Friday payout promises from every live cleaner-facing surface", () => {
@@ -92,6 +94,6 @@ describe("AUDIT-03A-01B cleaner payout cadence convergence", () => {
 
     expect(content).toContain("CLEANER_PAYOUT_RECRUITMENT_COPY");
     expect(content).not.toContain("get paid every week");
-    expect(seo).toContain("monthly bank-transfer payouts");
+    expect(seo).toContain("CLEANER_PAYOUT_RECRUITMENT_SEO_PHRASE");
   });
 });
