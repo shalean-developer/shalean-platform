@@ -11,7 +11,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { zohoBooksClient } from "../lib/zoho/zohoBooksClient";
 import {
-  candidateCleanerMatches, withinWindow, zarCents,
+  candidateCleanerMatches, withinWindow, zarCents, uniqueEvidence, potentiallySettled,
   type ZohoEvidence,
 } from "./zohoCleanerEvidenceMatching";
 
@@ -74,11 +74,14 @@ async function main() {
   // Make both Zoho GET calls before printing any results. Errors fail closed.
   const expenses = await pages("expenses");
   const bank = await pages("banktransactions");
-  const all = [...expenses,...bank].filter(x=>withinWindow(x.date));
+  const { rows: all, unknownIdentity } = uniqueEvidence([...expenses,...bank].filter(x=>withinWindow(x.date)));
   console.log(JSON.stringify({
     audit:"AUDIT-03A-02B.2",read_only:true,
     window:"2026-06-01..2026-07-31",bookings:11,cleaners:6,
     zoho_expense_rows:expenses.length,zoho_bank_rows:bank.length,
+    identity_missing_records:unknownIdentity,
+    all_unmatched_records:all.filter(e=>candidateCleanerMatches(e,names).length===0).length,
+    all_ambiguous_records:all.filter(e=>candidateCleanerMatches(e,names).length>1).length,
     results:names.map((c,index)=>{
       const matches = all.filter(e=>candidateCleanerMatches(e,[c]).length>0);
       return {
@@ -87,6 +90,8 @@ async function main() {
           .reduce((sum,b)=>sum+Number(b.cleaner_earnings_total_cents??0),0),
         possible_zoho_matches:matches.length,
         comparable_zar_matches:matches.filter(e=>zarCents(e)!==null).length,
+        possible_cleared_bank_records:matches.filter(e=>potentiallySettled(e)).length,
+        expense_only_records:matches.filter(e=>e.source==="expenses").length,
         // These are candidate counts, NOT paid/unpaid classifications.
         classification:"UNPROVEN_EXTERNAL_SETTLEMENT"
       };
