@@ -1,3 +1,5 @@
+import { CLEANER_PAYOUT_HELP_COPY } from "@shalean/utils/cleanerPayoutCadence";
+
 export type HelpArticle = {
   id: string;
   title: string;
@@ -23,7 +25,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
   {
     id: "earnings",
     title: "Earnings and payouts",
-    body: "Earnings shows today, this week, and this month, plus pending and paid amounts. Payouts usually process on the company Friday schedule once jobs are eligible.",
+    body: `Earnings shows today, this week, and this month, plus pending and paid amounts. ${CLEANER_PAYOUT_HELP_COPY}`,
   },
   {
     id: "offline",
