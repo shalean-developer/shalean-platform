@@ -95,6 +95,21 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: node --test scripts/audit03a02b2PleskEnvPreflight.test.mjs
 
+      - name: AUDIT-03A02B.2 evidence matching and pagination regression
+        if: steps.filter.outputs.run_suite == 'true'
+        run: npm run test -- lib/zoho/__tests__/audit03a02b2CleanerEvidence.test.ts
+
+      - name: AUDIT-03A02B.2 private audit safety regression
+        if: steps.filter.outputs.run_suite == 'true'
+        run: node --test scripts/audit03a02b2Safety.contract.test.mjs
+
+      - name: AUDIT-03A02B.2 staging-mode mocked execution (no credentials)
+        if: steps.filter.outputs.run_suite == 'true'
+        env:
+          SHALEAN_APP_ENV: staging
+          AUDIT_STAGING_SUPABASE_REF: uwvnmluiqbczeduzjgse
+        run: npx tsx scripts/audit03a02b2StagingMock.ts
+
       - name: Mandatory privileged Office email verification security contract
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/security/__tests__/p0MandatoryAal2Contract.test.ts lib/security/__tests__/p0PrivilegedMfaRolloutContract.test.ts
