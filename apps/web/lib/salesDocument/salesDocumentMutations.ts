@@ -64,7 +64,7 @@ export async function createSalesDocument(
       created_by: input.created_by ?? null,
       converted_from_id: input.converted_from_id ?? null,
     })
-    .select("id")
+    .select("id, zoho_invoice_id")
     .single();
 
   if (error || !data) return { ok: false, error: error?.message ?? "insert_failed" };
@@ -237,6 +237,9 @@ export async function convertSalesQuoteToInvoice(
   if (existingLookupErr) return { ok: false, error: existingLookupErr.message };
   if (existingInvoice?.id) {
     const invoiceId = String(existingInvoice.id);
+    const existingZohoInvoiceId = String(
+      (existingInvoice as { zoho_invoice_id?: string | null }).zoho_invoice_id ?? "",
+    ).trim();
     const bookingResult = await createBookingFromSalesQuoteInvoice(admin, { quoteId, invoiceId });
     if (!bookingResult.ok) {
       await logSystemEvent({
@@ -248,15 +251,17 @@ export async function convertSalesQuoteToInvoice(
       return { ok: false, error: `booking_create_failed:${bookingResult.error}` };
     }
 
-    const zohoSync = await syncSalesDocumentToZoho(admin, invoiceId);
-    if (!zohoSync.ok) {
-      await logSystemEvent({
-        level: "error",
-        source: "sales_document/convert",
-        message: "zoho_sync_failed_before_accept",
-        context: { quoteId, invoiceId, error: zohoSync.error },
-      });
-      return { ok: false, error: `zoho_sync_failed:${zohoSync.error}` };
+    if (!existingZohoInvoiceId) {
+      const zohoSync = await syncSalesDocumentToZoho(admin, invoiceId);
+      if (!zohoSync.ok) {
+        await logSystemEvent({
+          level: "error",
+          source: "sales_document/convert",
+          message: "zoho_sync_failed_before_accept",
+          context: { quoteId, invoiceId, error: zohoSync.error },
+        });
+        return { ok: false, error: `zoho_sync_failed:${zohoSync.error}` };
+      }
     }
 
     const snapshot = await recordSalesQuoteAcceptanceSnapshot(admin, { quoteId, invoiceId });
