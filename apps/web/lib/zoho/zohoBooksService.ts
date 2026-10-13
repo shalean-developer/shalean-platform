@@ -204,43 +204,53 @@ export async function lookupZohoInvoiceByShaleanIdentity(params: {
     const res = await zohoBooksClient.get<ZohoInvoiceListResponse>(
       `/invoices?reference_number=${encodeURIComponent(ref)}`,
     );
-    const exact = (res.invoices ?? []).filter(
+    const sameShortReference = (res.invoices ?? []).filter(
       (invoice) => String(invoice.reference_number ?? "").trim() === ref,
     );
+    if (sameShortReference.length === 0) return { ok: true, found: false };
 
-    if (exact.length === 0) return { ok: true, found: false };
-    if (exact.length > 1) {
-      return { ok: false, error: "ambiguous_reference_number" };
-    }
-
-    const candidateId = String(exact[0]?.invoice_id ?? "").trim();
-    if (!candidateId) return { ok: false, error: "reference_candidate_missing_id" };
-
-    const detail = await zohoBooksClient.get<ZohoInvoiceGetResponse>(
-      `/invoices/${encodeURIComponent(candidateId)}`,
-    );
-    const invoice = detail.invoice;
     const trace = `Shalean id: ${referenceId}`;
-    const notes = String(invoice?.notes ?? "");
-    const candidateCustomerId = String(invoice?.customer_id ?? "").trim();
     const expectedTotalCents = Math.round(Number(params.totalZar) * 100);
-    const candidateTotalCents = Math.round(Number(invoice?.total ?? 0) * 100);
+    const fullIdentityMatches: Array<{ zohoInvoiceId: string; invoiceNumber: string }> = [];
 
-    if (!notes.includes(trace)) {
-      return { ok: false, error: "reference_candidate_identity_mismatch" };
+    for (const candidate of sameShortReference) {
+      const candidateId = String(candidate.invoice_id ?? "").trim();
+      if (!candidateId) continue;
+
+      const detail = await zohoBooksClient.get<ZohoInvoiceGetResponse>(
+        `/invoices/${encodeURIComponent(candidateId)}`,
+      );
+      const invoice = detail.invoice;
+      const notes = String(invoice?.notes ?? "");
+      const candidateCustomerId = String(invoice?.customer_id ?? "").trim();
+      const candidateTotalCents = Math.round(Number(invoice?.total ?? 0) * 100);
+
+      // A short-reference collision is unrelated only when the full Shalean
+      // trace is absent. Once the authoritative full trace matches, any
+      // customer/financial drift must fail closed to avoid creating a duplicate.
+      if (!notes.includes(trace)) continue;
+      if (!candidateCustomerId || candidateCustomerId !== contactResult.contactId) {
+        return { ok: false, error: "full_identity_customer_conflict" };
+      }
+      if (candidateTotalCents !== expectedTotalCents) {
+        return { ok: false, error: "full_identity_total_conflict" };
+      }
+
+      fullIdentityMatches.push({
+        zohoInvoiceId: candidateId,
+        invoiceNumber: String(invoice?.invoice_number ?? candidate.invoice_number ?? ""),
+      });
     }
-    if (!candidateCustomerId || candidateCustomerId !== contactResult.contactId) {
-      return { ok: false, error: "reference_candidate_customer_mismatch" };
-    }
-    if (candidateTotalCents !== expectedTotalCents) {
-      return { ok: false, error: "reference_candidate_total_mismatch" };
+
+    if (fullIdentityMatches.length === 0) return { ok: true, found: false };
+    if (fullIdentityMatches.length > 1) {
+      return { ok: false, error: "ambiguous_full_identity_match" };
     }
 
     return {
       ok: true,
       found: true,
-      zohoInvoiceId: candidateId,
-      invoiceNumber: String(invoice?.invoice_number ?? exact[0]?.invoice_number ?? ""),
+      ...fullIdentityMatches[0],
     };
   } catch (err) {
     return { ok: false, error: String(err instanceof Error ? err.message : err) };
