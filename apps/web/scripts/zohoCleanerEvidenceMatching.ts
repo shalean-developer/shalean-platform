@@ -63,8 +63,12 @@ export function zarCents(e: ZohoEvidence): number | null {
 }
 
 export function withinWindow(date: string | undefined): boolean {
-  return Boolean(date && /^2026-(06|07)-\d\d$/.test(date) &&
-    date >= "2026-06-01" && date <= "2026-07-31");
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const [year, month, day] = date.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 ||
+      parsed.getUTCDate() !== day) return false;
+  return date >= "2026-06-01" && date <= "2026-07-31";
 }
 
 /** Keep provider records distinct across sources; no inference that an expense was settled. */
