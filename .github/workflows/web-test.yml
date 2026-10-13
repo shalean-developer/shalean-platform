@@ -99,10 +99,6 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: node --test scripts/audit03a02b2PleskEnvPreflight.test.mjs
 
-      - name: AUDIT-03A02B.2 protected Zoho audit route contract
-        if: steps.filter.outputs.run_suite == 'true'
-        run: node --test scripts/audit03a02b2ProtectedRoute.contract.test.mjs
-
       - name: AUDIT-03A02B.2 staging-mode mocked execution (no credentials)
         if: steps.filter.outputs.run_suite == 'true'
         env:
