@@ -209,7 +209,8 @@ export async function lookupZohoInvoiceByShaleanIdentity(params: {
     );
     if (sameShortReference.length === 0) return { ok: true, found: false };
 
-    const trace = `Shalean id: ${referenceId}`;
+    const canonicalTrace = `Shalean id: ${referenceId}`;
+    const legacyTrace = `Shalean sales document ${referenceId}`;
     const expectedTotalCents = Math.round(Number(params.totalZar) * 100);
     const fullIdentityMatches: Array<{ zohoInvoiceId: string; invoiceNumber: string }> = [];
 
@@ -224,11 +225,14 @@ export async function lookupZohoInvoiceByShaleanIdentity(params: {
       const notes = String(invoice?.notes ?? "");
       const candidateCustomerId = String(invoice?.customer_id ?? "").trim();
       const candidateTotalCents = Math.round(Number(invoice?.total ?? 0) * 100);
+      const hasFullIdentity =
+        notes.includes(canonicalTrace) || notes.includes(legacyTrace);
 
-      // A short-reference collision is unrelated only when the full Shalean
-      // trace is absent. Once the authoritative full trace matches, any
-      // customer/financial drift must fail closed to avoid creating a duplicate.
-      if (!notes.includes(trace)) continue;
+      // Support both the canonical marker and the legacy pre-01G full-UUID
+      // marker. Short-reference collisions without either full identity are
+      // unrelated. Once either full identity matches, any customer/financial
+      // drift must fail closed to avoid creating a duplicate.
+      if (!hasFullIdentity) continue;
       if (!candidateCustomerId || candidateCustomerId !== contactResult.contactId) {
         return { ok: false, error: "full_identity_customer_conflict" };
       }
