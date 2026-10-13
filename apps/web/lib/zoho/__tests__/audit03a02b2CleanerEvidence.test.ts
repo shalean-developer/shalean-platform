@@ -63,7 +63,34 @@ describe("AUDIT-03A-02B.2 Zoho read-only candidate matching", () => {
       return {banktransactions:[{transaction_id:"b1",date:"2026-06-20"}]};
     });
     expect(result).toHaveLength(1);
-    expect(paths).toEqual(["/banktransactions?date_after=2026-05-31&date_before=2026-08-01&per_page=200&page=1"]);
+    expect(paths).toEqual(["/banktransactions?date_start=2026-06-01&date_end=2026-07-31&per_page=200&page=1"]);
+  });
+  it("honors has_more_page on short pages and rejects contradictory page counters", async () => {
+    let calls = 0;
+    const data = await listZohoEvidencePages("expenses", async () => {
+      calls++;
+      return calls === 1
+        ? {expenses:[{expense_id:"one"}],page_context:[{page:1,per_page:200,has_more_page:true}]}
+        : {expenses:[{expense_id:"two"}],page_context:{page:2,has_more_page:false}};
+    });
+    expect(data).toHaveLength(2);
+    expect(calls).toBe(2);
+    await expect(listZohoEvidencePages("expenses",async()=>({
+      expenses:[{expense_id:"one"}],page_context:{page:2,has_more_page:false}
+    }))).rejects.toThrow("page mismatch");
+  });
+  it("fails closed on replayed pages and repeated provider IDs", async () => {
+    const page = Array.from({length:200},(_,i)=>({expense_id:String(i)}));
+    await expect(listZohoEvidencePages("expenses",async()=>({
+      expenses:page,page_context:{has_more_page:true}
+    }))).rejects.toThrow("replayed page");
+    let calls = 0;
+    await expect(listZohoEvidencePages("expenses",async()=>{
+      calls++;
+      return calls === 1
+        ? {expenses:[{expense_id:"same"}],page_context:{has_more_page:true}}
+        : {expenses:[{expense_id:"same",date:"2026-07-01"}],page_context:{has_more_page:false}};
+    })).rejects.toThrow("repeated provider ID");
   });
   it("rejects missing arrays, malformed row and oversized pages", async () => {
     await expect(listZohoEvidencePages("banktransactions",async()=>({
