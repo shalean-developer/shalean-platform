@@ -14,7 +14,7 @@ describe("AUDIT-03A-02B.2 Zoho read-only candidate matching", () => {
     expect(script).toContain('accountsDomain !== "accounts.zoho.com"');
     expect(script).toContain('apiDomain !== "www.zohoapis.com"');
     expect(script.indexOf("Unexpected Zoho OAuth/API domain")).toBeLessThan(script.indexOf("createClient(url,key"));
-    expect(script.indexOf("Unexpected Zoho OAuth/API domain")).toBeLessThan(script.indexOf('listZohoEvidencePages("expenses"'));
+    expect(script.indexOf("Unexpected Zoho OAuth/API domain")).toBeLessThan(script.indexOf('const expenses = await listZohoEvidencePages("expenses"'));
   });
 
   it("matches full cleaner names but never a first-name-only reference", () => {
