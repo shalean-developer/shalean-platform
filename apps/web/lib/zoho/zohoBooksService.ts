@@ -16,6 +16,7 @@ import type {
   ZohoInvoiceCreateResponse,
   ZohoInvoiceGetResponse,
   ZohoInvoiceInput,
+  ZohoInvoiceListResponse,
   ZohoInvoiceUpdateResponse,
   ZohoLineItem,
   ZohoPaymentCreateResponse,
@@ -167,6 +168,36 @@ export async function getOrCreateContact(params: {
 }
 
 // ─── Invoices ─────────────────────────────────────────────────────────────────
+
+/**
+ * Resolve an existing Zoho invoice by Shalean's deterministic reference_number.
+ * Used before create so a prior successful POST + failed local linkage write
+ * cannot produce a duplicate external invoice on recovery.
+ */
+export async function lookupZohoInvoiceByReferenceNumber(
+  referenceNumber: string,
+): Promise<ServiceResult<{ zohoInvoiceId: string; invoiceNumber: string } | { found: false }>> {
+  try {
+    const ref = referenceNumber.trim();
+    if (!ref) return { ok: false, error: "missing_reference_number" };
+
+    const res = await zohoBooksClient.get<ZohoInvoiceListResponse>(
+      `/invoices?reference_number=${encodeURIComponent(ref)}`,
+    );
+    const exact = (res.invoices ?? []).find(
+      (invoice) => String(invoice.reference_number ?? "").trim() === ref,
+    );
+    if (!exact?.invoice_id) return { ok: true, found: false };
+    return {
+      ok: true,
+      zohoInvoiceId: String(exact.invoice_id),
+      invoiceNumber: String(exact.invoice_number ?? ""),
+    };
+  } catch (err) {
+    return { ok: false, error: String(err instanceof Error ? err.message : err) };
+  }
+}
+
 
 export type CreateInvoiceParams = {
   /** Shalean internal booking or monthly_invoice UUID (stored in notes for traceability). */
