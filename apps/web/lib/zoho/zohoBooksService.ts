@@ -176,7 +176,11 @@ export async function getOrCreateContact(params: {
  */
 export async function lookupZohoInvoiceByReferenceNumber(
   referenceNumber: string,
-): Promise<ServiceResult<{ zohoInvoiceId: string; invoiceNumber: string } | { found: false }>> {
+): Promise<
+  | { ok: true; found: true; zohoInvoiceId: string; invoiceNumber: string }
+  | { ok: true; found: false }
+  | { ok: false; error: string }
+> {
   try {
     const ref = referenceNumber.trim();
     if (!ref) return { ok: false, error: "missing_reference_number" };
@@ -190,6 +194,7 @@ export async function lookupZohoInvoiceByReferenceNumber(
     if (!exact?.invoice_id) return { ok: true, found: false };
     return {
       ok: true,
+      found: true,
       zohoInvoiceId: String(exact.invoice_id),
       invoiceNumber: String(exact.invoice_number ?? ""),
     };
