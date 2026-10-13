@@ -38,8 +38,18 @@ export function candidateCleanerMatches(
   return cleaners.filter(({ name }) => {
     const full = normalizeName(name);
     // Do not match a single first name against potentially unrelated vendors.
-    return full.split(" ").length >= 2 && full.length >= 6 &&
-      (" " + text + " ").includes(" " + full + " ");
+    const tokens = full.split(" ").filter(Boolean);
+    if (tokens.length < 2 || full.length < 6) return false;
+    if ((" " + text + " ").includes(" " + full + " ")) return true;
+    // Candidate-only match: first + last tokens in either order,
+    // allowing omitted middle names. Do not infer settlement from this.
+    const first = tokens[0], last = tokens[tokens.length - 1];
+    if (first.length < 3 || last.length < 3) return false;
+    const words = text.split(" ");
+    return words.some((word, i) =>
+      (word === first && words[i + 1] === last) ||
+      (word === last && words[i + 1] === first));
+
   }).map((c) => c.id);
 }
 
