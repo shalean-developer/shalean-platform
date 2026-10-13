@@ -90,6 +90,7 @@ export async function syncSalesDocumentToZoho(
   const dueDate = ymdOrToday(row.due_date);
   const payNote = opts?.paymentUrl ? ` Pay via: ${opts.paymentUrl}` : "";
   const notes = `${row.notes ?? ""}${payNote}\nShalean sales document ${row.id}`.trim();
+  const invoiceNotes = `${notes}\nShalean id: ${row.id}`.trim();
   const editableWithoutPayment = salesDocumentIsEditableWithoutPayment({
     document_type: row.document_type,
     status: row.status,
@@ -163,7 +164,7 @@ export async function syncSalesDocumentToZoho(
       lineItems: zohoLineItems,
       invoiceDate,
       dueDate,
-      notes,
+      notes: invoiceNotes,
       currencyCode: row.currency,
     });
     if (!upd.ok) return { ok: false, error: upd.error };
@@ -200,7 +201,7 @@ export async function syncSalesDocumentToZoho(
         lineItems: zohoLineItems,
         invoiceDate,
         dueDate,
-        notes,
+        notes: invoiceNotes,
         currencyCode: row.currency,
       });
       if (!refreshed.ok) {
