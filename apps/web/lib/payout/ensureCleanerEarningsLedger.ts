@@ -78,6 +78,21 @@ export async function ensureCleanerEarningsLedgerRow(params: {
   if (row.is_team_job === true) {
     return { ok: true, skipped: true, reason: "team_job" };
   }
+
+  const { data: rosterRows, error: rosterErr } = await admin
+    .from("booking_cleaners")
+    .select("cleaner_id")
+    .eq("booking_id", bid);
+  if (rosterErr) return { ok: false, error: rosterErr.message };
+  const rosterCleanerIds = new Set(
+    (rosterRows ?? [])
+      .map((raw) => String((raw as { cleaner_id?: string | null }).cleaner_id ?? "").trim())
+      .filter(Boolean),
+  );
+  if (rosterCleanerIds.size >= 2) {
+    return { ok: true, skipped: true, reason: "paired_roster_job" };
+  }
+
   if (row.cleaner_line_earnings_finalized_at == null || String(row.cleaner_line_earnings_finalized_at).trim() === "") {
     return { ok: true, skipped: true, reason: "line_earnings_not_finalized" };
   }
