@@ -127,6 +127,9 @@ export async function listZohoEvidencePages(
       if (!row || typeof row !== "object" || Array.isArray(row))
         throw new Error(`Zoho ${endpoint} malformed row`);
       const evidence: ZohoEvidence = { ...(row as ZohoEvidence), source: endpoint };
+      if (typeof evidence.date === "string" &&
+          /^2026-(06|07)-/.test(evidence.date) && !withinWindow(evidence.date))
+        throw new Error(`Zoho ${endpoint} impossible provider date`);
       const id = evidenceKey(evidence);
       if (id && seenIds.has(id)) throw new Error(`Zoho ${endpoint} repeated provider ID across pages`);
       if (id) seenIds.add(id);
