@@ -174,35 +174,78 @@ export async function getOrCreateContact(params: {
  * Used before create so a prior successful POST + failed local linkage write
  * cannot produce a duplicate external invoice on recovery.
  */
-export async function lookupZohoInvoiceByReferenceNumber(
-  referenceNumber: string,
-): Promise<
+export async function lookupZohoInvoiceByShaleanIdentity(params: {
+  referenceNumber: string;
+  referenceId: string;
+  customerEmail?: string;
+  customerName: string;
+  customerPhone?: string;
+  totalZar: number;
+}): Promise<
   | { ok: true; found: true; zohoInvoiceId: string; invoiceNumber: string }
   | { ok: true; found: false }
   | { ok: false; error: string }
 > {
   try {
-    const ref = referenceNumber.trim();
+    const ref = params.referenceNumber.trim();
+    const referenceId = params.referenceId.trim();
     if (!ref) return { ok: false, error: "missing_reference_number" };
+    if (!referenceId) return { ok: false, error: "missing_reference_id" };
+
+    const contactResult = await getOrCreateContact({
+      email: params.customerEmail,
+      name: params.customerName,
+      phone: params.customerPhone,
+    });
+    if (!contactResult.ok) {
+      return { ok: false, error: `contact_resolution: ${contactResult.error}` };
+    }
 
     const res = await zohoBooksClient.get<ZohoInvoiceListResponse>(
       `/invoices?reference_number=${encodeURIComponent(ref)}`,
     );
-    const exact = (res.invoices ?? []).find(
+    const exact = (res.invoices ?? []).filter(
       (invoice) => String(invoice.reference_number ?? "").trim() === ref,
     );
-    if (!exact?.invoice_id) return { ok: true, found: false };
+
+    if (exact.length === 0) return { ok: true, found: false };
+    if (exact.length > 1) {
+      return { ok: false, error: "ambiguous_reference_number" };
+    }
+
+    const candidateId = String(exact[0]?.invoice_id ?? "").trim();
+    if (!candidateId) return { ok: false, error: "reference_candidate_missing_id" };
+
+    const detail = await zohoBooksClient.get<ZohoInvoiceGetResponse>(
+      `/invoices/${encodeURIComponent(candidateId)}`,
+    );
+    const invoice = detail.invoice;
+    const trace = `Shalean id: ${referenceId}`;
+    const notes = String(invoice?.notes ?? "");
+    const candidateCustomerId = String(invoice?.customer_id ?? "").trim();
+    const expectedTotalCents = Math.round(Number(params.totalZar) * 100);
+    const candidateTotalCents = Math.round(Number(invoice?.total ?? 0) * 100);
+
+    if (!notes.includes(trace)) {
+      return { ok: false, error: "reference_candidate_identity_mismatch" };
+    }
+    if (!candidateCustomerId || candidateCustomerId !== contactResult.contactId) {
+      return { ok: false, error: "reference_candidate_customer_mismatch" };
+    }
+    if (candidateTotalCents !== expectedTotalCents) {
+      return { ok: false, error: "reference_candidate_total_mismatch" };
+    }
+
     return {
       ok: true,
       found: true,
-      zohoInvoiceId: String(exact.invoice_id),
-      invoiceNumber: String(exact.invoice_number ?? ""),
+      zohoInvoiceId: candidateId,
+      invoiceNumber: String(invoice?.invoice_number ?? exact[0]?.invoice_number ?? ""),
     };
   } catch (err) {
     return { ok: false, error: String(err instanceof Error ? err.message : err) };
   }
 }
-
 
 export type CreateInvoiceParams = {
   /** Shalean internal booking or monthly_invoice UUID (stored in notes for traceability). */
