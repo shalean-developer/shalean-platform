@@ -16,6 +16,7 @@ import type {
   ZohoInvoiceCreateResponse,
   ZohoInvoiceGetResponse,
   ZohoInvoiceInput,
+  ZohoInvoiceListResponse,
   ZohoInvoiceUpdateResponse,
   ZohoLineItem,
   ZohoPaymentCreateResponse,
@@ -167,6 +168,98 @@ export async function getOrCreateContact(params: {
 }
 
 // ─── Invoices ─────────────────────────────────────────────────────────────────
+
+/**
+ * Resolve an existing Zoho invoice by Shalean's deterministic reference_number.
+ * Used before create so a prior successful POST + failed local linkage write
+ * cannot produce a duplicate external invoice on recovery.
+ */
+export async function lookupZohoInvoiceByShaleanIdentity(params: {
+  referenceNumber: string;
+  referenceId: string;
+  customerEmail?: string;
+  customerName: string;
+  customerPhone?: string;
+  totalZar: number;
+}): Promise<
+  | { ok: true; found: true; zohoInvoiceId: string; invoiceNumber: string }
+  | { ok: true; found: false }
+  | { ok: false; error: string }
+> {
+  try {
+    const ref = params.referenceNumber.trim();
+    const referenceId = params.referenceId.trim();
+    if (!ref) return { ok: false, error: "missing_reference_number" };
+    if (!referenceId) return { ok: false, error: "missing_reference_id" };
+
+    const contactResult = await getOrCreateContact({
+      email: params.customerEmail,
+      name: params.customerName,
+      phone: params.customerPhone,
+    });
+    if (!contactResult.ok) {
+      return { ok: false, error: `contact_resolution: ${contactResult.error}` };
+    }
+
+    const res = await zohoBooksClient.get<ZohoInvoiceListResponse>(
+      `/invoices?reference_number=${encodeURIComponent(ref)}`,
+    );
+    const sameShortReference = (res.invoices ?? []).filter(
+      (invoice) => String(invoice.reference_number ?? "").trim() === ref,
+    );
+    if (sameShortReference.length === 0) return { ok: true, found: false };
+
+    const canonicalTrace = `Shalean id: ${referenceId}`;
+    const legacyTrace = `Shalean sales document ${referenceId}`;
+    const expectedTotalCents = Math.round(Number(params.totalZar) * 100);
+    const fullIdentityMatches: Array<{ zohoInvoiceId: string; invoiceNumber: string }> = [];
+
+    for (const candidate of sameShortReference) {
+      const candidateId = String(candidate.invoice_id ?? "").trim();
+      if (!candidateId) continue;
+
+      const detail = await zohoBooksClient.get<ZohoInvoiceGetResponse>(
+        `/invoices/${encodeURIComponent(candidateId)}`,
+      );
+      const invoice = detail.invoice;
+      const notes = String(invoice?.notes ?? "");
+      const candidateCustomerId = String(invoice?.customer_id ?? "").trim();
+      const candidateTotalCents = Math.round(Number(invoice?.total ?? 0) * 100);
+      const hasFullIdentity =
+        notes.includes(canonicalTrace) || notes.includes(legacyTrace);
+
+      // Support both the canonical marker and the legacy pre-01G full-UUID
+      // marker. Short-reference collisions without either full identity are
+      // unrelated. Once either full identity matches, any customer/financial
+      // drift must fail closed to avoid creating a duplicate.
+      if (!hasFullIdentity) continue;
+      if (!candidateCustomerId || candidateCustomerId !== contactResult.contactId) {
+        return { ok: false, error: "full_identity_customer_conflict" };
+      }
+      if (candidateTotalCents !== expectedTotalCents) {
+        return { ok: false, error: "full_identity_total_conflict" };
+      }
+
+      fullIdentityMatches.push({
+        zohoInvoiceId: candidateId,
+        invoiceNumber: String(invoice?.invoice_number ?? candidate.invoice_number ?? ""),
+      });
+    }
+
+    if (fullIdentityMatches.length === 0) return { ok: true, found: false };
+    if (fullIdentityMatches.length > 1) {
+      return { ok: false, error: "ambiguous_full_identity_match" };
+    }
+
+    return {
+      ok: true,
+      found: true,
+      ...fullIdentityMatches[0],
+    };
+  } catch (err) {
+    return { ok: false, error: String(err instanceof Error ? err.message : err) };
+  }
+}
 
 export type CreateInvoiceParams = {
   /** Shalean internal booking or monthly_invoice UUID (stored in notes for traceability). */
