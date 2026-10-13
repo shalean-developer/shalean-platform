@@ -125,4 +125,36 @@ describe("SALES-BOOKING-CONVERSION-01/01B/01C/01D", () => {
     expect(sql).toContain("invoice_financial_state_blocks_compensation");
     expect(sql).toContain("compensate_failed_sales_document_conversion");
   });
+  it("requires canonical booking line items before accepting a raced booking", () => {
+    const src = readFileSync(
+      join(root, "lib/salesDocument/createBookingFromSalesQuoteInvoice.ts"),
+      "utf8",
+    );
+
+    expect(src).toContain('.from("booking_line_items")');
+    expect(src).toContain('.select("total_price_cents")');
+    expect(src).toContain("racedLineItemsTotalCents");
+    expect(src).toContain("racedLineItemsTotalCents === quotedTotalZar * 100");
+  });
+
+  it("reconciles a missing local Zoho link by deterministic reference before create", () => {
+    const syncSrc = readFileSync(
+      join(root, "lib/salesDocument/syncSalesDocumentToZoho.ts"),
+      "utf8",
+    );
+    const zohoSrc = readFileSync(
+      join(root, "lib/zoho/zohoBooksService.ts"),
+      "utf8",
+    );
+
+    const lookup = syncSrc.indexOf("lookupZohoInvoiceByReferenceNumber");
+    const create = syncSrc.indexOf("createZohoInvoice({", lookup);
+
+    expect(lookup).toBeGreaterThanOrEqual(0);
+    expect(create).toBeGreaterThan(lookup);
+    expect(syncSrc).toContain('formatZohoOrderReference(row.id, "sales")');
+    expect(syncSrc).toContain(".is(\"zoho_invoice_id\", null)");
+    expect(zohoSrc).toContain("/invoices?reference_number=");
+    expect(zohoSrc).toContain("invoice.reference_number");
+  });
 });
