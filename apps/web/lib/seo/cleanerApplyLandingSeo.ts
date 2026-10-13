@@ -17,7 +17,7 @@ export const CLEANER_APPLY_LANDING_ROBOTS_ALLOW = "/cleaner/apply$" as const;
 
 export const CLEANER_APPLY_LANDING_TITLE = "Apply as a Cleaner | Shalean Cape Town";
 export const CLEANER_APPLY_LANDING_DESCRIPTION =
-  "Join Shalean as a cleaner in Cape Town. Flexible hours, weekly payouts, and jobs near you. Learn more and apply online.";
+  "Join Shalean as a cleaner in Cape Town. Flexible hours, monthly bank-transfer payouts, and jobs near you. Learn more and apply online.";
 
 export const CLEANER_APPLY_FORM_TITLE = "Cleaner Application Form | Shalean";
 export const CLEANER_APPLY_FORM_DESCRIPTION =
