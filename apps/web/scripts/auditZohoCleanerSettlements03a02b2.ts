@@ -2,7 +2,7 @@
  * AUDIT-03A-02B.2 — READ ONLY evidence discovery (NOT proof of non-payment).
  *
  * Run from apps/web with the *existing production* Zoho + Supabase credentials:
- *   npx tsx scripts/auditZohoCleanerSettlements03a02b2.ts
+ *   NODE_OPTIONS=--conditions=react-server npx tsx scripts/auditZohoCleanerSettlements03a02b2.ts
  *
  * No API routes, database writes, Zoho writes or stored exports.
  * This script deliberately reports only anonymized per-cleaner candidate counts.
