@@ -105,9 +105,11 @@ describe("AUDIT-03A-02B.2 Zoho read-only candidate matching", () => {
   });
   it("rejects endless full pages instead of reporting partial evidence", async () => {
     let calls = 0;
-    const records = Array.from({length:200},(_,i)=>({expense_id:String(i),date:"2026-06-20"}));
     await expect(listZohoEvidencePages("expenses",async()=>{
       calls++;
+      const records = Array.from({length:200},(_,i)=>({
+        expense_id:`page-${calls}-row-${i}`,date:"2026-06-20"
+      }));
       return {expenses:records};
     })).rejects.toThrow("exceeded 20 pages");
     expect(calls).toBe(20);
