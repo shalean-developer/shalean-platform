@@ -44,6 +44,13 @@ class LedgerQueryBuilder {
     return this.execute();
   }
 
+  then<TResult1 = { data: unknown; error: { message: string; code?: string } | null }, TResult2 = never>(
+    onfulfilled?: ((value: { data: unknown; error: { message: string; code?: string } | null }) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ) {
+    return this.execute().then(onfulfilled, onrejected);
+  }
+
   private async execute(): Promise<{ data: unknown; error: { message: string; code?: string } | null }> {
     if (this.op === "insert") {
       const bookingId = String(this.insertRow?.booking_id ?? "");
@@ -214,6 +221,53 @@ describe("ensureCleanerEarningsLedgerRow scenarios", () => {
     });
     expect(result.ok && !result.skipped).toBe(true);
     expect(db.tables.cleaner_earnings?.[0]?.cleaner_id).toBe("c-owner");
+  });
+
+  it("2c) paired roster booking skips the one-row solo ledger", async () => {
+    seedBooking({
+      status: "completed",
+      cleaner_id: "c-lead",
+      payout_owner_cleaner_id: "c-lead",
+      is_team_job: false,
+      cleaner_line_earnings_finalized_at: "2026-10-13T10:00:00Z",
+      cleaner_earnings_total_cents: 52_000,
+    });
+    db.tables.booking_cleaners = [
+      { booking_id: "b1", cleaner_id: "c-lead", role: "lead" },
+      { booking_id: "b1", cleaner_id: "c-member", role: "member" },
+    ];
+
+    const result = await ensureCleanerEarningsLedgerRow({
+      admin: db as unknown as never,
+      bookingId: "b1",
+    });
+
+    expect(result).toEqual({ ok: true, skipped: true, reason: "paired_roster_job" });
+    expect(db.insertCount).toBe(0);
+  });
+
+  it("2d) one-cleaner roster booking still inserts the solo ledger row", async () => {
+    seedBooking({
+      status: "completed",
+      cleaner_id: "c1",
+      payout_owner_cleaner_id: "c1",
+      is_team_job: false,
+      cleaner_line_earnings_finalized_at: "2026-10-13T10:00:00Z",
+      cleaner_earnings_total_cents: 26_000,
+    });
+    db.tables.booking_cleaners = [{ booking_id: "b1", cleaner_id: "c1", role: "lead" }];
+
+    const result = await ensureCleanerEarningsLedgerRow({
+      admin: db as unknown as never,
+      bookingId: "b1",
+    });
+
+    expect(result.ok && !result.skipped).toBe(true);
+    expect(db.tables.cleaner_earnings?.[0]).toMatchObject({
+      booking_id: "b1",
+      cleaner_id: "c1",
+      amount_cents: 26_000,
+    });
   });
 
   it("3) team booking skips solo ledger", async () => {
