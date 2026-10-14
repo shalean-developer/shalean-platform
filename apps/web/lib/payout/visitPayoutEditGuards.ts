@@ -1,8 +1,10 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const EDITABLE_BATCH_STATUSES = new Set(["pending", "frozen"]);
 
 type BookingPayoutRow = {
+  date?: string | null;
   payout_id: string | null;
   payout_status: string | null;
   payout_paid_at?: string | null;
@@ -12,6 +14,9 @@ export async function assertBookingVisitPayoutEditable(
   admin: SupabaseClient,
   row: BookingPayoutRow,
 ): Promise<{ ok: true; payoutId: string | null } | { ok: false; error: string; code: string }> {
+  if (!isCurrentPayoutVisitDate(String(row.date ?? "").trim())) {
+    return {ok:false,error:"Historical or undated visit earnings are deferred.",code:"historical_payout_item_deferred"};
+  }
   const payoutStatus = String(row.payout_status ?? "").trim().toLowerCase();
   if (payoutStatus === "paid" || row.payout_paid_at) {
     return { ok: false, error: "Booking payout is already paid.", code: "booking_payout_paid" };

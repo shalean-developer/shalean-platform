@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate, PAYOUT_PROCESSING_START_YMD } from "@/lib/payout/payoutProcessingCutoff";
 import "server-only";
 
 import { normalizeUuidCandidate } from "@/lib/booking/userSelectedCleanerFromSnapshot";
@@ -83,6 +84,7 @@ export async function restoreRecurringPreferredCleanerAssignments(
   let query = admin
     .from("bookings")
     .select("id, recurring_id, selected_cleaner_id, customer_name, status, date, booking_snapshot")
+    .gte("date", PAYOUT_PROCESSING_START_YMD)
     .eq("is_recurring_generated", true)
     .is("cleaner_id", null)
     .is("team_id", null)
@@ -104,6 +106,7 @@ export async function restoreRecurringPreferredCleanerAssignments(
 
   for (const raw of stuckRows ?? []) {
     const row = raw as StuckRow;
+    if (!isCurrentPayoutVisitDate(String(row.date ?? "").trim())) { skipped++; continue; }
     const cleanerId = await resolveCleanerForStuckRow(admin, row, planCache);
     if (!cleanerId) {
       skipped++;
@@ -183,6 +186,7 @@ export async function restoreRecurringPreferredCleanerAssignments(
   let remainingQuery = admin
     .from("bookings")
     .select("id", { count: "exact", head: true })
+    .gte("date", PAYOUT_PROCESSING_START_YMD)
     .eq("is_recurring_generated", true)
     .is("cleaner_id", null)
     .is("team_id", null)

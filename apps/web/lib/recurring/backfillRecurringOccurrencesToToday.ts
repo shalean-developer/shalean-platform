@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -57,6 +58,8 @@ export async function backfillRecurringOccurrencesToToday(
   | BackfillRecurringOccurrencesResult
   | { ok: false; error: string; billing_type?: string; status?: string }
 > {
+  const requestedMonth = options?.invoiceMonthYm ?? todayJohannesburg().slice(0,7);
+  if (!isCurrentPayoutVisitDate(`${requestedMonth}-01`)) return {ok:false,error:"historical_payout_item_deferred"};
   const id = recurringId.trim();
   if (!id) return { ok: false, error: "Missing recurring id." };
 

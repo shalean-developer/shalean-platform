@@ -1,3 +1,4 @@
+import { fetchAllPayoutRows } from "@/lib/payout/payoutQueryPagination";
 import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import "server-only";
 
@@ -487,6 +488,14 @@ export async function propagateRecurringPlanToGeneratedBookings(
   }
 
   for (const invoiceId of invoiceIds) {
+    const {data: invoice, error: invoiceError} = await admin.from("monthly_invoices").select("month, status").eq("id",invoiceId).maybeSingle();
+    if (invoiceError) { result.errors.push(`Invoice ${invoiceId}: ${invoiceError.message}`); continue; }
+    if (!invoice || invoice.status !== "draft" || !isCurrentPayoutVisitDate(`${invoice.month}-01`)) continue;
+    let invoiceVisits: Array<{date?:unknown}>;
+    try {
+      invoiceVisits = await fetchAllPayoutRows((from,to)=>admin.from("bookings").select("id,date").eq("monthly_invoice_id",invoiceId).order("id",{ascending:true}).range(from,to));
+    } catch(error) { result.errors.push(`Invoice ${invoiceId}: ${error instanceof Error ? error.message : String(error)}`); continue; }
+    if (!invoiceVisits.length || invoiceVisits.some(row => !isCurrentPayoutVisitDate(String(row.date??"").trim()))) continue;
     const { error: rpcErr } = await admin.rpc("recompute_monthly_invoice_totals", {
       p_invoice_id: invoiceId,
     });

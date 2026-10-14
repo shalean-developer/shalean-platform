@@ -64,3 +64,27 @@ Review follow-up on 0ec674ff: normalize assignment visit dates through the canon
 Follow-up review: fence recurring reconciliation before historical cancellation or creation, including draft-invoice cross-month visits; reject historical/unknown roster repair before its first write. Focused regression suite: 17 tests passed. Production unchanged pending fresh CI and independent review.
 
 Further review: add shared booking_cleaners INSERT/UPDATE/DELETE boundary, checking both old and new booking IDs under row lock, so atomic admin/recurring roster RPCs cannot change historical attribution. Notes-only edits bypass reset safety while preserving existing paid/eligible/finalized locks. 611 critical tests pass; database roster probes added and await staging execution after review. Production unchanged.
+
+
+## Consolidated audit remediation — OC-01 through OC-10
+
+Candidate prepared after owner authorized resolving the ten findings in order. No production change or historical repair is part of this work.
+
+| Finding | Implementation | Verification status |
+| --- | --- | --- |
+| OC-01 historical ownership | Recurring continuity/restoration preflight; final parent booking boundary protects ownership | Application regressions + isolated PostgreSQL; independent review/staging pending |
+| OC-02 omitted financial representations | AFTER booking validation sees policy-trigger output; line/snapshot parent guards; shared computation/healing/sync preflights | Protected-field and later-policy-trigger checks pass in isolated PostgreSQL |
+| OC-03 identity rekeys | Validate OLD and NEW parents before other item triggers; protect booking/cleaner/team identity | Rekey rejection checks pass in isolated PostgreSQL |
+| OC-04 historical ledger insertion | Shared ledger helper defers; database item INSERT boundary | Historical helper no-write regressions and SQL rejection checks pass |
+| OC-05 historical invoice fan-out | Filter collector; validate invoice month/status and page every linked visit before recompute/Zoho | Collector regression passes; live fan-out staging fixture pending |
+| OC-06 historical backfill | Reject historical months before DB access; protect both insertion helpers | Direct helper and backfill no-access regressions pass |
+| OC-07 partial solo assignment | Preflight common validator before healing and commands before offer mutation | Historical/padded/unknown no-offer-write tests; forward assignment tests pass |
+| OC-08 cascade regression | Parent DELETE boundary; child allows missing parent only within cascading trigger depth | Real FK cascade passes in isolated PostgreSQL; full-schema staging pending |
+| OC-09 operational roster completion | Compare attribution fields on UPDATE; allow completed_at-only updates | Isolated PostgreSQL operational update passes |
+| OC-10 deferral contracts | Admin/PATCH and primary cleaner completion reject missing historical basis before writes; preserve existing positive basis without owner stamping/backfill; member timestamps remain operational | Admin/cleaner no-write regressions pass; live staging pending |
+
+Validation: 626 critical tests pass; enforced lint passes with four existing warnings; typecheck passes; migration governance passes. Four audit reproductions were inverted into acceptance tests and expanded to 15 cases. An isolated PGlite PostgreSQL harness executes the actual candidate trigger functions against a minimal schema: 39 checks pass, including real cascades, post-policy validation, field changes, rekeys, historical insertion/deletion, operational completion, notes and helper grants. This does not substitute for full-schema staging or concurrency verification.
+
+Harness: `scripts/audits/october-boundary-postgres.mjs`; install `@electric-sql/pglite` outside the repo and supply its module URL via `AUDIT_PGLITE_MODULE`, or provide the package in the runtime. It has no remote DB connection. Staging scripts suspend only named cutoff guards for transaction-local historical fixture construction, restore them before assertions, and always roll back. Production must never run these fixture scripts.
+
+All ten findings are **implemented locally, not independently closed**. Gate remains NO-GO until fresh CI/review and full-schema/live staging evidence pass. Production PR #936 stays held.

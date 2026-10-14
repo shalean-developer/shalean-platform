@@ -437,7 +437,7 @@ export async function collectDraftInvoiceIdsForRecurringPlan(
 ): Promise<string[]> {
   const { data, error } = await admin
     .from("bookings")
-    .select("monthly_invoice_id, monthly_invoices(status)")
+    .select("date, monthly_invoice_id, monthly_invoices(status, month)")
     .eq("recurring_id", recurringPlanId)
     .neq("status", "cancelled")
     .not("monthly_invoice_id", "is", null);
@@ -448,11 +448,12 @@ export async function collectDraftInvoiceIdsForRecurringPlan(
   for (const raw of data ?? []) {
     const row = raw as Record<string, unknown>;
     const invoiceId = row.monthly_invoice_id != null ? String(row.monthly_invoice_id) : "";
-    if (!invoiceId) continue;
+    if (!invoiceId || !isCurrentPayoutVisitDate(String(row.date ?? "").trim())) continue;
     const invJoin = row.monthly_invoices;
     if (invJoin && typeof invJoin === "object" && !Array.isArray(invJoin)) {
       const status = String((invJoin as { status?: unknown }).status ?? "").toLowerCase();
-      if (status === "draft") ids.add(invoiceId);
+      const month = String((invJoin as { month?: unknown }).month ?? "");
+      if (status === "draft" && isCurrentPayoutVisitDate(`${month}-01`)) ids.add(invoiceId);
     }
   }
   return [...ids];

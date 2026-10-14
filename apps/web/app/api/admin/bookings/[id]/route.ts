@@ -662,7 +662,12 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     time?: string | null;
     selected_cleaner_id?: string | null;
     metadata?: unknown;
+    display_earnings_cents?: unknown;
   } | null;
+  if (updates.status === "completed" && !isCurrentPayoutVisitDate(String(beforeRow?.date ?? "").trim())
+      && !(Number.isFinite(Number(beforeRow?.display_earnings_cents)) && Number(beforeRow?.display_earnings_cents)>0)) {
+    return NextResponse.json({error:"Historical earnings are deferred; completion cannot rebuild them.",code:"historical_payout_item_deferred"},{status:409});
+  }
   const beforeStatus = String(beforeRow?.status ?? "pending").trim() || "pending";
   const beforeCompletedAt =
     beforeRow?.completed_at != null && String(beforeRow.completed_at).trim()
