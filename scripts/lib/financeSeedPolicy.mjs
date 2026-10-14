@@ -9,6 +9,11 @@ export function seedFinanceCalendar(now=new Date()) {
 export function paidSeedBookingDate(day) {
  return '2026-10-'+String(day).padStart(2,'0');
 }
+export function closedSeedMonthTimestamp(date) {
+ const [year,month]=date.split('-').map(Number);
+ // First instant of the next month in Johannesburg (UTC+02:00).
+ return new Date(Date.UTC(year,month,1)-2*3600000).toISOString();
+}
 export function buildFinanceSeedPlan({earnings,payouts,bookingDates,now=new Date()}) {
  const {currentMonthStart,closedPeriod}=seedFinanceCalendar(now);
  const safeEarnings=earnings.map(row=>{
@@ -17,12 +22,12 @@ export function buildFinanceSeedPlan({earnings,payouts,bookingDates,now=new Date
   if(['paid','approved','processing'].includes(row.status)&&date>=currentMonthStart){
    return {...row,status:'pending',approved_at:null,paid_at:null,disbursement_id:null};
   }
-  return { ...row, ...(row.approved_at ? {approved_at:date+'T12:00:00Z'} : {}), ...(row.paid_at ? {paid_at:date+'T12:00:00Z'} : {}) };
+  return { ...row, ...(row.approved_at ? {approved_at:closedSeedMonthTimestamp(date)} : {}), ...(row.paid_at ? {paid_at:closedSeedMonthTimestamp(date)} : {}) };
  });
  return {earnings:safeEarnings,payouts:closedPeriod?payouts.map(row=>{
   // Runs are created through the normal application workflow, never pre-approved empty.
   const {payout_run_id,...unlinked}=row;
-  return {...unlinked,...closedPeriod, ...(row.frozen_at ? {frozen_at:closedPeriod.period_end+'T12:00:00Z'} : {}), ...(row.approved_at ? {approved_at:closedPeriod.period_end+'T12:00:00Z'} : {}), ...(row.paid_at ? {paid_at:closedPeriod.period_end+'T12:00:00Z'} : {})};
+  return {...unlinked,...closedPeriod, ...(row.frozen_at ? {frozen_at:closedSeedMonthTimestamp(closedPeriod.period_start)} : {}), ...(row.approved_at ? {approved_at:closedSeedMonthTimestamp(closedPeriod.period_start)} : {}), ...(row.paid_at ? {paid_at:closedSeedMonthTimestamp(closedPeriod.period_start)} : {})};
  }):[],runs:[],deferredReason:closedPeriod?null:'No closed October-or-later month; payout fixtures deferred'};
 }
 export async function writeFinanceSeedPlan(admin,plan) {
