@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -16,11 +17,15 @@ export async function resetBookingCleanerLineEarnings(
 
   const { data: bookingRow, error: loadErr } = await admin
     .from("bookings")
-    .select("status")
+    .select("status, date")
     .eq("id", bid)
     .maybeSingle();
   if (loadErr) return { ok: false, error: loadErr.message };
   if (!bookingRow) return { ok: false, error: "Booking not found" };
+
+  if (!isCurrentPayoutVisitDate((bookingRow as { date?: string | null }).date)) {
+    return { ok: false, error: "Historical or undated booking earnings are preserved; reset is not allowed." };
+  }
 
   const clearedDisplay = clearedDisplayEarningsCentsForStatus((bookingRow as { status?: string | null }).status);
 

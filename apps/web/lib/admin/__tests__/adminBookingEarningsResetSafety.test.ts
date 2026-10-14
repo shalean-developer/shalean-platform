@@ -10,7 +10,7 @@ function mockAdmin(booking: Record<string, unknown>, opts?: { payoutBatch?: Reco
         return {
           select: () => ({
             eq: () => ({
-              maybeSingle: () => Promise.resolve({ data: booking, error: null }),
+              maybeSingle: () => Promise.resolve({ data: { date: "2026-10-01", ...booking }, error: null }),
             }),
           }),
         };

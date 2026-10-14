@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -246,6 +247,11 @@ export async function propagateRecurringPlanToGeneratedBookings(
     const dateYmd = booking.date?.trim() ?? "";
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) {
       result.errors.push(`Booking ${booking.id}: invalid date`);
+      continue;
+    }
+
+    if (!isCurrentPayoutVisitDate(dateYmd)) {
+      result.earnings_skipped += 1;
       continue;
     }
 
