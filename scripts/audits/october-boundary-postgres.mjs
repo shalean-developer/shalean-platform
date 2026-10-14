@@ -17,13 +17,15 @@ create table team_job_member_payouts(id uuid primary key,booking_id uuid referen
 create table booking_cleaners(booking_id uuid references bookings on delete cascade,cleaner_id uuid,role text,payout_weight numeric,lead_bonus_cents int,source text,completed_at timestamptz);
 create table booking_line_items(id uuid primary key,booking_id uuid references bookings on delete cascade,cleaner_earnings_cents int,total_price_cents int,unit_price_cents int,quantity int,earns_cleaner boolean,name text);
 create table booking_cleaner_earnings_snapshot(booking_id uuid references bookings on delete cascade,cleaner_id uuid,display_earnings_cents int,updated_at timestamptz);
+create table booking_cleaner_earnings_snapshot_lines(booking_id uuid references bookings on delete cascade,booking_line_item_id uuid references booking_line_items on delete cascade,allocated_display_earnings_cents int);
 create function audit_03c02_has_verified_outcome(uuid,text,text,text default null) returns boolean language sql as 'select false';`);
 const old='aaaaaaaa-0000-4000-8000-000000000001', forward='aaaaaaaa-0000-4000-8000-000000000002', cid='bbbbbbbb-0000-4000-8000-000000000001', other='bbbbbbbb-0000-4000-8000-000000000002';
 await db.query(`insert into bookings(id,date,status,cleaner_id) values($1,'2026-09-30','pending',$3),($2,'2026-10-01','pending',$3)`,[old,forward,cid]);
 for(const [i,t] of ['cleaner_earnings','booking_roster_member_payouts','team_job_member_payouts'].entries()) await db.exec(`insert into ${t}(id,booking_id,cleaner_id,status) values ('cccccccc-0000-4000-8000-00000000000${i+1}','${old}','${cid}','pending')`);
 await db.exec(`insert into booking_cleaners(booking_id,cleaner_id,role) values('${old}','${cid}','lead'),('${forward}','${cid}','lead');
 insert into booking_line_items(id,booking_id,cleaner_earnings_cents) values('${old}','${old}',100),('${forward}','${forward}',100);
-insert into booking_cleaner_earnings_snapshot(booking_id,cleaner_id) values('${old}','${cid}'),('${forward}','${cid}')`);
+insert into booking_cleaner_earnings_snapshot(booking_id,cleaner_id) values('${old}','${cid}'),('${forward}','${cid}');
+insert into booking_cleaner_earnings_snapshot_lines values('${old}','${old}',100),('${forward}','${forward}',100)`);
 const convergence=await fs.readFile('supabase/migrations/20261014145923_audit_03c02_verified_provider_convergence.sql','utf8');
 await db.exec(convergence.slice(convergence.indexOf('create or replace function public.audit_03c02_guard_payout_item()'),convergence.indexOf('create or replace function public.audit_03c02_guard_payout_run()')));
 for(const t of ['bookings','cleaner_earnings','booking_roster_member_payouts','team_job_member_payouts']) await db.exec(`create trigger audit_03c02_existing_boundary before insert or update on ${t} for each row execute function audit_03c02_guard_payout_item()`);
@@ -49,6 +51,10 @@ await db.query(`update bookings set booking_snapshot='{"admin_notes":"allowed"}'
 // A later BEFORE policy writer cannot bypass the AFTER validation.
 await db.exec(`create function audit_policy_probe() returns trigger language plpgsql as $$begin NEW.display_earnings_cents:=999;return NEW;end;$$;create trigger zz_policy_probe before update of service on bookings for each row execute function audit_policy_probe()`);
 await reject(`update bookings set service='airbnb' where id=$1`,[old]);
+await reject(`update booking_cleaner_earnings_snapshot_lines set allocated_display_earnings_cents=200 where booking_id=$1`,[old]);
+await reject(`delete from booking_cleaner_earnings_snapshot_lines where booking_id=$1`,[old]);
+await reject(`insert into booking_cleaner_earnings_snapshot_lines values($1,$2,100)`,[forward,old]);
+await db.query(`update booking_cleaner_earnings_snapshot_lines set allocated_display_earnings_cents=200 where booking_id=$1`,[forward]);checks++;
 await db.query(`delete from bookings where id=$1`,[forward]);checks++;
 assert.equal((await db.query(`select count(*)::int n from booking_cleaners where booking_id=$1`,[forward])).rows[0].n,0);checks++;
 for(const role of ['anon','authenticated','service_role']){const r=await db.query(`select has_function_privilege($1,'audit_03c02_guard_final_booking_financials()','execute') permitted`,[role]);assert.equal(r.rows[0].permitted,false);checks++;}

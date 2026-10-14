@@ -1,3 +1,4 @@
+import { persistBookingCleanerEarningsSnapshot } from "@/lib/payout/persistBookingCleanerEarningsSnapshot";
 import { backfillRecurringOccurrencesToToday } from '@/lib/recurring/backfillRecurringOccurrencesToToday';
 import { insertRecurringOccurrenceBooking } from '@/lib/recurring/insertRecurringOccurrenceBooking';
 import { insertMonthlyRecurringOccurrenceBooking } from '@/lib/recurring/insertMonthlyRecurringOccurrenceBooking';
@@ -53,6 +54,15 @@ describe('historical creation and completion preflights',()=>{
   const admin={from:()=>q};
   expect(await performAdminBookingStatusChange({admin:admin as never,bookingId:'old',status:'completed',reason:'Recorded service completion',adminUserId:'admin'})).toMatchObject({ok:false,status:409,code:'historical_payout_item_deferred'});
   expect(await runCleanerBookingLifecycleAction({admin:admin as never,bookingId:'old',cleanerId:'cleaner',action:'complete'})).toMatchObject({status:409,json:{code:'historical_payout_item_deferred'}});
+  expect(writes).not.toHaveBeenCalled();
+ });
+});
+
+describe('historical snapshot allocation protection',()=>{
+ it.each(['2026-09-30',' 2026-09-30 ',null])('rejects %s before any parent upsert or allocation delete',async(date)=>{
+  const writes=vi.fn(()=>{throw new Error('unexpected snapshot mutation');});
+  const admin={from:(table:string)=>{expect(table).toBe('bookings');const q={select:()=>q,eq:()=>q,maybeSingle:async()=>({data:{date},error:null}),upsert:writes,delete:writes,insert:writes};return q;}};
+  expect(await persistBookingCleanerEarningsSnapshot({admin:admin as never,bookingId:'old',cleanerId:'cleaner',lineRows:[],earnings:{} as never})).toMatchObject({ok:false,error:'historical_payout_item_deferred'});
   expect(writes).not.toHaveBeenCalled();
  });
 });

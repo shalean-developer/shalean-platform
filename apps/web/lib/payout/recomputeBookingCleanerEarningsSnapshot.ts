@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -35,6 +36,7 @@ export async function recomputeBookingCleanerEarningsSnapshot(
     booking_snapshot?: unknown;
   } | null;
   if (!r) return { ok: false, error: "Booking not found" };
+  if (!isCurrentPayoutVisitDate(String(r.date ?? "").trim())) return {ok:true,skipped:true};
   if (r.is_team_job === true) return { ok: true, skipped: true };
 
   const cleanerId = String(r.cleaner_id ?? "").trim();

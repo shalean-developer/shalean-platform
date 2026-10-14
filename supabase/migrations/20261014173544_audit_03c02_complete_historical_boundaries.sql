@@ -91,6 +91,11 @@ begin
    end if;
    if v_before is not distinct from v_after then return NEW; end if;
  end if;
+ if TG_TABLE_NAME='booking_cleaner_earnings_snapshot_lines' and TG_OP<>'DELETE' then
+   if not exists(select 1 from public.booking_line_items li where li.id=NEW.booking_line_item_id and li.booking_id=NEW.booking_id) then
+     raise exception 'snapshot_line_booking_mismatch' using errcode='23514';
+   end if;
+ end if;
  perform b.id from public.bookings b where b.id in (v_old_booking,v_new_booking) order by b.id for update;
  if TG_OP='DELETE' and not found and pg_trigger_depth()>1 then return OLD; end if;
  if not exists(select 1 from public.bookings b where b.id=coalesce(v_new_booking,v_old_booking))
@@ -105,5 +110,7 @@ revoke all on function public.audit_03c02_guard_detail_financials() from public,
 create trigger audit_03c02_line_financials before insert or update or delete on public.booking_line_items
 for each row execute function public.audit_03c02_guard_detail_financials();
 create trigger audit_03c02_snapshot_financials before insert or update or delete on public.booking_cleaner_earnings_snapshot
+for each row execute function public.audit_03c02_guard_detail_financials();
+create trigger audit_03c02_snapshot_line_financials before insert or update or delete on public.booking_cleaner_earnings_snapshot_lines
 for each row execute function public.audit_03c02_guard_detail_financials();
 commit;
