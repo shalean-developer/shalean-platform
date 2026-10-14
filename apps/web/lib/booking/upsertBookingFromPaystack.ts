@@ -1368,11 +1368,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     throw new Error(`cleaning_credit_settlement_failed:${creditSettlement.error}`);
   }
 
-  // Verified historical capture records cash truth only; never rebuild the old roster or earnings.
-  if (historicalCapture) return {ok:true,skipped:false,bookingId:id,bookingInDatabase:true};
-
-  const runPostPersistSideEffects = async (): Promise<void> => {
-  if (id) {
+  const saveRecurringAuthorization = async (): Promise<void> => {
     const authCode = input.paystackAuthorizationCode?.trim() ?? "";
     if (authCode) {
       const { data: recurringHead } = await supabase
@@ -1397,6 +1393,20 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         }
       }
     }
+
+  };
+
+  // Payment convergence must also retain authorization for future recurring charges.
+  // Historical roster, earnings, and dispatch work remains deferred.
+  if (historicalCapture) {
+    await saveRecurringAuthorization();
+    await refreshRecurringPaymentStateForBooking(supabase, id);
+    return {ok:true,skipped:false,bookingId:id,bookingInDatabase:true};
+  }
+
+  const runPostPersistSideEffects = async (): Promise<void> => {
+  if (id) {
+    await saveRecurringAuthorization();
 
     const v2TeamPromote = await promoteV2TeamBookingAfterPayment(supabase, id);
     if (!v2TeamPromote.ok) {

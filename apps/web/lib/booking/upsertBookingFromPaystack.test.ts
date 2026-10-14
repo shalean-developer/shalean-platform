@@ -375,6 +375,11 @@ describe("observed pending upsert conflict propagation", () => {
     const reads: string[] = [];
     const predicates: Array<[string, unknown]> = [];
     const from = vi.fn((table: string) => {
+      if (table === "recurring_bookings") {
+        return { update: (patch: Record<string, unknown>) => ({ eq: async () => {
+          writes(patch); return { error: null };
+        } }) };
+      }
       if (table !== "bookings") throw new Error("Unexpected side-effect table " + table);
       let columns = "";
       let patch: Record<string, unknown> | null = null;
@@ -404,6 +409,7 @@ describe("observed pending upsert conflict propagation", () => {
       return query;
     });
     const rpc=vi.fn(async(_name:string,args:Record<string,unknown>)=>{
+      if (_name === "settle_cleaning_credit_for_booking") return {data:{ok:true,status:"settled"},error:null};
       Object.assign(current,competing);
       const expected=args.p_expected as Record<string,unknown>;
       if(!Object.entries(expected).every(([key,value])=>current[key]===value))return {data:null,error:{message:'historical_capture_identity_mismatch',code:'23514'}};
@@ -421,6 +427,18 @@ describe("observed pending upsert conflict propagation", () => {
       paystackMetadata: { booking_id: bookingId, price_snapshot: JSON.stringify(snapshot) }, ...overrides,
     };
   }
+
+  it.each([null, "2026-09-30"])("preserves recurring authorization and refreshes historical payment state for %s", async (date) => {
+    const db = pendingDb("paystack_reference", {}, {
+      date, recurring_id: "00000000-0000-4000-8000-000000000002", is_recurring_generated: true,
+    });
+    const result = await upsertBookingFromPaystack(input({ paystackAuthorizationCode: "AUTH_verified" }));
+    expect(result).toMatchObject({ ok: true, bookingId });
+    expect(db.writes).toHaveBeenCalledWith(expect.objectContaining({ paystack_authorization_code: "AUTH_verified" }));
+    expect(successEffect).toHaveBeenCalledExactlyOnceWith(expect.anything(), bookingId);
+    expect(db.writes.mock.invocationCallOrder[0]).toBeLessThan(successEffect.mock.invocationCallOrder[0]);
+    expect(enqueueFailedJob).not.toHaveBeenCalled();
+  });
 
   it.each([
     {date:null,currency:'USD',amountCents:12550,reason:'currency_mismatch'},
