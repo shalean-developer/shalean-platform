@@ -215,7 +215,6 @@ begin
      or exists(select 1 from public.team_job_member_payouts x where x.booking_id=b.id and x.cleaner_id=OLD.id)
      or exists(select 1 from public.booking_cleaner_earnings_snapshot x where x.booking_id=b.id and x.cleaner_id=OLD.id)
      or exists(select 1 from public.cleaner_earnings_adjustments x where x.booking_id=b.id and x.cleaner_id=OLD.id)
-     or exists(select 1 from public.team_members x where x.team_id=b.team_id and x.cleaner_id=OLD.id)
    )
  ) then raise exception 'historical_cleaner_tenure_deferred' using errcode='23514'; end if;
  return NEW;

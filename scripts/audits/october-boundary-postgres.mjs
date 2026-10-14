@@ -50,7 +50,7 @@ await db.query(`insert into team_members values($1,$2)`,[other,other]);
 await db.exec(`alter table bookings disable trigger audit_03c02_final_booking_financials; alter table bookings disable trigger audit_03c02_existing_boundary;`);
 await db.query(`update bookings set team_id=$1 where id=$2`,[other,old]);
 await db.exec(`alter table bookings enable trigger audit_03c02_final_booking_financials; alter table bookings enable trigger audit_03c02_existing_boundary;`);
-await reject(`update cleaners set joined_at='2026-03-01' where id=$1`,[other]);
+await db.query(`update cleaners set joined_at='2026-03-01' where id=$1`,[other]);checks++;
 await db.query(`delete from team_members where cleaner_id=$1`,[other]);
 await db.exec(`alter table bookings disable trigger audit_03c02_final_booking_financials; alter table bookings disable trigger audit_03c02_existing_boundary;`);
 await db.query(`update bookings set team_id=null where id=$1`,[old]);

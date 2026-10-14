@@ -1,4 +1,5 @@
 import "server-only";
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -176,11 +177,16 @@ export async function resolveBookingCanonicalPayout(
     .eq("booking_id", bookingId)
     .order("cleaner_id", { ascending: true });
 
+  const historicalTeam = !isCurrentPayoutVisitDate(r.date?.trim());
+  // An absent historical roster cannot be reconstructed from today's mutable team.
+  if (historicalTeam && !resolveTeamPayoutParticipantIds({rosterRows:rosterRows ?? [],activeTeamMemberIds:[]}).length) {
+    throw new Error("historical_payout_roster_missing");
+  }
   const membershipDateYmd = effectiveTeamMembershipDateYmd(r.date, r.assigned_at);
   const activeTeamMemberIds =
-    teamId && membershipDateYmd
+    !historicalTeam && teamId && membershipDateYmd
       ? await fetchActiveTeamMemberIdsForMembershipDate(admin, teamId, membershipDateYmd)
-      : teamId && apptIso
+      : !historicalTeam && teamId && apptIso
         ? await fetchActiveTeamMemberIdsAtAppointment(admin, teamId, apptIso)
         : [];
   const participantIds = resolveTeamPayoutParticipantIds({

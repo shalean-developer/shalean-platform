@@ -612,7 +612,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       amount_paid_cents: input.amountCents,
     };
     if (!observed) return finalizationFailure(paymentFinalizationConflict());
-    const mutation = !isCurrentPayoutVisitDate(existing?.date)
+    const mutation = !isCurrentPayoutVisitDate(String(existing?.date ?? "").trim())
       ? await finalizePendingPaymentBookingFromPaystack({
           supabase,observed,ownershipColumn,historicalBooking:true,
           verifiedMetadataBookingId:pendingFinalizeMatch==="id"?existingPendingPaymentId??undefined:undefined,historicalMismatch:"currency_mismatch",
@@ -670,7 +670,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       amount_paid_cents: input.amountCents,
     };
     if (!observed) return finalizationFailure(paymentFinalizationConflict());
-    const mutation = !isCurrentPayoutVisitDate(existing?.date)
+    const mutation = !isCurrentPayoutVisitDate(String(existing?.date ?? "").trim())
       ? await finalizePendingPaymentBookingFromPaystack({
           supabase,observed,ownershipColumn,historicalBooking:true,
           verifiedMetadataBookingId:pendingFinalizeMatch==="id"?existingPendingPaymentId??undefined:undefined,historicalMismatch:"amount_mismatch",
@@ -1150,7 +1150,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       row,
       observed,
       ownershipColumn,
-      historicalBooking: !isCurrentPayoutVisitDate(existing?.date),
+      historicalBooking: !isCurrentPayoutVisitDate(String(existing?.date ?? "").trim()),
       verifiedMetadataBookingId:pendingFinalizeMatch==="id"?existingPendingPaymentId??undefined:undefined,
     });
 
@@ -1272,7 +1272,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
 
   finalizeId = id;
 
-  const historicalCapture = Boolean(existingPendingPaymentId) && !isCurrentPayoutVisitDate(existing?.date);
+  const historicalCapture = Boolean(existingPendingPaymentId) && !isCurrentPayoutVisitDate(String(existing?.date ?? "").trim());
 
   const userIdForEffects =
     inserted && typeof inserted === "object"

@@ -428,6 +428,20 @@ describe("observed pending upsert conflict propagation", () => {
     };
   }
 
+  it.each([" 2026-10-02 ", "\t2026-10-01\n"])("uses ordinary finalization for padded forward visit %j",async(date)=>{
+    const db=pendingDb('paystack_reference',{}, {date});
+    await upsertBookingFromPaystack(input());
+    expect(db.rpc).not.toHaveBeenCalledWith('audit_03c02_record_historical_capture',expect.anything());
+    expect(db.writes).toHaveBeenCalledWith(expect.objectContaining({amount_paid_cents:12550,status:'pending'}));
+  });
+
+  it.each([{currency:'USD',reason:'currency_mismatch'},{amountCents:9940,reason:'amount_mismatch'}])('uses ordinary mismatch persistence for padded forward date %j',async(case_)=>{
+    const db=pendingDb('paystack_reference',{}, {date:' 2026-10-02 '});
+    expect(await upsertBookingFromPaystack(input(case_))).toMatchObject({ok:false,error:case_.reason});
+    expect(db.rpc).not.toHaveBeenCalledWith('audit_03c02_record_historical_capture',expect.anything());
+    expect(db.writes).toHaveBeenCalledWith(expect.objectContaining({status:'payment_mismatch'}));
+  });
+
   it("reports failed authorization persistence for recovery instead of historical success", async () => {
     pendingDb("paystack_reference", {}, {
       date: "2026-09-30", recurring_id: "00000000-0000-4000-8000-000000000002", is_recurring_generated: true,
