@@ -1,3 +1,5 @@
+import { isPayoutVisitInPeriod, isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod, HISTORICAL_PAYOUT_DEFERRED_MESSAGE } from "@/lib/payout/payoutProcessingCutoff";
+import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
@@ -17,7 +19,7 @@ export async function markCleanerPayoutPaid(
   const { data: payout, error: payoutErr } = await admin
     .from("cleaner_payouts")
     .select(
-      "id, status, payment_method, payment_reference, created_by, amount_adjusted_by, approved_by",
+      "id, status, payment_method, payment_reference, created_by, amount_adjusted_by, approved_by, period_start, period_end",
     )
     .eq("id", payoutId)
     .maybeSingle();
@@ -69,6 +71,17 @@ export async function markCleanerPayoutPaid(
 
   if (!isMatchingBankReplay && status !== "approved") {
     return { ok: false, error: "Only approved payout batches can be marked paid." };
+  }
+
+  // Historical successful replays are read-only; do not converge old ledger rows.
+  if (isMatchingBankReplay && !isCurrentPayoutVisitDate(payout.period_start)) return { ok: true };
+  if (!isProcessableClosedPayoutPeriod(String(payout.period_start ?? ""), String(payout.period_end ?? ""))) {
+    return { ok: false, error: "Settlement requires a closed October-or-later monthly payout." };
+  }
+  const loaded = await loadCleanerPayoutBatchItems(admin, payoutId);
+  if (loaded.error) return { ok: false, error: loaded.error };
+  if (!loaded.items.length || loaded.items.some((item) => !isPayoutVisitInPeriod(item.date, String(payout.period_start), String(payout.period_end)))) {
+    return { ok: false, error: HISTORICAL_PAYOUT_DEFERRED_MESSAGE };
   }
 
   const preparedBy = String(payout.created_by ?? "").trim();

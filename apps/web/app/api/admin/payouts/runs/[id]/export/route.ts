@@ -1,5 +1,6 @@
+import { validateTransferProcessingCutoff } from "@/lib/payout/validateTransferProcessingCutoff";
 import { cleanerPaymentReference } from "@/lib/payout/cleanerPaymentReference";
-import { isClosedMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
+import { isProcessableClosedPayoutPeriod } from "@/lib/payout/payoutProcessingCutoff";
 import { NextResponse } from "next/server";
 import { getPayoutDisbursementRunDetail } from "@/lib/admin/payoutDisbursementRuns";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
@@ -49,13 +50,22 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     "period_end",
   ].join(",");
 
+  const actionable = new Set<string>();
+  for (const p of detail.payouts) {
+    if (p.status === "approved" && isProcessableClosedPayoutPeriod(p.period_start, p.period_end)) {
+      const cutoff = await validateTransferProcessingCutoff(admin, "cleaner_payout", p.id);
+      if (cutoff.ok) actionable.add(p.id);
+      else if (cutoff.status >= 500) return NextResponse.json({ error: cutoff.error }, { status: cutoff.status });
+    }
+  }
+
   const lines = detail.payouts.map((p) =>
     [
       csvCell(p.id),
       csvCell(p.cleaner_id),
       csvCell(p.cleaner_name),
       csvCell(p.cleaner_payment_id),
-      csvCell(p.cleaner_payment_id && p.status === "approved" && isClosedMonthlyPayoutBatchPeriod(p.period_start, p.period_end)
+      csvCell(p.cleaner_payment_id && actionable.has(p.id)
         ? cleanerPaymentReference(p.cleaner_payment_id, p.period_start.slice(0, 7)) : ""),
       csvCell(p.total_amount_cents),
       csvCell(Math.round(p.total_amount_cents / 100)),

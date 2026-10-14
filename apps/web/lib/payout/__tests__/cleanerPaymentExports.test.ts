@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-const state = vi.hoisted(() => ({ cleanerRows: [] as Record<string, unknown>[], cleanerError: null as null | { message: string }, allowed: true }));
+const state = vi.hoisted(() => ({ cleanerRows: [] as Record<string, unknown>[], cleanerError: null as null | { message: string }, allowed: true, itemDate: "2026-10-01" as string | null, itemError: null as string | null }));
 const payout = { id: "payout-1", cleaner_id: "cleaner-1", total_amount_cents: 27160, status: "frozen", period_start: "2026-10-01", period_end: "2026-10-31", created_at: "2026-11-01" };
 function database() {
   return { from(table: string) {
@@ -12,14 +12,40 @@ function database() {
     return q;
   } } as unknown as SupabaseClient;
 }
+vi.mock("@/lib/payout/loadCleanerPayoutBatchItems", () => ({ loadCleanerPayoutBatchItems: async () => ({ items: [{ date: state.itemDate }], error: state.itemError, totalCents: payout.total_amount_cents }) }));
 vi.mock("@/lib/auth/requireAdminApi", () => ({ requireAdminApi: async () => state.allowed ? { ok: true } : { ok: false, status: 403, error: "Forbidden" } }));
 vi.mock("@/lib/supabase/admin", () => ({ getSupabaseAdmin: () => database() }));
 import { GET as singleExport } from "@/app/api/admin/payouts/[id]/export/route";
 import { GET as runExport } from "@/app/api/admin/payouts/runs/[id]/export/route";
 import { loadCleanerPaymentIdentities } from "../loadCleanerPaymentIdentities";
-beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date("2026-11-01T00:00:00+02:00")); payout.status = "approved"; payout.period_end = "2026-10-31"; state.allowed = true; state.cleanerError = null; state.cleanerRows = [{ id: "cleaner-1", full_name: "Example Cleaner", payment_id: "SHL-CL-000001" }]; });
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date("2026-11-01T00:00:00+02:00")); payout.status = "approved"; payout.period_start = "2026-10-01"; payout.period_end = "2026-10-31"; state.allowed = true; state.itemDate = "2026-10-01"; state.itemError = null; state.cleanerError = null; state.cleanerRows = [{ id: "cleaner-1", full_name: "Example Cleaner", payment_id: "SHL-CL-000001" }]; });
 afterEach(() => { vi.useRealTimers(); });
 describe("bank payment CSV identity", () => {
+  it.each([singleExport, runExport])("fails the whole export when earning validation cannot complete", async route => {
+    state.itemError = "earning read failed";
+    const r = await route(new Request("https://example.com"), { params: Promise.resolve({ id: "run-1" }) });
+    expect(r.status).toBe(500);
+    expect(r.headers.get("content-type")).toContain("application/json");
+  });
+  it.each(["2026-09-30", "2026-11-01", null])("blocks instructions and suppresses run references for invalid linked visit %s", async date => {
+    state.itemDate = date;
+    const single = await singleExport(new Request("https://example.com"), { params: Promise.resolve({ id: "payout-1" }) });
+    expect(single.status).toBe(409);
+    const report = await runExport(new Request("https://example.com"), { params: Promise.resolve({ id: "run-1" }) });
+    expect(report.status).toBe(200);
+    expect(await report.text()).not.toContain("SHL-CL-000001-202610");
+  });
+  it("blocks approved September bank instructions and retains history without an actionable reference", async () => {
+    payout.period_start = "2026-09-01";
+    payout.period_end = "2026-09-30";
+    const single = await singleExport(new Request("https://example.com"), { params: Promise.resolve({ id: "payout-1" }) });
+    expect(single.status).toBe(409);
+    const report = await runExport(new Request("https://example.com"), { params: Promise.resolve({ id: "run-1" }) });
+    expect(report.status).toBe(200);
+    const csv = await report.text();
+    expect(csv).toContain("2026-09-01");
+    expect(csv).not.toContain("SHL-CL-000001-202609");
+  });
   it.each(["pending", "frozen", "cancelled", "paid", "processing", "unknown"])("rejects bank instructions for %s payouts", async status => {
     payout.status = status;
     const r = await singleExport(new Request("https://example.com"), { params: Promise.resolve({ id: "payout-1" }) });
