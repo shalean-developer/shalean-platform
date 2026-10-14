@@ -99,6 +99,10 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/zoho/__tests__/audit03a02b2CleanerEvidence.test.ts
 
+      - name: AUDIT-03A02B.3 staging npm preflight registration
+        if: steps.filter.outputs.run_suite == 'true'
+        run: node --test scripts/audit03a02b3Manifest.contract.test.mjs
+
       - name: AUDIT-03A02B.2 private staging package proof regression
         if: steps.filter.outputs.run_suite == 'true'
         run: node --test scripts/audit03a02b2PrivatePackageProof.test.mjs
