@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 const { PGlite }=await import(process.env.AUDIT_PGLITE_MODULE ?? '@electric-sql/pglite');
 const db=new PGlite();
 await db.exec(`create role anon; create role authenticated; create role service_role;
-create table bookings(id uuid primary key,date date,time text,assigned_at timestamptz,service_slug text,base_amount_cents int,service_fee_cents int,price_snapshot jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,team_id uuid,is_team_job boolean,cleaner_count int,team_member_count_snapshot int,
+create table bookings(id uuid primary key,date date,time text,assigned_at timestamptz,service_slug text,base_amount_cents int,service_fee_cents int,total_paid_zar numeric,total_paid_cents int,amount_paid_cents int,price_snapshot jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,team_id uuid,is_team_job boolean,cleaner_count int,team_member_count_snapshot int,
 status text,payout_id uuid,payout_status text,payout_paid_at timestamptz,payout_frozen_cents int,
 cleaner_payout_cents int,cleaner_bonus_cents int,display_earnings_cents int,internal_earnings_cents int,payout_earnings_cents int,cleaner_earnings_total_cents int,company_revenue_cents int,
 cleaner_share_percentage numeric,earnings_summary jsonb,cleaner_line_earnings_finalized_at timestamptz,earnings_model_version text,payout_percentage numeric,payout_type text,
@@ -60,7 +60,7 @@ await reject(`delete from booking_cleaner_earnings_snapshot_lines where booking_
 await reject(`insert into booking_cleaner_earnings_snapshot_lines values($1,$2,100)`,[forward,old]);
 await db.query(`update booking_cleaner_earnings_snapshot_lines set allocated_display_earnings_cents=200 where booking_id=$1`,[forward]);checks++;
 await reject(`update bookings set cleaner_share_percentage=50 where id=$1`,[old]);
-for(const field of ['base_amount_cents','service_fee_cents'])await reject(`update bookings set ${field}=100 where id=$1`,[old]);
+for(const field of ['base_amount_cents','service_fee_cents','total_paid_zar','total_paid_cents','amount_paid_cents'])await reject(`update bookings set ${field}=100 where id=$1`,[old]);
 await reject(`update bookings set time='09:00' where id=$1`,[old]);
 await reject(`update bookings set price_snapshot='{"base":100}' where id=$1`,[old]);
 await reject(`update bookings set booking_snapshot='{"locked":{"service":"deep"}}' where id=$1`,[old]);

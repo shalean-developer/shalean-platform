@@ -4,7 +4,7 @@ begin;
 create or replace function public.audit_03c02_guard_final_booking_financials()
 returns trigger language plpgsql security definer set search_path=pg_catalog as $$
 declare v_keys text[] := array[
- 'date','time','assigned_at','service','service_slug','base_amount_cents','service_fee_cents','price_snapshot','cleaner_id','payout_owner_cleaner_id','team_id','is_team_job','cleaner_count','team_member_count_snapshot',
+ 'date','time','assigned_at','service','service_slug','base_amount_cents','service_fee_cents','total_paid_zar','total_paid_cents','amount_paid_cents','price_snapshot','cleaner_id','payout_owner_cleaner_id','team_id','is_team_job','cleaner_count','team_member_count_snapshot',
  'cleaner_payout_cents','cleaner_bonus_cents','display_earnings_cents','internal_earnings_cents',
  'payout_earnings_cents','cleaner_earnings_total_cents','company_revenue_cents','payout_frozen_cents',
  'cleaner_share_percentage','earnings_summary','cleaner_line_earnings_finalized_at','earnings_model_version','payout_percentage','payout_type',

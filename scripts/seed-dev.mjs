@@ -21,6 +21,7 @@
  *   SUPABASE_SERVICE_ROLE_KEY
  */
 
+import { forwardSeedBookingDate } from "./lib/forwardSeedBookingDate.mjs";
 import { createRequire } from "node:module";
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -680,7 +681,7 @@ async function seedTeams(admin) {
 // Phase 6 — Bookings
 // ──────────────────────────────────────────────────────────────────────────────
 
-async function seedBookings(admin, userIdMap, locationIdMap) {
+function buildSeedBookings(userIdMap, locationIdMap) {
   const custIds = {
     c1: userIdMap["customer.one@example.com"],
     c2: userIdMap["customer.two@example.com"],
@@ -727,7 +728,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 3, bathrooms: 2,
       location: "Sea Point", suburb: "Sea Point", city: "Cape Town",
       location_id: seaPtLocId,
-      date: isoDate(-14), time: "09:00",
+      date: forwardSeedBookingDate(-14), time: "09:00",
       price_snapshot: { basePrice: 350, bedrooms: 3, bathrooms: 2, pricePerBedroom: 80, pricePerBathroom: 60, total: 548 },
       display_earnings_cents: 29800, payout_earnings_cents: 29800, internal_earnings_cents: 25000,
       // eligible + frozen_cents satisfies bookings_eligible_paid_require_frozen_cents constraint
@@ -752,7 +753,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 3, bathrooms: 2,
       location: "Claremont", suburb: "Claremont", city: "Cape Town",
       location_id: clarLocId,
-      date: isoDate(-7), time: "08:00",
+      date: forwardSeedBookingDate(-7), time: "08:00",
       price_snapshot: { basePrice: 950, bedrooms: 3, bathrooms: 2, total: 1330 },
       display_earnings_cents: 79800, payout_earnings_cents: 79800, internal_earnings_cents: 53200,
       payout_status: "pending", dispatch_status: "assigned",
@@ -775,7 +776,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 2, bathrooms: 1,
       location: "Sea Point", suburb: "Sea Point", city: "Cape Town",
       location_id: seaPtLocId,
-      date: isoDate(-21), time: "10:00",
+      date: forwardSeedBookingDate(-21), time: "10:00",
       price_snapshot: { basePrice: 350, bedrooms: 2, bathrooms: 1, total: 430 },
       display_earnings_cents: 23650, payout_earnings_cents: 23650, internal_earnings_cents: 19350,
       payout_status: "eligible", payout_frozen_cents: 23650,
@@ -799,7 +800,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 3, bathrooms: 2,
       location: "Claremont", suburb: "Claremont", city: "Cape Town",
       location_id: clarLocId,
-      date: isoDate(-10), time: "08:30",
+      date: forwardSeedBookingDate(-10), time: "08:30",
       price_snapshot: { basePrice: 350, bedrooms: 3, bathrooms: 2, total: 548 },
       display_earnings_cents: 30140, payout_earnings_cents: 30140, internal_earnings_cents: 24660,
       payout_status: "pending", dispatch_status: "assigned",
@@ -821,7 +822,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 2, bathrooms: 1,
       location: "Sea Point", suburb: "Sea Point", city: "Cape Town",
       location_id: seaPtLocId,
-      date: isoDate(5), time: "09:00",
+      date: forwardSeedBookingDate(5), time: "09:00",
       price_snapshot: { total: 430 },
       dispatch_status: "searching",
     }),
@@ -839,7 +840,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       service_slug: "regular-cleaning",
       location: "Observatory", suburb: "Observatory", city: "Cape Town",
       location_id: obsLocId,
-      date: isoDate(3), time: "10:00",
+      date: forwardSeedBookingDate(3), time: "10:00",
       price_snapshot: { total: 430 },
     }),
 
@@ -857,7 +858,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       service_slug: "regular-cleaning",
       location: "Sea Point", suburb: "Sea Point", city: "Cape Town",
       location_id: seaPtLocId,
-      date: isoDate(2), time: "11:00",
+      date: forwardSeedBookingDate(2), time: "11:00",
       price_snapshot: { total: 380 },
     }),
 
@@ -874,7 +875,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       service_slug: "deep-cleaning",
       location: "Claremont", suburb: "Claremont", city: "Cape Town",
       location_id: clarLocId,
-      date: isoDate(-5),
+      date: forwardSeedBookingDate(-5),
       price_snapshot: { total: 1030 },
     }),
 
@@ -892,7 +893,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       service_slug: "regular-cleaning",
       location: "Claremont", suburb: "Claremont", city: "Cape Town",
       location_id: clarLocId,
-      date: isoDate(-30),
+      date: forwardSeedBookingDate(-30),
       price_snapshot: { total: 548 },
     }),
 
@@ -913,7 +914,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 3, bathrooms: 2,
       location: "Rondebosch", suburb: "Rondebosch", city: "Cape Town",
       location_id: rondLocId,
-      date: isoDate(-3), time: "08:00",
+      date: forwardSeedBookingDate(-3), time: "08:00",
       price_snapshot: { basePrice: 1100, bedrooms: 3, bathrooms: 2, total: 1450 },
       display_earnings_cents: 81200, payout_earnings_cents: 81200, internal_earnings_cents: 63800,
       payout_status: "eligible", payout_frozen_cents: 81200,
@@ -936,7 +937,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 2, bathrooms: 1,
       location: "Newlands", suburb: "Newlands", city: "Cape Town",
       location_id: newLocId,
-      date: isoDate(10), time: "08:00",
+      date: forwardSeedBookingDate(10), time: "08:00",
       price_snapshot: { total: 630 },
       dispatch_status: "searching",
     }),
@@ -958,7 +959,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 3, bathrooms: 0,
       location: "Sea Point", suburb: "Sea Point", city: "Cape Town",
       location_id: seaPtLocId,
-      date: isoDate(-42), time: "09:00",
+      date: forwardSeedBookingDate(-42), time: "09:00",
       price_snapshot: { basePrice: 500, bedrooms: 3, total: 650 },
       display_earnings_cents: 36400, payout_earnings_cents: 36400, internal_earnings_cents: 28600,
       payout_status: "eligible", payout_frozen_cents: 36400,
@@ -982,7 +983,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 4, bathrooms: 2,
       location: "Sea Point", suburb: "Sea Point", city: "Cape Town",
       location_id: seaPtLocId,
-      date: isoDate(3), time: "08:00",
+      date: forwardSeedBookingDate(3), time: "08:00",
       is_team_job: true,
       payout_owner_cleaner_id: CLEANER_IDS.c3,  // required when is_team_job=true
       price_snapshot: { total: 1330 },
@@ -993,7 +994,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
     booking({
       id: BOOKING_IDS.draft,
       paystack_reference: `${SEED_TAG}-BK-014`,
-      date: isoDate(3),
+      date: forwardSeedBookingDate(3),
       customer_email: "customer.five@example.com",
       customer_name: "Dev Customer Five",
       customer_phone: TEST_PHONES.cust5,
@@ -1021,7 +1022,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       service_slug: "regular-cleaning",
       location: "Claremont", suburb: "Claremont", city: "Cape Town",
       location_id: clarLocId,
-      date: isoDate(-5), time: "09:00",
+      date: forwardSeedBookingDate(-5), time: "09:00",
       is_monthly_billing_booking: true,
       price_snapshot: { total: 480 },
       payout_status: "pending",
@@ -1030,6 +1031,11 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
     }),
   ];
 
+  return {bookings,custIds};
+}
+
+async function seedBookings(admin, userIdMap, locationIdMap) {
+  const {bookings,custIds}=buildSeedBookings(userIdMap,locationIdMap);
   for (const bk of bookings) {
     const { error } = await admin
       .from("bookings")
@@ -1739,6 +1745,16 @@ async function main() {
   const args = process.argv.slice(2);
   const reset  = args.includes("--reset");
   const dryRun = args.includes("--dry-run");
+
+  // Local fixture validation only: does not construct a Supabase client or read credentials.
+  if (args.includes("--validate-bookings")) {
+    const {bookings}=buildSeedBookings({},{});
+    if (bookings.length !== 15 || bookings.some(row => !/^\d{4}-\d{2}-\d{2}$/.test(row.date ?? "") || row.date < "2026-10-01")) {
+      throw new Error("Seed booking dates violate the forward boundary");
+    }
+    console.log(JSON.stringify({bookings:bookings.length,earliestDate:bookings.map(row=>row.date).sort()[0],dates:bookings.map(row=>row.date)}));
+    return;
+  }
 
   // Load env
   const envFile = resolve(root, "apps/web/.env.local");
