@@ -124,11 +124,12 @@ describe("M-18 migration: 20260945_m18_cleaner_payouts_unique_period.sql", () =>
 type Row = Record<string, unknown>;
 
 class StubBuilder {
-  private filters: Array<{ kind: "eq" | "is" | "not_is" | "in"; column: string; value: unknown }> = [];
+  private filters: Array<{ kind: "eq" | "is" | "not_is" | "in" | "gte"; column: string; value: unknown }> = [];
   private op: "select" | "insert" | "update" | "delete" = "select";
   private patch: Row = {};
   private insertRows: Row[] = [];
   private headOnly = false;
+  private window: [number, number] | null = null;
 
   constructor(private table: string, private db: StubDb) {}
 
@@ -141,11 +142,13 @@ class StubBuilder {
   insert(values: Row | Row[]) { this.op = "insert"; this.insertRows = Array.isArray(values) ? values.map((v) => ({ ...v })) : [{ ...values }]; return this; }
   delete() { this.op = "delete"; return this; }
   eq(col: string, val: unknown) { this.filters.push({ kind: "eq", column: col, value: val }); return this; }
+  gte(col: string, val: unknown) { this.filters.push({ kind: "gte", column: col, value: val }); return this; }
   is(col: string, val: unknown) { this.filters.push({ kind: "is", column: col, value: val }); return this; }
   not(col: string, op: string, val: unknown) { if (op === "is") this.filters.push({ kind: "not_is", column: col, value: val }); return this; }
   in(col: string, vals: unknown[]) { this.filters.push({ kind: "in", column: col, value: vals }); return this; }
   order() { return this; }
   limit() { return this; }
+  range(from: number, to: number) { this.window = [from, to]; return this; }
   maybeSingle() { return this.execute(true); }
   single() { return this.execute(true); }
   then<T>(onfulfilled?: ((v: { data: unknown; error: unknown; count?: number | null }) => T | PromiseLike<T>) | null) {
@@ -156,6 +159,7 @@ class StubBuilder {
     for (const f of this.filters) {
       const v = row[f.column];
       if (f.kind === "eq" && v !== f.value) return false;
+      if (f.kind === "gte" && (v == null || String(v) < String(f.value))) return false;
       if (f.kind === "is") {
         if (f.value === null) { if (v !== null && v !== undefined) return false; }
         else if (v !== f.value) return false;
@@ -217,7 +221,7 @@ class StubBuilder {
       return { data: null, error: null, count: matched.length };
     }
     if (single) return { data: matched[0] ?? null, error: null, count: null };
-    return { data: matched, error: null, count: null };
+    return { data: this.window ? matched.slice(this.window[0], this.window[1] + 1) : matched, error: null, count: null };
   }
 }
 
@@ -402,7 +406,7 @@ describe("M-18 generateWeeklyPayouts: 23505 unique-violation is handled idempote
   beforeEach(() => {
     vi.resetModules();
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-08-05T12:00:00+02:00"));
+    vi.setSystemTime(new Date("2026-11-05T12:00:00+02:00"));
   });
 
   afterEach(() => {
@@ -412,10 +416,10 @@ describe("M-18 generateWeeklyPayouts: 23505 unique-violation is handled idempote
   /**
    * Seeds the DB stub with a single cleaner + 1 completed prepaid booking that
    * passes the Phase-12 `bookingPayableForWeeklyBatch` gate (prepaid +
-   * non-monthly, customer-settled), inside a July 2026 monthly payout period.
+   * non-monthly, customer-settled), inside a October 2026 monthly payout period.
    */
   function seedSingleCleanerSinglePayableBooking(db: StubDb) {
-    const completedYmd = "2026-07-15";
+    const completedYmd = "2026-10-15";
 
     db.tables.cleaners = [{ id: "cleaner-1" }];
     db.tables.bookings = [
@@ -466,8 +470,8 @@ describe("M-18 generateWeeklyPayouts: 23505 unique-violation is handled idempote
       calculated_amount_cents: 25_000,
       status: "pending",
       payout_run_id: null,
-      period_start: "2026-07-01",
-      period_end: "2026-07-31",
+      period_start: "2026-10-01",
+      period_end: "2026-10-31",
     }];
 
     const { generateWeeklyPayouts } = await import("@/lib/payout/generateWeeklyPayouts");
@@ -552,17 +556,15 @@ describe("M-18 generateWeeklyPayouts: 23505 unique-violation is handled idempote
     expect(db.tables.bookings[0]!.payout_id).toBeNull();
   });
 
-  it("non-23505 insert errors still surface as skip + reportOperationalIssue (no silent success)", async () => {
+  it("non-23505 atomic insert errors fail closed without a batch or booking link", async () => {
     const db = new StubDb();
     seedSingleCleanerSinglePayableBooking(db);
     db.queueInsertError("cleaner_payouts", { code: "23502", message: "not null violation" });
 
     const { generateWeeklyPayouts } = await import("@/lib/payout/generateWeeklyPayouts");
-    const result = await generateWeeklyPayouts(db as unknown as never);
-
-    expect(result.payoutsCreated).toBe(0);
-    expect(result.skippedCleaners).toBeGreaterThanOrEqual(1);
+    await expect(generateWeeklyPayouts(db as unknown as never)).rejects.toThrow("not null violation");
     expect(db.tables.cleaner_payouts.length).toBe(0);
+    expect(db.tables.bookings[0]!.payout_id).toBeNull();
   });
 
   it("two cleaners in the same window: 23505 on cleaner A does NOT block cleaner B", async () => {

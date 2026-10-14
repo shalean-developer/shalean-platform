@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
-import { isClosedMonthlyPayoutBatchPeriod, isMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
+import { isPayoutVisitInPeriod, isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod, HISTORICAL_PAYOUT_DEFERRED_MESSAGE } from "@/lib/payout/payoutProcessingCutoff";
 import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
 import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
 import { loadCleanerPayoutFunding } from "@/lib/payout/payoutFunding";
@@ -21,16 +21,18 @@ export async function approveCleanerPayout(
 
   const periodStart = String((payout as { period_start?: string | null }).period_start ?? "").trim();
   const periodEnd = String((payout as { period_end?: string | null }).period_end ?? "").trim();
-  if (isMonthlyPayoutBatchPeriod(periodStart, periodEnd) && !isClosedMonthlyPayoutBatchPeriod(periodStart, periodEnd)) {
-    return {
-      ok: false,
-      error: "This monthly payout period is still open. Close the month before approving cleaner payouts.",
-    };
+  if (!isProcessableClosedPayoutPeriod(periodStart, periodEnd)) {
+    return { ok: false, error: isCurrentPayoutVisitDate(periodStart)
+      ? "This payout requires a closed calendar month before approval."
+      : HISTORICAL_PAYOUT_DEFERRED_MESSAGE };
   }
 
   const loaded = await loadCleanerPayoutBatchItems(admin, params.payoutId);
   if (loaded.error) return { ok: false, error: loaded.error };
   if (!loaded.items.length) return { ok: false, error: "Payout has no linked earning items." };
+  if (loaded.items.some((item) => !isPayoutVisitInPeriod(item.date, periodStart, periodEnd))) {
+    return { ok: false, error: HISTORICAL_PAYOUT_DEFERRED_MESSAGE };
+  }
   if (loaded.items.some((item) => item.is_test)) {
     return { ok: false, error: "Cannot approve a payout batch containing test bookings." };
   }

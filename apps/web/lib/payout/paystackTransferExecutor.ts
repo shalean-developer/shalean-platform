@@ -1,3 +1,4 @@
+import { validateTransferProcessingCutoff } from "@/lib/payout/validateTransferProcessingCutoff";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -103,6 +104,8 @@ async function validateCleanerPayoutBeforeProviderPost(
   params: SubmitPaystackTransferParams,
   amount: number,
 ): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+  const cutoff = await validateTransferProcessingCutoff(admin, params.rail, params.subjectId);
+  if (!cutoff.ok) return cutoff;
   if (params.rail !== "cleaner_payout") return { ok: true };
 
   const { data: payoutData, error: payoutErr } = await admin
@@ -1045,6 +1048,26 @@ export async function submitPaystackTransferViaOutbox(
   if (!safetyGate.ok) {
     const now = new Date().toISOString();
     const permanentValidationFailure = safetyGate.status >= 400 && safetyGate.status < 500;
+
+    if (params.rail === "cleaner_earnings") {
+      if (permanentValidationFailure) {
+        const { data: retired, error: retireErr } = await admin.from("payout_transfer_outbox")
+          .update({ status: "failed", last_error: `Blocked before provider POST: ${safetyGate.error}`, updated_at: now })
+          .eq("id", outbox.id).eq("status", "sending").eq("attempts", outbox.attempts)
+          .select("id").maybeSingle();
+        if (!retireErr && retired) {
+          return { ...safetyGate, needsReconcile: true };
+        }
+      }
+      const released = await releaseOutboxSendLease(admin, outbox.id, outbox.attempts);
+      return {
+        ok: false,
+        error: released.ok ? safetyGate.error : `${safetyGate.error} Lease release also failed: ${released.error}`,
+        status: released.ok ? safetyGate.status : 500,
+        // Retain the original claim for retry/review; no provider POST occurred.
+        needsReconcile: true,
+      };
+    }
 
     if (permanentValidationFailure && params.rail === "cleaner_payout") {
       const { error: terminalErr } = await admin.rpc("fail_cleaner_payout_outbox_validation", {
