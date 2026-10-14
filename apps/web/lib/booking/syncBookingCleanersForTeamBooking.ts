@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate, PAYOUT_PROCESSING_START_YMD } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolvePersistCleanerIdForBooking } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
@@ -14,6 +15,12 @@ export async function syncBookingCleanersForTeamBooking(
   bookingId: string,
   source: "admin" | "dispatch" | "sync" = "sync",
 ): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { data: boundary, error: boundaryError } = await admin.from("bookings")
+    .select("date").eq("id", bookingId).maybeSingle();
+  if (boundaryError || !boundary) return { ok: false, message: boundaryError?.message ?? "booking_not_found" };
+  if (!isCurrentPayoutVisitDate(String(boundary.date ?? "").trim())) {
+    return { ok: false, message: "historical_payout_item_deferred" };
+  }
   let lastMessage = "unknown";
   for (let i = 0; i < RETRY_MS.length; i++) {
     const delay = RETRY_MS[i] ?? 0;
@@ -81,7 +88,8 @@ export async function resyncBookingCleanersForTeamNonFinalizedJobs(
 
   const { data: rows, error } = await admin
     .from("bookings")
-    .select("id")
+    .select("id, date")
+    .gte("date", PAYOUT_PROCESSING_START_YMD)
     .eq("team_id", tid)
     .eq("is_team_job", true)
     .is("cleaner_line_earnings_finalized_at", null)
@@ -92,6 +100,7 @@ export async function resyncBookingCleanersForTeamNonFinalizedJobs(
   let synced = 0;
   let failed = 0;
   for (const r of rows) {
+    if (!isCurrentPayoutVisitDate(String((r as { date?: unknown }).date ?? "").trim())) continue;
     const id = String((r as { id?: string }).id ?? "").trim();
     if (!id) continue;
     const out = await rebuildTeamVisitPayoutsForBooking(admin, id, source);

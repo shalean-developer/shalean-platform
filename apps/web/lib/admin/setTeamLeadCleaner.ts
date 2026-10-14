@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate, PAYOUT_PROCESSING_START_YMD } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resyncBookingCleanersForTeamNonFinalizedJobs } from "@/lib/booking/syncBookingCleanersForTeamBooking";
 import { isTeamMemberActiveOnBookingDate } from "@/lib/cleaner/teamMemberAvailability";
@@ -33,6 +34,7 @@ export async function setTeamLeadCleaner(
   const { data: openBookings, error: bErr } = await admin
     .from("bookings")
     .select("id, date")
+    .gte("date", PAYOUT_PROCESSING_START_YMD)
     .eq("team_id", tid)
     .eq("is_team_job", true)
     .is("cleaner_line_earnings_finalized_at", null);
@@ -42,7 +44,7 @@ export async function setTeamLeadCleaner(
     const row = raw as { id?: string; date?: string | null };
     const bookingId = String(row.id ?? "").trim();
     const dateYmd = String(row.date ?? "").trim();
-    if (!bookingId || !/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) continue;
+    if (!bookingId || !isCurrentPayoutVisitDate(dateYmd)) continue;
     if (!isTeamMemberActiveOnBookingDate(member as { active_from?: string | null; active_to?: string | null }, dateYmd)) {
       continue;
     }

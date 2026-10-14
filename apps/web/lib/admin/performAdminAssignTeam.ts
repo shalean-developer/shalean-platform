@@ -1,4 +1,4 @@
-import { PAYOUT_PROCESSING_START_YMD } from "@/lib/payout/payoutProcessingCutoff";
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assignAdminTeamAndSyncRoster } from "@/lib/booking/teamAssignmentBookingStateCommands";
 import { triggerAssignmentEarningsSnapshotForBooking } from "@/lib/admin/triggerAssignmentEarningsSnapshot";
@@ -130,7 +130,7 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
 
   const b = booking as BookingRow;
   // Reject before capacity RPCs, earnings reopening or assignment/roster writes.
-  if (b.date && /^\d{4}-\d{2}-\d{2}$/.test(b.date) && b.date < PAYOUT_PROCESSING_START_YMD) {
+  if (!isCurrentPayoutVisitDate(String(b.date ?? "").trim())) {
     return {
       ok: false,
       httpStatus: 409,

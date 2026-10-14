@@ -300,9 +300,9 @@ function createMockAdmin(opts: {
 }
 
 describe("performAdminAssignTeam", () => {
-  it.each([false, true])("rejects historical completed reassignment before capacity or financial writes (force=%s)", async force => {
+  it.each([[false, "2026-09-30"], [true, "2026-09-30"], [true, " 2026-09-30 "]] as const)("rejects historical completed reassignment before capacity or financial writes (force=%s, date=%s)", async (force, date) => {
     const { admin, rpc, payoutInserts, bookingUpdates } = createMockAdmin({
-      booking: baseBooking({ date: "2026-09-30", status: "completed", team_id: oldTeamId, is_team_job: true, cleaner_line_earnings_finalized_at: null }),
+      booking: baseBooking({ date, status: "completed", team_id: oldTeamId, is_team_job: true, cleaner_line_earnings_finalized_at: null }),
     });
     const before = JSON.stringify({ payoutInserts, bookingUpdates });
     const result = await performAdminAssignTeam({ admin: admin as never, bookingId, teamId: newTeamId, adminUserId: "admin-uuid", force });
