@@ -25,7 +25,7 @@ const oldTeamId = "33333333-3333-4333-8333-333333333333";
 function baseBooking(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: bookingId,
-    date: "2026-06-01",
+    date: "2026-10-01",
     time: "09:00",
     service: "deep cleaning",
     booking_snapshot: { locked: { service: "deep" } },
@@ -75,6 +75,7 @@ function countChain(count: number) {
     select: () => root,
     eq: () => root,
     neq: () => root,
+    or: () => root,
     in: () => root,
     then: p.then.bind(p),
     catch: p.catch.bind(p),
@@ -299,6 +300,18 @@ function createMockAdmin(opts: {
 }
 
 describe("performAdminAssignTeam", () => {
+  it.each([false, true])("rejects historical completed reassignment before capacity or financial writes (force=%s)", async force => {
+    const { admin, rpc, payoutInserts, bookingUpdates } = createMockAdmin({
+      booking: baseBooking({ date: "2026-09-30", status: "completed", team_id: oldTeamId, is_team_job: true, cleaner_line_earnings_finalized_at: null }),
+    });
+    const before = JSON.stringify({ payoutInserts, bookingUpdates });
+    const result = await performAdminAssignTeam({ admin: admin as never, bookingId, teamId: newTeamId, adminUserId: "admin-uuid", force });
+    expect(result).toMatchObject({ ok: false, httpStatus: 409, code: "historical_payout_item_deferred" });
+    expect(rpc).not.toHaveBeenCalled();
+    expect(JSON.stringify({ payoutInserts, bookingUpdates })).toBe(before);
+    expect(resetBookingCleanerLineEarnings).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.mocked(logSystemEvent).mockClear();
     vi.mocked(assertBookingCleanerEarningsResetSafe).mockReset();
@@ -321,7 +334,7 @@ describe("performAdminAssignTeam", () => {
     expect(res).toEqual({ ok: true, teamId: newTeamId, oldTeamId: null });
     expect(rpc).toHaveBeenCalledWith(
       "claim_team_capacity_slot",
-      expect.objectContaining({ p_team_id: newTeamId, p_booking_date: "2026-06-01" }),
+      expect.objectContaining({ p_team_id: newTeamId, p_booking_date: "2026-10-01" }),
     );
     expect(rpc).not.toHaveBeenCalledWith("release_team_capacity_slot", expect.anything());
     expect(rpc).toHaveBeenCalledWith(
@@ -478,7 +491,7 @@ describe("performAdminAssignTeam", () => {
 
   it("blocks assign when earnings finalized and roster empty without force", async () => {
     const { admin, rpc } = createMockAdmin({
-      booking: baseBooking({ cleaner_line_earnings_finalized_at: "2026-06-01T12:00:00.000Z" }),
+      booking: baseBooking({ cleaner_line_earnings_finalized_at: "2026-10-01T12:00:00.000Z" }),
       bookingCleanersCount: 0,
     });
     const res = await performAdminAssignTeam({
@@ -499,7 +512,7 @@ describe("performAdminAssignTeam", () => {
 
   it("force assign reopens earnings then syncs roster when finalized", async () => {
     const { admin, rpc } = createMockAdmin({
-      booking: baseBooking({ cleaner_line_earnings_finalized_at: "2026-06-01T12:00:00.000Z" }),
+      booking: baseBooking({ cleaner_line_earnings_finalized_at: "2026-10-01T12:00:00.000Z" }),
       bookingCleanersCount: 0,
     });
     const res = await performAdminAssignTeam({
@@ -547,7 +560,7 @@ describe("performAdminAssignTeam", () => {
       code: "weekly_payout_locked",
     });
     const { admin, rpc } = createMockAdmin({
-      booking: baseBooking({ cleaner_line_earnings_finalized_at: "2026-06-01T12:00:00.000Z" }),
+      booking: baseBooking({ cleaner_line_earnings_finalized_at: "2026-10-01T12:00:00.000Z" }),
       bookingCleanersCount: 0,
     });
     const res = await performAdminAssignTeam({
