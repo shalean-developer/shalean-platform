@@ -42,3 +42,9 @@ All fixture changes were rolled back. `bookings` remains 12 rows with full-row c
 Initial review of `f4fd86a04a4e97ef7c713319a04f82604131e657` raised three P1 findings: existing transfer verification must precede the new-send cutoff; batch visits must remain in their period; claimed-ledger visit dates must remain fixed. Revised code addresses these and requires a fresh review. Existing external intents can still be verified; historical accounting convergence remains subject to the deferred historical-review boundary, rather than creating a new transfer or inventing a payment.
 
 Staging ledger versions were aligned to canonical CLI-generated files `20261014140342` and `20261014142019` after candidate verification; temporary candidate ledger entries were consolidated. This changed migration metadata only.
+
+## Verified-provider reconciliation follow-up
+
+Latest review found three blockers on 65e68c6a. Run exports now abort on source validation errors; ledger pre-POST rejection releases or retires its send lease while retaining its claim for review. Migration 20261014145923 permits only terminal outcome convergence backed by matching transfer/outbox evidence (subject, rail, reference, cleaner and full amount). It does not authorize a new historical transfer or change amounts, beneficiaries, visit dates or links. Existing bank settlements remain protected.
+
+Transaction tests in staging pass for historical batch failure/success/reference replay, direct booking synchronization and historical ledger/booking synchronization. Missing evidence, amount edits and unrelated references are rejected. DDL and synthetic fixtures were rolled back. Booking count/hash before and after: 12 / 3d9137ac10fdbbd2547972872a6eb100; payout, payout-transfer and outbox tables remain empty. Revised exact-head CI/review and live staging runtime checks remain mandatory. No production cutoff migration is applied.

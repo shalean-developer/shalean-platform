@@ -28,3 +28,28 @@ it.each(["submitted", "needs_reconcile"])("verifies an existing %s intent withou
   expect(cutoff).not.toHaveBeenCalled();
   expect(updates).not.toContain("cleaner_payouts");
 });
+
+it.each([409, 500])("releases a ledger send lease on cutoff rejection %s without a provider request", async (status) => {
+  cutoff.mockResolvedValueOnce({ ok: false, error: "cutoff unavailable or deferred", status });
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+  const row = { id: "outbox", status: "pending", transfer_row_id: "transfer", transfer_code: null, attempts: 0, reference: "existing-ref" };
+  const admin = { from(table: string) {
+    let patch: Record<string, unknown> | null = null;
+    const q = {
+      select: () => q, eq: () => q, neq: () => q,
+      update: (value: Record<string, unknown>) => { patch = value; return q; },
+      maybeSingle: async () => {
+        if (table !== "payout_transfer_outbox") return { data: null, error: null };
+        if (patch) Object.assign(row, patch);
+        return { data: { ...row }, error: null };
+      },
+    };
+    return q;
+  } };
+  const result = await submitPaystackTransferViaOutbox(admin as never, { rail: "cleaner_earnings", subjectId: "disbursement", cleanerId: "cleaner", amountCents: 100, recipientCode: "recipient", reference: "existing-ref" });
+  expect(result).toMatchObject({ ok: false, status, needsReconcile: true });
+  expect(row.status).toBe(status === 409 ? "failed" : "pending");
+  expect(row.attempts).toBe(1);
+  expect(fetchMock).not.toHaveBeenCalled();
+});

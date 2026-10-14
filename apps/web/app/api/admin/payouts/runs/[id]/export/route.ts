@@ -55,6 +55,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     if (p.status === "approved" && isProcessableClosedPayoutPeriod(p.period_start, p.period_end)) {
       const cutoff = await validateTransferProcessingCutoff(admin, "cleaner_payout", p.id);
       if (cutoff.ok) actionable.add(p.id);
+      else if (cutoff.status >= 500) return NextResponse.json({ error: cutoff.error }, { status: cutoff.status });
     }
   }
 
