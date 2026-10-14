@@ -13,7 +13,8 @@ test("staging-only private artifact proof has zero external calls or writes",()=
 test("rejects prod metadata, nonprivate execution and embedded secrets",()=>{
  for(const changed of [{deployment_environment:"production"},{supabase_ref:"paqjwfulwywtsyyvdxrq"},{server_secrets_baked_in:true},{artifact_sha:"invalid"}])
   assert.throws(()=>verifyPrivateArtifact({...good,...changed},"private",{}));
- assert.throws(()=>verifyPrivateArtifact(good,"public",{}));
+ assert.throws(()=>verifyPrivateArtifact(good,"public",{SHALEAN_APP_ENV:"staging"}));
+ assert.throws(()=>verifyPrivateArtifact(good,"private",{}));
  assert.throws(()=>verifyPrivateArtifact(good,"private",{SHALEAN_APP_ENV:"production"}));
 });
 test("staging workflow packages proof outside public and never starts it",()=>{
