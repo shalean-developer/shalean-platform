@@ -310,7 +310,7 @@ describe("AUDIT-02A01 pending-payment cash source of truth", () => {
     );
     expect(paystackFinalize).toContain("const runRequiredPostPersistRecovery = async");
     expect(paystackFinalize.indexOf("await runRequiredPostPersistRecovery()")).toBeLessThan(
-      paystackFinalize.indexOf("if (input.deferPostPersistSideEffects)"),
+      paystackFinalize.indexOf("if (input.deferPostPersistSideEffects && !historicalCapture)"),
     );
 
     const finalizeCommands = read("lib/booking/paymentFinalizationBookingCommands.ts");
