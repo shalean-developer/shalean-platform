@@ -1,3 +1,4 @@
+import { cleanerPaymentReference } from "@/lib/payout/cleanerPaymentReference";
 import { NextResponse } from "next/server";
 import { getPayoutDisbursementRunDetail } from "@/lib/admin/payoutDisbursementRuns";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
@@ -34,6 +35,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     "payout_id",
     "cleaner_id",
     "cleaner_name",
+    "cleaner_payment_id",
+    "suggested_bank_reference",
     "amount_cents",
     "amount_zar_whole",
     "batch_status",
@@ -50,6 +53,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       csvCell(p.id),
       csvCell(p.cleaner_id),
       csvCell(p.cleaner_name),
+      csvCell(p.cleaner_payment_id),
+      csvCell(p.cleaner_payment_id ? cleanerPaymentReference(p.cleaner_payment_id, p.period_start.slice(0, 7)) : ""),
       csvCell(p.total_amount_cents),
       csvCell(Math.round(p.total_amount_cents / 100)),
       csvCell(p.status),
