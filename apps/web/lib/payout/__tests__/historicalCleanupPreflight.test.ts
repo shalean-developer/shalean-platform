@@ -1,3 +1,4 @@
+import { repairStrippedTeamBookingRoster } from "@/lib/payout/repairStrippedTeamBookingRoster";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { describe, expect, it, vi } from "vitest";
 import { assertBookingCleanerEarningsResetSafe } from "@/lib/admin/adminBookingEarningsResetSafety";
@@ -46,6 +47,12 @@ function readOnlyBooking(date: string | null) {
   return { admin, writes, row };
 }
 describe("historical cleanup rejects before any mutation", () => {
+  it.each(["2026-07-15", " 2026-09-30 ", null])("blocks roster repair for %s before writes", async (date) => {
+    const { admin, writes, row } = readOnlyBooking(date);
+    Object.assign(row, { is_team_job: true, team_id: "team" });
+    expect(await repairStrippedTeamBookingRoster({ admin: admin as never, bookingId: BID, participantCleanerIds: [CID] })).toMatchObject({ ok: false, repaired: false, error: "historical_payout_item_deferred" });
+    expect(writes).not.toHaveBeenCalled();
+  });
   it("skips historical persistence before any roster or payout cleanup", async () => {
     const { admin, writes } = readOnlyBooking("2026-09-30");
     expect(await persistCleanerPayoutIfUnset({ admin: admin as never, bookingId: BID, cleanerId: CID, forceDisplayRecompute: true })).toMatchObject({ ok: true, skipped: true, skipReason: "historical_payout_item_deferred" });

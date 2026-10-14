@@ -1,4 +1,5 @@
 import "server-only";
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { dispatchBookingCancelledNotifications } from "@/lib/notifications/bookingCancelledNotifications";
@@ -338,14 +339,16 @@ export async function reconcileRecurringPlanOccurrences(
   const invoiceIdSet = new Set<string>();
 
   for (const invoiceMonthYm of months) {
+    if (!isCurrentPayoutVisitDate(`${invoiceMonthYm}-01`)) continue;
     const monthStart = `${invoiceMonthYm}-01`;
     const monthEnd = lastDayYmdOfInvoiceMonth(invoiceMonthYm);
     const fromYmd = compareYmd(monthStart, plan.start_date) >= 0 ? monthStart : plan.start_date;
     const throughYmd =
       plan.end_date && compareYmd(plan.end_date, monthEnd) < 0 ? plan.end_date : monthEnd;
 
-    const expectedDates = new Set(occurrenceDatesInclusive(schedule, fromYmd, throughYmd));
-    const inMonth = bookingsInReconcileMonth(existingBookings, invoiceMonthYm, fromYmd, throughYmd);
+    const expectedDates = new Set(occurrenceDatesInclusive(schedule, fromYmd, throughYmd).filter(isCurrentPayoutVisitDate));
+    const inMonth = bookingsInReconcileMonth(existingBookings, invoiceMonthYm, fromYmd, throughYmd)
+      .filter((booking) => isCurrentPayoutVisitDate(booking.date.trim()));
 
     const existingDates = new Set(inMonth.map((b) => b.date));
 

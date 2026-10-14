@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
@@ -35,7 +36,7 @@ export async function repairStrippedTeamBookingRoster(params: {
   const { data: booking, error: bErr } = await params.admin
     .from("bookings")
     .select(
-      "id, status, is_team_job, team_id, payout_owner_cleaner_id, cleaner_id, cleaner_line_earnings_finalized_at",
+      "id, date, status, is_team_job, team_id, payout_owner_cleaner_id, cleaner_id, cleaner_line_earnings_finalized_at",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -44,12 +45,17 @@ export async function repairStrippedTeamBookingRoster(params: {
   }
 
   const row = booking as {
+    date?: string | null;
     status?: string | null;
     is_team_job?: boolean | null;
     team_id?: string | null;
     payout_owner_cleaner_id?: string | null;
     cleaner_line_earnings_finalized_at?: string | null;
   };
+
+  if (!isCurrentPayoutVisitDate(String(row.date ?? "").trim())) {
+    return { bookingId, ok: false, repaired: false, error: "historical_payout_item_deferred" };
+  }
 
   if (String(row.status ?? "").toLowerCase() !== "completed" || row.is_team_job !== true) {
     return { bookingId, ok: false, repaired: false, error: "Booking is not a completed team job" };
