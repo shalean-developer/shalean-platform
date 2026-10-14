@@ -363,12 +363,12 @@ describe("observed pending upsert conflict propagation", () => {
     vi.mocked(resolveBookingUserId).mockResolvedValue(null);
   });
 
-  function pendingDb(mode: "id" | "paystack_reference", competing: Record<string, unknown> = {}) {
+  function pendingDb(mode: "id" | "paystack_reference", competing: Record<string, unknown> = {}, initialOverrides:Record<string,unknown> = {}) {
     const initial: Record<string, unknown> = {
       id: bookingId, status: "pending_payment", customer_email: " Payer@Example.com ",
       customer_id: "owner-a", paystack_reference: mode === "id" ? bookingId : "pay_verified",
       selected_cleaner_id: null, cleaner_id: null, assignment_type: null,
-      is_recurring_generated: false, price_snapshot: null,
+      is_recurring_generated: false, price_snapshot: null,date:"2026-10-14",amount_paid_cents:0, ...initialOverrides,
     };
     const current = { ...initial };
     const writes = vi.fn();
@@ -403,8 +403,15 @@ describe("observed pending upsert conflict propagation", () => {
       };
       return query;
     });
-    getSupabaseAdminMock.mockReturnValue({ from } as unknown as ReturnType<typeof getSupabaseAdmin>);
-    return { initial, current, writes, predicates, reads };
+    const rpc=vi.fn(async(_name:string,args:Record<string,unknown>)=>{
+      Object.assign(current,competing);
+      const expected=args.p_expected as Record<string,unknown>;
+      if(!Object.entries(expected).every(([key,value])=>current[key]===value))return {data:null,error:{message:'historical_capture_identity_mismatch',code:'23514'}};
+      current.status='payment_mismatch';current.booking_snapshot={verified_capture_mismatch:{amount_cents:args.p_amount_cents,currency:args.p_currency,reason:args.p_mismatch}};
+      return {data:{id:bookingId},error:null};
+    });
+    getSupabaseAdminMock.mockReturnValue({ from,rpc } as unknown as ReturnType<typeof getSupabaseAdmin>);
+    return { initial, current, writes, predicates, reads,rpc };
   }
 
   function input(overrides = {}) {
@@ -414,6 +421,31 @@ describe("observed pending upsert conflict propagation", () => {
       paystackMetadata: { booking_id: bookingId, price_snapshot: JSON.stringify(snapshot) }, ...overrides,
     };
   }
+
+  it.each([
+    {date:null,currency:'USD',amountCents:12550,reason:'currency_mismatch'},
+    {date:'2026-09-30',currency:'USD',amountCents:12550,reason:'currency_mismatch'},
+    {date:null,currency:'ZAR',amountCents:9940,reason:'amount_mismatch'},
+    {date:'2026-09-30',currency:'ZAR',amountCents:9940,reason:'amount_mismatch'},
+  ])('durably records historical verified mismatch %j without pricing/paid-total writes',async(case_)=>{
+    const db=pendingDb('paystack_reference',{}, {date:case_.date});
+    const result=await upsertBookingFromPaystack(input({currency:case_.currency,amountCents:case_.amountCents}));
+    expect(result).toMatchObject({ok:false,error:case_.reason,recoveryEnqueue:true,bookingId});
+    expect(db.rpc).toHaveBeenCalledWith('audit_03c02_record_historical_capture',expect.objectContaining({p_mismatch:case_.reason,p_amount_cents:case_.amountCents,p_currency:case_.currency}));
+    expect(db.current.status).toBe('payment_mismatch');expect(db.current.amount_paid_cents).toBe(0);expect(db.current.date).toBe(case_.date);
+    expect(db.writes).not.toHaveBeenCalled();expect(successEffect).not.toHaveBeenCalled();expect(enqueueFailedJob).toHaveBeenCalled();
+  });
+  it('binds verified metadata when an undated legacy intent has no stored provider reference',async()=>{
+    const db=pendingDb('id',{}, {date:null,paystack_reference:null});
+    expect(await upsertBookingFromPaystack(input({currency:'USD'}))).toMatchObject({ok:false,error:'currency_mismatch',recoveryEnqueue:true});
+    expect(db.rpc).toHaveBeenCalledWith('audit_03c02_record_historical_capture',expect.objectContaining({p_verified_booking_id:bookingId,p_expected:expect.objectContaining({paystack_reference:null})}));
+    expect(db.writes).not.toHaveBeenCalled();expect(enqueueFailedJob).toHaveBeenCalled();
+  });
+  it('does not enqueue historical mismatch recovery after a competing identity change',async()=>{
+    const db=pendingDb('paystack_reference',{customer_id:'competing-owner'},{date:null});
+    expect(await upsertBookingFromPaystack(input({currency:'USD'}))).toMatchObject({ok:false,error:'historical_capture_identity_mismatch'});
+    expect(db.writes).not.toHaveBeenCalled();expect(enqueueFailedJob).not.toHaveBeenCalled();
+  });
 
   for (const mode of ["id", "paystack_reference"] as const) {
     it.each([

@@ -35,31 +35,44 @@ revoke all on function public.audit_03c02_verified_booking_refund(jsonb,jsonb) f
 
 -- Called only after the server has verified Paystack success. No provider request
 -- is made here. Retain the historical service, roster, pricing and earnings basis.
-create or replace function public.audit_03c02_record_historical_capture(p_booking_id uuid,p_reference text,p_amount_cents bigint,p_currency text,p_paid_at timestamptz,p_expected jsonb)
+create or replace function public.audit_03c02_record_historical_capture(p_booking_id uuid,p_reference text,p_amount_cents bigint,p_currency text,p_paid_at timestamptz,p_expected jsonb,p_mismatch text default null,p_verified_booking_id uuid default null)
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
 declare b public.bookings; result jsonb; prior_context text;
 begin
  select * into b from public.bookings where id=p_booking_id for update;
  if not found or (b.date is not null and b.date::date>=date '2026-10-01')
    or b.status::text not in ('pending_payment','payment_expired','payment_reconciliation_required')
-   or nullif(p_reference,'') is null or b.paystack_reference is distinct from p_reference
-   or p_amount_cents is null or p_amount_cents<0 or p_currency is distinct from coalesce(b.currency,'ZAR')
+   or nullif(p_reference,'') is null
+   or (b.paystack_reference is distinct from p_reference and not (coalesce(p_verified_booking_id=b.id,false)
+     and (b.paystack_reference is null or b.paystack_reference=b.id::text)))
+   or p_amount_cents is null or p_amount_cents<0 or nullif(p_currency,'') is null
+   or (p_mismatch is null and p_currency is distinct from coalesce(b.currency,'ZAR'))
+   or (p_mismatch is not null and p_mismatch not in ('amount_mismatch','currency_mismatch'))
    or p_paid_at is null or p_expected is null or not (to_jsonb(b) @> p_expected)
    or not (p_expected ? 'customer_id' or p_expected ? 'user_id')
    or not (p_expected ?& array['status','paystack_reference','customer_email','cleaner_id','selected_cleaner_id','assignment_type']) then
    raise exception 'historical_capture_identity_mismatch' using errcode='23514';
  end if;
+ if p_mismatch is not null then
+   -- Keep foreign-currency/wrong-amount cash evidence separate from the old ZAR
+   -- entitlement inputs. This is reconciliation, never a successful fulfillment.
+   update public.bookings set status='payment_mismatch',payment_mismatch=true,payment_completed_at=p_paid_at,
+     booking_snapshot=coalesce(b.booking_snapshot,'{}'::jsonb)||jsonb_build_object('verified_capture_mismatch',jsonb_build_object(
+       'reference',p_reference,'amount_cents',p_amount_cents,'currency',p_currency,'paid_at',p_paid_at,'reason',p_mismatch)),
+     updated_at=now() where id=b.id;
+   return jsonb_build_object('id',b.id,'created_at',b.created_at);
+ end if;
  prior_context:=current_setting('shalean.verified_booking_capture',true);
  perform set_config('shalean.verified_booking_capture',b.id::text,true);
- update public.bookings set amount_paid_cents=p_amount_cents,total_paid_cents=p_amount_cents,total_paid_zar=p_amount_cents::numeric/100,
+ update public.bookings set paystack_reference=p_reference,amount_paid_cents=p_amount_cents,total_paid_cents=p_amount_cents,total_paid_zar=p_amount_cents::numeric/100,
    payment_completed_at=p_paid_at,payment_status=case when b.payment_status='pending_monthly' then b.payment_status else 'success' end,
    status=case when b.cleaner_id is not null or b.selected_cleaner_id is not null then 'pending_assignment' else 'pending' end,updated_at=now() where id=b.id;
  perform set_config('shalean.verified_booking_capture',coalesce(prior_context,''),true);
  select jsonb_build_object('id',id,'created_at',created_at) into result from public.bookings where id=b.id;
  return result;
 end; $$;
-revoke all on function public.audit_03c02_record_historical_capture(uuid,text,bigint,text,timestamptz,jsonb) from public,anon,authenticated;
-grant execute on function public.audit_03c02_record_historical_capture(uuid,text,bigint,text,timestamptz,jsonb) to service_role;
+revoke all on function public.audit_03c02_record_historical_capture(uuid,text,bigint,text,timestamptz,jsonb,text,uuid) from public,anon,authenticated;
+grant execute on function public.audit_03c02_record_historical_capture(uuid,text,bigint,text,timestamptz,jsonb,text,uuid) to service_role;
 
 create or replace function public.audit_03c02_guard_final_booking_financials()
 returns trigger language plpgsql security definer set search_path=pg_catalog as $$

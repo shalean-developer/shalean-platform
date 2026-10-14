@@ -141,3 +141,12 @@ Validation: 794 critical tests / 62 files, typecheck and 84 isolated PostgreSQL 
 
 
 Finance fixture timestamp completion: approved/paid/frozen timestamps now use the first instant after the relevant visit/payout month closes in Johannesburg, rather than a visit-day or last-day timestamp within the open month. They remain stable across reseeds. A first-eligible-instant regression passes. Current local critical suite is 795 tests / 62 files; typecheck passes. No new shared mutation was required.
+
+
+### Historical verified capture mismatches
+
+Review of 4fdb52bc found currency/amount mismatch branches before the normal historical capture command. Those branches now use the same restricted RPC in mismatch mode. It records the verified reference, amount, currency, timestamp and reason in booking_snapshot.verified_capture_mismatch and sets payment_mismatch/payment_completed_at without rewriting the old paid totals, pricing or earnings. This avoids representing foreign currency as ZAR. Recovery is enqueued only after durable mismatch state; competing identity changes still fail before recovery/success side effects.
+
+Verified metadata can bind an existing legacy UUID-placeholder/null reference to its original booking, while the original observed identity/reference remains checked. Replacing a different real provider reference is still refused. The full staging schema requires non-null paystack_reference, so its probe uses a UUID placeholder; isolated compatibility tests additionally cover nullable legacy references.
+
+Validation: 802 critical tests / 62 files, typecheck and 94 isolated PostgreSQL checks pass. Six application mismatch/binding scenarios cover September/null dates, currency/amount mismatches, legacy metadata binding and competing identity. Full-schema rolled-back probes cover selected-cleaner September/null capture, UUID reference binding, refund convergence, and both mismatch modes with preserved paid totals. No actual capture/refund/provider request ran. Exact-head CI/independent review, persistent staging deployment and runtime/UI verification remain open.

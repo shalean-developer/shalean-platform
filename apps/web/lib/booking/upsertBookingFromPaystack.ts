@@ -612,9 +612,14 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       amount_paid_cents: input.amountCents,
     };
     if (!observed) return finalizationFailure(paymentFinalizationConflict());
-    const mutation = await updateObservedPendingPaymentBooking({
-      supabase, row: currencyMismatchPatch, observed, ownershipColumn,
-    });
+    const mutation = !isCurrentPayoutVisitDate(existing?.date)
+      ? await finalizePendingPaymentBookingFromPaystack({
+          supabase,observed,ownershipColumn,historicalBooking:true,
+          verifiedMetadataBookingId:pendingFinalizeMatch==="id"?existingPendingPaymentId??undefined:undefined,historicalMismatch:"currency_mismatch",
+          row:{...currencyMismatchPatch,currency:input.currency,paystack_reference:input.paystackReference,
+            customer_email:emailStored,[ownershipColumn]:userIdResolved},
+        })
+      : await updateObservedPendingPaymentBooking({supabase,row:currencyMismatchPatch,observed,ownershipColumn});
     if (mutation.error) return finalizationFailure(mutation.error);
     void enqueueFailedJob("booking_finalize", {
       paystackReference: input.paystackReference,
@@ -665,9 +670,14 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       amount_paid_cents: input.amountCents,
     };
     if (!observed) return finalizationFailure(paymentFinalizationConflict());
-    const mutation = await updateObservedPendingPaymentBooking({
-      supabase, row: mismatchPatch, observed, ownershipColumn,
-    });
+    const mutation = !isCurrentPayoutVisitDate(existing?.date)
+      ? await finalizePendingPaymentBookingFromPaystack({
+          supabase,observed,ownershipColumn,historicalBooking:true,
+          verifiedMetadataBookingId:pendingFinalizeMatch==="id"?existingPendingPaymentId??undefined:undefined,historicalMismatch:"amount_mismatch",
+          row:{...mismatchPatch,currency:input.currency,paystack_reference:input.paystackReference,
+            customer_email:emailStored,[ownershipColumn]:userIdResolved},
+        })
+      : await updateObservedPendingPaymentBooking({supabase,row:mismatchPatch,observed,ownershipColumn});
     if (mutation.error) return finalizationFailure(mutation.error);
     void enqueueFailedJob("booking_finalize", {
       paystackReference: input.paystackReference,
@@ -1141,6 +1151,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       observed,
       ownershipColumn,
       historicalBooking: !isCurrentPayoutVisitDate(existing?.date),
+      verifiedMetadataBookingId:pendingFinalizeMatch==="id"?existingPendingPaymentId??undefined:undefined,
     });
 
     if (bookingPaystackFinalizeTraceEnabled()) {

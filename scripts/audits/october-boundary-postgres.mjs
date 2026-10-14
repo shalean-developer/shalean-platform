@@ -6,7 +6,7 @@ const { PGlite }=await import(process.env.AUDIT_PGLITE_MODULE ?? '@electric-sql/
 const db=new PGlite();
 await db.exec(`create role anon; create role authenticated; create role service_role;
 create table audit_users(id uuid primary key);
-create table bookings(currency text, paystack_reference text,customer_email text,customer_id uuid,selected_cleaner_id uuid,assignment_type text,payment_status text,payment_completed_at timestamptz,created_at timestamptz,updated_at timestamptz,refund_status text,id uuid primary key,check(not((cleaner_id is not null or selected_cleaner_id is not null) and status='pending')),date date,time text,assigned_at timestamptz,service_slug text,base_amount_cents int,service_fee_cents int,total_paid_zar numeric,total_paid_cents int,amount_paid_cents int,price_snapshot jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,team_id uuid,is_team_job boolean,cleaner_count int,team_member_count_snapshot int,
+create table bookings(currency text, paystack_reference text,customer_email text,customer_id uuid,selected_cleaner_id uuid,assignment_type text,payment_status text,payment_completed_at timestamptz,created_at timestamptz,updated_at timestamptz,refund_status text,payment_mismatch boolean,id uuid primary key,check(not((cleaner_id is not null or selected_cleaner_id is not null) and status='pending')),date date,time text,assigned_at timestamptz,service_slug text,base_amount_cents int,service_fee_cents int,total_paid_zar numeric,total_paid_cents int,amount_paid_cents int,price_snapshot jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,team_id uuid,is_team_job boolean,cleaner_count int,team_member_count_snapshot int,
 status text,payout_id uuid,payout_status text,payout_paid_at timestamptz,payout_frozen_cents int,
 cleaner_payout_cents int,cleaner_bonus_cents int,display_earnings_cents int,internal_earnings_cents int,payout_earnings_cents int,cleaner_earnings_total_cents int,company_revenue_cents int,
 cleaner_share_percentage numeric,earnings_summary jsonb,cleaner_line_earnings_finalized_at timestamptz,earnings_model_version text,payout_percentage numeric,payout_type text,
@@ -31,7 +31,7 @@ insert into booking_cleaner_earnings_snapshot_lines values('${old}','${old}',100
 await db.query(`insert into cleaner_earnings_adjustments(id,booking_id,cleaner_id,amount_cents) values($1,$1,$2,100)`,[old,cid]);
 await db.query(`insert into audit_users values($1)`,[cid]);
 await db.query(`update cleaner_earnings_adjustments set created_by=$1,created_by_email='retained@example.com' where booking_id=$2`,[cid,old]);
-await db.exec(`insert into bookings(id,date,status,paystack_reference,currency) values('eeeeeeee-0000-4000-8000-000000000001',null,'pending_payment','undated-charge','ZAR')`);
+await db.exec(`insert into bookings(id,date,status,paystack_reference,currency) values('eeeeeeee-0000-4000-8000-000000000001',null,'pending_payment','undated-charge','ZAR'),('eeeeeeee-0000-4000-8000-000000000002',null,'pending_payment',null,'ZAR')`);
 const convergence=await fs.readFile('supabase/migrations/20261014145923_audit_03c02_verified_provider_convergence.sql','utf8');
 await db.exec(convergence.slice(convergence.indexOf('create or replace function public.audit_03c02_guard_payout_item()'),convergence.indexOf('create or replace function public.audit_03c02_guard_payout_run()')));
 for(const t of ['bookings','cleaner_earnings','booking_roster_member_payouts','team_job_member_payouts']) await db.exec(`create trigger audit_03c02_existing_boundary before insert or update on ${t} for each row execute function audit_03c02_guard_payout_item()`);
@@ -112,9 +112,22 @@ assert.equal((await db.query(`select status from bookings where id=$1`,[old])).r
 assert.equal((await db.query(`select amount_paid_cents from bookings where id=$1`,[old])).rows[0].amount_paid_cents,1000);checks++;
 await reject(`update bookings set total_paid_cents=999 where id=$1`,[old]);
 for(const role of ['anon','authenticated','service_role']){
- const r=await db.query(`select has_function_privilege($1,'audit_03c02_record_historical_capture(uuid,text,bigint,text,timestamptz,jsonb)','execute') permitted`,[role]);assert.equal(r.rows[0].permitted,role==='service_role');checks++;
+ const r=await db.query(`select has_function_privilege($1,'audit_03c02_record_historical_capture(uuid,text,bigint,text,timestamptz,jsonb,text,uuid)','execute') permitted`,[role]);assert.equal(r.rows[0].permitted,role==='service_role');checks++;
 }
 await db.query(captureSql,['eeeeeeee-0000-4000-8000-000000000001','undated-charge',1000,JSON.stringify({...expected,paystack_reference:'undated-charge',cleaner_id:null})]);checks++;
 assert.equal((await db.query(`select date,status from bookings where id='eeeeeeee-0000-4000-8000-000000000001'`)).rows[0].date,null);checks++;
+for(const [reason,currency] of [['amount_mismatch','ZAR'],['currency_mismatch','USD']]) {
+ await db.query(`update bookings set status='payment_reconciliation_required' where id=$1`,[old]);
+ const prior=(await db.query(`select amount_paid_cents,total_paid_cents,total_paid_zar,date from bookings where id=$1`,[old])).rows[0];
+ await db.query(`select audit_03c02_record_historical_capture($1,'charge-1',123,$2,'2026-10-14T12:00:00Z',$3,$4)`,[old,currency,JSON.stringify({...expected,status:'payment_reconciliation_required'}),reason]);checks++;
+ const after=(await db.query(`select amount_paid_cents,total_paid_cents,total_paid_zar,date from bookings where id=$1`,[old])).rows[0];assert.deepEqual(after,prior);checks++;
+ assert.equal((await db.query(`select status from bookings where id=$1`,[old])).rows[0].status,'payment_mismatch');checks++;
+}
+const aliasId='eeeeeeee-0000-4000-8000-000000000002';
+const aliasExpected={...expected,paystack_reference:null,cleaner_id:null};
+await reject(captureSql,[aliasId,'verified-new-charge',1000,JSON.stringify(aliasExpected)]);
+await reject(`select audit_03c02_record_historical_capture($1,'verified-new-charge',1000,'ZAR',now(),$2,null,$3)`,[aliasId,JSON.stringify(aliasExpected),old]);
+await db.query(`select audit_03c02_record_historical_capture($1,'verified-new-charge',1000,'ZAR',now(),$2,null,$1)`,[aliasId,JSON.stringify(aliasExpected)]);checks++;
+assert.equal((await db.query(`select paystack_reference from bookings where id=$1`,[aliasId])).rows[0].paystack_reference,'verified-new-charge');checks++;
 console.log(`PASS ${checks} isolated PostgreSQL boundary checks (minimal schema; not live staging proof)`);
 await db.close();

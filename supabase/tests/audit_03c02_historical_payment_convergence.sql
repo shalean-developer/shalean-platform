@@ -11,7 +11,7 @@ begin
  if not found then raise exception 'staging pending-payment fixture unavailable'; end if;
  intent:=jsonb_build_object('version',1,'captured_cents',1000,'refunded_cents',0,'currency','ZAR','records',jsonb_build_array(
    jsonb_build_object('id','audit-refund','amount_cents',200,'currency','ZAR','record_only',false,'provider_state','submitted_to_provider')));
- update public.bookings set selected_cleaner_id=(select id from public.cleaners order by id limit 1),booking_snapshot=coalesce(booking_snapshot,'{}')||jsonb_build_object('refund_workflow',intent) where id=b.id;
+ update public.bookings set paystack_reference=case when probe_date is null then id::text else paystack_reference end,selected_cleaner_id=(select id from public.cleaners order by id limit 1),booking_snapshot=coalesce(booking_snapshot,'{}')||jsonb_build_object('refund_workflow',intent) where id=b.id;
  set constraints all immediate;
  alter table public.bookings disable trigger audit_03c02_final_booking_financials;
  update public.bookings set date=probe_date::date where id=b.id;
@@ -24,7 +24,7 @@ begin
    perform public.audit_03c02_record_historical_capture(b.id,'wrong-reference',1000,'ZAR',now(),expected);
    raise exception 'FAIL wrong charge reference';
  exception when check_violation then if sqlerrm<>'historical_capture_identity_mismatch' then raise; end if; end;
- result:=public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,coalesce(b.currency,'ZAR'),now(),expected);
+ result:=public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,coalesce(b.currency,'ZAR'),now(),expected,null,b.id);
  if result->>'id' is distinct from b.id::text then raise exception 'FAIL capture row missing'; end if;
  if not exists(select 1 from public.bookings where id=b.id and amount_paid_cents=1000 and payment_status='success' and status='pending_assignment') then raise exception 'FAIL capture not recorded'; end if;
  begin
@@ -42,6 +42,16 @@ begin
    update public.bookings set total_paid_cents=999 where id=b.id;
    raise exception 'FAIL capture exception leaked';
  exception when check_violation then if sqlerrm<>'historical_payout_item_deferred' then raise; end if; end;
+ update public.bookings set status='payment_reconciliation_required' where id=b.id;
+ select jsonb_object_agg(key,value) into expected from public.bookings x,jsonb_each(to_jsonb(x))
+   where x.id=b.id and key=any(array['status','paystack_reference','customer_email','customer_id','cleaner_id','selected_cleaner_id','assignment_type']);
+ perform public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,123,'USD',now(),expected,'currency_mismatch');
+ if not exists(select 1 from public.bookings where id=b.id and status='payment_mismatch' and amount_paid_cents=800
+   and booking_snapshot->'verified_capture_mismatch'->>'currency'='USD') then raise exception 'FAIL currency mismatch cash evidence'; end if;
+ update public.bookings set status='payment_reconciliation_required' where id=b.id;
+ perform public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,123,'ZAR',now(),expected,'amount_mismatch');
+ if not exists(select 1 from public.bookings where id=b.id and status='payment_mismatch' and amount_paid_cents=800
+   and booking_snapshot->'verified_capture_mismatch'->>'reason'='amount_mismatch') then raise exception 'FAIL amount mismatch cash evidence'; end if;
 end loop;
 end $$;
 rollback;
