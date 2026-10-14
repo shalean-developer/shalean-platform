@@ -5,10 +5,10 @@ import assert from 'node:assert/strict';
 const { PGlite }=await import(process.env.AUDIT_PGLITE_MODULE ?? '@electric-sql/pglite');
 const db=new PGlite();
 await db.exec(`create role anon; create role authenticated; create role service_role;
-create table bookings(id uuid primary key,date date,cleaner_id uuid,payout_owner_cleaner_id uuid,team_id uuid,is_team_job boolean,cleaner_count int,team_member_count_snapshot int,
+create table bookings(id uuid primary key,date date,time text,assigned_at timestamptz,service_slug text,base_amount_cents int,service_fee_cents int,price_snapshot jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,team_id uuid,is_team_job boolean,cleaner_count int,team_member_count_snapshot int,
 status text,payout_id uuid,payout_status text,payout_paid_at timestamptz,payout_frozen_cents int,
 cleaner_payout_cents int,cleaner_bonus_cents int,display_earnings_cents int,internal_earnings_cents int,payout_earnings_cents int,cleaner_earnings_total_cents int,company_revenue_cents int,
-earnings_summary jsonb,cleaner_line_earnings_finalized_at timestamptz,earnings_model_version text,payout_percentage numeric,payout_type text,
+cleaner_share_percentage numeric,earnings_summary jsonb,cleaner_line_earnings_finalized_at timestamptz,earnings_model_version text,payout_percentage numeric,payout_type text,
 earnings_percentage_applied numeric,earnings_cap_cents_applied int,earnings_tenure_months_at_assignment int,service text,booking_snapshot jsonb);
 create table cleaner_payouts(id uuid primary key,period_start date,period_end date);
 create table cleaner_earnings(id uuid primary key,booking_id uuid references bookings on delete cascade,cleaner_id uuid,amount_cents int,status text,disbursement_id uuid,paid_at timestamptz,updated_at timestamptz);
@@ -17,6 +17,7 @@ create table team_job_member_payouts(id uuid primary key,booking_id uuid referen
 create table booking_cleaners(booking_id uuid references bookings on delete cascade,cleaner_id uuid,role text,payout_weight numeric,lead_bonus_cents int,source text,completed_at timestamptz);
 create table booking_line_items(id uuid primary key,booking_id uuid references bookings on delete cascade,cleaner_earnings_cents int,total_price_cents int,unit_price_cents int,quantity int,earns_cleaner boolean,name text,item_type text,slug text,metadata jsonb);
 create table booking_cleaner_earnings_snapshot(booking_id uuid references bookings on delete cascade,cleaner_id uuid,display_earnings_cents int,updated_at timestamptz);
+create table cleaner_earnings_adjustments(id uuid primary key,booking_id uuid references bookings on delete cascade,cleaner_id uuid,amount_cents int,reason text);
 create table booking_cleaner_earnings_snapshot_lines(booking_id uuid references bookings on delete cascade,booking_line_item_id uuid references booking_line_items on delete cascade,allocated_display_earnings_cents int);
 create function audit_03c02_has_verified_outcome(uuid,text,text,text default null) returns boolean language sql as 'select false';`);
 const old='aaaaaaaa-0000-4000-8000-000000000001', forward='aaaaaaaa-0000-4000-8000-000000000002', cid='bbbbbbbb-0000-4000-8000-000000000001', other='bbbbbbbb-0000-4000-8000-000000000002';
@@ -26,6 +27,7 @@ await db.exec(`insert into booking_cleaners(booking_id,cleaner_id,role) values('
 insert into booking_line_items(id,booking_id,cleaner_earnings_cents) values('${old}','${old}',100),('${forward}','${forward}',100);
 insert into booking_cleaner_earnings_snapshot(booking_id,cleaner_id) values('${old}','${cid}'),('${forward}','${cid}');
 insert into booking_cleaner_earnings_snapshot_lines values('${old}','${old}',100),('${forward}','${forward}',100)`);
+await db.query(`insert into cleaner_earnings_adjustments(id,booking_id,cleaner_id,amount_cents) values($1,$1,$2,100)`,[old,cid]);
 const convergence=await fs.readFile('supabase/migrations/20261014145923_audit_03c02_verified_provider_convergence.sql','utf8');
 await db.exec(convergence.slice(convergence.indexOf('create or replace function public.audit_03c02_guard_payout_item()'),convergence.indexOf('create or replace function public.audit_03c02_guard_payout_run()')));
 for(const t of ['bookings','cleaner_earnings','booking_roster_member_payouts','team_job_member_payouts']) await db.exec(`create trigger audit_03c02_existing_boundary before insert or update on ${t} for each row execute function audit_03c02_guard_payout_item()`);
@@ -51,12 +53,24 @@ await reject(`update booking_cleaner_earnings_snapshot set cleaner_id=$1 where b
 await db.query(`update booking_cleaners set completed_at=now() where booking_id=$1`,[old]);checks++;
 await db.query(`update bookings set booking_snapshot='{"admin_notes":"allowed"}' where id=$1`,[old]);checks++;
 // A later BEFORE policy writer cannot bypass the AFTER validation.
-await db.exec(`create function audit_policy_probe() returns trigger language plpgsql as $$begin NEW.display_earnings_cents:=999;return NEW;end;$$;create trigger zz_policy_probe before update of service on bookings for each row execute function audit_policy_probe()`);
-await reject(`update bookings set service='airbnb' where id=$1`,[old]);
+await db.exec(`create function audit_policy_probe() returns trigger language plpgsql as $$begin NEW.display_earnings_cents:=999;return NEW;end;$$;create trigger zz_policy_probe before update of booking_snapshot on bookings for each row execute function audit_policy_probe()`);
+await reject(`update bookings set booking_snapshot='{"admin_notes":"policy probe"}' where id=$1`,[old]);
 await reject(`update booking_cleaner_earnings_snapshot_lines set allocated_display_earnings_cents=200 where booking_id=$1`,[old]);
 await reject(`delete from booking_cleaner_earnings_snapshot_lines where booking_id=$1`,[old]);
 await reject(`insert into booking_cleaner_earnings_snapshot_lines values($1,$2,100)`,[forward,old]);
 await db.query(`update booking_cleaner_earnings_snapshot_lines set allocated_display_earnings_cents=200 where booking_id=$1`,[forward]);checks++;
+await reject(`update bookings set cleaner_share_percentage=50 where id=$1`,[old]);
+for(const field of ['base_amount_cents','service_fee_cents'])await reject(`update bookings set ${field}=100 where id=$1`,[old]);
+await reject(`update bookings set time='09:00' where id=$1`,[old]);
+await reject(`update bookings set price_snapshot='{"base":100}' where id=$1`,[old]);
+await reject(`update bookings set booking_snapshot='{"locked":{"service":"deep"}}' where id=$1`,[old]);
+await reject(`update bookings set service_slug='deep' where id=$1`,[old]);
+await reject(`insert into cleaner_earnings_adjustments(id,booking_id,cleaner_id,amount_cents) values($1,$2,$3,200)`,[forward,old,cid]);
+await reject(`update cleaner_earnings_adjustments set amount_cents=200 where booking_id=$1`,[old]);
+await reject(`delete from cleaner_earnings_adjustments where booking_id=$1`,[old]);
+await reject(`update cleaner_earnings_adjustments set booking_id=$1 where booking_id=$2`,[forward,old]);
+await db.query(`update bookings set cleaner_share_percentage=50 where id=$1`,[forward]);checks++;
+await db.query(`insert into cleaner_earnings_adjustments(id,booking_id,cleaner_id,amount_cents) values($1,$1,$2,200)`,[forward,cid]);checks++;
 await db.query(`delete from bookings where id=$1`,[forward]);checks++;
 assert.equal((await db.query(`select count(*)::int n from booking_cleaners where booking_id=$1`,[forward])).rows[0].n,0);checks++;
 for(const role of ['anon','authenticated','service_role']){const r=await db.query(`select has_function_privilege($1,'audit_03c02_guard_final_booking_financials()','execute') permitted`,[role]);assert.equal(r.rows[0].permitted,false);checks++;}

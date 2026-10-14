@@ -43,7 +43,7 @@ type Captured = {
   adjustmentInserts: Array<Record<string, unknown>>;
 };
 
-function makeAdmin(existing: ExistingRow | null, overrides: { updateError?: string; insertError?: string } = {}) {
+function makeAdmin(existing: ExistingRow | null, overrides: { updateError?: string; insertError?: string; bookingDate?: string | null; bookingReadError?: string } = {}) {
   const captured: Captured = {
     selectedColumns: [],
     updatePatches: [],
@@ -81,6 +81,9 @@ function makeAdmin(existing: ExistingRow | null, overrides: { updateError?: stri
             };
           }),
         };
+      }
+      if (table === "bookings") {
+        return {select:()=>({eq:()=>({maybeSingle:async()=>({data:{date:overrides.bookingDate === undefined ? "2026-10-01" : overrides.bookingDate},error:overrides.bookingReadError ? {message:overrides.bookingReadError} : null})})})};
       }
       if (table === "cleaner_earnings_adjustments") {
         return {
@@ -399,4 +402,27 @@ describe("H-12: source content guards", () => {
     // does not silently overwrite first-reviewer
     expect(src).toMatch(/!row\.reviewed_by/);
   });
+});
+
+describe("historical adjustment boundary before dispute resolution",()=>{
+ beforeEach(()=>{
+  vi.mocked(requireAdminApi).mockResolvedValue({ok:true,userId:ADMIN_ID,email:ADMIN_EMAIL} as never);
+ });
+ it.each(["2026-09-30"," 2026-09-30 ",null])("rejects an adjustment for %s before closing the dispute",async(bookingDate)=>{
+  const {admin,captured}=makeAdmin(baseExisting,{bookingDate});
+  vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
+  const response=await PATCH(patchRequest({status:"resolved",admin_response:"Reviewed",adjustment_amount_cents:100,adjustment_reason:"Correction"}),paramsCtx());
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({code:"historical_payout_item_deferred"});
+  expect(captured.updatePatches).toEqual([]);
+  expect(captured.adjustmentInserts).toEqual([]);
+ });
+ it("fails closed on a booking-date read error before any mutation",async()=>{
+  const {admin,captured}=makeAdmin(baseExisting,{bookingReadError:"database unavailable"});
+  vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
+  const response=await PATCH(patchRequest({status:"resolved",admin_response:"Reviewed",adjustment_amount_cents:100,adjustment_reason:"Correction"}),paramsCtx());
+  expect(response.status).toBe(500);
+  expect(captured.updatePatches).toEqual([]);
+  expect(captured.adjustmentInserts).toEqual([]);
+ });
 });

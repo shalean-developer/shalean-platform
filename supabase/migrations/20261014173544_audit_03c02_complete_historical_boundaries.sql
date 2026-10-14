@@ -4,10 +4,10 @@ begin;
 create or replace function public.audit_03c02_guard_final_booking_financials()
 returns trigger language plpgsql security definer set search_path=pg_catalog as $$
 declare v_keys text[] := array[
- 'date','cleaner_id','payout_owner_cleaner_id','team_id','is_team_job','cleaner_count','team_member_count_snapshot',
+ 'date','time','assigned_at','service','service_slug','base_amount_cents','service_fee_cents','price_snapshot','cleaner_id','payout_owner_cleaner_id','team_id','is_team_job','cleaner_count','team_member_count_snapshot',
  'cleaner_payout_cents','cleaner_bonus_cents','display_earnings_cents','internal_earnings_cents',
  'payout_earnings_cents','cleaner_earnings_total_cents','company_revenue_cents','payout_frozen_cents',
- 'earnings_summary','cleaner_line_earnings_finalized_at','earnings_model_version','payout_percentage','payout_type',
+ 'cleaner_share_percentage','earnings_summary','cleaner_line_earnings_finalized_at','earnings_model_version','payout_percentage','payout_type',
  'earnings_percentage_applied','earnings_cap_cents_applied','earnings_tenure_months_at_assignment'];
  v_before jsonb; v_after jsonb;
 begin
@@ -25,6 +25,8 @@ begin
  end if;
  select jsonb_object_agg(key,value) into v_before from jsonb_each(to_jsonb(OLD)) where key=any(v_keys);
  select jsonb_object_agg(key,value) into v_after from jsonb_each(to_jsonb(NEW)) where key=any(v_keys);
+ v_before:=v_before || jsonb_build_object('locked_booking_basis',to_jsonb(OLD)->'booking_snapshot'->'locked');
+ v_after:=v_after || jsonb_build_object('locked_booking_basis',to_jsonb(NEW)->'booking_snapshot'->'locked');
  if v_before is distinct from v_after and
    (OLD.date is null or OLD.date::date < date '2026-10-01' or NEW.date is null or NEW.date::date < date '2026-10-01') then
    raise exception 'historical_payout_item_deferred' using errcode='23514';
@@ -112,5 +114,7 @@ for each row execute function public.audit_03c02_guard_detail_financials();
 create trigger audit_03c02_snapshot_financials before insert or update or delete on public.booking_cleaner_earnings_snapshot
 for each row execute function public.audit_03c02_guard_detail_financials();
 create trigger audit_03c02_snapshot_line_financials before insert or update or delete on public.booking_cleaner_earnings_snapshot_lines
+for each row execute function public.audit_03c02_guard_detail_financials();
+create trigger audit_03c02_manual_adjustment_financials before insert or update or delete on public.cleaner_earnings_adjustments
 for each row execute function public.audit_03c02_guard_detail_financials();
 commit;
