@@ -92,6 +92,9 @@ jobs:
           # Credential-free one-shot diagnostic. Outside document root and never auto-invoked.
           mkdir -p "$STAGE/private-audit"
           install -m 0600 apps/web/scripts/audit03a02b2PleskEnvPreflight.mjs "$STAGE/private-audit/audit03a02b2PleskEnvPreflight.mjs"
+          # Synthetic-only Node 24 packaging proof; not a Zoho audit runner.
+          install -m 0600 apps/web/scripts/audit03a02b2PrivatePackageProof.mjs "$STAGE/private-audit/audit03a02b2PrivatePackageProof.mjs"
+          test ! -e "$STAGE/public/private-audit/audit03a02b2PrivatePackageProof.mjs"
           test ! -e "$STAGE/public/private-audit/audit03a02b2PleskEnvPreflight.mjs"
           node --test apps/web/scripts/audit03a02b2PleskEnvPreflight.test.mjs
           cat > "$STAGE/build-meta.json" <<META
