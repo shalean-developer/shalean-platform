@@ -1,20 +1,21 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const successEffect = vi.hoisted(() => vi.fn());
+const paymentEffect = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/recurring/refreshRecurringPaymentStateForBooking", () => ({ refreshRecurringPaymentStateForBooking: successEffect }));
 vi.mock("@/lib/booking/promoteV2TeamBookingAfterPayment", () => ({ promoteV2TeamBookingAfterPayment: successEffect }));
 vi.mock("@/lib/booking/persistPreferredCleaners", () => ({ syncPreferredCleanerRosterFromBookingRow: successEffect }));
-vi.mock("@/lib/referrals/server", () => ({ createPendingCustomerReferral: successEffect, processCustomerReferralAfterFirstPaidBooking: successEffect }));
+vi.mock("@/lib/referrals/server", () => ({ createPendingCustomerReferral: paymentEffect, processCustomerReferralAfterFirstPaidBooking: paymentEffect }));
 vi.mock("@/lib/dispatch/preferredCleanerDispatch", () => ({ startPreferredCleanerDispatchAfterPayment: successEffect }));
 vi.mock("@/lib/admin/runAdminAssignSmart", () => ({ runAdminAssignSmart: successEffect }));
 vi.mock("@/lib/marketplace-intelligence/assignBestCleaner", () => ({ assignBestCleaner: successEffect }));
 vi.mock("@/lib/dispatch/notifyCleanerAssigned", () => ({ notifyCleanerAssignedBooking: successEffect }));
-vi.mock("@/lib/booking/recordBookingSideEffects", () => ({ recordBookingSideEffects: successEffect }));
-vi.mock("@/lib/booking/cancelUnsentBookingPaymentRecoveryJobs", () => ({ cancelUnsentBookingPaymentRecoveryJobs: successEffect }));
-vi.mock("@/lib/growth/syncPrimaryCity", () => ({ syncUserPrimaryCityFromBooking: successEffect }));
-vi.mock("@/lib/growth/growthActionOutcomes", () => ({ attributePaidBookingToGrowthOutcomes: successEffect }));
-vi.mock("@/lib/conversion/conversionExperimentOutcomes", () => ({ recordConversionExperimentResultsOnPayment: successEffect }));
-vi.mock("@/lib/ai-autonomy/learningLoop", () => ({ learnFromPaymentSuccess: successEffect }));
+vi.mock("@/lib/booking/recordBookingSideEffects", () => ({ recordBookingSideEffects: paymentEffect }));
+vi.mock("@/lib/booking/cancelUnsentBookingPaymentRecoveryJobs", () => ({ cancelUnsentBookingPaymentRecoveryJobs: paymentEffect }));
+vi.mock("@/lib/growth/syncPrimaryCity", () => ({ syncUserPrimaryCityFromBooking: paymentEffect }));
+vi.mock("@/lib/growth/growthActionOutcomes", () => ({ attributePaidBookingToGrowthOutcomes: paymentEffect }));
+vi.mock("@/lib/conversion/conversionExperimentOutcomes", () => ({ recordConversionExperimentResultsOnPayment: paymentEffect }));
+vi.mock("@/lib/ai-autonomy/learningLoop", () => ({ learnFromPaymentSuccess: paymentEffect }));
 vi.mock("@/lib/payout/persistCleanerPayout", () => ({ persistCleanerPayoutIfUnset: successEffect }));
 vi.mock("@/lib/booking/resolveBookingUserId", () => ({ resolveBookingUserId: vi.fn().mockResolvedValue(null) }));
 vi.mock("@/lib/booking/checkoutCleanerEligibility", () => ({
@@ -456,10 +457,13 @@ describe("observed pending upsert conflict propagation", () => {
     const db = pendingDb("paystack_reference", {}, {
       date, recurring_id: "00000000-0000-4000-8000-000000000002", is_recurring_generated: true,
     });
-    const result = await upsertBookingFromPaystack(input({ paystackAuthorizationCode: "AUTH_verified" }));
+    const result = await upsertBookingFromPaystack(input({ paystackAuthorizationCode: "AUTH_verified", deferPostPersistSideEffects: true }));
     expect(result).toMatchObject({ ok: true, bookingId });
     expect(db.writes).toHaveBeenCalledWith(expect.objectContaining({ paystack_authorization_code: "AUTH_verified" }));
     expect(successEffect).toHaveBeenCalledExactlyOnceWith(expect.anything(), bookingId);
+    expect(paymentEffect).toHaveBeenCalledWith(expect.objectContaining({bookingId,skipLifecycleJobs:true,amountCents:12550}));
+    expect(paymentEffect).toHaveBeenCalledWith(expect.anything(),bookingId);
+    expect(paymentEffect).toHaveBeenCalledWith(expect.objectContaining({bookingId,amountCents:12550,paidAtIso:expect.any(String)}));
     expect(db.writes.mock.invocationCallOrder[0]).toBeLessThan(successEffect.mock.invocationCallOrder[0]);
     expect(enqueueFailedJob).not.toHaveBeenCalled();
   });

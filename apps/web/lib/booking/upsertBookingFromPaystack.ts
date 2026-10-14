@@ -1402,30 +1402,31 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   if (historicalCapture) {
     await saveRecurringAuthorization();
     await refreshRecurringPaymentStateForBooking(supabase, id);
-    return {ok:true,skipped:false,bookingId:id,bookingInDatabase:true};
   }
 
   const runPostPersistSideEffects = async (): Promise<void> => {
   if (id) {
-    await saveRecurringAuthorization();
+    if (!historicalCapture) {
+      await saveRecurringAuthorization();
 
-    const v2TeamPromote = await promoteV2TeamBookingAfterPayment(supabase, id);
-    if (!v2TeamPromote.ok) {
-      void reportOperationalIssue("warn", "upsertBookingFromPaystack", v2TeamPromote.error, {
-        bookingId: id,
-        paystackReference: input.paystackReference,
+      const v2TeamPromote = await promoteV2TeamBookingAfterPayment(supabase, id);
+      if (!v2TeamPromote.ok) {
+        void reportOperationalIssue("warn", "upsertBookingFromPaystack", v2TeamPromote.error, {
+          bookingId: id,
+          paystackReference: input.paystackReference,
+        });
+      }
+
+      await syncPreferredCleanerRosterFromBookingRow(supabase, id, {
+        booking_snapshot: pendingExisting?.booking_snapshot ?? bookingSnapshotMerged,
+        selected_cleaner_id:
+          userConfirmedCleanerId ??
+          normalizedPickedCleaner ??
+          (typeof existingPersistedSelectedCleanerId === "string" ? existingPersistedSelectedCleanerId : null) ??
+          pendingExisting?.selected_cleaner_id ??
+          null,
       });
     }
-
-    await syncPreferredCleanerRosterFromBookingRow(supabase, id, {
-      booking_snapshot: pendingExisting?.booking_snapshot ?? bookingSnapshotMerged,
-      selected_cleaner_id:
-        userConfirmedCleanerId ??
-        normalizedPickedCleaner ??
-        (typeof existingPersistedSelectedCleanerId === "string" ? existingPersistedSelectedCleanerId : null) ??
-        pendingExisting?.selected_cleaner_id ??
-        null,
-    });
 
     const referralCode = String(input.paystackMetadata?.referral_code ?? input.paystackMetadata?.client_referralCode ?? "").trim();
     if (referralCode) {
@@ -1455,122 +1456,156 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       console.warn("Subscriptions deprecated — ignoring subscriptionFrequency", { subscriptionFrequency });
     }
 
-    /** Customer-picked cleaner: dispatch offer first; assignment finalizes on accept (see `acceptDispatchOffer`). */
-    const dispatchOfferCleanerId = recurringDirectAssignCleanerId
-      ? null
-      : checkoutPaidDispatchOfferCleanerId({
-      checkoutResolution,
-      userConfirmedCleanerId,
-      normalizedPickedCleaner,
-    });
-    if (dispatchOfferCleanerId) {
-      const { dateYmd: dispatchDate, timeHm: dispatchTime } = resolvePreferredDispatchScheduleAtPayment({
-        finalizeRow: row,
-        pendingRow: pendingExisting,
-        lockedRow,
-        bookingSnapshot: preservedSnapshot,
+    if (!historicalCapture) {
+      /** Customer-picked cleaner: dispatch offer first; assignment finalizes on accept (see `acceptDispatchOffer`). */
+      const dispatchOfferCleanerId = recurringDirectAssignCleanerId
+        ? null
+        : checkoutPaidDispatchOfferCleanerId({
+        checkoutResolution,
+        userConfirmedCleanerId,
+        normalizedPickedCleaner,
       });
-      const { data: priorityRow } = await supabase
-        .from("bookings")
-        .select("booking_priority, dispatch_attempt_count")
-        .eq("id", id)
-        .maybeSingle();
-      const dispatchResult = await startPreferredCleanerDispatchAfterPayment(supabase, {
-        bookingId: id,
-        preferredCleanerId: dispatchOfferCleanerId,
-        dateYmd: dispatchDate,
-        timeHm: dispatchTime,
-        bookingPriority:
-          priorityRow && typeof priorityRow === "object"
-            ? (priorityRow as { booking_priority?: string | null }).booking_priority
-            : null,
-        paystackReference: input.paystackReference,
-        dispatchAttemptCount:
-          priorityRow && typeof priorityRow === "object"
-            ? (priorityRow as { dispatch_attempt_count?: number | null }).dispatch_attempt_count ?? 0
-            : 0,
-      });
-      if (
-        dispatchResult.kind === "preferred_offer_sent" ||
-        dispatchResult.kind === "skipped_urgent"
-      ) {
-        metrics.increment("booking.checkout_assignment", {
-          assignment_type: "user_selected",
-          bookingId: id,
-          selected_cleaner_id: dispatchOfferCleanerId,
-          phase: dispatchResult.kind === "skipped_urgent" ? "skipped_urgent_backup" : "preferred_offered",
+      if (dispatchOfferCleanerId) {
+        const { dateYmd: dispatchDate, timeHm: dispatchTime } = resolvePreferredDispatchScheduleAtPayment({
+          finalizeRow: row,
+          pendingRow: pendingExisting,
+          lockedRow,
+          bookingSnapshot: preservedSnapshot,
         });
-      } else if (dispatchResult.kind === "offer_failed") {
-        await escalateFailedCheckoutDispatchOffer({
-          supabase,
+        const { data: priorityRow } = await supabase
+          .from("bookings")
+          .select("booking_priority, dispatch_attempt_count")
+          .eq("id", id)
+          .maybeSingle();
+        const dispatchResult = await startPreferredCleanerDispatchAfterPayment(supabase, {
           bookingId: id,
+          preferredCleanerId: dispatchOfferCleanerId,
+          dateYmd: dispatchDate,
+          timeHm: dispatchTime,
+          bookingPriority:
+            priorityRow && typeof priorityRow === "object"
+              ? (priorityRow as { booking_priority?: string | null }).booking_priority
+              : null,
           paystackReference: input.paystackReference,
-          cleanerId: dispatchOfferCleanerId,
-          offerError: dispatchResult.error,
+          dispatchAttemptCount:
+            priorityRow && typeof priorityRow === "object"
+              ? (priorityRow as { dispatch_attempt_count?: number | null }).dispatch_attempt_count ?? 0
+              : 0,
         });
-        await dispatchFallbackAfterSelectedCleanerOfferInsertFailure({
-          supabase,
-          bookingId: id,
-          paystackReference: input.paystackReference,
-          failedSelectedCleanerId: dispatchOfferCleanerId,
-        });
-      }
-    } else if (!normalizedPickedCleaner) {
-      const autoAssignmentTag = selectionInvalidatedCleaner ? "auto_fallback" : "auto_dispatch";
-      const smartAssignOpts =
-        selectionInvalidatedCleaner && pickedCleanerUuid
-          ? { excludeCleanerIds: [pickedCleanerUuid] as const }
-          : undefined;
-      /** Booking V2 team checkout already selected a team — do not run marketplace auto-assign. */
-      const skipAutoDispatchForV2Team =
-        String(pendingExisting?.cleaner_mode ?? "").trim().toLowerCase() === "team" &&
-        Boolean(String(pendingExisting?.assigned_team_id ?? "").trim());
-      /** Soft ops reserves wait for manual assignment — do not auto-dispatch. */
-      const fulfillmentMode = String(
-        (pendingExisting as { fulfillment_mode?: string | null } | null | undefined)?.fulfillment_mode ?? "",
-      )
-        .trim()
-        .toLowerCase();
-      const skipAutoDispatchForOpsReserve = fulfillmentMode === "ops_assignment";
-      /** Smart dispatch unless explicitly disabled (`AUTO_DISPATCH_CLEANERS=false`). */
-      const autoDispatch =
-        process.env.AUTO_DISPATCH_CLEANERS !== "false" &&
-        !skipAutoDispatchForV2Team &&
-        !skipAutoDispatchForOpsReserve;
-      const offerAssignFallback = process.env.CHECKOUT_ADMIN_OFFER_ASSIGN_FALLBACK === "true";
-      if (autoDispatch) {
-        const r = await assignBestCleaner(supabase, id, {
-          source: "paystack_checkout",
-          smartAssign: smartAssignOpts,
-        });
-        const freshAuto = r.ok && !(r as { noOp?: boolean }).noOp;
-        if (freshAuto) {
-          await supabase
-            .from("bookings")
-            .update(
-              buildAutoAssignmentPatch(
-                autoAssignmentTag,
-                selectionInvalidatedCleaner,
-                pickedCleanerUuid,
-                checkoutFallbackReason,
-              ),
-            )
-            .eq("id", id)
-            .is("assignment_type", null);
-          if (r.assignmentKind === "individual") {
-            await notifyCleanerAssignedBooking(supabase, id, r.cleanerId);
-          }
+        if (
+          dispatchResult.kind === "preferred_offer_sent" ||
+          dispatchResult.kind === "skipped_urgent"
+        ) {
           metrics.increment("booking.checkout_assignment", {
-            assignment_type: autoAssignmentTag,
+            assignment_type: "user_selected",
             bookingId: id,
-            selected_cleaner_id: pickedCleanerUuid,
-            assigned_cleaner_id: r.assignmentKind === "individual" ? r.cleanerId : null,
-            assigned_team_id: r.assignmentKind === "team" ? r.teamId : null,
-            ...(autoAssignmentTag === "auto_fallback" && checkoutFallbackReason
-              ? { fallback_reason: checkoutFallbackReason }
-              : {}),
+            selected_cleaner_id: dispatchOfferCleanerId,
+            phase: dispatchResult.kind === "skipped_urgent" ? "skipped_urgent_backup" : "preferred_offered",
           });
-        } else if (!r.ok && offerAssignFallback) {
+        } else if (dispatchResult.kind === "offer_failed") {
+          await escalateFailedCheckoutDispatchOffer({
+            supabase,
+            bookingId: id,
+            paystackReference: input.paystackReference,
+            cleanerId: dispatchOfferCleanerId,
+            offerError: dispatchResult.error,
+          });
+          await dispatchFallbackAfterSelectedCleanerOfferInsertFailure({
+            supabase,
+            bookingId: id,
+            paystackReference: input.paystackReference,
+            failedSelectedCleanerId: dispatchOfferCleanerId,
+          });
+        }
+      } else if (!normalizedPickedCleaner) {
+        const autoAssignmentTag = selectionInvalidatedCleaner ? "auto_fallback" : "auto_dispatch";
+        const smartAssignOpts =
+          selectionInvalidatedCleaner && pickedCleanerUuid
+            ? { excludeCleanerIds: [pickedCleanerUuid] as const }
+            : undefined;
+        /** Booking V2 team checkout already selected a team — do not run marketplace auto-assign. */
+        const skipAutoDispatchForV2Team =
+          String(pendingExisting?.cleaner_mode ?? "").trim().toLowerCase() === "team" &&
+          Boolean(String(pendingExisting?.assigned_team_id ?? "").trim());
+        /** Soft ops reserves wait for manual assignment — do not auto-dispatch. */
+        const fulfillmentMode = String(
+          (pendingExisting as { fulfillment_mode?: string | null } | null | undefined)?.fulfillment_mode ?? "",
+        )
+          .trim()
+          .toLowerCase();
+        const skipAutoDispatchForOpsReserve = fulfillmentMode === "ops_assignment";
+        /** Smart dispatch unless explicitly disabled (`AUTO_DISPATCH_CLEANERS=false`). */
+        const autoDispatch =
+          process.env.AUTO_DISPATCH_CLEANERS !== "false" &&
+          !skipAutoDispatchForV2Team &&
+          !skipAutoDispatchForOpsReserve;
+        const offerAssignFallback = process.env.CHECKOUT_ADMIN_OFFER_ASSIGN_FALLBACK === "true";
+        if (autoDispatch) {
+          const r = await assignBestCleaner(supabase, id, {
+            source: "paystack_checkout",
+            smartAssign: smartAssignOpts,
+          });
+          const freshAuto = r.ok && !(r as { noOp?: boolean }).noOp;
+          if (freshAuto) {
+            await supabase
+              .from("bookings")
+              .update(
+                buildAutoAssignmentPatch(
+                  autoAssignmentTag,
+                  selectionInvalidatedCleaner,
+                  pickedCleanerUuid,
+                  checkoutFallbackReason,
+                ),
+              )
+              .eq("id", id)
+              .is("assignment_type", null);
+            if (r.assignmentKind === "individual") {
+              await notifyCleanerAssignedBooking(supabase, id, r.cleanerId);
+            }
+            metrics.increment("booking.checkout_assignment", {
+              assignment_type: autoAssignmentTag,
+              bookingId: id,
+              selected_cleaner_id: pickedCleanerUuid,
+              assigned_cleaner_id: r.assignmentKind === "individual" ? r.cleanerId : null,
+              assigned_team_id: r.assignmentKind === "team" ? r.teamId : null,
+              ...(autoAssignmentTag === "auto_fallback" && checkoutFallbackReason
+                ? { fallback_reason: checkoutFallbackReason }
+                : {}),
+            });
+          } else if (!r.ok && offerAssignFallback) {
+            const smart = await runAdminAssignSmart(supabase, {
+              bookingId: id,
+              force: false,
+              maxAttempts: 25,
+              cleanerIds: null,
+              autoEscalateExtremeSla: null,
+            });
+            if (smart.ok) {
+              await supabase
+                .from("bookings")
+                .update(
+                  buildAutoAssignmentPatch(
+                    autoAssignmentTag,
+                    selectionInvalidatedCleaner,
+                    pickedCleanerUuid,
+                    checkoutFallbackReason,
+                  ),
+                )
+                .eq("id", id)
+                .is("assignment_type", null);
+              await notifyCleanerAssignedBooking(supabase, id, smart.cleanerId);
+              metrics.increment("booking.checkout_assignment", {
+                assignment_type: autoAssignmentTag,
+                bookingId: id,
+                selected_cleaner_id: pickedCleanerUuid,
+                assigned_cleaner_id: smart.cleanerId,
+                ...(autoAssignmentTag === "auto_fallback" && checkoutFallbackReason
+                  ? { fallback_reason: checkoutFallbackReason }
+                  : {}),
+              });
+            }
+          }
+        } else if (offerAssignFallback) {
           const smart = await runAdminAssignSmart(supabase, {
             bookingId: id,
             force: false,
@@ -1603,38 +1638,6 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
             });
           }
         }
-      } else if (offerAssignFallback) {
-        const smart = await runAdminAssignSmart(supabase, {
-          bookingId: id,
-          force: false,
-          maxAttempts: 25,
-          cleanerIds: null,
-          autoEscalateExtremeSla: null,
-        });
-        if (smart.ok) {
-          await supabase
-            .from("bookings")
-            .update(
-              buildAutoAssignmentPatch(
-                autoAssignmentTag,
-                selectionInvalidatedCleaner,
-                pickedCleanerUuid,
-                checkoutFallbackReason,
-              ),
-            )
-            .eq("id", id)
-            .is("assignment_type", null);
-          await notifyCleanerAssignedBooking(supabase, id, smart.cleanerId);
-          metrics.increment("booking.checkout_assignment", {
-            assignment_type: autoAssignmentTag,
-            bookingId: id,
-            selected_cleaner_id: pickedCleanerUuid,
-            assigned_cleaner_id: smart.cleanerId,
-            ...(autoAssignmentTag === "auto_fallback" && checkoutFallbackReason
-              ? { fallback_reason: checkoutFallbackReason }
-              : {}),
-          });
-        }
       }
     }
     const createdAt =
@@ -1654,6 +1657,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         createdAt: createdAt || new Date().toISOString(),
         appointmentDateYmd: locked?.date ?? null,
         appointmentTimeHm: locked?.time ?? null,
+        skipLifecycleJobs: historicalCapture,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -1663,67 +1667,79 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       });
     }
 
-    void syncUserPrimaryCityFromBooking(supabase, userIdForEffects, cityId);
-    void processCustomerReferralAfterFirstPaidBooking({
+    const paymentEffects = await Promise.allSettled([
+      syncUserPrimaryCityFromBooking(supabase, userIdForEffects, cityId),
+      processCustomerReferralAfterFirstPaidBooking({
       admin: supabase,
       bookingUserId: userIdForEffects,
       customerEmail: emailStored,
       bookingId: id,
-    });
-    void attributePaidBookingToGrowthOutcomes({
+    }),
+      attributePaidBookingToGrowthOutcomes({
       admin: supabase,
       userId: userIdForEffects,
       bookingId: id,
       amountCents: input.amountCents,
       paidAtIso: paidMoment,
-    });
-    void recordConversionExperimentResultsOnPayment(supabase, {
+    }),
+      recordConversionExperimentResultsOnPayment(supabase, {
       bookingId: id,
       userId: userIdForEffects,
       revenueCents: input.amountCents,
       paidAtIso: paidMoment,
-    });
-    void learnFromPaymentSuccess(supabase, {
+    }),
+      learnFromPaymentSuccess(supabase, {
       userId: userIdForEffects,
       bookingId: id,
       amountCents: input.amountCents,
-    });
-
-    const { data: persistedForEarnings } = await supabase
-      .from("bookings")
-      .select("status, cleaner_id, payout_owner_cleaner_id, is_team_job")
-      .eq("id", id)
-      .maybeSingle();
-    if (
-      persistedForEarnings &&
-      String((persistedForEarnings as { status?: string | null }).status ?? "").toLowerCase() === "completed"
-    ) {
-      const persistCleanerId = resolvePersistCleanerIdForBooking(persistedForEarnings as BookingPersistIdsRow);
-      if (persistCleanerId) {
-        void logSystemEvent({
-          level: "info",
-          source: "upsertBookingFromPaystack",
-          message: "earnings_trigger_completed_status",
-          context: { bookingId: id, paystackReference: input.paystackReference },
-        });
-        const pr = await persistCleanerPayoutIfUnset({
-          admin: supabase,
+    }),
+    ]);
+    for (const effect of paymentEffects) {
+      if (effect.status === "rejected") {
+        await reportOperationalIssue("warn", "upsertBookingFromPaystack", "payment attribution effect failed", {
           bookingId: id,
-          cleanerId: persistCleanerId,
+          error: effect.reason instanceof Error ? effect.reason.message : String(effect.reason),
         });
-        if (!pr.ok) {
-          void reportOperationalIssue("warn", "upsertBookingFromPaystack", pr.error ?? "persist failed", {
+      }
+    }
+
+    if (!historicalCapture) {
+      const { data: persistedForEarnings } = await supabase
+        .from("bookings")
+        .select("status, cleaner_id, payout_owner_cleaner_id, is_team_job")
+        .eq("id", id)
+        .maybeSingle();
+      if (
+        persistedForEarnings &&
+        String((persistedForEarnings as { status?: string | null }).status ?? "").toLowerCase() === "completed"
+      ) {
+        const persistCleanerId = resolvePersistCleanerIdForBooking(persistedForEarnings as BookingPersistIdsRow);
+        if (persistCleanerId) {
+          void logSystemEvent({
+            level: "info",
+            source: "upsertBookingFromPaystack",
+            message: "earnings_trigger_completed_status",
+            context: { bookingId: id, paystackReference: input.paystackReference },
+          });
+          const pr = await persistCleanerPayoutIfUnset({
+            admin: supabase,
             bookingId: id,
             cleanerId: persistCleanerId,
           });
+          if (!pr.ok) {
+            void reportOperationalIssue("warn", "upsertBookingFromPaystack", pr.error ?? "persist failed", {
+              bookingId: id,
+              cleanerId: persistCleanerId,
+            });
+          }
+        } else {
+          void logSystemEvent({
+            level: "warn",
+            source: "upsertBookingFromPaystack",
+            message: "earnings_skipped_completed_missing_cleaner",
+            context: { bookingId: id },
+          });
         }
-      } else {
-        void logSystemEvent({
-          level: "warn",
-          source: "upsertBookingFromPaystack",
-          message: "earnings_skipped_completed_missing_cleaner",
-          context: { bookingId: id },
-        });
       }
     }
 
@@ -1742,7 +1758,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   }
   };
 
-  if (input.deferPostPersistSideEffects) {
+  if (input.deferPostPersistSideEffects && !historicalCapture) {
     after(async () => {
       try {
         await runPostPersistSideEffects();

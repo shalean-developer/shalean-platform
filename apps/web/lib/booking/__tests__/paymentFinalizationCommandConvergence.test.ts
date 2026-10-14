@@ -53,7 +53,7 @@ describe("payment finalization booking command convergence (Phase 1F)", () => {
 
     expect(paystackSrc).toContain("const runRequiredPostPersistRecovery = async");
     expect(paystackSrc.indexOf("await runRequiredPostPersistRecovery()")).toBeLessThan(
-      paystackSrc.indexOf("if (input.deferPostPersistSideEffects)"),
+      paystackSrc.indexOf("if (input.deferPostPersistSideEffects && !historicalCapture)"),
     );
   });
 

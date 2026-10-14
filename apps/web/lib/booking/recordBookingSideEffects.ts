@@ -14,6 +14,8 @@ type Params = {
   /** From booking snapshot `locked` — drives lifecycle schedule (SAST). */
   appointmentDateYmd: string | null | undefined;
   appointmentTimeHm: string | null | undefined;
+  /** Verified historical capture records payment facts without starting old service reminders. */
+  skipLifecycleJobs?: boolean;
 };
 
 /**
@@ -80,7 +82,7 @@ export async function recordBookingSideEffects(params: Params): Promise<void> {
     }
   }
 
-  if (!email || email.length < 3) return;
+  if (params.skipLifecycleJobs || !email || email.length < 3) return;
 
   try {
     await scheduleBookingLifecycleJobs(params.supabase, {
