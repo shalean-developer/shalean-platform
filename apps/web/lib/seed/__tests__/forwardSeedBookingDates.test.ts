@@ -10,6 +10,14 @@ describe('governed seed booking timeline',()=>{
   expect(result.dates).toHaveLength(15);
   expect(result.dates.every((date:string)=>/^\d{4}-\d{2}-\d{2}$/.test(date)&&date>='2026-10-01')).toBe(true);
  });
+ it.each(['2026-10-14','2026-11-01','2026-12-01'])('keeps all actual staging reseed fixtures insertable at %s',async(today)=>{
+  const {buildNonprodBookingFixtures}=await import(pathToFileURL(resolve(root,'scripts/env/nonprodBookingFixtures.mjs')).href);
+  const rows=buildNonprodBookingFixtures('staging','test-marker','test-customer',new Date(today+'T12:00:00Z'));
+  expect(rows).toHaveLength(3);
+  expect(rows.every((row:{date:string})=>/^\d{4}-\d{2}-\d{2}$/.test(row.date)&&row.date>='2026-10-01')).toBe(true);
+  expect(rows.map((row:{amount_paid_cents:number})=>row.amount_paid_cents)).toEqual([0,20000,0]);
+  expect(rows.every((row:{customer_id:string,is_test:boolean})=>row.customer_id==='test-customer'&&row.is_test)).toBe(true);
+ });
  it.each(['2026-10-14','2026-11-01','2026-12-01'])('keeps the complete relative timeline forward at %s',async(today)=>{
   const {forwardSeedBookingDate}=await import(pathToFileURL(resolve(root,'scripts/lib/forwardSeedBookingDate.mjs')).href);
   const dates=[-42,-30,-21,-14,-7,-3,0,3,10].map(offset=>forwardSeedBookingDate(offset,new Date(today+'T12:00:00Z')));

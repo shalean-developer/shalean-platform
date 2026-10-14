@@ -11,6 +11,7 @@
  * Requires docs/audits/environments/evidence/.secrets-local/staging.keys.env
  * (gitignored). Never prints secret values.
  */
+import { buildNonprodBookingFixtures } from "./nonprodBookingFixtures.mjs";
 import { createRequire } from "node:module";
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -160,62 +161,7 @@ async function seedBookings(admin, env, isolationMarker, retainedReferences = ne
   const customer = listed?.users?.find((x) => x.email === customerEmail);
   if (!customer) throw new Error("customer auth user missing");
 
-  const fixtures = [
-    {
-      paystack_reference: `${isolationMarker}-pending`,
-      status: "pending",
-      payment_status: "pending",
-      amount_paid_cents: 0,
-      payment_method: "card",
-      service_slug: "standard-cleaning",
-      customer_name: `TEST ${env} Customer`,
-      customer_email: customerEmail,
-      customer_phone: "+27000000000",
-      customer_id: customer.id,
-      is_test: true,
-      total_price: 450,
-      price_snapshot: { env03: true, marker: isolationMarker, total: 450, kind: "pending" },
-      metadata: { env03: true, marker: isolationMarker, kind: "pending" },
-      suburb: "TEST Suburb",
-      city: "Cape Town",
-    },
-    {
-      paystack_reference: `${isolationMarker}-partial`,
-      status: "pending",
-      payment_status: "pending",
-      amount_paid_cents: 20000,
-      payment_method: "card",
-      service_slug: "standard-cleaning",
-      customer_name: `TEST ${env} Customer`,
-      customer_email: customerEmail,
-      customer_phone: "+27000000000",
-      customer_id: customer.id,
-      is_test: true,
-      total_price: 450,
-      price_snapshot: { env03: true, marker: isolationMarker, total: 450, kind: "partial" },
-      metadata: { env03: true, marker: isolationMarker, kind: "partial" },
-      suburb: "TEST Suburb",
-      city: "Cape Town",
-    },
-    {
-      paystack_reference: `${isolationMarker}-zerocash`,
-      status: "pending",
-      payment_status: "pending",
-      amount_paid_cents: 0,
-      payment_method: "eft",
-      service_slug: "standard-cleaning",
-      customer_name: `TEST ${env} Customer`,
-      customer_email: customerEmail,
-      customer_phone: "+27000000000",
-      customer_id: customer.id,
-      is_test: true,
-      total_price: 0,
-      price_snapshot: { env03: true, marker: isolationMarker, total: 0, kind: "zero_cash" },
-      metadata: { env03: true, marker: isolationMarker, kind: "zero_cash" },
-      suburb: "TEST Suburb",
-      city: "Cape Town",
-    },
-  ];
+  const fixtures = buildNonprodBookingFixtures(env, isolationMarker, customer.id);
 
   for (const row of fixtures) {
     if (retainedReferences.has(row.paystack_reference)) {
