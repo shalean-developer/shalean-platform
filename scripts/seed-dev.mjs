@@ -989,10 +989,11 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       dispatch_status: "assigned",
     }),
 
-    // 14. Draft booking — C5, incomplete
+    // 14. Draft booking — C5, incomplete but scheduled within the forward boundary
     booking({
       id: BOOKING_IDS.draft,
       paystack_reference: `${SEED_TAG}-BK-014`,
+      date: isoDate(3),
       customer_email: "customer.five@example.com",
       customer_name: "Dev Customer Five",
       customer_phone: TEST_PHONES.cust5,
