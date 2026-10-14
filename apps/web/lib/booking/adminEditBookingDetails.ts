@@ -51,7 +51,7 @@ export type AdminEditBookingDetailsResult =
   | { ok: false; status: 409; conflict: true; message: string };
 
 /** True when the edit-details body updates admin notes only (no bedrooms/bathrooms/extras). */
-export function isAdminEditBookingDetailsNotesOnlyBody(body: AdminEditBookingDetailsBody): boolean {
+export function isAdminEditBookingDetailsNotesOnlyBody(body: Pick<AdminEditBookingDetailsBody, "bedrooms" | "bathrooms" | "extras" | "notes">): boolean {
   const wantsRooms = body.bedrooms !== undefined;
   const wantsBaths = body.bathrooms !== undefined;
   const wantsExtras = body.extras !== undefined;
