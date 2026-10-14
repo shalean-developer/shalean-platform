@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 const root = resolve(process.cwd(), '../..');
 describe('governed seed booking timeline',()=>{
  it('validates all 15 actual fixtures without credentials or database access',()=>{
-  const result=JSON.parse(execFileSync(process.execPath,[resolve(root,'scripts/seed-dev.mjs'),'--validate-bookings'],{encoding:'utf8',env:{PATH:process.env.PATH}}));
+  const result=JSON.parse(execFileSync(process.execPath,[resolve(root,'scripts/seed-dev.mjs'),'--validate-bookings'],{encoding:'utf8',env:{NODE_ENV:"test",PATH:process.env.PATH}}));
   expect(result.bookings).toBe(15);
   expect(result.dates).toHaveLength(15);
   expect(result.dates.every((date:string)=>/^\d{4}-\d{2}-\d{2}$/.test(date)&&date>='2026-10-01')).toBe(true);

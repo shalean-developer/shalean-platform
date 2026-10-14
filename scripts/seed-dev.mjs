@@ -21,6 +21,7 @@
  *   SUPABASE_SERVICE_ROLE_KEY
  */
 
+import { buildFinanceSeedPlan, writeFinanceSeedPlan, paidSeedBookingDate, seedFinanceCalendar } from "./lib/financeSeedPolicy.mjs";
 import { forwardSeedBookingDate } from "./lib/forwardSeedBookingDate.mjs";
 import { createRequire } from "node:module";
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
@@ -728,7 +729,7 @@ function buildSeedBookings(userIdMap, locationIdMap) {
       rooms: 3, bathrooms: 2,
       location: "Sea Point", suburb: "Sea Point", city: "Cape Town",
       location_id: seaPtLocId,
-      date: forwardSeedBookingDate(-14), time: "09:00",
+      date: paidSeedBookingDate(4, -14), time: "09:00",
       price_snapshot: { basePrice: 350, bedrooms: 3, bathrooms: 2, pricePerBedroom: 80, pricePerBathroom: 60, total: 548 },
       display_earnings_cents: 29800, payout_earnings_cents: 29800, internal_earnings_cents: 25000,
       // eligible + frozen_cents satisfies bookings_eligible_paid_require_frozen_cents constraint
@@ -959,7 +960,7 @@ function buildSeedBookings(userIdMap, locationIdMap) {
       rooms: 3, bathrooms: 0,
       location: "Sea Point", suburb: "Sea Point", city: "Cape Town",
       location_id: seaPtLocId,
-      date: forwardSeedBookingDate(-42), time: "09:00",
+      date: paidSeedBookingDate(7, -42), time: "09:00",
       price_snapshot: { basePrice: 500, bedrooms: 3, total: 650 },
       display_earnings_cents: 36400, payout_earnings_cents: 36400, internal_earnings_cents: 28600,
       payout_status: "eligible", payout_frozen_cents: 36400,
@@ -1169,18 +1170,6 @@ async function seedFinance(admin, userIdMap) {
     },
   ];
 
-  for (const row of earnings) {
-    // Idempotent: delete-and-reinsert by known id
-    await admin.from("cleaner_earnings").upsert(row, { onConflict: "id" });
-  }
-
-  // cleaner_payout_runs
-  await admin.from("cleaner_payout_runs").upsert([
-    { id: PAYOUT_RUN_IDS.draft,    status: "draft",    total_amount_cents: 0 },
-    { id: PAYOUT_RUN_IDS.approved, status: "approved", total_amount_cents: 183600,
-      approved_at: new Date(Date.now() - 4*24*3600*1000).toISOString() },
-  ], { onConflict: "id" });
-
   // cleaner_payouts
   const payoutPeriodStart = lastMonthStart();
   const payoutPeriodEnd   = lastMonthEnd();
@@ -1192,16 +1181,16 @@ async function seedFinance(admin, userIdMap) {
       period_start: payoutPeriodStart, period_end: payoutPeriodEnd,
       payment_status: "pending",
     },
-    // Cleaner1: frozen (batched in draft run)
+    // Cleaner3: frozen standalone fixture; runs come from the application workflow
     {
-      id: PAYOUT_IDS.p2_frozen, cleaner_id: CLEANER_IDS.c1,
+      id: PAYOUT_IDS.p2_frozen, cleaner_id: CLEANER_IDS.c3,
       total_amount_cents: 36400, status: "frozen",
       period_start: isoDate(-35), period_end: isoDate(-28),
       payout_run_id: PAYOUT_RUN_IDS.draft,
       frozen_at: new Date(Date.now() - 2*24*3600*1000).toISOString(),
       payment_status: "pending",
     },
-    // Cleaner2: approved (in approved run)
+    // Cleaner2: approved standalone fixture
     {
       id: PAYOUT_IDS.p3_approved, cleaner_id: CLEANER_IDS.c2,
       total_amount_cents: 30140, status: "approved",
@@ -1228,11 +1217,11 @@ async function seedFinance(admin, userIdMap) {
     },
   ];
 
-  for (const p of payouts) {
-    await admin.from("cleaner_payouts").upsert(p, { onConflict: "id" });
-  }
-
-  return { earningsCount: earnings.length, payoutsCount: payouts.length };
+  const {data: bookingRows,error: bookingError}=await admin.from("bookings").select("id,date").in("id",earnings.map(row=>row.booking_id));
+  if(bookingError)throw new Error(`Finance seed booking dates: ${bookingError.message}`);
+  const bookingDates=new Map((bookingRows??[]).map(row=>[row.id,row.date]));
+  const plan=buildFinanceSeedPlan({earnings,payouts,bookingDates});
+  return writeFinanceSeedPlan(admin,plan);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1789,7 +1778,7 @@ async function main() {
     console.log(`  Dispatch teams: ${DEV_TEAMS.length} move-clean teams`);
     console.log("  Bookings: 15 representative");
     console.log("  Recurring: 3 (weekly, fortnightly, monthly)");
-    console.log("  Earnings: 5 | Payout runs: 2 | Payouts: 5");
+    console.log(`  Earnings: 5 | Payout runs: 0 (application-generated) | Payouts: ${seedFinanceCalendar().closedPeriod ? 5 : 0}`);
     console.log("  Monthly invoices: 2");
     console.log("  Admin proposals: 5 (pending/rejected/approved/expired)");
     return;
@@ -1835,8 +1824,9 @@ async function main() {
   console.log(`  Recurring: ${recurringCount}`);
 
   console.log("[seed-dev] Phase 8: Finance (earnings, payouts)");
-  const { earningsCount, payoutsCount } = await seedFinance(admin, userIdMap);
+  const { earningsCount, payoutsCount, runsCount, deferredReason } = await seedFinance(admin, userIdMap);
   console.log(`  Earnings: ${earningsCount} | Payouts: ${payoutsCount}`);
+  if(deferredReason)console.log(`  Finance fixtures: ${deferredReason}`);
 
   console.log("[seed-dev] Phase 9: Monthly Invoices");
   const invoiceCount = await seedInvoices(admin, userIdMap);
@@ -1855,7 +1845,7 @@ async function main() {
   console.log("  Cleaners: 6  |  cleaner_locations: up to 12  |  cleaner_availability: ~120 rows");
   console.log(`  Dispatch teams: ${teamCount}`);
   console.log(`  Bookings: ${bookingCount}  |  Recurring: ${recurringCount}`);
-  console.log(`  Earnings: ${earningsCount}  |  Payout runs: 2  |  Payouts: ${payoutsCount}`);
+  console.log(`  Earnings: ${earningsCount}  |  Payout runs: ${runsCount}  |  Payouts: ${payoutsCount}`);
   console.log(`  Monthly invoices: ${invoiceCount}  |  Admin proposals: ${proposalCount}`);
   console.log("\n[seed-dev] CONFIRM: no production PII, auth, payment, or banking data was seeded.");
 }
