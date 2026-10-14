@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   BOOKING_SELECT_FIELDS_FOR_WEEKLY_BATCH_ELIGIBILITY,
@@ -82,7 +83,7 @@ export async function listRosterMemberWeeklyPayoutCandidates(params: {
     if (!id || !bookingId) continue;
 
     const booking = bookingById.get(bookingId);
-    if (!booking) continue;
+    if (!booking || !isCurrentPayoutVisitDate(booking.date)) continue;
 
     const ymd = weeklyBatchDayYmd(booking);
     if (!ymd || !isYmdInInclusiveRange(ymd, periodStart, periodEnd)) continue;

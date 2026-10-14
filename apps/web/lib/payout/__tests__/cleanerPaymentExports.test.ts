@@ -17,9 +17,20 @@ vi.mock("@/lib/supabase/admin", () => ({ getSupabaseAdmin: () => database() }));
 import { GET as singleExport } from "@/app/api/admin/payouts/[id]/export/route";
 import { GET as runExport } from "@/app/api/admin/payouts/runs/[id]/export/route";
 import { loadCleanerPaymentIdentities } from "../loadCleanerPaymentIdentities";
-beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date("2026-11-01T00:00:00+02:00")); payout.status = "approved"; payout.period_end = "2026-10-31"; state.allowed = true; state.cleanerError = null; state.cleanerRows = [{ id: "cleaner-1", full_name: "Example Cleaner", payment_id: "SHL-CL-000001" }]; });
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date("2026-11-01T00:00:00+02:00")); payout.status = "approved"; payout.period_start = "2026-10-01"; payout.period_end = "2026-10-31"; state.allowed = true; state.cleanerError = null; state.cleanerRows = [{ id: "cleaner-1", full_name: "Example Cleaner", payment_id: "SHL-CL-000001" }]; });
 afterEach(() => { vi.useRealTimers(); });
 describe("bank payment CSV identity", () => {
+  it("blocks approved September bank instructions and retains history without an actionable reference", async () => {
+    payout.period_start = "2026-09-01";
+    payout.period_end = "2026-09-30";
+    const single = await singleExport(new Request("https://example.com"), { params: Promise.resolve({ id: "payout-1" }) });
+    expect(single.status).toBe(409);
+    const report = await runExport(new Request("https://example.com"), { params: Promise.resolve({ id: "run-1" }) });
+    expect(report.status).toBe(200);
+    const csv = await report.text();
+    expect(csv).toContain("2026-09-01");
+    expect(csv).not.toContain("SHL-CL-000001-202609");
+  });
   it.each(["pending", "frozen", "cancelled", "paid", "processing", "unknown"])("rejects bank instructions for %s payouts", async status => {
     payout.status = status;
     const r = await singleExport(new Request("https://example.com"), { params: Promise.resolve({ id: "payout-1" }) });

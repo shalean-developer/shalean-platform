@@ -1,5 +1,5 @@
 import { cleanerPaymentReference } from "@/lib/payout/cleanerPaymentReference";
-import { isClosedMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
+import { isProcessableClosedPayoutPeriod } from "@/lib/payout/payoutProcessingCutoff";
 import { NextResponse } from "next/server";
 import { getPayoutDisbursementRunDetail } from "@/lib/admin/payoutDisbursementRuns";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
@@ -55,7 +55,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       csvCell(p.cleaner_id),
       csvCell(p.cleaner_name),
       csvCell(p.cleaner_payment_id),
-      csvCell(p.cleaner_payment_id && p.status === "approved" && isClosedMonthlyPayoutBatchPeriod(p.period_start, p.period_end)
+      csvCell(p.cleaner_payment_id && p.status === "approved" && isProcessableClosedPayoutPeriod(p.period_start, p.period_end)
         ? cleanerPaymentReference(p.cleaner_payment_id, p.period_start.slice(0, 7)) : ""),
       csvCell(p.total_amount_cents),
       csvCell(Math.round(p.total_amount_cents / 100)),

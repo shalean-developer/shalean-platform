@@ -1,3 +1,4 @@
+import { validateTransferProcessingCutoff } from "@/lib/payout/validateTransferProcessingCutoff";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -103,6 +104,8 @@ async function validateCleanerPayoutBeforeProviderPost(
   params: SubmitPaystackTransferParams,
   amount: number,
 ): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+  const cutoff = await validateTransferProcessingCutoff(admin, params.rail, params.subjectId);
+  if (!cutoff.ok) return cutoff;
   if (params.rail !== "cleaner_payout") return { ok: true };
 
   const { data: payoutData, error: payoutErr } = await admin
@@ -363,6 +366,9 @@ export async function submitPaystackTransferViaOutbox(
   if (amount <= 0) return { ok: false, error: "Transfer amount must be positive.", status: 400 };
   if (!params.recipientCode.trim()) return { ok: false, error: "Missing recipient_code.", status: 400 };
   if (!params.reference.trim()) return { ok: false, error: "Missing immutable reference.", status: 400 };
+
+  const cutoff = await validateTransferProcessingCutoff(admin, params.rail, params.subjectId);
+  if (!cutoff.ok) return cutoff;
 
   const existingSuccess = await loadSuccessTransfer(admin, params.rail, params.subjectId);
   if (existingSuccess) {

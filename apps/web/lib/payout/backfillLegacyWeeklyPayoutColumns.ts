@@ -1,3 +1,4 @@
+import { PAYOUT_PROCESSING_START_YMD } from "@/lib/payout/payoutProcessingCutoff";
 import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -67,6 +68,7 @@ export async function backfillLegacyWeeklyPayoutColumnsFromEarnings(
       .from("bookings")
       .select("id, display_earnings_cents, payout_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_bonus_cents, cleaner_id, payout_owner_cleaner_id, metadata")
       .eq("status", "completed")
+      .gte("date", PAYOUT_PROCESSING_START_YMD)
       .eq("is_test", false)
       .is("cleaner_payout_cents", null)
       .order("id", { ascending: true });
@@ -143,6 +145,7 @@ export async function countCompletedBlockingMissingLegacyPayout(
       .from("bookings")
       .select("id, display_earnings_cents, cleaner_earnings_total_cents, cleaner_id, payout_owner_cleaner_id, metadata")
       .eq("status", "completed")
+      .gte("date", PAYOUT_PROCESSING_START_YMD)
       .eq("is_test", false)
       .is("cleaner_payout_cents", null)
       .order("id", { ascending: true })

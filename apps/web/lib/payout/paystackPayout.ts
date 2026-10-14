@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod, HISTORICAL_PAYOUT_DEFERRED_MESSAGE } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { ensurePaystackRecipient } from "@/lib/payout/ensurePaystackRecipient";
@@ -10,6 +11,8 @@ import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatch
 import { applyTransferSuccess } from "@/lib/payout/paystackTransferStatus";
 
 type PayoutRow = {
+  period_start: string;
+  period_end: string;
   id: string;
   cleaner_id: string;
   total_amount_cents: number;
@@ -52,10 +55,16 @@ async function loadAndValidatePayoutBatch(
   | { ok: true; items: Awaited<ReturnType<typeof loadCleanerPayoutBatchItems>>["items"]; payoutAmount: number }
   | { ok: false; error: string; status: number }
 > {
+  if (!isProcessableClosedPayoutPeriod(payout.period_start, payout.period_end)) {
+    return { ok: false, error: "Transfers require a closed October-or-later monthly payout.", status: 409 };
+  }
   const loadedItems = await loadCleanerPayoutBatchItems(admin, payout.id);
   if (loadedItems.error) return { ok: false, error: loadedItems.error, status: 500 };
 
   const batchItems = loadedItems.items;
+  if (batchItems.some((item) => !isCurrentPayoutVisitDate(item.date))) {
+    return { ok: false, error: HISTORICAL_PAYOUT_DEFERRED_MESSAGE, status: 409 };
+  }
   if (batchItems.length === 0) {
     return { ok: false, error: "Payout has no linked earning items.", status: 400 };
   }
@@ -182,7 +191,7 @@ export async function payCleanerPayoutWithPaystack(
   const { data: payoutData, error: payoutErr } = await admin
     .from("cleaner_payouts")
     .select(
-      "id, cleaner_id, total_amount_cents, status, payment_status, payment_reference, amount_adjusted_at, calculated_amount_cents, adjustment_note, created_by, amount_adjusted_by, approved_by",
+      "id, cleaner_id, period_start, period_end, total_amount_cents, status, payment_status, payment_reference, amount_adjusted_at, calculated_amount_cents, adjustment_note, created_by, amount_adjusted_by, approved_by",
     )
     .eq("id", params.payoutId)
     .maybeSingle();
@@ -190,6 +199,9 @@ export async function payCleanerPayoutWithPaystack(
   if (!payoutData) return { ok: false, error: "Payout not found.", status: 404 };
 
   const payout = payoutData as PayoutRow;
+  if (!isProcessableClosedPayoutPeriod(payout.period_start, payout.period_end)) {
+    return { ok: false, error: "Transfers require a closed October-or-later monthly payout.", status: 409 };
+  }
 
   const { data: existingSuccess, error: existingErr } = await admin
     .from("payout_transfers")
