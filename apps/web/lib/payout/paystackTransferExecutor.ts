@@ -367,9 +367,6 @@ export async function submitPaystackTransferViaOutbox(
   if (!params.recipientCode.trim()) return { ok: false, error: "Missing recipient_code.", status: 400 };
   if (!params.reference.trim()) return { ok: false, error: "Missing immutable reference.", status: 400 };
 
-  const cutoff = await validateTransferProcessingCutoff(admin, params.rail, params.subjectId);
-  if (!cutoff.ok) return cutoff;
-
   const existingSuccess = await loadSuccessTransfer(admin, params.rail, params.subjectId);
   if (existingSuccess) {
     const transferCode = existingSuccess.transfer_code?.trim() ?? null;

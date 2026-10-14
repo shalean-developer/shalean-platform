@@ -15,3 +15,12 @@ export function isCurrentPayoutVisitDate(value: unknown): boolean {
 export function isProcessableClosedPayoutPeriod(start: string, end: string, now: Date = new Date()): boolean {
   return isCurrentPayoutVisitDate(start) && isClosedMonthlyPayoutBatchPeriod(start, end, now);
 }
+
+/** Forward payouts use the visit's calendar month, including late completion. */
+export function currentPayoutBatchDayYmd(booking: { date?: unknown }): string | null {
+  return isCurrentPayoutVisitDate(booking.date) ? String(booking.date) : null;
+}
+
+export function isPayoutVisitInPeriod(date: unknown, start: string, end: string): boolean {
+  return isCurrentPayoutVisitDate(date) && String(date) >= start && String(date) <= end;
+}

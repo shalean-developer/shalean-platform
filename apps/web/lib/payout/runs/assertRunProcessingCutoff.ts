@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllPayoutRows } from "@/lib/payout/payoutQueryPagination";
 import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
-import { isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod } from "@/lib/payout/payoutProcessingCutoff";
+import { isPayoutVisitInPeriod, isProcessableClosedPayoutPeriod } from "@/lib/payout/payoutProcessingCutoff";
 
 /** Validate the entire run before any child transfer or run-state mutation. */
 export async function assertRunProcessingCutoff(admin: SupabaseClient, runId: string): Promise<void> {
@@ -16,7 +16,7 @@ export async function assertRunProcessingCutoff(admin: SupabaseClient, runId: st
     }
     const loaded = await loadCleanerPayoutBatchItems(admin, payout.id);
     if (loaded.error) throw new Error(loaded.error);
-    if (!loaded.items.length || loaded.items.some((item) => !isCurrentPayoutVisitDate(item.date))) {
+    if (!loaded.items.length || loaded.items.some((item) => !isPayoutVisitInPeriod(item.date, payout.period_start, payout.period_end))) {
       throw new Error("Historical or undated earning items cannot enter current payout processing.");
     }
   }

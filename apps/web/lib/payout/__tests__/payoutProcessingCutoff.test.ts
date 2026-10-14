@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod } from "@/lib/payout/payoutProcessingCutoff";
+import { currentPayoutBatchDayYmd, isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod } from "@/lib/payout/payoutProcessingCutoff";
 import { isMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
 
 describe("October processing policy, independent of historical monthly model", () => {
+  it("keeps a late-completed October visit in October", () => {
+    const booking = { date: "2026-10-31", completed_at: "2026-11-01T12:00:00Z" };
+    expect(currentPayoutBatchDayYmd(booking)).toBe("2026-10-31");
+  });
   it.each([null, undefined, "", "2026-09-30", "2026-10-00", "2026-10-32", "2026-13-01", "2026-10-1", "2026-10-01T12:00:00Z"])("rejects deferred or unverifiable visit date %s", value => {
     expect(isCurrentPayoutVisitDate(value)).toBe(false);
   });

@@ -1,3 +1,4 @@
+import { validateTransferProcessingCutoff } from "@/lib/payout/validateTransferProcessingCutoff";
 import { loadCleanerPaymentIdentities } from "@/lib/payout/loadCleanerPaymentIdentities";
 import { cleanerPaymentReference } from "@/lib/payout/cleanerPaymentReference";
 import { isProcessableClosedPayoutPeriod } from "@/lib/payout/payoutProcessingCutoff";
@@ -42,6 +43,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   if (!isProcessableClosedPayoutPeriod(p.period_start, p.period_end) || p.status !== "approved") {
     return NextResponse.json({ error: "Bank instructions require a closed, approved monthly payout." }, { status: 409 });
   }
+  const cutoff = await validateTransferProcessingCutoff(admin, "cleaner_payout", p.id);
+  if (!cutoff.ok) return NextResponse.json({ error: cutoff.error }, { status: cutoff.status });
   let identity: { name: string; paymentId: string };
   let reference: string;
   try {

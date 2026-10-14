@@ -47,7 +47,7 @@ describe("October payout boundary", () => {
     expect(admin.rpc).not.toHaveBeenCalled();
     expect(loadItems).not.toHaveBeenCalled();
   });
-  it.each(["2026-09-30", null, "invalid"])("rejects mixed historical or undated batch item %s", async (date) => {
+  it.each(["2026-09-30", "2026-11-01", null, "invalid"])("rejects mixed historical, outside-month or undated batch item %s", async (date) => {
     loadItems.mockResolvedValue({ items: [{ date: "2026-10-01" }, { date }], error: null });
     const admin = client({ period_start: "2026-10-01", period_end: "2026-10-31" });
     expect((await validateTransferProcessingCutoff(admin as never, "cleaner_payout", "p")).ok).toBe(false);

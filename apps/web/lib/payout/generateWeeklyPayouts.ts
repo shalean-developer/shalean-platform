@@ -24,8 +24,8 @@ import {
   getPreviousMonthDateBoundsJhb,
   isMonthlyPayoutPeriod,
 } from "@/lib/payout/monthBounds";
-import { PAYOUT_PROCESSING_START_YMD, isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod } from "@/lib/payout/payoutProcessingCutoff";
-import { isYmdInInclusiveRange, weeklyBatchDayYmd } from "@/lib/payout/weekBounds";
+import { PAYOUT_PROCESSING_START_YMD, currentPayoutBatchDayYmd, isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod } from "@/lib/payout/payoutProcessingCutoff";
+import { isYmdInInclusiveRange } from "@/lib/payout/weekBounds";
 import { filterBookingsNotOnLedgerRail } from "@/lib/payout/filterBookingsNotOnLedgerRail";
 import {
   listRosterMemberWeeklyPayoutCandidates,
@@ -195,7 +195,7 @@ async function listUnbatchedCompletionMonths(
 
   const monthStarts = new Set<string>();
   for (const row of directRows) {
-    const ymd = weeklyBatchDayYmd(row as Parameters<typeof weeklyBatchDayYmd>[0]);
+    const ymd = currentPayoutBatchDayYmd(row as Parameters<typeof currentPayoutBatchDayYmd>[0]);
     if (!isCurrentPayoutVisitDate((row as { date?: unknown }).date) || !ymd || ymd < PAYOUT_PROCESSING_START_YMD) continue;
     monthStarts.add(getJohannesburgMonthBoundsContainingYmd(ymd).periodStart);
   }
@@ -238,7 +238,7 @@ async function listUnbatchedCompletionMonths(
       .eq("is_test", false);
     if (memberBookingsErr) throw new Error(memberBookingsErr.message);
     for (const row of memberBookings ?? []) {
-      const ymd = weeklyBatchDayYmd(row as Parameters<typeof weeklyBatchDayYmd>[0]);
+      const ymd = currentPayoutBatchDayYmd(row as Parameters<typeof currentPayoutBatchDayYmd>[0]);
       if (!isCurrentPayoutVisitDate((row as { date?: unknown }).date) || !ymd || ymd < PAYOUT_PROCESSING_START_YMD) continue;
       monthStarts.add(getJohannesburgMonthBoundsContainingYmd(ymd).periodStart);
     }
@@ -312,7 +312,7 @@ async function generateWeeklyPayoutsForPeriod(
 
     const candidateBookings = rawBookings.filter((b) => {
       const br = b as BookingPayoutRow;
-      const ymd = weeklyBatchDayYmd(br);
+      const ymd = currentPayoutBatchDayYmd(br);
       if (!isCurrentPayoutVisitDate(br.date) || !ymd || ymd < PAYOUT_PROCESSING_START_YMD) return false;
       return isYmdInInclusiveRange(ymd, periodStart, periodEnd);
     }) as BookingPayoutRow[];
@@ -323,7 +323,7 @@ async function generateWeeklyPayoutsForPeriod(
       if (Number.isFinite(completedMs) && instantNearJhbThursdayPayoutCutoff(completedMs)) {
         jhbCutoffEdgeCaseBookings += 1;
       }
-      const ymd = weeklyBatchDayYmd(br);
+      const ymd = currentPayoutBatchDayYmd(br);
       const uiFriday = Number.isFinite(completedMs)
         ? payoutArrivalSummaryJohannesburg(new Date(completedMs)).payoutTargetFridayYmd
         : ymd

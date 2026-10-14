@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllPayoutRows } from "@/lib/payout/payoutQueryPagination";
 import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
 import { getJohannesburgMonthBoundsContainingYmd } from "@/lib/payout/monthBounds";
-import { isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod } from "@/lib/payout/payoutProcessingCutoff";
+import { isPayoutVisitInPeriod, isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod } from "@/lib/payout/payoutProcessingCutoff";
 
 /** Shared final fence for new provider submissions, including cron outbox retries. */
 export async function validateTransferProcessingCutoff(
@@ -21,7 +21,7 @@ export async function validateTransferProcessingCutoff(
       }
       const loaded = await loadCleanerPayoutBatchItems(admin, subjectId);
       if (loaded.error) return { ok: false, error: loaded.error, status: 500 };
-      if (!loaded.items.length || loaded.items.some((item) => !isCurrentPayoutVisitDate(item.date))) {
+      if (!loaded.items.length || loaded.items.some((item) => !isPayoutVisitInPeriod(item.date, data.period_start, data.period_end))) {
         return { ok: false, error: "Historical or undated earning items cannot be transferred.", status: 409 };
       }
     } else {

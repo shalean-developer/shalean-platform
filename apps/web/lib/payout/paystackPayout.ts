@@ -1,4 +1,4 @@
-import { isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod, HISTORICAL_PAYOUT_DEFERRED_MESSAGE } from "@/lib/payout/payoutProcessingCutoff";
+import { isPayoutVisitInPeriod, isProcessableClosedPayoutPeriod, HISTORICAL_PAYOUT_DEFERRED_MESSAGE } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { ensurePaystackRecipient } from "@/lib/payout/ensurePaystackRecipient";
@@ -62,7 +62,7 @@ async function loadAndValidatePayoutBatch(
   if (loadedItems.error) return { ok: false, error: loadedItems.error, status: 500 };
 
   const batchItems = loadedItems.items;
-  if (batchItems.some((item) => !isCurrentPayoutVisitDate(item.date))) {
+  if (batchItems.some((item) => !isPayoutVisitInPeriod(item.date, payout.period_start, payout.period_end))) {
     return { ok: false, error: HISTORICAL_PAYOUT_DEFERRED_MESSAGE, status: 409 };
   }
   if (batchItems.length === 0) {
@@ -199,10 +199,6 @@ export async function payCleanerPayoutWithPaystack(
   if (!payoutData) return { ok: false, error: "Payout not found.", status: 404 };
 
   const payout = payoutData as PayoutRow;
-  if (!isProcessableClosedPayoutPeriod(payout.period_start, payout.period_end)) {
-    return { ok: false, error: "Transfers require a closed October-or-later monthly payout.", status: 409 };
-  }
-
   const { data: existingSuccess, error: existingErr } = await admin
     .from("payout_transfers")
     .select("id, transfer_code, reference")

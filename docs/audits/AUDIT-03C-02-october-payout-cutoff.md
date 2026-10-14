@@ -1,6 +1,6 @@
 # AUDIT-03C-02 — October forward payout processing
 
-Status: OPEN. Implementation candidate; database and deployment verification pending.
+Status: OPEN. Staging database enforcement verified; revised exact-head review and deployment verification pending.
 
 ## Authorized policy and source truth
 
@@ -10,8 +10,8 @@ Production before this change contains 46 cancelled historical batches (1,488,99
 
 ## Bounded implementation
 
-- Generation, discovery and legacy-column backfill exclude pre-October visit dates. Roster and team candidates use the same visit boundary.
-- Approval and settlement require a closed October-or-later full calendar month and reject historical or undated linked items.
+- Generation, discovery and legacy-column backfill exclude pre-October visit dates. Forward batches use the visit calendar month, including late completion. Roster and team candidates use the same visit boundary.
+- Approval and settlement require a closed October-or-later full calendar month and reject historical, outside-month or undated linked items.
 - Run processing and retries validate every child before any run mutation or transfer.
 - The shared Paystack executor verifies the boundary before new submission, including ledger and outbox retry rails. Historical successful bank replay is read-only.
 - Bank instruction export rejects historical batches. Historical run reports remain readable but omit actionable references.
@@ -20,15 +20,25 @@ Production before this change contains 46 cancelled historical batches (1,488,99
 
 ## Local evidence
 
-The enforced critical suite passed 550 tests after adding 27 cutoff tests. Focused generation, month, export and boundary checks passed 84 tests before the additional historical-export regression. Type checking passed; enforced booking-core lint has no errors (existing warnings).
+The enforced critical suite passed 555 tests, including 31 dedicated cutoff and existing-intent verification checks. Focused generation, month, export, boundary and existing-intent checks passed 92 tests, including month-membership, late-completion and existing-provider-intent coverage. Type checking passed; enforced booking-core lint has no errors (existing warnings).
 
 The broader payout suite was also compared with unchanged main `e40ffccf32a77026484e7194f1c90bdc87fe2fd5`: baseline had 26 failures; candidate initially had 21. Two newly failing catch-up expectations encoded the retired processing policy and were updated. Other broad-suite failures are present on baseline; they are not described as a clean full-suite pass.
 
 ## Remaining gates
 
-1. Exact-head review and CI.
-2. Staging database enforcement probes, unchanged-data controls, automatic staging deployment and UI/API verification.
+1. Revised exact-head review and CI.
+2. Automatic staging deployment and UI/API verification. Staging database probes already pass and all six table hashes match their pre-migration controls.
 3. Reviewed production release; production historical row/hash and amount reconciliation, actual automatic deployment SHA verification.
 4. Verify October beneficiary identities, included bookings and adjustment reasons before any payment approval or settlement.
 
 No real payout, bank transfer or historical reconciliation is authorized by this implementation work. No historical accounting repair is included. Close only when the release and reconciliation evidence is recorded.
+
+## Staging database evidence
+
+Both migrations were exercised against `uwvnmluiqbczeduzjgse`. Transaction-contained probes reject September batches, open October batches, historical earning-link RPC calls, direct historical booking amount edits, roster amount edits, historical team paid inserts, historical ledger processing claims and member adjustment RPC calls. Future caller-supplied closure dates cannot create a run or freeze October early.
+
+All fixture changes were rolled back. `bookings` remains 12 rows with full-row control hash `f58407f8b05cdaa2770b9cb383577c46`; cleaner payouts, cleaner earnings, roster payouts, team payouts and payout runs remain empty with hash `d41d8cd98f00b204e9800998ecf8427e`.
+
+Initial review of `f4fd86a04a4e97ef7c713319a04f82604131e657` raised three P1 findings: existing transfer verification must precede the new-send cutoff; batch visits must remain in their period; claimed-ledger visit dates must remain fixed. Revised code addresses these and requires a fresh review. Existing external intents can still be verified; historical accounting convergence remains subject to the deferred historical-review boundary, rather than creating a new transfer or inventing a payment.
+
+Staging ledger versions were aligned to canonical CLI-generated files `20261014140342` and `20261014142019` after candidate verification; temporary candidate ledger entries were consolidated. This changed migration metadata only.

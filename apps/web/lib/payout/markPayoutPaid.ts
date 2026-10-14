@@ -1,4 +1,4 @@
-import { isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod, HISTORICAL_PAYOUT_DEFERRED_MESSAGE } from "@/lib/payout/payoutProcessingCutoff";
+import { isPayoutVisitInPeriod, isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod, HISTORICAL_PAYOUT_DEFERRED_MESSAGE } from "@/lib/payout/payoutProcessingCutoff";
 import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
@@ -80,7 +80,7 @@ export async function markCleanerPayoutPaid(
   }
   const loaded = await loadCleanerPayoutBatchItems(admin, payoutId);
   if (loaded.error) return { ok: false, error: loaded.error };
-  if (!loaded.items.length || loaded.items.some((item) => !isCurrentPayoutVisitDate(item.date))) {
+  if (!loaded.items.length || loaded.items.some((item) => !isPayoutVisitInPeriod(item.date, String(payout.period_start), String(payout.period_end)))) {
     return { ok: false, error: HISTORICAL_PAYOUT_DEFERRED_MESSAGE };
   }
 

@@ -29,12 +29,13 @@ begin
     (b.payout_id=v_id
       or exists (select 1 from public.booking_roster_member_payouts r where r.booking_id=b.id and r.cleaner_payout_id=v_id)
       or exists (select 1 from public.team_job_member_payouts t where t.booking_id=b.id and t.cleaner_payout_id=v_id))
-    and (b.date is null or b.date < date '2026-10-01')) then
+    and (b.date::date is null or b.date::date < date '2026-10-01')) then
     raise exception 'historical_payout_item_deferred' using errcode = '23514';
   end if;
   return NEW;
 end; $$;
 revoke all on function public.audit_03c02_guard_payout_batch() from public;
+drop trigger if exists audit_03c02_payout_batch_boundary on public.cleaner_payouts;
 create trigger audit_03c02_payout_batch_boundary before insert or update or delete on public.cleaner_payouts
 for each row execute function public.audit_03c02_guard_payout_batch();
 
@@ -51,14 +52,14 @@ begin
       or NEW.payout_paid_at is distinct from OLD.payout_paid_at
       or NEW.payout_frozen_cents is distinct from OLD.payout_frozen_cents end;
     if TG_OP = 'UPDATE' and NEW.date is distinct from OLD.date
-      and (NEW.date is null or NEW.date < date '2026-10-01' or OLD.date < date '2026-10-01')
+      and (NEW.date is null or NEW.date::date < date '2026-10-01' or OLD.date::date < date '2026-10-01')
       and (NEW.payout_id is not null or OLD.payout_id is not null
         or exists (select 1 from public.booking_roster_member_payouts r where r.booking_id=NEW.id and r.cleaner_payout_id is not null)
         or exists (select 1 from public.team_job_member_payouts t where t.booking_id=NEW.id and t.cleaner_payout_id is not null)) then
       raise exception 'linked_visit_cannot_cross_cutoff' using errcode = '23514';
     end if;
   else
-    select b.date into v_date from public.bookings b where b.id=NEW.booking_id for update;
+    select b.date::date into v_date from public.bookings b where b.id=NEW.booking_id for update;
     if TG_TABLE_NAME = 'cleaner_earnings' then
       v_changed := case when TG_OP = 'INSERT' then NEW.disbursement_id is not null or NEW.status::text in ('processing','paid')
         else NEW.disbursement_id is distinct from OLD.disbursement_id
@@ -87,12 +88,16 @@ begin
   return NEW;
 end; $$;
 revoke all on function public.audit_03c02_guard_payout_item() from public;
+drop trigger if exists audit_03c02_booking_boundary on public.bookings;
 create trigger audit_03c02_booking_boundary before insert or update on public.bookings
 for each row execute function public.audit_03c02_guard_payout_item();
+drop trigger if exists audit_03c02_roster_boundary on public.booking_roster_member_payouts;
 create trigger audit_03c02_roster_boundary before insert or update on public.booking_roster_member_payouts
 for each row execute function public.audit_03c02_guard_payout_item();
+drop trigger if exists audit_03c02_team_boundary on public.team_job_member_payouts;
 create trigger audit_03c02_team_boundary before insert or update on public.team_job_member_payouts
 for each row execute function public.audit_03c02_guard_payout_item();
+drop trigger if exists audit_03c02_ledger_boundary on public.cleaner_earnings;
 create trigger audit_03c02_ledger_boundary before insert or update on public.cleaner_earnings
 for each row execute function public.audit_03c02_guard_payout_item();
 
@@ -438,8 +443,8 @@ begin
     inner join public.bookings b on b.id = ce.booking_id
     where ce.cleaner_id = p_cleaner_id
       and ce.status = 'approved'
-      and b.date >= date '2026-10-01'
-      and b.date < date_trunc('month', timezone('Africa/Johannesburg', now()))::date
+      and b.date::date >= date '2026-10-01'
+      and b.date::date < date_trunc('month', timezone('Africa/Johannesburg', now()))::date
       and ce.disbursement_id is null
       and b.payout_id is null
       and lower(coalesce(b.payout_status, '')) is distinct from 'paid'
@@ -491,6 +496,7 @@ begin
   return NEW;
 end; $$;
 revoke all on function public.audit_03c02_guard_payout_run() from public;
+drop trigger if exists audit_03c02_run_boundary on public.cleaner_payout_runs;
 create trigger audit_03c02_run_boundary before update on public.cleaner_payout_runs
 for each row execute function public.audit_03c02_guard_payout_run();
 

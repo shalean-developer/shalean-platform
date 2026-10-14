@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
-import { isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod, HISTORICAL_PAYOUT_DEFERRED_MESSAGE } from "@/lib/payout/payoutProcessingCutoff";
+import { isPayoutVisitInPeriod, isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod, HISTORICAL_PAYOUT_DEFERRED_MESSAGE } from "@/lib/payout/payoutProcessingCutoff";
 import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
 import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
 import { loadCleanerPayoutFunding } from "@/lib/payout/payoutFunding";
@@ -30,7 +30,7 @@ export async function approveCleanerPayout(
   const loaded = await loadCleanerPayoutBatchItems(admin, params.payoutId);
   if (loaded.error) return { ok: false, error: loaded.error };
   if (!loaded.items.length) return { ok: false, error: "Payout has no linked earning items." };
-  if (loaded.items.some((item) => !isCurrentPayoutVisitDate(item.date))) {
+  if (loaded.items.some((item) => !isPayoutVisitInPeriod(item.date, periodStart, periodEnd))) {
     return { ok: false, error: HISTORICAL_PAYOUT_DEFERRED_MESSAGE };
   }
   if (loaded.items.some((item) => item.is_test)) {
