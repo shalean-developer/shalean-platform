@@ -17,8 +17,18 @@ vi.mock("@/lib/supabase/admin", () => ({ getSupabaseAdmin: () => database() }));
 import { GET as singleExport } from "@/app/api/admin/payouts/[id]/export/route";
 import { GET as runExport } from "@/app/api/admin/payouts/runs/[id]/export/route";
 import { loadCleanerPaymentIdentities } from "../loadCleanerPaymentIdentities";
-beforeEach(() => { state.allowed = true; state.cleanerError = null; state.cleanerRows = [{ id: "cleaner-1", full_name: "Example Cleaner", payment_id: "SHL-CL-000001" }]; });
+beforeEach(() => { payout.status = "frozen"; payout.period_end = "2026-10-31"; state.allowed = true; state.cleanerError = null; state.cleanerRows = [{ id: "cleaner-1", full_name: "Example Cleaner", payment_id: "SHL-CL-000001" }]; });
 describe("bank payment CSV identity", () => {
+  it.each(["cancelled", "paid", "processing", "unknown"])("rejects bank instructions for %s payouts", async status => {
+    payout.status = status;
+    const r = await singleExport(new Request("https://example.com"), { params: Promise.resolve({ id: "payout-1" }) });
+    expect(r.status).toBe(409);
+  });
+  it("rejects a historical weekly period sharing the same monthly reference", async () => {
+    payout.period_end = "2026-10-07";
+    const r = await singleExport(new Request("https://example.com"), { params: Promise.resolve({ id: "payout-1" }) });
+    expect(r.status).toBe(409);
+  });
   it.each([singleExport, runExport])("exports permanent monthly identity on each active route", async route => {
     const response = await route(new Request("https://example.com"), { params: Promise.resolve({ id: "run-1" }) });
     expect(response.status).toBe(200);

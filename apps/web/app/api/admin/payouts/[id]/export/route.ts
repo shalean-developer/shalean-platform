@@ -1,5 +1,6 @@
 import { loadCleanerPaymentIdentities } from "@/lib/payout/loadCleanerPaymentIdentities";
 import { cleanerPaymentReference } from "@/lib/payout/cleanerPaymentReference";
+import { isMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -34,9 +35,14 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     id: string;
     cleaner_id: string;
     total_amount_cents: number;
+    status: string;
     period_start: string;
     period_end: string;
   };
+  if (!isMonthlyPayoutBatchPeriod(p.period_start, p.period_end) ||
+      !["pending", "frozen", "approved"].includes(p.status)) {
+    return NextResponse.json({ error: "Bank instructions require an active monthly payout." }, { status: 409 });
+  }
   let identity: { name: string; paymentId: string };
   let reference: string;
   try {
