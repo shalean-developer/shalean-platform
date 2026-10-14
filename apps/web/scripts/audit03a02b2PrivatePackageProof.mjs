@@ -12,7 +12,7 @@ export function verifyPrivateArtifact(meta, source, env) {
       !/^[a-f0-9]{40}$/.test(String(meta.artifact_sha ?? ""))) {
     throw new Error("Audit staging artifact identity rejected");
   }
-  if (env.SHALEAN_APP_ENV && env.SHALEAN_APP_ENV !== "staging")
+  if (env.SHALEAN_APP_ENV !== "staging")
     throw new Error("Audit runtime environment mismatch");
   if (source !== "private") throw new Error("Audit must execute from private runtime directory");
   return {
