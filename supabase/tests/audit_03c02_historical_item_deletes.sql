@@ -1,0 +1,50 @@
+-- Staging-only probes. No retained fixture writes.
+begin;
+select set_config('request.jwt.claim.role','service_role',true);
+create temp table audit03c02_delete_probe(booking_id uuid);
+create trigger probe_delete before delete on audit03c02_delete_probe
+for each row execute function public.audit_03c02_guard_item_delete();
+do $$
+declare b uuid; c uuid; n integer;
+begin
+ select id into b from public.bookings where status='pending' and payout_id is null order by id limit 1;
+ select id into c from public.cleaners order by id limit 1;
+ if b is null or c is null then raise exception 'staging fixtures unavailable'; end if;
+ select count(*) into n from pg_trigger where not tgisinternal and tgenabled='O' and tgname in ('audit_03c02_ledger_delete_boundary','audit_03c02_roster_delete_boundary','audit_03c02_team_delete_boundary');
+ if n<>3 then raise exception 'FAIL missing production-table DELETE trigger'; end if;
+ update public.bookings set date='2026-09-30' where id=b;
+ insert into public.cleaner_earnings(id,booking_id,cleaner_id,amount_cents,status) values('a03c0204-0000-4000-8000-000000000001',b,c,100,'pending');
+ insert into public.booking_roster_member_payouts(id,booking_id,cleaner_id,payout_cents,bonus_cents,status) values('a03c0204-0000-4000-8000-000000000002',b,c,100,0,'pending');
+ begin
+  delete from public.cleaner_earnings where id='a03c0204-0000-4000-8000-000000000001';
+  raise exception 'FAIL historical ledger deleted';
+ exception when check_violation then if sqlerrm<>'historical_payout_item_deferred' then raise; end if; end;
+ begin
+  delete from public.booking_roster_member_payouts where id='a03c0204-0000-4000-8000-000000000002';
+  raise exception 'FAIL historical roster deleted';
+ exception when check_violation then if sqlerrm<>'historical_payout_item_deferred' then raise; end if; end;
+ insert into public.teams(id,name,service_type,capacity_per_day,is_active) values('a03c0204-0000-4000-8000-000000000003','AUDIT03C02 disposable team','deep',1,false);
+ insert into public.team_job_member_payouts(id,booking_id,team_id,cleaner_id,payout_cents,status) values('a03c0204-0000-4000-8000-000000000004',b,'a03c0204-0000-4000-8000-000000000003',c,100,'pending');
+ begin
+  delete from public.team_job_member_payouts where id='a03c0204-0000-4000-8000-000000000004';
+  raise exception 'FAIL historical team item deleted';
+ exception when check_violation then if sqlerrm<>'historical_payout_item_deferred' then raise; end if; end;
+ insert into audit03c02_delete_probe values(b);
+ begin
+  delete from audit03c02_delete_probe;
+  raise exception 'FAIL historical shared delete guard';
+ exception when check_violation then if sqlerrm<>'historical_payout_item_deferred' then raise; end if; end;
+ update public.bookings set date='2026-10-01' where id=b;
+ delete from public.cleaner_earnings where id='a03c0204-0000-4000-8000-000000000001';
+ delete from public.booking_roster_member_payouts where id='a03c0204-0000-4000-8000-000000000002';
+ delete from public.team_job_member_payouts where id='a03c0204-0000-4000-8000-000000000004';
+ delete from audit03c02_delete_probe;
+ if exists(select 1 from public.cleaner_earnings where id='a03c0204-0000-4000-8000-000000000001') or exists(select 1 from audit03c02_delete_probe) then raise exception 'FAIL forward pending delete blocked'; end if;
+ insert into audit03c02_delete_probe values(null);
+ begin
+  delete from audit03c02_delete_probe;
+  raise exception 'FAIL undated delete accepted';
+ exception when check_violation then if sqlerrm<>'historical_payout_item_deferred' then raise; end if; end;
+end $$;
+rollback;
+select 'PASS: historical ledger/roster/team deletes and unknown-date deletion rejected; shared team guard installed; forward pending deletes allowed; fixtures rolled back' evidence;
