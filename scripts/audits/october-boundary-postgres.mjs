@@ -15,7 +15,7 @@ create table cleaner_earnings(id uuid primary key,booking_id uuid references boo
 create table booking_roster_member_payouts(id uuid primary key,booking_id uuid references bookings on delete cascade,cleaner_id uuid,payout_cents int,bonus_cents int,status text,cleaner_payout_id uuid);
 create table team_job_member_payouts(id uuid primary key,booking_id uuid references bookings on delete cascade,cleaner_id uuid,team_id uuid,payout_cents int,status text,cleaner_payout_id uuid);
 create table booking_cleaners(booking_id uuid references bookings on delete cascade,cleaner_id uuid,role text,payout_weight numeric,lead_bonus_cents int,source text,completed_at timestamptz);
-create table booking_line_items(id uuid primary key,booking_id uuid references bookings on delete cascade,cleaner_earnings_cents int,total_price_cents int,unit_price_cents int,quantity int,earns_cleaner boolean,name text);
+create table booking_line_items(id uuid primary key,booking_id uuid references bookings on delete cascade,cleaner_earnings_cents int,total_price_cents int,unit_price_cents int,quantity int,earns_cleaner boolean,name text,item_type text,slug text,metadata jsonb);
 create table booking_cleaner_earnings_snapshot(booking_id uuid references bookings on delete cascade,cleaner_id uuid,display_earnings_cents int,updated_at timestamptz);
 create table booking_cleaner_earnings_snapshot_lines(booking_id uuid references bookings on delete cascade,booking_line_item_id uuid references booking_line_items on delete cascade,allocated_display_earnings_cents int);
 create function audit_03c02_has_verified_outcome(uuid,text,text,text default null) returns boolean language sql as 'select false';`);
@@ -45,6 +45,8 @@ for(const t of ['cleaner_earnings','booking_roster_member_payouts','team_job_mem
 }
 await reject(`update booking_cleaners set cleaner_id=$1 where booking_id=$2`,[other,old]);
 await reject(`update booking_line_items set cleaner_earnings_cents=200 where booking_id=$1`,[old]);
+for(const field of ['item_type','slug','name']) await reject(`update booking_line_items set ${field}='adjustment' where booking_id=$1`,[old]);
+await reject(`update booking_line_items set metadata='{"exclude_from_cleaner_earnings":true}' where booking_id=$1`,[old]);
 await reject(`update booking_cleaner_earnings_snapshot set cleaner_id=$1 where booking_id=$2`,[other,old]);
 await db.query(`update booking_cleaners set completed_at=now() where booking_id=$1`,[old]);checks++;
 await db.query(`update bookings set booking_snapshot='{"admin_notes":"allowed"}' where id=$1`,[old]);checks++;

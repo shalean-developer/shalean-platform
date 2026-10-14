@@ -495,7 +495,9 @@ export async function propagateRecurringPlanToGeneratedBookings(
     try {
       invoiceVisits = await fetchAllPayoutRows((from,to)=>admin.from("bookings").select("id,date").eq("monthly_invoice_id",invoiceId).order("id",{ascending:true}).range(from,to));
     } catch(error) { result.errors.push(`Invoice ${invoiceId}: ${error instanceof Error ? error.message : String(error)}`); continue; }
-    if (!invoiceVisits.length || invoiceVisits.some(row => !isCurrentPayoutVisitDate(String(row.date??"").trim()))) continue;
+    // An October draft can carry historical visits. Recompute the invoice after
+    // forward changes without changing those protected historical booking rows.
+    if (!invoiceVisits.some(row => isCurrentPayoutVisitDate(String(row.date??"").trim()))) continue;
     const { error: rpcErr } = await admin.rpc("recompute_monthly_invoice_totals", {
       p_invoice_id: invoiceId,
     });

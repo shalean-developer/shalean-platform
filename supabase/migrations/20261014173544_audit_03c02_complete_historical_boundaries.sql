@@ -83,9 +83,9 @@ begin
  if TG_OP='UPDATE' then
    if TG_TABLE_NAME='booking_line_items' then
      select jsonb_object_agg(key,value) into v_before from jsonb_each(to_jsonb(OLD))
-       where key=any(array['booking_id','cleaner_earnings_cents','total_price_cents','unit_price_cents','quantity','earns_cleaner']);
+       where key=any(array['booking_id','cleaner_earnings_cents','total_price_cents','unit_price_cents','quantity','earns_cleaner','item_type','slug','name','metadata']);
      select jsonb_object_agg(key,value) into v_after from jsonb_each(to_jsonb(NEW))
-       where key=any(array['booking_id','cleaner_earnings_cents','total_price_cents','unit_price_cents','quantity','earns_cleaner']);
+       where key=any(array['booking_id','cleaner_earnings_cents','total_price_cents','unit_price_cents','quantity','earns_cleaner','item_type','slug','name','metadata']);
    else
      v_before:=to_jsonb(OLD)-'updated_at'; v_after:=to_jsonb(NEW)-'updated_at';
    end if;
