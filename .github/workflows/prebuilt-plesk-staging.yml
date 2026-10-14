@@ -96,6 +96,7 @@ jobs:
           install -m 0600 apps/web/scripts/audit03a02b2PrivatePackageProof.mjs "$STAGE/private-audit/audit03a02b2PrivatePackageProof.mjs"
           test ! -e "$STAGE/public/private-audit/audit03a02b2PrivatePackageProof.mjs"
           test ! -e "$STAGE/public/private-audit/audit03a02b2PleskEnvPreflight.mjs"
+          node apps/web/scripts/audit03a02b3AddManifestScript.mjs "$STAGE/package.json"
           node --test apps/web/scripts/audit03a02b2PleskEnvPreflight.test.mjs
           cat > "$STAGE/build-meta.json" <<META
           {
