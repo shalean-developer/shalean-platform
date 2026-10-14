@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import { preservePaymentCustomerIdentity, paymentFinalizationReplayEquivalent } from "@/lib/booking/paymentCustomerIdentityGuard";
 import { bookingCreationLifecyclePatch } from "@/lib/booking/bookingCreationProfiles";
 import { after } from "next/server";
@@ -1139,7 +1140,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       row,
       observed,
       ownershipColumn,
-      historicalBooking: typeof existing?.date === 'string' && existing.date.trim() < '2026-10-01',
+      historicalBooking: !isCurrentPayoutVisitDate(existing?.date),
     });
 
     if (bookingPaystackFinalizeTraceEnabled()) {
@@ -1260,7 +1261,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
 
   finalizeId = id;
 
-  const historicalCapture = typeof existing?.date === 'string' && existing.date.trim() < '2026-10-01';
+  const historicalCapture = Boolean(existingPendingPaymentId) && !isCurrentPayoutVisitDate(existing?.date);
 
   const userIdForEffects =
     inserted && typeof inserted === "object"

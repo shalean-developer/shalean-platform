@@ -16,6 +16,19 @@ describe('governed seed upgrade without historical mutation',()=>{
   const old=`f${kind}000001-0001-4002-8002-000000000001`;
   expect(forwardSeedFixtureId(old)).toBe(old.replace('000001-','000002-'));
  });
+ it('retains every existing forward fixture date before reseeding',async()=>{
+  const {seedBookings}=await moduleAt('scripts/seed-dev.mjs');
+  const writes:{id:string,date:string}[]=[];
+  const stored=Array.from({length:15},(_,i)=>({id:`f2000002-${String(i+1).padStart(4,'0')}-4002-8002-${String(i+1).padStart(12,'0')}`,date:'2026-10-07'}));
+  const db={from:()=>({select:()=>({in:async()=>({data:stored,error:null})}),upsert:async(row:{id:string,date:string})=>{writes.push(row);return {error:null};}})};
+  expect((await seedBookings(db,{},{})).count).toBe(15);
+  expect(writes).toHaveLength(15);expect(writes.every(row=>row.date==='2026-10-07')).toBe(true);
+ });
+ it('fails before reseeding when stored dates cannot be read',async()=>{
+  const {seedBookings}=await moduleAt('scripts/seed-dev.mjs');const upsert=vi.fn();
+  const db={from:()=>({select:()=>({in:async()=>({data:null,error:{message:'read failed'}})}),upsert})};
+  await expect(seedBookings(db,{},{})).rejects.toThrow('read failed');expect(upsert).not.toHaveBeenCalled();
+ });
  it('does not remap arbitrary identities',async()=>{
   const {forwardSeedFixtureId}=await moduleAt('scripts/lib/seedFixtureGeneration.mjs');
   expect(()=>forwardSeedFixtureId('arbitrary-user')).toThrow();

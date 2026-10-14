@@ -21,7 +21,7 @@
  *   SUPABASE_SERVICE_ROLE_KEY
  */
 
-import { FORWARD_SEED_TAG, forwardSeedFixtureId } from "./lib/seedFixtureGeneration.mjs";
+import { FORWARD_SEED_TAG, forwardSeedFixtureId, isForwardSeedBooking } from "./lib/seedFixtureGeneration.mjs";
 import { buildFinanceSeedPlan, writeFinanceSeedPlan, paidSeedBookingDate, seedFinanceCalendar } from "./lib/financeSeedPolicy.mjs";
 import { forwardSeedBookingDate } from "./lib/forwardSeedBookingDate.mjs";
 import { createRequire } from "node:module";
@@ -1041,9 +1041,13 @@ function buildSeedBookings(userIdMap, locationIdMap) {
   return {bookings,custIds};
 }
 
-async function seedBookings(admin, userIdMap, locationIdMap) {
+export async function seedBookings(admin, userIdMap, locationIdMap) {
   const {bookings,custIds}=buildSeedBookings(userIdMap,locationIdMap);
+  const {data:existing,error:existingError}=await admin.from("bookings").select("id,date").in("id",bookings.map(row=>row.id));
+  if(existingError)throw new Error(`Seed booking dates: ${existingError.message}`);
+  const retainedDates=new Map((existing??[]).filter(isForwardSeedBooking).map(row=>[row.id,row.date]));
   for (const bk of bookings) {
+    if(retainedDates.has(bk.id))bk.date=retainedDates.get(bk.id);
     const { error } = await admin
       .from("bookings")
       .upsert(bk, { onConflict: "paystack_reference" });

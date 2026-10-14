@@ -40,7 +40,7 @@ returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
 declare b public.bookings; result jsonb; prior_context text;
 begin
  select * into b from public.bookings where id=p_booking_id for update;
- if not found or b.date is null or b.date::date>=date '2026-10-01'
+ if not found or (b.date is not null and b.date::date>=date '2026-10-01')
    or b.status::text not in ('pending_payment','payment_expired','payment_reconciliation_required')
    or nullif(p_reference,'') is null or b.paystack_reference is distinct from p_reference
    or p_amount_cents is null or p_amount_cents<0 or p_currency is distinct from coalesce(b.currency,'ZAR')

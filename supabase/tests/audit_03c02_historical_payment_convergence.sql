@@ -2,9 +2,10 @@
 begin;
 select set_config('request.jwt.claim.role','service_role',true);
 do $$
-declare b public.bookings; intent jsonb; succeeded jsonb; expected jsonb; result jsonb; before_basis jsonb; after_basis jsonb;
+declare probe_date text; b public.bookings; intent jsonb; succeeded jsonb; expected jsonb; result jsonb; before_basis jsonb; after_basis jsonb;
  keys text[]:=array['date','cleaner_id','payout_owner_cleaner_id','team_id','base_amount_cents','service_fee_cents','price_snapshot','display_earnings_cents','internal_earnings_cents','payout_earnings_cents','cleaner_payout_cents','payout_frozen_cents'];
 begin
+ foreach probe_date in array array['2026-09-30',null] loop
  select * into b from public.bookings where status='pending_payment' and payout_id is null
    and monthly_invoice_id is null and billing_type='prepaid' and nullif(paystack_reference,'') is not null order by id limit 1;
  if not found then raise exception 'staging pending-payment fixture unavailable'; end if;
@@ -13,7 +14,7 @@ begin
  update public.bookings set selected_cleaner_id=(select id from public.cleaners order by id limit 1),booking_snapshot=coalesce(booking_snapshot,'{}')||jsonb_build_object('refund_workflow',intent) where id=b.id;
  set constraints all immediate;
  alter table public.bookings disable trigger audit_03c02_final_booking_financials;
- update public.bookings set date='2026-09-30' where id=b.id;
+ update public.bookings set date=probe_date::date where id=b.id;
  set constraints all immediate;
  alter table public.bookings enable trigger audit_03c02_final_booking_financials;
  select jsonb_object_agg(key,value) into before_basis from public.bookings x,jsonb_each(to_jsonb(x)) where x.id=b.id and key=any(keys);
@@ -41,6 +42,7 @@ begin
    update public.bookings set total_paid_cents=999 where id=b.id;
    raise exception 'FAIL capture exception leaked';
  exception when check_violation then if sqlerrm<>'historical_payout_item_deferred' then raise; end if; end;
+end loop;
 end $$;
 rollback;
 select 'PASS: verified historical refund and capture persist payment truth; arbitrary edits rejected; pricing, roster and earnings preserved; all fixtures rolled back' evidence;

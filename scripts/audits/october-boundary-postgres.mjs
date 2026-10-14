@@ -31,6 +31,7 @@ insert into booking_cleaner_earnings_snapshot_lines values('${old}','${old}',100
 await db.query(`insert into cleaner_earnings_adjustments(id,booking_id,cleaner_id,amount_cents) values($1,$1,$2,100)`,[old,cid]);
 await db.query(`insert into audit_users values($1)`,[cid]);
 await db.query(`update cleaner_earnings_adjustments set created_by=$1,created_by_email='retained@example.com' where booking_id=$2`,[cid,old]);
+await db.exec(`insert into bookings(id,date,status,paystack_reference,currency) values('eeeeeeee-0000-4000-8000-000000000001',null,'pending_payment','undated-charge','ZAR')`);
 const convergence=await fs.readFile('supabase/migrations/20261014145923_audit_03c02_verified_provider_convergence.sql','utf8');
 await db.exec(convergence.slice(convergence.indexOf('create or replace function public.audit_03c02_guard_payout_item()'),convergence.indexOf('create or replace function public.audit_03c02_guard_payout_run()')));
 for(const t of ['bookings','cleaner_earnings','booking_roster_member_payouts','team_job_member_payouts']) await db.exec(`create trigger audit_03c02_existing_boundary before insert or update on ${t} for each row execute function audit_03c02_guard_payout_item()`);
@@ -113,5 +114,7 @@ await reject(`update bookings set total_paid_cents=999 where id=$1`,[old]);
 for(const role of ['anon','authenticated','service_role']){
  const r=await db.query(`select has_function_privilege($1,'audit_03c02_record_historical_capture(uuid,text,bigint,text,timestamptz,jsonb)','execute') permitted`,[role]);assert.equal(r.rows[0].permitted,role==='service_role');checks++;
 }
+await db.query(captureSql,['eeeeeeee-0000-4000-8000-000000000001','undated-charge',1000,JSON.stringify({...expected,paystack_reference:'undated-charge',cleaner_id:null})]);checks++;
+assert.equal((await db.query(`select date,status from bookings where id='eeeeeeee-0000-4000-8000-000000000001'`)).rows[0].date,null);checks++;
 console.log(`PASS ${checks} isolated PostgreSQL boundary checks (minimal schema; not live staging proof)`);
 await db.close();

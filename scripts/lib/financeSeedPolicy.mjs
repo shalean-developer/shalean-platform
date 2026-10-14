@@ -1,16 +1,13 @@
-import { forwardSeedBookingDate } from './forwardSeedBookingDate.mjs';
 const FLOOR='2026-10-01';
 export function seedFinanceCalendar(now=new Date()) {
  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Johannesburg',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
  const get=type=>parts.find(part=>part.type===type).value;
  const currentMonthStart=`${get('year')}-${get('month')}-01`;
- const end=new Date(Date.parse(currentMonthStart+'T12:00:00Z')-86400000).toISOString().slice(0,10);
- const start=end.slice(0,7)+'-01';
- return {currentMonthStart,closedPeriod:start>=FLOOR?{period_start:start,period_end:end}:null};
+ return {currentMonthStart,closedPeriod:currentMonthStart>'2026-10-01'?{period_start:'2026-10-01',period_end:'2026-10-31'}:null};
 }
-export function paidSeedBookingDate(day, fallbackOffset, now=new Date()) {
- const {closedPeriod}=seedFinanceCalendar(now);
- return closedPeriod?closedPeriod.period_start.slice(0,8)+String(day).padStart(2,'0'):forwardSeedBookingDate(fallbackOffset,now);
+// Fixed fixture IDs keep their October visit dates across every reseed.
+export function paidSeedBookingDate(day) {
+ return '2026-10-'+String(day).padStart(2,'0');
 }
 export function buildFinanceSeedPlan({earnings,payouts,bookingDates,now=new Date()}) {
  const {currentMonthStart,closedPeriod}=seedFinanceCalendar(now);
@@ -25,7 +22,7 @@ export function buildFinanceSeedPlan({earnings,payouts,bookingDates,now=new Date
  return {earnings:safeEarnings,payouts:closedPeriod?payouts.map(row=>{
   // Runs are created through the normal application workflow, never pre-approved empty.
   const {payout_run_id,...unlinked}=row;
-  return {...unlinked,...closedPeriod, ...(row.approved_at ? {approved_at:closedPeriod.period_end+'T12:00:00Z'} : {}), ...(row.paid_at ? {paid_at:closedPeriod.period_end+'T12:00:00Z'} : {})};
+  return {...unlinked,...closedPeriod, ...(row.frozen_at ? {frozen_at:closedPeriod.period_end+'T12:00:00Z'} : {}), ...(row.approved_at ? {approved_at:closedPeriod.period_end+'T12:00:00Z'} : {}), ...(row.paid_at ? {paid_at:closedPeriod.period_end+'T12:00:00Z'} : {})};
  }):[],runs:[],deferredReason:closedPeriod?null:'No closed October-or-later month; payout fixtures deferred'};
 }
 export async function writeFinanceSeedPlan(admin,plan) {
