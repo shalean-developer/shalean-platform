@@ -26,6 +26,7 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: "https://paqjwfulwywtsyyvdxrq.supabase.co"
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ vars.PROD_SUPABASE_PUBLISHABLE_KEY }}"
       NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "${{ vars.PROD_PAYSTACK_PUBLIC_KEY }}"
+      PLESK_PRODUCTION_HISTORY_ANCHOR: "a70bad83a38aa0cfff2390c12bea69c283508c62"
 
     steps:
       - name: Checkout production
@@ -100,12 +101,20 @@ jobs:
           cp scripts/plesk-activate-prebuilt-production.sh "$RUNNER_TEMP/activate.sh"
           sha256sum "$RUNNER_TEMP/production-runtime.tar.gz"
 
+      - name: Verify deployment history regression
+        run: node --test scripts/plesk-production-history.test.mjs
+
       - name: Publish deploy branch
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch --orphan deploy-production-publish
+          git fetch --no-tags origin refs/heads/deploy/production
+          git switch --detach FETCH_HEAD
+          git fetch --no-tags origin "$PLESK_PRODUCTION_HISTORY_ANCHOR"
+          if ! git merge-base --is-ancestor "$PLESK_PRODUCTION_HISTORY_ANCHOR" HEAD; then
+            git merge --no-edit --strategy=ours --allow-unrelated-histories "$PLESK_PRODUCTION_HISTORY_ANCHOR"
+          fi
           git rm -rf --ignore-unmatch .
           git clean -fdx
           cp "$RUNNER_TEMP/production-runtime.tar.gz" production-runtime.tar.gz
@@ -113,4 +122,4 @@ jobs:
           printf '%s\n' "$GITHUB_SHA" > release-sha.txt
           git add production-runtime.tar.gz activate.sh release-sha.txt
           git commit -m "deploy: production $GITHUB_SHA"
-          git push --force origin HEAD:refs/heads/deploy/production
+          git push origin HEAD:refs/heads/deploy/production
