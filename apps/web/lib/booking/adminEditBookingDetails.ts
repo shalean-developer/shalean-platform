@@ -482,7 +482,9 @@ export async function previewAdminEditBookingDetails(
   },
 ): Promise<PreviewAdminEditBookingDetailsResult> {
   const bookingId = params.bookingId.trim();
-  const gate = await assertAdminBookingEditDetailsAllowed(admin, bookingId);
+  const gate = await assertAdminBookingEditDetailsAllowed(admin, bookingId, {
+    notesOnly: isAdminEditBookingDetailsNotesOnlyBody(params.body),
+  });
   if (!gate.ok) {
     return { ok: false, status: gate.status, error: gate.error };
   }
@@ -605,7 +607,9 @@ async function beginAdminEditDetailsMutation(
   const bookingId = params.bookingId.trim();
   const dedupeKey = (params.idempotencyKey ?? params.body.idempotency_key ?? "").trim().slice(0, 256) || null;
 
-  const gate = await assertAdminBookingEditDetailsAllowed(admin, bookingId);
+  const gate = await assertAdminBookingEditDetailsAllowed(admin, bookingId, {
+    notesOnly: isAdminEditBookingDetailsNotesOnlyBody(params.body),
+  });
   if (!gate.ok) {
     return { ok: false, result: { ok: false, status: gate.status, error: gate.error } };
   }

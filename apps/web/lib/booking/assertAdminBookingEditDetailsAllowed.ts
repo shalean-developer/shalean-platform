@@ -12,6 +12,7 @@ export const ADMIN_BOOKING_EDIT_PAYOUT_LOCKED_MESSAGE = "Cannot edit booking aft
 export async function assertAdminBookingEditDetailsAllowed(
   admin: SupabaseClient,
   bookingId: string,
+  options?: { notesOnly?: boolean },
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const bid = bookingId.trim();
   if (!/^[0-9a-f-]{36}$/i.test(bid)) {
@@ -39,6 +40,8 @@ export async function assertAdminBookingEditDetailsAllowed(
   if (fin != null && String(fin).trim() !== "") {
     return { ok: false, status: 409, error: ADMIN_BOOKING_EDIT_PAYOUT_LOCKED_MESSAGE };
   }
+
+  if (options?.notesOnly) return { ok: true };
 
   const resetSafe = await assertBookingCleanerEarningsResetSafe(admin, bid);
   if (!resetSafe.ok) {

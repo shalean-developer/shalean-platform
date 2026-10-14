@@ -47,6 +47,11 @@ function readOnlyBooking(date: string | null) {
   return { admin, writes, row };
 }
 describe("historical cleanup rejects before any mutation", () => {
+  it.each(["2026-09-30", null])("allows notes-only edits of %s without earnings access", async (date) => {
+    const { admin, writes } = readOnlyBooking(date);
+    expect(await assertAdminBookingEditDetailsAllowed(admin as never, BID, { notesOnly: true })).toEqual({ ok: true });
+    expect(writes).not.toHaveBeenCalled();
+  });
   it.each(["2026-07-15", " 2026-09-30 ", null])("blocks roster repair for %s before writes", async (date) => {
     const { admin, writes, row } = readOnlyBooking(date);
     Object.assign(row, { is_team_job: true, team_id: "team" });

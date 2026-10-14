@@ -4,6 +4,9 @@ select set_config('request.jwt.claim.role','service_role',true);
 create temp table audit03c02_delete_probe(booking_id uuid);
 create trigger probe_delete before delete on audit03c02_delete_probe
 for each row execute function public.audit_03c02_guard_item_delete();
+create temp table audit03c02_roster_probe(booking_id uuid);
+create trigger probe_roster before insert or update or delete on audit03c02_roster_probe
+for each row execute function public.audit_03c02_guard_booking_roster_mutation();
 do $$
 declare b uuid; c uuid; n integer;
 begin
@@ -12,7 +15,23 @@ begin
  if b is null or c is null then raise exception 'staging fixtures unavailable'; end if;
  select count(*) into n from pg_trigger where not tgisinternal and tgenabled='O' and tgname in ('audit_03c02_ledger_delete_boundary','audit_03c02_roster_delete_boundary','audit_03c02_team_delete_boundary');
  if n<>3 then raise exception 'FAIL missing production-table DELETE trigger'; end if;
+ update public.bookings set date='2026-10-01' where id=b;
+ insert into audit03c02_roster_probe values(b);
  update public.bookings set date='2026-09-30' where id=b;
+ begin
+  insert into audit03c02_roster_probe values(b);
+  raise exception 'FAIL historical roster insert';
+ exception when check_violation then if sqlerrm<>'historical_payout_item_deferred' then raise; end if; end;
+ begin
+  update audit03c02_roster_probe set booking_id=b;
+  raise exception 'FAIL historical roster update';
+ exception when check_violation then if sqlerrm<>'historical_payout_item_deferred' then raise; end if; end;
+ begin
+  delete from audit03c02_roster_probe;
+  raise exception 'FAIL historical roster delete';
+ exception when check_violation then if sqlerrm<>'historical_payout_item_deferred' then raise; end if; end;
+ if not exists(select 1 from pg_trigger where tgname='audit_03c02_booking_roster_boundary' and tgrelid='public.booking_cleaners'::regclass and tgenabled='O') then raise exception 'FAIL shared roster trigger missing'; end if;
+
  insert into public.cleaner_earnings(id,booking_id,cleaner_id,amount_cents,status) values('a03c0204-0000-4000-8000-000000000001',b,c,100,'pending');
  insert into public.booking_roster_member_payouts(id,booking_id,cleaner_id,payout_cents,bonus_cents,status) values('a03c0204-0000-4000-8000-000000000002',b,c,100,0,'pending');
  begin
