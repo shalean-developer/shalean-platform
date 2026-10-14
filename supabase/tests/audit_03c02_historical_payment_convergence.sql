@@ -10,7 +10,7 @@ begin
  if not found then raise exception 'staging pending-payment fixture unavailable'; end if;
  intent:=jsonb_build_object('version',1,'captured_cents',1000,'refunded_cents',0,'currency','ZAR','records',jsonb_build_array(
    jsonb_build_object('id','audit-refund','amount_cents',200,'currency','ZAR','record_only',false,'provider_state','submitted_to_provider')));
- update public.bookings set booking_snapshot=coalesce(booking_snapshot,'{}')||jsonb_build_object('refund_workflow',intent) where id=b.id;
+ update public.bookings set selected_cleaner_id=(select id from public.cleaners order by id limit 1),booking_snapshot=coalesce(booking_snapshot,'{}')||jsonb_build_object('refund_workflow',intent) where id=b.id;
  set constraints all immediate;
  alter table public.bookings disable trigger audit_03c02_final_booking_financials;
  update public.bookings set date='2026-09-30' where id=b.id;
@@ -25,7 +25,7 @@ begin
  exception when check_violation then if sqlerrm<>'historical_capture_identity_mismatch' then raise; end if; end;
  result:=public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,coalesce(b.currency,'ZAR'),now(),expected);
  if result->>'id' is distinct from b.id::text then raise exception 'FAIL capture row missing'; end if;
- if not exists(select 1 from public.bookings where id=b.id and amount_paid_cents=1000 and payment_status='success') then raise exception 'FAIL capture not recorded'; end if;
+ if not exists(select 1 from public.bookings where id=b.id and amount_paid_cents=1000 and payment_status='success' and status='pending_assignment') then raise exception 'FAIL capture not recorded'; end if;
  begin
    update public.bookings set amount_paid_cents=800,total_paid_cents=800,total_paid_zar=8 where id=b.id;
    raise exception 'FAIL arbitrary paid-total edit';

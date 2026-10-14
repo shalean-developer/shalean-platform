@@ -53,7 +53,7 @@ begin
  perform set_config('shalean.verified_booking_capture',b.id::text,true);
  update public.bookings set amount_paid_cents=p_amount_cents,total_paid_cents=p_amount_cents,total_paid_zar=p_amount_cents::numeric/100,
    payment_completed_at=p_paid_at,payment_status=case when b.payment_status='pending_monthly' then b.payment_status else 'success' end,
-   status='pending',updated_at=now() where id=b.id;
+   status=case when b.cleaner_id is not null or b.selected_cleaner_id is not null then 'pending_assignment' else 'pending' end,updated_at=now() where id=b.id;
  perform set_config('shalean.verified_booking_capture',coalesce(prior_context,''),true);
  select jsonb_build_object('id',id,'created_at',created_at) into result from public.bookings where id=b.id;
  return result;

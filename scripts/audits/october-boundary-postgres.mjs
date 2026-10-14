@@ -6,7 +6,7 @@ const { PGlite }=await import(process.env.AUDIT_PGLITE_MODULE ?? '@electric-sql/
 const db=new PGlite();
 await db.exec(`create role anon; create role authenticated; create role service_role;
 create table audit_users(id uuid primary key);
-create table bookings(currency text, paystack_reference text,customer_email text,customer_id uuid,selected_cleaner_id uuid,assignment_type text,payment_status text,payment_completed_at timestamptz,created_at timestamptz,updated_at timestamptz,refund_status text,id uuid primary key,date date,time text,assigned_at timestamptz,service_slug text,base_amount_cents int,service_fee_cents int,total_paid_zar numeric,total_paid_cents int,amount_paid_cents int,price_snapshot jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,team_id uuid,is_team_job boolean,cleaner_count int,team_member_count_snapshot int,
+create table bookings(currency text, paystack_reference text,customer_email text,customer_id uuid,selected_cleaner_id uuid,assignment_type text,payment_status text,payment_completed_at timestamptz,created_at timestamptz,updated_at timestamptz,refund_status text,id uuid primary key,check(not((cleaner_id is not null or selected_cleaner_id is not null) and status='pending')),date date,time text,assigned_at timestamptz,service_slug text,base_amount_cents int,service_fee_cents int,total_paid_zar numeric,total_paid_cents int,amount_paid_cents int,price_snapshot jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,team_id uuid,is_team_job boolean,cleaner_count int,team_member_count_snapshot int,
 status text,payout_id uuid,payout_status text,payout_paid_at timestamptz,payout_frozen_cents int,
 cleaner_payout_cents int,cleaner_bonus_cents int,display_earnings_cents int,internal_earnings_cents int,payout_earnings_cents int,cleaner_earnings_total_cents int,company_revenue_cents int,
 cleaner_share_percentage numeric,earnings_summary jsonb,cleaner_line_earnings_finalized_at timestamptz,earnings_model_version text,payout_percentage numeric,payout_type text,
@@ -22,7 +22,7 @@ create table cleaner_earnings_adjustments(created_by uuid references audit_users
 create table booking_cleaner_earnings_snapshot_lines(booking_id uuid references bookings on delete cascade,booking_line_item_id uuid references booking_line_items on delete cascade,allocated_display_earnings_cents int);
 create function audit_03c02_has_verified_outcome(uuid,text,text,text default null) returns boolean language sql as 'select false';`);
 const old='aaaaaaaa-0000-4000-8000-000000000001', forward='aaaaaaaa-0000-4000-8000-000000000002', cid='bbbbbbbb-0000-4000-8000-000000000001', other='bbbbbbbb-0000-4000-8000-000000000002';
-await db.query(`insert into bookings(id,date,status,cleaner_id) values($1,'2026-09-30','pending',$3),($2,'2026-10-01','pending',$3)`,[old,forward,cid]);
+await db.query(`insert into bookings(id,date,status,cleaner_id) values($1,'2026-09-30','pending_assignment',$3),($2,'2026-10-01','pending_assignment',$3)`,[old,forward,cid]);
 for(const [i,t] of ['cleaner_earnings','booking_roster_member_payouts','team_job_member_payouts'].entries()) await db.exec(`insert into ${t}(id,booking_id,cleaner_id,status) values ('cccccccc-0000-4000-8000-00000000000${i+1}','${old}','${cid}','pending')`);
 await db.exec(`insert into booking_cleaners(booking_id,cleaner_id,role) values('${old}','${cid}','lead'),('${forward}','${cid}','lead');
 insert into booking_line_items(id,booking_id,cleaner_earnings_cents) values('${old}','${old}',100),('${forward}','${forward}',100);
@@ -107,6 +107,7 @@ await reject(captureSql,[old,'wrong-reference',1000,JSON.stringify(expected)]);
 await reject(captureSql,[old,'charge-1',-1,JSON.stringify(expected)]);
 await reject(captureSql,[old,'charge-1',1000,JSON.stringify({...expected,cleaner_id:other})]);
 await db.query(captureSql,[old,'charge-1',1000,JSON.stringify(expected)]);checks++;
+assert.equal((await db.query(`select status from bookings where id=$1`,[old])).rows[0].status,'pending_assignment');checks++;
 assert.equal((await db.query(`select amount_paid_cents from bookings where id=$1`,[old])).rows[0].amount_paid_cents,1000);checks++;
 await reject(`update bookings set total_paid_cents=999 where id=$1`,[old]);
 for(const role of ['anon','authenticated','service_role']){

@@ -21,6 +21,7 @@
  *   SUPABASE_SERVICE_ROLE_KEY
  */
 
+import { FORWARD_SEED_TAG, forwardSeedFixtureId } from "./lib/seedFixtureGeneration.mjs";
 import { buildFinanceSeedPlan, writeFinanceSeedPlan, paidSeedBookingDate, seedFinanceCalendar } from "./lib/financeSeedPolicy.mjs";
 import { forwardSeedBookingDate } from "./lib/forwardSeedBookingDate.mjs";
 import { createRequire } from "node:module";
@@ -38,7 +39,7 @@ const { createClient } = require("@supabase/supabase-js");
 // Constants
 // ──────────────────────────────────────────────────────────────────────────────
 
-const SEED_TAG = "DEVSEED";
+const SEED_TAG = FORWARD_SEED_TAG;
 
 /**
  * Multi-layer safety guard. Refuses to seed if:
@@ -189,6 +190,11 @@ const PROPOSAL_IDS = {
   approved:           "f8000001-0004-4008-8008-000000000004",
   expired:            "f8000001-0005-4008-8008-000000000005",
 };
+
+// A new financial namespace preserves old September/undated fixture graphs.
+for (const ids of [BOOKING_IDS,EARNING_IDS,PAYOUT_RUN_IDS,PAYOUT_IDS,RECURRING_IDS,INVOICE_IDS,PROPOSAL_IDS]) {
+  for (const key of Object.keys(ids)) ids[key]=forwardSeedFixtureId(ids[key]);
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Synthetic user definitions (no real personal data)
@@ -1359,7 +1365,7 @@ async function seedProposals(admin, userIdMap) {
 // Reset — wipe all seed rows
 // ──────────────────────────────────────────────────────────────────────────────
 
-async function resetSeedRows(admin) {
+export async function resetSeedRows(admin) {
   console.log("[seed-dev] Resetting dev seed rows...");
 
   const must = async (label, promise) => {
@@ -1379,6 +1385,12 @@ async function resetSeedRows(admin) {
     }
     throw new Error(`[seed-dev] Reset failed at ${label}: ${message}`);
   };
+
+  const legacySeedBookings = await must(
+    "load retained legacy seed generation",
+    admin.from("bookings").select("id").like("paystack_reference","DEVSEED-BK-%").limit(1),
+  );
+  const retainSharedParents=(legacySeedBookings??[]).length>0;
 
   const taggedSeedBookings = await must(
     "load tagged seed bookings",
@@ -1699,6 +1711,9 @@ async function resetSeedRows(admin) {
     "recurring_bookings",
     admin.from("recurring_bookings").delete().in("id", Object.values(RECURRING_IDS)),
   );
+  if (retainSharedParents) {
+    console.log("[seed-dev] Retained legacy fixture generation and its shared cleaner/team parents.");
+  } else {
   await must(
     "team_members",
     admin.from("team_members").delete().in("team_id", Object.values(TEAM_IDS)),
@@ -1723,6 +1738,8 @@ async function resetSeedRows(admin) {
     );
   }
 
+  }
+
   console.log("[seed-dev] Reset complete.");
 }
 
@@ -1741,7 +1758,7 @@ async function main() {
     if (bookings.length !== 15 || bookings.some(row => !/^\d{4}-\d{2}-\d{2}$/.test(row.date ?? "") || row.date < "2026-10-01")) {
       throw new Error("Seed booking dates violate the forward boundary");
     }
-    console.log(JSON.stringify({bookings:bookings.length,earliestDate:bookings.map(row=>row.date).sort()[0],dates:bookings.map(row=>row.date)}));
+    console.log(JSON.stringify({bookings:bookings.length,earliestDate:bookings.map(row=>row.date).sort()[0],dates:bookings.map(row=>row.date),ids:bookings.map(row=>row.id),references:bookings.map(row=>row.paystack_reference)}));
     return;
   }
 
@@ -1850,7 +1867,7 @@ async function main() {
   console.log("\n[seed-dev] CONFIRM: no production PII, auth, payment, or banking data was seeded.");
 }
 
-main().catch((err) => {
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) main().catch((err) => {
   console.error("[seed-dev] FAILED:", err.message || err);
   process.exit(1);
 });

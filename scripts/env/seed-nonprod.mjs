@@ -11,6 +11,7 @@
  * Requires docs/audits/environments/evidence/.secrets-local/staging.keys.env
  * (gitignored). Never prints secret values.
  */
+import { isForwardSeedBooking } from "../lib/seedFixtureGeneration.mjs";
 import { buildNonprodBookingFixtures } from "./nonprodBookingFixtures.mjs";
 import { createRequire } from "node:module";
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
@@ -209,10 +210,10 @@ function applyCatalogSql(env) {
   }
 }
 
-async function resetFixtures(admin, env) {
+export async function resetFixtures(admin, env) {
   const { data: rows, error: loadError } = await admin
     .from("bookings")
-    .select("id, paystack_reference")
+    .select("id, paystack_reference, date")
     .like("paystack_reference", "ENV-03-STG-%");
   if (loadError) throw new Error(`reset bookings read: ${loadError.message}`);
 
@@ -220,6 +221,11 @@ async function resetFixtures(admin, env) {
   let retainedFinancial = 0;
   const retainedReferences = new Set();
   for (const row of rows ?? []) {
+    if (!isForwardSeedBooking(row)) {
+      retainedFinancial += 1;
+      retainedReferences.add(row.paystack_reference);
+      continue;
+    }
     const { data: financiallyProtected, error: historyError } = await admin.rpc(
       "booking_has_financial_history",
       { p_booking_id: row.id },
@@ -236,7 +242,7 @@ async function resetFixtures(admin, env) {
     if (error) throw new Error(`reset booking ${row.paystack_reference}: ${error.message}`);
     deleted += 1;
   }
-  console.log(`[seed-nonprod] reset deleted=${deleted} retained_financial_history=${retainedFinancial}`);
+  console.log(`[seed-nonprod] reset deleted=${deleted} retained_protected=${retainedFinancial}`);
   return retainedReferences;
 }
 
@@ -288,7 +294,7 @@ async function main() {
   console.log("[seed-nonprod] done (passwords in .secrets-local, not printed)");
 }
 
-main().catch((err) => {
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) main().catch((err) => {
   console.error("[seed-nonprod] FAILED:", err.message || err);
   process.exit(1);
 });

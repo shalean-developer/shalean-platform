@@ -29,6 +29,8 @@ node scripts/env/seed-nonprod.mjs --env staging
 node scripts/env/seed-nonprod.mjs --env staging --reset
 ```
 
+Historical or undated ENV-03 bookings are retained during reset, alongside financially protected fixtures. New runs create a fresh forward-dated isolation marker. The development seed uses a separate `DEVSEED-OCT2026-*` generation and financial IDs; earlier `DEVSEED-BK-*` graphs and their shared cleaner/team parents remain intact. No historical fixture migration or financial repair is performed.
+
 Creates:
 
 - Synthetic auth users (`staging-*@shalean.test`)
