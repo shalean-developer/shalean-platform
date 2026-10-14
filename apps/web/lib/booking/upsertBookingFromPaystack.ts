@@ -1371,11 +1371,12 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const saveRecurringAuthorization = async (): Promise<void> => {
     const authCode = input.paystackAuthorizationCode?.trim() ?? "";
     if (authCode) {
-      const { data: recurringHead } = await supabase
+      const { data: recurringHead, error: recurringHeadErr } = await supabase
         .from("bookings")
         .select("recurring_id")
         .eq("id", id)
         .maybeSingle();
+      if (recurringHeadErr) throw new Error("recurring_authorization_lookup_failed");
       const recurringId =
         recurringHead && typeof recurringHead === "object" && "recurring_id" in recurringHead
           ? (recurringHead as { recurring_id: string | null }).recurring_id
@@ -1390,10 +1391,10 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
             bookingId: id,
             recurringId,
           });
+          throw new Error("recurring_authorization_save_failed");
         }
       }
     }
-
   };
 
   // Payment convergence must also retain authorization for future recurring charges.

@@ -363,7 +363,7 @@ describe("observed pending upsert conflict propagation", () => {
     vi.mocked(resolveBookingUserId).mockResolvedValue(null);
   });
 
-  function pendingDb(mode: "id" | "paystack_reference", competing: Record<string, unknown> = {}, initialOverrides:Record<string,unknown> = {}) {
+  function pendingDb(mode: "id" | "paystack_reference", competing: Record<string, unknown> = {}, initialOverrides:Record<string,unknown> = {}, authorizationError: string | null = null) {
     const initial: Record<string, unknown> = {
       id: bookingId, status: "pending_payment", customer_email: " Payer@Example.com ",
       customer_id: "owner-a", paystack_reference: mode === "id" ? bookingId : "pay_verified",
@@ -377,7 +377,7 @@ describe("observed pending upsert conflict propagation", () => {
     const from = vi.fn((table: string) => {
       if (table === "recurring_bookings") {
         return { update: (patch: Record<string, unknown>) => ({ eq: async () => {
-          writes(patch); return { error: null };
+          writes(patch); return { error: authorizationError ? {message: authorizationError} : null };
         } }) };
       }
       if (table !== "bookings") throw new Error("Unexpected side-effect table " + table);
@@ -427,6 +427,16 @@ describe("observed pending upsert conflict propagation", () => {
       paystackMetadata: { booking_id: bookingId, price_snapshot: JSON.stringify(snapshot) }, ...overrides,
     };
   }
+
+  it("reports failed authorization persistence for recovery instead of historical success", async () => {
+    pendingDb("paystack_reference", {}, {
+      date: "2026-09-30", recurring_id: "00000000-0000-4000-8000-000000000002", is_recurring_generated: true,
+    }, "transient write failure");
+    const result = await upsertBookingFromPaystack(input({ paystackAuthorizationCode: "AUTH_verified" }));
+    expect(result).toMatchObject({ok:false,reason:"finalization_failed",error:"recurring_authorization_save_failed",recoveryEnqueue:true});
+    expect(successEffect).not.toHaveBeenCalled();
+    expect(enqueueFailedJob).toHaveBeenCalledWith("booking_finalize", expect.objectContaining({paystackReference:"pay_verified"}));
+  });
 
   it.each([null, "2026-09-30"])("preserves recurring authorization and refreshes historical payment state for %s", async (date) => {
     const db = pendingDb("paystack_reference", {}, {
