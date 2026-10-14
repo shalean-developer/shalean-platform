@@ -1,3 +1,6 @@
+import { loadCleanerPaymentIdentities } from "@/lib/payout/loadCleanerPaymentIdentities";
+import { cleanerPaymentReference } from "@/lib/payout/cleanerPaymentReference";
+import { isClosedMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -32,21 +35,25 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     id: string;
     cleaner_id: string;
     total_amount_cents: number;
+    status: string;
     period_start: string;
     period_end: string;
   };
-  const { data: cleaner } = await admin
-    .from("cleaners")
-    .select("id, full_name")
-    .eq("id", p.cleaner_id)
-    .maybeSingle();
-
-  const amountZar = Math.round(Number(p.total_amount_cents ?? 0) / 100);
-  const cleanerName = (cleaner as { full_name?: string | null } | null)?.full_name ?? p.cleaner_id;
-  const reference = `PAYOUT-${p.period_start}-${p.period_end}-${String(p.id).slice(0, 8)}`;
+  if (!isClosedMonthlyPayoutBatchPeriod(p.period_start, p.period_end) || p.status !== "approved") {
+    return NextResponse.json({ error: "Bank instructions require a closed, approved monthly payout." }, { status: 409 });
+  }
+  let identity: { name: string; paymentId: string };
+  let reference: string;
+  try {
+    identity = (await loadCleanerPaymentIdentities(admin, [p.cleaner_id])).get(p.cleaner_id)!;
+    reference = cleanerPaymentReference(identity.paymentId, p.period_start.slice(0, 7));
+  } catch {
+    return NextResponse.json({ error: "Cleaner payment identity could not be verified." }, { status: 503 });
+  }
+  const amountZar = (Number(p.total_amount_cents) / 100).toFixed(2);
   const csv = [
-    ["Cleaner", "Amount", "Bank", "Reference"].map(csvCell).join(","),
-    [cleanerName, amountZar, "", reference].map(csvCell).join(","),
+    ["Cleaner", "Amount", "Bank", "Reference", "CleanerPaymentID"].map(csvCell).join(","),
+    [identity.name, amountZar, "", reference, identity.paymentId].map(csvCell).join(","),
   ].join("\n");
 
   return new Response(csv, {
