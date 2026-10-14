@@ -98,7 +98,24 @@ export async function finalizePendingPaymentBookingFromPaystack(params: {
   row: Record<string, unknown>;
   observed: PaymentFinalizationObservedPendingBooking;
   ownershipColumn: BookingCustomerOwnershipColumn;
+  historicalBooking?: boolean;
 }): Promise<{ data: PaymentFinalizationPersistedBookingRow | null; error: DbError | null }> {
+  if (params.historicalBooking) {
+    const {observed,row,ownershipColumn}=params;
+    const identity=preservePaymentCustomerIdentity(observed,{
+      customerEmail:typeof row.customer_email==='string'?row.customer_email:null,
+      customerAuthId:typeof row[ownershipColumn]==='string'?row[ownershipColumn] as string:null,
+    });
+    if(identity.error)return {data:null,error:identity.error};
+    const {data,error}=await params.supabase.rpc('audit_03c02_record_historical_capture',{
+      p_booking_id:observed.id,p_reference:row.paystack_reference,p_amount_cents:row.amount_paid_cents,
+      p_currency:row.currency,p_paid_at:row.payment_completed_at,
+      p_expected:{status:observed.status,paystack_reference:observed.paystackReference,
+        customer_email:observed.customerEmail,[ownershipColumn]:observed.customerAuthId,
+        cleaner_id:observed.cleanerId,selected_cleaner_id:observed.selectedCleanerId,assignment_type:observed.assignmentType},
+    });
+    return {data:data as PaymentFinalizationPersistedBookingRow|null,error};
+  }
   return updateObservedPendingPaymentBooking({
     ...params,
     row: normalizePaystackFinalizationPaidAmountRow(params.row),

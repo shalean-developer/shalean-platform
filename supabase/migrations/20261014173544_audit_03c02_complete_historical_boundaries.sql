@@ -1,6 +1,66 @@
 -- Validate final booking values after every BEFORE policy trigger. Preserve history
 -- without preventing notes, completion timestamps, or verified provider convergence.
 begin;
+-- Refund confirmation may reconcile paid totals only against an existing provider intent.
+create or replace function public.audit_03c02_verified_booking_refund(p_old jsonb,p_new jsonb)
+returns boolean language plpgsql immutable set search_path=pg_catalog as $$
+declare a jsonb:=p_old->'booking_snapshot'->'refund_workflow'; z jsonb:=p_new->'booking_snapshot'->'refund_workflow';
+ r jsonb; prior jsonb; changed integer:=0; delta bigint:=0; remaining bigint;
+begin
+ if nullif(p_old->>'paystack_reference','') is null or p_old->>'paystack_reference' is distinct from p_new->>'paystack_reference'
+   or a is null or z is null or a->>'captured_cents' is distinct from z->>'captured_cents'
+   or a->>'currency' is distinct from z->>'currency' or jsonb_typeof(a->'records')<>'array' or jsonb_typeof(z->'records')<>'array'
+   or jsonb_array_length(a->'records')<>jsonb_array_length(z->'records') then return false; end if;
+ for r in select value from jsonb_array_elements(z->'records') loop
+   select value into prior from jsonb_array_elements(a->'records') where value->>'id'=r->>'id';
+   if prior is null then return false; end if;
+   if prior is distinct from r then
+     if prior->>'provider_state' not in ('submitted_to_provider','pending') or r->>'provider_state'<>'succeeded'
+       or coalesce((prior->>'record_only')::boolean,true) or coalesce((r->>'record_only')::boolean,true)
+       or nullif(r->>'provider_reference','') is null or nullif(r->>'succeeded_at','') is null
+       or (prior-array['provider_state','provider_reference','provider_outcome','updated_at','succeeded_at','failed_at'])
+         is distinct from (r-array['provider_state','provider_reference','provider_outcome','updated_at','succeeded_at','failed_at'])
+       or (r->>'amount_cents')::bigint<=0 then return false; end if;
+     changed:=changed+1; delta:=(r->>'amount_cents')::bigint;
+   end if;
+ end loop;
+ remaining:=(z->>'captured_cents')::bigint-(z->>'refunded_cents')::bigint;
+ return changed=1 and remaining>0 and p_new->>'refund_status'='partial'
+   and (z->>'refunded_cents')::bigint=(a->>'refunded_cents')::bigint+delta
+   and (p_new->>'amount_paid_cents')::bigint=remaining and (p_new->>'total_paid_cents')::bigint=remaining
+   and (p_new->>'total_paid_zar')::numeric=remaining::numeric/100;
+exception when invalid_text_representation or numeric_value_out_of_range then return false;
+end; $$;
+revoke all on function public.audit_03c02_verified_booking_refund(jsonb,jsonb) from public,anon,authenticated,service_role;
+
+-- Called only after the server has verified Paystack success. No provider request
+-- is made here. Retain the historical service, roster, pricing and earnings basis.
+create or replace function public.audit_03c02_record_historical_capture(p_booking_id uuid,p_reference text,p_amount_cents bigint,p_currency text,p_paid_at timestamptz,p_expected jsonb)
+returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare b public.bookings; result jsonb; prior_context text;
+begin
+ select * into b from public.bookings where id=p_booking_id for update;
+ if not found or b.date is null or b.date::date>=date '2026-10-01'
+   or b.status::text not in ('pending_payment','payment_expired','payment_reconciliation_required')
+   or nullif(p_reference,'') is null or b.paystack_reference is distinct from p_reference
+   or p_amount_cents is null or p_amount_cents<0 or p_currency is distinct from coalesce(b.currency,'ZAR')
+   or p_paid_at is null or p_expected is null or not (to_jsonb(b) @> p_expected)
+   or not (p_expected ? 'customer_id' or p_expected ? 'user_id')
+   or not (p_expected ?& array['status','paystack_reference','customer_email','cleaner_id','selected_cleaner_id','assignment_type']) then
+   raise exception 'historical_capture_identity_mismatch' using errcode='23514';
+ end if;
+ prior_context:=current_setting('shalean.verified_booking_capture',true);
+ perform set_config('shalean.verified_booking_capture',b.id::text,true);
+ update public.bookings set amount_paid_cents=p_amount_cents,total_paid_cents=p_amount_cents,total_paid_zar=p_amount_cents::numeric/100,
+   payment_completed_at=p_paid_at,payment_status=case when b.payment_status='pending_monthly' then b.payment_status else 'success' end,
+   status='pending',updated_at=now() where id=b.id;
+ perform set_config('shalean.verified_booking_capture',coalesce(prior_context,''),true);
+ select jsonb_build_object('id',id,'created_at',created_at) into result from public.bookings where id=b.id;
+ return result;
+end; $$;
+revoke all on function public.audit_03c02_record_historical_capture(uuid,text,bigint,text,timestamptz,jsonb) from public,anon,authenticated;
+grant execute on function public.audit_03c02_record_historical_capture(uuid,text,bigint,text,timestamptz,jsonb) to service_role;
+
 create or replace function public.audit_03c02_guard_final_booking_financials()
 returns trigger language plpgsql security definer set search_path=pg_catalog as $$
 declare v_keys text[] := array[
@@ -22,6 +82,11 @@ begin
      raise exception 'historical_payout_item_deferred' using errcode='23514';
    end if;
    return NEW;
+ end if;
+ if current_setting('shalean.verified_booking_capture',true)=NEW.id::text
+   or (coalesce(nullif(current_setting('request.jwt.claim.role',true),''),current_setting('request.jwt.claims',true)::jsonb->>'role')='service_role'
+     and public.audit_03c02_verified_booking_refund(to_jsonb(OLD),to_jsonb(NEW))) then
+   v_keys:=array_remove(array_remove(array_remove(v_keys,'total_paid_zar'),'total_paid_cents'),'amount_paid_cents');
  end if;
  select jsonb_object_agg(key,value) into v_before from jsonb_each(to_jsonb(OLD)) where key=any(v_keys);
  select jsonb_object_agg(key,value) into v_after from jsonb_each(to_jsonb(NEW)) where key=any(v_keys);
@@ -88,6 +153,10 @@ begin
        where key=any(array['booking_id','cleaner_earnings_cents','total_price_cents','unit_price_cents','quantity','earns_cleaner','item_type','slug','name','metadata']);
      select jsonb_object_agg(key,value) into v_after from jsonb_each(to_jsonb(NEW))
        where key=any(array['booking_id','cleaner_earnings_cents','total_price_cents','unit_price_cents','quantity','earns_cleaner','item_type','slug','name','metadata']);
+   elsif TG_TABLE_NAME='cleaner_earnings_adjustments' and pg_trigger_depth()>1
+     and to_jsonb(OLD)->>'created_by' is not null and to_jsonb(NEW)->>'created_by' is null then
+     -- Only the FK-driven creator nulling is operational; retain audit email.
+     v_before:=to_jsonb(OLD)-array['updated_at','created_by']; v_after:=to_jsonb(NEW)-array['updated_at','created_by'];
    else
      v_before:=to_jsonb(OLD)-'updated_at'; v_after:=to_jsonb(NEW)-'updated_at';
    end if;

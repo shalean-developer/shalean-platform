@@ -358,3 +358,24 @@ describe("observed-state payment writes", () => {
     expect(db.current.status).toBe("pending_payment");
   });
 });
+
+
+describe('verified historical capture command',()=>{
+ const observed:PaymentFinalizationObservedPendingBooking={id:'old-booking',status:'pending_payment',customerEmail:'customer@example.com',customerAuthId:null,paystackReference:'charge-1',selectedCleanerId:null,cleanerId:null,assignmentType:null};
+ const row={paystack_reference:'charge-1',customer_email:'customer@example.com',amount_paid_cents:1000,currency:'ZAR',payment_completed_at:'2026-10-14T12:00:00Z',date:'2026-09-30',cleaner_id:'must-not-write',base_amount_cents:999};
+ it('uses the restricted RPC with original identity and excludes payout/pricing fields',async()=>{
+  const rpc=vi.fn().mockResolvedValue({data:{id:observed.id},error:null});const from=vi.fn();
+  const result=await finalizePendingPaymentBookingFromPaystack({supabase:{rpc,from} as unknown as SupabaseClient,row,observed,ownershipColumn:'customer_id',historicalBooking:true});
+  expect(result).toEqual({data:{id:observed.id},error:null});expect(from).not.toHaveBeenCalled();
+  expect(rpc).toHaveBeenCalledWith('audit_03c02_record_historical_capture',expect.objectContaining({p_booking_id:observed.id,p_reference:'charge-1',p_amount_cents:1000,p_expected:expect.objectContaining({cleaner_id:null,customer_id:null,status:'pending_payment'})}));
+  expect(rpc.mock.calls[0][1]).not.toHaveProperty('base_amount_cents');
+ });
+ it('returns a database failure rather than claiming capture persistence',async()=>{
+  const rpc=vi.fn().mockResolvedValue({data:null,error:{message:'identity mismatch'}});
+  expect(await finalizePendingPaymentBookingFromPaystack({supabase:{rpc} as unknown as SupabaseClient,row,observed,ownershipColumn:'customer_id',historicalBooking:true})).toMatchObject({data:null,error:{message:'identity mismatch'}});
+ });
+ it('rejects changed customer identity before the RPC',async()=>{
+  const rpc=vi.fn();const result=await finalizePendingPaymentBookingFromPaystack({supabase:{rpc} as unknown as SupabaseClient,row:{...row,customer_email:'other@example.com'},observed,ownershipColumn:'customer_id',historicalBooking:true});
+  expect(result.error).not.toBeNull();expect(rpc).not.toHaveBeenCalled();
+ });
+});

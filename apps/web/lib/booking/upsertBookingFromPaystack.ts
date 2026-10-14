@@ -1139,6 +1139,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       row,
       observed,
       ownershipColumn,
+      historicalBooking: typeof existing?.date === 'string' && existing.date.trim() < '2026-10-01',
     });
 
     if (bookingPaystackFinalizeTraceEnabled()) {
@@ -1259,6 +1260,8 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
 
   finalizeId = id;
 
+  const historicalCapture = typeof existing?.date === 'string' && existing.date.trim() < '2026-10-01';
+
   const userIdForEffects =
     inserted && typeof inserted === "object"
       ? bookingCustomerKey(inserted as { customer_id?: string | null; user_id?: string | null }) || userIdResolved
@@ -1337,7 +1340,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     }
   };
 
-  await runRequiredPostPersistRecovery();
+  if (!historicalCapture) await runRequiredPostPersistRecovery();
 
   // Cleaning Credit is payment-critical. It must settle synchronously before any
   // optional/deferred post-persist work so a late verified Paystack success cannot
@@ -1352,6 +1355,9 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     );
     throw new Error(`cleaning_credit_settlement_failed:${creditSettlement.error}`);
   }
+
+  // Verified historical capture records cash truth only; never rebuild the old roster or earnings.
+  if (historicalCapture) return {ok:true,skipped:false,bookingId:id,bookingInDatabase:true};
 
   const runPostPersistSideEffects = async (): Promise<void> => {
   if (id) {
