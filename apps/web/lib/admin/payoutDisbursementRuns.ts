@@ -1,3 +1,4 @@
+import { loadCleanerPaymentIdentities } from "@/lib/payout/loadCleanerPaymentIdentities";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { filterMonthlyPayoutBatchRows } from "@/lib/payout/monthBounds";
 
@@ -16,6 +17,7 @@ export type AdminPayoutRunDetailPayout = {
   id: string;
   cleaner_id: string;
   cleaner_name: string;
+  cleaner_payment_id: string | null;
   total_amount_cents: number;
   status: string;
   payment_status: string | null;
@@ -99,18 +101,12 @@ export async function getPayoutDisbursementRunDetail(
 
   const payoutRows = filterMonthlyPayoutBatchRows(payouts ?? []);
   const cleanerIds = [...new Set(payoutRows.map((p) => String((p as { cleaner_id?: string }).cleaner_id ?? "")).filter(Boolean))];
-  const names = new Map<string, string>();
+  const identities = await loadCleanerPaymentIdentities(admin, cleanerIds);
   const banks = new Map<string, { bank_code: string | null; account_number: string | null }>();
 
   if (cleanerIds.length) {
-    const [{ data: cleaners }, { data: details }] = await Promise.all([
-      admin.from("cleaners").select("id, full_name").in("id", cleanerIds),
-      admin.from("cleaner_payment_details").select("cleaner_id, bank_code, account_number").in("cleaner_id", cleanerIds),
-    ]);
-    for (const c of cleaners ?? []) {
-      const row = c as { id?: string; full_name?: string | null };
-      if (row.id) names.set(row.id, row.full_name?.trim() || row.id);
-    }
+    const { data: details, error: bankError } = await admin.from("cleaner_payment_details").select("cleaner_id, bank_code, account_number").in("cleaner_id", cleanerIds);
+    if (bankError) throw new Error("Cleaner bank details could not be loaded.");
     for (const d of details ?? []) {
       const row = d as { cleaner_id?: string; bank_code?: string | null; account_number?: string | null };
       if (row.cleaner_id) banks.set(row.cleaner_id, { bank_code: row.bank_code ?? null, account_number: row.account_number ?? null });
@@ -136,7 +132,8 @@ export async function getPayoutDisbursementRunDetail(
     return {
       id: row.id,
       cleaner_id: row.cleaner_id,
-      cleaner_name: names.get(row.cleaner_id) ?? row.cleaner_id,
+      cleaner_name: identities.get(row.cleaner_id)!.name,
+      cleaner_payment_id: identities.get(row.cleaner_id)!.paymentId,
       total_amount_cents: row.total_amount_cents,
       status: row.status,
       payment_status: row.payment_status ?? null,
