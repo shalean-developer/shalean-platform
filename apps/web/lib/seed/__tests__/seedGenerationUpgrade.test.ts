@@ -29,6 +29,18 @@ describe('governed seed upgrade without historical mutation',()=>{
   const db={from:()=>({select:()=>({in:async()=>({data:null,error:{message:'read failed'}})}),upsert})};
   await expect(seedBookings(db,{},{})).rejects.toThrow('read failed');expect(upsert).not.toHaveBeenCalled();
  });
+ it.each([true,false])('preserves shared cleaner tenure on reseed: existing=%s',async(existing)=>{
+  const {upsertSeedCleaner}=await moduleAt('scripts/seed-dev.mjs');const upsert=vi.fn().mockResolvedValue({error:null});
+  const db={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:existing?{id:'cleaner'}:null,error:null})})}),upsert})};
+  await upsertSeedCleaner(db,{id:'cleaner',joined_at:'2026-01-01',full_name:'Fixture'});
+  expect(upsert).toHaveBeenCalledWith(existing?{id:'cleaner',full_name:'Fixture'}:{id:'cleaner',joined_at:'2026-01-01',full_name:'Fixture'},{onConflict:'id'});
+ });
+ it('fails cleaner reseeding on lookup or write errors',async()=>{
+  const {upsertSeedCleaner}=await moduleAt('scripts/seed-dev.mjs');const upsert=vi.fn().mockResolvedValue({error:{message:'write failed'}});
+  const from=()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:null,error:{message:'read failed'}})})}),upsert});
+  await expect(upsertSeedCleaner({from},{id:'c'})).rejects.toThrow('read failed');expect(upsert).not.toHaveBeenCalled();
+  await expect(upsertSeedCleaner({from:()=>({...from(),select:()=>({eq:()=>({maybeSingle:async()=>({data:{id:'c'},error:null})})})})},{id:'c'})).rejects.toThrow('write failed');
+ });
  it('does not remap arbitrary identities',async()=>{
   const {forwardSeedFixtureId}=await moduleAt('scripts/lib/seedFixtureGeneration.mjs');
   expect(()=>forwardSeedFixtureId('arbitrary-user')).toThrow();

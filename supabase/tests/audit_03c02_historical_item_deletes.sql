@@ -52,6 +52,12 @@ begin
  insert into public.booking_roster_member_payouts(id,booking_id,cleaner_id,payout_cents,bonus_cents,status) values('a03c0204-0000-4000-8000-000000000002',b,c,100,0,'pending');
  set constraints all immediate;
  alter table public.booking_roster_member_payouts enable trigger audit_03c02_a_roster_payout_identity;
+ if not exists(select 1 from pg_trigger where tgname='audit_03c02_cleaner_tenure' and tgrelid='public.cleaners'::regclass and tgenabled='O') then raise exception 'FAIL cleaner tenure guard missing'; end if;
+ begin
+  update public.cleaners set joined_at=coalesce(joined_at,created_at)+interval '1 day' where id=c;
+  raise exception 'FAIL historical cleaner tenure changed';
+ exception when check_violation then if sqlerrm<>'historical_cleaner_tenure_deferred' then raise; end if; end;
+ update public.cleaners set joined_at=joined_at where id=c;
  begin
   delete from public.cleaner_earnings where id='a03c0204-0000-4000-8000-000000000001';
   raise exception 'FAIL historical ledger deleted';

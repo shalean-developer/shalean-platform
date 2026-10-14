@@ -536,6 +536,16 @@ async function seedAuthUsers(admin) {
 // Phase 4 — Cleaners
 // ──────────────────────────────────────────────────────────────────────────────
 
+export async function upsertSeedCleaner(admin, row) {
+  const {data: existing,error: readError} = await admin.from("cleaners").select("id").eq("id",row.id).maybeSingle();
+  if (readError) throw new Error(`Seed cleaner lookup failed: ${readError.message}`);
+  const profile = {...row};
+  // Shared legacy cleaner parents retain their original tenure across reseeds.
+  if (existing) delete profile.joined_at;
+  const {error} = await admin.from("cleaners").upsert(profile,{onConflict:"id"});
+  if (error) throw new Error(`Seed cleaner write failed: ${error.message}`);
+}
+
 async function seedCleaners(admin, userIdMap, locationIdMap) {
   const cleanerDefs = [
     {
@@ -598,7 +608,7 @@ async function seedCleaners(admin, userIdMap, locationIdMap) {
     const authUserId = userIdMap[def.email];
     if (!authUserId) throw new Error(`No auth user ID for ${def.email}`);
 
-    await admin.from("cleaners").upsert({
+    await upsertSeedCleaner(admin, {
       id: def.id,
       full_name: def.name,
       email: def.email,
@@ -617,7 +627,7 @@ async function seedCleaners(admin, userIdMap, locationIdMap) {
       rating: def.tier === "gold" ? 4.9 : def.tier === "silver" ? 4.6 : 4.3,
       jobs_completed: def.tier === "gold" ? 142 : def.tier === "silver" ? 67 : 12,
       acceptance_rate: 0.95,
-    }, { onConflict: "id" });
+    });
 
     // cleaner_locations: delete stale then insert fresh
     await admin.from("cleaner_locations").delete().eq("cleaner_id", def.id);

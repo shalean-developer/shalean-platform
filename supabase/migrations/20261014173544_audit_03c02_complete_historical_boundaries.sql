@@ -199,4 +199,28 @@ create trigger audit_03c02_snapshot_line_financials before insert or update or d
 for each row execute function public.audit_03c02_guard_detail_financials();
 create trigger audit_03c02_manual_adjustment_financials before insert or update or delete on public.cleaner_earnings_adjustments
 for each row execute function public.audit_03c02_guard_detail_financials();
+-- Canonical payout resolution reads the cleaner's live effective tenure anchor.
+-- Preserve it when any historical attribution can resolve this cleaner.
+create or replace function public.audit_03c02_guard_cleaner_tenure()
+returns trigger language plpgsql security definer set search_path=pg_catalog as $$
+begin
+ if coalesce(OLD.joined_at,OLD.created_at) is not distinct from coalesce(NEW.joined_at,NEW.created_at) then return NEW; end if;
+ if exists (
+   select 1 from public.bookings b
+   where (b.date is null or b.date::date < date '2026-10-01') and (
+     OLD.id in (b.cleaner_id,b.selected_cleaner_id,b.payout_owner_cleaner_id)
+     or exists(select 1 from public.booking_cleaners x where x.booking_id=b.id and x.cleaner_id=OLD.id)
+     or exists(select 1 from public.cleaner_earnings x where x.booking_id=b.id and x.cleaner_id=OLD.id)
+     or exists(select 1 from public.booking_roster_member_payouts x where x.booking_id=b.id and x.cleaner_id=OLD.id)
+     or exists(select 1 from public.team_job_member_payouts x where x.booking_id=b.id and x.cleaner_id=OLD.id)
+     or exists(select 1 from public.booking_cleaner_earnings_snapshot x where x.booking_id=b.id and x.cleaner_id=OLD.id)
+     or exists(select 1 from public.cleaner_earnings_adjustments x where x.booking_id=b.id and x.cleaner_id=OLD.id)
+     or exists(select 1 from public.team_members x where x.team_id=b.team_id and x.cleaner_id=OLD.id)
+   )
+ ) then raise exception 'historical_cleaner_tenure_deferred' using errcode='23514'; end if;
+ return NEW;
+end; $$;
+revoke all on function public.audit_03c02_guard_cleaner_tenure() from public,anon,authenticated,service_role;
+create trigger audit_03c02_cleaner_tenure after update on public.cleaners
+for each row execute function public.audit_03c02_guard_cleaner_tenure();
 commit;

@@ -39,7 +39,7 @@ export async function assertBookingCleanerEarningsResetSafe(
     return { ok: false, status: 404, error: bErr?.message ?? "Booking not found.", code: "booking_not_found" };
   }
 
-  if (!isCurrentPayoutVisitDate((b as { date?: string | null }).date)) {
+  if (!isCurrentPayoutVisitDate((b as { date?: string | null }).date?.trim())) {
     return { ok: false, status: 409, code: "historical_payout_item_deferred", error: "Historical or undated booking earnings are preserved; reset is not allowed." };
   }
 

@@ -6,6 +6,8 @@ const { PGlite }=await import(process.env.AUDIT_PGLITE_MODULE ?? '@electric-sql/
 const db=new PGlite();
 await db.exec(`create role anon; create role authenticated; create role service_role;
 create table audit_users(id uuid primary key);
+create table cleaners(id uuid primary key,joined_at timestamptz,created_at timestamptz,full_name text);
+create table team_members(team_id uuid,cleaner_id uuid);
 create table bookings(currency text, paystack_reference text,customer_email text,customer_id uuid,selected_cleaner_id uuid,assignment_type text,payment_status text,payment_completed_at timestamptz,created_at timestamptz,updated_at timestamptz,refund_status text,payment_mismatch boolean,id uuid primary key,check(not((cleaner_id is not null or selected_cleaner_id is not null) and status='pending')),date date,time text,assigned_at timestamptz,service_slug text,base_amount_cents int,service_fee_cents int,total_paid_zar numeric,total_paid_cents int,amount_paid_cents int,price_snapshot jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,team_id uuid,is_team_job boolean,cleaner_count int,team_member_count_snapshot int,
 status text,payout_id uuid,payout_status text,payout_paid_at timestamptz,payout_frozen_cents int,
 cleaner_payout_cents int,cleaner_bonus_cents int,display_earnings_cents int,internal_earnings_cents int,payout_earnings_cents int,cleaner_earnings_total_cents int,company_revenue_cents int,
@@ -37,7 +39,25 @@ await db.exec(convergence.slice(convergence.indexOf('create or replace function 
 for(const t of ['bookings','cleaner_earnings','booking_roster_member_payouts','team_job_member_payouts']) await db.exec(`create trigger audit_03c02_existing_boundary before insert or update on ${t} for each row execute function audit_03c02_guard_payout_item()`);
 for(const name of ['20261014155906_audit_03c02_protect_historical_item_deletes.sql','20261014173544_audit_03c02_complete_historical_boundaries.sql'])await db.exec(await fs.readFile('supabase/migrations/'+name,'utf8'));
 let checks=0;
+await db.query(`insert into cleaners(id,joined_at,created_at) values($1,'2026-01-01','2025-01-01'),($2,null,'2026-01-01')`,[cid,other]);
+
 async function reject(sql,args=[]){await assert.rejects(db.query(sql,args),e=>e.code==='23514');checks++;}
+await reject(`update cleaners set joined_at='2026-09-01' where id=$1`,[cid]);
+await reject(`update cleaners set joined_at=null where id=$1`,[cid]);
+await db.query(`update cleaners set full_name='Operational edit',created_at='2024-01-01' where id=$1`,[cid]);checks++;
+await db.query(`update cleaners set joined_at='2026-02-01' where id=$1`,[other]);checks++;
+await db.query(`insert into team_members values($1,$2)`,[other,other]);
+await db.exec(`alter table bookings disable trigger audit_03c02_final_booking_financials; alter table bookings disable trigger audit_03c02_existing_boundary;`);
+await db.query(`update bookings set team_id=$1 where id=$2`,[other,old]);
+await db.exec(`alter table bookings enable trigger audit_03c02_final_booking_financials; alter table bookings enable trigger audit_03c02_existing_boundary;`);
+await reject(`update cleaners set joined_at='2026-03-01' where id=$1`,[other]);
+await db.query(`delete from team_members where cleaner_id=$1`,[other]);
+await db.exec(`alter table bookings disable trigger audit_03c02_final_booking_financials; alter table bookings disable trigger audit_03c02_existing_boundary;`);
+await db.query(`update bookings set team_id=null where id=$1`,[old]);
+await db.exec(`alter table bookings enable trigger audit_03c02_final_booking_financials; alter table bookings enable trigger audit_03c02_existing_boundary;`);
+await db.query(`update cleaners set joined_at=null where id=$1`,[other]);
+await db.query(`insert into booking_cleaners(booking_id,cleaner_id) values($1,$2)`,[forward,other]);
+await db.query(`update cleaners set created_at='2025-01-01' where id=$1`,[other]);checks++;
 for(const field of ['cleaner_id','payout_owner_cleaner_id','team_id']) await reject(`update bookings set ${field}=$1 where id=$2`,[other,old]);
 for(const field of ['display_earnings_cents','internal_earnings_cents','payout_earnings_cents','cleaner_earnings_total_cents','company_revenue_cents','payout_frozen_cents','cleaner_payout_cents','cleaner_bonus_cents'])await reject(`update bookings set ${field}=100 where id=$1`,[old]);
 await reject(`update bookings set earnings_summary='{"x":1}' where id=$1`,[old]);
