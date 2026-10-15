@@ -181,3 +181,17 @@ test('fixed fixture rejects changed schedule instead of overwriting its policy',
   assert.equal(c.state.bookings[0].is_test,true);
   assert(!c.writes.some(w=>w.table==='recurring_bookings'));
 });
+
+test('fixed retirement blocks resumed, missing or foreign schedule before hiding fixture', async () => {
+  for (const patch of [null,{status:'active'},{booking_snapshot_template:{}},{customer_id:'foreign'},{legacy_earnings_cents:25000}]) {
+    const p={...lockedFixture.fixturePlan(),customer_id:'95610000-0000-4000-8000-000000000099',is_test:true,status:'assigned'};
+    const c=resumableClient(p,lockedFixture);
+    await lockedFixture.applyFixture(c,p);
+    if (patch===null) c.state.recurring_bookings=[];
+    else Object.assign(c.state.recurring_bookings[0],patch);
+    c.writes.length=0;
+    await assert.rejects(lockedFixture.retireFixture(c));
+    assert.deepEqual(c.writes,[]);
+    assert.equal(c.state.bookings[0].is_test,false);
+  }
+});

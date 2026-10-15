@@ -154,9 +154,20 @@ export function createPairedUiFixture({ fixedLegacy = false } = {}) {
 
 
   async function retireFixture(admin) {
-    const booking = await checked(admin.from('bookings').select('id,metadata,paystack_reference,payout_id,payout_run_id,payout_paid_at,payout_status,payment_status,amount_paid_cents,total_paid_cents,deposit_paid_cents,payment_completed_at,paid_at,payment_transaction_id,payment_reference_external,marked_paid_by_admin_id,monthly_invoice_id,zoho_invoice_id,sales_document_id').eq('id', ids.booking).single(), 'Retirement preflight');
+    const booking = await checked(admin.from('bookings').select('id,customer_id,recurring_id,metadata,paystack_reference,payout_id,payout_run_id,payout_paid_at,payout_status,payment_status,amount_paid_cents,total_paid_cents,deposit_paid_cents,payment_completed_at,paid_at,payment_transaction_id,payment_reference_external,marked_paid_by_admin_id,monthly_invoice_id,zoho_invoice_id,sales_document_id').eq('id', ids.booking).single(), 'Retirement preflight');
     assert.equal(booking.metadata?.audit_fixture, TAG);
     assert.equal(booking.paystack_reference, TAG);
+    if (fixedLegacy) {
+      assert.equal(booking.recurring_id, ids.recurring, 'Schedule linkage blocks retirement');
+      const schedules = await checked(admin.from('recurring_bookings').select('id,customer_id,status,earnings_policy,legacy_earnings_cents,booking_snapshot_template').eq('id', ids.recurring), 'Schedule retirement preflight');
+      assert.equal(schedules.length, 1, 'Missing schedule blocks retirement');
+      const schedule = schedules[0];
+      assert.equal(schedule.customer_id, booking.customer_id, 'Changed schedule customer blocks retirement');
+      assert.equal(schedule.booking_snapshot_template?.audit_fixture, TAG, 'Schedule ownership blocks retirement');
+      assert.equal(schedule.status, 'paused', 'Active schedule blocks retirement');
+      assert.equal(schedule.earnings_policy, 'legacy_july', 'Changed schedule policy blocks retirement');
+      assert.equal(schedule.legacy_earnings_cents, rate, 'Changed schedule basis blocks retirement');
+    }
     assert.equal(booking.payment_status, 'pending', 'Customer payment blocks retirement');
     assert([booking.amount_paid_cents, booking.total_paid_cents, booking.deposit_paid_cents].every(v => v == null || Number(v) === 0), 'Captured amount blocks retirement');
     assert(!booking.payment_completed_at && !booking.paid_at && !booking.payment_transaction_id && !booking.payment_reference_external && !booking.marked_paid_by_admin_id && !booking.monthly_invoice_id && !booking.zoho_invoice_id && !booking.sales_document_id, 'Payment linkage blocks retirement');
