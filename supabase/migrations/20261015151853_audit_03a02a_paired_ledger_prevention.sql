@@ -44,17 +44,6 @@ begin
     return new;
   end if;
 
-  -- Only non-team paired jobs use per-member roster truth. Formal team jobs
-  -- must retain the existing locked-ledger validation (PR #923 review).
-  if not coalesce(new.is_team_job, false) and exists (
-    select 1 from public.booking_cleaners bc
-    where bc.booking_id = new.id
-    group by bc.booking_id
-    having count(distinct bc.cleaner_id) >= 2
-  ) then
-    return new;
-  end if;
-
   if new.cleaner_id is not null
      and new.payout_owner_cleaner_id is not null
      and new.cleaner_id is distinct from new.payout_owner_cleaner_id then
@@ -107,6 +96,17 @@ begin
       raise exception 'locked cleaner earnings ledger conflicts with booking %', new.id
         using errcode = '55000';
     end if;
+    return new;
+  end if;
+
+  -- Preserve locked ledger/settlement validation above for every booking.
+  -- Only then exclude non-team paired jobs from pending solo synchronization.
+  if not coalesce(new.is_team_job, false) and exists (
+    select 1 from public.booking_cleaners bc
+    where bc.booking_id = new.id
+    group by bc.booking_id
+    having count(distinct bc.cleaner_id) >= 2
+  ) then
     return new;
   end if;
 

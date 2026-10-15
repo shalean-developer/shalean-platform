@@ -22,14 +22,14 @@ try {
   await db.exec(await readFile(new URL('../../supabase/migrations/20261015151853_audit_03a02a_paired_ledger_prevention.sql', import.meta.url), 'utf8'));
   await db.exec(`create trigger sync after update of cleaner_earnings_total_cents, cleaner_id, payout_owner_cleaner_id
     on public.bookings for each row execute function public.sync_pending_cleaner_earnings_from_booking_update();`);
-  async function scenario({ team = false, roster = [1], ledgerStatus = 'pending', disbursed = false, payout = '', child = '', reject = false, paired = false }) {
+  async function scenario({ team = false, roster = [1], ledgerStatus = 'pending', disbursed = false, payout = '', child = '', bookingRun = false, bookingPaidAt = false, childRun = false, childPaidAt = false, missingChild = false, reject = false, paired = false }) {
     await db.exec('truncate bookings, cleaner_earnings, booking_cleaners, cleaner_payouts;');
-    await db.query(`insert into bookings values ($1,$2,$2,$3,'completed',now(),26000,$4,null,null,$5)`,
-      [id(100),id(1),team,payout,child ? id(200) : null]);
+    await db.query(`insert into bookings values ($1,$2,$2,$3,'completed',now(),26000,$4,$6,$7,$5)`,
+      [id(100),id(1),team,payout,(child || missingChild) ? id(200) : null,bookingRun ? id(301) : null,bookingPaidAt ? '2026-10-01T10:00:00Z' : null]);
     await db.query('insert into cleaner_earnings values ($1,$2,$3,$4,26000,$5)',
       [id(101),id(100),ledgerStatus,id(1),disbursed ? id(300) : null]);
     for (const member of roster) await db.query('insert into booking_cleaners values ($1,$2)',[id(100),id(member)]);
-    if (child) await db.query('insert into cleaner_payouts values ($1,$2,null,null)',[id(200),child]);
+    if (child) await db.query('insert into cleaner_payouts values ($1,$2,$3,$4)',[id(200),child,childRun ? id(302) : null,childPaidAt ? '2026-10-01T10:00:00Z' : null]);
     const update = () => db.query('update bookings set cleaner_earnings_total_cents=52000 where id=$1',[id(100)]);
     if (reject) await assert.rejects(update, error => error.code === '55000');
     else await update();
@@ -43,10 +43,12 @@ try {
   await scenario({ roster: [1,1] });
   await scenario({ roster: [] });
   await scenario({ team: true, roster: [1,2] });
-  for (const lock of [{ledgerStatus:'approved'},{ledgerStatus:'paid'},{disbursed:true},{payout:'paid'},{child:'paid'}]) {
+  for (const lock of [{ledgerStatus:'approved'},{ledgerStatus:'paid'},{disbursed:true},{payout:'paid'},{child:'paid'},{bookingRun:true},{bookingPaidAt:true},{child:'pending',childRun:true},{child:'pending',childPaidAt:true}]) {
     await scenario({ ...lock, reject: true });
     await scenario({ ...lock, team: true, roster: [1,2], reject: true });
+    await scenario({ ...lock, roster: [1,2], reject: true });
   }
+  await scenario({ roster: [1,2], missingChild: true, reject: true });
   const { rows } = await db.query(`select has_function_privilege('anon',
     'public.sync_pending_cleaner_earnings_from_booking_update()', 'EXECUTE') as allowed`);
   assert.equal(rows[0].allowed, false); checks++;
