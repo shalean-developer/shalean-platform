@@ -60,12 +60,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, earnings: data });
   }
 
-  const { data, error } = await admin
-    .from("cleaner_earnings")
-    .update({ status: "approved", approved_at: approvedAt })
-    .eq("cleaner_id", cleanerId)
-    .eq("status", "pending")
-    .select("id, booking_id, cleaner_id, amount_cents, status");
+  const { data, error } = await admin.rpc("audit_03c02_approve_current_cleaner_earnings", {
+    p_cleaner_id:cleanerId,p_approved_at:approvedAt,
+  });
   if (error) return NextResponse.json({ error: error.message }, { status: error.message.includes("historical_payout_item_deferred") ? 409 : 500 });
   const updated = data ?? [];
   if (updated.length === 0) {

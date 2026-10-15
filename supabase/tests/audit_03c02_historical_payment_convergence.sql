@@ -24,7 +24,7 @@ begin
    perform public.audit_03c02_record_historical_capture(b.id,'wrong-reference',1000,'ZAR',now(),expected);
    raise exception 'FAIL wrong charge reference';
  exception when check_violation then if sqlerrm<>'historical_capture_identity_mismatch' then raise; end if; end;
- result:=public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,coalesce(b.currency,'ZAR'),now(),expected,null,b.id);
+ result:=public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,' zar ',now(),expected,null,b.id);
  if result->>'id' is distinct from b.id::text then raise exception 'FAIL capture row missing'; end if;
  if not exists(select 1 from public.bookings where id=b.id and amount_paid_cents=1000 and payment_status='success' and status='pending_assignment') then raise exception 'FAIL capture not recorded'; end if;
  select exists(select 1 from public.user_events where booking_id=b.id and event_type='booking_created') into receipt_existed;

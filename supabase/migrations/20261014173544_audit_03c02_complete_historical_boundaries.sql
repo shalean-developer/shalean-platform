@@ -39,6 +39,7 @@ create or replace function public.audit_03c02_record_historical_capture(p_bookin
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
 declare b public.bookings; result jsonb; prior_context text;
 begin
+ p_currency:=upper(btrim(p_currency));
  select * into b from public.bookings where id=p_booking_id for update;
  if not found or (b.date is not null and b.date::date>=date '2026-10-01')
    or b.status::text not in ('pending_payment','payment_expired','payment_reconciliation_required')
@@ -46,7 +47,7 @@ begin
    or (b.paystack_reference is distinct from p_reference and not (coalesce(p_verified_booking_id=b.id,false)
      and (b.paystack_reference is null or b.paystack_reference=b.id::text)))
    or p_amount_cents is null or p_amount_cents<0 or nullif(p_currency,'') is null
-   or (p_mismatch is null and p_currency is distinct from coalesce(b.currency,'ZAR'))
+   or (p_mismatch is null and p_currency is distinct from coalesce(nullif(upper(btrim(b.currency)),''),'ZAR'))
    or (p_mismatch is not null and p_mismatch not in ('amount_mismatch','currency_mismatch'))
    or p_paid_at is null or p_expected is null or not (to_jsonb(b) @> p_expected)
    or not (p_expected ? 'customer_id' or p_expected ? 'user_id')
@@ -237,4 +238,22 @@ end; $$;
 revoke all on function public.audit_03c02_guard_cleaner_tenure() from public,anon,authenticated,service_role;
 create trigger audit_03c02_cleaner_tenure after update on public.cleaners
 for each row execute function public.audit_03c02_guard_cleaner_tenure();
+-- Approval skips deferred rows rather than letting one historical row abort a cleaner's current approvals.
+create or replace function public.audit_03c02_approve_current_cleaner_earnings(p_cleaner_id uuid,p_approved_at timestamptz)
+returns setof public.cleaner_earnings language plpgsql security definer set search_path=pg_catalog as $$
+declare candidate record; visit_date date;
+begin
+ if p_cleaner_id is null or p_approved_at is null then raise exception 'invalid_earnings_approval' using errcode='23514'; end if;
+ for candidate in select ce.id,b.date from public.cleaner_earnings ce join public.bookings b on b.id=ce.booking_id
+   where ce.cleaner_id=p_cleaner_id and ce.status='pending' order by b.id,ce.id for update of b,ce
+ loop
+   begin visit_date:=btrim(candidate.date::text)::date;
+   exception when invalid_datetime_format or datetime_field_overflow then continue; end;
+   if visit_date is null or visit_date<date '2026-10-01' then continue; end if;
+   return query update public.cleaner_earnings set status='approved',approved_at=p_approved_at
+     where id=candidate.id and status='pending' returning *;
+ end loop;
+end; $$;
+revoke all on function public.audit_03c02_approve_current_cleaner_earnings(uuid,timestamptz) from public,anon,authenticated;
+grant execute on function public.audit_03c02_approve_current_cleaner_earnings(uuid,timestamptz) to service_role;
 commit;

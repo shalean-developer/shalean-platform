@@ -72,6 +72,11 @@ for(const t of ['cleaner_earnings','booking_roster_member_payouts','team_job_mem
  await reject(`delete from ${t} where booking_id=$1`,[old]);
  await reject(`insert into ${t}(id,booking_id,cleaner_id,status) values('dddddddd-0000-4000-8000-000000000001',$1,$2,'pending')`,[old,cid]);
 }
+await db.query(`insert into cleaner_earnings(id,booking_id,cleaner_id,amount_cents,status) values($1,$1,$2,200,'pending')`,[forward,cid]);
+const approved=await db.query(`select * from audit_03c02_approve_current_cleaner_earnings($1,now())`,[cid]);
+assert.deepEqual(approved.rows.map(row=>row.id),[forward]);checks++;
+assert.equal((await db.query(`select status from cleaner_earnings where booking_id=$1`,[old])).rows[0].status,'pending');checks++;
+await db.query(`delete from cleaner_earnings where id=$1`,[forward]);
 await reject(`update cleaner_earnings set status='approved',approved_at=now() where booking_id=$1`,[old]);
 await reject(`update cleaner_earnings set amount_cents=999 where booking_id=$1`,[old]);
 await reject(`update cleaner_earnings set approved_at=now() where booking_id=$1`,[old]);
@@ -151,6 +156,9 @@ for(const [reason,currency] of [['amount_mismatch','ZAR'],['currency_mismatch','
  const after=(await db.query(`select amount_paid_cents,total_paid_cents,total_paid_zar,date from bookings where id=$1`,[old])).rows[0];assert.deepEqual(after,prior);checks++;
  assert.equal((await db.query(`select status from bookings where id=$1`,[old])).rows[0].status,'payment_mismatch');checks++;
 }
+await db.query(`update bookings set status='payment_reconciliation_required' where id=$1`,[old]);
+await db.query(`select audit_03c02_record_historical_capture($1,'charge-1',1000,' zar ','2026-10-14T12:00:00Z',$2)`,[old,JSON.stringify({...expected,status:'payment_reconciliation_required'})]);checks++;
+assert.equal((await db.query(`select amount_paid_cents from bookings where id=$1`,[old])).rows[0].amount_paid_cents,1000);checks++;
 const aliasId='eeeeeeee-0000-4000-8000-000000000002';
 const aliasExpected={...expected,paystack_reference:null,cleaner_id:null};
 await reject(captureSql,[aliasId,'verified-new-charge',1000,JSON.stringify(aliasExpected)]);

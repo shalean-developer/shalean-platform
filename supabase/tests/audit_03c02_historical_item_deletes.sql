@@ -8,7 +8,7 @@ create temp table audit03c02_roster_probe(booking_id uuid,cleaner_id uuid,comple
 create trigger probe_roster before insert or update or delete on audit03c02_roster_probe
 for each row execute function public.audit_03c02_guard_booking_roster_mutation();
 do $$
-declare b uuid; c uuid; n integer;
+declare b uuid; c uuid; f uuid; approved_ids uuid[]; n integer;
 begin
  select id into b from public.bookings where status='pending' and payout_id is null order by id limit 1;
  select id into c from public.cleaners order by id limit 1;
@@ -58,6 +58,14 @@ begin
   raise exception 'FAIL historical cleaner tenure changed';
  exception when check_violation then if sqlerrm<>'historical_cleaner_tenure_deferred' then raise; end if; end;
  update public.cleaners set joined_at=joined_at where id=c;
+ select id into f from public.bookings where id<>b and date is not null and date::date>=date '2026-10-01' and payout_id is null order by id limit 1;
+ if f is null then raise exception 'forward fixture unavailable'; end if;
+ insert into public.cleaner_earnings(id,booking_id,cleaner_id,amount_cents,status)
+ values('a03c0204-0000-4000-8000-000000000005',f,c,200,'pending');
+ select array_agg(id) into approved_ids from public.audit_03c02_approve_current_cleaner_earnings(c,now());
+ if approved_ids is distinct from array['a03c0204-0000-4000-8000-000000000005'::uuid] then raise exception 'FAIL mixed bulk approval selection'; end if;
+ if not exists(select 1 from public.cleaner_earnings where id='a03c0204-0000-4000-8000-000000000001' and status='pending') then raise exception 'FAIL historical bulk approval'; end if;
+ delete from public.cleaner_earnings where id='a03c0204-0000-4000-8000-000000000005';
  begin
   update public.cleaner_earnings set status='approved',approved_at=now() where id='a03c0204-0000-4000-8000-000000000001';
   raise exception 'FAIL historical ledger approved';
