@@ -40,7 +40,7 @@ test('existing booking collision fails closed without overwriting it', async () 
   await assert.rejects(applyFixture(c, fixturePlan()), /Booking collision/);
   assert.deepEqual(c.writes, []);
 });
-const booking = { id: ids.booking, metadata: { audit_fixture: TAG }, paystack_reference: TAG, payout_status: 'pending', payout_id: null, payout_run_id: null, payout_paid_at: null };
+const booking = { id: ids.booking, metadata: { audit_fixture: TAG }, paystack_reference: TAG, payout_status: 'pending', payout_id: null, payout_run_id: null, payout_paid_at: null, payment_status: 'pending', amount_paid_cents: 0 };
 test('retirement blocks settled booking or locked member evidence before mutation', async () => {
   for (const change of [{ payout_id: 'linked' }, { payout_run_id: 'run' }, { payout_paid_at: '2026-10-15' }, { payout_status: 'paid' }, { metadata: {} }]) {
     const c = client(() => ({ data: { ...booking, ...change } }));
@@ -137,4 +137,9 @@ test('resuming a settled or modified fixture fails before any mutation', async (
 
 test('governed paired runner requires exact staging allowlist before any request', async () => {
   for (const allow of ['', env.SUPABASE_PROD_REF, `${ref},${env.SUPABASE_PROD_REF}`]) await assert.rejects(runPairedUiSeed({}, {...env,SEED_ALLOWED_PROJECT_REFS:allow}), /allowlisted/);
+});
+
+test('retirement rejects customer payment, captured cash and invoice linkage before hiding any row', async () => {
+  const cases=[{payment_status:'success'}, {amount_paid_cents:65000}, {total_paid_cents:65000}, {deposit_paid_cents:100}, {payment_completed_at:'2026-10-15'}, {paid_at:'2026-10-15'}, {payment_transaction_id:'txn'}, {payment_reference_external:'eft'}, {marked_paid_by_admin_id:'admin'}, {monthly_invoice_id:'invoice'}, {zoho_invoice_id:'zoho'}, {sales_document_id:'sales'}];
+  for(const patch of cases){const c=client(()=>({data:{...booking,...patch}})); await assert.rejects(retireFixture(c));assert.deepEqual(c.writes,[]);}
 });

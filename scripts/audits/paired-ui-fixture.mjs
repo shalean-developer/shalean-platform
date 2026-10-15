@@ -93,7 +93,10 @@ export async function applyFixture(admin, plan) {
     assert.equal(booking.paystack_reference, TAG, 'Booking collision');
     assert(['assigned', 'completed'].includes(booking.status), 'Unexpected fixture lifecycle');
     assert.equal(booking.payout_status, 'pending', 'Locked fixture');
-    assert(!booking.payout_id && !booking.payout_run_id && !booking.payout_paid_at && !booking.payment_transaction_id && !booking.monthly_invoice_id && !booking.zoho_invoice_id, 'Linked financial evidence');
+    assert.equal(booking.payment_status, 'pending', 'Customer payment blocks retirement');
+  assert([booking.amount_paid_cents, booking.total_paid_cents, booking.deposit_paid_cents].every(v => v == null || Number(v) === 0), 'Captured amount blocks retirement');
+  assert(!booking.payment_completed_at && !booking.paid_at && !booking.payment_transaction_id && !booking.payment_reference_external && !booking.marked_paid_by_admin_id && !booking.monthly_invoice_id && !booking.zoho_invoice_id && !booking.sales_document_id, 'Payment linkage blocks retirement');
+  assert(!booking.payout_id && !booking.payout_run_id && !booking.payout_paid_at && !booking.payment_transaction_id && !booking.monthly_invoice_id && !booking.zoho_invoice_id, 'Linked financial evidence');
     for (const key of ['amount_paid_cents', 'payment_status', 'billing_type', 'cleaner_id', 'payout_owner_cleaner_id', 'cleaner_payout_cents', 'display_earnings_cents', 'cleaner_earnings_total_cents', 'total_paid_zar', 'company_revenue_cents', 'is_team_job']) assert.equal(booking[key], plan[key], `Changed fixture ${key}`);
     assert.deepEqual(booking.earnings_summary?.per_cleaner_earnings, plan.earnings_summary.per_cleaner_earnings, 'Changed fixture summary');
     assert(/^\d{4}-\d{2}-\d{2}$/.test(booking.date) && booking.date >= '2026-10-01' && booking.date <= plan.date, 'Unexpected fixture date');
@@ -131,9 +134,12 @@ export async function applyFixture(admin, plan) {
 
 
 export async function retireFixture(admin) {
-  const booking = await checked(admin.from('bookings').select('id,metadata,paystack_reference,payout_id,payout_run_id,payout_paid_at,payout_status').eq('id', ids.booking).single(), 'Retirement preflight');
+  const booking = await checked(admin.from('bookings').select('id,metadata,paystack_reference,payout_id,payout_run_id,payout_paid_at,payout_status,payment_status,amount_paid_cents,total_paid_cents,deposit_paid_cents,payment_completed_at,paid_at,payment_transaction_id,payment_reference_external,marked_paid_by_admin_id,monthly_invoice_id,zoho_invoice_id,sales_document_id').eq('id', ids.booking).single(), 'Retirement preflight');
   assert.equal(booking.metadata?.audit_fixture, TAG);
   assert.equal(booking.paystack_reference, TAG);
+  assert.equal(booking.payment_status, 'pending', 'Customer payment blocks retirement');
+  assert([booking.amount_paid_cents, booking.total_paid_cents, booking.deposit_paid_cents].every(v => v == null || Number(v) === 0), 'Captured amount blocks retirement');
+  assert(!booking.payment_completed_at && !booking.paid_at && !booking.payment_transaction_id && !booking.payment_reference_external && !booking.marked_paid_by_admin_id && !booking.monthly_invoice_id && !booking.zoho_invoice_id && !booking.sales_document_id, 'Payment linkage blocks retirement');
   assert(!booking.payout_id && !booking.payout_run_id && !booking.payout_paid_at && booking.payout_status === 'pending', 'Settlement evidence blocks retirement');
   for (const table of ['booking_roster_member_payouts', 'team_job_member_payouts']) {
     const rows = await checked(admin.from(table).select('status,cleaner_payout_id').eq('booking_id', ids.booking), 'Member retirement preflight');
