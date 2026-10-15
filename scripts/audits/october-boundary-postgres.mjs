@@ -17,7 +17,7 @@ cleaner_payout_cents int,cleaner_bonus_cents int,display_earnings_cents int,inte
 cleaner_share_percentage numeric,earnings_summary jsonb,cleaner_line_earnings_finalized_at timestamptz,earnings_model_version text,payout_percentage numeric,payout_type text,
 earnings_percentage_applied numeric,earnings_cap_cents_applied int,earnings_tenure_months_at_assignment int,service text,booking_snapshot jsonb);
 create table cleaner_payouts(id uuid primary key,period_start date,period_end date);
-create table cleaner_earnings(id uuid primary key,booking_id uuid references bookings on delete cascade,cleaner_id uuid,amount_cents int,status text,disbursement_id uuid,paid_at timestamptz,updated_at timestamptz);
+create table cleaner_earnings(approved_at timestamptz,created_at timestamptz,id uuid primary key,booking_id uuid references bookings on delete cascade,cleaner_id uuid,amount_cents int,status text,disbursement_id uuid,paid_at timestamptz,updated_at timestamptz);
 create table booking_roster_member_payouts(id uuid primary key,booking_id uuid references bookings on delete cascade,cleaner_id uuid,payout_cents int,bonus_cents int,status text,cleaner_payout_id uuid);
 create table team_job_member_payouts(id uuid primary key,booking_id uuid references bookings on delete cascade,cleaner_id uuid,team_id uuid,payout_cents int,status text,cleaner_payout_id uuid);
 create table booking_cleaners(booking_id uuid references bookings on delete cascade,cleaner_id uuid,role text,payout_weight numeric,lead_bonus_cents int,source text,completed_at timestamptz);
@@ -72,6 +72,11 @@ for(const t of ['cleaner_earnings','booking_roster_member_payouts','team_job_mem
  await reject(`delete from ${t} where booking_id=$1`,[old]);
  await reject(`insert into ${t}(id,booking_id,cleaner_id,status) values('dddddddd-0000-4000-8000-000000000001',$1,$2,'pending')`,[old,cid]);
 }
+await reject(`update cleaner_earnings set status='approved',approved_at=now() where booking_id=$1`,[old]);
+await reject(`update cleaner_earnings set amount_cents=999 where booking_id=$1`,[old]);
+await reject(`update cleaner_earnings set approved_at=now() where booking_id=$1`,[old]);
+await reject(`update cleaner_earnings set created_at=now() where booking_id=$1`,[old]);
+await db.query(`update cleaner_earnings set updated_at=now() where booking_id=$1`,[old]);checks++;
 await reject(`update booking_cleaners set cleaner_id=$1 where booking_id=$2`,[other,old]);
 await reject(`update booking_line_items set cleaner_earnings_cents=200 where booking_id=$1`,[old]);
 for(const field of ['item_type','slug','name']) await reject(`update booking_line_items set ${field}='adjustment' where booking_id=$1`,[old]);

@@ -59,6 +59,18 @@ begin
  exception when check_violation then if sqlerrm<>'historical_cleaner_tenure_deferred' then raise; end if; end;
  update public.cleaners set joined_at=joined_at where id=c;
  begin
+  update public.cleaner_earnings set status='approved',approved_at=now() where id='a03c0204-0000-4000-8000-000000000001';
+  raise exception 'FAIL historical ledger approved';
+ exception when check_violation then if sqlerrm<>'historical_payout_item_deferred' then raise; end if; end;
+ begin
+  update public.cleaner_earnings set amount_cents=999 where id='a03c0204-0000-4000-8000-000000000001';
+  raise exception 'FAIL historical ledger amount changed';
+ exception when check_violation then if sqlerrm<>'historical_payout_item_deferred' then raise; end if; end;
+ begin
+  update public.cleaner_earnings set approved_at=now() where id='a03c0204-0000-4000-8000-000000000001';
+  raise exception 'FAIL historical ledger approval metadata changed';
+ exception when check_violation then if sqlerrm<>'historical_payout_item_deferred' then raise; end if; end;
+ begin
   delete from public.cleaner_earnings where id='a03c0204-0000-4000-8000-000000000001';
   raise exception 'FAIL historical ledger deleted';
  exception when check_violation then if sqlerrm<>'historical_payout_item_deferred' then raise; end if; end;

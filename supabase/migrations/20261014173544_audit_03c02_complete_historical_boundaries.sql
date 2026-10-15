@@ -129,6 +129,21 @@ begin
    v_identity_changed := NEW.booking_id is distinct from OLD.booking_id
      or NEW.cleaner_id is distinct from OLD.cleaner_id
      or to_jsonb(NEW)->'team_id' is distinct from to_jsonb(OLD)->'team_id';
+   if TG_TABLE_NAME='cleaner_earnings' then
+     -- Freeze entitlement and approval metadata as well as attribution.
+     -- Only previously verified provider outcomes may converge an existing claim.
+     if OLD.status::text='processing' and NEW.status::text='approved'
+       and OLD.disbursement_id is not null and NEW.disbursement_id is null
+       and (to_jsonb(NEW)-array['status','disbursement_id','updated_at'])=(to_jsonb(OLD)-array['status','disbursement_id','updated_at'])
+       and public.audit_03c02_has_verified_outcome(OLD.disbursement_id,'cleaner_earnings','failed')
+       and not public.audit_03c02_has_verified_outcome(OLD.disbursement_id,'cleaner_earnings','success') then return NEW; end if;
+     if OLD.status::text in ('processing','paid') and NEW.status::text='paid'
+       and OLD.disbursement_id is not null
+       and (to_jsonb(NEW)-array['status','paid_at','updated_at'])=(to_jsonb(OLD)-array['status','paid_at','updated_at'])
+       and (OLD.paid_at is null or NEW.paid_at is not distinct from OLD.paid_at)
+       and public.audit_03c02_has_verified_outcome(OLD.disbursement_id,'cleaner_earnings','success') then return NEW; end if;
+     v_identity_changed:=(to_jsonb(NEW)-'updated_at') is distinct from (to_jsonb(OLD)-'updated_at');
+   end if;
  end if;
  if not v_identity_changed then return NEW; end if;
  -- Consistent parent order prevents opposite-direction rekeys from deadlocking.
