@@ -108,7 +108,7 @@ begin
       )
     end;
 
-    if v_financial_cap_cents >= new.internal_earnings_cents then
+    if v_financial_cap_cents >= greatest(v_legacy_cents, new.internal_earnings_cents) then
       new.cleaner_payout_cents := v_legacy_cents;
       new.payout_earnings_cents := v_legacy_cents;
       if new.payout_status = 'eligible' then
