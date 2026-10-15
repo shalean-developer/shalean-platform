@@ -29,7 +29,6 @@ import {
 } from "lucide-react";
 import {
   OfficeZohoMetricCard,
-  OfficeZohoMetricsRow,
   OfficeZohoPageHeader,
   OfficeZohoPillTabs,
   OfficeZohoPrimaryButton,
@@ -233,7 +232,6 @@ export default function PayoutsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [edits, setEdits] = useState<Record<string, { zar: string; note: string }>>({});
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
 
   const reportParams = useMemo(
     () => ({ from: fromDate, to: toDate }),
@@ -261,10 +259,6 @@ export default function PayoutsPage() {
       net_profit_percent: number | null;
     };
   }>("/api/admin/financial-dashboard", { params: reportParams });
-
-  useEffect(() => {
-    if (!loading && data) setLastRefreshedAt(new Date());
-  }, [loading, data]);
 
   const payouts = data?.payouts ?? [];
   const cleaners = data?.cleaners ?? [];
@@ -765,21 +759,10 @@ export default function PayoutsPage() {
         />
       ) : null}
 
-      <OfficeZohoMetricsRow
-        meta={
-          <>
-            <p>
-              Updated
-              {lastRefreshedAt
-                ? ` on ${lastRefreshedAt.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}`
-                : ""}
-            </p>
-          </>
-        }
-      >
-        <OfficeZohoMetricCard icon={ClipboardList} label="Bookings" value={loading ? "—" : String(totals?.visit_count ?? 0)} />
-        <OfficeZohoMetricCard icon={DollarSign} label="Earned" value={loading ? "—" : formatZar(totals?.earned_cents ?? 0)} />
-        <OfficeZohoMetricCard
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+        <OfficeZohoMetricCard compact icon={ClipboardList} label="Bookings" value={loading ? "—" : String(totals?.visit_count ?? 0)} />
+        <OfficeZohoMetricCard compact icon={DollarSign} label="Earned" value={loading ? "—" : formatZar(totals?.earned_cents ?? 0)} />
+        <OfficeZohoMetricCard compact
           icon={Clock}
           iconClassName="bg-amber-50 text-amber-600"
           label="Pending invoice"
@@ -794,7 +777,7 @@ export default function PayoutsPage() {
             )
           }
         />
-        <OfficeZohoMetricCard
+        <OfficeZohoMetricCard compact
           icon={Zap}
           iconClassName="bg-violet-50 text-violet-600"
           label="Payment-ready"
@@ -809,7 +792,7 @@ export default function PayoutsPage() {
             )
           }
         />
-        <OfficeZohoMetricCard
+        <OfficeZohoMetricCard compact
           icon={Layers}
           iconClassName="bg-blue-50 text-blue-600"
           label="Batched"
@@ -824,7 +807,7 @@ export default function PayoutsPage() {
             )
           }
         />
-        <OfficeZohoMetricCard
+        <OfficeZohoMetricCard compact
           icon={Wallet}
           iconClassName="bg-emerald-50 text-emerald-600"
           label="Paid out"
@@ -839,7 +822,7 @@ export default function PayoutsPage() {
             )
           }
         />
-      </OfficeZohoMetricsRow>
+      </div>
 
       <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
