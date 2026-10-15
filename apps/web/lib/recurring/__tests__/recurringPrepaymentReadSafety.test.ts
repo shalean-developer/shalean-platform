@@ -1,4 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("../recurringBookingInsertGuards", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../recurringBookingInsertGuards")>(),
+  recurringPlanOccurrenceRowExists: vi.fn().mockResolvedValue(false),
+}));
+import { recurringPlanOccurrenceRowExists } from "../recurringBookingInsertGuards";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findRecurringPrepaymentCycleForDate, findReservedRecurringPrepaymentAllocation } from "../recurringPrepaymentLedger";
 import { insertRecurringOccurrenceBooking } from "../insertRecurringOccurrenceBooking";
@@ -26,6 +31,13 @@ const args = {
 };
 
 describe('recurring prepayment read safety', () => {
+  beforeEach(() => vi.mocked(recurringPlanOccurrenceRowExists).mockReset().mockResolvedValue(false));
+  it('skips an already-generated paid package visit before reserved allocation lookup', async () => {
+    vi.mocked(recurringPlanOccurrenceRowExists).mockResolvedValue(true);
+    const { admin, tables } = adminFor({ data: null, error: { message: 'applied allocation is not reserved' } });
+    expect(await insertRecurringOccurrenceBooking(admin, args)).toEqual({ ok: false, error: 'duplicate_occurrence' });
+    expect(tables).toEqual([]);
+  });
   it.each(['schema cache missing', 'database unavailable', 'permission denied'])('rejects allocation read failure before booking creation: %s', async (message) => {
     const { admin, tables } = adminFor({ data: null, error: { message } });
     expect(await insertRecurringOccurrenceBooking(admin, args)).toEqual({ ok: false, error: `recurring_allocation_lookup_failed:${message}` });
