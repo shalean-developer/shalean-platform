@@ -22,12 +22,10 @@ import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import {
   getJohannesburgMonthBoundsContainingYmd,
   getPreviousMonthDateBoundsJhb,
-  isClosedMonthlyPayoutBatchPeriod,
-  isMonthlyPayoutBatchPeriod,
   isMonthlyPayoutPeriod,
 } from "@/lib/payout/monthBounds";
-import { MONTHLY_PAYOUT_START_YMD } from "@/lib/payout/payoutPeriodConfig";
-import { isYmdInInclusiveRange, weeklyBatchDayYmd } from "@/lib/payout/weekBounds";
+import { PAYOUT_PROCESSING_START_YMD, currentPayoutBatchDayYmd, isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod } from "@/lib/payout/payoutProcessingCutoff";
+import { isYmdInInclusiveRange } from "@/lib/payout/weekBounds";
 import { filterBookingsNotOnLedgerRail } from "@/lib/payout/filterBookingsNotOnLedgerRail";
 import {
   listRosterMemberWeeklyPayoutCandidates,
@@ -93,21 +91,20 @@ async function ensureNoMissingCompletedPayouts(
 ): Promise<{ backfilled: number; remaining: number }> {
   const legacyBackfill = await backfillLegacyWeeklyPayoutColumnsFromEarnings(admin, 1000);
 
-  const { data: missingRows, error } = await admin
-    .from("bookings")
-    .select("id, cleaner_id, payout_owner_cleaner_id, is_team_job")
-    .eq("status", "completed")
-    .eq("is_test", false)
-    .is("cleaner_payout_cents", null)
-    .limit(1000);
-
-  if (error) {
-    await reportOperationalIssue("error", "generateWeeklyPayouts", `missing payout preflight failed: ${error.message}`);
+  let missingRows: Array<Record<string, unknown>>;
+  try {
+    missingRows = await fetchAllPayoutRows((from,to)=>admin.from("bookings")
+      .select("id, date, cleaner_id, payout_owner_cleaner_id, is_team_job")
+      .eq("status","completed").eq("is_test",false).is("cleaner_payout_cents",null)
+      .order("id",{ascending:true}).range(from,to));
+  } catch(error) {
+    await reportOperationalIssue("error","generateWeeklyPayouts",`missing payout preflight failed: ${String(error)}`);
     throw new Error("Cannot generate payout batch: missing payout preflight failed");
   }
 
   let backfilled = legacyBackfill.fixed;
   for (const row of missingRows ?? []) {
+    if (!isCurrentPayoutVisitDate(row.date)) continue;
     const bookingId = String((row as { id?: string }).id ?? "");
     const cleanerId = resolvePersistCleanerIdForBooking(
       row as { cleaner_id?: string | null; payout_owner_cleaner_id?: string | null; is_team_job?: boolean | null },
@@ -173,7 +170,7 @@ export function closedCatchUpPayoutPeriods(
   return [...new Set(periodStarts)]
     .sort()
     .map((periodStart) => getJohannesburgMonthBoundsContainingYmd(periodStart))
-    .filter(({ periodStart, periodEnd }) => isClosedMonthlyPayoutBatchPeriod(periodStart, periodEnd, now));
+    .filter(({ periodStart, periodEnd }) => isProcessableClosedPayoutPeriod(periodStart, periodEnd, now));
 }
 
 async function listUnbatchedCompletionMonths(
@@ -185,7 +182,7 @@ async function listUnbatchedCompletionMonths(
       .from("bookings")
       .select("id, completed_at, date, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id")
       .eq("status", "completed")
-      .eq("is_test", false)
+        .eq("is_test", false)
       .is("payout_id", null)
       .not("cleaner_payout_cents", "is", null)
       .gt("cleaner_payout_cents", 0)
@@ -195,8 +192,8 @@ async function listUnbatchedCompletionMonths(
 
   const monthStarts = new Set<string>();
   for (const row of directRows) {
-    const ymd = weeklyBatchDayYmd(row as Parameters<typeof weeklyBatchDayYmd>[0]);
-    if (!ymd || ymd < MONTHLY_PAYOUT_START_YMD) continue;
+    const ymd = currentPayoutBatchDayYmd(row as Parameters<typeof currentPayoutBatchDayYmd>[0]);
+    if (!isCurrentPayoutVisitDate((row as { date?: unknown }).date) || !ymd || ymd < PAYOUT_PROCESSING_START_YMD) continue;
     monthStarts.add(getJohannesburgMonthBoundsContainingYmd(ymd).periodStart);
   }
 
@@ -234,11 +231,11 @@ async function listUnbatchedCompletionMonths(
       .select("id, completed_at, date, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id")
       .in("id", memberBookingIds.slice(i, i + 120))
       .eq("status", "completed")
-      .eq("is_test", false);
+        .eq("is_test", false);
     if (memberBookingsErr) throw new Error(memberBookingsErr.message);
     for (const row of memberBookings ?? []) {
-      const ymd = weeklyBatchDayYmd(row as Parameters<typeof weeklyBatchDayYmd>[0]);
-      if (!ymd || ymd < MONTHLY_PAYOUT_START_YMD) continue;
+      const ymd = currentPayoutBatchDayYmd(row as Parameters<typeof currentPayoutBatchDayYmd>[0]);
+      if (!isCurrentPayoutVisitDate((row as { date?: unknown }).date) || !ymd || ymd < PAYOUT_PROCESSING_START_YMD) continue;
       monthStarts.add(getJohannesburgMonthBoundsContainingYmd(ymd).periodStart);
     }
   }
@@ -257,7 +254,7 @@ async function generateWeeklyPayoutsForPeriod(
   periodEnd: string,
   opts?: { asOfForCutoffProbe?: Date; createdBy?: string | null },
 ): Promise<GeneratePeriodResult> {
-  if (!isMonthlyPayoutBatchPeriod(periodStart, periodEnd)) {
+  if (!isProcessableClosedPayoutPeriod(periodStart, periodEnd)) {
     return { payoutsCreated: 0, bookingsLinked: 0, payoutsBackfilled: 0, skippedCleaners: 0 };
   }
 
@@ -311,8 +308,8 @@ async function generateWeeklyPayoutsForPeriod(
 
     const candidateBookings = rawBookings.filter((b) => {
       const br = b as BookingPayoutRow;
-      const ymd = weeklyBatchDayYmd(br);
-      if (!ymd || ymd < MONTHLY_PAYOUT_START_YMD) return false;
+      const ymd = currentPayoutBatchDayYmd(br);
+      if (!isCurrentPayoutVisitDate(br.date) || !ymd || ymd < PAYOUT_PROCESSING_START_YMD) return false;
       return isYmdInInclusiveRange(ymd, periodStart, periodEnd);
     }) as BookingPayoutRow[];
 
@@ -322,7 +319,7 @@ async function generateWeeklyPayoutsForPeriod(
       if (Number.isFinite(completedMs) && instantNearJhbThursdayPayoutCutoff(completedMs)) {
         jhbCutoffEdgeCaseBookings += 1;
       }
-      const ymd = weeklyBatchDayYmd(br);
+      const ymd = currentPayoutBatchDayYmd(br);
       const uiFriday = Number.isFinite(completedMs)
         ? payoutArrivalSummaryJohannesburg(new Date(completedMs)).payoutTargetFridayYmd
         : ymd
@@ -898,7 +895,7 @@ export async function generateWeeklyPayouts(
   const asOf = new Date();
   const { periodStart, periodEnd } = getPreviousMonthDateBoundsJhb(asOf);
 
-  if (!isMonthlyPayoutPeriod(periodStart)) {
+  if (periodStart < PAYOUT_PROCESSING_START_YMD || !isMonthlyPayoutPeriod(periodStart)) {
     return {
       period: { start: periodStart, end: periodEnd },
       payoutsCreated: 0,
@@ -924,7 +921,7 @@ export async function generateWeeklyPayouts(
 }
 
 /**
- * Admin catch-up: batch every Johannesburg calendar month (from July 2026) that still has unlinked payable bookings.
+ * Admin catch-up: batch every closed Johannesburg calendar month (from October 2026) that still has unlinked payable bookings.
  * Cron continues to use {@link generateWeeklyPayouts} for the previous month only.
  */
 export async function generateCatchUpWeeklyPayouts(

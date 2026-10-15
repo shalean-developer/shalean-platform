@@ -1,10 +1,11 @@
+import { currentPayoutBatchDayYmd, isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   BOOKING_SELECT_FIELDS_FOR_WEEKLY_BATCH_ELIGIBILITY,
   bookingPayableForWeeklyBatch,
   type BookingRowForWeeklyBatchEligibility,
 } from "@/lib/payout/bookingPayableForWeeklyBatch";
-import { isYmdInInclusiveRange, weeklyBatchDayYmd } from "@/lib/payout/weekBounds";
+import { isYmdInInclusiveRange } from "@/lib/payout/weekBounds";
 import { fetchAllPayoutRows, payoutQueryChunks } from "@/lib/payout/payoutQueryPagination";
 
 export type TeamJobMemberWeeklyPayoutCandidate = {
@@ -84,9 +85,9 @@ export async function listTeamJobMemberWeeklyPayoutCandidates(params: {
     if (!id || !bookingId) continue;
 
     const booking = bookingById.get(bookingId);
-    if (!booking) continue;
+    if (!booking || !isCurrentPayoutVisitDate(booking.date)) continue;
 
-    const ymd = weeklyBatchDayYmd(booking);
+    const ymd = currentPayoutBatchDayYmd(booking);
     if (!ymd || !isYmdInInclusiveRange(ymd, periodStart, periodEnd)) continue;
 
     const payoutCents = Math.max(0, Math.floor(Number(member.payout_cents) || 0));

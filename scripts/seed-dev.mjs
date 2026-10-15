@@ -21,6 +21,9 @@
  *   SUPABASE_SERVICE_ROLE_KEY
  */
 
+import { FORWARD_SEED_TAG, forwardSeedFixtureId, isForwardSeedBooking } from "./lib/seedFixtureGeneration.mjs";
+import { buildFinanceSeedPlan, writeFinanceSeedPlan, paidSeedBookingDate, seedFinanceCalendar } from "./lib/financeSeedPolicy.mjs";
+import { forwardSeedBookingDate } from "./lib/forwardSeedBookingDate.mjs";
 import { createRequire } from "node:module";
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -36,7 +39,7 @@ const { createClient } = require("@supabase/supabase-js");
 // Constants
 // ──────────────────────────────────────────────────────────────────────────────
 
-const SEED_TAG = "DEVSEED";
+const SEED_TAG = FORWARD_SEED_TAG;
 
 /**
  * Multi-layer safety guard. Refuses to seed if:
@@ -187,6 +190,11 @@ const PROPOSAL_IDS = {
   approved:           "f8000001-0004-4008-8008-000000000004",
   expired:            "f8000001-0005-4008-8008-000000000005",
 };
+
+// A new financial namespace preserves old September/undated fixture graphs.
+for (const ids of [BOOKING_IDS,EARNING_IDS,PAYOUT_RUN_IDS,PAYOUT_IDS,RECURRING_IDS,INVOICE_IDS,PROPOSAL_IDS]) {
+  for (const key of Object.keys(ids)) ids[key]=forwardSeedFixtureId(ids[key]);
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Synthetic user definitions (no real personal data)
@@ -528,6 +536,16 @@ async function seedAuthUsers(admin) {
 // Phase 4 — Cleaners
 // ──────────────────────────────────────────────────────────────────────────────
 
+export async function upsertSeedCleaner(admin, row) {
+  const {data: existing,error: readError} = await admin.from("cleaners").select("id").eq("id",row.id).maybeSingle();
+  if (readError) throw new Error(`Seed cleaner lookup failed: ${readError.message}`);
+  const profile = {...row};
+  // Shared legacy cleaner parents retain their original tenure across reseeds.
+  if (existing) delete profile.joined_at;
+  const {error} = await admin.from("cleaners").upsert(profile,{onConflict:"id"});
+  if (error) throw new Error(`Seed cleaner write failed: ${error.message}`);
+}
+
 async function seedCleaners(admin, userIdMap, locationIdMap) {
   const cleanerDefs = [
     {
@@ -590,7 +608,7 @@ async function seedCleaners(admin, userIdMap, locationIdMap) {
     const authUserId = userIdMap[def.email];
     if (!authUserId) throw new Error(`No auth user ID for ${def.email}`);
 
-    await admin.from("cleaners").upsert({
+    await upsertSeedCleaner(admin, {
       id: def.id,
       full_name: def.name,
       email: def.email,
@@ -609,7 +627,7 @@ async function seedCleaners(admin, userIdMap, locationIdMap) {
       rating: def.tier === "gold" ? 4.9 : def.tier === "silver" ? 4.6 : 4.3,
       jobs_completed: def.tier === "gold" ? 142 : def.tier === "silver" ? 67 : 12,
       acceptance_rate: 0.95,
-    }, { onConflict: "id" });
+    });
 
     // cleaner_locations: delete stale then insert fresh
     await admin.from("cleaner_locations").delete().eq("cleaner_id", def.id);
@@ -680,7 +698,7 @@ async function seedTeams(admin) {
 // Phase 6 — Bookings
 // ──────────────────────────────────────────────────────────────────────────────
 
-async function seedBookings(admin, userIdMap, locationIdMap) {
+function buildSeedBookings(userIdMap, locationIdMap) {
   const custIds = {
     c1: userIdMap["customer.one@example.com"],
     c2: userIdMap["customer.two@example.com"],
@@ -727,7 +745,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 3, bathrooms: 2,
       location: "Sea Point", suburb: "Sea Point", city: "Cape Town",
       location_id: seaPtLocId,
-      date: isoDate(-14), time: "09:00",
+      date: paidSeedBookingDate(4, -14), time: "09:00",
       price_snapshot: { basePrice: 350, bedrooms: 3, bathrooms: 2, pricePerBedroom: 80, pricePerBathroom: 60, total: 548 },
       display_earnings_cents: 29800, payout_earnings_cents: 29800, internal_earnings_cents: 25000,
       // eligible + frozen_cents satisfies bookings_eligible_paid_require_frozen_cents constraint
@@ -752,7 +770,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 3, bathrooms: 2,
       location: "Claremont", suburb: "Claremont", city: "Cape Town",
       location_id: clarLocId,
-      date: isoDate(-7), time: "08:00",
+      date: forwardSeedBookingDate(-7), time: "08:00",
       price_snapshot: { basePrice: 950, bedrooms: 3, bathrooms: 2, total: 1330 },
       display_earnings_cents: 79800, payout_earnings_cents: 79800, internal_earnings_cents: 53200,
       payout_status: "pending", dispatch_status: "assigned",
@@ -775,7 +793,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 2, bathrooms: 1,
       location: "Sea Point", suburb: "Sea Point", city: "Cape Town",
       location_id: seaPtLocId,
-      date: isoDate(-21), time: "10:00",
+      date: forwardSeedBookingDate(-21), time: "10:00",
       price_snapshot: { basePrice: 350, bedrooms: 2, bathrooms: 1, total: 430 },
       display_earnings_cents: 23650, payout_earnings_cents: 23650, internal_earnings_cents: 19350,
       payout_status: "eligible", payout_frozen_cents: 23650,
@@ -799,7 +817,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 3, bathrooms: 2,
       location: "Claremont", suburb: "Claremont", city: "Cape Town",
       location_id: clarLocId,
-      date: isoDate(-10), time: "08:30",
+      date: forwardSeedBookingDate(-10), time: "08:30",
       price_snapshot: { basePrice: 350, bedrooms: 3, bathrooms: 2, total: 548 },
       display_earnings_cents: 30140, payout_earnings_cents: 30140, internal_earnings_cents: 24660,
       payout_status: "pending", dispatch_status: "assigned",
@@ -821,7 +839,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 2, bathrooms: 1,
       location: "Sea Point", suburb: "Sea Point", city: "Cape Town",
       location_id: seaPtLocId,
-      date: isoDate(5), time: "09:00",
+      date: forwardSeedBookingDate(5), time: "09:00",
       price_snapshot: { total: 430 },
       dispatch_status: "searching",
     }),
@@ -839,7 +857,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       service_slug: "regular-cleaning",
       location: "Observatory", suburb: "Observatory", city: "Cape Town",
       location_id: obsLocId,
-      date: isoDate(3), time: "10:00",
+      date: forwardSeedBookingDate(3), time: "10:00",
       price_snapshot: { total: 430 },
     }),
 
@@ -857,7 +875,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       service_slug: "regular-cleaning",
       location: "Sea Point", suburb: "Sea Point", city: "Cape Town",
       location_id: seaPtLocId,
-      date: isoDate(2), time: "11:00",
+      date: forwardSeedBookingDate(2), time: "11:00",
       price_snapshot: { total: 380 },
     }),
 
@@ -874,7 +892,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       service_slug: "deep-cleaning",
       location: "Claremont", suburb: "Claremont", city: "Cape Town",
       location_id: clarLocId,
-      date: isoDate(-5),
+      date: forwardSeedBookingDate(-5),
       price_snapshot: { total: 1030 },
     }),
 
@@ -892,7 +910,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       service_slug: "regular-cleaning",
       location: "Claremont", suburb: "Claremont", city: "Cape Town",
       location_id: clarLocId,
-      date: isoDate(-30),
+      date: forwardSeedBookingDate(-30),
       price_snapshot: { total: 548 },
     }),
 
@@ -913,7 +931,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 3, bathrooms: 2,
       location: "Rondebosch", suburb: "Rondebosch", city: "Cape Town",
       location_id: rondLocId,
-      date: isoDate(-3), time: "08:00",
+      date: forwardSeedBookingDate(-3), time: "08:00",
       price_snapshot: { basePrice: 1100, bedrooms: 3, bathrooms: 2, total: 1450 },
       display_earnings_cents: 81200, payout_earnings_cents: 81200, internal_earnings_cents: 63800,
       payout_status: "eligible", payout_frozen_cents: 81200,
@@ -936,7 +954,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 2, bathrooms: 1,
       location: "Newlands", suburb: "Newlands", city: "Cape Town",
       location_id: newLocId,
-      date: isoDate(10), time: "08:00",
+      date: forwardSeedBookingDate(10), time: "08:00",
       price_snapshot: { total: 630 },
       dispatch_status: "searching",
     }),
@@ -958,7 +976,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 3, bathrooms: 0,
       location: "Sea Point", suburb: "Sea Point", city: "Cape Town",
       location_id: seaPtLocId,
-      date: isoDate(-42), time: "09:00",
+      date: paidSeedBookingDate(7, -42), time: "09:00",
       price_snapshot: { basePrice: 500, bedrooms: 3, total: 650 },
       display_earnings_cents: 36400, payout_earnings_cents: 36400, internal_earnings_cents: 28600,
       payout_status: "eligible", payout_frozen_cents: 36400,
@@ -982,17 +1000,18 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       rooms: 4, bathrooms: 2,
       location: "Sea Point", suburb: "Sea Point", city: "Cape Town",
       location_id: seaPtLocId,
-      date: isoDate(3), time: "08:00",
+      date: forwardSeedBookingDate(3), time: "08:00",
       is_team_job: true,
       payout_owner_cleaner_id: CLEANER_IDS.c3,  // required when is_team_job=true
       price_snapshot: { total: 1330 },
       dispatch_status: "assigned",
     }),
 
-    // 14. Draft booking — C5, incomplete
+    // 14. Draft booking — C5, incomplete but scheduled within the forward boundary
     booking({
       id: BOOKING_IDS.draft,
       paystack_reference: `${SEED_TAG}-BK-014`,
+      date: forwardSeedBookingDate(3),
       customer_email: "customer.five@example.com",
       customer_name: "Dev Customer Five",
       customer_phone: TEST_PHONES.cust5,
@@ -1020,7 +1039,7 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
       service_slug: "regular-cleaning",
       location: "Claremont", suburb: "Claremont", city: "Cape Town",
       location_id: clarLocId,
-      date: isoDate(-5), time: "09:00",
+      date: forwardSeedBookingDate(-5), time: "09:00",
       is_monthly_billing_booking: true,
       price_snapshot: { total: 480 },
       payout_status: "pending",
@@ -1029,7 +1048,16 @@ async function seedBookings(admin, userIdMap, locationIdMap) {
     }),
   ];
 
+  return {bookings,custIds};
+}
+
+export async function seedBookings(admin, userIdMap, locationIdMap) {
+  const {bookings,custIds}=buildSeedBookings(userIdMap,locationIdMap);
+  const {data:existing,error:existingError}=await admin.from("bookings").select("id,date").in("id",bookings.map(row=>row.id));
+  if(existingError)throw new Error(`Seed booking dates: ${existingError.message}`);
+  const retainedDates=new Map((existing??[]).filter(isForwardSeedBooking).map(row=>[row.id,row.date]));
   for (const bk of bookings) {
+    if(retainedDates.has(bk.id))bk.date=retainedDates.get(bk.id);
     const { error } = await admin
       .from("bookings")
       .upsert(bk, { onConflict: "paystack_reference" });
@@ -1162,18 +1190,6 @@ async function seedFinance(admin, userIdMap) {
     },
   ];
 
-  for (const row of earnings) {
-    // Idempotent: delete-and-reinsert by known id
-    await admin.from("cleaner_earnings").upsert(row, { onConflict: "id" });
-  }
-
-  // cleaner_payout_runs
-  await admin.from("cleaner_payout_runs").upsert([
-    { id: PAYOUT_RUN_IDS.draft,    status: "draft",    total_amount_cents: 0 },
-    { id: PAYOUT_RUN_IDS.approved, status: "approved", total_amount_cents: 183600,
-      approved_at: new Date(Date.now() - 4*24*3600*1000).toISOString() },
-  ], { onConflict: "id" });
-
   // cleaner_payouts
   const payoutPeriodStart = lastMonthStart();
   const payoutPeriodEnd   = lastMonthEnd();
@@ -1185,16 +1201,16 @@ async function seedFinance(admin, userIdMap) {
       period_start: payoutPeriodStart, period_end: payoutPeriodEnd,
       payment_status: "pending",
     },
-    // Cleaner1: frozen (batched in draft run)
+    // Cleaner3: frozen standalone fixture; runs come from the application workflow
     {
-      id: PAYOUT_IDS.p2_frozen, cleaner_id: CLEANER_IDS.c1,
+      id: PAYOUT_IDS.p2_frozen, cleaner_id: CLEANER_IDS.c3,
       total_amount_cents: 36400, status: "frozen",
       period_start: isoDate(-35), period_end: isoDate(-28),
       payout_run_id: PAYOUT_RUN_IDS.draft,
       frozen_at: new Date(Date.now() - 2*24*3600*1000).toISOString(),
       payment_status: "pending",
     },
-    // Cleaner2: approved (in approved run)
+    // Cleaner2: approved standalone fixture
     {
       id: PAYOUT_IDS.p3_approved, cleaner_id: CLEANER_IDS.c2,
       total_amount_cents: 30140, status: "approved",
@@ -1221,11 +1237,11 @@ async function seedFinance(admin, userIdMap) {
     },
   ];
 
-  for (const p of payouts) {
-    await admin.from("cleaner_payouts").upsert(p, { onConflict: "id" });
-  }
-
-  return { earningsCount: earnings.length, payoutsCount: payouts.length };
+  const {data: bookingRows,error: bookingError}=await admin.from("bookings").select("id,date").in("id",earnings.map(row=>row.booking_id));
+  if(bookingError)throw new Error(`Finance seed booking dates: ${bookingError.message}`);
+  const bookingDates=new Map((bookingRows??[]).map(row=>[row.id,row.date]));
+  const plan=buildFinanceSeedPlan({earnings,payouts,bookingDates});
+  return writeFinanceSeedPlan(admin,plan);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1363,7 +1379,7 @@ async function seedProposals(admin, userIdMap) {
 // Reset — wipe all seed rows
 // ──────────────────────────────────────────────────────────────────────────────
 
-async function resetSeedRows(admin) {
+export async function resetSeedRows(admin) {
   console.log("[seed-dev] Resetting dev seed rows...");
 
   const must = async (label, promise) => {
@@ -1383,6 +1399,12 @@ async function resetSeedRows(admin) {
     }
     throw new Error(`[seed-dev] Reset failed at ${label}: ${message}`);
   };
+
+  const legacySeedBookings = await must(
+    "load retained legacy seed generation",
+    admin.from("bookings").select("id").like("paystack_reference","DEVSEED-BK-%").limit(1),
+  );
+  const retainSharedParents=(legacySeedBookings??[]).length>0;
 
   const taggedSeedBookings = await must(
     "load tagged seed bookings",
@@ -1703,6 +1725,9 @@ async function resetSeedRows(admin) {
     "recurring_bookings",
     admin.from("recurring_bookings").delete().in("id", Object.values(RECURRING_IDS)),
   );
+  if (retainSharedParents) {
+    console.log("[seed-dev] Retained legacy fixture generation and its shared cleaner/team parents.");
+  } else {
   await must(
     "team_members",
     admin.from("team_members").delete().in("team_id", Object.values(TEAM_IDS)),
@@ -1727,6 +1752,8 @@ async function resetSeedRows(admin) {
     );
   }
 
+  }
+
   console.log("[seed-dev] Reset complete.");
 }
 
@@ -1738,6 +1765,16 @@ async function main() {
   const args = process.argv.slice(2);
   const reset  = args.includes("--reset");
   const dryRun = args.includes("--dry-run");
+
+  // Local fixture validation only: does not construct a Supabase client or read credentials.
+  if (args.includes("--validate-bookings")) {
+    const {bookings}=buildSeedBookings({},{});
+    if (bookings.length !== 15 || bookings.some(row => !/^\d{4}-\d{2}-\d{2}$/.test(row.date ?? "") || row.date < "2026-10-01")) {
+      throw new Error("Seed booking dates violate the forward boundary");
+    }
+    console.log(JSON.stringify({bookings:bookings.length,earliestDate:bookings.map(row=>row.date).sort()[0],dates:bookings.map(row=>row.date),ids:bookings.map(row=>row.id),references:bookings.map(row=>row.paystack_reference)}));
+    return;
+  }
 
   // Load env
   const envFile = resolve(root, "apps/web/.env.local");
@@ -1772,7 +1809,7 @@ async function main() {
     console.log(`  Dispatch teams: ${DEV_TEAMS.length} move-clean teams`);
     console.log("  Bookings: 15 representative");
     console.log("  Recurring: 3 (weekly, fortnightly, monthly)");
-    console.log("  Earnings: 5 | Payout runs: 2 | Payouts: 5");
+    console.log(`  Earnings: 5 | Payout runs: 0 (application-generated) | Payouts: ${seedFinanceCalendar().closedPeriod ? 5 : 0}`);
     console.log("  Monthly invoices: 2");
     console.log("  Admin proposals: 5 (pending/rejected/approved/expired)");
     return;
@@ -1818,8 +1855,9 @@ async function main() {
   console.log(`  Recurring: ${recurringCount}`);
 
   console.log("[seed-dev] Phase 8: Finance (earnings, payouts)");
-  const { earningsCount, payoutsCount } = await seedFinance(admin, userIdMap);
+  const { earningsCount, payoutsCount, runsCount, deferredReason } = await seedFinance(admin, userIdMap);
   console.log(`  Earnings: ${earningsCount} | Payouts: ${payoutsCount}`);
+  if(deferredReason)console.log(`  Finance fixtures: ${deferredReason}`);
 
   console.log("[seed-dev] Phase 9: Monthly Invoices");
   const invoiceCount = await seedInvoices(admin, userIdMap);
@@ -1838,12 +1876,12 @@ async function main() {
   console.log("  Cleaners: 6  |  cleaner_locations: up to 12  |  cleaner_availability: ~120 rows");
   console.log(`  Dispatch teams: ${teamCount}`);
   console.log(`  Bookings: ${bookingCount}  |  Recurring: ${recurringCount}`);
-  console.log(`  Earnings: ${earningsCount}  |  Payout runs: 2  |  Payouts: ${payoutsCount}`);
+  console.log(`  Earnings: ${earningsCount}  |  Payout runs: ${runsCount}  |  Payouts: ${payoutsCount}`);
   console.log(`  Monthly invoices: ${invoiceCount}  |  Admin proposals: ${proposalCount}`);
   console.log("\n[seed-dev] CONFIRM: no production PII, auth, payment, or banking data was seeded.");
 }
 
-main().catch((err) => {
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) main().catch((err) => {
   console.error("[seed-dev] FAILED:", err.message || err);
   process.exit(1);
 });

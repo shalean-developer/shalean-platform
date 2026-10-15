@@ -1,3 +1,4 @@
+import { assertRunProcessingCutoff } from "@/lib/payout/runs/assertRunProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { markCleanerPayoutPaid } from "@/lib/payout/markPayoutPaid";
@@ -96,6 +97,8 @@ async function processPayoutRunManual(
     };
   }
 
+  await assertRunProcessingCutoff(admin, runId);
+
   if (runStatus === "draft") throw new Error("Approve the run before processing.");
 
   if (runStatus === "approved") {
@@ -167,6 +170,8 @@ async function processPayoutRunPaystack(admin: SupabaseClient, runId: string, pa
   if (runStatus === "paid") {
     return { runId, mode: "paystack", successCount: 0, skippedInFlightCount: 0, failedCount: 0, errors: [] };
   }
+
+  await assertRunProcessingCutoff(admin, runId);
 
   if (runStatus === "draft") throw new Error("Approve the run before processing.");
 

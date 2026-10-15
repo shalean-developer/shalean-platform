@@ -1,3 +1,4 @@
+import { assertRunProcessingCutoff } from "@/lib/payout/runs/assertRunProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { payCleanerPayoutWithPaystack } from "@/lib/payout/paystackPayout";
@@ -18,6 +19,7 @@ export async function retryFailedRunTransfers(
   params: { runId: string; paidBy: string; payoutId?: string | null },
 ): Promise<RetryFailedRunTransfersResult> {
   const { runId, paidBy, payoutId } = params;
+  await assertRunProcessingCutoff(admin, runId);
   let q = admin
     .from("cleaner_payouts")
     .select("id, payment_status")

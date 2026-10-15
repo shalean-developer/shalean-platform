@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assignAdminTeamAndSyncRoster } from "@/lib/booking/teamAssignmentBookingStateCommands";
 import { triggerAssignmentEarningsSnapshotForBooking } from "@/lib/admin/triggerAssignmentEarningsSnapshot";
@@ -128,6 +129,15 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
   if (!booking) return { ok: false, httpStatus: 404, error: "Booking not found." };
 
   const b = booking as BookingRow;
+  // Reject before capacity RPCs, earnings reopening or assignment/roster writes.
+  if (!isCurrentPayoutVisitDate(String(b.date ?? "").trim())) {
+    return {
+      ok: false,
+      httpStatus: 409,
+      code: "historical_payout_item_deferred",
+      error: "Pre-October bookings are preserved for historical reconciliation and cannot be reassigned.",
+    };
+  }
   const stBooking = String(b.status ?? "").toLowerCase();
   if (stBooking === "pending_payment" || stBooking === "payment_expired") {
     return {

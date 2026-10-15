@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import "server-only";
 
 import type { ReplaceBookingCleanersRpcRow } from "@/lib/admin/bookingRosterReplacePayload";
@@ -79,7 +80,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
   const { data: booking, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, completed_at, cleaner_id, cleaner_response_status, accepted_at, en_route_at, started_at, team_id, is_team_job, cleaner_line_earnings_finalized_at, cleaner_count, booking_cleaners(cleaner_id, role, source)",
+      "id, date, status, completed_at, cleaner_id, cleaner_response_status, accepted_at, en_route_at, started_at, team_id, is_team_job, cleaner_line_earnings_finalized_at, cleaner_count, booking_cleaners(cleaner_id, role, source)",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -94,6 +95,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
   }
 
   const row = booking as {
+    date?: string | null;
     status?: string | null;
     completed_at?: string | null;
     cleaner_id?: string | null;
@@ -107,6 +109,10 @@ export async function applyRecurringOccurrenceRosterContinuity(
     cleaner_count?: number | null;
     booking_cleaners?: { cleaner_id?: string | null; role?: string | null; source?: string | null }[] | null;
   };
+
+  if (!isCurrentPayoutVisitDate(String(row.date ?? "").trim())) {
+    return { ok: true, applied: false, cleanerCount: 0, kind: "locked", reason: "historical_payout_item_deferred" };
+  }
 
   if (isAuthoritativeBookingCompleted({ status: row.status, completed_at: row.completed_at })) {
     return { ok: true, applied: false, cleanerCount: 0, kind: "locked" };

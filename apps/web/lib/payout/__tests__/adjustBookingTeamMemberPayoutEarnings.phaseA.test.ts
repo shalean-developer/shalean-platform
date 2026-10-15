@@ -50,7 +50,7 @@ function makeAdmin(opts?: { withSummaryMember?: boolean }) {
               maybeSingle: vi.fn(async () => ({
                 data: {
                   id: BOOKING_ID,
-                  date: "2026-07-15",
+                  date: "2026-10-15",
                   status: "completed",
                   team_id: null,
                   cleaner_id: LEAD,
@@ -188,7 +188,14 @@ function makeAdmin(opts?: { withSummaryMember?: boolean }) {
     };
   });
 
-  return { from, bookingUpdates, tjUpdates, bookingsSelects };
+  return { from, bookingUpdates, tjUpdates, bookingsSelects,
+    rpc: vi.fn(async (name: string, args: {p_payout_cents:number;p_booking_patch:Row}) => {
+      expect(name).toBe("adjust_unrun_member_payout_earnings");
+      tjUpdates.push({payout_cents:args.p_payout_cents});
+      bookingUpdates.push(args.p_booking_patch);
+      return {data:{batch_total_cents:null,synced_payout_ids:[]},error:null};
+    }),
+  };
 }
 
 describe("adjustBookingTeamMemberPayoutEarnings pseudo-team TJ member", () => {

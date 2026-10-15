@@ -1,3 +1,4 @@
+import { assertCurrentPayoutBookingMutation } from "@/lib/payout/assertCurrentPayoutBookingMutation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import type { MarketplaceBookingAssignPatch } from "@/lib/marketplace-intelligence/marketplaceBookingMeta";
@@ -20,6 +21,9 @@ export async function setAdminManualBookingDirectAssigned(
   params: SetAdminManualBookingDirectAssignedParams,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { admin, bookingId, cleanerId, nowIso, prevCleanerId, assignMeta, truthPatch } = params;
+
+  const boundary = await assertCurrentPayoutBookingMutation(admin, bookingId);
+  if (!boundary.ok) return boundary;
 
   await admin
     .from("dispatch_offers")

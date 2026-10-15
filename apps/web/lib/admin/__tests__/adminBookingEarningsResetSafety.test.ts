@@ -10,7 +10,7 @@ function mockAdmin(booking: Record<string, unknown>, opts?: { payoutBatch?: Reco
         return {
           select: () => ({
             eq: () => ({
-              maybeSingle: () => Promise.resolve({ data: booking, error: null }),
+              maybeSingle: () => Promise.resolve({ data: { date: "2026-10-01", ...booking }, error: null }),
             }),
           }),
         };
@@ -41,6 +41,12 @@ function mockAdmin(booking: Record<string, unknown>, opts?: { payoutBatch?: Reco
 }
 
 describe("assertBookingCleanerEarningsResetSafe", () => {
+  it.each([" 2026-10-02 ", "\t2026-10-01\n"])("accepts padded forward date %j", async (date) => {
+    expect(await assertBookingCleanerEarningsResetSafe(mockAdmin({id:bookingId,date}) as never,bookingId)).toEqual({ok:true});
+  });
+  it.each([" 2026-09-30 ", null, " 2026-02-30 ", "bad-date"])("preserves historical/invalid date %j", async (date) => {
+    expect(await assertBookingCleanerEarningsResetSafe(mockAdmin({id:bookingId,date}) as never,bookingId)).toMatchObject({ok:false,code:"historical_payout_item_deferred"});
+  });
   it("blocks eligible payout_status by default", async () => {
     const admin = mockAdmin({
       id: bookingId,

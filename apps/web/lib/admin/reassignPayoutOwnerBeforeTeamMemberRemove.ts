@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveTeamPayoutOwnerCleanerId } from "@/lib/dispatch/resolveTeamPayoutOwnerCleanerId";
@@ -75,7 +76,7 @@ export async function reassignPayoutOwnerBeforeTeamMemberRemove(
   if (membersErr) return { ok: false, httpStatus: 500, error: membersErr.message };
   if (openErr) return { ok: false, httpStatus: 500, error: openErr.message };
 
-  const openBookings = (openRows ?? []) as Array<{ id?: string; date?: string | null }>;
+  const openBookings = ((openRows ?? []) as Array<{ id?: string; date?: string | null }>).filter(row => isCurrentPayoutVisitDate(String(row.date ?? "").trim()));
   if (openBookings.length === 0) {
     return { ok: true, reassigned: 0 };
   }

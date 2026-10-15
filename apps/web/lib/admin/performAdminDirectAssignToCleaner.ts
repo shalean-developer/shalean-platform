@@ -89,7 +89,7 @@ export async function performAdminDirectAssignToCleaner(
   });
 
   if (!committed.ok) {
-    return { ok: false, httpStatus: 500, error: committed.error };
+    return { ok: false, httpStatus: committed.error === "historical_payout_item_deferred" ? 409 : 500, error: committed.error };
   }
 
   await syncCleanerBusyFromBookings(admin, resolvedCleanerId);

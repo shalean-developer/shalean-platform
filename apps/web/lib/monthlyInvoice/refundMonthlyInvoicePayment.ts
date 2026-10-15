@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { recordUnifiedRefundAccounting } from "@/lib/accounting/recordUnifiedRefundAccounting";
@@ -75,28 +76,34 @@ async function recordRefundLedger(
 async function reverseMonthlyInvoiceChildBookings(
   admin: SupabaseClient,
   invoiceId: string,
-): Promise<{ payoutEligible: number }> {
+): Promise<{ ok:true; payoutEligible: number } | {ok:false;error:string}> {
   const { data: bookings, error } = await admin
     .from("bookings")
-    .select("id, payout_status")
+    .select("id, date, payout_status, payment_status, amount_paid_cents")
     .eq("monthly_invoice_id", invoiceId)
     .neq("status", "cancelled");
-  if (error || !bookings?.length) return { payoutEligible: 0 };
+  if(error) return {ok:false,error:error.message};
+  if (!bookings?.length) return { ok:true,payoutEligible: 0 };
 
   let payoutEligible = 0;
   for (const b of bookings) {
-    const row = b as { id: string; payout_status: string | null };
+    const row = b as { id: string; date?:string|null; payment_status?:string|null; amount_paid_cents?:number|null; payout_status: string | null };
     const ps = String(row.payout_status ?? "").toLowerCase();
     if (ps === "eligible" || ps === "paid") payoutEligible += 1;
 
+    if('date' in row && !isCurrentPayoutVisitDate(row.date)){
+      if(row.payment_status!=='pending_monthly' || Number(row.amount_paid_cents??0)!==0) return {ok:false,error:`historical_monthly_reversal_incomplete:${row.id}`};
+      continue;
+    }
     if (ps === "paid") {
       // A customer refund must not erase a cleaner payout that was already settled.
-      await admin
+      const {error:updateError}=await admin
         .from("bookings")
         .update({ payment_status: "pending_monthly", amount_paid_cents: 0 })
         .eq("id", row.id);
+      if(updateError) return {ok:false,error:updateError.message};
     } else {
-      await admin
+      const {error:updateError}=await admin
         .from("bookings")
         .update({
           payment_status: "pending_monthly",
@@ -105,9 +112,10 @@ async function reverseMonthlyInvoiceChildBookings(
           payout_frozen_cents: null,
         })
         .eq("id", row.id);
+      if(updateError) return {ok:false,error:updateError.message};
     }
   }
-  return { payoutEligible };
+  return { ok:true,payoutEligible };
 }
 
 export async function refundMonthlyInvoicePayment(
@@ -138,6 +146,7 @@ export async function refundMonthlyInvoicePayment(
   const resolved = await resolveChargeReference(admin, row.id, row.paystack_reference);
   if (!resolved.ok) return { ok: false, error: resolved.error };
   const { chargeRef, chargeAmount } = resolved;
+  if(!params.recordOnly && chargeAmount>0 && chargeAmount!==amountCents) return {ok:false,error:"statement_collection_refund_unsupported"};
   const refundAmount = chargeAmount > 0 ? chargeAmount : amountCents;
   const pastedRefundRef = params.refundReference?.trim() || null;
   const nowIso = new Date().toISOString();
@@ -180,7 +189,6 @@ export async function refundMonthlyInvoicePayment(
     .update({
       status: "refunded",
       amount_paid_cents: 0,
-      balance_cents: total,
       is_overdue: false,
       refunded_at: nowIso,
       refund_reference: refundReference,
@@ -190,6 +198,7 @@ export async function refundMonthlyInvoicePayment(
   if (updErr) return { ok: false, error: updErr.message };
 
   const reversal = await reverseMonthlyInvoiceChildBookings(admin, row.id);
+  if(!reversal.ok) return reversal;
   await appendMonthlyInvoiceSnapshotEvent(admin, row.id, {
     kind: "payment_refunded",
     at: nowIso,

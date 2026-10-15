@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { effectiveJobDurationMinutes } from "@/lib/admin/adminAssignEligibility";
 import { adminAssignmentWarningFromWorkloadWarning } from "@/lib/admin/adminAssignEligibility";
@@ -105,6 +106,9 @@ export async function validateAdminManualAssignToCleaner(
   }
 
   const b = booking as BookingRow;
+  if (!isCurrentPayoutVisitDate(String(b.date ?? "").trim())) {
+    return {ok:false,httpStatus:409,error:"historical_payout_item_deferred"};
+  }
   const st = String(b.status ?? "").toLowerCase();
   if (st === "pending_payment" || st === "payment_expired") {
     return {

@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -148,6 +149,11 @@ export async function recalculateCleanerEarningsBatch(
   let resetBlocked = 0;
 
   for (const row of candidates) {
+    if (!isCurrentPayoutVisitDate(row.date)) {
+      skipped += 1;
+      skipReasons.set("historical_payout_item_deferred", (skipReasons.get("historical_payout_item_deferred") ?? 0) + 1);
+      continue;
+    }
     const cleanerId = resolvePersistCleanerIdForBooking({
       cleaner_id: row.cleaner_id,
       payout_owner_cleaner_id: row.payout_owner_cleaner_id,

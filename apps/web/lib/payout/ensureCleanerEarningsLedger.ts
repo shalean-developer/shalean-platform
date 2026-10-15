@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -57,13 +58,14 @@ export async function ensureCleanerEarningsLedgerRow(params: {
   const { data: b, error: bErr } = await admin
     .from("bookings")
     .select(
-      "id, status, cleaner_id, payout_owner_cleaner_id, is_team_job, cleaner_line_earnings_finalized_at, cleaner_earnings_total_cents",
+      "id, date, status, cleaner_id, payout_owner_cleaner_id, is_team_job, cleaner_line_earnings_finalized_at, cleaner_earnings_total_cents",
     )
     .eq("id", bid)
     .maybeSingle();
   if (bErr || !b) return { ok: false, error: bErr?.message ?? "Booking not found" };
 
   const row = b as {
+    date?: string | null;
     status?: string | null;
     cleaner_id?: string | null;
     payout_owner_cleaner_id?: string | null;
@@ -71,6 +73,10 @@ export async function ensureCleanerEarningsLedgerRow(params: {
     cleaner_line_earnings_finalized_at?: string | null;
     cleaner_earnings_total_cents?: number | null;
   };
+
+  if (!isCurrentPayoutVisitDate(String(row.date ?? "").trim())) {
+    return { ok: true, skipped: true, reason: "historical_payout_item_deferred" };
+  }
 
   if (String(row.status ?? "").toLowerCase() !== "completed") {
     return { ok: true, skipped: true, reason: "not_completed" };

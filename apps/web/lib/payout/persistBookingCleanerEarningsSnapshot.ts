@@ -1,3 +1,4 @@
+import { assertCurrentPayoutBookingMutation } from "@/lib/payout/assertCurrentPayoutBookingMutation";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -25,6 +26,8 @@ export async function persistBookingCleanerEarningsSnapshot(params: {
   earnings: ComputeBookingEarningsOutput;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const { admin, bookingId, cleanerId, lineRows, earnings } = params;
+  const boundary = await assertCurrentPayoutBookingMutation(admin, bookingId);
+  if (!boundary.ok) return boundary;
   const items: EarningsLineItemInput[] = lineRows.map((r) => ({
     id: r.id,
     item_type: r.item_type,

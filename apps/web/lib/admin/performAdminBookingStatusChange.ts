@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { invalidateCleanerAvailabilityCache } from "@/lib/admin/cleanerAvailabilityCache";
 import { applyAdminBookingLifecycleStatusOverride } from "@/lib/admin/adminBookingLifecycleStatusOverrideCommand";
@@ -85,6 +86,11 @@ export async function performAdminBookingStatusChange(
 
   if (beforeStatus === nextStatus) {
     return { ok: false, status: 400, error: "Booking is already in that status.", code: "status_unchanged" };
+  }
+
+  if (nextStatus === "completed" && !isCurrentPayoutVisitDate(String(beforeRow.date ?? "").trim())
+      && !isCompletableDisplayEarningsCents(beforeRow.display_earnings_cents)) {
+    return {ok:false,status:409,error:"Historical earnings are deferred; completion cannot rebuild them.",code:"historical_payout_item_deferred"};
   }
 
   const beforeCompletedAt =
