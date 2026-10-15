@@ -72,6 +72,6 @@ export async function retryHistoricalPaymentEffects(admin:SupabaseClient):Promis
  if(error) throw new Error(error.message);
  for(const job of data??[]){
   try{await runHistoricalPaymentEffect(admin,job.payload as HistoricalPaymentEffectPayload);const {error}=await admin.from('failed_jobs').delete().eq('id',job.id);if(error) throw new Error(error.message);}
-  catch(error){const attempts=Number(job.attempts??0)+1;await admin.from('failed_jobs').update({attempts,type:attempts>=25?'historical_payment_effect_exhausted':HISTORICAL_PAYMENT_EFFECT_JOB}).eq('id',job.id);await reportOperationalIssue(attempts>=25?'critical':'warn','historicalPaymentEffects/retry','Payment effect retry failed',{jobId:job.id,attempts,error:String(error)});}
+  catch(error){const attempts=Number(job.attempts??0)+1;const {error:trackingError}=await admin.from('failed_jobs').update({attempts,type:attempts>=25?'historical_payment_effect_exhausted':HISTORICAL_PAYMENT_EFFECT_JOB}).eq('id',job.id);if(trackingError) throw new Error(`historical_payment_effect_retry_tracking_failed:${trackingError.message}`);await reportOperationalIssue(attempts>=25?'critical':'warn','historicalPaymentEffects/retry','Payment effect retry failed',{jobId:job.id,attempts,error:String(error)});}
  }
 }

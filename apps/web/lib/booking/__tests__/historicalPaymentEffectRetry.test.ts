@@ -44,4 +44,11 @@ describe('durable historical payment effect retries',()=>{
   expect(reportOperationalIssue).toHaveBeenCalledWith('warn','historicalPaymentEffects','Payment effect retained for retry',expect.objectContaining({error:expect.stringContaining('delete unavailable')}));
  });
 
+ it('surfaces retry-attempt persistence failures without removing the durable job',async()=>{
+  const remove=vi.fn();const q={select:()=>q,eq:()=>q,order:()=>q,limit:async()=>({data:[{id:'job',payload,attempts:0}],error:null}),delete:()=>({eq:remove}),update:()=>({eq:async()=>({error:{message:'attempt write unavailable'}})})};
+  const admin={from:()=>q,rpc:async()=>({data:null,error:{message:'effect unavailable'}})};
+  await expect(retryHistoricalPaymentEffects(admin as never)).rejects.toThrow('retry_tracking_failed:attempt write unavailable');
+  expect(remove).not.toHaveBeenCalled();
+ });
+
 });
