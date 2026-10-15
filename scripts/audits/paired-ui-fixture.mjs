@@ -52,7 +52,7 @@ export function fixturePlan(now = new Date()) {
     is_test: false, is_team_job: false, status: 'completed', dispatch_status: 'assigned',
     amount_paid_cents: 0, total_paid_zar: 650, payment_status: 'pending', billing_type: 'pay_later',
     cleaner_id: ids.lead, payout_owner_cleaner_id: ids.lead, cleaner_payout_cents: 25000,
-    cleaner_bonus_cents: 0, display_earnings_cents: 50000, cleaner_earnings_total_cents: 50000,
+    cleaner_bonus_cents: 0, display_earnings_cents: 25000, cleaner_earnings_total_cents: 50000,
     company_revenue_cents: 15000, payout_status: 'pending', completed_at: now.toISOString(),
     cleaner_line_earnings_finalized_at: now.toISOString(), earnings_summary: summary,
     price_snapshot: { total: 650 }, booking_snapshot: { selectedCleanerIds: [ids.lead, ids.member] },
