@@ -120,4 +120,7 @@ async function main() {
     try { if (begun) await db.query('rollback'); } finally { await db.close(); }
   }
 }
-if (process.argv[1]?.endsWith('/member-payout-fixture.ts')) main().catch(() => { console.error('Candidate fixture verification failed; no acceptance recorded. Inspect locally without sharing credentials.'); process.exitCode = 1; });
+export function isMemberPayoutFixtureEntrypoint(value: string | undefined): boolean {
+  return (value ?? '').replaceAll('\\','/').split('/').at(-1) === 'member-payout-fixture.ts';
+}
+if (isMemberPayoutFixtureEntrypoint(process.argv[1])) main().catch(() => { console.error('Candidate fixture verification failed; no acceptance recorded. Inspect locally without sharing credentials.'); process.exitCode = 1; });
