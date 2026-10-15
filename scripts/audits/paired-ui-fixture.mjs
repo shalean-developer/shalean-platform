@@ -50,7 +50,7 @@ export function fixturePlan(now = new Date()) {
     // Reporting deliberately excludes is_test=true. This opt-in fixture is staging-only,
     // namespaced and synthetic; never run the payout actions while it is present.
     is_test: false, is_team_job: false, status: 'completed', dispatch_status: 'assigned',
-    amount_paid_cents: 0, total_paid_zar: 650, payment_status: 'pending', billing_type: 'prepaid',
+    amount_paid_cents: 0, total_paid_zar: 650, payment_status: 'pending', billing_type: 'pay_later',
     cleaner_id: ids.lead, payout_owner_cleaner_id: ids.lead, cleaner_payout_cents: 25000,
     cleaner_bonus_cents: 0, display_earnings_cents: 50000, cleaner_earnings_total_cents: 50000,
     company_revenue_cents: 15000, payout_status: 'pending', completed_at: now.toISOString(),
@@ -97,11 +97,11 @@ export async function applyFixture(admin, plan) {
       assert.equal(existingCleaner[0].auth_user_id, authId);
     } else {
       await checked(admin.from('cleaners').insert({ id: p.id, auth_user_id: authId, full_name: p.name,
-        email: p.email, phone: p.phone, payment_id: `${TAG}-${p.id}`, is_active: true, is_available: false }), 'Create synthetic cleaner');
+        email: p.email, phone: p.phone, payment_id: p.id === ids.lead ? 'SHL-CL-951001' : 'SHL-CL-951002', is_active: true, is_available: false }), 'Create synthetic cleaner');
     }
   }
   // Prepare reporting state only. This fixture does not claim application finalization coverage.
-  await checked(admin.from('bookings').insert({ ...plan, status: 'pending', completed_at: null,
+  await checked(admin.from('bookings').insert({ ...plan, status: 'assigned', completed_at: null,
     cleaner_line_earnings_finalized_at: null, payout_status: 'pending' }), 'Create fixture booking');
   await checked(admin.from('booking_cleaners').insert(people.map((p, i) => ({ booking_id: ids.booking,
     cleaner_id: p.id, role: i ? 'member' : 'lead', source: 'admin' }))), 'Create paired roster');

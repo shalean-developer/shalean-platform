@@ -47,10 +47,6 @@ jobs:
             echo "No web/package path changes — reporting successful no-op for required vitest check."
           fi
 
-      - name: Paired UI fixture safety tests
-        working-directory: .
-        run: node --test scripts/audits/paired-ui-fixture.test.mjs
-
       - name: Docs-only / unrelated change — required-check no-op
         if: steps.filter.outputs.run_suite != 'true'
         working-directory: .
@@ -102,6 +98,7 @@ jobs:
           set -euo pipefail
           npm install --prefix "$RUNNER_TEMP/paired-ledger" --no-save --package-lock=false --ignore-scripts @electric-sql/pglite@0.5.10
           AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node scripts/audits/paired-ledger-isolated.mjs
+          AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node --test scripts/audits/paired-ui-fixture.test.mjs
 
       - name: AUDIT-03A02B.2 isolated Plesk preflight regression
         if: steps.filter.outputs.run_suite == 'true'

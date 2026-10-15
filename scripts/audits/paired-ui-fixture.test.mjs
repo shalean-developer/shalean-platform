@@ -54,3 +54,25 @@ test('retirement preserves history and only excludes the owned fixture from repo
   assert.equal((await retireFixture(c)).historyRetained, true);
   assert.deepEqual(c.writes, [{ table: 'bookings', value: { is_test: true } }]);
 });
+test('fixture respects live assigned-status and unpaid earnings-cap SQL constraints', async () => {
+  const { PGlite } = await import(process.env.AUDIT_PGLITE_MODULE ?? '@electric-sql/pglite');
+  const db = new PGlite();
+  try {
+    // Exact relevant predicates read from staging pg_constraint, not relaxed fixture rules.
+    await db.exec(`create table bookings(status text,cleaner_id uuid,selected_cleaner_id uuid,
+      cleaner_payout_cents integer,cleaner_bonus_cents integer,billing_type text,
+      is_monthly_billing_booking boolean,payment_status text,monthly_invoice_id uuid,
+      total_paid_cents integer,total_paid_zar numeric,amount_paid_cents integer,base_amount_cents integer,
+      check(not(((cleaner_id is not null) or (selected_cleaner_id is not null)) and lower(trim(coalesce(status,'')))='pending')),
+      check(cleaner_payout_cents is null or coalesce(cleaner_payout_cents,0)+coalesce(cleaner_bonus_cents,0) <=
+        case when lower(trim(coalesce(billing_type,''))) in ('recurring_invoice','monthly_contract','pay_later') or coalesce(is_monthly_billing_booking,false) or lower(trim(coalesce(payment_status,'')))='pending_monthly' or monthly_invoice_id is not null
+        then coalesce(total_paid_cents,case when total_paid_zar>0 then round(total_paid_zar*100)::bigint end,nullif(amount_paid_cents,0),0)
+        else case when lower(trim(coalesce(payment_status,'')))='success' then greatest(coalesce(total_paid_cents,amount_paid_cents,case when total_paid_zar>0 then round(total_paid_zar*100)::bigint end,0),coalesce(base_amount_cents,0))
+        else coalesce(total_paid_cents,amount_paid_cents,case when total_paid_zar>0 then round(total_paid_zar*100)::bigint end,0) end end));`);
+    const p = fixturePlan();
+    const insert = (status, billing) => db.query('insert into bookings(status,cleaner_id,cleaner_payout_cents,cleaner_bonus_cents,billing_type,payment_status,total_paid_zar,amount_paid_cents) values ($1,$2,$3,$4,$5,$6,$7,$8)', [status,p.cleaner_id,p.cleaner_payout_cents,0,billing,p.payment_status,p.total_paid_zar,p.amount_paid_cents]);
+    await insert('assigned',p.billing_type); await insert('completed',p.billing_type);
+    await assert.rejects(insert('pending',p.billing_type), e => e.code === '23514');
+    await assert.rejects(insert('assigned','prepaid'), e => e.code === '23514');
+  } finally { await db.close(); }
+});
