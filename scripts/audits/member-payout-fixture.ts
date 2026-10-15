@@ -63,14 +63,18 @@ async function main() {
       await db.query(`create temporary table audit946_${table} on commit drop as select ${columns} from public.${table} where false`);
     }
     await db.query('insert into pg_temp.audit946_monthly_invoices values ($1,$2)', [id(1), 'paid']);
-    await db.query(`insert into pg_temp.audit946_bookings
-      (id,status,cleaner_id,cleaner_payout_cents,cleaner_bonus_cents,is_test,completed_at,date,billing_type,
-       is_monthly_billing_booking,monthly_invoice_id,payment_status,payout_status,payout_frozen_cents,metadata)
-      values ($1,'completed',$2,25000,0,false,'2026-10-05T12:00:00Z','2026-10-05','recurring_invoice',true,$3,'success','eligible',25000,'{}')`, [id(2), id(3), id(1)]);
-    for (const table of tables.slice(2)) {
+    for (const [table, bookingId, basis] of [
+      ['booking_roster_member_payouts',id(2),25000],
+      ['team_job_member_payouts',id(6),0],
+    ] as const) {
+      await db.query(`insert into pg_temp.audit946_bookings
+        (id,status,cleaner_id,cleaner_payout_cents,cleaner_bonus_cents,is_test,completed_at,date,billing_type,
+         is_monthly_billing_booking,monthly_invoice_id,payment_status,payout_status,payout_frozen_cents,metadata)
+        values ($1,'completed',$2,$4,0,false,'2026-10-05T12:00:00Z','2026-10-05','recurring_invoice',true,$3,'success','eligible',$4,'{}')`,
+        [bookingId,id(3),id(1),basis]);
       const bonus = table === 'booking_roster_member_payouts' ? ',bonus_cents' : '';
       await db.query(`insert into pg_temp.audit946_${table} (id,booking_id,cleaner_id,payout_cents,status${bonus})
-        values ($1,$2,$3,25000,'pending'${bonus ? ',0' : ''})`, [id(4), id(2), id(5)]);
+        values ($1,$2,$3,25000,'pending'${bonus ? ',0' : ''})`, [id(4),bookingId,id(5)]);
     }
     let fail = '';
     const admin = { from(table: string) {
@@ -95,7 +99,10 @@ async function main() {
     } } as unknown as SupabaseClient;
     const params = { admin, cleanerId: id(5), periodStart: '2026-10-01', periodEnd: '2026-10-31', invoiceStatusById: new Map<string,string>() };
     for (const list of [roster, team]) {
-      assert.equal((await list(params)).length, 1); checks++;
+      const candidates = await list(params);
+      assert.equal(candidates.length, 1); checks++;
+      assert.equal(candidates[0].payout_cents,25000); checks++;
+      assert.equal(candidates[0].booking.cleaner_payout_cents,list === team ? 0 : 25000); checks++;
       await db.query("update pg_temp.audit946_monthly_invoices set status='sent'");
       assert.equal((await list(params)).length, 0); checks++;
       await db.query("update pg_temp.audit946_monthly_invoices set status='paid'");
