@@ -1,20 +1,21 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const successEffect = vi.hoisted(() => vi.fn());
+const paymentEffect = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/recurring/refreshRecurringPaymentStateForBooking", () => ({ refreshRecurringPaymentStateForBooking: successEffect }));
 vi.mock("@/lib/booking/promoteV2TeamBookingAfterPayment", () => ({ promoteV2TeamBookingAfterPayment: successEffect }));
 vi.mock("@/lib/booking/persistPreferredCleaners", () => ({ syncPreferredCleanerRosterFromBookingRow: successEffect }));
-vi.mock("@/lib/referrals/server", () => ({ createPendingCustomerReferral: successEffect, processCustomerReferralAfterFirstPaidBooking: successEffect }));
+vi.mock("@/lib/referrals/server", () => ({ createPendingCustomerReferral: paymentEffect, processCustomerReferralAfterFirstPaidBooking: paymentEffect }));
 vi.mock("@/lib/dispatch/preferredCleanerDispatch", () => ({ startPreferredCleanerDispatchAfterPayment: successEffect }));
 vi.mock("@/lib/admin/runAdminAssignSmart", () => ({ runAdminAssignSmart: successEffect }));
 vi.mock("@/lib/marketplace-intelligence/assignBestCleaner", () => ({ assignBestCleaner: successEffect }));
 vi.mock("@/lib/dispatch/notifyCleanerAssigned", () => ({ notifyCleanerAssignedBooking: successEffect }));
-vi.mock("@/lib/booking/recordBookingSideEffects", () => ({ recordBookingSideEffects: successEffect }));
-vi.mock("@/lib/booking/cancelUnsentBookingPaymentRecoveryJobs", () => ({ cancelUnsentBookingPaymentRecoveryJobs: successEffect }));
-vi.mock("@/lib/growth/syncPrimaryCity", () => ({ syncUserPrimaryCityFromBooking: successEffect }));
-vi.mock("@/lib/growth/growthActionOutcomes", () => ({ attributePaidBookingToGrowthOutcomes: successEffect }));
-vi.mock("@/lib/conversion/conversionExperimentOutcomes", () => ({ recordConversionExperimentResultsOnPayment: successEffect }));
-vi.mock("@/lib/ai-autonomy/learningLoop", () => ({ learnFromPaymentSuccess: successEffect }));
+vi.mock("@/lib/booking/recordBookingSideEffects", () => ({ recordBookingSideEffects: paymentEffect }));
+vi.mock("@/lib/booking/cancelUnsentBookingPaymentRecoveryJobs", () => ({ cancelUnsentBookingPaymentRecoveryJobs: paymentEffect }));
+vi.mock("@/lib/growth/syncPrimaryCity", () => ({ syncUserPrimaryCityFromBooking: paymentEffect }));
+vi.mock("@/lib/growth/growthActionOutcomes", () => ({ attributePaidBookingToGrowthOutcomes: paymentEffect }));
+vi.mock("@/lib/conversion/conversionExperimentOutcomes", () => ({ recordConversionExperimentResultsOnPayment: paymentEffect }));
+vi.mock("@/lib/ai-autonomy/learningLoop", () => ({ learnFromPaymentSuccess: paymentEffect }));
 vi.mock("@/lib/payout/persistCleanerPayout", () => ({ persistCleanerPayoutIfUnset: successEffect }));
 vi.mock("@/lib/booking/resolveBookingUserId", () => ({ resolveBookingUserId: vi.fn().mockResolvedValue(null) }));
 vi.mock("@/lib/booking/checkoutCleanerEligibility", () => ({
@@ -359,18 +360,30 @@ describe("observed pending upsert conflict propagation", () => {
     vi.mocked(resolveBookingUserId).mockResolvedValue(null);
   });
 
-  function pendingDb(mode: "id" | "paystack_reference", competing: Record<string, unknown> = {}) {
+  function pendingDb(mode: "id" | "paystack_reference", competing: Record<string, unknown> = {}, initialOverrides:Record<string,unknown> = {}, authorizationError: string | null = null, paymentEffectError:string|null=null) {
     const initial: Record<string, unknown> = {
       id: bookingId, status: "pending_payment", customer_email: " Payer@Example.com ",
       customer_id: "owner-a", paystack_reference: mode === "id" ? bookingId : "pay_verified",
       selected_cleaner_id: null, cleaner_id: null, assignment_type: null,
-      is_recurring_generated: false, price_snapshot: null,
+      is_recurring_generated: false, price_snapshot: null,date:"2026-10-14",amount_paid_cents:0, ...initialOverrides,
     };
     const current = { ...initial };
+    let captureCommitted=false;
     const writes = vi.fn();
+    const effectDeletes=vi.fn();
     const reads: string[] = [];
     const predicates: Array<[string, unknown]> = [];
     const from = vi.fn((table: string) => {
+      if (table === "cleaning_credit_reservations") return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) };
+      if(table === "failed_jobs") return {
+        select:()=>({eq:()=>({contains:async()=>({data:['payment_state','cancel_recovery','receipt','referral','city','growth','conversion'].map((effect,i)=>({id:String(i),payload:{bookingId,userId:'owner-a',customerEmail:'payer@example.com',amountCents:12550,paystackReference:'pay_verified',paidAtIso:'2026-10-14T12:00:00Z',cityId:null,referralCode:'',effect}})),error:null})})}),
+        delete:()=>({eq:async(...args:unknown[])=>{effectDeletes(...args);return {error:null};}}),
+      };
+      if (table === "recurring_bookings") {
+        return { update: (patch: Record<string, unknown>) => ({ eq: async () => {
+          writes(patch); return { error: authorizationError ? {message: authorizationError} : null };
+        } }) };
+      }
       if (table !== "bookings") throw new Error("Unexpected side-effect table " + table);
       let columns = "";
       let patch: Record<string, unknown> | null = null;
@@ -394,13 +407,25 @@ describe("observed pending upsert conflict propagation", () => {
           reads.push(columns);
           if (columns === "payment_link_first_sent_at") return { data: null, error: null };
           if (mode === "id" && filters.some(([key]) => key === "paystack_reference")) return { data: null, error: null };
-          return { data: { ...initial }, error: null };
+          return { data: { ...(captureCommitted?current:initial) }, error: null };
         }),
       };
       return query;
     });
-    getSupabaseAdminMock.mockReturnValue({ from } as unknown as ReturnType<typeof getSupabaseAdmin>);
-    return { initial, current, writes, predicates, reads };
+    const rpc=vi.fn(async(_name:string,args:Record<string,unknown>)=>{
+      if (_name === "audit_03c02_record_payment_receipt") return {data:null,error:null};
+      if (_name === "settle_cleaning_credit_for_booking") return paymentEffectError?{data:{ok:false,error_message:paymentEffectError},error:null}:{data:{ok:true,status:"settled"},error:null};
+      if(authorizationError) return {data:null,error:{message:authorizationError}};
+      Object.assign(current,competing);
+      const expected=args.p_expected as Record<string,unknown>;
+      if(!Object.entries(expected).every(([key,value])=>current[key]===value))return {data:null,error:{message:'historical_capture_identity_mismatch',code:'23514'}};
+      current.paystack_reference=args.p_reference;
+      if(args.p_mismatch){current.status='payment_mismatch';current.booking_snapshot={verified_capture_mismatch:{amount_cents:args.p_amount_cents,currency:args.p_currency,reason:args.p_mismatch}};}
+      else {current.status=current.cleaner_id||current.selected_cleaner_id?'pending_assignment':'pending';current.amount_paid_cents=args.p_amount_cents;current.payment_status='success';captureCommitted=true;}
+      return {data:{id:bookingId},error:null};
+    });
+    getSupabaseAdminMock.mockReturnValue({ from,rpc } as unknown as ReturnType<typeof getSupabaseAdmin>);
+    return { initial, current, writes, predicates, reads,rpc,effectDeletes };
   }
 
   function input(overrides = {}) {
@@ -410,6 +435,92 @@ describe("observed pending upsert conflict propagation", () => {
       paystackMetadata: { booking_id: bookingId, price_snapshot: JSON.stringify(snapshot) }, ...overrides,
     };
   }
+
+  it.each([" 2026-10-02 ", "\t2026-10-01\n"])("uses ordinary finalization for padded forward visit %j",async(date)=>{
+    const db=pendingDb('paystack_reference',{}, {date});
+    await upsertBookingFromPaystack(input());
+    expect(db.rpc).not.toHaveBeenCalledWith('audit_03c02_record_historical_capture',expect.anything());
+    expect(db.writes).toHaveBeenCalledWith(expect.objectContaining({amount_paid_cents:12550,status:'pending'}));
+  });
+
+  it.each([{currency:'USD',reason:'currency_mismatch'},{amountCents:9940,reason:'amount_mismatch'}])('uses ordinary mismatch persistence for padded forward date %j',async(case_)=>{
+    const db=pendingDb('paystack_reference',{}, {date:' 2026-10-02 '});
+    expect(await upsertBookingFromPaystack(input(case_))).toMatchObject({ok:false,error:case_.reason});
+    expect(db.rpc).not.toHaveBeenCalledWith('audit_03c02_record_historical_capture',expect.anything());
+    expect(db.writes).toHaveBeenCalledWith(expect.objectContaining({status:'payment_mismatch'}));
+  });
+
+  it("reports failed authorization persistence for recovery instead of historical success", async () => {
+    const db=pendingDb("paystack_reference", {}, {
+      date: "2026-09-30", recurring_id: "00000000-0000-4000-8000-000000000002", is_recurring_generated: true,
+    }, "transient write failure");
+    const result = await upsertBookingFromPaystack(input({ paystackAuthorizationCode: "AUTH_verified" }));
+    expect(result).toMatchObject({ok:false,error:"transient write failure",reason:"finalization_failed",recoveryEnqueue:true});
+    expect(db.current.status).toBe("pending_payment");
+    expect(successEffect).not.toHaveBeenCalled();
+    expect(enqueueFailedJob).not.toHaveBeenCalled();
+  });
+
+  it('keeps committed historical capture non-pending when durable payment-state work fails',async()=>{
+    vi.mocked(resolveBookingUserId).mockResolvedValue('owner-a');
+    const db=pendingDb('paystack_reference',{}, {date:'2026-09-30'},null,'credit_reclaim_failed');
+    const result=await upsertBookingFromPaystack(input());
+    expect(result).toMatchObject({ok:false,bookingId,bookingInDatabase:true,error:'historical_payment_effects_pending'});
+    expect(result).not.toHaveProperty('recoveryEnqueue');expect(db.current.status).toBe('pending');expect(db.current.payment_status).toBe('success');
+    expect(db.rpc.mock.calls.filter(([name])=>name==='audit_03c02_record_historical_capture')).toHaveLength(1);
+    expect(enqueueFailedJob).not.toHaveBeenCalled();expect(db.effectDeletes).not.toHaveBeenCalledWith('id','0');
+    expect(db.writes).not.toHaveBeenCalledWith(expect.objectContaining({status:'payment_reconciliation_required'}));
+    const replay=await upsertBookingFromPaystack(input());expect(replay.error).toBeUndefined();expect(replay).toMatchObject({ok:true,skipped:true,bookingId});
+    expect(db.rpc.mock.calls.filter(([name])=>name==='audit_03c02_record_historical_capture')).toHaveLength(1);
+    expect(enqueueFailedJob).not.toHaveBeenCalled();
+  });
+
+  it.each([{currency:'USD'},{amountCents:9940}])('requests reconciliation when historical mismatch persistence fails: %j',async(override)=>{
+    const db=pendingDb('paystack_reference',{}, {date:null},'queue/database unavailable');
+    expect(await upsertBookingFromPaystack(input(override))).toMatchObject({ok:false,reason:'finalization_failed',recoveryEnqueue:true,error:'queue/database unavailable',bookingId});
+    expect(db.current.status).toBe('pending_payment');expect(successEffect).not.toHaveBeenCalled();
+  });
+
+  it.each([null, "2026-09-30"])("preserves recurring authorization and refreshes historical payment state for %s", async (date) => {
+    const db = pendingDb("paystack_reference", {}, {
+      date, recurring_id: "00000000-0000-4000-8000-000000000002", is_recurring_generated: true,
+    });
+    const result = await upsertBookingFromPaystack(input({ paystackAuthorizationCode: "AUTH_verified", deferPostPersistSideEffects: true }));
+    expect(result).toMatchObject({ ok: true, bookingId });
+    expect(db.rpc).toHaveBeenCalledWith("audit_03c02_record_historical_capture",expect.objectContaining({p_effect_context:expect.objectContaining({authorizationCode:"AUTH_verified"})}));
+    expect(successEffect).toHaveBeenCalledExactlyOnceWith(expect.anything(), bookingId);
+    expect(db.rpc).toHaveBeenCalledWith("audit_03c02_record_payment_receipt",{p_booking_id:bookingId,p_reference:"pay_verified",p_amount_cents:12550});
+    expect(paymentEffect).toHaveBeenCalledWith(expect.anything(),bookingId);
+    expect(paymentEffect).toHaveBeenCalledWith(expect.objectContaining({bookingId,amountCents:12550,paidAtIso:expect.any(String)}));
+    expect(db.rpc.mock.invocationCallOrder[0]).toBeLessThan(successEffect.mock.invocationCallOrder[0]);
+    expect(enqueueFailedJob).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {date:null,currency:'USD',amountCents:12550,reason:'currency_mismatch'},
+    {date:'2026-09-30',currency:'USD',amountCents:12550,reason:'currency_mismatch'},
+    {date:null,currency:'ZAR',amountCents:9940,reason:'amount_mismatch'},
+    {date:'2026-09-30',currency:'ZAR',amountCents:9940,reason:'amount_mismatch'},
+  ])('durably records historical verified mismatch %j without pricing/paid-total writes',async(case_)=>{
+    const db=pendingDb('paystack_reference',{}, {date:case_.date});
+    const result=await upsertBookingFromPaystack(input({currency:case_.currency,amountCents:case_.amountCents}));
+    expect(result).toMatchObject({ok:false,error:case_.reason,recoveryEnqueue:true,bookingId});
+    expect(db.rpc).toHaveBeenCalledWith('audit_03c02_record_historical_capture',expect.objectContaining({p_mismatch:case_.reason,p_amount_cents:case_.amountCents,p_currency:case_.currency}));
+    expect(db.current.status).toBe('payment_mismatch');expect(db.current.amount_paid_cents).toBe(0);expect(db.current.date).toBe(case_.date);
+    expect(db.writes).not.toHaveBeenCalled();expect(successEffect).not.toHaveBeenCalled();expect(enqueueFailedJob).toHaveBeenCalled();
+  });
+  it('binds verified metadata when an undated legacy intent has no stored provider reference',async()=>{
+    const db=pendingDb('id',{}, {date:null,paystack_reference:null});
+    expect(await upsertBookingFromPaystack(input({currency:'USD'}))).toMatchObject({ok:false,error:'currency_mismatch',recoveryEnqueue:true});
+    expect(db.rpc).toHaveBeenCalledWith('audit_03c02_record_historical_capture',expect.objectContaining({p_verified_booking_id:bookingId,p_expected:expect.objectContaining({paystack_reference:null})}));
+    expect(db.current.paystack_reference).toBe('pay_verified');
+    expect(db.writes).not.toHaveBeenCalled();expect(enqueueFailedJob).toHaveBeenCalled();
+  });
+  it('does not enqueue historical mismatch recovery after a competing identity change',async()=>{
+    const db=pendingDb('paystack_reference',{customer_id:'competing-owner'},{date:null});
+    expect(await upsertBookingFromPaystack(input({currency:'USD'}))).toMatchObject({ok:false,error:'historical_capture_identity_mismatch'});
+    expect(db.writes).not.toHaveBeenCalled();expect(enqueueFailedJob).not.toHaveBeenCalled();
+  });
 
   for (const mode of ["id", "paystack_reference"] as const) {
     it.each([

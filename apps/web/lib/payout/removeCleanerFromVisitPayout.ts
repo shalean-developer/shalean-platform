@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logAdminEarningsAction } from "@/lib/admin/logAdminEarningsAction";
 import {
@@ -15,6 +16,7 @@ import { withPayoutAttributionRemovalMarker } from "@/lib/payout/bookingPayoutAt
 
 type BookingRow = {
   id: string;
+  date: string | null;
   status: string | null;
   cleaner_id: string | null;
   payout_owner_cleaner_id: string | null;
@@ -160,7 +162,7 @@ export async function removeCleanerFromVisitPayout(
   const { data: booking, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, cleaner_id, payout_owner_cleaner_id, selected_cleaner_id, payout_id, payout_status, payout_paid_at, is_team_job, display_earnings_cents, cleaner_payout_cents, cleaner_earnings_total_cents, payout_frozen_cents, earnings_summary, metadata",
+      "id, date, status, cleaner_id, payout_owner_cleaner_id, selected_cleaner_id, payout_id, payout_status, payout_paid_at, is_team_job, display_earnings_cents, cleaner_payout_cents, cleaner_earnings_total_cents, payout_frozen_cents, earnings_summary, metadata",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -168,6 +170,9 @@ export async function removeCleanerFromVisitPayout(
   if (!booking) return { ok: false, error: "Booking not found.", code: "booking_not_found" };
 
   const row = booking as BookingRow;
+  if (!isCurrentPayoutVisitDate(row.date)) {
+    return { ok: false, code: "historical_payout_item_deferred", error: "Historical or undated visit payout attribution is preserved." };
+  }
   if (String(row.status ?? "").toLowerCase() !== "completed") {
     return { ok: false, error: "Only completed visits can be removed from payout.", code: "booking_not_completed" };
   }

@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import {
   type CleanerPayoutResult,
   resolvePayoutBaseAndServiceFeeCents,
@@ -1459,11 +1460,15 @@ export async function persistCleanerPayoutIfUnset(
   params: { admin: SupabaseClient; bookingId: string; cleanerId: string; forceDisplayRecompute?: boolean },
 ): Promise<PersistCleanerPayoutIfUnsetResult> {
   try {
-    const { data: idemRow } = await params.admin
+    const { data: idemRow, error: boundaryError } = await params.admin
       .from("bookings")
-      .select("is_team_job, display_earnings_cents, cleaner_line_earnings_finalized_at, cleaner_earnings_total_cents")
+      .select("date, is_team_job, display_earnings_cents, cleaner_line_earnings_finalized_at, cleaner_earnings_total_cents")
       .eq("id", params.bookingId)
       .maybeSingle();
+    if (boundaryError) return { ok: false, error: boundaryError.message };
+    if (idemRow && !isCurrentPayoutVisitDate(String((idemRow as { date?: unknown }).date ?? "").trim())) {
+      return { ok: true, skipped: true, skipReason: "historical_payout_item_deferred" };
+    }
     if (idemRow && (idemRow as { is_team_job?: boolean | null }).is_team_job !== true) {
       const forceDisplay = params.forceDisplayRecompute === true;
       const finRaw = (idemRow as { cleaner_line_earnings_finalized_at?: string | null }).cleaner_line_earnings_finalized_at;

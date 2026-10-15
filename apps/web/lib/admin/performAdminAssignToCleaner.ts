@@ -81,7 +81,7 @@ export async function performAdminAssignToCleaner(
   if (!offered.ok) {
     return {
       ok: false,
-      httpStatus: offered.code === "team_assignment_conflict" ? 409 : 500,
+      httpStatus: offered.code === "team_assignment_conflict" || offered.error === "historical_payout_item_deferred" ? 409 : 500,
       error: offered.error,
     };
   }

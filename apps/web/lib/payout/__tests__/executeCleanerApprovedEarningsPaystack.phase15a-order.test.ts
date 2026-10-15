@@ -1,329 +1,239 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const CID = "aaaaaaaa-bbbb-4ccc-dddd-eeeeeeeeeeee";
-const DISB = "dddddddd-dddd-4ddd-dddd-eeeeeeeeeeee";
-const TRANSFER_ROW = "eeeeeeee-eeee-4eee-eeee-ffffffffffff";
-const OUTBOX_ID = "ffffffff-ffff-4fff-ffff-ffffffffffff";
-
-const { measureMock } = vi.hoisted(() => ({
-  measureMock: vi.fn(async () => undefined),
-}));
-
-vi.mock("@/lib/payout/ensurePaystackRecipient", () => ({
-  ensurePaystackRecipient: vi.fn(async () => ({ ok: true, recipientCode: "RCP_TEST" })),
-}));
-
-vi.mock("@/lib/payout/phase15aLedgerClaimShadowEligibility", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("@/lib/payout/phase15aLedgerClaimShadowEligibility")>();
-  return { ...mod, measurePhase15aLedgerClaimShadowEligibility: measureMock };
-});
-
-vi.mock("@/lib/payout/payoutAudit", () => ({
-  logPayoutAuditEvent: vi.fn(async () => undefined),
-}));
-
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { executeCleanerApprovedEarningsPaystack } from "@/lib/payout/executeCleanerApprovedEarningsPaystack";
-
-function chainEq(terminal: () => Promise<unknown>) {
-  const self: Record<string, unknown> = {};
-  self.eq = () => self;
-  self.neq = () => self;
-  self.in = () => self;
-  self.select = () => self;
-  self.maybeSingle = terminal;
-  self.then = undefined;
-  return self;
+const CID = "aaaaaaaa-bbbb-4ccc-dddd-eeeeeeeeeeee",
+  DISB = "dddddddd-dddd-4ddd-dddd-eeeeeeeeeeee",
+  BID = "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb";
+const { measure } = vi.hoisted(() => ({
+  measure: vi.fn(async () => undefined),
+}));
+vi.mock("@/lib/payout/ensurePaystackRecipient", () => ({
+  ensurePaystackRecipient: async () => ({
+    ok: true,
+    recipientCode: "RCP_TEST",
+  }),
+}));
+vi.mock("@/lib/payout/phase15aLedgerClaimShadowEligibility", () => ({
+  measurePhase15aLedgerClaimShadowEligibility: measure,
+}));
+vi.mock("@/lib/payout/payoutAudit", () => ({ logPayoutAuditEvent: vi.fn() }));
+type Row = Record<string, unknown>;
+function database() {
+  const events: string[] = [];
+  const rows: Record<string, Row[]> = {
+    cleaner_earnings: [
+      {
+        id: "e",
+        cleaner_id: CID,
+        booking_id: BID,
+        bookings: { date: "2026-10-15" },
+        status: "approved",
+        disbursement_id: null,
+      },
+    ],
+    bookings: [{ id: BID, payout_id: null, payout_status: "pending" }],
+    cleaner_earnings_disbursements: [
+      {
+        id: DISB,
+        cleaner_id: CID,
+        total_amount_cents: 100,
+        status: "processing",
+      },
+    ],
+    earnings_disbursement_transfers: [],
+    payout_transfer_outbox: [],
+  };
+  let readError: string | null = null;
+  const rpc = vi.fn(async (name: string) => {
+    events.push(`rpc:${name}`);
+    if (name === "claim_cleaner_earnings_for_paystack")
+      Object.assign(rows.cleaner_earnings[0]!, {
+        status: "processing",
+        disbursement_id: DISB,
+      });
+    return { data: DISB, error: null };
+  });
+  return {
+    rows,
+    events,
+    rpc,
+    setReadError: (s: string) => {
+      readError = s;
+    },
+    from(table: string) {
+      if (!(table in rows)) throw Error(`Unexpected table ${table}`);
+      const filters: ((r: Row) => boolean)[] = [];
+      let patch: Row | null = null,
+        insert = false,
+        max = Infinity;
+      const val = (r: Row, c: string): unknown =>
+        c.split(".").reduce<unknown>((v, k) => (v as Row | undefined)?.[k], r);
+      const exec = () => {
+        if (readError && table === "cleaner_earnings")
+          return { data: null, error: { message: readError } };
+        if (insert) {
+          const r = {
+            id: table + "-1",
+            ...(table === "payout_transfer_outbox"
+              ? { attempts: 0, transfer_code: null }
+              : {}),
+            ...patch,
+          };
+          rows[table]!.push(r);
+          events.push("insert:" + table);
+          return { data: [r], error: null };
+        }
+        const selected = rows[table]!.filter((r) =>
+          filters.every((f) => f(r)),
+        ).slice(0, max);
+        if (patch) {
+          selected.forEach((r) => Object.assign(r, patch));
+          events.push("update:" + table);
+        }
+        return { data: selected, error: null };
+      };
+      const q = {
+        select: (_s?: string) => q,
+        eq: (c: string, v: unknown) => {
+          filters.push((r) => val(r, c) === v);
+          return q;
+        },
+        neq: (c: string, v: unknown) => {
+          filters.push((r) => val(r, c) !== v);
+          return q;
+        },
+        is: (c: string, v: unknown) => {
+          filters.push((r) => val(r, c) === v);
+          return q;
+        },
+        in: (c: string, v: unknown[]) => {
+          filters.push((r) => v.includes(val(r, c)));
+          return q;
+        },
+        gte: (c: string, v: string) => {
+          filters.push((r) => String(val(r, c)) >= v);
+          return q;
+        },
+        lt: (c: string, v: string) => {
+          filters.push((r) => String(val(r, c)) < v);
+          return q;
+        },
+        order: () => q,
+        range: () => q,
+        limit: (n: number) => {
+          max = n;
+          return q;
+        },
+        insert: (r: Row) => {
+          patch = r;
+          insert = true;
+          return q;
+        },
+        update: (r: Row) => {
+          patch = r;
+          return q;
+        },
+        maybeSingle: async () => {
+          const r = exec();
+          return { ...r, data: r.data?.[0] ?? null };
+        },
+        then: (f: (r: ReturnType<typeof exec>) => unknown) =>
+          Promise.resolve(exec()).then(f),
+      };
+      return q;
+    },
+  };
 }
-
-describe("executeCleanerApprovedEarningsPaystack — Phase 15A ordering + outbox", () => {
-  beforeEach(() => {
-    measureMock.mockClear();
-    measureMock.mockImplementation(async () => undefined);
-    vi.stubEnv("PAYSTACK_SECRET_KEY", "sk_test_phase15a_vitest");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        status: 200,
-        json: async () => ({ status: true, data: { transfer_code: "TC", reference: `shalean-earnings-${DISB}` } }),
-      })) as unknown as typeof fetch,
-    );
-  });
-
-  it("runs shadow measurement before claim and completes via outbox (insert before Paystack)", async () => {
-    const order: string[] = [];
-    measureMock.mockImplementation(async () => {
-      order.push("measure");
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-11-05T12:00:00+02:00"));
+  measure.mockReset();
+  vi.stubEnv("PAYSTACK_SECRET_KEY", "sk_test_example");
+});
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
+describe("ledger ordering with October preflight", () => {
+  it.each(["2026-10-15", " 2026-10-15 "])("measures before claim and persists the leased outbox before POST for %j", async (date) => {
+    const db = database();
+    db.rows.cleaner_earnings[0].bookings = {date};
+    measure.mockImplementation(async () => {
+      db.events.push("measure");
     });
-
-    const rpc = vi.fn(async (fn: string) => {
-      order.push(`rpc:${fn}`);
-      return { data: DISB, error: null };
+    const provider = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      expect(init?.method).toBe("POST");
+      expect(db.rows.earnings_disbursement_transfers).toHaveLength(1);
+      expect(db.rows.payout_transfer_outbox[0]).toMatchObject({
+        status: "sending",
+        attempts: 1,
+      });
+      db.events.push("provider:POST");
+      return new Response(
+        JSON.stringify({
+          status: true,
+          data: { transfer_code: "TC", reference: `shalean-earnings-${DISB}` },
+        }),
+        { status: 200 },
+      );
     });
-
-    const admin = {
-      rpc,
-      from(table: string) {
-        if (table === "earnings_disbursement_transfers") {
-          return {
-            select: () =>
-              chainEq(async () => ({ data: null, error: null })),
-            insert: (row: Record<string, unknown>) => {
-              order.push("insert:earnings_disbursement_transfers");
-              expect(row.reference).toBe(`shalean-earnings-${DISB}`);
-              expect(row.status).toBe("processing");
-              return {
-                select: () => ({
-                  maybeSingle: async () => ({ data: { id: TRANSFER_ROW }, error: null }),
-                }),
-              };
-            },
-            update: () => chainEq(async () => ({ error: null })),
-          };
-        }
-        if (table === "payout_transfer_outbox") {
-          return {
-            select: () =>
-              chainEq(async () => ({ data: null, error: null })),
-            insert: () => {
-              order.push("insert:payout_transfer_outbox");
-              return {
-                select: () => ({
-                  maybeSingle: async () => ({
-                    data: {
-                      id: OUTBOX_ID,
-                      status: "pending",
-                      transfer_code: null,
-                      transfer_row_id: TRANSFER_ROW,
-                      reference: `shalean-earnings-${DISB}`,
-                      attempts: 0,
-                    },
-                    error: null,
-                  }),
-                }),
-              };
-            },
-            update: () => ({
-              eq: () => ({
-                in: () => ({
-                  select: () => ({
-                    maybeSingle: async () => ({
-                      data: {
-                        id: OUTBOX_ID,
-                        status: "pending",
-                        transfer_code: null,
-                        transfer_row_id: TRANSFER_ROW,
-                        reference: `shalean-earnings-${DISB}`,
-                        attempts: 1,
-                      },
-                      error: null,
-                    }),
-                  }),
-                }),
-                neq: async () => ({ error: null }),
-                maybeSingle: async () => ({ error: null }),
-              }),
-            }),
-          };
-        }
-        if (table === "cleaner_earnings_disbursements") {
-          return {
-            select: () => ({
-              eq: () => ({
-                maybeSingle: async () => {
-                  order.push("select:cleaner_earnings_disbursements");
-                  return {
-                    data: { id: DISB, cleaner_id: CID, total_amount_cents: 100, status: "processing" },
-                    error: null,
-                  };
-                },
-              }),
-            }),
-            update: () => ({
-              eq: () => ({
-                eq: async () => {
-                  order.push("update:cleaner_earnings_disbursements");
-                  return { error: null };
-                },
-              }),
-            }),
-          };
-        }
-        if (table === "cleaner_earnings") {
-          return {
-            select: (cols: string) => {
-              expect(cols).toBe("id, booking_id");
-              order.push("select:cleaner_earnings");
-              return {
-                eq: (col: string, val: unknown) => {
-                  if (col === "cleaner_id") expect(val).toBe(CID);
-                  return {
-                    eq: (col2: string, val2: unknown) => {
-                      expect(col2).toBe("status");
-                      expect(val2).toBe("approved");
-                      return {
-                        is: (col3: string, val3: unknown) => {
-                          expect(col3).toBe("disbursement_id");
-                          expect(val3).toBeNull();
-                          return {
-                            limit: async (n: number) => {
-                              expect(n).toBe(200);
-                              // No approved ledger rows → dual-rail gate passes without booking scan.
-                              return { data: [], error: null };
-                            },
-                          };
-                        },
-                      };
-                    },
-                  };
-                },
-              };
-            },
-            update: () => {
-              throw new Error("unexpected write to cleaner_earnings in ordering test");
-            },
-            insert: () => {
-              throw new Error("unexpected insert into cleaner_earnings in ordering test");
-            },
-          };
-        }
-        if (table === "bookings") {
-          return {
-            select: () => {
-              throw new Error("unexpected bookings select when cleaner_earnings returned no rows");
-            },
-            update: () => {
-              throw new Error("unexpected write to bookings in ordering test");
-            },
-          };
-        }
-        if (table === "payout_audit_events") {
-          return { insert: async () => ({ error: null }) };
-        }
-        throw new Error(`unexpected table in test: ${table}`);
-      },
-    };
-
-    const res = await executeCleanerApprovedEarningsPaystack(admin as never, { cleanerId: CID });
-
-    expect(measureMock).toHaveBeenCalledWith(admin, CID);
-    expect(order[0]).toBe("measure");
-    expect(order).toContain("select:cleaner_earnings");
-    expect(order.indexOf("select:cleaner_earnings")).toBeLessThan(
-      order.indexOf("rpc:claim_cleaner_earnings_for_paystack"),
+    vi.stubGlobal("fetch", provider);
+    expect(
+      await executeCleanerApprovedEarningsPaystack(db as never, {
+        cleanerId: CID,
+      }),
+    ).toMatchObject({ ok: true, disbursement_id: DISB });
+    expect(db.events.indexOf("measure")).toBeLessThan(
+      db.events.indexOf("rpc:claim_cleaner_earnings_for_paystack"),
     );
-    expect(order).toContain("rpc:claim_cleaner_earnings_for_paystack");
-    expect(order).toContain("insert:earnings_disbursement_transfers");
-    expect(order).toContain("insert:payout_transfer_outbox");
-    // Outbox insert must happen before Paystack fetch completes the path
-    const insertIdx = order.indexOf("insert:payout_transfer_outbox");
-    const transferInsertIdx = order.indexOf("insert:earnings_disbursement_transfers");
-    expect(transferInsertIdx).toBeLessThan(insertIdx);
-    expect(res.ok).toBe(true);
-    if (res.ok) {
-      expect(res.disbursement_id).toBe(DISB);
-      expect(res.reference).toBe(`shalean-earnings-${DISB}`);
-    }
+    expect(
+      db.events.indexOf("insert:earnings_disbursement_transfers"),
+    ).toBeLessThan(db.events.indexOf("insert:payout_transfer_outbox"));
+    expect(db.events.indexOf("insert:payout_transfer_outbox")).toBeLessThan(
+      db.events.indexOf("provider:POST"),
+    );
+    expect(provider).toHaveBeenCalledTimes(1);
   });
-
-  it("propagates cleaner_earnings dual-rail load errors without writing", async () => {
-    const writes: string[] = [];
-    const admin = {
-      rpc: vi.fn(async () => {
-        writes.push("rpc");
-        return { data: DISB, error: null };
+  it("propagates read errors without claims or writes", async () => {
+    const db = database();
+    db.setReadError("ce_select_failed");
+    expect(
+      await executeCleanerApprovedEarningsPaystack(db as never, {
+        cleanerId: CID,
       }),
-      from(table: string) {
-        if (table === "cleaner_earnings") {
-          return {
-            select: () => ({
-              eq: () => ({
-                eq: () => ({
-                  is: () => ({
-                    limit: async () => ({ data: null, error: { message: "ce_select_failed" } }),
-                  }),
-                }),
-              }),
-            }),
-            update: () => {
-              writes.push("update:cleaner_earnings");
-              throw new Error("no write expected");
-            },
-            insert: () => {
-              writes.push("insert:cleaner_earnings");
-              throw new Error("no write expected");
-            },
-          };
-        }
-        throw new Error(`unexpected table in error-propagation test: ${table}`);
-      },
-    };
-
-    const res = await executeCleanerApprovedEarningsPaystack(admin as never, { cleanerId: CID });
-    expect(res.ok).toBe(false);
-    if (!res.ok) {
-      expect(res.error).toBe("ce_select_failed");
-      expect(res.code).toBe("earnings_load_failed");
-      expect(res.status).toBe(409);
-    }
-    expect(admin.rpc).not.toHaveBeenCalled();
-    expect(writes).toEqual([]);
+    ).toMatchObject({ ok: false, error: "ce_select_failed" });
+    expect(db.rpc).not.toHaveBeenCalled();
+    expect(db.events).toEqual([]);
   });
-
-  it("blocks weekly-rail conflict without claiming or writing cleaner_earnings", async () => {
-    const bookingId = "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb";
-    const writes: string[] = [];
-    const admin = {
-      rpc: vi.fn(async () => {
-        writes.push("rpc");
-        return { data: DISB, error: null };
+  it("blocks weekly conflicts without claims or writes", async () => {
+    const db = database();
+    Object.assign(db.rows.bookings[0]!, {
+      payout_id: "payout-1",
+      payout_status: "paid",
+    });
+    expect(
+      await executeCleanerApprovedEarningsPaystack(db as never, {
+        cleanerId: CID,
       }),
-      from(table: string) {
-        if (table === "cleaner_earnings") {
-          return {
-            select: () => ({
-              eq: () => ({
-                eq: () => ({
-                  is: () => ({
-                    limit: async () => ({
-                      data: [{ id: "ce-1", booking_id: bookingId }],
-                      error: null,
-                    }),
-                  }),
-                }),
-              }),
-            }),
-            update: () => {
-              writes.push("update:cleaner_earnings");
-              return { eq: () => ({ eq: async () => ({ error: null }) }) };
-            },
-          };
-        }
-        if (table === "bookings") {
-          return {
-            select: () => ({
-              in: async () => ({
-                data: [{ id: bookingId, payout_id: "payout-1", payout_status: "paid" }],
-                error: null,
-              }),
-            }),
-            update: () => {
-              writes.push("update:bookings");
-              throw new Error("no booking write expected");
-            },
-          };
-        }
-        throw new Error(`unexpected table: ${table}`);
-      },
-    };
-
-    const res = await executeCleanerApprovedEarningsPaystack(admin as never, { cleanerId: CID });
-    expect(res.ok).toBe(false);
-    if (!res.ok) {
-      expect(res.code).toBe("dual_rail_weekly_conflict");
-      expect(res.status).toBe(409);
-    }
-    expect(admin.rpc).not.toHaveBeenCalled();
-    expect(writes).toEqual([]);
+    ).toMatchObject({ ok: false, code: "dual_rail_weekly_conflict" });
+    expect(db.rpc).not.toHaveBeenCalled();
+    expect(db.events).toEqual([]);
   });
+  it.each(["2026-09-30", "2026-11-01"])(
+    "excludes visit %s without claims or sends",
+    async (date) => {
+      const db = database();
+      db.rows.cleaner_earnings[0]!.bookings = { date };
+      const provider = vi.fn();
+      vi.stubGlobal("fetch", provider);
+      expect(
+        await executeCleanerApprovedEarningsPaystack(db as never, {
+          cleanerId: CID,
+        }),
+      ).toMatchObject({ ok: false, code: "no_approved_earnings" });
+      expect(db.rpc).not.toHaveBeenCalled();
+      expect(provider).not.toHaveBeenCalled();
+      expect(db.events).toEqual([]);
+    },
+  );
 });

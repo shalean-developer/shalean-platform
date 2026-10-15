@@ -91,22 +91,20 @@ async function ensureNoMissingCompletedPayouts(
 ): Promise<{ backfilled: number; remaining: number }> {
   const legacyBackfill = await backfillLegacyWeeklyPayoutColumnsFromEarnings(admin, 1000);
 
-  const { data: missingRows, error } = await admin
-    .from("bookings")
-    .select("id, cleaner_id, payout_owner_cleaner_id, is_team_job")
-    .eq("status", "completed")
-    .gte("date", PAYOUT_PROCESSING_START_YMD)
-    .eq("is_test", false)
-    .is("cleaner_payout_cents", null)
-    .limit(1000);
-
-  if (error) {
-    await reportOperationalIssue("error", "generateWeeklyPayouts", `missing payout preflight failed: ${error.message}`);
+  let missingRows: Array<Record<string, unknown>>;
+  try {
+    missingRows = await fetchAllPayoutRows((from,to)=>admin.from("bookings")
+      .select("id, date, cleaner_id, payout_owner_cleaner_id, is_team_job")
+      .eq("status","completed").eq("is_test",false).is("cleaner_payout_cents",null)
+      .order("id",{ascending:true}).range(from,to));
+  } catch(error) {
+    await reportOperationalIssue("error","generateWeeklyPayouts",`missing payout preflight failed: ${String(error)}`);
     throw new Error("Cannot generate payout batch: missing payout preflight failed");
   }
 
   let backfilled = legacyBackfill.fixed;
   for (const row of missingRows ?? []) {
+    if (!isCurrentPayoutVisitDate(row.date)) continue;
     const bookingId = String((row as { id?: string }).id ?? "");
     const cleanerId = resolvePersistCleanerIdForBooking(
       row as { cleaner_id?: string | null; payout_owner_cleaner_id?: string | null; is_team_job?: boolean | null },
@@ -184,8 +182,7 @@ async function listUnbatchedCompletionMonths(
       .from("bookings")
       .select("id, completed_at, date, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id")
       .eq("status", "completed")
-      .gte("date", PAYOUT_PROCESSING_START_YMD)
-      .eq("is_test", false)
+        .eq("is_test", false)
       .is("payout_id", null)
       .not("cleaner_payout_cents", "is", null)
       .gt("cleaner_payout_cents", 0)
@@ -234,8 +231,7 @@ async function listUnbatchedCompletionMonths(
       .select("id, completed_at, date, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id")
       .in("id", memberBookingIds.slice(i, i + 120))
       .eq("status", "completed")
-      .gte("date", PAYOUT_PROCESSING_START_YMD)
-      .eq("is_test", false);
+        .eq("is_test", false);
     if (memberBookingsErr) throw new Error(memberBookingsErr.message);
     for (const row of memberBookings ?? []) {
       const ymd = currentPayoutBatchDayYmd(row as Parameters<typeof currentPayoutBatchDayYmd>[0]);

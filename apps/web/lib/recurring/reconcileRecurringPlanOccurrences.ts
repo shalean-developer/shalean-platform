@@ -1,4 +1,5 @@
 import "server-only";
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { dispatchBookingCancelledNotifications } from "@/lib/notifications/bookingCancelledNotifications";
@@ -338,14 +339,16 @@ export async function reconcileRecurringPlanOccurrences(
   const invoiceIdSet = new Set<string>();
 
   for (const invoiceMonthYm of months) {
+    if (!isCurrentPayoutVisitDate(`${invoiceMonthYm}-01`)) continue;
     const monthStart = `${invoiceMonthYm}-01`;
     const monthEnd = lastDayYmdOfInvoiceMonth(invoiceMonthYm);
     const fromYmd = compareYmd(monthStart, plan.start_date) >= 0 ? monthStart : plan.start_date;
     const throughYmd =
       plan.end_date && compareYmd(plan.end_date, monthEnd) < 0 ? plan.end_date : monthEnd;
 
-    const expectedDates = new Set(occurrenceDatesInclusive(schedule, fromYmd, throughYmd));
-    const inMonth = bookingsInReconcileMonth(existingBookings, invoiceMonthYm, fromYmd, throughYmd);
+    const expectedDates = new Set(occurrenceDatesInclusive(schedule, fromYmd, throughYmd).filter(isCurrentPayoutVisitDate));
+    const inMonth = bookingsInReconcileMonth(existingBookings, invoiceMonthYm, fromYmd, throughYmd)
+      .filter((booking) => isCurrentPayoutVisitDate(booking.date.trim()));
 
     const existingDates = new Set(inMonth.map((b) => b.date));
 
@@ -434,7 +437,7 @@ export async function collectDraftInvoiceIdsForRecurringPlan(
 ): Promise<string[]> {
   const { data, error } = await admin
     .from("bookings")
-    .select("monthly_invoice_id, monthly_invoices(status)")
+    .select("date, monthly_invoice_id, monthly_invoices(status, month)")
     .eq("recurring_id", recurringPlanId)
     .neq("status", "cancelled")
     .not("monthly_invoice_id", "is", null);
@@ -445,11 +448,12 @@ export async function collectDraftInvoiceIdsForRecurringPlan(
   for (const raw of data ?? []) {
     const row = raw as Record<string, unknown>;
     const invoiceId = row.monthly_invoice_id != null ? String(row.monthly_invoice_id) : "";
-    if (!invoiceId) continue;
+    if (!invoiceId || !isCurrentPayoutVisitDate(String(row.date ?? "").trim())) continue;
     const invJoin = row.monthly_invoices;
     if (invJoin && typeof invJoin === "object" && !Array.isArray(invJoin)) {
       const status = String((invJoin as { status?: unknown }).status ?? "").toLowerCase();
-      if (status === "draft") ids.add(invoiceId);
+      const month = String((invJoin as { month?: unknown }).month ?? "");
+      if (status === "draft" && isCurrentPayoutVisitDate(`${month}-01`)) ids.add(invoiceId);
     }
   }
   return [...ids];

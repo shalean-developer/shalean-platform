@@ -49,7 +49,7 @@ function createAdmin(opts: {
                 eq: () => ({
                   eq: () => ({
                     is: async () => ({
-                      data: opts.openBookings ?? [{ id: "booking-1", date: "2026-07-13" }],
+                      data: opts.openBookings ?? [{ id: "booking-1", date: "2026-10-13" }],
                       error: null,
                     }),
                   }),
@@ -92,7 +92,7 @@ describe("reassignPayoutOwnerBeforeTeamMemberRemove", () => {
   it("reassigns open bookings to another active roster member", async () => {
     const { admin, updates } = createAdmin({
       leadCleanerId: removingId,
-      openBookings: [{ id: "booking-1", date: "2026-07-13" }],
+      openBookings: [{ id: "booking-1", date: "2026-10-13" }],
     });
     const result = await reassignPayoutOwnerBeforeTeamMemberRemove(admin as never, {
       teamId,
@@ -108,7 +108,7 @@ describe("reassignPayoutOwnerBeforeTeamMemberRemove", () => {
   it("blocks removal of the last member when open bookings still need a payout owner", async () => {
     const { admin } = createAdmin({
       remainingMembers: [],
-      openBookings: [{ id: "booking-1", date: "2026-07-13" }],
+      openBookings: [{ id: "booking-1", date: "2026-10-13" }],
     });
     const result = await reassignPayoutOwnerBeforeTeamMemberRemove(admin as never, {
       teamId,

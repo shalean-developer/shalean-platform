@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -508,6 +509,11 @@ export async function runCleanerBookingLifecycleAction(params: {
       reasonCode: "cleaner_forbidden",
     });
     return { status: 403, json: { error: "Not your job." } };
+  }
+
+  if (action === "complete" && String(bRow.cleaner_id ?? bRow.payout_owner_cleaner_id ?? "") === cleanerId && !isCurrentPayoutVisitDate(String(bRow.date ?? "").trim())
+      && !(Number.isFinite(Number(bRow.display_earnings_cents)) && Number(bRow.display_earnings_cents)>0)) {
+    return {status:409,json:{error:"Historical earnings are deferred; completion cannot rebuild them.",code:"historical_payout_item_deferred"}};
   }
 
   const isTeamJob = bRow.is_team_job === true;
@@ -1598,12 +1604,12 @@ export async function runCleanerBookingLifecycleAction(params: {
      * Otherwise ensureCleanerEarningsLedgerRow skips (no_cleaner) and office
      * Visits/Earnings skip the booking (perCleanerAllocationsForBooking → []).
      */
-    const completionOwnerPatch = buildSoloCompletionOwnerStamp({
+    const completionOwnerPatch = isCurrentPayoutVisitDate(String(bRow.date ?? "").trim()) ? buildSoloCompletionOwnerStamp({
       isTeamJob,
       existingCleanerId: bRow.cleaner_id,
       existingPayoutOwnerId: bRow.payout_owner_cleaner_id,
       ownerId: persistCleanerId ?? cleanerId,
-    });
+    }) : {};
     const { error: uErr } = await updateCleanerLifecycleBookingState({
       admin,
       bookingId,

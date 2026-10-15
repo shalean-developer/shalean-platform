@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -53,6 +54,8 @@ export async function computeCleanerEarningsForBooking(params: {
     date?: string | null;
     time?: string | null;
   };
+
+  if (!isCurrentPayoutVisitDate(String(row.date ?? "").trim())) return {ok:true,skipped:true,reason:"historical_payout_item_deferred"};
 
   if (row.is_team_job === true) {
     return { ok: true, skipped: true, reason: "team_job" };

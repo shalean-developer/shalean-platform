@@ -148,7 +148,7 @@ function unknownColumnError(column: string): PostgrestError {
 }
 
 function buildEligibilityMock(opts: MockOpts): SupabaseClient {
-  const date = opts.date ?? "2026-06-15"; // a Monday
+  const date = opts.date ?? "2026-10-19"; // a Monday
   const availabilityRows =
     opts.availabilityRows ??
     opts.cleaners.map((c) => ({
@@ -276,7 +276,7 @@ async function runEligibilityFor(
   const admin = buildEligibilityMock({ cleaners, ...(overrides ?? {}) });
   return computeAssignEligibility(admin, {
     bookingId: BOOKING_ID,
-    bookingDateYmd: overrides?.date ?? "2026-06-15",
+    bookingDateYmd: overrides?.date ?? "2026-10-19",
     bookingTimeHm: "10:00",
     durationMinutes: 240,
     cleanerIds: cleaners.map((c) => c.id),
@@ -538,13 +538,13 @@ describe("performAdminAssignToCleaner preserves admin-override semantics for is_
     } as unknown as SupabaseClient;
   }
 
-  // Booking with no date/time → skips the `getEligibleCleaners` slot path and
+  // Booking with a forward date but no time → skips the `getEligibleCleaners` slot path and
   // falls straight through to the cleaner-state checks (status==="offline" /
   // is_available===false). This isolates the M-14 explicit defense-in-depth
   // assertion from the canonical-pool DB filter.
   const noSlotBooking = {
     id: BOOKING_ID,
-    date: "",
+    date: "2026-10-19",
     time: "",
     status: "pending",
     cleaner_id: null,
@@ -835,7 +835,7 @@ describe("AssignEligibilityRow shape", () => {
     const admin = buildEligibilityMock({ cleaners: [] });
     const map = await computeAssignEligibility(admin, {
       bookingId: BOOKING_ID,
-      bookingDateYmd: "2026-06-15",
+      bookingDateYmd: "2026-10-19",
       bookingTimeHm: "10:00",
       durationMinutes: 240,
       cleanerIds: [HEALTHY_ID],
@@ -854,7 +854,7 @@ describe("AssignEligibilityRow shape", () => {
     const admin = buildEligibilityMock({ cleaners: [] });
     const map = await computeAssignEligibility(admin, {
       bookingId: BOOKING_ID,
-      bookingDateYmd: "2026-06-15",
+      bookingDateYmd: "2026-10-19",
       bookingTimeHm: "10:00",
       durationMinutes: 240,
       cleanerIds: [],
@@ -866,7 +866,7 @@ describe("AssignEligibilityRow shape", () => {
     const admin = buildEligibilityMock({ cleaners: [healthyCleaner(HEALTHY_ID)] });
     const map = await computeAssignEligibility(admin, {
       bookingId: BOOKING_ID,
-      bookingDateYmd: "2026-06-15",
+      bookingDateYmd: "2026-10-19",
       bookingTimeHm: "garbage",
       durationMinutes: 240,
       cleanerIds: [HEALTHY_ID],

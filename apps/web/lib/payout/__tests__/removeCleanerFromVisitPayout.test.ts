@@ -50,6 +50,7 @@ function makeAdmin(
               maybeSingle: vi.fn(async () => ({
                 data: {
                   id: BOOKING_ID,
+                  date: "2026-10-01",
                   status: "completed",
                   cleaner_id: null,
                   payout_owner_cleaner_id: null,

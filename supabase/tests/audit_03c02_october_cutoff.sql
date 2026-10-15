@@ -40,15 +40,23 @@ begin
   if n <> 0 then raise exception 'FAIL unexpected freeze'; end if;
 
   -- Temporarily model a deferred visit without introducing a live booking.
+ set constraints all immediate;
+ alter table public.bookings disable trigger audit_03c02_final_booking_financials;
   update public.bookings set date='2026-09-30' where id=b;
+ set constraints all immediate;
+ alter table public.bookings enable trigger audit_03c02_final_booking_financials;
   begin
     update public.bookings set cleaner_payout_cents=coalesce(cleaner_payout_cents,0)+1 where id=b;
     raise exception 'FAIL historical booking amount changed';
   exception when check_violation then
     if sqlerrm <> 'historical_payout_item_deferred' then raise; end if;
   end;
+ set constraints all immediate;
+ alter table public.booking_roster_member_payouts disable trigger audit_03c02_a_roster_payout_identity;
   insert into public.booking_roster_member_payouts(id,booking_id,cleaner_id,payout_cents,bonus_cents,status)
     values('a03c0202-0000-4000-8000-000000000003',b,c,100,0,'pending');
+ set constraints all immediate;
+ alter table public.booking_roster_member_payouts enable trigger audit_03c02_a_roster_payout_identity;
   begin
     update public.booking_roster_member_payouts set payout_cents=101
       where id='a03c0202-0000-4000-8000-000000000003';

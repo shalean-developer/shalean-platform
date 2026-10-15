@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import "server-only";
 
 import { normalizeUuidCandidate } from "@/lib/booking/userSelectedCleanerFromSnapshot";
@@ -80,21 +81,28 @@ export async function restoreRecurringPreferredCleanerAssignments(
   admin: SupabaseClient,
   options?: { fromDate?: string | null; toDate?: string | null },
 ): Promise<RestoreRecurringAssignmentsResult> {
-  let query = admin
-    .from("bookings")
-    .select("id, recurring_id, selected_cleaner_id, customer_name, status, date, booking_snapshot")
-    .eq("is_recurring_generated", true)
-    .is("cleaner_id", null)
-    .is("team_id", null)
-    .not("status", "in", `(${TERMINAL_STATUSES.join(",")})`);
-
   const fromDate = options?.fromDate?.trim();
   const toDate = options?.toDate?.trim();
-  if (fromDate && /^\d{4}-\d{2}-\d{2}$/.test(fromDate)) query = query.gte("date", fromDate);
-  if (toDate && /^\d{4}-\d{2}-\d{2}$/.test(toDate)) query = query.lte("date", toDate);
-
-  const { data: stuckRows, error } = await query.limit(5000);
-  if (error) throw new Error(error.message);
+  const inScope = (row: StuckRow): boolean => {
+    const date = String(row.date ?? "").trim();
+    return isCurrentPayoutVisitDate(date)
+      && !(fromDate && /^\d{4}-\d{2}-\d{2}$/.test(fromDate) && date < fromDate)
+      && !(toDate && /^\d{4}-\d{2}-\d{2}$/.test(toDate) && date > toDate);
+  };
+  const loadCandidates = async (): Promise<StuckRow[]> => {
+    const rows: StuckRow[] = [];
+    for (let offset = 0; ; offset += 1000) {
+      const {data,error} = await admin.from("bookings")
+        .select("id, recurring_id, selected_cleaner_id, customer_name, status, date, booking_snapshot")
+        .eq("is_recurring_generated",true).is("cleaner_id",null).is("team_id",null)
+        .not("status","in",`(${TERMINAL_STATUSES.join(",")})`)
+        .order("id",{ascending:true}).range(offset,offset+999);
+      if (error) throw new Error(error.message);
+      rows.push(...((data ?? []) as StuckRow[]));
+      if ((data?.length ?? 0) < 1000) return rows;
+    }
+  };
+  const stuckRows = await loadCandidates();
 
   let updated = 0;
   let skipped = 0;
@@ -104,6 +112,7 @@ export async function restoreRecurringPreferredCleanerAssignments(
 
   for (const raw of stuckRows ?? []) {
     const row = raw as StuckRow;
+    if (!inScope(row)) { skipped++; continue; }
     const cleanerId = await resolveCleanerForStuckRow(admin, row, planCache);
     if (!cleanerId) {
       skipped++;
@@ -180,16 +189,6 @@ export async function restoreRecurringPreferredCleanerAssignments(
     if (!planErr) plansUpdated++;
   }
 
-  let remainingQuery = admin
-    .from("bookings")
-    .select("id", { count: "exact", head: true })
-    .eq("is_recurring_generated", true)
-    .is("cleaner_id", null)
-    .is("team_id", null)
-    .not("status", "in", `(${TERMINAL_STATUSES.join(",")})`);
-  if (fromDate && /^\d{4}-\d{2}-\d{2}$/.test(fromDate)) remainingQuery = remainingQuery.gte("date", fromDate);
-  if (toDate && /^\d{4}-\d{2}-\d{2}$/.test(toDate)) remainingQuery = remainingQuery.lte("date", toDate);
-  const { count: remaining } = await remainingQuery;
-
-  return { updated, skipped, plansUpdated, rostersApplied, remaining: remaining ?? 0 };
+  const remaining = (await loadCandidates()).filter(inScope).length;
+  return { updated, skipped, plansUpdated, rostersApplied, remaining };
 }

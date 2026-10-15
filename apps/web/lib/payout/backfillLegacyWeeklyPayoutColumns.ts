@@ -1,9 +1,10 @@
-import { PAYOUT_PROCESSING_START_YMD } from "@/lib/payout/payoutProcessingCutoff";
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type LegacyBackfillRow = {
   id: string;
+  date?: unknown;
   display_earnings_cents?: number | null;
   payout_earnings_cents?: number | null;
   cleaner_earnings_total_cents?: number | null;
@@ -66,9 +67,8 @@ export async function backfillLegacyWeeklyPayoutColumnsFromEarnings(
   while (actionableScanned < limit) {
     let query = admin
       .from("bookings")
-      .select("id, display_earnings_cents, payout_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_bonus_cents, cleaner_id, payout_owner_cleaner_id, metadata")
+      .select("id, date, display_earnings_cents, payout_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_bonus_cents, cleaner_id, payout_owner_cleaner_id, metadata")
       .eq("status", "completed")
-      .gte("date", PAYOUT_PROCESSING_START_YMD)
       .eq("is_test", false)
       .is("cleaner_payout_cents", null)
       .order("id", { ascending: true });
@@ -84,6 +84,7 @@ export async function backfillLegacyWeeklyPayoutColumnsFromEarnings(
       const row = raw as LegacyBackfillRow;
       if (row.id) cursor = row.id;
       scanned += 1;
+      if (!isCurrentPayoutVisitDate(row.date)) { skipped++; continue; }
 
       if (bookingHasActivePayoutAttributionRemoval(row)) {
         skipped += 1;
@@ -143,9 +144,8 @@ export async function countCompletedBlockingMissingLegacyPayout(
   for (;;) {
     const { data, error } = await admin
       .from("bookings")
-      .select("id, display_earnings_cents, cleaner_earnings_total_cents, cleaner_id, payout_owner_cleaner_id, metadata")
+      .select("id, date, display_earnings_cents, cleaner_earnings_total_cents, cleaner_id, payout_owner_cleaner_id, metadata")
       .eq("status", "completed")
-      .gte("date", PAYOUT_PROCESSING_START_YMD)
       .eq("is_test", false)
       .is("cleaner_payout_cents", null)
       .order("id", { ascending: true })
@@ -155,6 +155,7 @@ export async function countCompletedBlockingMissingLegacyPayout(
     const rows = data ?? [];
 
     for (const row of rows) {
+      if (!isCurrentPayoutVisitDate(row.date)) continue;
       if (bookingHasActivePayoutAttributionRemoval(row as unknown as Record<string, unknown>)) continue;
       const display = Math.floor(
         Number(

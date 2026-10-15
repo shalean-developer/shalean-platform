@@ -1,3 +1,4 @@
+import {retryHistoricalPaymentEffects,HISTORICAL_PAYMENT_EFFECT_JOB} from "@/lib/booking/historicalPaymentEffects";
 import { NextResponse } from "next/server";
 import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
@@ -142,12 +143,16 @@ export async function POST(request: Request) {
     context: { route: ROUTE, timestamp: runStartedAtIso },
   });
 
+  await retryHistoricalPaymentEffects(supabase);
+
   const failedJobsThreshold = Number(process.env.FAILED_JOBS_ALERT_THRESHOLD ?? "5");
   const thresholdJobs = Number.isFinite(failedJobsThreshold) && failedJobsThreshold > 0 ? failedJobsThreshold : 5;
   const { count: failedJobsOpen } = await supabase
     .from("failed_jobs")
     .select("id", { count: "exact", head: true })
     .in("type", [
+      HISTORICAL_PAYMENT_EFFECT_JOB,
+      "historical_payment_effect_exhausted",
       FAILED_JOB_TYPE_BOOKING_INSERT,
       FAILED_JOB_TYPE_PAYMENT_RECONCILIATION,
       FAILED_JOB_TYPE_BOOKING_INSERT_INVALID,

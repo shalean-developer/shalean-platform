@@ -103,7 +103,7 @@ export async function markMonthlyInvoicePaidManual(
 
   const { data: bookings, error: bErr } = await admin
     .from("bookings")
-    .select("id, total_paid_zar, amount_paid_cents, display_earnings_cents, cleaner_payout_cents")
+    .select("id, date, total_paid_zar, amount_paid_cents, display_earnings_cents, cleaner_payout_cents")
     .eq("monthly_invoice_id", row.id)
     .neq("status", "cancelled");
 

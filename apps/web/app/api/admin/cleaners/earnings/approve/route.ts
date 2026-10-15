@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       .eq("status", "pending")
       .select("id, booking_id, cleaner_id, amount_cents, status")
       .maybeSingle();
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ error: error.message }, { status: error.message.includes("historical_payout_item_deferred") ? 409 : 500 });
     if (!data) {
       return NextResponse.json({ error: "Earnings row not found or not in pending status." }, { status: 404 });
     }
@@ -53,20 +53,17 @@ export async function POST(request: Request) {
       .eq("status", "pending")
       .select("id, booking_id, cleaner_id, amount_cents, status")
       .maybeSingle();
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ error: error.message }, { status: error.message.includes("historical_payout_item_deferred") ? 409 : 500 });
     if (!data) {
       return NextResponse.json({ error: "No pending cleaner_earnings row for this booking." }, { status: 404 });
     }
     return NextResponse.json({ ok: true, earnings: data });
   }
 
-  const { data, error } = await admin
-    .from("cleaner_earnings")
-    .update({ status: "approved", approved_at: approvedAt })
-    .eq("cleaner_id", cleanerId)
-    .eq("status", "pending")
-    .select("id, booking_id, cleaner_id, amount_cents, status");
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const { data, error } = await admin.rpc("audit_03c02_approve_current_cleaner_earnings", {
+    p_cleaner_id:cleanerId,p_approved_at:approvedAt,
+  });
+  if (error) return NextResponse.json({ error: error.message }, { status: error.message.includes("historical_payout_item_deferred") ? 409 : 500 });
   const updated = data ?? [];
   if (updated.length === 0) {
     return NextResponse.json({ error: "No pending cleaner_earnings rows for this cleaner." }, { status: 404 });

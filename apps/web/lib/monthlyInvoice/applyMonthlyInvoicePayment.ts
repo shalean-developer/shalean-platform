@@ -33,7 +33,8 @@ export type ApplyMonthlyInvoicePaymentResult =
  * After each settled booking row, {@link refreshRecurringBookingPaymentState} runs so `payment_state` matches the per-booking recurring projection (invoice settlement vs operational truth).
  *
  * Side-effect order for one `charge.success`: insert dedup row → invoice + booking rows (sequential updates) → `payment_state` refresh per booking.
- * A single large DB transaction is intentionally not used here (Phase 10C): map replay via dedup, partial-loop failure modes, and compensating repair before wrapping.
+ * The invoice paid transition settles historical child cash in the same database transaction, preserving frozen earnings.
+ * Forward child work remains sequential and replayable through the existing settlement command.
  */
 export async function applyMonthlyInvoicePayment(
   admin: SupabaseClient,
@@ -78,7 +79,7 @@ export async function applyMonthlyInvoicePayment(
   if (st === "paid") {
     const { data: existingBookings, error: existingBookingsErr } = await admin
       .from("bookings")
-      .select("id, total_paid_zar, amount_paid_cents, display_earnings_cents, cleaner_payout_cents")
+      .select("id, date, total_paid_zar, amount_paid_cents, display_earnings_cents, cleaner_payout_cents")
       .eq("monthly_invoice_id", row.id)
       .neq("status", "cancelled");
 
@@ -211,7 +212,7 @@ export async function applyMonthlyInvoicePayment(
 
     const { data: bookings, error: bErr } = await admin
       .from("bookings")
-      .select("id, total_paid_zar, amount_paid_cents, display_earnings_cents, cleaner_payout_cents")
+      .select("id, date, total_paid_zar, amount_paid_cents, display_earnings_cents, cleaner_payout_cents")
       .eq("monthly_invoice_id", row.id)
       .neq("status", "cancelled");
 

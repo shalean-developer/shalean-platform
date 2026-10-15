@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { currentPayoutBatchDayYmd, isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod } from "@/lib/payout/payoutProcessingCutoff";
+import { currentPayoutBatchDayYmd, isPayoutVisitInPeriod, isCurrentPayoutVisitDate, isProcessableClosedPayoutPeriod } from "@/lib/payout/payoutProcessingCutoff";
 import { isMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
 
 describe("October processing policy, independent of historical monthly model", () => {
@@ -10,8 +10,14 @@ describe("October processing policy, independent of historical monthly model", (
   it.each([null, undefined, "", "2026-09-30", "2026-10-00", "2026-10-32", "2026-13-01", "2026-10-1", "2026-10-01T12:00:00Z"])("rejects deferred or unverifiable visit date %s", value => {
     expect(isCurrentPayoutVisitDate(value)).toBe(false);
   });
-  it.each(["2026-10-01", "2026-10-31", "2026-11-01"])("accepts forward visit date %s", value => {
+  it.each(["2026-10-01", "2026-10-31", "2026-11-01", " 2026-10-02 ", "\t2026-10-01\n"])("accepts forward visit date %s", value => {
     expect(isCurrentPayoutVisitDate(value)).toBe(true);
+  });
+  it("normalizes period membership and batch day for padded visits",()=>{
+    expect(currentPayoutBatchDayYmd({date:' 2026-10-02 '})).toBe('2026-10-02');
+    expect(isPayoutVisitInPeriod(' 2026-10-02 ','2026-10-01','2026-10-31')).toBe(true);
+    expect(isCurrentPayoutVisitDate(' 2026-09-30 ')).toBe(false);
+    expect(isCurrentPayoutVisitDate(' 2026-10-32 ')).toBe(false);
   });
   it("preserves July monthly classification while refusing September processing", () => {
     expect(isMonthlyPayoutBatchPeriod("2026-07-01", "2026-07-31")).toBe(true);
