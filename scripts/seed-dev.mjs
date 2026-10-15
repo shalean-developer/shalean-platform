@@ -1763,11 +1763,13 @@ export async function resetSeedRows(admin) {
 
 async function main() {
   const args = process.argv.slice(2);
+  if (args.includes("--fixed-legacy") && !args.includes("--paired-ui-only")) throw new Error("Fixed legacy fixture requires paired-ui-only");
   const reset  = args.includes("--reset");
   const dryRun = args.includes("--dry-run");
 
   if (args.includes('--paired-ui-only') && dryRun) {
-    const { fixturePlan, TAG } = await import('./audits/paired-ui-fixture.mjs');
+    const module = await import('./audits/paired-ui-fixture.mjs');
+    const { fixturePlan, TAG } = args.includes('--fixed-legacy') ? module.lockedFixture : module;
     console.log(JSON.stringify({ tag: TAG, booking: fixturePlan(), createsBatches: false }, null, 2));
     return;
   }
@@ -1826,7 +1828,8 @@ async function main() {
   });
 
   if (args.includes('--paired-ui-only')) {
-    const { runPairedUiSeed } = await import('./audits/paired-ui-fixture.mjs');
+    const module = await import('./audits/paired-ui-fixture.mjs');
+    const { runPairedUiSeed } = args.includes('--fixed-legacy') ? module.lockedFixture : module;
     console.log(JSON.stringify(await runPairedUiSeed(admin, { ...envVars, ...process.env,
       NEXT_PUBLIC_SUPABASE_URL: url }, reset)));
     return;

@@ -3,7 +3,7 @@ import { assertBookingCleanerEarningsResetSafe } from "@/lib/admin/adminBookingE
 
 const bookingId = "11111111-1111-4111-8111-111111111111";
 
-function mockAdmin(booking: Record<string, unknown>, opts?: { payoutBatch?: Record<string, unknown> | null; earnings?: Array<{ id: string; status: string }> }) {
+function mockAdmin(booking: Record<string, unknown>, opts?: { payoutBatch?: Record<string, unknown> | null; earnings?: Array<{ id: string; status: string }>; members?: Record<string, Array<Record<string, unknown>>>; memberError?: string }) {
   return {
     from: vi.fn((table: string) => {
       if (table === "bookings") {
@@ -27,6 +27,9 @@ function mockAdmin(booking: Record<string, unknown>, opts?: { payoutBatch?: Reco
             }),
           }),
         };
+      }
+      if (table === "booking_roster_member_payouts" || table === "team_job_member_payouts") {
+        return { select: () => ({ eq: () => Promise.resolve({ data: opts?.members?.[table] ?? [], error: opts?.memberError === table ? {message:"Member lookup unavailable"} : null }) }) };
       }
       if (table === "cleaner_earnings") {
         return {
@@ -104,4 +107,28 @@ describe("assertBookingCleanerEarningsResetSafe", () => {
     });
     expect(res).toMatchObject({ ok: false, code: "weekly_payout_locked" });
   });
+});
+
+describe("member payout reset locks", () => {
+  for (const table of ["booking_roster_member_payouts", "team_job_member_payouts"]) {
+    it.each([
+      {status:"pending",cleaner_payout_id:"draft-batch"},
+      {status:"batched",cleaner_payout_id:null},
+      {status:"frozen",cleaner_payout_id:null},
+      {status:"approved",cleaner_payout_id:null},
+      {status:"paid",cleaner_payout_id:null},
+      {status:null,cleaner_payout_id:null},
+    ])(`blocks ${table} protected row %j even with eligible override`, async (member) => {
+      const admin=mockAdmin({id:bookingId,payout_status:"pending"},{members:{[table]:[member]}});
+      expect(await assertBookingCleanerEarningsResetSafe(admin as never,bookingId,{allowEligiblePayoutStatus:true})).toMatchObject({ok:false,status:409,code:"member_payout_locked"});
+    });
+    it(`allows unlinked pending ${table} member`, async () => {
+      const admin=mockAdmin({id:bookingId},{members:{[table]:[{status:"pending",cleaner_payout_id:null}]}});
+      expect(await assertBookingCleanerEarningsResetSafe(admin as never,bookingId)).toEqual({ok:true});
+    });
+    it(`fails closed when ${table} cannot be read`, async () => {
+      const admin=mockAdmin({id:bookingId},{memberError:table});
+      expect(await assertBookingCleanerEarningsResetSafe(admin as never,bookingId)).toMatchObject({ok:false,status:500,code:"member_payout_lookup_failed"});
+    });
+  }
 });

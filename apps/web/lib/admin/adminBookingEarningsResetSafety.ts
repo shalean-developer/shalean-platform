@@ -11,14 +11,15 @@ export type AssertBookingCleanerEarningsResetSafeOptions = {
   /**
    * Admin force-assign / reopen: allow bookings already marked eligible (or paid status
    * without `payout_paid_at`). Still blocks when `payout_paid_at` is set, weekly batch is
-   * locked, or non-pending `cleaner_earnings` rows exist.
+   * locked, linked/non-pending member payouts or non-pending `cleaner_earnings` rows exist.
    */
   allowEligiblePayoutStatus?: boolean;
 };
 
 /**
  * Guards {@link resetBookingCleanerLineEarnings} + re-persist: no locked weekly payout,
- * booking not already in invoice payout pipeline, and no non-pending `cleaner_earnings` rows.
+ * booking not already in invoice payout pipeline, no linked/non-pending member payouts,
+ * and no non-pending `cleaner_earnings` rows.
  */
 export async function assertBookingCleanerEarningsResetSafe(
   admin: SupabaseClient,
@@ -90,6 +91,25 @@ export async function assertBookingCleanerEarningsResetSafe(
           error: "Weekly payout batch is frozen, approved, or paid; reset is not allowed.",
           code: "weekly_payout_locked",
         };
+      }
+    }
+  }
+
+  // A member can be batched independently of the booking header. Even a draft
+  // batch owns its captured amount; persistence deliberately cannot rewrite it.
+  for (const table of ["booking_roster_member_payouts", "team_job_member_payouts"] as const) {
+    const { data: members, error: memberErr } = await admin
+      .from(table)
+      .select("status, cleaner_payout_id")
+      .eq("booking_id", bid);
+    if (memberErr) {
+      return { ok: false, status: 500, error: memberErr.message, code: "member_payout_lookup_failed" };
+    }
+    for (const member of members ?? []) {
+      const status = String(member.status ?? "").trim().toLowerCase();
+      const payoutId = String(member.cleaner_payout_id ?? "").trim();
+      if (status !== "pending" || payoutId) {
+        return { ok: false, status: 409, error: "A cleaner member payout is linked to a batch or is no longer pending; reset is not allowed.", code: "member_payout_locked" };
       }
     }
   }

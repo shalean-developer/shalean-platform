@@ -28,6 +28,9 @@
     "audit:production": "npm --prefix apps/web run audit:production",
     "audit:paired-ui:plan": "node scripts/seed-dev.mjs --paired-ui-only --dry-run",
     "audit:paired-ui:apply": "node scripts/seed-dev.mjs --paired-ui-only",
+    "audit:locked-ui:plan": "node scripts/seed-dev.mjs --paired-ui-only --fixed-legacy --dry-run",
+    "audit:locked-ui:apply": "node scripts/seed-dev.mjs --paired-ui-only --fixed-legacy",
+    "audit:locked-ui:retire": "node scripts/seed-dev.mjs --paired-ui-only --fixed-legacy --reset",
     "audit:paired-ui:retire": "node scripts/seed-dev.mjs --paired-ui-only --reset"
   }
 }
