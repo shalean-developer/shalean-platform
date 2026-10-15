@@ -1,14 +1,25 @@
 -- Validate final booking values after every BEFORE policy trigger. Preserve history
 -- without preventing notes, completion timestamps, or verified provider convergence.
 begin;
+create or replace function public.audit_03c02_verified_monthly_cash_reversal(p_old jsonb,p_new jsonb)
+returns boolean language sql stable set search_path=pg_catalog as $$
+ select p_new->>'monthly_invoice_id' is not null and p_new->>'monthly_invoice_id'=p_old->>'monthly_invoice_id'
+   and current_setting('shalean.verified_monthly_invoice',true)=p_new->>'monthly_invoice_id'
+   and p_new->>'payment_status'='pending_monthly'
+   and p_new->>'payout_status'=(case when p_old->>'payout_status'='paid' then 'paid' else 'pending' end)
+   and (p_new->>'amount_paid_cents')::bigint<=coalesce((p_old->>'amount_paid_cents')::bigint,0)
+   and (p_new-array['payment_status','amount_paid_cents','payment_completed_at','payout_status','updated_at','payment_state'])
+     = (p_old-array['payment_status','amount_paid_cents','payment_completed_at','payout_status','updated_at','payment_state']);
+$$;
+revoke all on function public.audit_03c02_verified_monthly_cash_reversal(jsonb,jsonb) from public,anon,authenticated,service_role;
 -- Retrofit the already-deployed cutoff RPCs without changing their signatures or ACLs.
--- Only these audited visit-date expressions change; provider and month-closure proofs remain intact.
+-- Retrofit canonical visit parsing and the narrowly verified invoice-cash reversal; provider and month-closure proofs remain intact.
 do $patch$
 declare fn record; definition text; patched text;
 begin
- for fn in select p.oid from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+ for fn in select p.oid,p.proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace
    where n.nspname='public' and p.proname=any(array[
-     'audit_03c02_guard_payout_batch','audit_03c02_guard_payout_item','upsert_pending_payout_earnings',
+     'audit_03c02_guard_payout_batch','audit_03c02_guard_payout_item','bookings_lock_under_finalized_monthly_invoice','upsert_pending_payout_earnings',
      'append_draft_run_payout_earnings','settle_cleaner_payout_bank_transfer','adjust_unrun_member_payout_earnings','claim_cleaner_earnings_for_paystack'])
  loop
    definition:=pg_get_functiondef(fn.oid); patched:=definition;
@@ -16,6 +27,18 @@ begin
    patched:=replace(patched,'OLD.date::date','coalesce(public.audit_03c02_visit_date(OLD.date::text),date ''-infinity'')');
    patched:=replace(patched,'NEW.date::date','coalesce(public.audit_03c02_visit_date(NEW.date::text),date ''-infinity'')');
    patched:=replace(patched,'v_date := NEW.date;','v_date := public.audit_03c02_visit_date(NEW.date::text);');
+   if fn.proname='audit_03c02_guard_payout_item' then
+     patched:=replace(patched,'  if TG_OP=''UPDATE'' then',$cash_reversal$
+  if TG_OP='UPDATE' and TG_TABLE_NAME='bookings' then
+    if public.audit_03c02_verified_monthly_cash_reversal(to_jsonb(OLD),to_jsonb(NEW)) then return NEW; end if;
+  end if;
+  if TG_OP='UPDATE' then$cash_reversal$);
+   end if;
+   if fn.proname='bookings_lock_under_finalized_monthly_invoice' then
+     patched:=replace(patched,'  if old.monthly_invoice_id is null then',$invoice_reversal$
+  if public.audit_03c02_verified_monthly_cash_reversal(to_jsonb(OLD),to_jsonb(NEW)) then return NEW; end if;
+  if old.monthly_invoice_id is null then$invoice_reversal$);
+   end if;
    if patched<>definition then execute patched; end if;
  end loop;
 end $patch$;

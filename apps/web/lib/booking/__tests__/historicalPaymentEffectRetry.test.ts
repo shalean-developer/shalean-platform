@@ -35,8 +35,8 @@ describe('durable historical payment effect retries',()=>{
   expect(remove).not.toHaveBeenCalled();
  });
 
- it('reports retained retry work when successful effect cleanup returns a database error',async()=>{
-  const jobs=[{id:'retained',payload}];const remove=vi.fn().mockResolvedValue({error:{message:'delete unavailable'}});
+ it.each(['referral','payment_state'] as const)('reports retained %s cleanup without undoing completed payment state',async(effect)=>{
+  const jobs=[{id:'retained',payload:{...payload,effect}}];const remove=vi.fn().mockResolvedValue({error:{message:'delete unavailable'}});
   const q={select:()=>q,eq:()=>q,contains:async()=>({data:jobs,error:null}),delete:()=>({eq:remove})};
   const admin={from:()=>q,rpc:async()=>({data:{ok:true},error:null})};
   await completeHistoricalPaymentEffects(admin as never,payload);
