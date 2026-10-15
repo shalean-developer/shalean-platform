@@ -1,3 +1,4 @@
+import { assertCurrentPayoutBookingMutation } from "@/lib/payout/assertCurrentPayoutBookingMutation";
 import { NextResponse } from "next/server";
 import { logAdminEarningsAction } from "@/lib/admin/logAdminEarningsAction";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
@@ -90,6 +91,14 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const cur = String(row.status ?? "").toLowerCase();
   if (cur === "resolved" || cur === "rejected") {
     return NextResponse.json({ error: "Dispute is already closed." }, { status: 409 });
+  }
+
+  if (adjustmentAmountCents != null) {
+    const boundary = await assertCurrentPayoutBookingMutation(admin, String(row.booking_id ?? ""));
+    if (!boundary.ok) {
+      const historical = boundary.error === "historical_payout_item_deferred";
+      return NextResponse.json({error:boundary.error,...(historical ? {code:"historical_payout_item_deferred"} : {})},{status:historical ? 409 : 500});
+    }
   }
 
   const now = new Date().toISOString();

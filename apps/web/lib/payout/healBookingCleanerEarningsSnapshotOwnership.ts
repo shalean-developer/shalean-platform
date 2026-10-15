@@ -1,3 +1,4 @@
+import { assertCurrentPayoutBookingMutation } from "@/lib/payout/assertCurrentPayoutBookingMutation";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -21,6 +22,9 @@ export async function healBookingCleanerEarningsSnapshotOwnershipIfNeeded(params
   const bookingId = String(params.bookingId ?? "").trim();
   const expectedCleanerId = String(params.expectedCleanerId ?? "").trim();
   if (!bookingId || !expectedCleanerId) return { healed: false };
+
+  const boundary = await assertCurrentPayoutBookingMutation(params.admin, bookingId);
+  if (!boundary.ok) return {healed:false};
 
   const { data: snap, error } = await params.admin
     .from("booking_cleaner_earnings_snapshot")

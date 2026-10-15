@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import "server-only";
 import { bookingCreationLifecyclePatch } from "@/lib/booking/bookingCreationProfiles";
 
@@ -46,6 +47,7 @@ export async function insertMonthlyRecurringOccurrenceBooking(
     customerPhone: string | null;
   },
 ): Promise<{ ok: true; bookingId: string; paystackReference: string } | { ok: false; error: string }> {
+  if (!isCurrentPayoutVisitDate(params.occurrenceDateYmd)) return {ok:false,error:"historical_payout_item_deferred"};
   const template = cloneSnapshotTemplate(params.recurring.booking_snapshot_template);
   if (!template?.locked) {
     return { ok: false, error: "recurring_bookings.booking_snapshot_template missing valid locked payload." };

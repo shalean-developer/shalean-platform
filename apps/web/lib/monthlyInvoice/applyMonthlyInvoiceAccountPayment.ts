@@ -140,7 +140,7 @@ export async function applyMonthlyInvoiceAccountPayment(
 
       const { data: bookings, error: bookingsErr } = await admin
         .from("bookings")
-        .select("id, total_paid_zar, amount_paid_cents, display_earnings_cents, cleaner_payout_cents")
+        .select("id, date, total_paid_zar, amount_paid_cents, display_earnings_cents, cleaner_payout_cents")
         .eq("monthly_invoice_id", item.id)
         .neq("status", "cancelled");
       if (bookingsErr) throw new Error(bookingsErr.message);

@@ -1,3 +1,4 @@
+import { assertCurrentPayoutBookingMutation } from "@/lib/payout/assertCurrentPayoutBookingMutation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assignmentTruthPatchForOfferStart } from "@/lib/dispatch/assignmentTruth";
 import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
@@ -24,6 +25,8 @@ export type SetAdminManualBookingOfferedResult =
 export async function setAdminManualBookingOffered(
   params: SetAdminManualBookingOfferedParams,
 ): Promise<SetAdminManualBookingOfferedResult> {
+  const boundary = await assertCurrentPayoutBookingMutation(params.admin, params.bookingId);
+  if (!boundary.ok) return boundary;
   const { data, error } = await params.admin
     .from("bookings")
     .update({

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { refreshDraftMonthlyInvoiceDueDate } from "@/lib/monthlyInvoice/refreshDraftMonthlyInvoiceDueDate";
@@ -133,7 +134,7 @@ export async function revertManualPaidMonthlyInvoiceToDraft(
   const { data: bookings, error: bookingErr } = await admin
     .from("bookings")
     .select(
-      "id, status, payment_status, amount_paid_cents, payout_status, payout_frozen_cents, payout_id, payout_run_id, payout_paid_at, payment_completed_at",
+      "id, date, status, payment_status, amount_paid_cents, payout_status, payout_frozen_cents, payout_id, payout_run_id, payout_paid_at, payment_completed_at",
     )
     .eq("monthly_invoice_id", row.id)
     .neq("status", "cancelled");
@@ -142,6 +143,7 @@ export async function revertManualPaidMonthlyInvoiceToDraft(
 
   const children = (bookings ?? []) as Array<{
     id: string;
+    date?:string|null;
     status: string | null;
     payment_status: string | null;
     amount_paid_cents: number | null;
@@ -169,6 +171,7 @@ export async function revertManualPaidMonthlyInvoiceToDraft(
 
   // Restore children first. If a child update fails, abort before reopening the invoice.
   for (const child of children) {
+    if('date' in child && !isCurrentPayoutVisitDate(child.date)){restoredBookingIds.push(child.id);continue;}
     const previousChildPaid = previousPaidByBooking.get(child.id) ?? 0;
     const { data: restored, error: restoreErr } = await admin
       .from("bookings")

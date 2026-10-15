@@ -14,7 +14,7 @@ function makeAdmin(bookingStatus: string) {
         return {
           select: vi.fn(() => ({
             eq: vi.fn(() => ({
-              maybeSingle: vi.fn(async () => ({ data: { status: bookingStatus }, error: null })),
+              maybeSingle: vi.fn(async () => ({ data: { status: bookingStatus, date: "2026-10-01" }, error: null })),
             })),
           })),
         };

@@ -116,7 +116,7 @@ describe("performAdminDirectAssignToCleaner", () => {
   it("returns alreadyAssigned when same cleaner is assigned and acceptance is complete", async () => {
     const { admin } = createMockAdmin({
       id: bookingId,
-      date: "2026-07-06",
+      date: "2026-10-06",
       time: "07:30",
       status: "assigned",
       cleaner_id: cleanerId,
@@ -127,7 +127,7 @@ describe("performAdminDirectAssignToCleaner", () => {
       service_slug: "standard",
       service: "Standard Cleaning",
       cleaner_response_status: CLEANER_RESPONSE.ACCEPTED,
-      accepted_at: "2026-07-05T19:05:46.701+00:00",
+      accepted_at: "2026-10-05T19:05:46.701+00:00",
     });
 
     const result = await performAdminDirectAssignToCleaner(admin as never, {
@@ -142,7 +142,7 @@ describe("performAdminDirectAssignToCleaner", () => {
   it("confirms acceptance when same cleaner is assigned but never accepted (offer expired)", async () => {
     const { admin, bookingUpdates } = createMockAdmin({
       id: bookingId,
-      date: "2026-07-06",
+      date: "2026-10-06",
       time: "07:30",
       status: "assigned",
       cleaner_id: cleanerId,

@@ -1,3 +1,4 @@
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/admin/requireAdminSession";
@@ -661,7 +662,12 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     time?: string | null;
     selected_cleaner_id?: string | null;
     metadata?: unknown;
+    display_earnings_cents?: unknown;
   } | null;
+  if (updates.status === "completed" && !isCurrentPayoutVisitDate(String(beforeRow?.date ?? "").trim())
+      && !(Number.isFinite(Number(beforeRow?.display_earnings_cents)) && Number(beforeRow?.display_earnings_cents)>0)) {
+    return NextResponse.json({error:"Historical earnings are deferred; completion cannot rebuild them.",code:"historical_payout_item_deferred"},{status:409});
+  }
   const beforeStatus = String(beforeRow?.status ?? "pending").trim() || "pending";
   const beforeCompletedAt =
     beforeRow?.completed_at != null && String(beforeRow.completed_at).trim()
@@ -687,6 +693,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     newCleaner === oldCleaner &&
     removalMarkerBefore != null;
   const cleanerAttributionRefresh = cleanerWasChanged || restoreExistingHeaderAttribution;
+
+  if (cleanerAttributionRefresh && !isCurrentPayoutVisitDate(String(beforeRow?.date ?? "").trim())) {
+    return NextResponse.json({ error: "Historical or undated booking attribution is preserved.", code: "historical_payout_item_deferred" }, { status: 409 });
+  }
 
   if (cleanerAttributionRefresh) {
     Object.assign(updates, BOOKING_PAYOUT_COLUMNS_CLEAR);

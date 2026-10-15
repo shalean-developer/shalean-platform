@@ -1,3 +1,5 @@
+import { loadCurrentTeamBookings } from "@/lib/booking/loadCurrentTeamBookings";
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resyncBookingCleanersForTeamNonFinalizedJobs } from "@/lib/booking/syncBookingCleanersForTeamBooking";
 import { isTeamMemberActiveOnBookingDate } from "@/lib/cleaner/teamMemberAvailability";
@@ -30,19 +32,15 @@ export async function setTeamLeadCleaner(
   const { error: upErr } = await admin.from("teams").update({ lead_cleaner_id: cid }).eq("id", tid);
   if (upErr) return { ok: false, status: 500, error: upErr.message };
 
-  const { data: openBookings, error: bErr } = await admin
-    .from("bookings")
-    .select("id, date")
-    .eq("team_id", tid)
-    .eq("is_team_job", true)
-    .is("cleaner_line_earnings_finalized_at", null);
-  if (bErr) return { ok: false, status: 500, error: bErr.message };
+  let openBookings: Array<{id:string;date:string}>;
+  try { openBookings=await loadCurrentTeamBookings(admin,tid); }
+  catch(error) { return {ok:false,status:500,error:error instanceof Error?error.message:String(error)}; }
 
   for (const raw of openBookings ?? []) {
     const row = raw as { id?: string; date?: string | null };
     const bookingId = String(row.id ?? "").trim();
     const dateYmd = String(row.date ?? "").trim();
-    if (!bookingId || !/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) continue;
+    if (!bookingId || !isCurrentPayoutVisitDate(dateYmd)) continue;
     if (!isTeamMemberActiveOnBookingDate(member as { active_from?: string | null; active_to?: string | null }, dateYmd)) {
       continue;
     }

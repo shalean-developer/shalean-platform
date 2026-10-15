@@ -121,7 +121,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   if (Object.keys(updates).length === 0) return NextResponse.json({ error: "No valid fields to update." }, { status: 400 });
   const { error } = await admin.from("cleaners").update(updates).eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: error.message }, {
+    status: error.message.includes("historical_cleaner_tenure_deferred") ? 409 : 500,
+  });
 
   const shouldRegenSlots = body.availability_start !== undefined || body.availability_end !== undefined;
   try {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { settleMonthlyInvoiceChildBooking } from "@/lib/monthlyInvoice/settleMonthlyInvoiceChildBooking";
 
@@ -120,4 +120,11 @@ describe("settleMonthlyInvoiceChildBooking", () => {
     expect(result).toEqual({ ok: false, error: "invalid_payout_frozen_cents:booking-unsafe" });
     expect(updateCalled).toBe(false);
   });
+  it('settles historical monthly cash through the paid-invoice RPC without a new earnings basis',async()=>{
+    const rpc=vi.fn().mockResolvedValue({error:null});
+    const admin={rpc,from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{date:'2026-09-30',monthly_invoice_id:'invoice'},error:null})})})})};
+    expect(await settleMonthlyInvoiceChildBooking(admin as never,{bookingId:'old',amountPaidCents:1000,payoutFrozenCents:0})).toEqual({ok:true});
+    expect(rpc).toHaveBeenCalledWith('audit_03c02_settle_historical_monthly_child',{p_invoice_id:'invoice',p_booking_id:'old'});
+  });
+
 });

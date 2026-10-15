@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { occurrenceDatesInclusive } from "@/lib/recurring/calculateNextRunDate";
 import {
+  reconcileRecurringPlanOccurrences,
   bookingsInReconcileMonth,
   reconcileMonthsForPlan,
   reconcileOrphanCancelBlockReason,
@@ -120,5 +121,30 @@ describe("weekly schedule orphan math", () => {
     expect(twoDays.length).toBeGreaterThanOrEqual(8);
     expect(twoDays.length).toBeLessThanOrEqual(9);
     expect(twoDays.length - oneDay.length).toBeGreaterThanOrEqual(4);
+  });
+});
+
+
+describe("historical schedule reconciliation cutoff", () => {
+  it("does not cancel or create historical visits, including dates attached to October invoices", async () => {
+    const writes = vi.fn(() => { throw new Error("Historical write attempted"); });
+    const historical = { id: "old", date: "2026-09-30", status: "pending", monthly_invoice_id: "invoice", monthly_invoices: {status: "draft", month: "2026-10"} };
+    const admin = {
+      auth: {admin: {getUserById: async () => ({data: {user: {email: "fixture@example.test"}}})}},
+      from: (table: string) => {
+        const q = {select: () => q, eq: () => q, neq: () => q,
+          maybeSingle: async () => ({data: {billing_type: "monthly"}, error: null}),
+          then: (resolve: (r: unknown) => unknown) => Promise.resolve({data: [historical], error: null}).then(resolve),
+          update: writes, insert: writes, delete: writes};
+        expect(["bookings", "user_profiles"]).toContain(table);
+        return q;
+      }, rpc: writes,
+    };
+    const result = await reconcileRecurringPlanOccurrences(admin as never, {
+      id: "plan", customer_id: "customer", price: 100, booking_snapshot_template: {},
+      frequency: "weekly", days_of_week: [1], start_date: "2026-07-01", end_date: "2026-09-30",
+    });
+    expect(result).toMatchObject({bookings_created: 0, bookings_cancelled: 0, errors: []});
+    expect(writes).not.toHaveBeenCalled();
   });
 });

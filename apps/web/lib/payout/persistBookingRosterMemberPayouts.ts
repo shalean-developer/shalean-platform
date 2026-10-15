@@ -1,3 +1,4 @@
+import { assertCurrentPayoutBookingMutation } from "@/lib/payout/assertCurrentPayoutBookingMutation";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -23,6 +24,9 @@ export async function syncBookingRosterMemberPayouts(params: {
 }): Promise<SyncBookingRosterMemberPayoutsResult> {
   const bookingId = params.bookingId.trim();
   if (!bookingId) return { ok: false, error: "Invalid booking id" };
+
+  const boundary = await assertCurrentPayoutBookingMutation(params.admin, bookingId);
+  if (!boundary.ok) return boundary;
 
   const { data: existing, error: exErr } = await params.admin
     .from("booking_roster_member_payouts")

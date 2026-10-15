@@ -167,4 +167,11 @@ describe("settleMonthlyInvoiceChildren", () => {
     expect(updates).toEqual([]);
     expect(refreshRecurringBookingPaymentState).not.toHaveBeenCalled();
   });
+  it('settles a historical child without deriving frozen earnings',async()=>{
+    const rpc=vi.fn().mockResolvedValue({error:null});
+    const admin={rpc,from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{date:'2026-09-30',monthly_invoice_id:'invoice'},error:null})})})})};
+    const result=await settleMonthlyInvoiceChildren(admin as never,{invoiceId:'invoice',source:'test',children:[{id:'old',date:'2026-09-30',total_paid_zar:10,amount_paid_cents:0,display_earnings_cents:0,cleaner_payout_cents:0}]});
+    expect(result).toMatchObject({ok:true,settled:1});expect(rpc).toHaveBeenCalledOnce();
+  });
+
 });

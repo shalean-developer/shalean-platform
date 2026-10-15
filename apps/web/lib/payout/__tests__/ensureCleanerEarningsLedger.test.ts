@@ -59,7 +59,7 @@ class LedgerQueryBuilder {
       return { data: row, error: null };
     }
 
-    let rows = [...(this.db.tables[this.table] ?? [])];
+    let rows = [...(this.db.tables[this.table] ?? [])].map(row => this.table === "bookings" ? {date:"2026-10-01",...row} : row);
     for (const f of this.filters) {
       rows = rows.filter((r) => r[f.column] === f.value);
     }
