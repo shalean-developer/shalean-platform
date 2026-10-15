@@ -60,7 +60,7 @@ export async function completeHistoricalPaymentEffects(admin:SupabaseClient,p:Hi
   if(error) throw new Error('historical_payment_effect_queue_read_failed');
   let criticalFailure:unknown;
   for(const job of data??[]){
-    try {await runHistoricalPaymentEffect(admin,job.payload as HistoricalPaymentEffectPayload);await admin.from('failed_jobs').delete().eq('id',job.id);}
+    try {await runHistoricalPaymentEffect(admin,job.payload as HistoricalPaymentEffectPayload);const {error}=await admin.from('failed_jobs').delete().eq('id',job.id);if(error) throw new Error(error.message);}
     catch(error){if((job.payload as HistoricalPaymentEffectPayload).effect==='payment_state') criticalFailure=error;await reportOperationalIssue('warn','historicalPaymentEffects','Payment effect retained for retry',{bookingId:p.bookingId,effect:(job.payload as HistoricalPaymentEffectPayload).effect,error:String(error)});}
   }
   if(criticalFailure) throw criticalFailure;
