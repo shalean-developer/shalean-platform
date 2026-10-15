@@ -98,14 +98,20 @@ export async function insertRecurringOccurrenceBooking(
   });
 
   const priceZar = Math.max(1, Math.round(Number(params.recurring.price)));
-  const existingPrepaidAllocation = await findReservedRecurringPrepaymentAllocation(
-    admin,
-    params.recurring.id,
-    params.occurrenceDateYmd,
-  );
-  const existingCycle = existingPrepaidAllocation
-    ? null
-    : await findRecurringPrepaymentCycleForDate(admin, params.recurring.id, params.occurrenceDateYmd);
+  let existingPrepaidAllocation: Awaited<ReturnType<typeof findReservedRecurringPrepaymentAllocation>>;
+  let existingCycle: Awaited<ReturnType<typeof findRecurringPrepaymentCycleForDate>>;
+  try {
+    existingPrepaidAllocation = await findReservedRecurringPrepaymentAllocation(
+      admin,
+      params.recurring.id,
+      params.occurrenceDateYmd,
+    );
+    existingCycle = existingPrepaidAllocation
+      ? null
+      : await findRecurringPrepaymentCycleForDate(admin, params.recurring.id, params.occurrenceDateYmd);
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "recurring_prepayment_lookup_failed" };
+  }
   if (existingCycle) {
     return {
       ok: false,

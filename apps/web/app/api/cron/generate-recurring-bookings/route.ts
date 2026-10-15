@@ -95,6 +95,7 @@ export async function POST(request: Request) {
   let skippedDuplicate = 0;
   let failed = 0;
   let skippedPlans = 0;
+  let awaitingPayment = 0;
 
   try {
   const today = todayJohannesburg();
@@ -315,6 +316,7 @@ export async function POST(request: Request) {
     const dates = datesAll.slice(0, MAX_OCCURRENCES_PER_PLAN);
     const partialBacklog = datesAll.length > dates.length;
     let planInsertFailures = 0;
+    let awaitingPackagePayment = false;
 
     for (const d of dates) {
       if (r.skip_next_occurrence_date && d === r.skip_next_occurrence_date) continue;
@@ -394,6 +396,16 @@ export async function POST(request: Request) {
       } else if (ins.code === "duplicate_occurrence") {
         skippedDuplicate++;
         console.log("[generate] skipped recurring duplicate", { planId: r.id, date: d });
+      } else if (!useMonthlyInvoicePath && ins.message === "recurring_package_payment_pending") {
+        // Retain the cursor so paid allocations are generated on the next run.
+        awaitingPackagePayment = true;
+        awaitingPayment++;
+        await logSystemEvent({
+          level: "info",
+          source: "cron/generate-recurring-bookings",
+          message: "recurring_occurrence_awaiting_package_payment",
+          context: { recurring_id: r.id, occurrence_date: d },
+        });
       } else {
         await logSystemEvent({
           level: "warn",
@@ -407,7 +419,7 @@ export async function POST(request: Request) {
     }
 
     const nextRun =
-      planInsertFailures > 0
+      planInsertFailures > 0 || awaitingPackagePayment
         ? r.next_run_date
         : partialBacklog
           ? datesAll[MAX_OCCURRENCES_PER_PLAN]!
@@ -429,6 +441,7 @@ export async function POST(request: Request) {
       skipped_duplicate: skippedDuplicate,
       failed,
       skipped_plans: skippedPlans,
+      awaiting_payment: awaitingPayment,
     },
     {
       today,
