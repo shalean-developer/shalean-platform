@@ -68,6 +68,17 @@ begin
       select greatest(count(distinct bc.cleaner_id), 1)::integer into v_participants
       from public.booking_cleaners bc where bc.booking_id = new.id;
       new.internal_earnings_cents := v_legacy_cents * v_participants;
+      -- Signed, participant-specific adjustments remain part of the obligation.
+      with participants as (
+        select distinct bc.cleaner_id from public.booking_cleaners bc where bc.booking_id=new.id
+        union all
+        select coalesce(new.cleaner_id,new.payout_owner_cleaner_id)
+        where not exists(select 1 from public.booking_cleaners bc where bc.booking_id=new.id)
+      )
+      select coalesce(sum(greatest(v_legacy_cents + coalesce((
+        select sum(a.amount_cents) from public.cleaner_earnings_adjustments a
+        where a.booking_id=new.id and a.cleaner_id=p.cleaner_id
+      ),0),0)),v_legacy_cents)::integer into new.internal_earnings_cents from participants p;
     end if;
 
     v_financial_cap_cents := case
@@ -82,6 +93,12 @@ begin
         nullif(new.amount_paid_cents, 0)::bigint,
         0::bigint
       )
+      when lower(trim(coalesce(new.payment_status, ''))) = 'success' then greatest(
+        coalesce(new.total_paid_cents::bigint, new.amount_paid_cents::bigint,
+          case when new.total_paid_zar is not null and new.total_paid_zar > 0
+            then round(new.total_paid_zar * 100)::bigint else null end,0::bigint),
+        coalesce(new.base_amount_cents::bigint,0::bigint)
+      )
       else coalesce(
         new.total_paid_cents::bigint,
         new.amount_paid_cents::bigint,
@@ -91,7 +108,7 @@ begin
       )
     end;
 
-    if v_financial_cap_cents >= v_legacy_cents * v_participants then
+    if v_financial_cap_cents >= new.internal_earnings_cents then
       new.cleaner_payout_cents := v_legacy_cents;
       new.payout_earnings_cents := v_legacy_cents;
       if new.payout_status = 'eligible' then
@@ -117,5 +134,28 @@ end;
 $function$;
 
 revoke all on function public.apply_booking_earnings_policy_lock() from public, anon, authenticated;
+
+-- A booking must exist before its FK-backed roster. Refresh the fixed pool after
+-- real roster changes; do not touch historical, paid, batched or formal-team rows.
+create or replace function public.refresh_current_locked_policy_after_roster()
+returns trigger language plpgsql security definer set search_path=pg_catalog as $$
+declare v_id uuid; v_ids uuid[];
+begin
+  if tg_op='INSERT' then v_ids:=array[new.booking_id];
+  elsif tg_op='DELETE' then v_ids:=array[old.booking_id];
+  else v_ids:=array[old.booking_id,new.booking_id]; end if;
+  for v_id in select distinct x from unnest(v_ids) x order by x loop
+    update public.bookings b set internal_earnings_cents=b.internal_earnings_cents
+    where b.id=v_id and b.date>='2026-10-01' and b.earnings_policy='legacy_july'
+      and not coalesce(b.is_team_job,false) and b.payout_status='pending'
+      and b.payout_id is null and b.payout_run_id is null and b.payout_paid_at is null;
+  end loop;
+  return null;
+end;
+$$;
+revoke all on function public.refresh_current_locked_policy_after_roster() from public,anon,authenticated;
+create trigger booking_roster_refresh_current_locked_policy
+after insert or update or delete on public.booking_cleaners
+for each row execute function public.refresh_current_locked_policy_after_roster();
 commit;
 
