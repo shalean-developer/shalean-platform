@@ -10,13 +10,23 @@ type DB = { query(sql: string, values?: unknown[]): Promise<{ rows: Record<strin
 const tables = ['bookings', 'monthly_invoices', 'booking_roster_member_payouts', 'team_job_member_payouts'];
 const id = (n: number) => `94600000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
-export function assertStagingTarget(value: string): void {
-  const url = new URL(value);
-  const ref = 'uwvnmluiqbczeduzjgse';
-  const direct = url.hostname === `db.${ref}.supabase.co` && decodeURIComponent(url.username) === 'postgres';
-  const pooler = url.hostname.endsWith('.pooler.supabase.com') && decodeURIComponent(url.username) === `postgres.${ref}`;
-  assert(['postgres:', 'postgresql:'].includes(url.protocol) && (direct || pooler), 'Only the approved staging database is allowed');
+export function assertStagingTarget(value: string) {
   assert(process.env.SHALEAN_APP_ENV === 'staging', 'SHALEAN_APP_ENV must be staging');
+  const ref = process.env.AUDIT_STAGING_REF ?? '';
+  const productionRef = process.env.SUPABASE_PROD_REF ?? '';
+  assert(/^[a-z]{20}$/.test(ref) && /^[a-z]{20}$/.test(productionRef) && ref !== productionRef,
+    'Distinct private staging and production references are required');
+  const url = new URL(value);
+  assert(!url.search && !url.hash, 'Connection query parameters and fragments are forbidden');
+  const user = decodeURIComponent(url.username);
+  const direct = url.hostname === `db.${ref}.supabase.co` && user === 'postgres';
+  const pooler = url.hostname.endsWith('.pooler.supabase.com') && user === `postgres.${ref}`;
+  assert(['postgres:', 'postgresql:'].includes(url.protocol) && (direct || pooler), 'Only the approved staging database is allowed');
+  const port = Number(url.port || 5432);
+  assert([5432,6543].includes(port) && url.pathname === '/postgres', 'Unexpected database or port');
+  // Pass explicit validated fields: never let the driver reparse a connection string.
+  return { host: url.hostname, user, password: decodeURIComponent(url.password), database: 'postgres', port,
+    ssl: { rejectUnauthorized: true }, connectionTimeoutMillis: 10_000 };
 }
 
 async function main() {
@@ -34,9 +44,9 @@ async function main() {
     await db.query('create table public.team_job_member_payouts (id uuid, booking_id uuid, cleaner_id uuid, payout_cents integer, cleaner_payout_id uuid, status text)');
   } else {
     const url = process.env.AUDIT_STAGING_DATABASE_URL ?? '';
-    assertStagingTarget(url);
+    const connection = assertStagingTarget(url);
     const { Client } = await import(process.env.AUDIT_PG_MODULE ?? 'pg');
-    const client = new Client({ connectionString: url, ssl: { rejectUnauthorized: true } });
+    const client = new Client(connection);
     await client.connect();
     db = { query: (sql, values) => client.query(sql, values), close: () => client.end() };
   }
