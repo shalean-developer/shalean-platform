@@ -384,6 +384,7 @@ async function resolveTeamCleanerCountForCanonical(
 }
 
 export type PersistBookingRowForEarnings = {
+  earnings_policy?: string | null;
   is_team_job?: boolean | null;
   team_id?: string | null;
   team_member_count_snapshot?: number | null;
@@ -682,7 +683,7 @@ export async function previewDisplayEarningsCentsForCleanerJobDiagnostic(
   if (!isTeamJob) {
     const rosterRows = await loadBookingRosterRows(admin, bookingId);
     const paired = isPairedRosterSoloJob({ isTeamJob: false, rosterRows });
-    if (paired || isCurrentPayoutVisitDate(r.date?.trim())) {
+    if (paired || (isCurrentPayoutVisitDate(r.date?.trim()) && r.earnings_policy === "legacy_july")) {
       const canonical = await resolveBookingCanonicalPayout(admin, {
         bookingId,
         row: r as BookingRowForCanonicalPayout,
