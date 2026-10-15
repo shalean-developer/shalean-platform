@@ -13,7 +13,8 @@ create table user_profiles(id uuid primary key,booking_count bigint,total_spent_
 create table cleaners(id uuid primary key,joined_at timestamptz,created_at timestamptz,full_name text);
 create table team_members(team_id uuid,cleaner_id uuid);
 create table recurring_bookings(id uuid primary key,paystack_authorization_code text,updated_at timestamptz);
-create table bookings(recurring_id uuid,currency text, paystack_reference text,customer_email text,customer_id uuid,selected_cleaner_id uuid,assignment_type text,payment_status text,payment_completed_at timestamptz,created_at timestamptz,updated_at timestamptz,refund_status text,payment_mismatch boolean,id uuid primary key,check(not((cleaner_id is not null or selected_cleaner_id is not null) and status='pending')),date text,time text,assigned_at timestamptz,service_slug text,base_amount_cents int,service_fee_cents int,total_paid_zar numeric,total_paid_cents int,amount_paid_cents int,price_snapshot jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,team_id uuid,is_team_job boolean,cleaner_count int,team_member_count_snapshot int,
+create table monthly_invoices(id uuid primary key,customer_id uuid,status text,total_amount_cents bigint,amount_paid_cents bigint);
+create table bookings(monthly_invoice_id uuid,billing_type text,paid_at timestamptz,completed_at timestamptz,recurring_id uuid,currency text, paystack_reference text,customer_email text,customer_id uuid,selected_cleaner_id uuid,assignment_type text,payment_status text,payment_completed_at timestamptz,created_at timestamptz,updated_at timestamptz,refund_status text,payment_mismatch boolean,id uuid primary key,check(not((cleaner_id is not null or selected_cleaner_id is not null) and status='pending')),date text,time text,assigned_at timestamptz,service_slug text,base_amount_cents int,service_fee_cents int,total_paid_zar numeric,total_paid_cents int,amount_paid_cents int,price_snapshot jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,team_id uuid,is_team_job boolean,cleaner_count int,team_member_count_snapshot int,
 status text,payout_id uuid,payout_status text,payout_paid_at timestamptz,payout_frozen_cents int,
 cleaner_payout_cents int,cleaner_bonus_cents int,display_earnings_cents int,internal_earnings_cents int,payout_earnings_cents int,cleaner_earnings_total_cents int,company_revenue_cents int,
 cleaner_share_percentage numeric,earnings_summary jsonb,cleaner_line_earnings_finalized_at timestamptz,earnings_model_version text,payout_percentage numeric,payout_type text,
@@ -41,6 +42,7 @@ await db.query(`update cleaner_earnings_adjustments set created_by=$1,created_by
 await db.exec(`insert into bookings(id,date,status,paystack_reference,currency) values('eeeeeeee-0000-4000-8000-000000000001',null,'pending_payment','undated-charge','ZAR'),('eeeeeeee-0000-4000-8000-000000000002',null,'pending_payment',null,'ZAR')`);
 await db.exec(`insert into bookings(id,date,status,paystack_reference,currency) values('eeeeeeee-0000-4000-8000-000000000003','2026-02-30','pending_payment','invalid-day','ZAR'),('eeeeeeee-0000-4000-8000-000000000004','bad-date','pending_payment','invalid-text','ZAR')`);
 await db.exec(`insert into bookings(id,date,status,paystack_reference,currency) values('eeeeeeee-0000-4000-8000-000000000005',null,'pending_payment','eeeeeeee-0000-4000-8000-000000000005','ZAR')`);
+await db.exec(`insert into bookings(id,date,status,monthly_invoice_id,billing_type,payment_status,amount_paid_cents,total_paid_zar,payout_frozen_cents) values('eeeeeeee-0000-4000-8000-000000000006','2026-09-30','completed','dddddddd-0000-4000-8000-000000000001','monthly','pending_monthly',0,10,77)`);
 const convergence=await fs.readFile('supabase/migrations/20261014145923_audit_03c02_verified_provider_convergence.sql','utf8');
 await db.exec(convergence.slice(convergence.indexOf('create or replace function public.audit_03c02_guard_payout_item()'),convergence.indexOf('create or replace function public.audit_03c02_guard_payout_run()')));
 for(const t of ['bookings','cleaner_earnings','booking_roster_member_payouts','team_job_member_payouts']) await db.exec(`create trigger audit_03c02_existing_boundary before insert or update on ${t} for each row execute function audit_03c02_guard_payout_item()`);
@@ -221,5 +223,22 @@ assert.deepEqual((await db.query('select booking_count::int n,total_spent_cents:
 await reject(`select audit_03c02_record_payment_receipt($1,'wrong',1000)`,[aliasId]);
 await reject(`select audit_03c02_record_payment_receipt($1,'verified-new-charge',999)`,[aliasId]);
 for(const role of ['anon','authenticated','service_role']){assert.equal((await db.query(`select has_function_privilege($1,'audit_03c02_record_payment_receipt(uuid,text,bigint)','execute') ok`,[role])).rows[0].ok,role==='service_role');checks++;}
+const invoiceId='dddddddd-0000-4000-8000-000000000001',monthlyChild='eeeeeeee-0000-4000-8000-000000000006';
+await db.query("insert into monthly_invoices values($1,$2,'sent',1000,0)",[invoiceId,cid]);
+await reject("update monthly_invoices set status='paid',amount_paid_cents=999 where id=$1",[invoiceId]);
+await db.exec("alter table bookings add constraint reject_monthly_cash check(billing_type is distinct from 'monthly' or amount_paid_cents=0) not valid");
+await reject("update monthly_invoices set status='paid',amount_paid_cents=1000 where id=$1",[invoiceId]);
+assert.equal((await db.query('select status from monthly_invoices where id=$1',[invoiceId])).rows[0].status,'sent');checks++;
+assert.equal((await db.query('select amount_paid_cents from bookings where id=$1',[monthlyChild])).rows[0].amount_paid_cents,0);checks++;
+await db.exec('alter table bookings drop constraint reject_monthly_cash');
+await db.query("update monthly_invoices set status='paid',amount_paid_cents=1000 where id=$1",[invoiceId]);checks++;
+assert.deepEqual((await db.query('select payment_status,amount_paid_cents,payout_frozen_cents,payout_status from bookings where id=$1',[monthlyChild])).rows[0],{payment_status:'success',amount_paid_cents:1000,payout_frozen_cents:77,payout_status:null});checks++;
+await db.query('select audit_03c02_settle_historical_monthly_child($1,$2)',[invoiceId,monthlyChild]);checks++;
+await reject('select audit_03c02_settle_historical_monthly_child($1,$2)',[old,monthlyChild]);
+await reject('update bookings set payout_frozen_cents=99 where id=$1',[monthlyChild]);
+for(const role of ['anon','authenticated','service_role']){
+ assert.equal((await db.query("select has_function_privilege($1,'audit_03c02_settle_historical_monthly_child(uuid,uuid)','execute') ok",[role])).rows[0].ok,role==='service_role');checks++;
+ assert.equal((await db.query("select has_function_privilege($1,'audit_03c02_apply_historical_monthly_child(uuid,uuid)','execute') ok",[role])).rows[0].ok,false);checks++;
+}
 console.log(`PASS ${checks} isolated PostgreSQL boundary checks (minimal schema; not live staging proof)`);
 await db.close();

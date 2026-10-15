@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { refreshRecurringBookingPaymentState } from "@/lib/booking/bookingOperations";
@@ -13,6 +14,7 @@ import { settleMonthlyInvoiceChildBooking } from "@/lib/monthlyInvoice/settleMon
 
 export type MonthlyInvoiceSettlementChildRow = {
   id: string;
+  date?:string|null;
   total_paid_zar: number | null;
   amount_paid_cents: number | null;
   display_earnings_cents: number | null;
@@ -61,7 +63,8 @@ export async function settleMonthlyInvoiceChildren(
       total_paid_zar: b.total_paid_zar,
       amount_paid_cents: b.amount_paid_cents,
     });
-    let frozen = resolveCleanerFrozenCentsForSettlement({
+    const historical='date' in b && !isCurrentPayoutVisitDate(b.date);
+    let frozen = historical?0:resolveCleanerFrozenCentsForSettlement({
       display_earnings_cents: b.display_earnings_cents,
       cleaner_payout_cents: b.cleaner_payout_cents,
     });
@@ -70,7 +73,7 @@ export async function settleMonthlyInvoiceChildren(
     // booking-wide earnings total is positive. Do not strand a paid monthly
     // invoice child in pending_monthly because of that narrower legacy shape.
     // Reuse the existing P1 earnings resolver instead of inventing a second rule.
-    if (frozen == null || frozen <= 0) {
+    if (!historical && (frozen == null || frozen <= 0)) {
       const { data: basisRow } = await admin
         .from("bookings")
         .select("cleaner_earnings_total_cents")
@@ -82,7 +85,7 @@ export async function settleMonthlyInvoiceChildren(
       });
     }
 
-    if (frozen == null || frozen <= 0) {
+    if (!historical && (frozen == null || frozen <= 0)) {
       const error = `booking_missing_cleaner_earnings_basis:${b.id}`;
       failures.push({ bookingId: b.id, error });
       await logSystemEvent({
@@ -97,7 +100,7 @@ export async function settleMonthlyInvoiceChildren(
     const res = await settleMonthlyInvoiceChildBooking(admin, {
       bookingId: b.id,
       amountPaidCents: allocatedCents,
-      payoutFrozenCents: frozen,
+      payoutFrozenCents: frozen??0,
     });
     if (!res.ok) {
       failures.push({ bookingId: b.id, error: res.error });

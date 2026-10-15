@@ -119,7 +119,7 @@ grant execute on function public.audit_03c02_record_historical_capture(uuid,text
 create or replace function public.audit_03c02_guard_final_booking_financials()
 returns trigger language plpgsql security definer set search_path=pg_catalog as $$
 declare v_keys text[] := array[
- 'date','time','assigned_at','service','service_slug','base_amount_cents','service_fee_cents','total_paid_zar','total_paid_cents','amount_paid_cents','price_snapshot','cleaner_id','payout_owner_cleaner_id','team_id','is_team_job','cleaner_count','team_member_count_snapshot',
+ 'monthly_invoice_id','billing_type','date','time','assigned_at','service','service_slug','base_amount_cents','service_fee_cents','total_paid_zar','total_paid_cents','amount_paid_cents','price_snapshot','cleaner_id','payout_owner_cleaner_id','team_id','is_team_job','cleaner_count','team_member_count_snapshot',
  'cleaner_payout_cents','cleaner_bonus_cents','display_earnings_cents','internal_earnings_cents',
  'payout_earnings_cents','cleaner_earnings_total_cents','company_revenue_cents','payout_frozen_cents',
  'cleaner_share_percentage','earnings_summary','cleaner_line_earnings_finalized_at','earnings_model_version','payout_percentage','payout_type',
@@ -142,6 +142,10 @@ begin
    or (coalesce(nullif(current_setting('request.jwt.claim.role',true),''),current_setting('request.jwt.claims',true)::jsonb->>'role')='service_role'
      and public.audit_03c02_verified_booking_refund(to_jsonb(OLD),to_jsonb(NEW))) then
    v_keys:=array_remove(array_remove(array_remove(v_keys,'total_paid_zar'),'total_paid_cents'),'amount_paid_cents');
+ end if;
+ if NEW.monthly_invoice_id is not null and NEW.monthly_invoice_id is not distinct from OLD.monthly_invoice_id
+   and current_setting('shalean.verified_monthly_invoice',true)=NEW.monthly_invoice_id::text then
+   v_keys:=array_remove(v_keys,'amount_paid_cents');
  end if;
  select jsonb_object_agg(key,value) into v_before from jsonb_each(to_jsonb(OLD)) where key=any(v_keys);
  select jsonb_object_agg(key,value) into v_after from jsonb_each(to_jsonb(NEW)) where key=any(v_keys);
