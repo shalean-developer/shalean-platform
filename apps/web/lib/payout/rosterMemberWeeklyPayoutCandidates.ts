@@ -1,3 +1,4 @@
+import { loadMemberPayoutInvoiceStatuses } from "@/lib/payout/memberPayoutInvoiceStatuses";
 import { currentPayoutBatchDayYmd, isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -37,8 +38,8 @@ export async function listRosterMemberWeeklyPayoutCandidates(params: {
         .order("id", { ascending: true })
         .range(from, to),
     );
-  } catch {
-    return [];
+  } catch (error) {
+    throw new Error(`Member payout rows lookup failed: ${error instanceof Error ? error.message : String(error)}`);
   }
   if (!memberRows.length) return [];
 
@@ -59,7 +60,7 @@ export async function listRosterMemberWeeklyPayoutCandidates(params: {
       .in("id", idChunk)
       .eq("status", "completed")
       .eq("is_test", false);
-    if (error) return [];
+    if (error) throw new Error(`Member payout booking lookup failed: ${error.message}`);
     bookingRows.push(...(data ?? []));
   }
   if (!bookingRows.length) return [];
@@ -69,6 +70,8 @@ export async function listRosterMemberWeeklyPayoutCandidates(params: {
     const row = raw as BookingRowForWeeklyBatchEligibility & { id: string };
     if (row.id) bookingById.set(row.id, row);
   }
+
+  const memberInvoiceStatuses = await loadMemberPayoutInvoiceStatuses(admin, [...bookingById.values()], invoiceStatusById);
 
   const out: RosterMemberWeeklyPayoutCandidate[] = [];
   for (const raw of memberRows) {
@@ -88,7 +91,7 @@ export async function listRosterMemberWeeklyPayoutCandidates(params: {
     const ymd = currentPayoutBatchDayYmd(booking);
     if (!ymd || !isYmdInInclusiveRange(ymd, periodStart, periodEnd)) continue;
 
-    const gate = bookingPayableForWeeklyBatch(booking, invoiceStatusById);
+    const gate = bookingPayableForWeeklyBatch(booking, memberInvoiceStatuses);
     if (!gate.payable) continue;
 
     const payoutCents = Math.max(0, Math.floor(Number(member.payout_cents) || 0));
