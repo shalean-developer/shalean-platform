@@ -1,3 +1,5 @@
+import { bookingHasAuthoritativeSettledPaymentStatus } from "@/lib/booking/bookingPaymentSettlementState";
+
 /** Read-only Office payment display. Quote/legacy mirrors cannot override explicit cash cents. */
 type BookingPayment = {
   amount_paid_cents?: unknown;
@@ -19,7 +21,9 @@ function cents(value: unknown): number | null {
   return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : null;
 }
 function bookingSettled(booking: BookingPayment): boolean {
-  return ['paid', 'success', 'completed', 'settled'].includes(normalized(booking.payment_status));
+  const status = normalized(booking.payment_status);
+  // pending_monthly authorizes invoice billing; it does not establish collection.
+  return status !== 'pending_monthly' && (bookingHasAuthoritativeSettledPaymentStatus(status) || status === 'settled');
 }
 export function officeBookingCollectedCents(booking: BookingPayment): number {
   // Explicit zero is authoritative, even when an old quote remains in a mirror.

@@ -22,3 +22,12 @@ describe('Office collected payment display', () => {
     for (const payment of [{settlement_status:'failed'},{settlement_status:'reversed'},{payment_channel:'refund'}]) expect(officeBookingPaymentDisplay({amount_paid_cents:0,payment_status:'pending'},{amount_cents:65000,paid_at:'2026-10-15',...payment})).toEqual({collectedCents:0,settled:false});
   });
 });
+
+it('preserves canonical succeeded historical payment status', () => {
+  expect(officeBookingPaymentDisplay({payment_status:'succeeded',total_paid_zar:650})).toEqual({collectedCents:65000,settled:true});
+});
+
+it('does not treat monthly billing authorization as collected cash', () => {
+  expect(officeBookingPaymentDisplay({payment_status:'pending_monthly',amount_paid_cents:0,total_paid_zar:650})).toEqual({collectedCents:0,settled:false});
+  expect(officeBookingPaymentDisplay({payment_status:'pending_monthly',total_paid_zar:650})).toEqual({collectedCents:0,settled:false});
+});
