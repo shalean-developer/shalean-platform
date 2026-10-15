@@ -25,6 +25,9 @@
     "lint:booking-core": "npm --prefix apps/web run lint:booking-core",
     "typecheck": "npm --prefix apps/web run typecheck",
     "test:critical": "npm --prefix apps/web run test:critical",
-    "audit:production": "npm --prefix apps/web run audit:production"
+    "audit:production": "npm --prefix apps/web run audit:production",
+    "audit:paired-ui:plan": "node scripts/audits/paired-ui-fixture.mjs --plan",
+    "audit:paired-ui:apply": "node scripts/audits/paired-ui-fixture.mjs --apply",
+    "audit:paired-ui:retire": "node scripts/audits/paired-ui-fixture.mjs --retire"
   }
 }

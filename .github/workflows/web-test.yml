@@ -39,13 +39,17 @@ jobs:
           CHANGED="$(git diff --name-only "$BASE" "$HEAD" || true)"
           echo "Changed paths:"
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -Eq '^(apps/web/|packages/|supabase/migrations/|scripts/audits/paired-ledger|\.github/workflows/web-test\.yml)'; then
+          if echo "$CHANGED" | grep -Eq '^(apps/web/|packages/|supabase/migrations/|scripts/audits/paired-ledger|scripts/audits/paired-ui-fixture|\.github/workflows/web-test\.yml)'; then
             echo "run_suite=true" >> "$GITHUB_OUTPUT"
             echo "Web/package paths changed — running vitest suite."
           else
             echo "run_suite=false" >> "$GITHUB_OUTPUT"
             echo "No web/package path changes — reporting successful no-op for required vitest check."
           fi
+
+      - name: Paired UI fixture safety tests
+        working-directory: .
+        run: node --test scripts/audits/paired-ui-fixture.test.mjs
 
       - name: Docs-only / unrelated change — required-check no-op
         if: steps.filter.outputs.run_suite != 'true'
