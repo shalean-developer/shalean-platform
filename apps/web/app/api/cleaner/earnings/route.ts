@@ -33,6 +33,7 @@ import type { CleanerPayoutSummaryRow } from "@/lib/cleaner/cleanerPayoutSummary
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
 import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { fetchMemberRailBookingIds } from "@/lib/cleaner/soloLedgerShadowScope";
 import { fetchViewerPayoutByBookingIds } from "@/lib/cleaner/fetchViewerPayoutByBookingIds";
 import { fetchCleanerAllTimeEarningsCents } from "@/lib/cleaner/fetchCleanerAllTimeEarningsCents";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -162,12 +163,11 @@ export async function GET(request: Request) {
   const statusParam = String(url.searchParams.get("status") ?? "all").trim().toLowerCase();
   const statusFilter =
     statusParam === "pending" || statusParam === "approved" || statusParam === "paid" ? statusParam : "all";
-  const useLedgerTotalsParam = String(url.searchParams.get("use_ledger_totals") ?? "")
-    .trim()
-    .toLowerCase();
-  const useLedgerTotalsFromQuery = useLedgerTotalsParam === "true" || useLedgerTotalsParam === "1";
-  const useLedgerTotalsEnv = process.env.USE_LEDGER_TOTALS === "true";
-  const useLedgerTotals = useLedgerTotalsEnv || useLedgerTotalsFromQuery;
+  // Stage 03 has not approved a ledger flip. A query/env flag cannot override
+  // booking/member truth while the solo ledger deliberately excludes member rails.
+  const ledgerTotalsRequested = process.env.USE_LEDGER_TOTALS === "true" ||
+    ["true", "1"].includes(String(url.searchParams.get("use_ledger_totals") ?? "").trim().toLowerCase());
+  const useLedgerTotals = false;
 
   const ledgerTotalsQuery = admin
     .from("cleaner_earnings")
@@ -216,14 +216,12 @@ export async function GET(request: Request) {
         .maybeSingle(),
       ledgerTotalsQuery,
       ledgerFilteredQuery,
-      useLedgerTotals
-        ? Promise.resolve({ total: 0, error: null as string | null })
-        : fetchCleanerAllTimeEarningsCents(admin, cleanerId)
-            .then((total) => ({ total, error: null as string | null }))
-            .catch((err: unknown) => ({
-              total: 0,
-              error: err instanceof Error ? err.message : "Could not load cleaner all-time earnings.",
-            })),
+      fetchCleanerAllTimeEarningsCents(admin, cleanerId)
+        .then((total) => ({ total, error: null as string | null }))
+        .catch((err: unknown) => ({
+          total: 0,
+          error: err instanceof Error ? err.message : "Could not load cleaner all-time earnings.",
+        })),
     ]);
 
   if (error) {
@@ -257,8 +255,12 @@ export async function GET(request: Request) {
 
   const bookingIds = bookings.map((b) => String(b.id ?? "").trim()).filter(Boolean);
   let viewerPayoutByBooking: Map<string, number>;
+  let memberRailBookingIds: Set<string>;
   try {
-    viewerPayoutByBooking = await fetchViewerPayoutByBookingIds(admin, cleanerId, bookingIds);
+    [viewerPayoutByBooking, memberRailBookingIds] = await Promise.all([
+      fetchViewerPayoutByBookingIds(admin, cleanerId, bookingIds),
+      fetchMemberRailBookingIds(admin, bookings as BookingEarningsRow[]),
+    ]);
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Could not load cleaner payout allocations." },
@@ -542,11 +544,15 @@ export async function GET(request: Request) {
   }));
   const asOfMs = Date.parse(as_of);
   const shadowOpts = { asOfMs: Number.isFinite(asOfMs) ? asOfMs : Date.now() };
-  const finance_shadow_core = computeEarningsFinanceShadow(shadowCards, ledgerShadowRows, shadowOpts);
-  const weekSliceCards = filterPayoutCardsForJhbIsoWeek(shadowCards, new Date(as_of));
+  const soloShadowCards = shadowCards.filter(card => !memberRailBookingIds.has(card.booking_id));
+  const finance_shadow_core = computeEarningsFinanceShadow(soloShadowCards, ledgerShadowRows, shadowOpts);
+  const weekSliceCards = filterPayoutCardsForJhbIsoWeek(soloShadowCards, new Date(as_of));
   const finance_shadow_jhb_week = computeEarningsFinanceShadow(weekSliceCards, ledgerShadowRows, shadowOpts);
   const finance_shadow = {
     ...finance_shadow_core,
+    scope: "solo_ledger_only" as const,
+    excluded_member_rail_count: memberRailBookingIds.size,
+    solo_slice_ready: isEarningsLedgerFlipReady(finance_shadow_core),
     jhb_week: finance_shadow_jhb_week,
   };
   const cutoff_assignment_probe = computeCutoffAssignmentProbe(new Date(as_of));
@@ -590,7 +596,8 @@ export async function GET(request: Request) {
     });
   }
 
-  const earnings_ledger_flip_ready = isEarningsLedgerFlipReady(finance_shadow);
+  // Slice agreement is diagnostic only, never authority for a whole-system flip.
+  const earnings_ledger_flip_ready = false;
   metrics.increment("cleaner.earnings_ledger_flip_ready", {
     ready: earnings_ledger_flip_ready ? 1 : 0,
     use_ledger_totals: useLedgerTotals,
@@ -603,12 +610,12 @@ export async function GET(request: Request) {
     use_ledger_totals: useLedgerTotals,
   });
 
-  const source_of_truth = useLedgerTotals ? ("ledger" as const) : ("booking" as const);
-  const total_all_time = useLedgerTotals ? ledger_total_all_time : bookingAllTimeResult.total;
+  const source_of_truth = "booking" as const;
+  const total_all_time = bookingAllTimeResult.total;
   const summaryPayload = {
-    pending_cents: useLedgerTotals ? total_pending : pending_cents,
-    eligible_cents: useLedgerTotals ? total_approved : eligible_cents,
-    paid_cents: useLedgerTotals ? total_paid : paid_cents,
+    pending_cents,
+    eligible_cents,
+    paid_cents,
     invalid_cents,
     frozen_batch_cents,
     today_cents,
@@ -623,10 +630,12 @@ export async function GET(request: Request) {
     as_of,
     /**
      * `"booking"`: card buckets + `rows` are booking-derived; ledger is shadowed.
-     * `"ledger"` (with `?use_ledger_totals=true`): summary pending/eligible/paid mirror full-ledger totals; rows unchanged.
+     * Ledger totals remain diagnostic until all payout rails have converged.
      */
     source_of_truth,
     use_ledger_totals: useLedgerTotals,
+    ledger_totals_requested: ledgerTotalsRequested,
+    ledger_totals_blocked_reason: "ledger_convergence_not_approved",
     earnings_ledger_flip_ready,
     finance_shadow,
     cutoff_assignment_probe,
@@ -636,6 +645,7 @@ export async function GET(request: Request) {
     total_all_time,
     summary: summaryPayload,
     line_item_ledger: {
+      total_all_time_cents: ledger_total_all_time,
       total_pending_cents: ledger_pending,
       total_approved_cents: ledger_approved,
       total_paid_cents: ledger_paid,
