@@ -87,9 +87,21 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run audit:production
 
+      - name: Office booking payment display regression
+        if: steps.filter.outputs.run_suite == 'true'
+        run: npm run test -- lib/booking/__tests__/officeBookingPaymentDisplay.test.ts
+
       - name: Critical tests (payments + referrals)
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test:critical
+
+      - name: Paired-ledger isolated PostgreSQL regression
+        if: steps.filter.outputs.run_suite == 'true'
+        working-directory: .
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/paired-ledger" --no-save --package-lock=false --ignore-scripts @electric-sql/pglite@0.5.10
+          AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node scripts/audits/paired-ledger-isolated.mjs
 
       - name: Mandatory privileged Office email verification security contract
         if: steps.filter.outputs.run_suite == 'true'

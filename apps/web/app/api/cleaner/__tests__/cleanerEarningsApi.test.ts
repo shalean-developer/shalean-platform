@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type Row = Record<string, unknown>;
 
@@ -198,9 +198,48 @@ class MockSupabaseClient {
 }
 
 describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
+  afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     vi.restoreAllMocks();
     mockState.cleanerId = "cleaner-1";
+  });
+
+  it.each([
+    { cleaner: "cleaner-1", status: "pending", flag: "query" },
+    { cleaner: "cleaner-2", status: "pending", flag: "env" },
+    { cleaner: "cleaner-1", status: "paid", flag: "env" },
+    { cleaner: "cleaner-2", status: "paid", flag: "query" },
+  ])("keeps paired $status earnings correct for $cleaner with $flag ledger request", async ({ cleaner, status, flag }) => {
+    mockState.cleanerId = cleaner;
+    vi.stubEnv("USE_LEDGER_TOTALS", flag === "env" ? "true" : "false");
+    mockState.admin = new MockSupabaseClient({
+      cleaners: [{ id: cleaner, full_name: cleaner }],
+      bookings: [{ id: "11111111-1111-4111-8111-111111111111", cleaner_id: "cleaner-1", payout_owner_cleaner_id: "cleaner-1",
+        status: "completed", is_test: false, is_team_job: false, date: "2026-10-01",
+        completed_at: "2026-10-01T10:00:00Z", display_earnings_cents: 26000,
+        cleaner_earnings_total_cents: 52000, payout_status: status,
+        payout_frozen_cents: status === "paid" ? 26000 : null,
+        payout_paid_at: status === "paid" ? "2026-10-02T10:00:00Z" : null }],
+      booking_cleaners: [{ id: "r1", booking_id: "11111111-1111-4111-8111-111111111111", cleaner_id: "cleaner-1" },
+        { id: "r2", booking_id: "11111111-1111-4111-8111-111111111111", cleaner_id: "cleaner-2" }],
+      booking_roster_member_payouts: [{ booking_id: "11111111-1111-4111-8111-111111111111", cleaner_id: "cleaner-2", payout_cents: 25000, bonus_cents: 1000 }],
+      cleaner_earnings: [{ id: "legacy", booking_id: "11111111-1111-4111-8111-111111111111", cleaner_id: "cleaner-1", amount_cents: 52000, status: "pending" }],
+    });
+    const { GET } = await import("@/app/api/cleaner/earnings/route");
+    const res = await GET(new Request("http://localhost/api/cleaner/earnings" + (flag === "query" ? "?use_ledger_totals=true" : "")));
+    const json = await res.json();
+    expect(res.status).toBe(200);
+    expect(json.source_of_truth).toBe("booking");
+    expect(json.use_ledger_totals).toBe(false);
+    expect(json.ledger_totals_requested).toBe(true);
+    expect(json.total_all_time).toBe(26000);
+    expect(json.summary[status + "_cents"]).toBe(26000);
+    expect(json.rows[0].amount_cents).toBe(26000);
+    expect(json.finance_shadow.scope).toBe("solo_ledger_only");
+    expect(json.finance_shadow.excluded_member_rail_count).toBe(1);
+    expect(json.finance_shadow.delta_all_cents).toBe(0);
+    expect(json.finance_shadow.missing_ledger_expected_count).toBe(0);
+    expect(json.earnings_ledger_flip_ready).toBe(false);
   });
 
   it("earnings feed excludes a completed visit whose payout attribution was explicitly removed", async () => {

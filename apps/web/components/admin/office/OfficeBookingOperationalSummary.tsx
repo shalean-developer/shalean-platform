@@ -1,5 +1,7 @@
 "use client";
 
+import { officeBookingCollectedCents, officeBookingPaymentDisplay } from "@/lib/booking/officeBookingPaymentDisplay";
+
 import { useEffect, useMemo, useState } from "react";
 import {
   BadgeCheck,
@@ -102,10 +104,7 @@ function titleCaseService(value: string | null | undefined): string {
 
 /** Cash actually collected. Never fall back to the quote/total_price. */
 function bookingCollectedZar(booking: SummaryBooking): number {
-  const cents = numberOrNull(booking.total_paid_cents) ?? numberOrNull(booking.amount_paid_cents);
-  if (cents != null && cents > 0) return cents / 100;
-  const paid = numberOrNull(booking.total_paid_zar);
-  return paid != null && paid > 0 ? paid : 0;
+  return officeBookingCollectedCents(booking) / 100;
 }
 
 function bookingDurationMinutes(booking: SummaryBooking): number | null {
@@ -252,9 +251,7 @@ function extractTeamEarnings(booking: SummaryBooking, roster: RosterRow[]): { to
 }
 
 function isPaidBooking(booking: SummaryBooking): boolean {
-  if (bookingCollectedZar(booking) > 0) return true;
-  const status = String(booking.payment_status ?? "").trim().toLowerCase();
-  return ["paid", "success", "completed", "settled"].includes(status);
+  return officeBookingPaymentDisplay(booking).settled;
 }
 
 export function OfficeBookingOperationalSummary({ bookingId }: { bookingId: string }) {
@@ -414,7 +411,7 @@ export function OfficeBookingOperationalSummary({ bookingId }: { bookingId: stri
             </div>
             <div className="text-right">
               {pricing.originalTotal != null ? <p className="text-xs text-slate-500">Original quote {moneyZar(pricing.originalTotal)}</p> : null}
-              <p className={`text-lg font-bold ${collected > 0 ? "text-emerald-700" : "text-amber-700"}`}>{collected > 0 ? `Paid ${moneyZar(pricing.paidTotal)}` : "Payment not collected"}</p>
+              <p className={`text-lg font-bold ${collected > 0 ? "text-emerald-700" : "text-amber-700"}`}>{collected > 0 ? `Paid ${moneyZar(collected)}` : paid ? "Settled at R0" : "Payment not collected"}</p>
             </div>
           </div>
           <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_280px]">
@@ -430,7 +427,7 @@ export function OfficeBookingOperationalSummary({ bookingId }: { bookingId: stri
               <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Reconciliation</p>
               {pricing.originalTotal != null ? <MoneyRow label="Original total" value={moneyZar(pricing.originalTotal)} /> : null}
               {pricing.discount > 0 ? <MoneyRow label="Total discounts / credits" value={`− ${moneyZar(pricing.discount)}`} /> : null}
-              <MoneyRow label="Customer paid" value={collected > 0 ? moneyZar(pricing.paidTotal) : "Not collected"} strong />
+              <MoneyRow label="Customer paid" value={collected > 0 ? moneyZar(collected) : paid ? "R 0 (settled)" : "Not collected"} strong />
               <div className="mt-3 border-t border-slate-200 pt-3">
                 <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500"><Sparkles className="h-3.5 w-3.5" /> Extras</div>
                 {pricing.extras.length ? pricing.extras.map((extra) => (

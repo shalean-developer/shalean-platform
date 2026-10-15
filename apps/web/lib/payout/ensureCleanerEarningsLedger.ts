@@ -84,6 +84,19 @@ export async function ensureCleanerEarningsLedgerRow(params: {
   if (row.is_team_job === true) {
     return { ok: true, skipped: true, reason: "team_job" };
   }
+  // A booking-wide total cannot represent two independent roster earnings.
+  const { data: roster, error: rosterError } = await admin
+    .from("booking_cleaners")
+    .select("cleaner_id")
+    .eq("booking_id", bid);
+  if (rosterError) return { ok: false, error: rosterError.message };
+  const participantIds = new Set(
+    (roster ?? []).map((member: { cleaner_id?: string | null }) => String(member.cleaner_id ?? "").trim()).filter(Boolean),
+  );
+  if (participantIds.size >= 2) {
+    return { ok: true, skipped: true, reason: "paired_roster_job" };
+  }
+
   if (row.cleaner_line_earnings_finalized_at == null || String(row.cleaner_line_earnings_finalized_at).trim() === "") {
     return { ok: true, skipped: true, reason: "line_earnings_not_finalized" };
   }
