@@ -44,7 +44,15 @@ class LedgerQueryBuilder {
     return this.execute();
   }
 
+  then<TResult1 = { data: unknown; error: { message: string; code?: string } | null }, TResult2 = never>(
+    onfulfilled?: ((value: { data: unknown; error: { message: string; code?: string } | null }) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): Promise<TResult1 | TResult2> {
+    return this.execute().then(onfulfilled, onrejected);
+  }
+
   private async execute(): Promise<{ data: unknown; error: { message: string; code?: string } | null }> {
+    if (this.db.readErrors[this.table]) return { data: null, error: { message: this.db.readErrors[this.table] } };
     if (this.op === "insert") {
       const bookingId = String(this.insertRow?.booking_id ?? "");
       const existing = (this.db.tables.cleaner_earnings ?? []).find((r) => r.booking_id === bookingId);
@@ -73,6 +81,7 @@ class LedgerQueryBuilder {
 class MockLedgerDb {
   tables: Record<string, Row[]> = {};
   insertCount = 0;
+  readErrors: Record<string, string> = {};
 
   from(table: string) {
     return new LedgerQueryBuilder(table, this);
@@ -159,6 +168,30 @@ describe("ensureCleanerEarningsLedgerRow scenarios", () => {
   function seedBooking(row: Row) {
     db.tables.bookings = [{ id: "b1", ...row }];
   }
+
+  it.each([
+    { roster: ["c1", "c2"], skip: true },
+    { roster: ["c1"], skip: false },
+    { roster: ["c1", "c1", null, ""], skip: false },
+    { roster: [], skip: false },
+  ])("uses distinct roster participants: $roster", async ({ roster, skip }) => {
+    seedBooking({ status: "completed", cleaner_id: "c1", is_team_job: false,
+      cleaner_line_earnings_finalized_at: "2026-10-01T10:00:00Z", cleaner_earnings_total_cents: 52000 });
+    db.tables.booking_cleaners = roster.map(cleaner_id => ({ booking_id: "b1", cleaner_id }));
+    const result = await ensureCleanerEarningsLedgerRow({ admin: db as unknown as never, bookingId: "b1" });
+    expect(result).toEqual(skip ? { ok: true, skipped: true, reason: "paired_roster_job" }
+      : { ok: true, skipped: false, earnings_id: "earn-1" });
+    expect(db.insertCount).toBe(skip ? 0 : 1);
+  });
+
+  it("fails closed when roster lookup fails", async () => {
+    seedBooking({ status: "completed", cleaner_id: "c1", is_team_job: false,
+      cleaner_line_earnings_finalized_at: "2026-10-01T10:00:00Z", cleaner_earnings_total_cents: 52000 });
+    db.readErrors.booking_cleaners = "roster unavailable";
+    expect(await ensureCleanerEarningsLedgerRow({ admin: db as unknown as never, bookingId: "b1" }))
+      .toEqual({ ok: false, error: "roster unavailable" });
+    expect(db.insertCount).toBe(0);
+  });
 
   it("1) single cleaner completed paid booking creates ledger row", async () => {
     seedBooking({
