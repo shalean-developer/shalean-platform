@@ -54,10 +54,19 @@ begin
    or not (p_expected ?& array['status','paystack_reference','customer_email','cleaner_id','selected_cleaner_id','assignment_type']) then
    raise exception 'historical_capture_identity_mismatch' using errcode='23514';
  end if;
+ if (b.customer_id is not null and nullif(p_effect_context->>'customerAuthId','') is not null
+     and b.customer_id is distinct from (p_effect_context->>'customerAuthId')::uuid)
+   or (nullif(btrim(b.customer_email),'') is not null and nullif(btrim(p_effect_context->>'customerEmail'),'') is not null
+     and lower(btrim(b.customer_email))<>lower(btrim(p_effect_context->>'customerEmail'))) then
+   raise exception 'historical_capture_identity_mismatch' using errcode='23514';
+ end if;
+ -- Only fill missing verified identity; never rewrite established ownership or email.
+ b.customer_id:=coalesce(b.customer_id,nullif(p_effect_context->>'customerAuthId','')::uuid);
+ if nullif(btrim(b.customer_email),'') is null then b.customer_email:=nullif(btrim(p_effect_context->>'customerEmail'),''); end if;
  if p_mismatch is not null then
    -- Keep foreign-currency/wrong-amount cash evidence separate from the old ZAR
    -- entitlement inputs. This is reconciliation, never a successful fulfillment.
-   update public.bookings set status='payment_mismatch',payment_mismatch=true,payment_completed_at=p_paid_at,
+   update public.bookings set customer_id=b.customer_id,customer_email=b.customer_email,status='payment_mismatch',payment_mismatch=true,payment_completed_at=p_paid_at,
      booking_snapshot=coalesce(b.booking_snapshot,'{}'::jsonb)||jsonb_build_object('verified_capture_mismatch',jsonb_build_object(
        'reference',p_reference,'amount_cents',p_amount_cents,'currency',p_currency,'paid_at',p_paid_at,'reason',p_mismatch)),
      updated_at=now() where id=b.id;
@@ -65,7 +74,7 @@ begin
  end if;
  prior_context:=current_setting('shalean.verified_booking_capture',true);
  perform set_config('shalean.verified_booking_capture',b.id::text,true);
- update public.bookings set paystack_reference=p_reference,amount_paid_cents=p_amount_cents,total_paid_cents=p_amount_cents,total_paid_zar=p_amount_cents::numeric/100,
+ update public.bookings set customer_id=b.customer_id,customer_email=b.customer_email,paystack_reference=p_reference,amount_paid_cents=p_amount_cents,total_paid_cents=p_amount_cents,total_paid_zar=p_amount_cents::numeric/100,
    payment_completed_at=p_paid_at,payment_status=case when b.payment_status='pending_monthly' then b.payment_status else 'success' end,
    status=case when b.cleaner_id is not null or b.selected_cleaner_id is not null then 'pending_assignment' else 'pending' end,updated_at=now() where id=b.id;
  perform set_config('shalean.verified_booking_capture',coalesce(prior_context,''),true);
@@ -83,7 +92,7 @@ begin
    'referralCode',coalesce(p_effect_context->>'referralCode',''),'effect',effect)
  from unnest(array['payment_state','cancel_recovery','receipt','referral','city','growth','conversion']) effect;
 
- select jsonb_build_object('id',id,'created_at',created_at) into result from public.bookings where id=b.id;
+ select jsonb_build_object('id',id,'created_at',created_at,'customer_id',customer_id) into result from public.bookings where id=b.id;
  return result;
 end; $$;
 revoke all on function public.audit_03c02_record_historical_capture(uuid,text,bigint,text,timestamptz,jsonb,text,uuid,jsonb) from public,anon,authenticated;

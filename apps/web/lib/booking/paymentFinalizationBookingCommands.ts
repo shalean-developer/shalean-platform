@@ -113,7 +113,7 @@ export async function finalizePendingPaymentBookingFromPaystack(params: {
     const {data,error}=await params.supabase.rpc('audit_03c02_record_historical_capture',{
       p_booking_id:observed.id,p_reference:row.paystack_reference,p_amount_cents:row.amount_paid_cents,
       p_currency:row.currency,p_paid_at:row.payment_completed_at,
-      ...(params.historicalEffectContext ? {p_effect_context:params.historicalEffectContext} : {}),
+      p_effect_context:{...params.historicalEffectContext,customerEmail:identity.identity.customerEmail,customerAuthId:identity.identity.customerAuthId},
       ...(params.verifiedMetadataBookingId ? {p_verified_booking_id:params.verifiedMetadataBookingId} : {}),
       ...(params.historicalMismatch ? {p_mismatch:params.historicalMismatch} : {}),
       p_expected:{status:observed.status,paystack_reference:observed.paystackReference,

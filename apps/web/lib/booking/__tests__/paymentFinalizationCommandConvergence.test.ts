@@ -366,10 +366,15 @@ describe('verified historical capture command',()=>{
  it('uses the restricted RPC with original identity and excludes payout/pricing fields',async()=>{
   const rpc=vi.fn().mockResolvedValue({data:{id:observed.id},error:null});const from=vi.fn();
   const result=await finalizePendingPaymentBookingFromPaystack({supabase:{rpc,from} as unknown as SupabaseClient,row,observed,ownershipColumn:'customer_id',historicalBooking:true,historicalEffectContext:{cityId:'city',referralCode:'REFER'}});
-  expect(rpc.mock.calls[0][1].p_effect_context).toEqual({cityId:'city',referralCode:'REFER'});
+  expect(rpc.mock.calls[0][1].p_effect_context).toEqual({cityId:'city',referralCode:'REFER',customerEmail:'customer@example.com',customerAuthId:null});
   expect(result).toEqual({data:{id:observed.id},error:null});expect(from).not.toHaveBeenCalled();
   expect(rpc).toHaveBeenCalledWith('audit_03c02_record_historical_capture',expect.objectContaining({p_booking_id:observed.id,p_reference:'charge-1',p_amount_cents:1000,p_expected:expect.objectContaining({cleaner_id:null,customer_id:null,status:'pending_payment'})}));
   expect(rpc.mock.calls[0][1]).not.toHaveProperty('base_amount_cents');
+ });
+ it('passes verified identity fills while retaining the original null comparison',async()=>{
+  const rpc=vi.fn().mockResolvedValue({data:{id:observed.id},error:null});
+  await finalizePendingPaymentBookingFromPaystack({supabase:{rpc} as unknown as SupabaseClient,row:{...row,customer_id:'resolved-owner'},observed:{...observed,customerEmail:null},ownershipColumn:'customer_id',historicalBooking:true});
+  expect(rpc).toHaveBeenCalledWith('audit_03c02_record_historical_capture',expect.objectContaining({p_effect_context:expect.objectContaining({customerEmail:'customer@example.com',customerAuthId:'resolved-owner'}),p_expected:expect.objectContaining({customer_id:null,customer_email:null})}));
  });
  it('passes the verified booking binding for an existing legacy reference alias',async()=>{
   const rpc=vi.fn().mockResolvedValue({data:{id:observed.id},error:null});
