@@ -98,6 +98,7 @@ function resumableClient(initial, fixture = { ids, TAG }) {
   const namespace = TAG.includes("956") ? "956" : "951";
   const state = { bookings: [initial], booking_cleaners: [{ booking_id: ids.booking, cleaner_id: ids.lead, role: 'lead' }], booking_roster_member_payouts: [], team_job_member_payouts: [], cleaner_earnings: [], recurring_bookings: [],
     cleaners: [ids.lead,ids.member].map((id,i) => ({ id, email: `audit${namespace}.${i ? 'member':'lead'}@example.com`, auth_user_id: id })) };
+  if (namespace==='956') state.recurring_bookings=[{id:ids.recurring,customer_id:'95610000-0000-4000-8000-000000000099',frequency:'weekly',status:'paused',earnings_policy:'legacy_july',legacy_earnings_cents:26000,price:650,booking_snapshot_template:{audit_fixture:TAG}}];
   let failTable = '';
   const writes = [];
   const admin = { state, writes, fail(table) { failTable=table; }, auth: { admin: { listUsers: async () => ({ data: { users: [...state.cleaners.map(c => ({id:c.auth_user_id,email:c.email,app_metadata:{audit_fixture:TAG,is_test:true,role:'cleaner'}})), {id:'95610000-0000-4000-8000-000000000099',email:`audit${namespace}.customer@example.com`,app_metadata:{audit_fixture:TAG,is_test:true,role:'customer'}}] } }) } },
@@ -176,7 +177,7 @@ test('fixed fixture resumes owned partial state and retains paused schedule on r
 test('fixed fixture rejects changed schedule instead of overwriting its policy', async () => {
   const p={...lockedFixture.fixturePlan(),customer_id:'95610000-0000-4000-8000-000000000099',is_test:true};
   const c=resumableClient(p,lockedFixture);
-  c.state.recurring_bookings.push({id:lockedFixture.ids.recurring,customer_id:p.customer_id,frequency:'weekly',status:'active',earnings_policy:'legacy_july',legacy_earnings_cents:26000,price:650});
+  c.state.recurring_bookings=[{id:lockedFixture.ids.recurring,customer_id:p.customer_id,frequency:'weekly',status:'active',earnings_policy:'legacy_july',legacy_earnings_cents:26000,price:650,booking_snapshot_template:{audit_fixture:lockedFixture.TAG}}];
   await assert.rejects(lockedFixture.applyFixture(c,p),/Changed fixed schedule status/);
   assert.equal(c.state.bookings[0].is_test,true);
   assert(!c.writes.some(w=>w.table==='recurring_bookings'));
@@ -194,4 +195,24 @@ test('fixed retirement blocks resumed, missing or foreign schedule before hiding
     assert.deepEqual(c.writes,[]);
     assert.equal(c.state.bookings[0].is_test,false);
   }
+});
+
+test('foreign or changed fixed schedule with no identities fails before any creation', async () => {
+  for (const old of [{booking_snapshot_template:{}},{booking_snapshot_template:{audit_fixture:lockedFixture.TAG},frequency:'weekly',status:'active',earnings_policy:'legacy_july',legacy_earnings_cents:26000,price:650}]) {
+    const c=client(t=>({data:t==='recurring_bookings'?[{id:lockedFixture.ids.recurring,...old}]:[]}));
+    let creates=0;
+    c.auth={admin:{listUsers:async()=>({data:{users:[]}}),createUser:async()=>{creates++;throw new Error('Unexpected create');}}};
+    await assert.rejects(lockedFixture.applyFixture(c,lockedFixture.fixturePlan()),/Schedule ownership|Changed fixed schedule/);
+    assert.equal(creates,0);assert.deepEqual(c.writes,[]);
+  }
+});
+
+test('fresh fixed fixture creates one paused schedule after completing preflight', async () => {
+  const c=resumableClient(lockedFixture.fixturePlan(),lockedFixture);
+  c.state.bookings=[];c.state.recurring_bookings=[];c.state.booking_cleaners=[];
+  await lockedFixture.applyFixture(c,lockedFixture.fixturePlan());
+  assert.equal(c.state.bookings.length,1);
+  assert.equal(c.state.bookings[0].customer_id,c.state.recurring_bookings[0].customer_id);
+  assert.equal(c.state.recurring_bookings[0].status,'paused');
+  assert.equal(c.state.booking_cleaners.length,2);
 });

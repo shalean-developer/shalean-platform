@@ -67,7 +67,7 @@ export function createPairedUiFixture({ fixedLegacy = false } = {}) {
     return result.data;
   }
 
-  async function identity(admin, person) {
+  async function findIdentity(admin, person) {
     for (let page = 1; ; page++) {
       const data = await checked(admin.auth.admin.listUsers({ page, perPage: 200 }), 'Identity lookup');
       const found = data.users.find(u => u.email?.toLowerCase() === person.email);
@@ -79,6 +79,12 @@ export function createPairedUiFixture({ fixedLegacy = false } = {}) {
       }
       if (data.users.length < 200) break;
     }
+    return null;
+  }
+
+  async function identity(admin, person) {
+    const existingId = await findIdentity(admin, person);
+    if (existingId) return existingId;
     const data = await checked(admin.auth.admin.createUser({ email: person.email,
       password: `Audit-${randomBytes(24).toString('base64url')}!`, email_confirm: true,
       app_metadata: { role: person.role ?? 'cleaner', is_test: true, audit_fixture: TAG },
@@ -114,28 +120,46 @@ export function createPairedUiFixture({ fixedLegacy = false } = {}) {
     const team = await checked(admin.from('team_job_member_payouts').select('id').eq('booking_id', ids.booking), 'Team preflight');
     const ledger = await checked(admin.from('cleaner_earnings').select('id').eq('booking_id', ids.booking), 'Ledger preflight');
     assert.equal(team.length + ledger.length, 0, 'Unexpected team/solo ledger evidence');
+    // Inspect all owned schedules, auth identities and cleaner IDs before any write.
+    const customer = { email: plan.customer_email, name: plan.customer_name, role: 'customer' };
+    let existingSchedules = [];
+    let customerId = null;
+    if (fixedLegacy) {
+      existingSchedules = await checked(admin.from('recurring_bookings').select('*').eq('id', ids.recurring), 'Fixed schedule preflight');
+      assert(existingSchedules.length <= 1, 'Schedule collision');
+      const old = existingSchedules[0];
+      if (old) {
+        assert.equal(old.booking_snapshot_template?.audit_fixture, TAG, 'Schedule ownership');
+        for (const [key,value] of Object.entries({ frequency:'weekly',status:'paused',earnings_policy:'legacy_july',legacy_earnings_cents:rate,price:650 })) assert.equal(old[key], value, `Changed fixed schedule ${key}`);
+      }
+      customerId = await findIdentity(admin, customer);
+      if (old) assert.equal(old.customer_id, customerId, 'Schedule customer collision');
+      if (booking) {
+        assert(old, 'Missing fixed schedule');
+        assert.equal(booking.recurring_id, ids.recurring, 'Schedule linkage collision');
+        assert.equal(booking.customer_id, customerId, 'Booking customer collision');
+      }
+    }
+    const cleanerPreflight = [];
     for (const p of people) {
-      const existingCleaner = await checked(admin.from('cleaners').select('id,email,auth_user_id').eq('id', p.id), 'Cleaner preflight');
-      if (existingCleaner.length) assert.equal(existingCleaner[0].email, p.email, 'Cleaner collision');
-      const authId = await identity(admin, p);
-      if (existingCleaner.length) assert.equal(existingCleaner[0].auth_user_id, authId);
-      else await checked(admin.from('cleaners').insert({ id: p.id, auth_user_id: authId, full_name: p.name,
+      const rows = await checked(admin.from('cleaners').select('id,email,auth_user_id').eq('id', p.id), 'Cleaner preflight');
+      assert(rows.length <= 1, 'Cleaner collision');
+      if (rows.length) assert.equal(rows[0].email, p.email, 'Cleaner collision');
+      const authId = await findIdentity(admin, p);
+      if (rows.length) assert.equal(rows[0].auth_user_id, authId, 'Cleaner identity collision');
+      cleanerPreflight.push({ person:p, exists:rows.length>0, authId });
+    }
+    for (const { person:p, exists, authId:existingAuthId } of cleanerPreflight) {
+      const authId = existingAuthId ?? await identity(admin, p);
+      if (!exists) await checked(admin.from('cleaners').insert({ id: p.id, auth_user_id: authId, full_name: p.name,
         email: p.email, phone: p.phone, is_active: true, is_available: false }), 'Create synthetic cleaner');
     }
     if (fixedLegacy) {
-      const customerId = await identity(admin, { email: plan.customer_email, name: plan.customer_name, role: 'customer' });
-      const schedule = { id: ids.recurring, customer_id: customerId, frequency: 'weekly', days_of_week: [4],
-        start_date: '2026-10-01', next_run_date: '2099-01-01', price: 650, status: 'paused',
+      customerId ??= await identity(admin, customer);
+      if (!existingSchedules.length) await checked(admin.from('recurring_bookings').insert({ id: ids.recurring, customer_id: customerId,
+        frequency: 'weekly', days_of_week: [4], start_date: '2026-10-01', next_run_date: '2099-01-01', price: 650, status: 'paused',
         earnings_policy: 'legacy_july', legacy_earnings_cents: rate,
-        booking_snapshot_template: { audit_fixture: TAG, synthetic: true, service_slug: 'standard' } };
-      const existingSchedules = await checked(admin.from('recurring_bookings').select('*').eq('id', ids.recurring), 'Fixed schedule preflight');
-      assert(existingSchedules.length <= 1, 'Schedule collision');
-      if (existingSchedules.length) {
-        const old = existingSchedules[0];
-        for (const key of ['customer_id','frequency','status','earnings_policy','legacy_earnings_cents','price']) assert.equal(old[key], schedule[key], `Changed fixed schedule ${key}`);
-        assert.equal(old.booking_snapshot_template?.audit_fixture, TAG, 'Schedule ownership');
-      } else await checked(admin.from('recurring_bookings').insert(schedule), 'Create paused fixed schedule');
-      if (booking) { assert.equal(booking.recurring_id, ids.recurring); assert.equal(booking.customer_id, customerId); }
+        booking_snapshot_template: { audit_fixture: TAG, synthetic: true, service_slug: 'standard' } }), 'Create paused fixed schedule');
       plan = { ...plan, customer_id: customerId };
     }
     // Partial state stays excluded from reports. Resume only missing owned rows.
