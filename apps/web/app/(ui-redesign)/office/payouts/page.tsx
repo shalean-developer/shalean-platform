@@ -29,7 +29,6 @@ import {
 } from "lucide-react";
 import {
   OfficeZohoMetricCard,
-  OfficeZohoMetricsRow,
   OfficeZohoPageHeader,
   OfficeZohoPillTabs,
   OfficeZohoPrimaryButton,
@@ -168,8 +167,8 @@ function buildCleanerSummaryCsv(rows: OfficePayoutCleanerRow[], from: string, to
     "Earned (ZAR)",
     "Pending visits",
     "Pending (ZAR)",
-    "Eligible visits",
-    "Eligible (ZAR)",
+    "Payment-ready cleaner visits",
+    "Payment-ready (ZAR)",
     "Batched visits",
     "Batched (ZAR)",
     "Paid visits",
@@ -233,7 +232,6 @@ export default function PayoutsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [edits, setEdits] = useState<Record<string, { zar: string; note: string }>>({});
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
 
   const reportParams = useMemo(
     () => ({ from: fromDate, to: toDate }),
@@ -261,10 +259,6 @@ export default function PayoutsPage() {
       net_profit_percent: number | null;
     };
   }>("/api/admin/financial-dashboard", { params: reportParams });
-
-  useEffect(() => {
-    if (!loading && data) setLastRefreshedAt(new Date());
-  }, [loading, data]);
 
   const payouts = data?.payouts ?? [];
   const cleaners = data?.cleaners ?? [];
@@ -600,12 +594,12 @@ export default function PayoutsPage() {
     <div className="min-w-0 max-w-full space-y-5 overflow-x-hidden">
       <OfficeZohoPageHeader
         title="Cleaner Payouts"
-        subtitle={`Visit earnings and monthly payout batches (Johannesburg calendar, from ${new Date(`${MONTHLY_PAYOUT_START_YMD}T12:00:00`).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}).`}
+        subtitle={`Reports from ${new Date(`${MONTHLY_PAYOUT_START_YMD}T12:00:00`).toLocaleDateString("en-ZA", { month: "long", year: "numeric" })}. Batch October onward after month-end (Johannesburg).`}
         live
         actions={
           <>
             <Link href="/office/payouts/approvals">
-              <OfficeZohoSecondaryButton>Pending approvals</OfficeZohoSecondaryButton>
+              <OfficeZohoSecondaryButton>Approvals</OfficeZohoSecondaryButton>
             </Link>
             <OfficeZohoSecondaryButton
               disabled={actionLoading === "recalculate"}
@@ -616,7 +610,7 @@ export default function PayoutsPage() {
               ) : (
                 <RefreshCw className="h-4 w-4" />
               )}
-              {actionLoading === "recalculate" ? "Recalculating…" : "Recalculate earnings"}
+              {actionLoading === "recalculate" ? "Recalculating…" : "Recalculate"}
             </OfficeZohoSecondaryButton>
             <OfficeZohoPrimaryButton
               disabled={actionLoading === "generate" || !generationAvailability.hasClosedProcessingMonth}
@@ -627,7 +621,7 @@ export default function PayoutsPage() {
               ) : (
                 <Sparkles className="h-4 w-4" />
               )}
-              {actionLoading === "generate" ? "Generating…" : "Generate closed-month payouts"}
+              {actionLoading === "generate" ? "Generating…" : "Generate batches"}
             </OfficeZohoPrimaryButton>
             <OfficeZohoSecondaryButton disabled={filteredCleaners.length === 0} onClick={handleExportCleaners}>
               <Download className="h-4 w-4" /> Summary CSV
@@ -729,26 +723,19 @@ export default function PayoutsPage() {
         <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="font-semibold text-amber-950">{generationAvailability.rangeCanGenerate
-              ? "Payment-ready earnings in closed months"
+              ? "Ready to batch"
               : generationAvailability.monthLabel
-                ? `Payment-ready — awaiting ${generationAvailability.monthLabel} month closure`
-                : "Payment-ready earnings — select a closed processing period"}</p>
+                ? `Payment-ready · ${generationAvailability.monthLabel} open`
+                : "Select a closed month"}</p>
             <p className="mt-1 text-sm text-amber-900/90">
-              {totals?.eligible_visits ?? 0} visit{(totals?.eligible_visits ?? 0) === 1 ? "" : "s"} (
-              {formatZar(totals?.eligible_cents ?? 0)}) meet customer-payment conditions but are not yet in a monthly batch.
+              {totals?.eligible_visits ?? 0} cleaner visit{(totals?.eligible_visits ?? 0) === 1 ? "" : "s"} (
+              {formatZar(totals?.eligible_cents ?? 0)}).
               {generationAvailability.rangeCanGenerate
-                ? " Generation checks all closed months from October 2026, not just this report period."
-                : " Monthly batches require a closed Johannesburg calendar month from October 2026 onward. Open-month earnings remain unbatched."}
-              Review and edit per-visit earnings in the <strong>By cleaner</strong> table before generating.
+                ? " Generate batches checks all closed months from October 2026. "
+                : " Batching waits until month-end in Johannesburg. "}
+              Review earnings in <strong>By cleaner</strong>.
             </p>
           </div>
-          <OfficeZohoPrimaryButton
-            disabled={actionLoading === "generate" || !generationAvailability.rangeCanGenerate}
-            onClick={() => void handleGenerate()}
-            className="shrink-0 bg-amber-700 hover:brightness-95"
-          >
-            Generate closed-month payouts
-          </OfficeZohoPrimaryButton>
         </div>
       )}
 
@@ -772,28 +759,10 @@ export default function PayoutsPage() {
         />
       ) : null}
 
-      <OfficeZohoMetricsRow
-        meta={
-          <>
-            <p>
-              Report last refreshed
-              {lastRefreshedAt
-                ? ` on ${lastRefreshedAt.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}`
-                : ""}
-            </p>
-            <button
-              type="button"
-              onClick={() => void refreshAll()}
-              className="mt-1 font-semibold text-[--sidebar-active] hover:underline"
-            >
-              Refresh report
-            </button>
-          </>
-        }
-      >
-        <OfficeZohoMetricCard icon={ClipboardList} label="Visits" value={loading ? "—" : String(totals?.visit_count ?? 0)} />
-        <OfficeZohoMetricCard icon={DollarSign} label="Earned" value={loading ? "—" : formatZar(totals?.earned_cents ?? 0)} />
-        <OfficeZohoMetricCard
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+        <OfficeZohoMetricCard compact icon={ClipboardList} label="Bookings" value={loading ? "—" : String(totals?.visit_count ?? 0)} />
+        <OfficeZohoMetricCard compact icon={DollarSign} label="Earned" value={loading ? "—" : formatZar(totals?.earned_cents ?? 0)} />
+        <OfficeZohoMetricCard compact
           icon={Clock}
           iconClassName="bg-amber-50 text-amber-600"
           label="Pending invoice"
@@ -803,42 +772,42 @@ export default function PayoutsPage() {
             ) : (
               <>
                 {formatZar(totals?.pending_cents ?? 0)}
-                <span className="block text-xs font-medium text-slate-500">{totals?.pending_visits ?? 0} visits</span>
+                <span className="block text-xs font-medium text-slate-500">{totals?.pending_visits ?? 0} cleaner visits</span>
               </>
             )
           }
         />
-        <OfficeZohoMetricCard
+        <OfficeZohoMetricCard compact
           icon={Zap}
           iconClassName="bg-violet-50 text-violet-600"
-          label="Eligible"
+          label="Payment-ready"
           value={
             loading ? (
               "—"
             ) : (
               <>
                 {formatZar(totals?.eligible_cents ?? 0)}
-                <span className="block text-xs font-medium text-slate-500">{totals?.eligible_visits ?? 0} visits</span>
+                <span className="block text-xs font-medium text-slate-500">{totals?.eligible_visits ?? 0} cleaner visits</span>
               </>
             )
           }
         />
-        <OfficeZohoMetricCard
+        <OfficeZohoMetricCard compact
           icon={Layers}
           iconClassName="bg-blue-50 text-blue-600"
-          label="Batched (open)"
+          label="Batched"
           value={
             loading ? (
               "—"
             ) : (
               <>
                 {formatZar(totals?.batched_open_cents ?? 0)}
-                <span className="block text-xs font-medium text-slate-500">{totals?.batched_open_visits ?? 0} visits</span>
+                <span className="block text-xs font-medium text-slate-500">{totals?.batched_open_visits ?? 0} cleaner visits</span>
               </>
             )
           }
         />
-        <OfficeZohoMetricCard
+        <OfficeZohoMetricCard compact
           icon={Wallet}
           iconClassName="bg-emerald-50 text-emerald-600"
           label="Paid out"
@@ -848,18 +817,18 @@ export default function PayoutsPage() {
             ) : (
               <>
                 {formatZar(totals?.paid_cents ?? 0)}
-                <span className="block text-xs font-medium text-slate-500">{totals?.paid_visits ?? 0} visits</span>
+                <span className="block text-xs font-medium text-slate-500">{totals?.paid_visits ?? 0} cleaner visits</span>
               </>
             )
           }
         />
-      </OfficeZohoMetricsRow>
+      </div>
 
       <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
           <h2 className="text-sm font-semibold text-slate-800">Profit breakdown</h2>
           <p className="text-xs text-slate-500">
-            {loading ? "Loading…" : `${totals?.visit_count ?? 0} completed visit${(totals?.visit_count ?? 0) === 1 ? "" : "s"} in period`}
+            {loading ? "Loading…" : `${totals?.visit_count ?? 0} completed booking${(totals?.visit_count ?? 0) === 1 ? "" : "s"} in period`}
           </p>
         </div>
         <div className="p-5">
@@ -871,7 +840,7 @@ export default function PayoutsPage() {
               </p>
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-blue-600">Cleaner payouts</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-blue-600">Cleaner cost</p>
               <p className="mt-1 text-2xl font-bold tabular-nums text-blue-800">
                 {loading ? "—" : formatZar(profit?.cleaner_payouts_cents ?? totals?.earned_cents ?? 0)}
               </p>
@@ -909,28 +878,20 @@ export default function PayoutsPage() {
                 const revenue = profit?.customer_revenue_cents ?? totals?.total_revenue_cents ?? 0;
                 const cleaner = profit?.cleaner_payouts_cents ?? totals?.earned_cents ?? 0;
                 const gross = profit?.gross_margin_cents ?? totals?.company_earnings_cents ?? 0;
-                const expenses = profit?.operating_expenses_cents ?? 0;
-                const net = profit?.net_profit_cents ?? gross - expenses;
                 const cleanerWidth = Math.min(100, earningsSharePercent(cleaner, revenue));
                 const grossWidth = Math.min(100 - cleanerWidth, earningsSharePercent(gross, revenue));
-                const expenseWidth = Math.min(100 - cleanerWidth - grossWidth, earningsSharePercent(expenses, revenue));
                 return (
-                  <div className="flex h-3 overflow-hidden rounded-full bg-slate-100">
+                  <div className="flex h-3 overflow-hidden rounded-full bg-slate-100" role="img" aria-label="Revenue split between cleaner cost and gross margin">
                     {cleaner > 0 ? (
-                      <div className="h-full bg-blue-500" style={{ width: `${cleanerWidth}%` }} title={`Cleaner payouts: ${formatZar(cleaner)}`} />
+                      <div className="h-full bg-blue-500" style={{ width: `${cleanerWidth}%` }} title={`Cleaner cost: ${formatZar(cleaner)}`} />
                     ) : null}
                     {gross > 0 ? (
                       <div className="h-full bg-emerald-500" style={{ width: `${grossWidth}%` }} title={`Gross margin: ${formatZar(gross)}`} />
                     ) : null}
-                    {expenses > 0 ? (
-                      <div className="h-full bg-amber-500" style={{ width: `${expenseWidth}%` }} title={`Operating expenses: ${formatZar(expenses)}`} />
-                    ) : null}
-                    {net > 0 ? (
-                      <div className="h-full bg-violet-500" style={{ width: `${Math.max(0, 100 - cleanerWidth - grossWidth - expenseWidth)}%` }} title={`Net profit: ${formatZar(net)}`} />
-                    ) : null}
                   </div>
                 );
               })()}
+              <p className="mt-2 text-xs text-slate-500">Revenue = cleaner cost + gross margin. Expenses are deducted from gross margin.</p>
               <div className="mt-4 space-y-2.5">
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <div className="flex min-w-0 items-center gap-2">
@@ -942,7 +903,7 @@ export default function PayoutsPage() {
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <div className="flex min-w-0 items-center gap-2">
                     <TrendingUp className="h-4 w-4 shrink-0 text-blue-600" />
-                    <span className="text-slate-600">Cleaner payouts</span>
+                    <span className="text-slate-600">Cleaner cost</span>
                   </div>
                   <div className="flex shrink-0 items-center gap-3 tabular-nums">
                     <span className="font-semibold text-slate-900">{formatZar(profit?.cleaner_payouts_cents ?? totals?.earned_cents ?? 0)}</span>
@@ -992,7 +953,7 @@ export default function PayoutsPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-slate-800">By cleaner</h2>
-              <p className="text-xs text-slate-500">Completed visits by booking date — includes roster partners on paired jobs</p>
+              <p className="text-xs text-slate-500">Cleaner visits by booking date. A booking can include more than one cleaner.</p>
             </div>
             <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -1010,7 +971,7 @@ export default function PayoutsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {["Cleaner", "Visits", "Earned", "Pending", "Eligible", "Batched", "Paid", "Actions"].map((h) => (
+                {["Cleaner", "Visits", "Earned", "Pending", "Payment-ready", "Batched", "Paid", "Actions"].map((h) => (
                   <th
                     key={h}
                     className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400"
