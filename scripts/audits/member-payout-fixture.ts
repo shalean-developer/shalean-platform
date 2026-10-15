@@ -29,10 +29,17 @@ export function assertStagingTarget(value: string) {
     ssl: { rejectUnauthorized: true }, connectionTimeoutMillis: 10_000 };
 }
 
-export function postgresClientExport<T>(driver: { Client?: T; default?: { Client?: T } }): T {
+type PostgresConnection = {
+  connect(): Promise<void>;
+  query(sql: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
+  end(): Promise<void>;
+};
+type PostgresClientConstructor = new (config: ReturnType<typeof assertStagingTarget>) => PostgresConnection;
+
+export function postgresClientExport(driver: { Client?: unknown; default?: { Client?: unknown } }): PostgresClientConstructor {
   const client = driver.Client ?? driver.default?.Client;
   assert(typeof client === 'function', 'PostgreSQL Client constructor export is missing');
-  return client;
+  return client as PostgresClientConstructor;
 }
 
 async function main() {
