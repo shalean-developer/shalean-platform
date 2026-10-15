@@ -104,6 +104,11 @@ jobs:
           AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node scripts/audits/paired-ledger-isolated.mjs
           AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node --test scripts/audits/paired-ui-fixture.test.mjs
 
+      - name: October fixed-policy isolated PostgreSQL regression
+        if: steps.filter.outputs.run_suite == 'true'
+        working-directory: .
+        run: AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node scripts/audits/october-policy-isolated.mjs
+
       - name: Paired UI fixture actual Office read model
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/seed/__tests__/pairedUiFixtureReadModel.test.ts
