@@ -13,7 +13,7 @@ function summary(amounts: number[]) {
     costsCents:0,computedAtIso:"2026-10-16T00:00:00Z"});
 }
 function preview(before: number[],after: number[]): BookingEarningsPreview {
-  return {current:{display_earnings_cents:before[0],cleaner_earnings_total_cents:before.reduce((a,b)=>a+b,0),earnings_summary:summary(before)},
+  return {current:{is_team_job:false,display_earnings_cents:before[0],cleaner_earnings_total_cents:before.reduce((a,b)=>a+b,0),earnings_summary:summary(before)},
     computed_preview:summary(after),earnings_display:null};
 }
 describe("reset preview booking-wide comparison",()=>{
@@ -23,19 +23,36 @@ describe("reset preview booking-wide comparison",()=>{
   it.each([[[25000,25000],[26000,26000],2000],[[30000],[28000],-2000],[[25000],[25200],200]])("shows the signed correction",(before,after,delta)=>{
     expect(bookingEarningsPreviewComparison(preview(before as number[],after as number[]))?.diffCents).toBe(delta);
   });
-  it("falls back to the current aggregate before its lead-only display",()=>{
+  it("uses the booking-wide paired policy without a summary",()=>{
     const p=preview([26000,26000],[26000,26000]);p.current.earnings_summary=null;
     expect(bookingEarningsPreviewComparison(p)?.currentTotalCents).toBe(52000);
   });
   it("keeps a real zero instead of falling through to the display amount",()=>{
-    const p=preview([26000],[26000]);p.current.earnings_summary=null;p.current.cleaner_earnings_total_cents=0;
+    const p=preview([26000],[26000]);p.current.earnings_summary=null;p.current.cleaner_earnings_total_cents=0;p.current.display_earnings_cents=0;
     expect(bookingEarningsPreviewComparison(p)?.diffCents).toBe(26000);
   });
   it("does not turn failed or malformed previews into R0",()=>{
     expect(bookingEarningsPreviewComparison(null)).toBeNull();
+    const missing=preview([26000],[26000]);missing.current.earnings_summary=null;missing.current.display_earnings_cents=null;missing.current.cleaner_earnings_total_cents=null;
+    expect(bookingEarningsPreviewComparison(missing)).toBeNull();
     const p=preview([26000],[26000]);p.computed_preview=null;
     expect(bookingEarningsPreviewComparison(p)).toBeNull();
     p.computed_preview={...summary([26000]),total_cleaner_earnings_cents:NaN};
+    expect(bookingEarningsPreviewComparison(p)).toBeNull();
+  });
+});
+
+describe("current solo and team policy",()=>{
+  it("keeps a solo display lock when its aggregate is stale and summary absent",()=>{
+    const p=preview([25000],[28000]);p.current.earnings_summary=null;p.current.cleaner_earnings_total_cents=99999;
+    expect(bookingEarningsPreviewComparison(p)).toEqual({currentTotalCents:25000,projectedTotalCents:28000,diffCents:3000});
+  });
+  it("also keeps the solo display lock over a stale stored solo summary",()=>{
+    const p=preview([30000],[28000]);p.current.display_earnings_cents=28000;
+    expect(bookingEarningsPreviewComparison(p)?.currentTotalCents).toBe(28000);
+  });
+  it("does not substitute a lead display for incomplete formal team earnings",()=>{
+    const p=preview([26000,26000],[26000,26000]);p.current.is_team_job=true;p.current.earnings_summary=null;p.current.cleaner_earnings_total_cents=null;
     expect(bookingEarningsPreviewComparison(p)).toBeNull();
   });
 });
