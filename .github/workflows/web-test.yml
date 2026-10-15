@@ -87,6 +87,10 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run audit:production
 
+      - name: Office booking payment display regression
+        if: steps.filter.outputs.run_suite == 'true'
+        run: npm run test -- lib/booking/__tests__/officeBookingPaymentDisplay.test.ts
+
       - name: Critical tests (payments + referrals)
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test:critical

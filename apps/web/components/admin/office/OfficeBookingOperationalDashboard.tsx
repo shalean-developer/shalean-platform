@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CalendarClock, CircleDollarSign, MapPin, ReceiptText, ShieldAlert, Sparkles, Users } from "lucide-react";
+import { officeBookingPaymentDisplay } from "@/lib/booking/officeBookingPaymentDisplay";
 import { getAdminToken } from "@/hooks/useAdminData";
 
 type Booking = Record<string, unknown> & {
@@ -48,6 +49,7 @@ type RosterRow = {
 };
 
 type PaymentRow = {
+  paid_at?: string | null;
   gateway?: string | null;
   amount_cents?: number | null;
   processing_fee_cents?: number | null;
@@ -93,21 +95,6 @@ function serviceLabel(value: string | null): string {
   if (normalized === "deep" || normalized === "deep-cleaning") return "Deep Cleaning";
   if (normalized === "move" || normalized.includes("move-in") || normalized.includes("move_out")) return "Move In / Out Cleaning";
   return normalized.replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
-}
-
-function collectedCents(booking: Booking): number {
-  const stored = num(booking.total_paid_cents) ?? num(booking.amount_paid_cents);
-  if (stored != null && stored > 0) return Math.round(stored);
-  const major = num(booking.total_paid_zar);
-  return major != null && major > 0 ? Math.round(major * 100) : 0;
-}
-
-function isSettled(booking: Booking, payment: PaymentRow | null): boolean {
-  if (collectedCents(booking) > 0 || nonNegativeCents(payment?.amount_cents) > 0) return true;
-  const bookingStatus = String(booking.payment_status ?? "").trim().toLowerCase();
-  const settlementStatus = String(payment?.settlement_status ?? "").trim().toLowerCase();
-  const channel = String(payment?.payment_channel ?? "").trim().toLowerCase();
-  return ["paid", "success", "completed", "settled"].includes(bookingStatus) || settlementStatus === "settled" || channel === "promo_credit_cover";
 }
 
 function duration(booking: Booking): string {
@@ -220,10 +207,9 @@ export function OfficeBookingOperationalDashboard({ bookingId }: { bookingId: st
   const teamJob = booking.is_team_job === true || Boolean(booking.team_id) || roster.length > 1;
   const lead = roster.find((row) => row.role.toLowerCase() === "lead") ?? roster[0] ?? null;
   const earnings = earningsCents(booking, roster);
-  const paidCents = nonNegativeCents(payment?.amount_cents) || collectedCents(booking);
+  const { collectedCents: paidCents, settled } = officeBookingPaymentDisplay(booking, payment);
   const gatewayFeeCents = payment ? nonNegativeCents(payment.processing_fee_cents) : 0;
   const netReceivedCents = payment && num(payment.net_settlement_cents) != null ? Math.round(num(payment.net_settlement_cents) ?? 0) : paidCents - gatewayFeeCents;
-  const settled = isSettled(booking, payment);
   // Keep the signed result: a negative margin is operationally important and must not be hidden.
   const marginCents = settled ? netReceivedCents - earnings : null;
   const gateway = text(payment?.gateway)?.toLowerCase();
