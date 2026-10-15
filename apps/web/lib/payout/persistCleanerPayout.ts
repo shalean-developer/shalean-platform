@@ -681,14 +681,15 @@ export async function previewDisplayEarningsCentsForCleanerJobDiagnostic(
 
   if (!isTeamJob) {
     const rosterRows = await loadBookingRosterRows(admin, bookingId);
-    if (isPairedRosterSoloJob({ isTeamJob: false, rosterRows }) || isCurrentPayoutVisitDate(r.date?.trim())) {
+    const paired = isPairedRosterSoloJob({ isTeamJob: false, rosterRows });
+    if (paired || isCurrentPayoutVisitDate(r.date?.trim())) {
       const canonical = await resolveBookingCanonicalPayout(admin, {
         bookingId,
         row: r as BookingRowForCanonicalPayout,
         expectedCleanerId: cleanerId,
       });
       const cents = perCleanerTotalFromCanonical(canonical, cleanerId);
-      if (cents != null) {
+      if (cents != null && (paired || canonical.earningsModelVersion === "legacy_july_locked_v1")) {
         return { ok: true, amountCents: cents, source: "persist_engine", missingReason: null };
       }
     }
