@@ -52,9 +52,24 @@ try {
   const { rows } = await db.query(`select has_function_privilege('anon',
     'public.sync_pending_cleaner_earnings_from_booking_update()', 'EXECUTE') as allowed`);
   assert.equal(rows[0].allowed, false); checks++;
-  const contractResults = await db.exec(await readFile(new URL('./paired-ledger-staging-contract.sql', import.meta.url), 'utf8'));
-  const proof = contractResults.at(-1).rows[0].paired_ledger_staging_contract;
+  const contractSql = await readFile(new URL('./paired-ledger-staging-contract.sql', import.meta.url), 'utf8');
+  const contractResults = await db.exec(contractSql);
+  const proof = contractResults.find(r => r.rows?.[0]?.paired_ledger_staging_contract)?.rows[0].paired_ledger_staging_contract;
   assert.equal(proof.fixtures_rolled_back, true);
   assert.equal(proof.checks_including_cleanup, 36);
-  console.log(`${checks} isolated paired-ledger PostgreSQL checks and 36 rollback-contract checks passed; no remote connection.`);
+  // psql/Studio-style clients may submit each top-level statement separately.
+  const doStart = contractSql.indexOf('do $audit$');
+  const doEnd = contractSql.indexOf('$audit$;', doStart) + '$audit$;'.length;
+  const selectEnd = contractSql.indexOf('commit;', doEnd);
+  assert(doStart > 0 && doEnd > doStart && selectEnd > doEnd);
+  await db.exec(contractSql.slice(0, doStart));
+  try {
+    await db.exec(contractSql.slice(doStart, doEnd));
+    const separateProof = await db.exec(contractSql.slice(doEnd, selectEnd));
+    assert.equal(separateProof[0].rows[0].paired_ledger_staging_contract.checks_including_cleanup, 36);
+    assert.equal(separateProof[0].rows[0].paired_ledger_staging_contract.fixtures_rolled_back, true);
+    await db.exec(contractSql.slice(selectEnd));
+  } catch (error) { await db.exec('rollback'); throw error; }
+
+  console.log(`${checks} isolated paired-ledger PostgreSQL checks and 36 rollback-contract checks in both client modes passed; no remote connection.`);
 } finally { await db.close(); }

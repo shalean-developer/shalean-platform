@@ -2,6 +2,7 @@
 -- Run only on the approved staging project. No public table is written.
 -- The function is cloned into pg_temp with ONLY its three relation bindings changed.
 -- This proves database behavior and live source/schema compatibility, not browser UI behavior.
+begin;
 do $audit$
 declare
   body text;
@@ -98,3 +99,4 @@ begin
 end;
 $audit$;
 select current_setting('audit951.proof')::jsonb as paired_ledger_staging_contract;
+commit;
