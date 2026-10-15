@@ -1766,6 +1766,12 @@ async function main() {
   const reset  = args.includes("--reset");
   const dryRun = args.includes("--dry-run");
 
+  if (args.includes('--paired-ui-only') && dryRun) {
+    const { fixturePlan, TAG } = await import('./audits/paired-ui-fixture.mjs');
+    console.log(JSON.stringify({ tag: TAG, booking: fixturePlan(), createsBatches: false }, null, 2));
+    return;
+  }
+
   // Local fixture validation only: does not construct a Supabase client or read credentials.
   if (args.includes("--validate-bookings")) {
     const {bookings}=buildSeedBookings({},{});
@@ -1818,6 +1824,13 @@ async function main() {
   const admin = createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  if (args.includes('--paired-ui-only')) {
+    const { runPairedUiSeed } = await import('./audits/paired-ui-fixture.mjs');
+    console.log(JSON.stringify(await runPairedUiSeed(admin, { ...envVars, ...process.env,
+      NEXT_PUBLIC_SUPABASE_URL: url }, reset)));
+    return;
+  }
 
   if (reset) {
     await resetSeedRows(admin);

@@ -39,7 +39,7 @@ jobs:
           CHANGED="$(git diff --name-only "$BASE" "$HEAD" || true)"
           echo "Changed paths:"
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -Eq '^(apps/web/|packages/|supabase/migrations/|scripts/audits/paired-ledger|\.github/workflows/web-test\.yml)'; then
+          if echo "$CHANGED" | grep -Eq '^(apps/web/|packages/|supabase/migrations/|scripts/audits/paired-ledger|scripts/audits/paired-ui-fixture|\.github/workflows/web-test\.yml)'; then
             echo "run_suite=true" >> "$GITHUB_OUTPUT"
             echo "Web/package paths changed — running vitest suite."
           else
@@ -98,6 +98,11 @@ jobs:
           set -euo pipefail
           npm install --prefix "$RUNNER_TEMP/paired-ledger" --no-save --package-lock=false --ignore-scripts @electric-sql/pglite@0.5.10
           AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node scripts/audits/paired-ledger-isolated.mjs
+          AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node --test scripts/audits/paired-ui-fixture.test.mjs
+
+      - name: Paired UI fixture actual Office read model
+        if: steps.filter.outputs.run_suite == 'true'
+        run: npm run test -- lib/seed/__tests__/pairedUiFixtureReadModel.test.ts
 
       - name: AUDIT-03A02B.2 isolated Plesk preflight regression
         if: steps.filter.outputs.run_suite == 'true'
