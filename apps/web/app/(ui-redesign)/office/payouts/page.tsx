@@ -39,6 +39,7 @@ import {
 import { OfficePayoutDetailPanel } from "@/components/admin/office/OfficePayoutDetailPanel";
 import { OfficeCleanerEarningsEditPanel } from "@/components/admin/office/OfficeCleanerEarningsEditPanel";
 import { defaultOfficePayoutPeriodRange } from "@/lib/admin/payouts/officePayoutPeriodReport";
+import { payoutGenerationAvailability } from "@/lib/payout/payoutGenerationAvailability";
 import { MONTHLY_PAYOUT_START_YMD } from "@/lib/payout/payoutPeriodConfig";
 import { cleanerEarningsRulesSummaryText } from "@/lib/admin/cleanerTenureDisplay";
 import type {
@@ -216,6 +217,11 @@ export default function PayoutsPage() {
   const editCleanerId = searchParams.get("editCleaner")?.trim() || null;
   const earningsRules = cleanerEarningsRulesSummaryText();
 
+  const [generationClock, setGenerationClock] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setGenerationClock(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const defaultRange = defaultOfficePayoutPeriodRange();
   const [fromDate, setFromDate] = useState(defaultRange.from);
   const [toDate, setToDate] = useState(defaultRange.to);
@@ -385,6 +391,7 @@ export default function PayoutsPage() {
   }
 
   async function handleGenerate() {
+    if (!payoutGenerationAvailability(fromDate, toDate).hasClosedProcessingMonth) return;
     setActionLoading("generate");
     const res = await adminFetch<GenerateResponse>("/api/admin/payouts/generate", { method: "POST" });
     setActionLoading(null);
@@ -565,6 +572,7 @@ export default function PayoutsPage() {
     }
   }
 
+  const generationAvailability = payoutGenerationAvailability(range.from, range.to, generationClock);
   const showEligibleBanner =
     !loading && (totals?.eligible_visits ?? 0) > 0;
 
@@ -611,7 +619,7 @@ export default function PayoutsPage() {
               {actionLoading === "recalculate" ? "Recalculating…" : "Recalculate earnings"}
             </OfficeZohoSecondaryButton>
             <OfficeZohoPrimaryButton
-              disabled={actionLoading === "generate"}
+              disabled={actionLoading === "generate" || !generationAvailability.hasClosedProcessingMonth}
               onClick={() => void handleGenerate()}
             >
               {actionLoading === "generate" ? (
@@ -619,7 +627,7 @@ export default function PayoutsPage() {
               ) : (
                 <Sparkles className="h-4 w-4" />
               )}
-              {actionLoading === "generate" ? "Generating…" : "Generate monthly payouts"}
+              {actionLoading === "generate" ? "Generating…" : "Generate closed-month payouts"}
             </OfficeZohoPrimaryButton>
             <OfficeZohoSecondaryButton disabled={filteredCleaners.length === 0} onClick={handleExportCleaners}>
               <Download className="h-4 w-4" /> Summary CSV
@@ -720,19 +728,26 @@ export default function PayoutsPage() {
       {showEligibleBanner && (
         <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="font-semibold text-amber-950">Eligible earnings in this period</p>
+            <p className="font-semibold text-amber-950">{generationAvailability.rangeCanGenerate
+              ? "Payment-ready earnings in closed months"
+              : generationAvailability.monthLabel
+                ? `Payment-ready — awaiting ${generationAvailability.monthLabel} month closure`
+                : "Payment-ready earnings — select a closed processing period"}</p>
             <p className="mt-1 text-sm text-amber-900/90">
               {totals?.eligible_visits ?? 0} visit{(totals?.eligible_visits ?? 0) === 1 ? "" : "s"} (
-              {formatZar(totals?.eligible_cents ?? 0)}) are paid-invoice ready but not yet in a monthly batch.
+              {formatZar(totals?.eligible_cents ?? 0)}) meet customer-payment conditions but are not yet in a monthly batch.
+              {generationAvailability.rangeCanGenerate
+                ? " Generation checks all closed months from October 2026, not just this report period."
+                : " Monthly batches require a closed Johannesburg calendar month from October 2026 onward. Open-month earnings remain unbatched."}
               Review and edit per-visit earnings in the <strong>By cleaner</strong> table before generating.
             </p>
           </div>
           <OfficeZohoPrimaryButton
-            disabled={actionLoading === "generate"}
+            disabled={actionLoading === "generate" || !generationAvailability.rangeCanGenerate}
             onClick={() => void handleGenerate()}
             className="shrink-0 bg-amber-700 hover:brightness-95"
           >
-            Generate now
+            Generate closed-month payouts
           </OfficeZohoPrimaryButton>
         </div>
       )}
@@ -1180,7 +1195,7 @@ export default function PayoutsPage() {
                   <tr>
                     <td colSpan={6} className="py-12 text-center text-sm text-slate-400">
                       {(totals?.eligible_visits ?? 0) > 0
-                        ? "No monthly batches overlap this period — eligible visits may still need Generate monthly payouts."
+                        ? "No monthly batches overlap this period. Payment-ready visits can be batched only after their Johannesburg calendar month closes."
                         : "No payout batches overlap this period."}
                     </td>
                   </tr>
