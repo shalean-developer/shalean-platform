@@ -52,5 +52,9 @@ try {
   const { rows } = await db.query(`select has_function_privilege('anon',
     'public.sync_pending_cleaner_earnings_from_booking_update()', 'EXECUTE') as allowed`);
   assert.equal(rows[0].allowed, false); checks++;
-  console.log(`${checks} isolated paired-ledger PostgreSQL checks passed; no remote connection.`);
+  const contractResults = await db.exec(await readFile(new URL('./paired-ledger-staging-contract.sql', import.meta.url), 'utf8'));
+  const proof = contractResults.at(-1).rows[0].paired_ledger_staging_contract;
+  assert.equal(proof.fixtures_rolled_back, true);
+  assert.equal(proof.checks_including_cleanup, 36);
+  console.log(`${checks} isolated paired-ledger PostgreSQL checks and 36 rollback-contract checks passed; no remote connection.`);
 } finally { await db.close(); }
