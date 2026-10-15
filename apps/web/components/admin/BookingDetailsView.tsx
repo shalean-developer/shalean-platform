@@ -2214,7 +2214,7 @@ export default function BookingDetailsView({
         setToast({ kind: "error", text: "Please sign in as an admin." });
         return;
       }
-      const res = await fetch(`/api/admin/bookings/${encodeURIComponent(fullBooking.id)}/reset-earnings`, {
+      const res = await fetch(`/api/admin/bookings/${encodeURIComponent(fullBooking.id)}/reset-earnings?force=true`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
