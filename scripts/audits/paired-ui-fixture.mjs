@@ -97,7 +97,7 @@ export async function applyFixture(admin, plan) {
       assert.equal(existingCleaner[0].auth_user_id, authId);
     } else {
       await checked(admin.from('cleaners').insert({ id: p.id, auth_user_id: authId, full_name: p.name,
-        email: p.email, phone: p.phone, payment_id: p.id === ids.lead ? 'SHL-CL-951001' : 'SHL-CL-951002', is_active: true, is_available: false }), 'Create synthetic cleaner');
+        email: p.email, phone: p.phone, is_active: true, is_available: false }), 'Create synthetic cleaner');
     }
   }
   // Prepare reporting state only. This fixture does not claim application finalization coverage.

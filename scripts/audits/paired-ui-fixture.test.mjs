@@ -76,3 +76,19 @@ test('fixture respects live assigned-status and unpaid earnings-cap SQL constrai
     await assert.rejects(insert('assigned','prepaid'), e => e.code === '23514');
   } finally { await db.close(); }
 });
+test('new cleaner inserts leave payment ID allocation to the database', async () => {
+  const c = client((table, operation) => {
+    if (table === 'bookings' && operation === 'select') return { data: [] };
+    if (table === 'cleaners' && operation === 'select') return { data: [] };
+    if (table === 'cleaners' && operation === 'insert') return { data: null };
+    return { error: { message: 'stop after cleaner creation' } };
+  });
+  c.auth = { admin: {
+    listUsers: async () => ({ data: { users: [] } }),
+    createUser: async () => ({ data: { user: { id: '95110000-0000-4000-8000-000000000099' } } }),
+  } };
+  await assert.rejects(applyFixture(c, fixturePlan()));
+  const cleaners = c.writes.filter(w => w.table === 'cleaners');
+  assert.equal(cleaners.length, 2);
+  assert(cleaners.every(w => !Object.hasOwn(w.value, 'payment_id')));
+});
