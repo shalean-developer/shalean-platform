@@ -76,8 +76,9 @@ begin
       end loop;
     end loop;
     -- Database synchronization must never invent a missing solo ledger row.
-    truncate pg_temp.audit951_cleaner_earnings,pg_temp.audit951_cleaner_payouts;
-    update pg_temp.audit951_bookings set payout_id=null,payout_status='pending',payout_run_id=null,payout_paid_at=null;
+    truncate pg_temp.audit951_cleaner_earnings,pg_temp.audit951_cleaner_payouts,pg_temp.audit951_booking_cleaners;
+    insert into pg_temp.audit951_booking_cleaners(booking_id,cleaner_id) values(bid,lead);
+    update pg_temp.audit951_bookings set is_team_job=false,payout_id=null,payout_status='pending',payout_run_id=null,payout_paid_at=null;
     update pg_temp.audit951_bookings set cleaner_earnings_total_cents=53000;
     if exists(select 1 from pg_temp.audit951_cleaner_earnings) then raise exception 'Unexpected ledger insertion'; end if;
     checks := checks + 1;
