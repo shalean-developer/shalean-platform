@@ -29,7 +29,7 @@ assert.equal(await snapshot(), before); checks++;
 await assert.rejects(db.exec(`update recurring_prepaid_packages set visit_count=3`), e => e.code === '23514'); checks++;
 await assert.rejects(db.exec(`update recurring_prepaid_packages set paid_package_zar=501`), e => e.code === '23514'); checks++;
 await assert.rejects(db.exec(`update recurring_prepaid_allocations set allocated_zar=-1`), e => e.code === '23514'); checks++;
-await assert.rejects(db.exec(`delete from bookings`), e => e.code === '23001'); checks++;
+await assert.rejects(db.exec(`delete from bookings`), e => ['23001', '23503'].includes(e.code) && e.constraint === 'recurring_prepaid_packages_source_booking_id_fkey'); checks++;
 assert.equal(await snapshot(), before); checks++;
 await db.close();
 console.log(`${checks} isolated PostgreSQL schema checks passed`);
