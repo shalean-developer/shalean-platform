@@ -1406,11 +1406,18 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   // Payment convergence must also retain authorization for future recurring charges.
   // Historical roster, earnings, and dispatch work remains deferred.
   if (historicalCapture) {
+    try {
     await completeHistoricalPaymentEffects(supabase, {
       bookingId:id,userId:userIdForEffects,customerEmail:emailStored,amountCents:input.amountCents,
       paystackReference:input.paystackReference,paidAtIso:paidMoment,cityId:cityId??null,
       referralCode:String(input.paystackMetadata?.referral_code??input.paystackMetadata?.client_referralCode??"").trim(),
     });
+    } catch(error) {
+      // Capture, authorization and effect jobs already committed together. The outbox owns
+      // recovery; never make the captured booking pending or enqueue another finalization.
+      try {await reportOperationalIssue('warn','upsertBookingFromPaystack','Historical payment effects retained for retry',{bookingId:id,error:String(error)});} catch { /* Logging cannot invalidate the committed capture. */ }
+      return {ok:false,skipped:true,bookingId:id,bookingInDatabase:true,error:'historical_payment_effects_pending'};
+    }
     return {ok:true,skipped:false,bookingId:id,bookingInDatabase:true};
   }
 
