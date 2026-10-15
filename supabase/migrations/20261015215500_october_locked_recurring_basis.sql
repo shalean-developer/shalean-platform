@@ -137,7 +137,7 @@ revoke all on function public.apply_booking_earnings_policy_lock() from public, 
 
 -- A booking must exist before its FK-backed roster. Refresh the fixed pool after
 -- real roster changes; do not touch historical, paid, batched or formal-team rows.
-create or replace function public.refresh_current_locked_policy_after_roster()
+create or replace function public.refresh_current_locked_booking_policy()
 returns trigger language plpgsql security definer set search_path=pg_catalog as $$
 declare v_id uuid; v_ids uuid[];
 begin
@@ -148,14 +148,23 @@ begin
     update public.bookings b set internal_earnings_cents=b.internal_earnings_cents
     where b.id=v_id and b.date>='2026-10-01' and b.earnings_policy='legacy_july'
       and not coalesce(b.is_team_job,false) and b.payout_status='pending'
-      and b.payout_id is null and b.payout_run_id is null and b.payout_paid_at is null;
+      and b.payout_id is null and b.payout_run_id is null and b.payout_paid_at is null
+      and not exists(select 1 from public.cleaner_earnings ce where ce.booking_id=b.id
+        and (ce.status is distinct from 'pending' or ce.disbursement_id is not null or ce.paid_at is not null))
+      and not exists(select 1 from public.booking_roster_member_payouts mp where mp.booking_id=b.id
+        and (mp.status is distinct from 'pending' or mp.cleaner_payout_id is not null))
+      and not exists(select 1 from public.team_job_member_payouts mp where mp.booking_id=b.id
+        and (mp.status is distinct from 'pending' or mp.cleaner_payout_id is not null));
   end loop;
   return null;
 end;
 $$;
-revoke all on function public.refresh_current_locked_policy_after_roster() from public,anon,authenticated;
+revoke all on function public.refresh_current_locked_booking_policy() from public,anon,authenticated;
 create trigger booking_roster_refresh_current_locked_policy
 after insert or update or delete on public.booking_cleaners
-for each row execute function public.refresh_current_locked_policy_after_roster();
+for each row execute function public.refresh_current_locked_booking_policy();
+create trigger booking_adjustment_refresh_current_locked_policy
+after insert or update or delete on public.cleaner_earnings_adjustments
+for each row execute function public.refresh_current_locked_booking_policy();
 commit;
 
