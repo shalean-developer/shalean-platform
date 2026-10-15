@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { assertStagingTarget, isMemberPayoutFixtureEntrypoint } from '../../../../../scripts/audits/member-payout-fixture';
+import { assertStagingTarget, isMemberPayoutFixtureEntrypoint, postgresClientExport } from '../../../../../scripts/audits/member-payout-fixture';
 const stage = 'abcdefghijklmnopqrst';
 const prod = 'zyxwvutsrqponmlkjihg';
 const target = `postgres://postgres:fixture@db.${stage}.supabase.co/postgres`;
@@ -24,4 +24,11 @@ describe('member payout fixture target guard', () => {
 describe('fixture CLI startup', () => {
  it.each(['/repo/scripts/audits/member-payout-fixture.ts', String.raw`C:\Users\info\repo\scripts\audits\member-payout-fixture.ts`, 'member-payout-fixture.ts'])('runs CLI path %s', path => { expect(isMemberPayoutFixtureEntrypoint(path)).toBe(true); });
  it.each([undefined, '/repo/vitest.mjs', '/repo/member-payout-fixture.ts.bak'])('does not run on import %s', path => { expect(isMemberPayoutFixtureEntrypoint(path)).toBe(false); });
+});
+
+describe('PostgreSQL driver module compatibility', () => {
+ class Client {}
+ it('loads ESM named exports', () => { expect(postgresClientExport({ Client })).toBe(Client); });
+ it('loads a CommonJS default export', () => { expect(postgresClientExport({ default: { Client } })).toBe(Client); });
+ it('rejects missing constructors', () => { expect(() => postgresClientExport({})).toThrow('constructor export'); });
 });

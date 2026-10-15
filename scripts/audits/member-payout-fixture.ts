@@ -29,6 +29,12 @@ export function assertStagingTarget(value: string) {
     ssl: { rejectUnauthorized: true }, connectionTimeoutMillis: 10_000 };
 }
 
+export function postgresClientExport<T>(driver: { Client?: T; default?: { Client?: T } }): T {
+  const client = driver.Client ?? driver.default?.Client;
+  assert(typeof client === 'function', 'PostgreSQL Client constructor export is missing');
+  return client;
+}
+
 async function main() {
   const isolated = process.argv.includes('--isolated');
   let db: DB;
@@ -45,7 +51,8 @@ async function main() {
   } else {
     const url = process.env.AUDIT_STAGING_DATABASE_URL ?? '';
     const connection = assertStagingTarget(url);
-    const { Client } = await import(process.env.AUDIT_PG_MODULE ?? 'pg');
+    const driver = await import(process.env.AUDIT_PG_MODULE ?? 'pg');
+    const Client = postgresClientExport(driver);
     const client = new Client(connection);
     await client.connect();
     db = { query: (sql, values) => client.query(sql, values), close: () => client.end() };
