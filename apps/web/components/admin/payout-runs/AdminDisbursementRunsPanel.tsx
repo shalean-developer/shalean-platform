@@ -121,8 +121,8 @@ export function AdminDisbursementRunsPanel() {
         <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Disbursement</p>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Payout runs</h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Freeze closed monthly payouts, group them into a run, approve, then record each cleaner&apos;s bank transfer from the run detail page.
-          <strong> Paid</strong> is recorded only after the bank transfer reference is captured.
+          Review visits and earnings on Payouts. After month-end, generate monthly batches there, then freeze them here, create a run, review its cleaners and totals, and approve it. Make the transfers through your bank, then record each transfer reference in the run.
+           Approval does not mean paid. <strong>Paid</strong> is recorded only after the bank transfer reference is captured.
         </p>
       </div>
 
