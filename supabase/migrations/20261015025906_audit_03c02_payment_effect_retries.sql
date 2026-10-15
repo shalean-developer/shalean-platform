@@ -5,9 +5,15 @@ returns void language plpgsql security definer set search_path=pg_catalog as $$
 declare b public.bookings; inserted_count integer;
 begin
  select * into b from public.bookings where id=p_booking_id for update;
- if not found or (b.date is not null and b.date::date >= date '2026-10-01')
+ if not found or (b.date is not null and coalesce(public.audit_03c02_visit_date(b.date::text),date '-infinity') >= date '2026-10-01')
    or b.paystack_reference is distinct from p_reference or p_amount_cents is null or p_amount_cents<0
-   or coalesce(b.total_paid_cents,b.amount_paid_cents,0)<>p_amount_cents
+   or (coalesce(b.total_paid_cents,b.amount_paid_cents,0)<>p_amount_cents
+     and not exists(select 1 from public.failed_jobs j
+       where j.type in ('historical_payment_effect','historical_payment_effect_exhausted')
+         and j.payload->>'effect'='receipt' and j.payload->>'bookingId'=b.id::text
+         and j.payload->>'paystackReference'=p_reference and j.payload->>'amountCents'=p_amount_cents::text)
+     and not exists(select 1 from public.user_events e where e.booking_id=b.id and e.event_type='booking_created'
+       and e.payload->>'paystack_reference'=p_reference and e.payload->>'amount_cents'=p_amount_cents::text))
    or b.status::text in ('pending_payment','payment_expired','payment_mismatch') then
    raise exception 'historical_payment_receipt_mismatch' using errcode='23514';
  end if;

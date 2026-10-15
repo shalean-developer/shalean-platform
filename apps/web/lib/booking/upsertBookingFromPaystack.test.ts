@@ -454,10 +454,16 @@ describe("observed pending upsert conflict propagation", () => {
       date: "2026-09-30", recurring_id: "00000000-0000-4000-8000-000000000002", is_recurring_generated: true,
     }, "transient write failure");
     const result = await upsertBookingFromPaystack(input({ paystackAuthorizationCode: "AUTH_verified" }));
-    expect(result).toMatchObject({ok:false,error:"transient write failure"});
+    expect(result).toMatchObject({ok:false,error:"transient write failure",reason:"finalization_failed",recoveryEnqueue:true});
     expect(db.current.status).toBe("pending_payment");
     expect(successEffect).not.toHaveBeenCalled();
     expect(enqueueFailedJob).not.toHaveBeenCalled();
+  });
+
+  it.each([{currency:'USD'},{amountCents:9940}])('requests reconciliation when historical mismatch persistence fails: %j',async(override)=>{
+    const db=pendingDb('paystack_reference',{}, {date:null},'queue/database unavailable');
+    expect(await upsertBookingFromPaystack(input(override))).toMatchObject({ok:false,reason:'finalization_failed',recoveryEnqueue:true,error:'queue/database unavailable',bookingId});
+    expect(db.current.status).toBe('pending_payment');expect(successEffect).not.toHaveBeenCalled();
   });
 
   it.each([null, "2026-09-30"])("preserves recurring authorization and refreshes historical payment state for %s", async (date) => {

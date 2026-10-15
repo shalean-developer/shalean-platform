@@ -1,10 +1,21 @@
 -- Preserve deferred historical earnings during reassignment and synchronization.
 begin;
+-- A strict canonical parser matches application date policy. Invalid/undated visits are deferred.
+create or replace function public.audit_03c02_visit_date(p_value text)
+returns date language plpgsql immutable set search_path=pg_catalog as $$
+declare value text:=btrim(p_value); parsed date;
+begin
+ if value is null or value !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then return null; end if;
+ begin parsed:=value::date;
+ exception when invalid_datetime_format or datetime_field_overflow then return null; end;
+ return parsed;
+end; $$;
+revoke all on function public.audit_03c02_visit_date(text) from public,anon,authenticated,service_role;
 create or replace function public.audit_03c02_guard_item_delete()
 returns trigger language plpgsql security definer set search_path=pg_catalog as $$
 declare v_date date;
 begin
-  select b.date::date into v_date from public.bookings b where b.id=OLD.booking_id for update;
+  select coalesce(public.audit_03c02_visit_date(b.date::text),date '-infinity') into v_date from public.bookings b where b.id=OLD.booking_id for update;
   -- Parent DELETE is fenced before any FK cascade; no parent is visible during a valid cascade.
   if not found and pg_trigger_depth()>1 then return OLD; end if;
   if v_date is null or v_date < date '2026-10-01' then
@@ -32,14 +43,14 @@ begin
     return NEW;
   end if;
   if TG_OP <> 'INSERT' then
-    select b.date::date into v_date from public.bookings b where b.id=OLD.booking_id for update;
+    select coalesce(public.audit_03c02_visit_date(b.date::text),date '-infinity') into v_date from public.bookings b where b.id=OLD.booking_id for update;
     if TG_OP='DELETE' and not found and pg_trigger_depth()>1 then return OLD; end if;
     if v_date is null or v_date < date '2026-10-01' then
       raise exception 'historical_payout_item_deferred' using errcode='23514';
     end if;
   end if;
   if TG_OP <> 'DELETE' then
-    select b.date::date into v_date from public.bookings b where b.id=NEW.booking_id for update;
+    select coalesce(public.audit_03c02_visit_date(b.date::text),date '-infinity') into v_date from public.bookings b where b.id=NEW.booking_id for update;
     if v_date is null or v_date < date '2026-10-01' then
       raise exception 'historical_payout_item_deferred' using errcode='23514';
     end if;

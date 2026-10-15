@@ -499,9 +499,10 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       cleanerId: existing.cleaner_id as string | null,
       assignmentType: existing.assignment_type as string | null,
     } : null;
-  const finalizationFailure = (error: { message: string; code?: string }): UpsertBookingFromPaystackResult => {
+  const finalizationFailure = (error: { message: string; code?: string }, historicalWrite = false): UpsertBookingFromPaystackResult => {
     const retryableConflict =
-      error.code === "PAYMENT_FINALIZATION_CONFLICT" && Boolean(existingPendingPaymentId);
+      Boolean(existingPendingPaymentId) && (error.code === "PAYMENT_FINALIZATION_CONFLICT" ||
+        (historicalWrite && error.message!=="historical_capture_identity_mismatch" && error.code!=="PAYMENT_CUSTOMER_IDENTITY_MISMATCH"));
     return {
       ok: false,
       skipped: true,
@@ -621,7 +622,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
             customer_email:emailStored,[ownershipColumn]:userIdResolved},
         })
       : await updateObservedPendingPaymentBooking({supabase,row:currencyMismatchPatch,observed,ownershipColumn});
-    if (mutation.error) return finalizationFailure(mutation.error);
+    if (mutation.error) return finalizationFailure(mutation.error,!isCurrentPayoutVisitDate(String(existing?.date ?? "").trim()));
     void enqueueFailedJob("booking_finalize", {
       paystackReference: input.paystackReference,
       error: "currency_mismatch",
@@ -679,7 +680,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
             customer_email:emailStored,[ownershipColumn]:userIdResolved},
         })
       : await updateObservedPendingPaymentBooking({supabase,row:mismatchPatch,observed,ownershipColumn});
-    if (mutation.error) return finalizationFailure(mutation.error);
+    if (mutation.error) return finalizationFailure(mutation.error,!isCurrentPayoutVisitDate(String(existing?.date ?? "").trim()));
     void enqueueFailedJob("booking_finalize", {
       paystackReference: input.paystackReference,
       error: "amount_mismatch",
@@ -1165,7 +1166,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         paystackReference: input.paystackReference,
         code: updateErr.code,
       });
-      return finalizationFailure(updateErr);
+      return finalizationFailure(updateErr,!isCurrentPayoutVisitDate(String(existing?.date ?? "").trim()));
     }
     inserted = updated;
   } else {

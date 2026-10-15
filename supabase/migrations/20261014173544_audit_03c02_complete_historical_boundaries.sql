@@ -1,6 +1,24 @@
 -- Validate final booking values after every BEFORE policy trigger. Preserve history
 -- without preventing notes, completion timestamps, or verified provider convergence.
 begin;
+-- Retrofit the already-deployed cutoff RPCs without changing their signatures or ACLs.
+-- Only these audited visit-date expressions change; provider and month-closure proofs remain intact.
+do $patch$
+declare fn record; definition text; patched text;
+begin
+ for fn in select p.oid from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+   where n.nspname='public' and p.proname=any(array[
+     'audit_03c02_guard_payout_batch','audit_03c02_guard_payout_item','upsert_pending_payout_earnings',
+     'append_draft_run_payout_earnings','settle_cleaner_payout_bank_transfer','adjust_unrun_member_payout_earnings','claim_cleaner_earnings_for_paystack'])
+ loop
+   definition:=pg_get_functiondef(fn.oid); patched:=definition;
+   patched:=replace(patched,'b.date::date','coalesce(public.audit_03c02_visit_date(b.date::text),date ''-infinity'')');
+   patched:=replace(patched,'OLD.date::date','coalesce(public.audit_03c02_visit_date(OLD.date::text),date ''-infinity'')');
+   patched:=replace(patched,'NEW.date::date','coalesce(public.audit_03c02_visit_date(NEW.date::text),date ''-infinity'')');
+   patched:=replace(patched,'v_date := NEW.date;','v_date := public.audit_03c02_visit_date(NEW.date::text);');
+   if patched<>definition then execute patched; end if;
+ end loop;
+end $patch$;
 -- Refund confirmation may reconcile paid totals only against an existing provider intent.
 create or replace function public.audit_03c02_verified_booking_refund(p_old jsonb,p_new jsonb)
 returns boolean language plpgsql immutable set search_path=pg_catalog as $$
@@ -41,7 +59,7 @@ declare b public.bookings; result jsonb; prior_context text;
 begin
  p_currency:=upper(btrim(p_currency));
  select * into b from public.bookings where id=p_booking_id for update;
- if not found or (b.date is not null and b.date::date>=date '2026-10-01')
+ if not found or (b.date is not null and coalesce(public.audit_03c02_visit_date(b.date::text),date '-infinity')>=date '2026-10-01')
    or b.status::text not in ('pending_payment','payment_expired','payment_reconciliation_required')
    or nullif(p_reference,'') is null
    or (b.paystack_reference is distinct from p_reference and not (coalesce(p_verified_booking_id=b.id,false)
@@ -109,13 +127,13 @@ declare v_keys text[] := array[
  v_before jsonb; v_after jsonb;
 begin
  if TG_OP='DELETE' then
-   if OLD.date is null or OLD.date::date < date '2026-10-01' then
+   if OLD.date is null or coalesce(public.audit_03c02_visit_date(OLD.date::text),date '-infinity') < date '2026-10-01' then
      raise exception 'historical_payout_item_deferred' using errcode='23514';
    end if;
    return OLD;
  end if;
  if TG_OP='INSERT' then
-   if NEW.date is null or NEW.date::date < date '2026-10-01' then
+   if NEW.date is null or coalesce(public.audit_03c02_visit_date(NEW.date::text),date '-infinity') < date '2026-10-01' then
      raise exception 'historical_payout_item_deferred' using errcode='23514';
    end if;
    return NEW;
@@ -130,7 +148,7 @@ begin
  v_before:=v_before || jsonb_build_object('locked_booking_basis',to_jsonb(OLD)->'booking_snapshot'->'locked');
  v_after:=v_after || jsonb_build_object('locked_booking_basis',to_jsonb(NEW)->'booking_snapshot'->'locked');
  if v_before is distinct from v_after and
-   (OLD.date is null or OLD.date::date < date '2026-10-01' or NEW.date is null or NEW.date::date < date '2026-10-01') then
+   (OLD.date is null or coalesce(public.audit_03c02_visit_date(OLD.date::text),date '-infinity') < date '2026-10-01' or NEW.date is null or coalesce(public.audit_03c02_visit_date(NEW.date::text),date '-infinity') < date '2026-10-01') then
    raise exception 'historical_payout_item_deferred' using errcode='23514';
  end if;
  return NEW;
@@ -172,7 +190,7 @@ begin
  if not v_identity_changed then return NEW; end if;
  -- Consistent parent order prevents opposite-direction rekeys from deadlocking.
  for v_booking,v_date in
-   select b.id,b.date::date from public.bookings b
+   select b.id,coalesce(public.audit_03c02_visit_date(b.date::text),date '-infinity') from public.bookings b
    where b.id=NEW.booking_id or b.id=v_old_booking
    order by b.id for update
  loop
@@ -223,7 +241,7 @@ begin
  if TG_OP='DELETE' and not found and pg_trigger_depth()>1 then return OLD; end if;
  if not exists(select 1 from public.bookings b where b.id=coalesce(v_new_booking,v_old_booking))
    or exists(select 1 from public.bookings b where b.id in (v_old_booking,v_new_booking)
-     and (b.date is null or b.date::date < date '2026-10-01')) then
+     and (b.date is null or coalesce(public.audit_03c02_visit_date(b.date::text),date '-infinity') < date '2026-10-01')) then
    raise exception 'historical_payout_item_deferred' using errcode='23514';
  end if;
  if TG_OP='DELETE' then return OLD; end if;
@@ -246,7 +264,7 @@ begin
  if coalesce(OLD.joined_at,OLD.created_at) is not distinct from coalesce(NEW.joined_at,NEW.created_at) then return NEW; end if;
  if exists (
    select 1 from public.bookings b
-   where (b.date is null or b.date::date < date '2026-10-01') and (
+   where (b.date is null or coalesce(public.audit_03c02_visit_date(b.date::text),date '-infinity') < date '2026-10-01') and (
      OLD.id in (b.cleaner_id,b.selected_cleaner_id,b.payout_owner_cleaner_id)
      or exists(select 1 from public.booking_cleaners x where x.booking_id=b.id and x.cleaner_id=OLD.id)
      or exists(select 1 from public.cleaner_earnings x where x.booking_id=b.id and x.cleaner_id=OLD.id)
@@ -270,8 +288,7 @@ begin
  for candidate in select ce.id,b.date from public.cleaner_earnings ce join public.bookings b on b.id=ce.booking_id
    where ce.cleaner_id=p_cleaner_id and ce.status='pending' order by b.id,ce.id for update of b,ce
  loop
-   begin visit_date:=btrim(candidate.date::text)::date;
-   exception when invalid_datetime_format or datetime_field_overflow then continue; end;
+   visit_date:=public.audit_03c02_visit_date(candidate.date::text);
    if visit_date is null or visit_date<date '2026-10-01' then continue; end if;
    return query update public.cleaner_earnings set status='approved',approved_at=p_approved_at
      where id=candidate.id and status='pending' returning *;

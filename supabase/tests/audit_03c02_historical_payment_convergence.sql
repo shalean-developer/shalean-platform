@@ -5,7 +5,8 @@ do $$
 declare probe_customer uuid; probe_email text; probe_plan uuid; before_capture jsonb; queue_count integer; receipt_count integer; prior_count bigint; prior_spent bigint; receipt_existed boolean; probe_date text; b public.bookings; intent jsonb; succeeded jsonb; expected jsonb; result jsonb; before_basis jsonb; after_basis jsonb;
  keys text[]:=array['date','cleaner_id','payout_owner_cleaner_id','team_id','base_amount_cents','service_fee_cents','price_snapshot','display_earnings_cents','internal_earnings_cents','payout_earnings_cents','cleaner_payout_cents','payout_frozen_cents'];
 begin
- foreach probe_date in array array['2026-09-30',null] loop
+ foreach probe_date in array array['2026-09-30',null,'2026-02-30','bad-date','2026-10-1'] loop
+ begin
  select * into b from public.bookings where status='pending_payment' and payout_id is null
    and monthly_invoice_id is null and billing_type='prepaid' and nullif(paystack_reference,'') is not null order by id limit 1;
  if not found then raise exception 'staging pending-payment fixture unavailable'; end if;
@@ -19,7 +20,7 @@ begin
  update public.bookings set paystack_reference=case when probe_date is null then id::text else paystack_reference end,selected_cleaner_id=(select id from public.cleaners order by id limit 1),booking_snapshot=coalesce(booking_snapshot,'{}')||jsonb_build_object('refund_workflow',intent) where id=b.id;
  set constraints all immediate;
  alter table public.bookings disable trigger audit_03c02_final_booking_financials;
- update public.bookings set date=probe_date::date where id=b.id;
+ update public.bookings set date=probe_date where id=b.id;
  set constraints all immediate;
  alter table public.bookings enable trigger audit_03c02_final_booking_financials;
  select jsonb_object_agg(key,value) into before_basis from public.bookings x,jsonb_each(to_jsonb(x)) where x.id=b.id and key=any(keys);
@@ -55,15 +56,6 @@ begin
  b.customer_id:=probe_customer;
  if result->>'id' is distinct from b.id::text then raise exception 'FAIL capture row missing'; end if;
  if not exists(select 1 from public.bookings where id=b.id and amount_paid_cents=1000 and payment_status='success' and status='pending_assignment') then raise exception 'FAIL capture not recorded'; end if;
- select exists(select 1 from public.user_events where booking_id=b.id and event_type='booking_created') into receipt_existed;
- select coalesce(booking_count,0),coalesce(total_spent_cents,0) into prior_count,prior_spent from public.user_profiles where id=b.customer_id;
- perform public.audit_03c02_record_payment_receipt(b.id,b.paystack_reference,1000);
- perform public.audit_03c02_record_payment_receipt(b.id,b.paystack_reference,1000);
- select count(*) into receipt_count from public.user_events where booking_id=b.id and event_type='booking_created';
- if receipt_count<>1 then raise exception 'FAIL duplicate receipt'; end if;
- if b.customer_id is not null and not exists(select 1 from public.user_profiles where id=b.customer_id
-   and coalesce(booking_count,0)=coalesce(prior_count,0)+case when receipt_existed then 0 else 1 end
-   and coalesce(total_spent_cents,0)=coalesce(prior_spent,0)+case when receipt_existed then 0 else 1000 end) then raise exception 'FAIL receipt counters not exactly once'; end if;
 
  begin
    update public.bookings set amount_paid_cents=800,total_paid_cents=800,total_paid_zar=8 where id=b.id;
@@ -74,6 +66,16 @@ begin
    'provider_state','succeeded','provider_reference','audit-provider-refund','succeeded_at',now()));
  update public.bookings set amount_paid_cents=800,total_paid_cents=800,total_paid_zar=8,refund_status='partial',refunded_at=now(),
    booking_snapshot=jsonb_set(booking_snapshot,'{refund_workflow}',succeeded) where id=b.id;
+ select exists(select 1 from public.user_events where booking_id=b.id and event_type='booking_created') into receipt_existed;
+ select coalesce(booking_count,0),coalesce(total_spent_cents,0) into prior_count,prior_spent from public.user_profiles where id=b.customer_id;
+ perform public.audit_03c02_record_payment_receipt(b.id,b.paystack_reference,1000);
+ perform public.audit_03c02_record_payment_receipt(b.id,b.paystack_reference,1000);
+ select count(*) into receipt_count from public.user_events where booking_id=b.id and event_type='booking_created';
+ if receipt_count<>1 then raise exception 'FAIL duplicate receipt'; end if;
+ if b.customer_id is not null and not exists(select 1 from public.user_profiles where id=b.customer_id
+   and coalesce(booking_count,0)=coalesce(prior_count,0)+case when receipt_existed then 0 else 1 end
+   and coalesce(total_spent_cents,0)=coalesce(prior_spent,0)+case when receipt_existed then 0 else 1000 end) then raise exception 'FAIL receipt counters not exactly once'; end if;
+
  select jsonb_object_agg(key,value) into after_basis from public.bookings x,jsonb_each(to_jsonb(x)) where x.id=b.id and key=any(keys);
  if before_basis is distinct from after_basis then raise exception 'FAIL historical pricing/roster/earnings changed'; end if;
  begin
@@ -90,6 +92,9 @@ begin
  perform public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,123,'ZAR',now(),expected,'amount_mismatch');
  if not exists(select 1 from public.bookings where id=b.id and status='payment_mismatch' and amount_paid_cents=800
    and booking_snapshot->'verified_capture_mismatch'->>'reason'='amount_mismatch') then raise exception 'FAIL amount mismatch cash evidence'; end if;
+ raise exception 'audit_probe_rollback' using errcode='Z0001';
+ exception when sqlstate 'Z0001' then null;
+ end;
 end loop;
 end $$;
 rollback;
