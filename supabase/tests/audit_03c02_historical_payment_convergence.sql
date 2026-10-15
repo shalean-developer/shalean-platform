@@ -2,7 +2,7 @@
 begin;
 select set_config('request.jwt.claim.role','service_role',true);
 do $$
-declare receipt_count integer; prior_count bigint; prior_spent bigint; receipt_existed boolean; probe_date text; b public.bookings; intent jsonb; succeeded jsonb; expected jsonb; result jsonb; before_basis jsonb; after_basis jsonb;
+declare before_capture jsonb; queue_count integer; receipt_count integer; prior_count bigint; prior_spent bigint; receipt_existed boolean; probe_date text; b public.bookings; intent jsonb; succeeded jsonb; expected jsonb; result jsonb; before_basis jsonb; after_basis jsonb;
  keys text[]:=array['date','cleaner_id','payout_owner_cleaner_id','team_id','base_amount_cents','service_fee_cents','price_snapshot','display_earnings_cents','internal_earnings_cents','payout_earnings_cents','cleaner_payout_cents','payout_frozen_cents'];
 begin
  foreach probe_date in array array['2026-09-30',null] loop
@@ -24,7 +24,19 @@ begin
    perform public.audit_03c02_record_historical_capture(b.id,'wrong-reference',1000,'ZAR',now(),expected);
    raise exception 'FAIL wrong charge reference';
  exception when check_violation then if sqlerrm<>'historical_capture_identity_mismatch' then raise; end if; end;
+ select to_jsonb(x) into before_capture from public.bookings x where id=b.id;
+ select count(*) into queue_count from public.failed_jobs where type='historical_payment_effect' and payload->>'bookingId'=b.id::text;
+ alter table public.failed_jobs add constraint audit_reject_effect_queue check(type<>'historical_payment_effect') not valid;
+ begin
+   perform public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,' zar ',now(),expected,null,b.id);
+   raise exception 'FAIL queue failure accepted';
+ exception when check_violation then if sqlerrm not like '%audit_reject_effect_queue%' then raise; end if; end;
+ alter table public.failed_jobs drop constraint audit_reject_effect_queue;
+ if before_capture is distinct from (select to_jsonb(x) from public.bookings x where id=b.id) then raise exception 'FAIL capture survived queue failure'; end if;
+ if (select count(*) from public.failed_jobs where type='historical_payment_effect' and payload->>'bookingId'=b.id::text)<>queue_count then raise exception 'FAIL partial queue survived'; end if;
  result:=public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,' zar ',now(),expected,null,b.id);
+ if (select count(*) from public.failed_jobs where type='historical_payment_effect' and payload->>'bookingId'=b.id::text)<>queue_count+6 then raise exception 'FAIL capture missing effect queue'; end if;
+
  if result->>'id' is distinct from b.id::text then raise exception 'FAIL capture row missing'; end if;
  if not exists(select 1 from public.bookings where id=b.id and amount_paid_cents=1000 and payment_status='success' and status='pending_assignment') then raise exception 'FAIL capture not recorded'; end if;
  select exists(select 1 from public.user_events where booking_id=b.id and event_type='booking_created') into receipt_existed;

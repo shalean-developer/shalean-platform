@@ -46,10 +46,11 @@ export async function runHistoricalPaymentEffect(admin:SupabaseClient,p:Historic
   if(failures.length) throw new Error(failures.join('; ').slice(0,1000));
 }
 export async function completeHistoricalPaymentEffects(admin:SupabaseClient,p:HistoricalPaymentEffectPayload):Promise<void>{
-  // Persist every task before running any effect; interrupted tasks remain recoverable.
-  const {data,error}=await admin.from('failed_jobs').insert(effects.map(effect=>({type:HISTORICAL_PAYMENT_EFFECT_JOB,payload:{...p,effect}}))).select('id,payload');
-  if(error || data?.length!==effects.length) throw new Error('historical_payment_effect_enqueue_failed');
-  for(const job of data){
+  // Capture already committed these jobs atomically. Reads/execution may fail without losing retries.
+  const {data,error}=await admin.from('failed_jobs').select('id,payload')
+    .eq('type',HISTORICAL_PAYMENT_EFFECT_JOB).contains('payload',{bookingId:p.bookingId});
+  if(error) throw new Error('historical_payment_effect_queue_read_failed');
+  for(const job of data??[]){
     try {await runHistoricalPaymentEffect(admin,job.payload as HistoricalPaymentEffectPayload);await admin.from('failed_jobs').delete().eq('id',job.id);}
     catch(error){await reportOperationalIssue('warn','historicalPaymentEffects','Payment effect retained for retry',{bookingId:p.bookingId,effect:(job.payload as HistoricalPaymentEffectPayload).effect,error:String(error)});}
   }

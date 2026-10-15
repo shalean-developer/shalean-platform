@@ -19,8 +19,8 @@ describe('durable historical payment effect retries',()=>{
   await retryHistoricalPaymentEffects(admin as never);expect(remove).not.toHaveBeenCalled();expect(update).toHaveBeenCalledWith(expect.objectContaining({attempts:1}));
   state.fail=false;await retryHistoricalPaymentEffects(admin as never);expect(remove).toHaveBeenCalledOnce();
  });
- it('does not run effects when the durable queue cannot be written',async()=>{
-  const rpc=vi.fn();const admin={rpc,from:()=>({insert:()=>({select:async()=>({data:null,error:{message:'queue down'}})})})};
-  await expect(completeHistoricalPaymentEffects(admin as never,payload)).rejects.toThrow('enqueue_failed');expect(rpc).not.toHaveBeenCalled();
+ it('does not run effects when the committed queue cannot be read',async()=>{
+  const rpc=vi.fn();const admin={rpc,from:()=>({select:()=>({eq:()=>({contains:async()=>({data:null,error:{message:'queue down'}})})})})};
+  await expect(completeHistoricalPaymentEffects(admin as never,payload)).rejects.toThrow('queue_read_failed');expect(rpc).not.toHaveBeenCalled();
  });
 });

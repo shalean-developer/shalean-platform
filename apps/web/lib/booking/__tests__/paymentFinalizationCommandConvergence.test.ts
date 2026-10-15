@@ -365,7 +365,8 @@ describe('verified historical capture command',()=>{
  const row={paystack_reference:'charge-1',customer_email:'customer@example.com',amount_paid_cents:1000,currency:'ZAR',payment_completed_at:'2026-10-14T12:00:00Z',date:'2026-09-30',cleaner_id:'must-not-write',base_amount_cents:999};
  it('uses the restricted RPC with original identity and excludes payout/pricing fields',async()=>{
   const rpc=vi.fn().mockResolvedValue({data:{id:observed.id},error:null});const from=vi.fn();
-  const result=await finalizePendingPaymentBookingFromPaystack({supabase:{rpc,from} as unknown as SupabaseClient,row,observed,ownershipColumn:'customer_id',historicalBooking:true});
+  const result=await finalizePendingPaymentBookingFromPaystack({supabase:{rpc,from} as unknown as SupabaseClient,row,observed,ownershipColumn:'customer_id',historicalBooking:true,historicalEffectContext:{cityId:'city',referralCode:'REFER'}});
+  expect(rpc.mock.calls[0][1].p_effect_context).toEqual({cityId:'city',referralCode:'REFER'});
   expect(result).toEqual({data:{id:observed.id},error:null});expect(from).not.toHaveBeenCalled();
   expect(rpc).toHaveBeenCalledWith('audit_03c02_record_historical_capture',expect.objectContaining({p_booking_id:observed.id,p_reference:'charge-1',p_amount_cents:1000,p_expected:expect.objectContaining({cleaner_id:null,customer_id:null,status:'pending_payment'})}));
   expect(rpc.mock.calls[0][1]).not.toHaveProperty('base_amount_cents');

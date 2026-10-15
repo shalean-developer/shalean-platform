@@ -99,6 +99,7 @@ export async function finalizePendingPaymentBookingFromPaystack(params: {
   observed: PaymentFinalizationObservedPendingBooking;
   ownershipColumn: BookingCustomerOwnershipColumn;
   historicalBooking?: boolean;
+  historicalEffectContext?: {cityId:string|null;referralCode:string};
   verifiedMetadataBookingId?: string;
   historicalMismatch?: "amount_mismatch" | "currency_mismatch";
 }): Promise<{ data: PaymentFinalizationPersistedBookingRow | null; error: DbError | null }> {
@@ -112,6 +113,7 @@ export async function finalizePendingPaymentBookingFromPaystack(params: {
     const {data,error}=await params.supabase.rpc('audit_03c02_record_historical_capture',{
       p_booking_id:observed.id,p_reference:row.paystack_reference,p_amount_cents:row.amount_paid_cents,
       p_currency:row.currency,p_paid_at:row.payment_completed_at,
+      ...(params.historicalEffectContext ? {p_effect_context:params.historicalEffectContext} : {}),
       ...(params.verifiedMetadataBookingId ? {p_verified_booking_id:params.verifiedMetadataBookingId} : {}),
       ...(params.historicalMismatch ? {p_mismatch:params.historicalMismatch} : {}),
       p_expected:{status:observed.status,paystack_reference:observed.paystackReference,

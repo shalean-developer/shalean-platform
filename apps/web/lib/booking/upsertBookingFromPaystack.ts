@@ -1152,6 +1152,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       observed,
       ownershipColumn,
       historicalBooking: !isCurrentPayoutVisitDate(String(existing?.date ?? "").trim()),
+      historicalEffectContext:{cityId:cityId??null,referralCode:String(input.paystackMetadata?.referral_code??input.paystackMetadata?.client_referralCode??"").trim()},
       verifiedMetadataBookingId:pendingFinalizeMatch==="id"?existingPendingPaymentId??undefined:undefined,
     });
 

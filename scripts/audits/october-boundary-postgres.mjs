@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 const { PGlite }=await import(process.env.AUDIT_PGLITE_MODULE ?? '@electric-sql/pglite');
 const db=new PGlite();
 await db.exec(`create role anon; create role authenticated; create role service_role;
+create table failed_jobs(id uuid default gen_random_uuid(),type text,payload jsonb,attempts int default 0,created_at timestamptz default now());
 create table audit_users(id uuid primary key);
 create table user_events(id uuid default gen_random_uuid(),user_id uuid,event_type text,booking_id uuid,payload jsonb);
 create unique index on user_events(booking_id) where event_type='booking_created' and booking_id is not null;
@@ -140,12 +141,20 @@ const captureSql=`select audit_03c02_record_historical_capture($1,$2,$3,'ZAR','2
 await reject(captureSql,[old,'wrong-reference',1000,JSON.stringify(expected)]);
 await reject(captureSql,[old,'charge-1',-1,JSON.stringify(expected)]);
 await reject(captureSql,[old,'charge-1',1000,JSON.stringify({...expected,cleaner_id:other})]);
+const beforeQueueFailure=(await db.query('select to_jsonb(b) row from bookings b where id=$1',[old])).rows[0].row;
+await db.exec("alter table failed_jobs add constraint reject_effect_queue check(type<>'historical_payment_effect') not valid");
+await reject(captureSql,[old,'charge-1',1000,JSON.stringify(expected)]);
+assert.deepEqual((await db.query('select to_jsonb(b) row from bookings b where id=$1',[old])).rows[0].row,beforeQueueFailure);checks++;
+assert.equal((await db.query('select count(*)::int n from failed_jobs')).rows[0].n,0);checks++;
+await db.exec('alter table failed_jobs drop constraint reject_effect_queue');
 await db.query(captureSql,[old,'charge-1',1000,JSON.stringify(expected)]);checks++;
+assert.equal((await db.query("select count(*)::int n from failed_jobs where payload->>'bookingId'=$1",[old])).rows[0].n,6);checks++;
+
 assert.equal((await db.query(`select status from bookings where id=$1`,[old])).rows[0].status,'pending_assignment');checks++;
 assert.equal((await db.query(`select amount_paid_cents from bookings where id=$1`,[old])).rows[0].amount_paid_cents,1000);checks++;
 await reject(`update bookings set total_paid_cents=999 where id=$1`,[old]);
 for(const role of ['anon','authenticated','service_role']){
- const r=await db.query(`select has_function_privilege($1,'audit_03c02_record_historical_capture(uuid,text,bigint,text,timestamptz,jsonb,text,uuid)','execute') permitted`,[role]);assert.equal(r.rows[0].permitted,role==='service_role');checks++;
+ const r=await db.query(`select has_function_privilege($1,'audit_03c02_record_historical_capture(uuid,text,bigint,text,timestamptz,jsonb,text,uuid,jsonb)','execute') permitted`,[role]);assert.equal(r.rows[0].permitted,role==='service_role');checks++;
 }
 await db.query(captureSql,['eeeeeeee-0000-4000-8000-000000000001','undated-charge',1000,JSON.stringify({...expected,paystack_reference:'undated-charge',cleaner_id:null})]);checks++;
 assert.equal((await db.query(`select date,status from bookings where id='eeeeeeee-0000-4000-8000-000000000001'`)).rows[0].date,null);checks++;

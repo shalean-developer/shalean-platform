@@ -35,7 +35,7 @@ revoke all on function public.audit_03c02_verified_booking_refund(jsonb,jsonb) f
 
 -- Called only after the server has verified Paystack success. No provider request
 -- is made here. Retain the historical service, roster, pricing and earnings basis.
-create or replace function public.audit_03c02_record_historical_capture(p_booking_id uuid,p_reference text,p_amount_cents bigint,p_currency text,p_paid_at timestamptz,p_expected jsonb,p_mismatch text default null,p_verified_booking_id uuid default null)
+create or replace function public.audit_03c02_record_historical_capture(p_booking_id uuid,p_reference text,p_amount_cents bigint,p_currency text,p_paid_at timestamptz,p_expected jsonb,p_mismatch text default null,p_verified_booking_id uuid default null,p_effect_context jsonb default null)
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
 declare b public.bookings; result jsonb; prior_context text;
 begin
@@ -69,11 +69,20 @@ begin
    payment_completed_at=p_paid_at,payment_status=case when b.payment_status='pending_monthly' then b.payment_status else 'success' end,
    status=case when b.cleaner_id is not null or b.selected_cleaner_id is not null then 'pending_assignment' else 'pending' end,updated_at=now() where id=b.id;
  perform set_config('shalean.verified_booking_capture',coalesce(prior_context,''),true);
+ -- Capture and all required follow-up tasks commit together. Any queue error rolls back cash/status too.
+ insert into public.failed_jobs(type,payload)
+ select 'historical_payment_effect',jsonb_build_object(
+   'bookingId',b.id,'userId',coalesce(to_jsonb(b)->'customer_id',to_jsonb(b)->'user_id'),
+   'customerEmail',b.customer_email,'amountCents',p_amount_cents,'paystackReference',p_reference,
+   'paidAtIso',p_paid_at,'cityId',coalesce(p_effect_context->'cityId',to_jsonb(b)->'city_id'),
+   'referralCode',coalesce(p_effect_context->>'referralCode',''),'effect',effect)
+ from unnest(array['cancel_recovery','receipt','referral','city','growth','conversion']) effect;
+
  select jsonb_build_object('id',id,'created_at',created_at) into result from public.bookings where id=b.id;
  return result;
 end; $$;
-revoke all on function public.audit_03c02_record_historical_capture(uuid,text,bigint,text,timestamptz,jsonb,text,uuid) from public,anon,authenticated;
-grant execute on function public.audit_03c02_record_historical_capture(uuid,text,bigint,text,timestamptz,jsonb,text,uuid) to service_role;
+revoke all on function public.audit_03c02_record_historical_capture(uuid,text,bigint,text,timestamptz,jsonb,text,uuid,jsonb) from public,anon,authenticated;
+grant execute on function public.audit_03c02_record_historical_capture(uuid,text,bigint,text,timestamptz,jsonb,text,uuid,jsonb) to service_role;
 
 create or replace function public.audit_03c02_guard_final_booking_financials()
 returns trigger language plpgsql security definer set search_path=pg_catalog as $$

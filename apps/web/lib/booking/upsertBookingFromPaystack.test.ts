@@ -377,7 +377,7 @@ describe("observed pending upsert conflict propagation", () => {
     const predicates: Array<[string, unknown]> = [];
     const from = vi.fn((table: string) => {
       if(table === "failed_jobs") return {
-        insert:(jobs:unknown[])=>({select:async()=>({data:jobs.map((job,i)=>({id:String(i),...(job as object)})),error:null})}),
+        select:()=>({eq:()=>({contains:async()=>({data:['cancel_recovery','receipt','referral','city','growth','conversion'].map((effect,i)=>({id:String(i),payload:{bookingId,userId:'owner-a',customerEmail:'payer@example.com',amountCents:12550,paystackReference:'pay_verified',paidAtIso:'2026-10-14T12:00:00Z',cityId:null,referralCode:'',effect}})),error:null})})}),
         delete:()=>({eq:async()=>({error:null})}),
       };
       if (table === "recurring_bookings") {
