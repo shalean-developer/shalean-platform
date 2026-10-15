@@ -1,7 +1,8 @@
+import { fetchAllPayoutRows } from "@/lib/payout/payoutQueryPagination";
 import "server-only";
 
 import { johannesburgCalendarYmd } from "@/lib/dashboard/johannesburgMonth";
-import { PAYOUT_PROCESSING_START_YMD } from "@/lib/payout/payoutProcessingCutoff";
+import { isCurrentPayoutVisitDate, normalizePayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { ensurePaystackRecipient } from "@/lib/payout/ensurePaystackRecipient";
@@ -50,12 +51,18 @@ export async function executeCleanerApprovedEarningsPaystack(
   if (!/^[0-9a-f-]{36}$/i.test(cid)) return { ok: false, error: "Invalid cleaner id", status: 400 };
 
   const currentMonthStart = `${johannesburgCalendarYmd(new Date()).slice(0, 7)}-01`;
-  const { data: eligible, error: eligibleErr } = await admin.from("cleaner_earnings")
-    .select("id, bookings!inner(date)").eq("cleaner_id", cid).eq("status", "approved")
-    .is("disbursement_id", null).gte("bookings.date", PAYOUT_PROCESSING_START_YMD)
-    .lt("bookings.date", currentMonthStart).limit(1);
-  if (eligibleErr) return { ok: false, error: eligibleErr.message, status: 500 };
-  if (!eligible?.length) return { ok: false, error: "No closed October-or-later earnings to pay out.", code: "no_approved_earnings", status: 409 };
+  let eligible;
+  try {
+    eligible=await fetchAllPayoutRows((from,to)=>admin.from("cleaner_earnings")
+      .select("id, bookings!inner(date)").eq("cleaner_id",cid).eq("status","approved")
+      .is("disbursement_id",null).order("id",{ascending:true}).range(from,to));
+  } catch(error) { return {ok:false,error:error instanceof Error?error.message:String(error),status:500}; }
+  const hasClosedVisit=eligible.some(row=>{
+    const linked=row.bookings as {date?:unknown}|Array<{date?:unknown}>|null;
+    const date=normalizePayoutVisitDate(Array.isArray(linked)?linked[0]?.date:linked?.date);
+    return isCurrentPayoutVisitDate(date) && date! < currentMonthStart;
+  });
+  if (!hasClosedVisit) return { ok: false, error: "No closed October-or-later earnings to pay out.", code: "no_approved_earnings", status: 409 };
 
   const ensured = await ensurePaystackRecipient(admin, cid);
   if (!ensured.ok) {

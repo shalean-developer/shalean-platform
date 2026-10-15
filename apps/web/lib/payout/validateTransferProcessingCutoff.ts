@@ -32,7 +32,7 @@ export async function validateTransferProcessingCutoff(
       if (!rows.length || rows.some((raw) => {
         const booking = (raw as { bookings: { date: string | null } | { date: string | null }[] }).bookings;
         const date = Array.isArray(booking) ? booking[0]?.date : booking?.date;
-        return !isCurrentPayoutVisitDate(date) || String(date) >= periodStart;
+        return !isCurrentPayoutVisitDate(date) || String(date).trim() >= periodStart;
       })) {
         return { ok: false, error: "Ledger transfers require October-or-later visits in closed months.", status: 409 };
       }

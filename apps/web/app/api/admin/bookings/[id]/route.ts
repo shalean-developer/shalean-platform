@@ -694,7 +694,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     removalMarkerBefore != null;
   const cleanerAttributionRefresh = cleanerWasChanged || restoreExistingHeaderAttribution;
 
-  if (cleanerAttributionRefresh && !isCurrentPayoutVisitDate(beforeRow?.date)) {
+  if (cleanerAttributionRefresh && !isCurrentPayoutVisitDate(String(beforeRow?.date ?? "").trim())) {
     return NextResponse.json({ error: "Historical or undated booking attribution is preserved.", code: "historical_payout_item_deferred" }, { status: 409 });
   }
 

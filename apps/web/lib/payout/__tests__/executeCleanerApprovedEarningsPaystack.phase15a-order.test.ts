@@ -155,8 +155,9 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 describe("ledger ordering with October preflight", () => {
-  it("measures before claim and persists the leased outbox before POST", async () => {
+  it.each(["2026-10-15", " 2026-10-15 "])("measures before claim and persists the leased outbox before POST for %j", async (date) => {
     const db = database();
+    db.rows.cleaner_earnings[0].bookings = {date};
     measure.mockImplementation(async () => {
       db.events.push("measure");
     });

@@ -1,3 +1,4 @@
+import {loadCurrentTeamBookings} from "@/lib/booking/loadCurrentTeamBookings";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   syncBookingCleanersForTeamBooking,
@@ -16,7 +17,7 @@ function database() {
     { id: "old", date: "2026-09-30" },
     { id: "padded", date: " 2026-09-30 " },
     { id: "unknown", date: null },
-    { id: "new", date: "2026-10-01" },
+    { id: "new", date: " 2026-10-01 " },
   ];
   const writes: Array<{ id: unknown; patch: unknown }> = [];
   const rpc = vi.fn(async () => ({ error: null }));
@@ -42,6 +43,8 @@ function database() {
           return q;
         },
         limit: () => q,
+        order: () => q,
+        range: () => q,
         update: (p: unknown) => {
           patch = p;
           return q;
@@ -90,6 +93,11 @@ function database() {
 }
 beforeEach(() => persist.mockClear());
 describe("historical team roster boundary", () => {
+  it("loads padded forward rows beyond a full page of historical candidates",async()=>{
+    const rows=Array.from({length:501},(_,i)=>({id:String(i),date:i===500?' 2026-10-02 ':'2026-09-30'}));
+    const q={select:()=>q,eq:()=>q,is:()=>q,order:()=>q,range:async(from:number,to:number)=>({data:rows.slice(from,to+1),error:null})};
+    expect(await loadCurrentTeamBookings({from:()=>q} as never,'team')).toEqual([{id:'500',date:'2026-10-02'}]);
+  });
   it.each(["old", "padded", "unknown"])(
     "blocks direct roster RPC for %s",
     async (id) => {
@@ -107,7 +115,7 @@ describe("historical team roster boundary", () => {
     expect(
       await resyncBookingCleanersForTeamNonFinalizedJobs(db as never, "team"),
     ).toEqual({ synced: 1, failed: 0 });
-    expect(db.filters).toContain("date:2026-10-01");
+    expect(db.filters).not.toContain("date:2026-10-01");
     expect(db.rpc).toHaveBeenCalledTimes(1);
     expect(db.rpc).toHaveBeenCalledWith(
       "sync_booking_cleaners_for_team_booking",

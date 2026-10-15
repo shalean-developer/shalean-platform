@@ -1,4 +1,5 @@
-import { isCurrentPayoutVisitDate, PAYOUT_PROCESSING_START_YMD } from "@/lib/payout/payoutProcessingCutoff";
+import { loadCurrentTeamBookings } from "@/lib/booking/loadCurrentTeamBookings";
+import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolvePersistCleanerIdForBooking } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
@@ -86,16 +87,9 @@ export async function resyncBookingCleanersForTeamNonFinalizedJobs(
   const tid = teamId.trim();
   if (!tid) return { synced: 0, failed: 0 };
 
-  const { data: rows, error } = await admin
-    .from("bookings")
-    .select("id, date")
-    .gte("date", PAYOUT_PROCESSING_START_YMD)
-    .eq("team_id", tid)
-    .eq("is_team_job", true)
-    .is("cleaner_line_earnings_finalized_at", null)
-    .limit(MAX_TEAM_JOBS_RESYNC);
-
-  if (error || !rows?.length) return { synced: 0, failed: 0 };
+  let rows: Array<{id:string;date:string}>;
+  try { rows=(await loadCurrentTeamBookings(admin,tid)).slice(0,MAX_TEAM_JOBS_RESYNC); }
+  catch { return {synced:0,failed:1}; }
 
   let synced = 0;
   let failed = 0;
