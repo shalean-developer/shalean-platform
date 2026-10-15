@@ -149,7 +149,8 @@ export async function findRecurringPrepaymentCycleForDate(
     .order("coverage_start_date", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (error || !data?.id) return null;
+  if (error) throw new Error(`recurring_package_lookup_failed:${error.message}`);
+  if (!data?.id) return null;
   return { packageId: String(data.id), status: String(data.status ?? "") };
 }
 
@@ -166,14 +167,15 @@ export async function findReservedRecurringPrepaymentAllocation(
     .eq("recurring_prepaid_packages.recurring_id", recurringId)
     .eq("recurring_prepaid_packages.status", "active")
     .maybeSingle();
-  if (error || !data) return null;
+  if (error) throw new Error(`recurring_allocation_lookup_failed:${error.message}`);
+  if (!data) return null;
   const packageRow = Array.isArray(data.recurring_prepaid_packages)
     ? data.recurring_prepaid_packages[0]
     : data.recurring_prepaid_packages;
   const paidAt = packageRow && typeof packageRow === "object"
     ? String((packageRow as { payment_completed_at?: unknown }).payment_completed_at ?? "")
     : "";
-  if (!paidAt) return null;
+  if (!paidAt) throw new Error("recurring_allocation_payment_evidence_missing");
   return {
     allocationId: String(data.id),
     packageId: String(data.package_id),
