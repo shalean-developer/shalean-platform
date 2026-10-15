@@ -6,6 +6,9 @@ const { PGlite }=await import(process.env.AUDIT_PGLITE_MODULE ?? '@electric-sql/
 const db=new PGlite();
 await db.exec(`create role anon; create role authenticated; create role service_role;
 create table audit_users(id uuid primary key);
+create table user_events(id uuid default gen_random_uuid(),user_id uuid,event_type text,booking_id uuid,payload jsonb);
+create unique index on user_events(booking_id) where event_type='booking_created' and booking_id is not null;
+create table user_profiles(id uuid primary key,booking_count bigint,total_spent_cents bigint,updated_at timestamptz);
 create table cleaners(id uuid primary key,joined_at timestamptz,created_at timestamptz,full_name text);
 create table team_members(team_id uuid,cleaner_id uuid);
 create table bookings(currency text, paystack_reference text,customer_email text,customer_id uuid,selected_cleaner_id uuid,assignment_type text,payment_status text,payment_completed_at timestamptz,created_at timestamptz,updated_at timestamptz,refund_status text,payment_mismatch boolean,id uuid primary key,check(not((cleaner_id is not null or selected_cleaner_id is not null) and status='pending')),date date,time text,assigned_at timestamptz,service_slug text,base_amount_cents int,service_fee_cents int,total_paid_zar numeric,total_paid_cents int,amount_paid_cents int,price_snapshot jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,team_id uuid,is_team_job boolean,cleaner_count int,team_member_count_snapshot int,
@@ -149,5 +152,14 @@ await reject(captureSql,[aliasId,'verified-new-charge',1000,JSON.stringify(alias
 await reject(`select audit_03c02_record_historical_capture($1,'verified-new-charge',1000,'ZAR',now(),$2,null,$3)`,[aliasId,JSON.stringify(aliasExpected),old]);
 await db.query(`select audit_03c02_record_historical_capture($1,'verified-new-charge',1000,'ZAR',now(),$2,null,$1)`,[aliasId,JSON.stringify(aliasExpected)]);checks++;
 assert.equal((await db.query(`select paystack_reference from bookings where id=$1`,[aliasId])).rows[0].paystack_reference,'verified-new-charge');checks++;
+await db.exec(await fs.readFile('supabase/migrations/20261015025906_audit_03c02_payment_effect_retries.sql','utf8'));
+await db.query(`update bookings set customer_id=$1 where id=$2`,[cid,aliasId]);
+await db.query(`select audit_03c02_record_payment_receipt($1,'verified-new-charge',1000)`,[aliasId]);
+await db.query(`select audit_03c02_record_payment_receipt($1,'verified-new-charge',1000)`,[aliasId]);
+assert.equal((await db.query(`select count(*)::int n from user_events where booking_id=$1`,[aliasId])).rows[0].n,1);checks++;
+assert.deepEqual((await db.query(`select booking_count::int n,total_spent_cents::int amount from user_profiles where id=$1`,[cid])).rows[0],{n:1,amount:1000});checks++;
+await reject(`select audit_03c02_record_payment_receipt($1,'wrong',1000)`,[aliasId]);
+await reject(`select audit_03c02_record_payment_receipt($1,'verified-new-charge',999)`,[aliasId]);
+for(const role of ['anon','authenticated','service_role']){assert.equal((await db.query(`select has_function_privilege($1,'audit_03c02_record_payment_receipt(uuid,text,bigint)','execute') ok`,[role])).rows[0].ok,role==='service_role');checks++;}
 console.log(`PASS ${checks} isolated PostgreSQL boundary checks (minimal schema; not live staging proof)`);
 await db.close();

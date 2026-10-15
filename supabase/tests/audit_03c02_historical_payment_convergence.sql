@@ -2,7 +2,7 @@
 begin;
 select set_config('request.jwt.claim.role','service_role',true);
 do $$
-declare probe_date text; b public.bookings; intent jsonb; succeeded jsonb; expected jsonb; result jsonb; before_basis jsonb; after_basis jsonb;
+declare receipt_count integer; prior_count bigint; prior_spent bigint; receipt_existed boolean; probe_date text; b public.bookings; intent jsonb; succeeded jsonb; expected jsonb; result jsonb; before_basis jsonb; after_basis jsonb;
  keys text[]:=array['date','cleaner_id','payout_owner_cleaner_id','team_id','base_amount_cents','service_fee_cents','price_snapshot','display_earnings_cents','internal_earnings_cents','payout_earnings_cents','cleaner_payout_cents','payout_frozen_cents'];
 begin
  foreach probe_date in array array['2026-09-30',null] loop
@@ -27,6 +27,16 @@ begin
  result:=public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,coalesce(b.currency,'ZAR'),now(),expected,null,b.id);
  if result->>'id' is distinct from b.id::text then raise exception 'FAIL capture row missing'; end if;
  if not exists(select 1 from public.bookings where id=b.id and amount_paid_cents=1000 and payment_status='success' and status='pending_assignment') then raise exception 'FAIL capture not recorded'; end if;
+ select exists(select 1 from public.user_events where booking_id=b.id and event_type='booking_created') into receipt_existed;
+ select coalesce(booking_count,0),coalesce(total_spent_cents,0) into prior_count,prior_spent from public.user_profiles where id=b.customer_id;
+ perform public.audit_03c02_record_payment_receipt(b.id,b.paystack_reference,1000);
+ perform public.audit_03c02_record_payment_receipt(b.id,b.paystack_reference,1000);
+ select count(*) into receipt_count from public.user_events where booking_id=b.id and event_type='booking_created';
+ if receipt_count<>1 then raise exception 'FAIL duplicate receipt'; end if;
+ if b.customer_id is not null and not exists(select 1 from public.user_profiles where id=b.customer_id
+   and coalesce(booking_count,0)=coalesce(prior_count,0)+case when receipt_existed then 0 else 1 end
+   and coalesce(total_spent_cents,0)=coalesce(prior_spent,0)+case when receipt_existed then 0 else 1000 end) then raise exception 'FAIL receipt counters not exactly once'; end if;
+
  begin
    update public.bookings set amount_paid_cents=800,total_paid_cents=800,total_paid_zar=8 where id=b.id;
    raise exception 'FAIL arbitrary paid-total edit';

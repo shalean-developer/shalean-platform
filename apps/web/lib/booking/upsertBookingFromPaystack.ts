@@ -1,3 +1,4 @@
+import { completeHistoricalPaymentEffects } from "@/lib/booking/historicalPaymentEffects";
 import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import { preservePaymentCustomerIdentity, paymentFinalizationReplayEquivalent } from "@/lib/booking/paymentCustomerIdentityGuard";
 import { bookingCreationLifecyclePatch } from "@/lib/booking/bookingCreationProfiles";
@@ -1402,6 +1403,12 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   if (historicalCapture) {
     await saveRecurringAuthorization();
     await refreshRecurringPaymentStateForBooking(supabase, id);
+    await completeHistoricalPaymentEffects(supabase, {
+      bookingId:id,userId:userIdForEffects,customerEmail:emailStored,amountCents:input.amountCents,
+      paystackReference:input.paystackReference,paidAtIso:paidMoment,cityId:cityId??null,
+      referralCode:String(input.paystackMetadata?.referral_code??input.paystackMetadata?.client_referralCode??"").trim(),
+    });
+    return {ok:true,skipped:false,bookingId:id,bookingInDatabase:true};
   }
 
   const runPostPersistSideEffects = async (): Promise<void> => {

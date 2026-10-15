@@ -376,6 +376,10 @@ describe("observed pending upsert conflict propagation", () => {
     const reads: string[] = [];
     const predicates: Array<[string, unknown]> = [];
     const from = vi.fn((table: string) => {
+      if(table === "failed_jobs") return {
+        insert:(jobs:unknown[])=>({select:async()=>({data:jobs.map((job,i)=>({id:String(i),...(job as object)})),error:null})}),
+        delete:()=>({eq:async()=>({error:null})}),
+      };
       if (table === "recurring_bookings") {
         return { update: (patch: Record<string, unknown>) => ({ eq: async () => {
           writes(patch); return { error: authorizationError ? {message: authorizationError} : null };
@@ -410,6 +414,7 @@ describe("observed pending upsert conflict propagation", () => {
       return query;
     });
     const rpc=vi.fn(async(_name:string,args:Record<string,unknown>)=>{
+      if (_name === "audit_03c02_record_payment_receipt") return {data:null,error:null};
       if (_name === "settle_cleaning_credit_for_booking") return {data:{ok:true,status:"settled"},error:null};
       Object.assign(current,competing);
       const expected=args.p_expected as Record<string,unknown>;
@@ -461,7 +466,7 @@ describe("observed pending upsert conflict propagation", () => {
     expect(result).toMatchObject({ ok: true, bookingId });
     expect(db.writes).toHaveBeenCalledWith(expect.objectContaining({ paystack_authorization_code: "AUTH_verified" }));
     expect(successEffect).toHaveBeenCalledExactlyOnceWith(expect.anything(), bookingId);
-    expect(paymentEffect).toHaveBeenCalledWith(expect.objectContaining({bookingId,skipLifecycleJobs:true,amountCents:12550}));
+    expect(db.rpc).toHaveBeenCalledWith("audit_03c02_record_payment_receipt",{p_booking_id:bookingId,p_reference:"pay_verified",p_amount_cents:12550});
     expect(paymentEffect).toHaveBeenCalledWith(expect.anything(),bookingId);
     expect(paymentEffect).toHaveBeenCalledWith(expect.objectContaining({bookingId,amountCents:12550,paidAtIso:expect.any(String)}));
     expect(db.writes.mock.invocationCallOrder[0]).toBeLessThan(successEffect.mock.invocationCallOrder[0]);
