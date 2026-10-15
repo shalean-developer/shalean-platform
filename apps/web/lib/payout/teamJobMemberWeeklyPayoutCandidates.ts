@@ -1,3 +1,4 @@
+import { loadMemberPayoutInvoiceStatuses } from "@/lib/payout/memberPayoutInvoiceStatuses";
 import { currentPayoutBatchDayYmd, isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -40,8 +41,8 @@ export async function listTeamJobMemberWeeklyPayoutCandidates(params: {
         .order("id", { ascending: true })
         .range(from, to),
     );
-  } catch {
-    return [];
+  } catch (error) {
+    throw new Error(`Member payout rows lookup failed: ${error instanceof Error ? error.message : String(error)}`);
   }
   if (!memberRows.length) return [];
 
@@ -62,7 +63,7 @@ export async function listTeamJobMemberWeeklyPayoutCandidates(params: {
       .in("id", idChunk)
       .eq("status", "completed")
       .eq("is_test", false);
-    if (error) return [];
+    if (error) throw new Error(`Member payout booking lookup failed: ${error.message}`);
     bookingRows.push(...(data ?? []));
   }
   if (!bookingRows.length) return [];
@@ -72,6 +73,8 @@ export async function listTeamJobMemberWeeklyPayoutCandidates(params: {
     const row = raw as BookingRowForWeeklyBatchEligibility & { id: string };
     if (row.id) bookingById.set(row.id, row);
   }
+
+  const memberInvoiceStatuses = await loadMemberPayoutInvoiceStatuses(admin, [...bookingById.values()], invoiceStatusById);
 
   const out: TeamJobMemberWeeklyPayoutCandidate[] = [];
   for (const raw of memberRows) {
@@ -99,7 +102,7 @@ export async function listTeamJobMemberWeeklyPayoutCandidates(params: {
      * Reuse the shared payment/refund/accrual gate, but provide this member row
      * as the payout basis instead of inventing a booking-level solo payout.
      */
-    const gate = bookingPayableForWeeklyBatch(booking, invoiceStatusById, {
+    const gate = bookingPayableForWeeklyBatch(booking, memberInvoiceStatuses, {
       payoutBasisCents: payoutCents,
     });
     if (!gate.payable) continue;
