@@ -47,3 +47,24 @@ Write-Host "Retirement exit code: $LASTEXITCODE"
 Verify exclusion from reports and retained history. A successful apply by itself
 is not browser acceptance. Production promotion and October record repair remain
 separate pending gates. May–September is excluded.
+
+## Live evidence — 16 October, 01:13 Johannesburg
+
+Owner supplied runtime health for af11349005a9c8dfbf226fe9a5f3c260ef7b06d8:
+staging database matches, Paystack test/test, outbound disabled, issues empty.
+Governed AUDIT956 apply succeeded. Authenticated Office booking UI showed two
+cleaners at R260 each and R520 total. Ran explicit Reset & recompute on this
+synthetic booking; admin reset action at 2026-10-15T23:13:30.627683Z and summary
+computed_at advanced to 2026-10-15T23:13:33.099Z. Both participant summary amounts
+remain 26000, internal total 52000; member row pending/unlinked at 26000; solo
+ledger count zero; payment pending/captured cash zero; payout/run/paid links null.
+October Payouts showed one booking, two cleaner visits, R520 earned/pending,
+R0 ready/batched/paid and Generate batches disabled.
+
+Full acceptance remains open: reset confirmation rendered R0 because its client
+shape expected obsolete line-total/diff fields while the API returns a canonical
+BookingEarningsSummary. It also used the lead-only display as current paired total.
+Follow-up uses the shared API type and compares canonical booking-wide totals,
+with an explicit unavailable state instead of fabricated zero. Leave AUDIT956
+active until the reviewed/deployed preview follow-up is verified, then retire.
+No production earnings changes were made.
