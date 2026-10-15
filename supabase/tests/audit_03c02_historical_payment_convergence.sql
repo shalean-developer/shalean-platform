@@ -2,13 +2,16 @@
 begin;
 select set_config('request.jwt.claim.role','service_role',true);
 do $$
-declare before_capture jsonb; queue_count integer; receipt_count integer; prior_count bigint; prior_spent bigint; receipt_existed boolean; probe_date text; b public.bookings; intent jsonb; succeeded jsonb; expected jsonb; result jsonb; before_basis jsonb; after_basis jsonb;
+declare probe_plan uuid; before_capture jsonb; queue_count integer; receipt_count integer; prior_count bigint; prior_spent bigint; receipt_existed boolean; probe_date text; b public.bookings; intent jsonb; succeeded jsonb; expected jsonb; result jsonb; before_basis jsonb; after_basis jsonb;
  keys text[]:=array['date','cleaner_id','payout_owner_cleaner_id','team_id','base_amount_cents','service_fee_cents','price_snapshot','display_earnings_cents','internal_earnings_cents','payout_earnings_cents','cleaner_payout_cents','payout_frozen_cents'];
 begin
  foreach probe_date in array array['2026-09-30',null] loop
  select * into b from public.bookings where status='pending_payment' and payout_id is null
    and monthly_invoice_id is null and billing_type='prepaid' and nullif(paystack_reference,'') is not null order by id limit 1;
  if not found then raise exception 'staging pending-payment fixture unavailable'; end if;
+ insert into public.recurring_bookings(customer_id,frequency,days_of_week,start_date,price,next_run_date)
+ values(coalesce(b.customer_id,(select id from auth.users order by id limit 1)),'weekly',array[1],date '2026-10-01',100,date '2026-10-19') returning id into probe_plan;
+ update public.bookings set recurring_id=probe_plan where id=b.id;
  intent:=jsonb_build_object('version',1,'captured_cents',1000,'refunded_cents',0,'currency','ZAR','records',jsonb_build_array(
    jsonb_build_object('id','audit-refund','amount_cents',200,'currency','ZAR','record_only',false,'provider_state','submitted_to_provider')));
  update public.bookings set paystack_reference=case when probe_date is null then id::text else paystack_reference end,selected_cleaner_id=(select id from public.cleaners order by id limit 1),booking_snapshot=coalesce(booking_snapshot,'{}')||jsonb_build_object('refund_workflow',intent) where id=b.id;
@@ -24,19 +27,27 @@ begin
    perform public.audit_03c02_record_historical_capture(b.id,'wrong-reference',1000,'ZAR',now(),expected);
    raise exception 'FAIL wrong charge reference';
  exception when check_violation then if sqlerrm<>'historical_capture_identity_mismatch' then raise; end if; end;
+ alter table public.recurring_bookings add constraint audit_reject_auth check(paystack_authorization_code is null) not valid;
+ begin
+   perform public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,'ZAR',now(),expected,null,b.id,'{"authorizationCode":"AUTH_audit"}'::jsonb);
+   raise exception 'FAIL authorization failure accepted';
+ exception when check_violation then if sqlerrm not like '%audit_reject_auth%' then raise; end if; end;
+ alter table public.recurring_bookings drop constraint audit_reject_auth;
+ if (select status from public.bookings where id=b.id)<>expected->>'status' then raise exception 'FAIL capture survived authorization failure'; end if;
  select to_jsonb(x) into before_capture from public.bookings x where id=b.id;
  select count(*) into queue_count from public.failed_jobs where type='historical_payment_effect' and payload->>'bookingId'=b.id::text;
  alter table public.failed_jobs add constraint audit_reject_effect_queue check(type<>'historical_payment_effect') not valid;
  begin
-   perform public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,' zar ',now(),expected,null,b.id);
+   perform public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,' zar ',now(),expected,null,b.id,'{"authorizationCode":"AUTH_audit"}'::jsonb);
    raise exception 'FAIL queue failure accepted';
  exception when check_violation then if sqlerrm not like '%audit_reject_effect_queue%' then raise; end if; end;
  alter table public.failed_jobs drop constraint audit_reject_effect_queue;
  if before_capture is distinct from (select to_jsonb(x) from public.bookings x where id=b.id) then raise exception 'FAIL capture survived queue failure'; end if;
  if (select count(*) from public.failed_jobs where type='historical_payment_effect' and payload->>'bookingId'=b.id::text)<>queue_count then raise exception 'FAIL partial queue survived'; end if;
- result:=public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,' zar ',now(),expected,null,b.id);
- if (select count(*) from public.failed_jobs where type='historical_payment_effect' and payload->>'bookingId'=b.id::text)<>queue_count+6 then raise exception 'FAIL capture missing effect queue'; end if;
+ result:=public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,' zar ',now(),expected,null,b.id,'{"authorizationCode":"AUTH_audit"}'::jsonb);
+ if (select count(*) from public.failed_jobs where type='historical_payment_effect' and payload->>'bookingId'=b.id::text)<>queue_count+7 then raise exception 'FAIL capture missing effect queue'; end if;
 
+ if (select paystack_authorization_code from public.recurring_bookings where id=probe_plan) is distinct from 'AUTH_audit' then raise exception 'FAIL authorization missing after capture'; end if;
  if result->>'id' is distinct from b.id::text then raise exception 'FAIL capture row missing'; end if;
  if not exists(select 1 from public.bookings where id=b.id and amount_paid_cents=1000 and payment_status='success' and status='pending_assignment') then raise exception 'FAIL capture not recorded'; end if;
  select exists(select 1 from public.user_events where booking_id=b.id and event_type='booking_created') into receipt_existed;

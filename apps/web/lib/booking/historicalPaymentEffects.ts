@@ -1,4 +1,6 @@
 import 'server-only';
+import {refreshRecurringPaymentStateForBooking} from '@/lib/recurring/refreshRecurringPaymentStateForBooking';
+import {settleCleaningCreditForBooking} from '@/lib/referrals/creditReservations';
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {cancelUnsentBookingPaymentRecoveryJobs} from '@/lib/booking/cancelUnsentBookingPaymentRecoveryJobs';
 import {createPendingCustomerReferral,processCustomerReferralAfterFirstPaidBooking} from '@/lib/referrals/server';
@@ -8,7 +10,7 @@ import {recordConversionExperimentResultsOnPayment} from '@/lib/conversion/conve
 import {learnFromPaymentSuccess} from '@/lib/ai-autonomy/learningLoop';
 import {reportOperationalIssue} from '@/lib/logging/systemLog';
 export const HISTORICAL_PAYMENT_EFFECT_JOB='historical_payment_effect';
-const effects=['cancel_recovery','receipt','referral','city','growth','conversion'] as const;
+const effects=['payment_state','cancel_recovery','receipt','referral','city','growth','conversion'] as const;
 export type HistoricalPaymentEffectPayload={bookingId:string;userId:string|null;customerEmail:string;amountCents:number;paystackReference:string;paidAtIso:string;cityId:string|null;referralCode:string;effect?:typeof effects[number]};
 
 /** Observe returned DB errors even when older helpers log and return instead of throwing. */
@@ -33,6 +35,12 @@ export async function runHistoricalPaymentEffect(admin:SupabaseClient,p:Historic
   if(!p.effect || !effects.includes(p.effect)) throw new Error('invalid_historical_payment_effect');
   const failures:string[]=[];const db=observePaymentEffectErrors(admin,failures);
   switch(p.effect){
+    case 'payment_state': {
+      const settlement=await settleCleaningCreditForBooking(db,p.bookingId);
+      if(!settlement.ok && settlement.error!=='reservation_not_found') throw new Error(`cleaning_credit_settlement_failed:${settlement.error}`);
+      await refreshRecurringPaymentStateForBooking(db,p.bookingId);break;
+    }
+
     case 'cancel_recovery': await cancelUnsentBookingPaymentRecoveryJobs(db,p.bookingId);break;
     case 'receipt': {const {error}=await db.rpc('audit_03c02_record_payment_receipt',{p_booking_id:p.bookingId,p_reference:p.paystackReference,p_amount_cents:p.amountCents});if(error) failures.push(error.message);break;}
     case 'referral':
@@ -50,10 +58,12 @@ export async function completeHistoricalPaymentEffects(admin:SupabaseClient,p:Hi
   const {data,error}=await admin.from('failed_jobs').select('id,payload')
     .eq('type',HISTORICAL_PAYMENT_EFFECT_JOB).contains('payload',{bookingId:p.bookingId});
   if(error) throw new Error('historical_payment_effect_queue_read_failed');
+  let criticalFailure:unknown;
   for(const job of data??[]){
     try {await runHistoricalPaymentEffect(admin,job.payload as HistoricalPaymentEffectPayload);await admin.from('failed_jobs').delete().eq('id',job.id);}
-    catch(error){await reportOperationalIssue('warn','historicalPaymentEffects','Payment effect retained for retry',{bookingId:p.bookingId,effect:(job.payload as HistoricalPaymentEffectPayload).effect,error:String(error)});}
+    catch(error){if((job.payload as HistoricalPaymentEffectPayload).effect==='payment_state') criticalFailure=error;await reportOperationalIssue('warn','historicalPaymentEffects','Payment effect retained for retry',{bookingId:p.bookingId,effect:(job.payload as HistoricalPaymentEffectPayload).effect,error:String(error)});}
   }
+  if(criticalFailure) throw criticalFailure;
   // Learning is advisory and does not own financial/customer attribution completion.
   void learnFromPaymentSuccess(admin,{userId:p.userId,bookingId:p.bookingId,amountCents:p.amountCents});
 }

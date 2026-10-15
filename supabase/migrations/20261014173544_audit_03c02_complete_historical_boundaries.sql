@@ -69,6 +69,11 @@ begin
    payment_completed_at=p_paid_at,payment_status=case when b.payment_status='pending_monthly' then b.payment_status else 'success' end,
    status=case when b.cleaner_id is not null or b.selected_cleaner_id is not null then 'pending_assignment' else 'pending' end,updated_at=now() where id=b.id;
  perform set_config('shalean.verified_booking_capture',coalesce(prior_context,''),true);
+ -- Authorization belongs to this capture transaction, never a lossy post-capture write.
+ if b.recurring_id is not null and nullif(btrim(p_effect_context->>'authorizationCode'),'') is not null then
+   update public.recurring_bookings set paystack_authorization_code=btrim(p_effect_context->>'authorizationCode'),updated_at=now() where id=b.recurring_id;
+   if not found then raise exception 'recurring_authorization_plan_missing' using errcode='23514'; end if;
+ end if;
  -- Capture and all required follow-up tasks commit together. Any queue error rolls back cash/status too.
  insert into public.failed_jobs(type,payload)
  select 'historical_payment_effect',jsonb_build_object(
@@ -76,7 +81,7 @@ begin
    'customerEmail',b.customer_email,'amountCents',p_amount_cents,'paystackReference',p_reference,
    'paidAtIso',p_paid_at,'cityId',coalesce(p_effect_context->'cityId',to_jsonb(b)->'city_id'),
    'referralCode',coalesce(p_effect_context->>'referralCode',''),'effect',effect)
- from unnest(array['cancel_recovery','receipt','referral','city','growth','conversion']) effect;
+ from unnest(array['payment_state','cancel_recovery','receipt','referral','city','growth','conversion']) effect;
 
  select jsonb_build_object('id',id,'created_at',created_at) into result from public.bookings where id=b.id;
  return result;

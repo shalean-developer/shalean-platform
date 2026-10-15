@@ -377,7 +377,7 @@ describe("observed pending upsert conflict propagation", () => {
     const predicates: Array<[string, unknown]> = [];
     const from = vi.fn((table: string) => {
       if(table === "failed_jobs") return {
-        select:()=>({eq:()=>({contains:async()=>({data:['cancel_recovery','receipt','referral','city','growth','conversion'].map((effect,i)=>({id:String(i),payload:{bookingId,userId:'owner-a',customerEmail:'payer@example.com',amountCents:12550,paystackReference:'pay_verified',paidAtIso:'2026-10-14T12:00:00Z',cityId:null,referralCode:'',effect}})),error:null})})}),
+        select:()=>({eq:()=>({contains:async()=>({data:['payment_state','cancel_recovery','receipt','referral','city','growth','conversion'].map((effect,i)=>({id:String(i),payload:{bookingId,userId:'owner-a',customerEmail:'payer@example.com',amountCents:12550,paystackReference:'pay_verified',paidAtIso:'2026-10-14T12:00:00Z',cityId:null,referralCode:'',effect}})),error:null})})}),
         delete:()=>({eq:async()=>({error:null})}),
       };
       if (table === "recurring_bookings") {
@@ -416,6 +416,7 @@ describe("observed pending upsert conflict propagation", () => {
     const rpc=vi.fn(async(_name:string,args:Record<string,unknown>)=>{
       if (_name === "audit_03c02_record_payment_receipt") return {data:null,error:null};
       if (_name === "settle_cleaning_credit_for_booking") return {data:{ok:true,status:"settled"},error:null};
+      if(authorizationError) return {data:null,error:{message:authorizationError}};
       Object.assign(current,competing);
       const expected=args.p_expected as Record<string,unknown>;
       if(!Object.entries(expected).every(([key,value])=>current[key]===value))return {data:null,error:{message:'historical_capture_identity_mismatch',code:'23514'}};
@@ -449,13 +450,14 @@ describe("observed pending upsert conflict propagation", () => {
   });
 
   it("reports failed authorization persistence for recovery instead of historical success", async () => {
-    pendingDb("paystack_reference", {}, {
+    const db=pendingDb("paystack_reference", {}, {
       date: "2026-09-30", recurring_id: "00000000-0000-4000-8000-000000000002", is_recurring_generated: true,
     }, "transient write failure");
     const result = await upsertBookingFromPaystack(input({ paystackAuthorizationCode: "AUTH_verified" }));
-    expect(result).toMatchObject({ok:false,reason:"finalization_failed",error:"recurring_authorization_save_failed",recoveryEnqueue:true});
+    expect(result).toMatchObject({ok:false,error:"transient write failure"});
+    expect(db.current.status).toBe("pending_payment");
     expect(successEffect).not.toHaveBeenCalled();
-    expect(enqueueFailedJob).toHaveBeenCalledWith("booking_finalize", expect.objectContaining({paystackReference:"pay_verified"}));
+    expect(enqueueFailedJob).not.toHaveBeenCalled();
   });
 
   it.each([null, "2026-09-30"])("preserves recurring authorization and refreshes historical payment state for %s", async (date) => {
@@ -464,12 +466,12 @@ describe("observed pending upsert conflict propagation", () => {
     });
     const result = await upsertBookingFromPaystack(input({ paystackAuthorizationCode: "AUTH_verified", deferPostPersistSideEffects: true }));
     expect(result).toMatchObject({ ok: true, bookingId });
-    expect(db.writes).toHaveBeenCalledWith(expect.objectContaining({ paystack_authorization_code: "AUTH_verified" }));
+    expect(db.rpc).toHaveBeenCalledWith("audit_03c02_record_historical_capture",expect.objectContaining({p_effect_context:expect.objectContaining({authorizationCode:"AUTH_verified"})}));
     expect(successEffect).toHaveBeenCalledExactlyOnceWith(expect.anything(), bookingId);
     expect(db.rpc).toHaveBeenCalledWith("audit_03c02_record_payment_receipt",{p_booking_id:bookingId,p_reference:"pay_verified",p_amount_cents:12550});
     expect(paymentEffect).toHaveBeenCalledWith(expect.anything(),bookingId);
     expect(paymentEffect).toHaveBeenCalledWith(expect.objectContaining({bookingId,amountCents:12550,paidAtIso:expect.any(String)}));
-    expect(db.writes.mock.invocationCallOrder[0]).toBeLessThan(successEffect.mock.invocationCallOrder[0]);
+    expect(db.rpc.mock.invocationCallOrder[0]).toBeLessThan(successEffect.mock.invocationCallOrder[0]);
     expect(enqueueFailedJob).not.toHaveBeenCalled();
   });
 

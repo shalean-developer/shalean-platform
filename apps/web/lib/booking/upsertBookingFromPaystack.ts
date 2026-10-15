@@ -1152,7 +1152,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       observed,
       ownershipColumn,
       historicalBooking: !isCurrentPayoutVisitDate(String(existing?.date ?? "").trim()),
-      historicalEffectContext:{cityId:cityId??null,referralCode:String(input.paystackMetadata?.referral_code??input.paystackMetadata?.client_referralCode??"").trim()},
+      historicalEffectContext:{cityId:cityId??null,authorizationCode:input.paystackAuthorizationCode?.trim()??"",referralCode:String(input.paystackMetadata?.referral_code??input.paystackMetadata?.client_referralCode??"").trim()},
       verifiedMetadataBookingId:pendingFinalizeMatch==="id"?existingPendingPaymentId??undefined:undefined,
     });
 
@@ -1359,6 +1359,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   // Cleaning Credit is payment-critical. It must settle synchronously before any
   // optional/deferred post-persist work so a late verified Paystack success cannot
   // be reported as finalized while its released credit remains unreconciled.
+  if (!historicalCapture) {
   const creditSettlement = await settleCleaningCreditForBooking(supabase, id);
   if (!creditSettlement.ok && creditSettlement.error !== "reservation_not_found") {
     await reportOperationalIssue(
@@ -1368,6 +1369,8 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       { bookingId: id, paystackReference: input.paystackReference },
     );
     throw new Error(`cleaning_credit_settlement_failed:${creditSettlement.error}`);
+  }
+
   }
 
   const saveRecurringAuthorization = async (): Promise<void> => {
@@ -1402,8 +1405,6 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   // Payment convergence must also retain authorization for future recurring charges.
   // Historical roster, earnings, and dispatch work remains deferred.
   if (historicalCapture) {
-    await saveRecurringAuthorization();
-    await refreshRecurringPaymentStateForBooking(supabase, id);
     await completeHistoricalPaymentEffects(supabase, {
       bookingId:id,userId:userIdForEffects,customerEmail:emailStored,amountCents:input.amountCents,
       paystackReference:input.paystackReference,paidAtIso:paidMoment,cityId:cityId??null,

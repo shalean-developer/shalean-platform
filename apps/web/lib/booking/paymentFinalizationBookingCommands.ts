@@ -99,7 +99,7 @@ export async function finalizePendingPaymentBookingFromPaystack(params: {
   observed: PaymentFinalizationObservedPendingBooking;
   ownershipColumn: BookingCustomerOwnershipColumn;
   historicalBooking?: boolean;
-  historicalEffectContext?: {cityId:string|null;referralCode:string};
+  historicalEffectContext?: {cityId:string|null;referralCode:string;authorizationCode?:string};
   verifiedMetadataBookingId?: string;
   historicalMismatch?: "amount_mismatch" | "currency_mismatch";
 }): Promise<{ data: PaymentFinalizationPersistedBookingRow | null; error: DbError | null }> {

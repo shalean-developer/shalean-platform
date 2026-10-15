@@ -12,7 +12,8 @@ create unique index on user_events(booking_id) where event_type='booking_created
 create table user_profiles(id uuid primary key,booking_count bigint,total_spent_cents bigint,updated_at timestamptz);
 create table cleaners(id uuid primary key,joined_at timestamptz,created_at timestamptz,full_name text);
 create table team_members(team_id uuid,cleaner_id uuid);
-create table bookings(currency text, paystack_reference text,customer_email text,customer_id uuid,selected_cleaner_id uuid,assignment_type text,payment_status text,payment_completed_at timestamptz,created_at timestamptz,updated_at timestamptz,refund_status text,payment_mismatch boolean,id uuid primary key,check(not((cleaner_id is not null or selected_cleaner_id is not null) and status='pending')),date date,time text,assigned_at timestamptz,service_slug text,base_amount_cents int,service_fee_cents int,total_paid_zar numeric,total_paid_cents int,amount_paid_cents int,price_snapshot jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,team_id uuid,is_team_job boolean,cleaner_count int,team_member_count_snapshot int,
+create table recurring_bookings(id uuid primary key,paystack_authorization_code text,updated_at timestamptz);
+create table bookings(recurring_id uuid,currency text, paystack_reference text,customer_email text,customer_id uuid,selected_cleaner_id uuid,assignment_type text,payment_status text,payment_completed_at timestamptz,created_at timestamptz,updated_at timestamptz,refund_status text,payment_mismatch boolean,id uuid primary key,check(not((cleaner_id is not null or selected_cleaner_id is not null) and status='pending')),date date,time text,assigned_at timestamptz,service_slug text,base_amount_cents int,service_fee_cents int,total_paid_zar numeric,total_paid_cents int,amount_paid_cents int,price_snapshot jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,team_id uuid,is_team_job boolean,cleaner_count int,team_member_count_snapshot int,
 status text,payout_id uuid,payout_status text,payout_paid_at timestamptz,payout_frozen_cents int,
 cleaner_payout_cents int,cleaner_bonus_cents int,display_earnings_cents int,internal_earnings_cents int,payout_earnings_cents int,cleaner_earnings_total_cents int,company_revenue_cents int,
 cleaner_share_percentage numeric,earnings_summary jsonb,cleaner_line_earnings_finalized_at timestamptz,earnings_model_version text,payout_percentage numeric,payout_type text,
@@ -136,11 +137,19 @@ await db.query(refundSql,[JSON.stringify({refund_workflow:succeeded}),old]);chec
 await reject(`update bookings set amount_paid_cents=700,total_paid_cents=700,total_paid_zar=7 where id=$1`,[old]);
 // Historical charge convergence uses only the service-role RPC and original identity.
 await db.query(`update bookings set status='pending_payment',currency='ZAR' where id=$1`,[old]);
+await db.query('insert into recurring_bookings(id) values($1)',[cid]);
+await db.query('update bookings set recurring_id=$1 where id=$2',[cid,old]);
 const expected={customer_id:null,status:'pending_payment',paystack_reference:'charge-1',customer_email:null,cleaner_id:cid,selected_cleaner_id:null,assignment_type:null};
-const captureSql=`select audit_03c02_record_historical_capture($1,$2,$3,'ZAR','2026-10-14T12:00:00Z',$4)`;
+const captureSql=`select audit_03c02_record_historical_capture($1,$2,$3,'ZAR','2026-10-14T12:00:00Z',$4,null,null,'{"authorizationCode":"AUTH_atomic"}'::jsonb)`;
 await reject(captureSql,[old,'wrong-reference',1000,JSON.stringify(expected)]);
 await reject(captureSql,[old,'charge-1',-1,JSON.stringify(expected)]);
 await reject(captureSql,[old,'charge-1',1000,JSON.stringify({...expected,cleaner_id:other})]);
+await db.exec("alter table recurring_bookings add constraint reject_auth_write check(paystack_authorization_code is null) not valid");
+const beforeAuthFailure=(await db.query('select to_jsonb(b) row from bookings b where id=$1',[old])).rows[0].row;
+await reject(captureSql,[old,'charge-1',1000,JSON.stringify(expected)]);
+assert.deepEqual((await db.query('select to_jsonb(b) row from bookings b where id=$1',[old])).rows[0].row,beforeAuthFailure);checks++;
+assert.equal((await db.query('select paystack_authorization_code from recurring_bookings where id=$1',[cid])).rows[0].paystack_authorization_code,null);checks++;
+await db.exec('alter table recurring_bookings drop constraint reject_auth_write');
 const beforeQueueFailure=(await db.query('select to_jsonb(b) row from bookings b where id=$1',[old])).rows[0].row;
 await db.exec("alter table failed_jobs add constraint reject_effect_queue check(type<>'historical_payment_effect') not valid");
 await reject(captureSql,[old,'charge-1',1000,JSON.stringify(expected)]);
@@ -148,8 +157,9 @@ assert.deepEqual((await db.query('select to_jsonb(b) row from bookings b where i
 assert.equal((await db.query('select count(*)::int n from failed_jobs')).rows[0].n,0);checks++;
 await db.exec('alter table failed_jobs drop constraint reject_effect_queue');
 await db.query(captureSql,[old,'charge-1',1000,JSON.stringify(expected)]);checks++;
-assert.equal((await db.query("select count(*)::int n from failed_jobs where payload->>'bookingId'=$1",[old])).rows[0].n,6);checks++;
+assert.equal((await db.query("select count(*)::int n from failed_jobs where payload->>'bookingId'=$1",[old])).rows[0].n,7);checks++;
 
+assert.equal((await db.query('select paystack_authorization_code from recurring_bookings where id=$1',[cid])).rows[0].paystack_authorization_code,'AUTH_atomic');checks++;
 assert.equal((await db.query(`select status from bookings where id=$1`,[old])).rows[0].status,'pending_assignment');checks++;
 assert.equal((await db.query(`select amount_paid_cents from bookings where id=$1`,[old])).rows[0].amount_paid_cents,1000);checks++;
 await reject(`update bookings set total_paid_cents=999 where id=$1`,[old]);
