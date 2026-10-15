@@ -98,6 +98,19 @@ describe("parseRecurringGeneratorRunMessage", () => {
 describe("recurringGeneratorCronWarning", () => {
   const fmt = (iso: string | null) => iso ?? "never";
 
+  it("shows pending package payment separately from generator failures", () => {
+    const message = JSON.stringify({ failed: 0, skipped_plans: 0, awaiting_payment: 3 });
+    expect(parseRecurringGeneratorRunMessage(message)?.awaiting_payment).toBe(3);
+    const w = recurringGeneratorCronWarning({
+      job_name: "generate-recurring-bookings", last_success_at: new Date().toISOString(),
+      last_run_at: new Date().toISOString(), last_run_status: "success", last_run_message: message,
+      errors_last_24h: 70,
+    }, fmt);
+    expect(w?.severity).toBe("amber");
+    expect(w?.message).toContain("3 recurring occurrence(s) await package payment");
+    expect(recurringGeneratorCronStatus({ scanned: 1, generated: 1, skipped_duplicate: 0, failed: 0, skipped_plans: 0, awaiting_payment: 3 })).toBe("success");
+  });
+
   it("surfaces insert failures on the latest run as red", () => {
     const w = recurringGeneratorCronWarning(
       {

@@ -6,6 +6,8 @@ export type RecurringGeneratorRunCounters = {
   skipped_duplicate: number;
   /** Insert / generation errors for a scheduled occurrence date. */
   failed: number;
+  /** Covered occurrences held until their existing package is paid. */
+  awaiting_payment?: number;
   /**
    * Active plans skipped due to missing email, profile, or unsupported billing.
    * Empty generation windows are NOT counted here (healthy no-op).
@@ -74,6 +76,7 @@ export function parseRecurringGeneratorRunMessage(
     const legacySkipped =
       typeof o.skipped === "number" && typeof o.failed !== "number" && typeof o.skipped_duplicate !== "number";
     return {
+      ...(typeof o.awaiting_payment === "number" ? { awaiting_payment: o.awaiting_payment } : {}),
       scanned: typeof o.scanned === "number" ? o.scanned : undefined,
       generated: typeof o.generated === "number" ? o.generated : undefined,
       skipped_duplicate:
@@ -158,6 +161,14 @@ export function recurringGeneratorCronWarning(
       show: true,
       severity: "amber",
       message: `Generator is running (last success ${formatTs(job.last_success_at)}) but skipped ${lastRunParsed!.skipped_plans} plan(s) (profile/email/billing). Repair those plans — this is not a cron outage.`,
+    };
+  }
+
+  if ((lastRunParsed?.awaiting_payment ?? 0) > 0) {
+    return {
+      show: true,
+      severity: "amber",
+      message: `${lastRunParsed!.awaiting_payment} recurring occurrence(s) await package payment. The generator is running; no additional charge was created for those visits.`,
     };
   }
 

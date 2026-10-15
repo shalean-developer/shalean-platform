@@ -87,6 +87,11 @@ export async function insertRecurringOccurrenceBooking(
   },
 ): Promise<{ ok: true; bookingId: string; paystackReference: string } | { ok: false; error: string }> {
   if (!isCurrentPayoutVisitDate(params.occurrenceDateYmd)) return {ok:false,error:"historical_payout_item_deferred"};
+  // Paid package allocations become applied, so they no longer appear in the
+  // reserved-allocation lookup. Existing visits must win before classifying a cycle.
+  if (await recurringPlanOccurrenceRowExists(admin, params.recurring.id, params.occurrenceDateYmd)) {
+    return { ok: false, error: "duplicate_occurrence" };
+  }
   const template = cloneSnapshotTemplate(params.recurring.booking_snapshot_template);
   if (!template?.locked) {
     return { ok: false, error: "recurring_bookings.booking_snapshot_template missing valid locked payload." };
@@ -98,14 +103,20 @@ export async function insertRecurringOccurrenceBooking(
   });
 
   const priceZar = Math.max(1, Math.round(Number(params.recurring.price)));
-  const existingPrepaidAllocation = await findReservedRecurringPrepaymentAllocation(
-    admin,
-    params.recurring.id,
-    params.occurrenceDateYmd,
-  );
-  const existingCycle = existingPrepaidAllocation
-    ? null
-    : await findRecurringPrepaymentCycleForDate(admin, params.recurring.id, params.occurrenceDateYmd);
+  let existingPrepaidAllocation: Awaited<ReturnType<typeof findReservedRecurringPrepaymentAllocation>>;
+  let existingCycle: Awaited<ReturnType<typeof findRecurringPrepaymentCycleForDate>>;
+  try {
+    existingPrepaidAllocation = await findReservedRecurringPrepaymentAllocation(
+      admin,
+      params.recurring.id,
+      params.occurrenceDateYmd,
+    );
+    existingCycle = existingPrepaidAllocation
+      ? null
+      : await findRecurringPrepaymentCycleForDate(admin, params.recurring.id, params.occurrenceDateYmd);
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "recurring_prepayment_lookup_failed" };
+  }
   if (existingCycle) {
     return {
       ok: false,
