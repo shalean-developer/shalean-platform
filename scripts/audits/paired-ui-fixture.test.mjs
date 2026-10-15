@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assertTarget, fixturePlan, applyFixture, retireFixture, ids, TAG } from './paired-ui-fixture.mjs';
+import { assertTarget, fixturePlan, applyFixture, retireFixture, runPairedUiSeed, ids, TAG } from './paired-ui-fixture.mjs';
 const ref = 'aaaaaaaaaaaaaaaaaaaa';
 const env = { SHALEAN_APP_ENV: 'staging', AUDIT_STAGING_REF: ref, SUPABASE_PROD_REF: 'bbbbbbbbbbbbbbbbbbbb', NEXT_PUBLIC_SUPABASE_URL: `https://${ref}.supabase.co` };
 const health = { deployment: 'staging', shaleanAppEnv: 'staging', supabase: { configuredRef: ref, expectedRef: ref }, paystack: { secretMode: 'test', publicMode: 'test' }, messaging: { outboundDisabled: true }, issues: [] };
@@ -37,7 +37,7 @@ test('database lookup failures stop before any identity or data writes', async (
 });
 test('existing booking collision fails closed without overwriting it', async () => {
   const c = client(() => ({ data: [{ id: ids.booking }] }));
-  await assert.rejects(applyFixture(c, fixturePlan()), /already exists or collides/);
+  await assert.rejects(applyFixture(c, fixturePlan()), /Booking collision/);
   assert.deepEqual(c.writes, []);
 });
 const booking = { id: ids.booking, metadata: { audit_fixture: TAG }, paystack_reference: TAG, payout_status: 'pending', payout_id: null, payout_run_id: null, payout_paid_at: null };
@@ -79,7 +79,7 @@ test('fixture respects live assigned-status and unpaid earnings-cap SQL constrai
 test('new cleaner inserts leave payment ID allocation to the database', async () => {
   const c = client((table, operation) => {
     if (table === 'bookings' && operation === 'select') return { data: [] };
-    if (table === 'cleaners' && operation === 'select') return { data: [] };
+    if (operation === 'select') return { data: [] };
     if (table === 'cleaners' && operation === 'insert') return { data: null };
     return { error: { message: 'stop after cleaner creation' } };
   });
@@ -91,4 +91,50 @@ test('new cleaner inserts leave payment ID allocation to the database', async ()
   const cleaners = c.writes.filter(w => w.table === 'cleaners');
   assert.equal(cleaners.length, 2);
   assert(cleaners.every(w => !Object.hasOwn(w.value, 'payment_id')));
+});
+function resumableClient(initial) {
+  const state = { bookings: [initial], booking_cleaners: [{ booking_id: ids.booking, cleaner_id: ids.lead, role: 'lead' }], booking_roster_member_payouts: [], team_job_member_payouts: [], cleaner_earnings: [],
+    cleaners: [ids.lead,ids.member].map((id,i) => ({ id, email: `audit951.${i ? 'member':'lead'}@example.com`, auth_user_id: id })) };
+  let failTable = '';
+  const writes = [];
+  const admin = { state, writes, fail(table) { failTable=table; }, auth: { admin: { listUsers: async () => ({ data: { users: state.cleaners.map(c => ({id:c.auth_user_id,email:c.email,app_metadata:{audit_fixture:TAG,is_test:true,role:'cleaner'}})) } }) } },
+    from(table) {
+      let operation='select', value, filter, single=false;
+      const q={ select(){return q;}, or(){return q;}, eq(key,v){filter=[key,v];return q;}, single(){single=true;return q;},
+        insert(v){operation='insert';value=v;return q;},update(v){operation='update';value=v;return q;},
+        then(resolve,reject){return Promise.resolve().then(()=>{
+          if(operation!=='select' && failTable===table){failTable='';return {error:{message:'interrupted'}};}
+          let rows=state[table].filter(r=>!filter || r[filter[0]]===filter[1]);
+          if(operation==='insert'){state[table].push(value);writes.push({table,operation});rows=[value];}
+          if(operation==='update'){for(const r of rows)Object.assign(r,value);writes.push({table,operation});}
+          return {data:single?rows[0]:rows};
+        }).then(resolve,reject);},
+      };return q;
+    },
+  }; return admin;
+}
+test('partial financially material fixture resumes without delete or duplicate, including rerun and reset', async () => {
+  const plan=fixturePlan(new Date('2026-10-15T12:00:00Z'));
+  const c=resumableClient({...plan,status:'assigned',is_test:true});
+  c.fail('booking_roster_member_payouts');
+  await assert.rejects(applyFixture(c,plan), /Create synthetic member earnings failed/);
+  assert.equal(c.state.bookings[0].is_test,true);
+  await applyFixture(c,plan);
+  await applyFixture(c,fixturePlan(new Date('2026-10-16T12:00:00Z')));
+  assert.equal(c.state.bookings.length,1);assert.equal(c.state.booking_cleaners.length,2);assert.equal(c.state.booking_roster_member_payouts.length,1);
+  assert.equal(c.state.bookings[0].date,'2026-10-15');
+  assert.equal(c.state.bookings[0].is_test,false);
+  await retireFixture(c);assert.equal(c.state.bookings[0].is_test,true);
+  await applyFixture(c,plan);assert.equal(c.state.bookings[0].is_test,false);
+  assert.equal(c.state.booking_roster_member_payouts.length,1);
+});
+test('resuming a settled or modified fixture fails before any mutation', async () => {
+  const plan=fixturePlan();
+  for(const patch of [{payout_run_id:'run'},{cleaner_payout_cents:999},{earnings_summary:{per_cleaner_earnings:[]}}]) {
+    const c=resumableClient({...plan,...patch});await assert.rejects(applyFixture(c,plan));assert.deepEqual(c.writes,[]);
+  }
+});
+
+test('governed paired runner requires exact staging allowlist before any request', async () => {
+  for (const allow of ['', env.SUPABASE_PROD_REF, `${ref},${env.SUPABASE_PROD_REF}`]) await assert.rejects(runPairedUiSeed({}, {...env,SEED_ALLOWED_PROJECT_REFS:allow}), /allowlisted/);
 });

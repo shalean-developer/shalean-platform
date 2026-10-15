@@ -39,6 +39,9 @@
   npm run db:seed:dev:reset  # wipe seed rows then re-seed
   npm run db:seed:dev:dry-run  # print plan without writing
   npm run db:seed:reference  # export reference pricing from dev DB
+  npm run db:seed:dev -- --paired-ui-only --dry-run # local paired fixture plan
+  npm run db:seed:dev -- --paired-ui-only # bounded, resumable staging-only pair
+  npm run db:seed:dev -- --paired-ui-only --reset # retire pair from reports; retain history
   ```
 - The seed creates: 1 city (Cape Town), 7 suburbs, 6 pricing services, 26 extras, 17 auth users (3 admin, 6 cleaner, 8 customer), 15 bookings, 3 recurring schedules, 5 earnings rows, up to 5 standalone payout rows (only after an October-or-later month closes), 2 monthly invoices, 5 admin proposals.
 - The forward seed generation uses `DEVSEED-OCT2026-*` references and separate financial fixture IDs. Earlier `DEVSEED-BK-*` bookings and their shared cleaner/team parents are retained; reset targets only the forward generation. ENV-03 reset also retains historical or undated bookings. Counts above describe the current generation, not total retained database rows.

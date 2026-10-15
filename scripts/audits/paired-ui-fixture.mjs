@@ -1,8 +1,5 @@
 /** Governed opt-in staging fixture. Never creates a batch, transfer or real recipient. */
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 
 export const TAG = 'AUDIT951-PAIRED-UI';
@@ -87,30 +84,48 @@ async function identity(admin, person) {
 }
 
 export async function applyFixture(admin, plan) {
-  const existing = await checked(admin.from('bookings').select('id').or(`id.eq.${ids.booking},paystack_reference.eq.${TAG}`), 'Booking preflight');
-  assert.equal(existing.length, 0, 'Fixture already exists or collides; verify/cleanup before reseeding');
+  const existing = await checked(admin.from('bookings').select('*').or(`id.eq.${ids.booking},paystack_reference.eq.${TAG}`), 'Booking preflight');
+  assert(existing.length <= 1, 'Booking/reference collision');
+  const booking = existing[0];
+  if (booking) {
+    assert.equal(booking.id, ids.booking, 'Booking collision');
+    assert.equal(booking.metadata?.audit_fixture, TAG, 'Booking collision');
+    assert.equal(booking.paystack_reference, TAG, 'Booking collision');
+    assert(['assigned', 'completed'].includes(booking.status), 'Unexpected fixture lifecycle');
+    assert.equal(booking.payout_status, 'pending', 'Locked fixture');
+    assert(!booking.payout_id && !booking.payout_run_id && !booking.payout_paid_at && !booking.payment_transaction_id && !booking.monthly_invoice_id && !booking.zoho_invoice_id, 'Linked financial evidence');
+    for (const key of ['amount_paid_cents', 'payment_status', 'billing_type', 'cleaner_id', 'payout_owner_cleaner_id', 'cleaner_payout_cents', 'display_earnings_cents', 'cleaner_earnings_total_cents', 'total_paid_zar', 'company_revenue_cents', 'is_team_job']) assert.equal(booking[key], plan[key], `Changed fixture ${key}`);
+    assert.deepEqual(booking.earnings_summary?.per_cleaner_earnings, plan.earnings_summary.per_cleaner_earnings, 'Changed fixture summary');
+    assert(/^\d{4}-\d{2}-\d{2}$/.test(booking.date) && booking.date >= '2026-10-01' && booking.date <= plan.date, 'Unexpected fixture date');
+    plan = { ...plan, date: booking.date }; // retry never moves financial history to a later date
+  }
+  const roster = await checked(admin.from('booking_cleaners').select('*').eq('booking_id', ids.booking), 'Roster preflight');
+  assert(roster.length <= 2 && new Set(roster.map(r => r.cleaner_id)).size === roster.length, 'Duplicate roster');
+  for (const row of roster) assert(people.some((p, i) => p.id === row.cleaner_id && row.role === (i ? 'member' : 'lead')), 'Foreign roster');
+  const members = await checked(admin.from('booking_roster_member_payouts').select('*').eq('booking_id', ids.booking), 'Member preflight');
+  assert(members.length <= 1 && members.every(r => r.cleaner_id === ids.member && r.payout_cents === 25000 && r.bonus_cents === 0 && r.status === 'pending' && !r.cleaner_payout_id), 'Changed or locked member');
+  const team = await checked(admin.from('team_job_member_payouts').select('id').eq('booking_id', ids.booking), 'Team preflight');
+  const ledger = await checked(admin.from('cleaner_earnings').select('id').eq('booking_id', ids.booking), 'Ledger preflight');
+  assert.equal(team.length + ledger.length, 0, 'Unexpected team/solo ledger evidence');
   for (const p of people) {
     const existingCleaner = await checked(admin.from('cleaners').select('id,email,auth_user_id').eq('id', p.id), 'Cleaner preflight');
+    if (existingCleaner.length) assert.equal(existingCleaner[0].email, p.email, 'Cleaner collision');
     const authId = await identity(admin, p);
-    if (existingCleaner.length) {
-      assert.equal(existingCleaner[0].email, p.email, 'Cleaner collision');
-      assert.equal(existingCleaner[0].auth_user_id, authId);
-    } else {
-      await checked(admin.from('cleaners').insert({ id: p.id, auth_user_id: authId, full_name: p.name,
-        email: p.email, phone: p.phone, is_active: true, is_available: false }), 'Create synthetic cleaner');
-    }
+    if (existingCleaner.length) assert.equal(existingCleaner[0].auth_user_id, authId);
+    else await checked(admin.from('cleaners').insert({ id: p.id, auth_user_id: authId, full_name: p.name,
+      email: p.email, phone: p.phone, is_active: true, is_available: false }), 'Create synthetic cleaner');
   }
-  // Prepare reporting state only. This fixture does not claim application finalization coverage.
-  await checked(admin.from('bookings').insert({ ...plan, status: 'assigned', completed_at: null,
+  // Partial state stays excluded from reports. Resume only missing owned rows.
+  if (!booking) await checked(admin.from('bookings').insert({ ...plan, is_test: true, status: 'assigned', completed_at: null,
     cleaner_line_earnings_finalized_at: null, payout_status: 'pending' }), 'Create fixture booking');
-  await checked(admin.from('booking_cleaners').insert(people.map((p, i) => ({ booking_id: ids.booking,
-    cleaner_id: p.id, role: i ? 'member' : 'lead', source: 'admin' }))), 'Create paired roster');
-  await checked(admin.from('bookings').update(plan).eq('id', ids.booking).select('id').single(), 'Complete fixture');
-  await checked(admin.from('booking_roster_member_payouts').insert({ booking_id: ids.booking, cleaner_id: ids.member, payout_cents: 25000, bonus_cents: 0, status: 'pending' }), 'Create synthetic member earnings');
-  const rows = await checked(admin.from('booking_roster_member_payouts').select('cleaner_id,payout_cents,status').eq('booking_id', ids.booking), 'Read member earnings');
-  assert(rows.some(r => r.cleaner_id === ids.member && r.payout_cents === 25000 && r.status === 'pending'), 'Member fixture mismatch; no acceptance');
-  const ledger = await checked(admin.from('cleaner_earnings').select('id').eq('booking_id', ids.booking), 'Read solo ledger');
-  assert.equal(ledger.length, 0, 'Paired booking unexpectedly has solo ledger; no acceptance');
+  for (const [i, p] of people.entries()) {
+    if (!roster.some(r => r.cleaner_id === p.id)) await checked(admin.from('booking_cleaners').insert({ booking_id: ids.booking,
+      cleaner_id: p.id, role: i ? 'member' : 'lead', source: 'admin' }), 'Create paired roster');
+  }
+  if (!members.length) await checked(admin.from('booking_roster_member_payouts').insert({ booking_id: ids.booking, cleaner_id: ids.member, payout_cents: 25000, bonus_cents: 0, status: 'pending' }), 'Create synthetic member earnings');
+  if (booking?.status !== 'completed') await checked(admin.from('bookings').update({ status: 'completed', completed_at: plan.completed_at,
+    cleaner_line_earnings_finalized_at: plan.cleaner_line_earnings_finalized_at }).eq('id', ids.booking).select('id').single(), 'Complete fixture');
+  await checked(admin.from('bookings').update({ is_test: false }).eq('id', ids.booking).select('id').single(), 'Publish complete fixture');
   return { booking: ids.booking, date: plan.date, expectedBookings: 1, expectedCleanerVisits: 2, expectedEarnedCents: 50000, browserVerified: false };
 }
 
@@ -131,22 +146,14 @@ export async function retireFixture(admin) {
   return { booking: ids.booking, retiredFromReports: true, historyRetained: true };
 }
 
-async function main() {
-  const plan = fixturePlan();
-  if (process.argv.includes('--plan')) { console.log(JSON.stringify({ tag: TAG, booking: plan, createsBatches: false }, null, 2)); return; }
-  assert(process.argv.includes('--apply') !== process.argv.includes('--retire'), 'Use --plan, --apply or --retire');
-  const site = new URL(process.env.AUDIT_STAGING_SITE_URL);
+/** Called only by seed-dev.mjs after its common non-production guard. */
+export async function runPairedUiSeed(admin, env, reset = false) {
+  const allowed = String(env.SEED_ALLOWED_PROJECT_REFS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  assert.deepEqual(allowed, [env.AUDIT_STAGING_REF], 'Exactly the approved staging ref must be allowlisted');
+  const site = new URL(env.AUDIT_STAGING_SITE_URL);
   assert(site.protocol === 'https:' && site.pathname === '/' && !site.search && !site.hash && !site.username && !site.password, 'Canonical HTTPS staging origin required');
   const response = await fetch(new URL('/api/health/environment', site), { signal: AbortSignal.timeout(15000) });
   assert(response.ok, 'Staging health unavailable');
-  assertTarget(process.env, await response.json());
-  assert(process.env.SUPABASE_SERVICE_ROLE_KEY, 'Server-only staging key must be configured securely in environment');
-  const require = createRequire(new URL('../../apps/web/package.json', import.meta.url));
-  const { createClient } = require('@supabase/supabase-js');
-  const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
-  console.log(JSON.stringify(process.argv.includes('--retire') ? await retireFixture(admin) : await applyFixture(admin, plan)));
+  assertTarget(env, await response.json());
+  return reset ? retireFixture(admin) : applyFixture(admin, fixturePlan());
 }
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) main().catch(() => {
-  console.error('Paired UI fixture failed; do not accept. Partial synthetic records may remain; inspect namespaced records before retrying.');
-  process.exitCode = 1;
-});

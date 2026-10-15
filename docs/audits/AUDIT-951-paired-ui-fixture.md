@@ -12,12 +12,15 @@ Clean review and CI are required for the exact script head before remote use.
 Configure server-only credentials privately in the operator's environment, never
 in chat or committed files. Install apps/web dependencies with its locked npm ci.
 Required variables: SHALEAN_APP_ENV=staging, AUDIT_STAGING_REF,
+SEED_ALLOWED_PROJECT_REFS (exactly that one staging ref),
 SUPABASE_PROD_REF, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and
 AUDIT_STAGING_SITE_URL (canonical HTTPS staging origin only).
 The runner checks live health: both project refs match staging, test/test payment
-keys, outbound disabled, and no health issues. It rejects an existing booking or
-reference instead of overwriting it. Failed writes fail acceptance; inspect the
-namespaced rows before retrying after any partial failure.
+keys, outbound disabled, and no health issues. The entry point is the governed scripts/seed-dev.mjs command; its common
+non-production guard runs before the fixture module. Existing rows must match
+the owned namespace, unsettled state and exact financial basis. Failed writes
+fail acceptance. Partial fixtures stay is_test=true until every step completes;
+rerun the same command to resume missing rows without hard deletion or duplication.
 
 `npm run audit:paired-ui:plan` is local and needs no credentials.
 After the gates, `npm run audit:paired-ui:apply` creates the fixture.
@@ -50,9 +53,11 @@ Do not claim that separate surface was tested without testing it.
 After evidence capture run `npm run audit:paired-ui:retire`. It fails closed on
 booking settlement, member locks or an unexpected solo ledger, and changes only
 the owned booking's is_test to true. It retains synthetic financial history and
-identities; it never bypasses hard-delete guards. Do not reseed the retained ID.
+identities; it never bypasses hard-delete guards. A later apply can resume the retained ID after validating all ownership and
+settlement guards; it preserves the original visit date and financial basis.
 Recheck reports return to their baseline and non-fixture row hashes are unchanged.
-Partial setup records may also remain after failure; identify them by the reserved
+The --reset path retires this fixture only; it never invokes the broad seed reset.
+Partial setup records may remain after failure; identify them by the reserved
 UUIDs/reference/emails and do not delete or mutate unrelated records.
 
 Production promotion stays pending until acceptance and reconciliation are recorded.
