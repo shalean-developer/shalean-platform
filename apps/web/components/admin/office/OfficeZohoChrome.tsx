@@ -76,6 +76,7 @@ export function OfficeZohoMetricCard({
   value,
   onClick,
   active,
+  compact = false,
 }: {
   icon: LucideIcon;
   iconClassName?: string;
@@ -83,6 +84,7 @@ export function OfficeZohoMetricCard({
   value: ReactNode;
   onClick?: () => void;
   active?: boolean;
+  compact?: boolean;
 }) {
   const Tag = onClick ? "button" : "div";
   return (
@@ -90,14 +92,16 @@ export function OfficeZohoMetricCard({
       type={onClick ? "button" : undefined}
       onClick={onClick}
       className={cn(
-        "flex min-w-[180px] flex-1 items-start gap-3 rounded-lg border bg-white px-4 py-3.5 text-left shadow-sm transition",
+        "flex flex-1 items-start rounded-lg border bg-white text-left shadow-sm transition",
+        compact ? "min-w-0 gap-2 px-3 py-3" : "min-w-[180px] gap-3 px-4 py-3.5",
         active ? "border-[--sidebar-active] ring-1 ring-[--sidebar-active]/20" : "border-slate-200 hover:border-slate-300",
         onClick && "cursor-pointer",
       )}
     >
       <span
         className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[--sidebar-active]",
+          "flex shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[--sidebar-active]",
+          compact ? "h-7 w-7" : "h-9 w-9",
           iconClassName,
         )}
       >
