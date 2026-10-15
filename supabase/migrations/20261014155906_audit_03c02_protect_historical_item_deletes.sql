@@ -1,9 +1,14 @@
 -- Preserve deferred historical earnings during reassignment and synchronization.
 begin;
 -- A strict canonical parser matches application date policy. Invalid/undated visits are deferred.
+create or replace function public.audit_03c02_trim(p_value text)
+returns text language sql immutable set search_path=pg_catalog as $$
+ select btrim(p_value,E' \t\n\r\f' || U&'\000B\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF');
+$$;
+revoke all on function public.audit_03c02_trim(text) from public,anon,authenticated,service_role;
 create or replace function public.audit_03c02_visit_date(p_value text)
 returns date language plpgsql immutable set search_path=pg_catalog as $$
-declare value text:=btrim(p_value); parsed date;
+declare value text:=public.audit_03c02_trim(p_value); parsed date;
 begin
  if value is null or value !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then return null; end if;
  begin parsed:=value::date;

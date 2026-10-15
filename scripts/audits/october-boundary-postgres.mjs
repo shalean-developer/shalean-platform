@@ -40,11 +40,17 @@ await db.query(`insert into audit_users values($1)`,[cid]);
 await db.query(`update cleaner_earnings_adjustments set created_by=$1,created_by_email='retained@example.com' where booking_id=$2`,[cid,old]);
 await db.exec(`insert into bookings(id,date,status,paystack_reference,currency) values('eeeeeeee-0000-4000-8000-000000000001',null,'pending_payment','undated-charge','ZAR'),('eeeeeeee-0000-4000-8000-000000000002',null,'pending_payment',null,'ZAR')`);
 await db.exec(`insert into bookings(id,date,status,paystack_reference,currency) values('eeeeeeee-0000-4000-8000-000000000003','2026-02-30','pending_payment','invalid-day','ZAR'),('eeeeeeee-0000-4000-8000-000000000004','bad-date','pending_payment','invalid-text','ZAR')`);
+await db.exec(`insert into bookings(id,date,status,paystack_reference,currency) values('eeeeeeee-0000-4000-8000-000000000005',null,'pending_payment','eeeeeeee-0000-4000-8000-000000000005','ZAR')`);
 const convergence=await fs.readFile('supabase/migrations/20261014145923_audit_03c02_verified_provider_convergence.sql','utf8');
 await db.exec(convergence.slice(convergence.indexOf('create or replace function public.audit_03c02_guard_payout_item()'),convergence.indexOf('create or replace function public.audit_03c02_guard_payout_run()')));
 for(const t of ['bookings','cleaner_earnings','booking_roster_member_payouts','team_job_member_payouts']) await db.exec(`create trigger audit_03c02_existing_boundary before insert or update on ${t} for each row execute function audit_03c02_guard_payout_item()`);
 for(const name of ['20261014155906_audit_03c02_protect_historical_item_deletes.sql','20261014173544_audit_03c02_complete_historical_boundaries.sql'])await db.exec(await fs.readFile('supabase/migrations/'+name,'utf8'));
 let checks=0;
+for(const visit of [' 2026-10-02 ','\t2026-10-02\n','\u00a02026-10-02\ufeff']){
+ assert.equal((await db.query('select audit_03c02_visit_date($1)::text parsed',[visit])).rows[0].parsed,'2026-10-02');checks++;
+}
+for(const visit of ['2026-10-1','2026-02-30','bad-date']){assert.equal((await db.query('select audit_03c02_visit_date($1) parsed',[visit])).rows[0].parsed,null);checks++;}
+
 await db.query(`insert into cleaners(id,joined_at,created_at) values($1,'2026-01-01','2025-01-01'),($2,null,'2026-01-01')`,[cid,other]);
 
 async function reject(sql,args=[]){await assert.rejects(db.query(sql,args),e=>e.code==='23514');checks++;}
@@ -177,8 +183,11 @@ for(const [reason,currency] of [['amount_mismatch','ZAR'],['currency_mismatch','
  assert.equal((await db.query(`select status from bookings where id=$1`,[old])).rows[0].status,'payment_mismatch');checks++;
 }
 await db.query(`update bookings set status='payment_reconciliation_required' where id=$1`,[old]);
-await db.query(`select audit_03c02_record_historical_capture($1,'charge-1',1000,' zar ','2026-10-14T12:00:00Z',$2)`,[old,JSON.stringify({...expected,status:'payment_reconciliation_required'})]);checks++;
+await db.query(`select audit_03c02_record_historical_capture($1,'charge-1',1000,E'\\tzar\\n','2026-10-14T12:00:00Z',$2)`,[old,JSON.stringify({...expected,status:'payment_reconciliation_required'})]);checks++;
 assert.equal((await db.query(`select amount_paid_cents from bookings where id=$1`,[old])).rows[0].amount_paid_cents,1000);checks++;
+const mismatchAlias='eeeeeeee-0000-4000-8000-000000000005';
+await db.query(`select audit_03c02_record_historical_capture($1,'mismatch-bound-charge',123,'USD',now(),$2,'currency_mismatch',$1)`,[mismatchAlias,JSON.stringify({...expected,paystack_reference:mismatchAlias,cleaner_id:null})]);checks++;
+assert.equal((await db.query('select paystack_reference from bookings where id=$1',[mismatchAlias])).rows[0].paystack_reference,'mismatch-bound-charge');checks++;
 const aliasId='eeeeeeee-0000-4000-8000-000000000002';
 const aliasExpected={...expected,paystack_reference:null,cleaner_id:null};
 await reject(captureSql,[aliasId,'verified-new-charge',1000,JSON.stringify(aliasExpected)]);

@@ -26,6 +26,13 @@ begin
  select jsonb_object_agg(key,value) into before_basis from public.bookings x,jsonb_each(to_jsonb(x)) where x.id=b.id and key=any(keys);
  select jsonb_object_agg(key,value) into expected from public.bookings x,jsonb_each(to_jsonb(x))
    where x.id=b.id and key=any(array['status','paystack_reference','customer_email','customer_id','cleaner_id','selected_cleaner_id','assignment_type']);
+ if probe_date is null then
+   begin
+     perform public.audit_03c02_record_historical_capture(b.id,'audit-mismatch-'||b.id::text,123,'USD',now(),expected,'currency_mismatch',b.id);
+     if not exists(select 1 from public.bookings where id=b.id and paystack_reference='audit-mismatch-'||b.id::text and status='payment_mismatch') then raise exception 'FAIL mismatch charge reference not retained'; end if;
+     raise exception 'audit_alias_probe_rollback' using errcode='Z0002';
+   exception when sqlstate 'Z0002' then null; end;
+ end if;
  begin
    perform public.audit_03c02_record_historical_capture(b.id,'wrong-reference',1000,'ZAR',now(),expected);
    raise exception 'FAIL wrong charge reference';

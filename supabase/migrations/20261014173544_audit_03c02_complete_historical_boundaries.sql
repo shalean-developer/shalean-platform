@@ -57,7 +57,7 @@ create or replace function public.audit_03c02_record_historical_capture(p_bookin
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
 declare b public.bookings; result jsonb; prior_context text;
 begin
- p_currency:=upper(btrim(p_currency));
+ p_currency:=upper(public.audit_03c02_trim(p_currency));
  select * into b from public.bookings where id=p_booking_id for update;
  if not found or (b.date is not null and coalesce(public.audit_03c02_visit_date(b.date::text),date '-infinity')>=date '2026-10-01')
    or b.status::text not in ('pending_payment','payment_expired','payment_reconciliation_required')
@@ -65,7 +65,7 @@ begin
    or (b.paystack_reference is distinct from p_reference and not (coalesce(p_verified_booking_id=b.id,false)
      and (b.paystack_reference is null or b.paystack_reference=b.id::text)))
    or p_amount_cents is null or p_amount_cents<0 or nullif(p_currency,'') is null
-   or (p_mismatch is null and p_currency is distinct from coalesce(nullif(upper(btrim(b.currency)),''),'ZAR'))
+   or (p_mismatch is null and p_currency is distinct from coalesce(nullif(upper(public.audit_03c02_trim(b.currency)),''),'ZAR'))
    or (p_mismatch is not null and p_mismatch not in ('amount_mismatch','currency_mismatch'))
    or p_paid_at is null or p_expected is null or not (to_jsonb(b) @> p_expected)
    or not (p_expected ? 'customer_id' or p_expected ? 'user_id')
@@ -74,17 +74,17 @@ begin
  end if;
  if (b.customer_id is not null and nullif(p_effect_context->>'customerAuthId','') is not null
      and b.customer_id is distinct from (p_effect_context->>'customerAuthId')::uuid)
-   or (nullif(btrim(b.customer_email),'') is not null and nullif(btrim(p_effect_context->>'customerEmail'),'') is not null
-     and lower(btrim(b.customer_email))<>lower(btrim(p_effect_context->>'customerEmail'))) then
+   or (nullif(public.audit_03c02_trim(b.customer_email),'') is not null and nullif(public.audit_03c02_trim(p_effect_context->>'customerEmail'),'') is not null
+     and lower(public.audit_03c02_trim(b.customer_email))<>lower(public.audit_03c02_trim(p_effect_context->>'customerEmail'))) then
    raise exception 'historical_capture_identity_mismatch' using errcode='23514';
  end if;
  -- Only fill missing verified identity; never rewrite established ownership or email.
  b.customer_id:=coalesce(b.customer_id,nullif(p_effect_context->>'customerAuthId','')::uuid);
- if nullif(btrim(b.customer_email),'') is null then b.customer_email:=nullif(btrim(p_effect_context->>'customerEmail'),''); end if;
+ if nullif(public.audit_03c02_trim(b.customer_email),'') is null then b.customer_email:=nullif(public.audit_03c02_trim(p_effect_context->>'customerEmail'),''); end if;
  if p_mismatch is not null then
    -- Keep foreign-currency/wrong-amount cash evidence separate from the old ZAR
    -- entitlement inputs. This is reconciliation, never a successful fulfillment.
-   update public.bookings set customer_id=b.customer_id,customer_email=b.customer_email,status='payment_mismatch',payment_mismatch=true,payment_completed_at=p_paid_at,
+   update public.bookings set customer_id=b.customer_id,customer_email=b.customer_email,paystack_reference=p_reference,status='payment_mismatch',payment_mismatch=true,payment_completed_at=p_paid_at,
      booking_snapshot=coalesce(b.booking_snapshot,'{}'::jsonb)||jsonb_build_object('verified_capture_mismatch',jsonb_build_object(
        'reference',p_reference,'amount_cents',p_amount_cents,'currency',p_currency,'paid_at',p_paid_at,'reason',p_mismatch)),
      updated_at=now() where id=b.id;
