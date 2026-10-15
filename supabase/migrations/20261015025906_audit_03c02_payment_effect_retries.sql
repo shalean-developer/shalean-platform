@@ -38,7 +38,7 @@ begin
  select * into inv from public.monthly_invoices where id=p_invoice_id for update;
  if not found then raise exception 'monthly_invoice_not_found' using errcode='23514'; end if;
  select * into b from public.bookings where id=p_booking_id for update;
- if not found or b.monthly_invoice_id is distinct from inv.id or not coalesce(b.billing_type::text=any(array['monthly','recurring_invoice']),false)
+ if not found or b.monthly_invoice_id is distinct from inv.id or not coalesce(b.billing_type::text=any(array['recurring_invoice','monthly_contract','pay_later']),false)
    or b.status::text='cancelled' or public.audit_03c02_visit_date(b.date::text)>=date '2026-10-01'
    or (b.customer_id is not null and b.customer_id is distinct from inv.customer_id) then
    raise exception 'historical_monthly_child_mismatch' using errcode='23514';

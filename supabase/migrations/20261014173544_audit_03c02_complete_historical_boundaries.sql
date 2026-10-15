@@ -127,9 +127,9 @@ begin
  -- Capture and all required follow-up tasks commit together. Any queue error rolls back cash/status too.
  insert into public.failed_jobs(type,payload)
  select 'historical_payment_effect',jsonb_build_object(
-   'bookingId',b.id,'userId',coalesce(to_jsonb(b)->'customer_id',to_jsonb(b)->'user_id'),
+   'bookingId',b.id,'userId',coalesce(to_jsonb(b)->>'customer_id',to_jsonb(b)->>'user_id'),
    'customerEmail',b.customer_email,'amountCents',p_amount_cents,'paystackReference',p_reference,
-   'paidAtIso',p_paid_at,'cityId',coalesce(p_effect_context->'cityId',to_jsonb(b)->'city_id'),
+   'paidAtIso',p_paid_at,'cityId',coalesce(nullif(p_effect_context->>'cityId',''),to_jsonb(b)->>'city_id'),
    'referralCode',coalesce(p_effect_context->>'referralCode',''),'effect',effect)
  from unnest(array['payment_state','cancel_recovery','receipt','referral','city','growth','conversion']) effect;
 

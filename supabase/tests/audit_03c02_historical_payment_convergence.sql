@@ -39,7 +39,7 @@ begin
  exception when check_violation then if sqlerrm<>'historical_capture_identity_mismatch' then raise; end if; end;
  alter table public.recurring_bookings add constraint audit_reject_auth check(paystack_authorization_code is null) not valid;
  begin
-   perform public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,'ZAR',now(),expected,null,b.id,('{"authorizationCode":"AUTH_audit"}'::jsonb||jsonb_build_object('customerAuthId',probe_customer,'customerEmail',probe_email)));
+   perform public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,'ZAR',now(),expected,null,b.id,('{"authorizationCode":"AUTH_audit"}'::jsonb||jsonb_build_object('customerAuthId',probe_customer,'customerEmail',probe_email,'cityId',null)));
    raise exception 'FAIL authorization failure accepted';
  exception when check_violation then if sqlerrm not like '%audit_reject_auth%' then raise; end if; end;
  alter table public.recurring_bookings drop constraint audit_reject_auth;
@@ -48,18 +48,19 @@ begin
  select count(*) into queue_count from public.failed_jobs where type='historical_payment_effect' and payload->>'bookingId'=b.id::text;
  alter table public.failed_jobs add constraint audit_reject_effect_queue check(type<>'historical_payment_effect') not valid;
  begin
-   perform public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,' zar ',now(),expected,null,b.id,('{"authorizationCode":"AUTH_audit"}'::jsonb||jsonb_build_object('customerAuthId',probe_customer,'customerEmail',probe_email)));
+   perform public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,' zar ',now(),expected,null,b.id,('{"authorizationCode":"AUTH_audit"}'::jsonb||jsonb_build_object('customerAuthId',probe_customer,'customerEmail',probe_email,'cityId',null)));
    raise exception 'FAIL queue failure accepted';
  exception when check_violation then if sqlerrm not like '%audit_reject_effect_queue%' then raise; end if; end;
  alter table public.failed_jobs drop constraint audit_reject_effect_queue;
  if before_capture is distinct from (select to_jsonb(x) from public.bookings x where id=b.id) then raise exception 'FAIL capture survived queue failure'; end if;
  if (select count(*) from public.failed_jobs where type='historical_payment_effect' and payload->>'bookingId'=b.id::text)<>queue_count then raise exception 'FAIL partial queue survived'; end if;
- result:=public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,' zar ',now(),expected,null,b.id,('{"authorizationCode":"AUTH_audit"}'::jsonb||jsonb_build_object('customerAuthId',probe_customer,'customerEmail',probe_email)));
+ result:=public.audit_03c02_record_historical_capture(b.id,b.paystack_reference,1000,' zar ',now(),expected,null,b.id,('{"authorizationCode":"AUTH_audit"}'::jsonb||jsonb_build_object('customerAuthId',probe_customer,'customerEmail',probe_email,'cityId',null)));
  if (select count(*) from public.failed_jobs where type='historical_payment_effect' and payload->>'bookingId'=b.id::text)<>queue_count+7 then raise exception 'FAIL capture missing effect queue'; end if;
 
  if (select paystack_authorization_code from public.recurring_bookings where id=probe_plan) is distinct from 'AUTH_audit' then raise exception 'FAIL authorization missing after capture'; end if;
  if not exists(select 1 from public.bookings where id=b.id and customer_id=probe_customer and customer_email=probe_email) then raise exception 'FAIL verified identity not filled'; end if;
  if (select count(*) from public.failed_jobs where type='historical_payment_effect' and payload->>'bookingId'=b.id::text and payload->>'userId'=probe_customer::text and payload->>'customerEmail'=probe_email)<>7 then raise exception 'FAIL queued effects missing identity'; end if;
+ if b.city_id is not null and (select count(*) from public.failed_jobs where type='historical_payment_effect' and payload->>'bookingId'=b.id::text and payload->>'cityId'=b.city_id::text)<>7 then raise exception 'FAIL stored city discarded by null context'; end if;
  b.customer_id:=probe_customer;
  if result->>'id' is distinct from b.id::text then raise exception 'FAIL capture row missing'; end if;
  if not exists(select 1 from public.bookings where id=b.id and amount_paid_cents=1000 and payment_status='success' and status='pending_assignment') then raise exception 'FAIL capture not recorded'; end if;

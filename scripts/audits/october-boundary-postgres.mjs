@@ -18,7 +18,7 @@ create table monthly_invoice_events(id uuid default gen_random_uuid(),invoice_id
 create table monthly_invoice_paystack_charge_dedup(invoice_id uuid,charge_reference text,amount_cents bigint);
 create table payment_transactions(id uuid,gateway text,entity_type text,entity_id uuid,settlement_status text,payment_channel text,raw_gateway_payload jsonb,amount_cents bigint,currency_code text);
 create table refund_accounting_records(entity_type text,entity_id uuid,refund_reference text,refund_status text,amount_cents bigint,currency_code text);
-create table bookings(payout_run_id uuid,monthly_invoice_id uuid,billing_type text,paid_at timestamptz,completed_at timestamptz,recurring_id uuid,currency text, paystack_reference text,customer_email text,customer_id uuid,selected_cleaner_id uuid,assignment_type text,payment_status text,payment_completed_at timestamptz,created_at timestamptz,updated_at timestamptz,refund_status text,payment_mismatch boolean,id uuid primary key,check(not((cleaner_id is not null or selected_cleaner_id is not null) and status='pending')),date text,time text,assigned_at timestamptz,service_slug text,base_amount_cents int,service_fee_cents int,total_paid_zar numeric,total_paid_cents int,amount_paid_cents int,price_snapshot jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,team_id uuid,is_team_job boolean,cleaner_count int,team_member_count_snapshot int,
+create table bookings(payout_run_id uuid,monthly_invoice_id uuid,city_id uuid,billing_type text default 'prepaid' check(billing_type in ('prepaid','recurring_invoice','monthly_contract','pay_later')),paid_at timestamptz,completed_at timestamptz,recurring_id uuid,currency text, paystack_reference text,customer_email text,customer_id uuid,selected_cleaner_id uuid,assignment_type text,payment_status text,payment_completed_at timestamptz,created_at timestamptz,updated_at timestamptz,refund_status text,payment_mismatch boolean,id uuid primary key,check(not((cleaner_id is not null or selected_cleaner_id is not null) and status='pending')),date text,time text,assigned_at timestamptz,service_slug text,base_amount_cents int,service_fee_cents int,total_paid_zar numeric,total_paid_cents int,amount_paid_cents int,price_snapshot jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,team_id uuid,is_team_job boolean,cleaner_count int,team_member_count_snapshot int,
 status text,payout_id uuid,payout_status text,payout_paid_at timestamptz,payout_frozen_cents int,
 cleaner_payout_cents int,cleaner_bonus_cents int,display_earnings_cents int,internal_earnings_cents int,payout_earnings_cents int,cleaner_earnings_total_cents int,company_revenue_cents int,
 cleaner_share_percentage numeric,earnings_summary jsonb,cleaner_line_earnings_finalized_at timestamptz,earnings_model_version text,payout_percentage numeric,payout_type text,
@@ -46,8 +46,10 @@ await db.query(`update cleaner_earnings_adjustments set created_by=$1,created_by
 await db.exec(`insert into bookings(id,date,status,paystack_reference,currency) values('eeeeeeee-0000-4000-8000-000000000001',null,'pending_payment','undated-charge','ZAR'),('eeeeeeee-0000-4000-8000-000000000002',null,'pending_payment',null,'ZAR')`);
 await db.exec(`insert into bookings(id,date,status,paystack_reference,currency) values('eeeeeeee-0000-4000-8000-000000000003','2026-02-30','pending_payment','invalid-day','ZAR'),('eeeeeeee-0000-4000-8000-000000000004','bad-date','pending_payment','invalid-text','ZAR')`);
 await db.exec(`insert into bookings(id,date,status,paystack_reference,currency) values('eeeeeeee-0000-4000-8000-000000000005',null,'pending_payment','eeeeeeee-0000-4000-8000-000000000005','ZAR')`);
-await db.exec(`insert into bookings(id,date,status,monthly_invoice_id,billing_type,payment_status,amount_paid_cents,total_paid_zar,payout_frozen_cents) values('eeeeeeee-0000-4000-8000-000000000006','2026-09-30','completed','dddddddd-0000-4000-8000-000000000001','monthly','pending_monthly',0,10,77)`);
+await db.exec(`insert into bookings(id,date,status,monthly_invoice_id,billing_type,payment_status,amount_paid_cents,total_paid_zar,payout_frozen_cents) values('eeeeeeee-0000-4000-8000-000000000006','2026-09-30','completed','dddddddd-0000-4000-8000-000000000001','monthly_contract','pending_monthly',0,10,77)`);
 await db.exec(`insert into bookings(id,date,status,monthly_invoice_id,billing_type,payment_status,amount_paid_cents,total_paid_zar,payout_frozen_cents,payout_status,payout_paid_at) values('eeeeeeee-0000-4000-8000-000000000007','2026-09-30','completed','dddddddd-0000-4000-8000-000000000002','recurring_invoice','success',1000,10,88,'paid','2026-10-01T12:00:00Z')`);
+await db.query('update bookings set city_id=$1 where id=$2',[cid,'eeeeeeee-0000-4000-8000-000000000002']);
+await db.exec(`insert into bookings(id,date,status,monthly_invoice_id,billing_type,payment_status,amount_paid_cents,total_paid_zar,payout_frozen_cents) values('eeeeeeee-0000-4000-8000-000000000008','2026-09-30','completed','dddddddd-0000-4000-8000-000000000003','pay_later','pending_monthly',0,10,89)`);
 const convergence=await fs.readFile('supabase/migrations/20261014145923_audit_03c02_verified_provider_convergence.sql','utf8');
 await db.exec(convergence.slice(convergence.indexOf('create or replace function public.audit_03c02_guard_payout_item()'),convergence.indexOf('create or replace function public.audit_03c02_guard_payout_run()')));
 for(const t of ['bookings','cleaner_earnings','booking_roster_member_payouts','team_job_member_payouts']) await db.exec(`create trigger audit_03c02_existing_boundary before insert or update on ${t} for each row execute function audit_03c02_guard_payout_item()`);
@@ -199,13 +201,14 @@ const aliasId='eeeeeeee-0000-4000-8000-000000000002';
 const aliasExpected={...expected,paystack_reference:null,cleaner_id:null};
 await reject(captureSql,[aliasId,'verified-new-charge',1000,JSON.stringify(aliasExpected)]);
 await reject(`select audit_03c02_record_historical_capture($1,'verified-new-charge',1000,'ZAR',now(),$2,null,$3)`,[aliasId,JSON.stringify(aliasExpected),old]);
-await db.query(`select audit_03c02_record_historical_capture($1,'verified-new-charge',1000,'ZAR',now(),$2,null,$1,$3)`,[aliasId,JSON.stringify(aliasExpected),JSON.stringify({customerAuthId:cid,customerEmail:'payer@example.com'})]);checks++;
+await db.query(`select audit_03c02_record_historical_capture($1,'verified-new-charge',1000,'ZAR',now(),$2,null,$1,$3)`,[aliasId,JSON.stringify(aliasExpected),JSON.stringify({customerAuthId:cid,customerEmail:'payer@example.com',cityId:null})]);checks++;
 assert.equal((await db.query(`select paystack_reference from bookings where id=$1`,[aliasId])).rows[0].paystack_reference,'verified-new-charge');checks++;
 assert.deepEqual((await db.query('select customer_id,customer_email from bookings where id=$1',[aliasId])).rows[0],{customer_id:cid,customer_email:'payer@example.com'});checks++;
 assert.equal((await db.query("select count(*)::int n from failed_jobs where payload->>'bookingId'=$1 and payload->>'userId'=$2 and payload->>'customerEmail'='payer@example.com'",[aliasId,cid])).rows[0].n,7);checks++;
 await db.query("update bookings set status='payment_reconciliation_required' where id=$1",[aliasId]);
 const filledExpected={...aliasExpected,customer_id:cid,customer_email:'payer@example.com',status:'payment_reconciliation_required',paystack_reference:'verified-new-charge'};
 for(const identity of [{customerAuthId:other},{customerEmail:'attacker@example.com'}]) await reject(`select audit_03c02_record_historical_capture($1,'verified-new-charge',1000,'ZAR',now(),$2,null,null,$3)`,[aliasId,JSON.stringify(filledExpected),JSON.stringify(identity)]);
+assert.equal((await db.query("select count(*)::int n from failed_jobs where payload->>'bookingId'=$1 and payload->>'cityId'=$2",[aliasId,cid])).rows[0].n,7);checks++;
 await db.exec(await fs.readFile('supabase/migrations/20261015025906_audit_03c02_payment_effect_retries.sql','utf8'));
 for(const [id,reference,visit]of [['eeeeeeee-0000-4000-8000-000000000003','invalid-day','2026-02-30'],['eeeeeeee-0000-4000-8000-000000000004','invalid-text','bad-date']]){
  await db.query(`select audit_03c02_record_historical_capture($1,$2,1000,'ZAR',now(),$3)`,[id,reference,JSON.stringify({...aliasExpected,paystack_reference:reference})]);checks++;
@@ -231,7 +234,7 @@ for(const role of ['anon','authenticated','service_role']){assert.equal((await d
 const invoiceId='dddddddd-0000-4000-8000-000000000001',monthlyChild='eeeeeeee-0000-4000-8000-000000000006';
 await db.query("insert into monthly_invoices(id,customer_id,status,total_amount_cents,amount_paid_cents) values($1,$2,'sent',1000,0)",[invoiceId,cid]);
 await reject("update monthly_invoices set status='paid',amount_paid_cents=999 where id=$1",[invoiceId]);
-await db.exec("alter table bookings add constraint reject_monthly_cash check(billing_type is distinct from 'monthly' or amount_paid_cents=0) not valid");
+await db.exec("alter table bookings add constraint reject_monthly_cash check(billing_type not in ('recurring_invoice','monthly_contract','pay_later') or amount_paid_cents=0) not valid");
 await reject("update monthly_invoices set status='paid',amount_paid_cents=1000 where id=$1",[invoiceId]);
 assert.equal((await db.query('select status from monthly_invoices where id=$1',[invoiceId])).rows[0].status,'sent');checks++;
 assert.equal((await db.query('select amount_paid_cents from bookings where id=$1',[monthlyChild])).rows[0].amount_paid_cents,0);checks++;
@@ -258,7 +261,12 @@ for(const role of ['anon','authenticated','service_role']){assert.equal((await d
 const paidInvoice='dddddddd-0000-4000-8000-000000000002',paidChild='eeeeeeee-0000-4000-8000-000000000007';
 await db.query("insert into monthly_invoices(id,customer_id,status,total_amount_cents,amount_paid_cents) values($1,$2,'paid',1000,1000)",[paidInvoice,cid]);
 await db.query("insert into refund_accounting_records values('monthly_invoice',$1,'paid-child-refund','succeeded',1000,'ZAR')",[paidInvoice]);
+await db.query('select audit_03c02_settle_historical_monthly_child($1,$2)',[paidInvoice,paidChild]);checks++;
 await db.query("update monthly_invoices set status='refunded',amount_paid_cents=0,refund_reference='paid-child-refund',refunded_at=now() where id=$1",[paidInvoice]);checks++;
 assert.deepEqual((await db.query("select payment_status,amount_paid_cents,payout_status,payout_frozen_cents,payout_paid_at='2026-10-01T12:00:00Z'::timestamptz as payout_timestamp_retained from bookings where id=$1",[paidChild])).rows[0],{payment_status:'pending_monthly',amount_paid_cents:0,payout_status:'paid',payout_frozen_cents:88,payout_timestamp_retained:true});checks++;
+const laterInvoice='dddddddd-0000-4000-8000-000000000003',laterChild='eeeeeeee-0000-4000-8000-000000000008';
+await db.query("insert into monthly_invoices(id,customer_id,status,total_amount_cents,amount_paid_cents) values($1,$2,'sent',1000,0)",[laterInvoice,cid]);
+await db.query("update monthly_invoices set status='paid',amount_paid_cents=1000 where id=$1",[laterInvoice]);checks++;
+assert.deepEqual((await db.query('select payment_status,amount_paid_cents,payout_frozen_cents from bookings where id=$1',[laterChild])).rows[0],{payment_status:'success',amount_paid_cents:1000,payout_frozen_cents:89});checks++;
 console.log(`PASS ${checks} isolated PostgreSQL boundary checks (minimal schema; not live staging proof)`);
 await db.close();
