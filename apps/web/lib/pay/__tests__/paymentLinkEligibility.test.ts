@@ -54,6 +54,12 @@ describe("payment requests require current unpaid evidence", () => {
       .toEqual({ allowed: false, reason: "payment_recorded" });
     expect(verify).not.toHaveBeenCalled();
   });
+  it("retires expired payment requests while keeping terminal expiry verification available", async () => {
+    const expired = { ...unpaid, payment_link_expires_at: "2000-01-01T00:00:00Z" };
+    expect(await checkPaymentLinkEligibility(makeAdmin([expired]), "booking", reference)).toEqual({ allowed: false, reason: "payment_link_expired" });
+    expect(verify).not.toHaveBeenCalled();
+    expect(await checkPaymentLinkEligibility(makeAdmin([expired]), "booking", reference, { allowExpired: true })).toEqual({ allowed: true });
+  });
   it("fails closed on query failure, unavailable gateway, or a different reference", async () => {
     expect((await checkPaymentLinkEligibility(makeAdmin([unpaid], { error: { message: "offline" } }), "booking", reference)).allowed).toBe(false);
     verify.mockResolvedValue({ status: false, message: "timeout" });

@@ -276,6 +276,15 @@ describe("actual payment message entry points", () => {
     expect(updates).toContainEqual(expect.objectContaining({ last_error: "eligibility:gateway_unavailable", processing_token: null }));
     expect(email).not.toHaveBeenCalled(); expect(sms).not.toHaveBeenCalled();
   });
+  it("keeps eligibility outages queued beyond the send-failure budget without stamping sent_at", async () => {
+    eligibility.mockResolvedValue({ allowed: false, reason: "gateway_unavailable", retryable: true });
+    const { admin, updates } = makeAdmin();
+    (admin as unknown as { rpc: ReturnType<typeof vi.fn> }).rpc.mockResolvedValue({ data: [{ id: "queue-1", booking_id: "booking-1", processing_token: "token",
+      email_payload: payload, delivery_context: { deferred_email_failure_count: 3, deferred_eligibility_retry_count: 5 } }], error: null });
+    expect(await processDueDeferredPaymentLinkEmails(admin)).toMatchObject({ retriesScheduled: 1, deliveryFailures: 0 });
+    expect(updates).toContainEqual(expect.objectContaining({ delivery_context: expect.objectContaining({ deferred_email_failure_count: 3, deferred_eligibility_retry_count: 6 }) }));
+    expect(updates.some(patch => "sent_at" in patch)).toBe(false); expect(email).not.toHaveBeenCalled(); expect(sms).not.toHaveBeenCalled();
+  });
   it("retries a deferred request when the SMS eligibility recheck is transient", async () => {
     email.mockResolvedValue({ sent: false, error: "email_unavailable" });
     eligibility.mockResolvedValueOnce({ allowed: true }).mockResolvedValueOnce({ allowed: false, reason: "gateway_unavailable", retryable: true });

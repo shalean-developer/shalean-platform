@@ -144,22 +144,27 @@ async function releaseClaimForRetry(
   admin: SupabaseClient,
   row: DeferredRow,
   errorMessage: string,
+  options?: { eligibility?: boolean },
 ): Promise<{ released: boolean; failureCount: number; runAtIso: string | null }> {
-  const failureCount = deferredEmailFailureCount(row.delivery_context ?? {}) + 1;
-  if (failureCount >= DEFERRED_EMAIL_MAX_FAILURES) {
+  const context = row.delivery_context ?? {};
+  const failureCount = deferredEmailFailureCount(context) + (options?.eligibility ? 0 : 1);
+  if (!options?.eligibility && failureCount >= DEFERRED_EMAIL_MAX_FAILURES) {
     return { released: false, failureCount, runAtIso: null };
   }
 
-  const runAtIso = new Date(Date.now() + deferredEmailRetryDelaySeconds(failureCount) * 1000).toISOString();
+  const priorEligibility = Number(context.deferred_eligibility_retry_count ?? 0);
+  const eligibilityAttempts = (Number.isFinite(priorEligibility) && priorEligibility >= 0 ? Math.floor(priorEligibility) : 0) + 1;
+  const delaySeconds = options?.eligibility ? Math.min(900, 60 * 2 ** Math.min(eligibilityAttempts - 1, 4)) : deferredEmailRetryDelaySeconds(failureCount);
+  const runAtIso = new Date(Date.now() + delaySeconds * 1000).toISOString();
   const { data, error } = await admin
     .from("conversion_deferred_payment_link_emails")
     .update({
       run_at: runAtIso,
       last_error: errorMessage,
       delivery_context: {
-        ...(row.delivery_context ?? {}),
-        deferred_email_failure_count: failureCount,
-        deferred_email_last_failed_at: new Date().toISOString(),
+        ...context,
+        ...(options?.eligibility ? { deferred_eligibility_retry_count: eligibilityAttempts, deferred_eligibility_last_failed_at: new Date().toISOString() }
+          : { deferred_email_failure_count: failureCount, deferred_email_last_failed_at: new Date().toISOString() }),
       },
       processing_started_at: null,
       processing_token: null,
@@ -243,11 +248,9 @@ export async function processDueDeferredPaymentLinkEmails(
     const eligibility = await checkPaymentLinkEligibility(admin, row.booking_id, row.email_payload.paystackReference);
     if (!eligibility.allowed) {
       if (eligibility.retryable) {
-        const retry = await releaseClaimForRetry(admin, row, `eligibility:${eligibility.reason}`);
-        if (retry.released) { retriesScheduled++; continue; }
-        if (retry.failureCount < DEFERRED_EMAIL_MAX_FAILURES) { errors++; continue; }
-        deliveryFailures++;
-        await reportOperationalIssue("error", "deferred_payment_link_email/eligibility", eligibility.reason, { bookingId: row.booking_id });
+        const retry = await releaseClaimForRetry(admin, row, `eligibility:${eligibility.reason}`, { eligibility: true });
+        if (retry.released) retriesScheduled++; else errors++;
+        continue;
       }
       const completed = await completeClaim(admin, row, { last_error: `suppressed:${eligibility.reason}` });
       if (!completed) errors++;
@@ -286,11 +289,9 @@ export async function processDueDeferredPaymentLinkEmails(
       const smsEligibility = await checkPaymentLinkEligibility(admin, row.booking_id, row.email_payload.paystackReference);
       if (!smsEligibility.allowed) {
         if (smsEligibility.retryable) {
-          const retry = await releaseClaimForRetry(admin, row, `eligibility:${smsEligibility.reason}`);
-          if (retry.released) { retriesScheduled++; continue; }
-          if (retry.failureCount < DEFERRED_EMAIL_MAX_FAILURES) { errors++; continue; }
-          deliveryFailures++;
-          await reportOperationalIssue("error", "deferred_payment_link_email/eligibility", smsEligibility.reason, { bookingId: row.booking_id });
+          const retry = await releaseClaimForRetry(admin, row, `eligibility:${smsEligibility.reason}`, { eligibility: true });
+          if (retry.released) retriesScheduled++; else errors++;
+          continue;
         }
         if (!await completeClaim(admin, row, { last_error: `suppressed:${smsEligibility.reason}` })) errors++;
         continue;
