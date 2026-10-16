@@ -154,24 +154,23 @@ export async function processPaymentRecoveryJob(
 
   let bookingRow = booking as Record<string, unknown>;
   const paymentReference = String(bookingRow.paystack_reference ?? "").trim();
-  const messageEligibility = await checkPaymentLinkEligibility(supabase, bookingId, paymentReference, {
-    allowExpired: jobType === "booking_payment_expired",
-    allowUninitialized: jobType === "booking_payment_expired",
-  });
-  if (!messageEligibility.allowed) {
-    if (messageEligibility.retryable) {
+  const eligibilityOptions = { allowExpired: jobType === "booking_payment_expired", allowUninitialized: jobType === "booking_payment_expired" };
+  const stopForEligibility = async (blocked: { reason: string; retryable?: boolean }): Promise<ProcessPaymentRecoveryResult> => {
+    if (blocked.retryable) {
       const attempts = attempts0 + 1;
       const terminal = jobType !== "booking_payment_expired" && attempts >= TERMINAL_FAILURE_ATTEMPTS;
       await supabase.from("booking_payment_recovery_jobs").update({
         attempts, status: terminal ? "failed_terminal" : "failed_retryable",
         ...(jobType === "booking_payment_expired" ? { scheduled_for: new Date(Date.now() + 15 * 60_000).toISOString() } : {}),
-        last_error: `eligibility:${messageEligibility.reason}`, processed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        last_error: `eligibility:${blocked.reason}`, processed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       }).eq("id", jobId);
       return terminal ? "terminal" : "retry";
     }
-    await markCancelled(supabase, jobId, messageEligibility.reason);
+    await markCancelled(supabase, jobId, blocked.reason);
     return "skipped";
-  }
+  };
+  const messageEligibility = await checkPaymentLinkEligibility(supabase, bookingId, paymentReference, eligibilityOptions);
+  if (!messageEligibility.allowed) return stopForEligibility(messageEligibility);
   if (jobType === "booking_payment_expired" && String(bookingRow.status ?? "").trim().toLowerCase() === "pending_payment") {
     const expired = await expirePendingPaymentTerminal(supabase, {
       bookingId,
@@ -226,6 +225,12 @@ export async function processPaymentRecoveryJob(
       processed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     }).eq("id", jobId);
     return exhausted ? "skipped" : "retry";
+  }
+
+  const finalEligibility = await checkPaymentLinkEligibility(supabase, bookingId, paymentReference, eligibilityOptions);
+  if (!finalEligibility.allowed) {
+    if (reminderStage) await releaseAutomaticPaymentReminder(supabase, paymentReference, reminderStage);
+    return stopForEligibility(finalEligibility);
   }
 
   let result: { sent: boolean; error?: string };

@@ -50,6 +50,25 @@ export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, boo
     return false;
   }
 
+  const markFallback = async (): Promise<boolean> => {
+    try {
+      const { error: markError } = await admin.from("bookings").update({ recurring_fallback_at: new Date().toISOString() }).eq("id", bookingId);
+      if (!markError) return true;
+      await reportOperationalIssue("error", "recurring/fallback/marker", markError.message, { bookingId });
+    } catch (error) {
+      await reportOperationalIssue("error", "recurring/fallback/marker", String(error), { bookingId });
+    }
+    return false;
+  };
+  // Repair a failed marker without reinitializing Paystack or replacing accepted queue work.
+  const { data: queuedWork, error: queueReadError } = await admin.from("conversion_deferred_payment_link_emails")
+    .select("id").eq("booking_id", bookingId).eq("delivery_context->>stage", "recurring_auto_charge_fallback").limit(1).maybeSingle();
+  if (queueReadError) {
+    await reportOperationalIssue("error", "recurring/fallback/queue_lookup", queueReadError.message, { bookingId });
+    return false;
+  }
+  if (queuedWork) return markFallback();
+
   const snap = (row as { booking_snapshot?: unknown }).booking_snapshot;
   const locked =
     snap && typeof snap === "object" && snap !== null && "locked" in snap ? (snap as { locked?: unknown }).locked : null;
@@ -208,7 +227,7 @@ export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, boo
       context: { bookingId: head.id, stage: "recurring_auto_charge_fallback" },
     });
     queued = true;
-    await admin.from("bookings").update({ recurring_fallback_at: new Date().toISOString() }).eq("id", bookingId);
+    if (!await markFallback()) return false;
     await persistPaymentLinkDelivery(admin, head.id, {
       whatsappOk: null, smsOk: null, emailOk: false, twilioSmsSid: null, primaryChannel: "none",
       fallbackTrace: "recurring_payment_link_queued", byChannel: { whatsapp: "skipped", sms: "skipped", email: "skipped" },

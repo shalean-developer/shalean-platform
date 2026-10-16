@@ -70,8 +70,14 @@ export async function POST(request: Request) {
     let retry = 0;
     let terminal = 0;
     let skipped = 0;
+    let deferredByBudget = 0;
+    const deadline = Date.now() + 4 * 60_000;
 
-    for (const row of jobs ?? []) {
+    for (const [index, row] of (jobs ?? []).entries()) {
+      if (Date.now() >= deadline) {
+        deferredByBudget = (jobs?.length ?? 0) - index;
+        break;
+      }
       const r = await processPaymentRecoveryJob(supabase, row as PaymentRecoveryJobRow);
       if (r === "sent") sent++;
       else if (r === "retry") retry++;
@@ -88,6 +94,7 @@ export async function POST(request: Request) {
       terminalFailures: terminal,
       skipped,
       batchSize: jobs?.length ?? 0,
+      deferredByBudget,
     };
 
     await logSystemEvent({
