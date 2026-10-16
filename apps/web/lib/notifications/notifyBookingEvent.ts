@@ -264,7 +264,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       }
     }
     const hasEmail = Boolean(resolvedEmail);
-    const custPhone = String(head?.customer_phone ?? event.snapshot?.customer?.phone ?? "").trim();
+    const custPhone = String(head?.customer_phone ?? "").trim() || String(event.snapshot?.customer?.phone ?? "").trim();
 
     if (!process.env.RESEND_API_KEY?.trim()) {
       notifyBookingDebug("payment_confirmed_resend_missing", { bookingId: event.bookingId });
