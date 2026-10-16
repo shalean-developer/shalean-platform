@@ -31,6 +31,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_SCAN = 300;
+/** Leave room for the final provider call and cleanup inside the 600-second lease. */
+const RUN_BUDGET_MS = 4 * 60_000;
 /** Widen scan so “slow” adaptive ~2h window still fits in one cron sweep. */
 const SCAN_EXPIRES_MAX_MIN = 130;
 
@@ -106,6 +108,7 @@ export async function POST(request: Request) {
     .not("payment_link", "is", null)
     .gte("payment_link_expires_at", isoPlusMinutes(now, 5))
     .lte("payment_link_expires_at", isoPlusMinutes(now, SCAN_EXPIRES_MAX_MIN))
+    .order("payment_link_expires_at", { ascending: true })
     .limit(MAX_SCAN);
 
   if (error) {
@@ -117,10 +120,15 @@ export async function POST(request: Request) {
   let sent15m = 0;
   let skipped = 0;
   let skippedAdaptiveInstant = 0;
+  let deferredByBudget = 0;
   const priorBucketCache = new Map<string, PaymentConversionBucket | null>();
   const channelStats = await fetchRecentPaymentLinkChannelStats(admin);
 
-  for (const raw of candidates ?? []) {
+  for (const [candidateIndex, raw] of (candidates ?? []).entries()) {
+    if (Date.now() - now >= RUN_BUDGET_MS) {
+      deferredByBudget = (candidates?.length ?? 0) - candidateIndex;
+      break;
+    }
     const row = raw as Row;
     const expMs = row.payment_link_expires_at ? new Date(row.payment_link_expires_at).getTime() : NaN;
     if (!Number.isFinite(expMs) || !row.payment_link || !row.paystack_reference) {
@@ -320,6 +328,7 @@ export async function POST(request: Request) {
       sent15m,
       skipped,
       skipped_adaptive_instant: skippedAdaptiveInstant,
+      deferred_by_budget: deferredByBudget,
     },
   });
 
@@ -330,6 +339,7 @@ export async function POST(request: Request) {
     sent15m,
     skipped,
     skippedAdaptiveInstant,
+    deferredByBudget,
   });
   } finally {
     await releaseCronLock(admin, lockAcq.jobName, lockAcq.holderId);
