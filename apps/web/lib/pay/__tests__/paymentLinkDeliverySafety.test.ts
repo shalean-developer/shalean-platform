@@ -170,6 +170,22 @@ describe("actual payment message entry points", () => {
         job_type: jobType, customer_email: "customer@example.com", attempts: 0 });
       expect(result).toBe("skipped"); expect(recoveryEmail).not.toHaveBeenCalled(); expect(expire).not.toHaveBeenCalled();
     });
+  it("lets a legacy reminder retry when a competing worker later releases its claim", async () => {
+    const { buildPaymentRecoveryEmailContext } = await import("@/lib/email/paymentRecoveryEmails");
+    vi.mocked(buildPaymentRecoveryEmailContext).mockReturnValue({ bookingId: "booking-1", to: payload.customerEmail,
+      customerName: "Pat", serviceLabel: payload.serviceLabel, dateLabel: payload.dateLabel, timeLabel: payload.timeLabel,
+      amountZar: 458, paymentUrl: payload.paymentUrl, paystackReference: "bps_test" });
+    claim.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    recoveryEmail.mockRejectedValueOnce(new Error("temporary provider failure"));
+    const { admin, updates } = makeAdmin();
+    const job = { id: "job-1", booking_id: "booking-1", job_type: "payment_reminder_1h", customer_email: payload.customerEmail, attempts: 0 };
+    expect(await processPaymentRecoveryJob(admin, job)).toBe("retry");
+    expect(updates).toContainEqual(expect.objectContaining({ status: "failed_retryable", last_error: "automatic_reminder_claim_pending" }));
+    expect(recoveryEmail).not.toHaveBeenCalled();
+    await processPaymentRecoveryJob(admin, job);
+    expect(recoveryEmail).toHaveBeenCalledOnce();
+    expect(release).toHaveBeenCalledWith(admin, "bps_test", "first");
+  });
   it("retries an unverified deferred payment request without sending email or SMS", async () => {
     eligibility.mockResolvedValue({ allowed: false, reason: "gateway_unavailable", retryable: true });
     const { admin, updates } = makeAdmin();
