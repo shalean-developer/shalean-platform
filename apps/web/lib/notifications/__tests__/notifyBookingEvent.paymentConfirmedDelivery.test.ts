@@ -248,6 +248,13 @@ describe("notifyBookingEvent payment_confirmed delivery result", () => {
       customerEmail: "pat@example.com", amountCents: 45800, paymentReference: "bps_retry", confirmationRetry: true });
     expect(result.failed).toBe(true); expect(enqueueMock).not.toHaveBeenCalled();
   });
+  it("completes a phone-only confirmation after SMS acceptance without an email retry", async () => {
+    tryClaimNotificationIdempotencyMock.mockResolvedValue(true);
+    const result = await notifyBookingEvent({ type: "payment_confirmed", supabase: makeAdmin({ customer_phone: "+27000000000" }),
+      bookingId: "b1", snapshot: null, customerEmail: "", amountCents: 45800, paymentReference: "bps_phone_only" });
+    expect(result).toMatchObject({ failed: false, customerEmailSent: false });
+    expect(customerSmsMock).toHaveBeenCalledOnce(); expect(enqueueMock).not.toHaveBeenCalled();
+  });
   it("dispatches office alerts with the approved production fallback when the environment setting is absent", async () => {
     vi.stubEnv("SHALEAN_APP_ENV", "production"); vi.stubEnv("ADMIN_NOTIFICATION_EMAIL", "");
     tryClaimNotificationIdempotencyMock.mockResolvedValue(true);

@@ -513,6 +513,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             },
           });
           debugCustomerSmsOk = smsRet.ok;
+          if (smsRet.ok) delivery = { ...delivery, failed: false, error: undefined };
           notifyBookingDebug("payment_confirmed_customer_sms_result", {
             bookingId: event.bookingId,
             ok: smsRet.ok,
