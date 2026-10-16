@@ -175,6 +175,22 @@ await assertPayable(26000,26100);
 assert.equal((await db.query('select payout_status from bookings')).rows[0].payout_status,'eligible');checks++;
 await db.exec("update bookings set payout_status='pending';");
 await assertPayable(26000,26100);
+// Summary-absent adjustments and roster changes preserve the original margin basis.
+await db.exec('update bookings set earnings_summary=null,company_revenue_cents=13900;');
+await db.query('insert into cleaner_earnings_adjustments(booking_id,cleaner_id,amount_cents) values($1,$2,500)',[bid,lead]);
+assert.equal((await db.query('select company_revenue_cents from bookings')).rows[0].company_revenue_cents,13400);checks++;
+await db.query('delete from cleaner_earnings_adjustments where booking_id=$1 and cleaner_id=$2',[bid,lead]);
+assert.equal((await db.query('select company_revenue_cents from bookings')).rows[0].company_revenue_cents,13900);checks++;
+await db.query('delete from booking_cleaners where booking_id=$1 and cleaner_id=$2',[bid,member]);
+assert.equal((await db.query('select company_revenue_cents from bookings')).rows[0].company_revenue_cents,40000);checks++;
+await db.query('insert into booking_cleaners(booking_id,cleaner_id) values($1,$2)',[bid,member]);
+assert.equal((await db.query('select company_revenue_cents from bookings')).rows[0].company_revenue_cents,13900);checks++;
+await db.exec('update bookings set company_revenue_cents=100;');
+await db.query('insert into cleaner_earnings_adjustments(booking_id,cleaner_id,amount_cents) values($1,$2,500)',[bid,lead]);
+assert.equal((await db.query('select company_revenue_cents from bookings')).rows[0].company_revenue_cents,-400);checks++;
+await db.query('delete from cleaner_earnings_adjustments where booking_id=$1 and cleaner_id=$2',[bid,lead]);
+assert.equal((await db.query('select company_revenue_cents from bookings')).rows[0].company_revenue_cents,100);checks++;
+await db.exec("update bookings set company_revenue_cents=13900,earnings_summary=jsonb_build_object('customer_total_cents',66000,'costs_cents',0);");
 // Dispute closure, adjustment insertion and payable refresh are one transaction.
 await db.query('delete from cleaner_earnings_adjustments where cleaner_id=$1',[member]);
 const dispute='00000000-0000-4000-8000-000000000088';
@@ -221,6 +237,17 @@ assert.equal(row.earnings_summary.cleaner_count,1);checks++;
 assert.equal(row.metadata.payout_attribution_removal_v1.active,true);checks++;
 assert.equal((await db.query("select has_function_privilege('anon','public.refresh_current_locked_booking_policy()','execute') as allowed")).rows[0].allowed,false);checks++;
 assert.equal((await db.query("select has_function_privilege('authenticated','public.apply_booking_earnings_policy_lock()','execute') as allowed")).rows[0].allowed,false);checks++;
+// Unsupported dispute policies fail before adjustment insertion or closure.
+const unsupportedDispute='00000000-0000-4000-8000-000000000091';
+await db.query("insert into cleaner_earnings_disputes(id,booking_id,cleaner_id,status) values($1,$2,$3,'open')",[unsupportedDispute,bid,lead]);
+for(const patch of ["earnings_policy='current_v1'","earnings_policy='legacy_july',is_team_job=true","is_team_job=false,service='unsupported'"]) {
+ await db.exec('alter table bookings disable trigger policy; update bookings set '+patch+'; alter table bookings enable trigger policy;');
+ const countBefore=(await db.query('select count(*)::integer n from cleaner_earnings_adjustments')).rows[0].n;
+ await assert.rejects(db.query("select public.resolve_cleaner_dispute_with_adjustment($1,500,'Unsupported','Reviewed',$2,'admin@example.com')",[unsupportedDispute,lead]),/unsupported_dispute_adjustment_policy/);checks++;
+ assert.equal((await db.query('select status from cleaner_earnings_disputes where id=$1',[unsupportedDispute])).rows[0].status,'open');checks++;
+ assert.equal((await db.query('select count(*)::integer n from cleaner_earnings_adjustments')).rows[0].n,countBefore);checks++;
+}
+await db.exec("alter table bookings disable trigger policy; update bookings set earnings_policy='legacy_july',is_team_job=false,service='standard'; alter table bookings enable trigger policy;");
 await db.exec("update bookings set payout_run_id='00000000-0000-4000-8000-000000000077';");
 const beforeAuthDelete=(await db.query('select to_jsonb(b) value from bookings b')).rows;
 await db.query('delete from auth.users where id=$1',[actor]);

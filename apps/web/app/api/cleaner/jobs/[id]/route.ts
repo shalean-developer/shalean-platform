@@ -1,3 +1,4 @@
+import { resolveCleanerBonusCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { resolveCleanerJobDetailEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { NextResponse } from "next/server";
 import {
@@ -412,7 +413,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         session.cleanerId,
         viewerPayoutCents ?? cleanerFacing?.job_earning_cents ?? displayEarningsCents,
       );
-  const bonusCents = attributionRemoved ? 0 : (cleanerFacing?.bonus_cents ?? 0);
+  const bonusCents = attributionRemoved ? 0 : resolveCleanerBonusCents({...record,viewer_payout_cents:viewerPayoutCents},session.cleanerId);
 
   const jobPayload = {
     ...safe,

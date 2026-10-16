@@ -1,3 +1,4 @@
+import { resolveCleanerBonusCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { cleanerEarningsReadInputs } from "@/lib/cleaner/cleanerEarningsReadInputs";
 import { NextResponse } from "next/server";
 import {
@@ -330,7 +331,7 @@ export async function GET(request: Request) {
     }
     const facing = resolveCleanerFacingEarnings(parseBookingEarningsSummary(b.earnings_summary), cleanerId);
     const cents = amountCentsForRow(b, cleanerId);
-    const bonusCents = facing?.bonus_cents ?? 0;
+    const bonusCents = resolveCleanerBonusCents(b, cleanerId);
     bonus_total_cents += bonusCents;
     const customerPaid = bookingTotalCents(b);
     if (customerPaid != null && customerPaid < cents) {
@@ -391,7 +392,7 @@ export async function GET(request: Request) {
       payout_frozen_cents: normalized.payout_frozen_cents,
       amount_cents: normalized.amount_cents,
       bonus_cents: bonusCents,
-      job_earning_cents: facing?.job_earning_cents ?? normalized.amount_cents,
+      job_earning_cents: facing?.job_earning_cents ?? Math.max(0, normalized.amount_cents - bonusCents),
       payout_paid_at: dashboardWire.payout_paid_at,
       payout_run_id: dashboardWire.payout_run_id,
       in_frozen_batch: dashboardWire.in_frozen_batch,

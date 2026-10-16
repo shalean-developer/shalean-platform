@@ -84,6 +84,7 @@ begin
     values(bid,member,500,'AUDIT960 rollback-only summary-absent scenario');
   select * into strict b from public.bookings where id=bid;
   assert b.earnings_summary is null and b.internal_earnings_cents=52500, 'Summary-absent obligation is incorrect';
+  assert b.company_revenue_cents=12500, 'Summary-absent margin did not follow the bonus';
   assert (select payout_cents+bonus_cents from public.booking_roster_member_payouts where booking_id=bid)=26500,
     'Summary-absent member payable is incorrect';
   assert b.is_test is true and b.payout_status='pending' and b.payout_id is null

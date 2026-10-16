@@ -203,6 +203,19 @@ export function resolveCleanerDashboardEarningsCents(
   return 0;
 }
 
+/** Summary detail wins; otherwise expose the current fixed-policy net bonus above basis. */
+export function resolveCleanerBonusCents(
+  booking: Parameters<typeof resolveCleanerDashboardEarningsCents>[0],
+  cleanerId: string,
+): number {
+  const facing = resolveCleanerFacingEarnings(parseBookingEarningsSummary(booking.earnings_summary), cleanerId);
+  if (facing) return Math.max(0, facing.bonus_cents);
+  const basis = optionalCentsFromDb(booking.display_earnings_cents);
+  if (booking.date == null || booking.date < "2026-10-01" || booking.earnings_policy !== "legacy_july"
+    || booking.is_team_job === true || basis == null || basis <= 0) return 0;
+  return Math.max(0, resolveCleanerDashboardEarningsCents(booking, cleanerId) - basis);
+}
+
 /** Job detail uses the shared net amount for current visits, preserving old detail semantics. */
 export function resolveCleanerJobDetailEarningsCents(
   booking: Parameters<typeof resolveCleanerDashboardEarningsCents>[0],

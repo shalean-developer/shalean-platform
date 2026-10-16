@@ -166,7 +166,7 @@ declare
   v_lead uuid; v_base integer; v_rows jsonb; v_summary jsonb;
   v_added_booking uuid; v_added_cleaner uuid; v_added_amount bigint:=0;
   v_removed_booking uuid; v_removed_cleaner uuid; v_removed_amount bigint:=0;
-  v_bonus jsonb; v_deductions jsonb; v_total integer; v_previous_total bigint; v_written integer; v_expected integer;
+  v_bonus jsonb; v_deductions jsonb; v_total integer; v_prior_obligation bigint; v_previous_total bigint; v_written integer; v_expected integer;
 begin
   -- FK ON DELETE SET NULL may remove the creator identity while retaining the
   -- immutable audit email. This changes no entitlement and must not touch a
@@ -232,6 +232,8 @@ begin
       if tg_table_name='cleaner_earnings_adjustments' then raise exception 'payout_attribution_removed' using errcode='55000'; end if;
       continue;
     end if;
+    if tg_table_name='bookings' then v_prior_obligation:=old.internal_earnings_cents;
+    else v_prior_obligation:=b.internal_earnings_cents; end if;
     if tg_table_name='booking_cleaners' then
       update public.bookings set cleaner_id=v_lead,payout_owner_cleaner_id=v_lead,
         internal_earnings_cents=internal_earnings_cents where id=v_id returning * into b;
@@ -291,6 +293,13 @@ begin
         'computed_at',clock_timestamp());
       update public.bookings set earnings_summary=v_summary,
         company_revenue_cents=(v_summary->>'company_revenue_cents')::integer where id=v_id;
+    elsif b.company_revenue_cents is not null then
+      -- Preserve the existing customer/cost basis while the summary is absent.
+      -- Keep the signed delta so removing a loss-making adjustment restores the
+      -- original margin rather than manufacturing revenue after a zero clamp.
+      update public.bookings set company_revenue_cents=b.company_revenue_cents
+        +coalesce(case when tg_table_name='cleaner_earnings_adjustments' then v_previous_total
+          else v_prior_obligation end,v_total)-v_total where id=v_id;
     end if;
     delete from public.booking_roster_member_payouts mp where mp.booking_id=v_id
       and (mp.cleaner_id=v_lead or not exists(select 1 from jsonb_array_elements(v_rows) r
@@ -345,6 +354,10 @@ begin
   select * into b from public.bookings where id=d.booking_id for update;
   if not found then raise exception 'booking_not_found' using errcode='P0002'; end if;
   if b.date is null or b.date::date<date '2026-10-01' then raise exception 'historical_payout_item_deferred' using errcode='23514'; end if;
+  if b.earnings_policy is distinct from 'legacy_july' or coalesce(b.is_team_job,false)
+    or lower(coalesce(b.service_slug,b.service,'')) not in ('standard','regular-cleaning','airbnb') then
+    raise exception 'unsupported_dispute_adjustment_policy' using errcode='23514';
+  end if;
   perform 1 from public.cleaner_earnings where booking_id=b.id for update;
   perform 1 from public.booking_roster_member_payouts where booking_id=b.id for update;
   perform 1 from public.team_job_member_payouts where booking_id=b.id for update;

@@ -263,6 +263,9 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
       expect(res.status).toBe(200);
       expect(json.rows.every((r: { amount_cents:number }) => r.amount_cents === 26500)).toBe(true);
       expect(json.summary.today_cents).toBe(318000);
+      expect(json.rows.every((r: { bonus_cents:number }) => r.bonus_cents === 500)).toBe(true);
+      expect(json.summary.bonus_total_cents).toBe(6000);
+      expect(json.rows.every((r: {job_earning_cents:number})=>r.job_earning_cents===26000)).toBe(true);
       expect(json.summary.suggested_daily_goal_cents).toBe(Math.round(318000 / 7 * 1.1));
     } finally { vi.useRealTimers(); }
   });

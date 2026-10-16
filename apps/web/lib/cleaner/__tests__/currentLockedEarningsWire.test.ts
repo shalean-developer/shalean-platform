@@ -1,4 +1,4 @@
-import { resolveCleanerJobDetailEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
+import { resolveCleanerJobDetailEarningsCents, resolveCleanerBonusCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { describe,expect,it,vi } from "vitest";
 vi.mock("@/lib/payout/persistCleanerPayout",()=>({previewDisplayEarningsCentsForCleanerJob:vi.fn(async()=>null)}));
 import { cleanerEarningsReadInputs,CLEANER_EARNINGS_READ_SELECT } from "@/lib/cleaner/cleanerEarningsReadInputs";
@@ -51,6 +51,11 @@ describe("current fixed earning read pipeline",()=>{
  it("keeps a fully deducted member at zero in Office allocations",()=>{
   const b={...wire(),internal_earnings_cents:26000};
   expect(perCleanerAllocationsForBooking(b,b.booking_cleaners!,[{cleaner_id:member,payout_cents:0}]).map(r=>r.cents)).toEqual([26000,0]);
+ });
+ it("shows a summary-absent member net bonus without inventing a bonus on deductions",()=>{
+  expect(resolveCleanerBonusCents({...wire(),viewer_payout_cents:26500},member)).toBe(500);
+  expect(resolveCleanerBonusCents({...wire(),viewer_payout_cents:25700},member)).toBe(0);
+  expect(resolveCleanerBonusCents({...wire(),date:"2026-09-30",viewer_payout_cents:26500},member)).toBe(0);
  });
  it("keeps Office allocations aligned with the cleaner earning pipeline",()=>{
   const b=wire();
