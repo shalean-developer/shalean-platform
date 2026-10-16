@@ -4,6 +4,7 @@ import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import {
   processPaymentRecoveryJob,
+  recoverStalePaymentRecoveryJobs,
   type PaymentRecoveryJobRow,
 } from "@/lib/booking/processPaymentRecoveryJob";
 import { logSystemEvent, reportOperationalIssue, logCronRun } from "@/lib/logging/systemLog";
@@ -46,6 +47,7 @@ export async function POST(request: Request) {
       context: { started },
     });
 
+    await recoverStalePaymentRecoveryJobs(supabase);
     const nowIso = new Date().toISOString();
     const { data: jobs, error: jobErr } = await supabase
       .from("booking_payment_recovery_jobs")

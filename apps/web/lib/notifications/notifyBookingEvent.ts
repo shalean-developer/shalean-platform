@@ -245,6 +245,18 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
   });
 
   if (event.type === "payment_confirmed") {
+    // A pre-send claim can belong to a callback that is still running. Retry workers
+    // require accepted-delivery evidence before treating a duplicate as complete.
+    const acceptedConfirmation = async (channel: "email" | "sms" | "in_app", role: "customer" | "admin" = "customer") => {
+      if (!event.confirmationRetry) return true;
+      const query = channel === "in_app"
+        ? supabase.from("user_notifications").select("id").eq("booking_id", event.bookingId).eq("type", "confirmed")
+        : supabase.from("notification_logs").select("id").eq("booking_id", event.bookingId)
+          .eq("role", role).eq("channel", channel).eq("status", "sent")
+          .in("event_type", role === "admin" ? ["payment_confirmed", "payment_confirmed_admin"] : ["payment_confirmed"]);
+      const { data, error } = await query.limit(1).maybeSingle();
+      return !error && Boolean(data);
+    };
     let debugEmailClaimed: boolean | null = null;
     let debugSmsClaimed: boolean | null = null;
     let debugCustomerSmsOk: boolean | null = null;
@@ -441,7 +453,9 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           error: "dedupe_skip",
           bookingId: event.bookingId,
         });
-        delivery = emptyNotifyDeliveryResult({ dedupeSkipped: true });
+        const accepted = await acceptedConfirmation("email");
+        delivery = emptyNotifyDeliveryResult({ dedupeSkipped: true,
+          ...(!accepted ? { failed: true, error: "customer_email_claim_pending" } : {}) });
       }
       notifyBookingDebug("payment_confirmed_email_result", {
         bookingId: event.bookingId,
@@ -539,7 +553,8 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           });
         }
       } else {
-        delivery = { ...delivery, failed: false, error: undefined, dedupeSkipped: true };
+        const accepted = await acceptedConfirmation("sms");
+        delivery = { ...delivery, failed: !accepted, error: accepted ? undefined : "customer_sms_claim_pending", dedupeSkipped: true };
         notifyBookingDebug("payment_confirmed_customer_sms_dedupe_skip", { bookingId: event.bookingId });
       }
     } else if (custPhone && emailSent) {
@@ -568,7 +583,10 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           channel: "email",
           bookingId: event.bookingId,
         });
-        if (!claimedAdminEmail) return;
+        if (!claimedAdminEmail) {
+          if (!(await acceptedConfirmation("email", "admin"))) delivery = { ...delivery, failed: true, error: "admin_email_claim_pending" };
+          return;
+        }
         try {
         const adminAssignmentNote =
           payload.showCleanerSubstitutionNotice && payload.fallbackReason
@@ -658,6 +676,8 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             error: msg,
           });
         }
+      } else if (!(await acceptedConfirmation("in_app"))) {
+        delivery = { ...delivery, failed: true, error: "in_app_claim_pending" };
       }
     }
 

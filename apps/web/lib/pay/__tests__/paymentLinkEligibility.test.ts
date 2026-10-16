@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const { verify, issue } = vi.hoisted(() => ({ verify: vi.fn(), issue: vi.fn() }));
 vi.mock("@/lib/payments/verifyPaystackTransaction", () => ({ fetchPaystackTransactionVerify: verify }));
 vi.mock("@/lib/logging/systemLog", () => ({ logSystemEvent: vi.fn(), reportOperationalIssue: issue }));
-import { checkPaymentLinkEligibility, claimAutomaticPaymentReminder } from "@/lib/pay/paymentLinkEligibility";
+import { checkPaymentLinkEligibility, claimAutomaticPaymentReminder, releaseAutomaticPaymentReminder } from "@/lib/pay/paymentLinkEligibility";
 
 const reference = "bps_test_payment";
 const unpaid = { status: "pending_payment", payment_status: "pending", paystack_reference: reference };
@@ -137,5 +137,19 @@ describe("shared automatic reminder claims", () => {
       payment_link_reminder_15m_sent_at: "2026-10-16T12:15:00Z" }) : { insert } } as never;
     expect(await claimAutomaticPaymentReminder(admin, "booking", reference, stage)).toBe(false);
     expect(insert).not.toHaveBeenCalled();
+  });
+  it("retries a transient failure when releasing an unsent reminder claim", async () => {
+    const remove = vi.fn().mockResolvedValueOnce({ error: { message: "database unavailable" } }).mockResolvedValue({ error: null });
+    const chain = { eq: () => chain, then: (resolve: (result: unknown) => unknown) => remove().then(resolve) };
+    const admin = { from: () => ({ delete: () => chain }) } as never;
+    await releaseAutomaticPaymentReminder(admin, reference, "first");
+    expect(remove).toHaveBeenCalledTimes(2);
+  });
+  it("surfaces an exhausted claim-release failure for operational recovery", async () => {
+    const remove = vi.fn(async () => ({ error: { message: "persistent database failure" } }));
+    const chain = { eq: () => chain, then: (resolve: (result: unknown) => unknown) => remove().then(resolve) };
+    await expect(releaseAutomaticPaymentReminder({ from: () => ({ delete: () => chain }) } as never, reference, "first")).rejects.toThrow("claim_release_failed");
+    expect(remove).toHaveBeenCalledTimes(3);
+    expect(issue).toHaveBeenCalledWith("critical", "paymentReminderClaim/release", "persistent database failure", expect.anything());
   });
 });
