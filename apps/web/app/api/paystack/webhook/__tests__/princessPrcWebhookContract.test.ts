@@ -179,13 +179,15 @@ function sign(rawBody: string, secret = SECRET): string {
   return crypto.createHmac("sha512", secret).update(rawBody).digest("hex");
 }
 
-async function postWebhook(payload: unknown, signature: string | null) {
+async function postWebhook(payload: unknown, signature: string | null, compatibility = false) {
   const rawBody = typeof payload === "string" ? payload : JSON.stringify(payload);
   const headers = new Headers({ "Content-Type": "application/json" });
   if (signature != null) headers.set("x-paystack-signature", signature);
-  const { POST } = await import("@/app/api/paystack/webhook/route");
+  const { POST } = compatibility
+    ? await import("@/app/api/payment/webhook/route")
+    : await import("@/app/api/paystack/webhook/route");
   return POST(
-    new Request("http://localhost/api/paystack/webhook", {
+    new Request(`http://localhost/api/${compatibility ? "payment" : "paystack"}/webhook`, {
       method: "POST",
       headers,
       body: rawBody,
@@ -194,6 +196,23 @@ async function postWebhook(payload: unknown, signature: string | null) {
 }
 
 describe("Princess PR C — Paystack webhook contract", () => {
+  it("rejects unsigned requests to the former configured URL before payment writes", async () => {
+    const response = await postWebhook(chargeSuccessPayload(), null, true);
+    expect(response.status).toBe(401);
+    expect(mocks.finalizePaidBooking).not.toHaveBeenCalled();
+    expect(mocks.recordPaystackBookingPayment).not.toHaveBeenCalled();
+  });
+
+  it("processes a signed charge sent to the former configured URL through canonical finalization", async () => {
+    const payload = chargeSuccessPayload();
+    const response = await postWebhook(payload, sign(JSON.stringify(payload)), true);
+    expect(response.status).toBe(200);
+    expect(mocks.finalizePaidBooking).toHaveBeenCalledTimes(1);
+    expect(mocks.recordPaystackBookingPayment).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      reference: REFERENCE, amountCents: AMOUNT_CENTS, bookingId: BOOKING_ID,
+    }));
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.PAYSTACK_SECRET_KEY = SECRET;

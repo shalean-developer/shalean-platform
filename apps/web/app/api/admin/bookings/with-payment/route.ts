@@ -20,13 +20,15 @@ import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
 import { processPaystackInitializeBody } from "@/lib/booking/paystackInitializeCore";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type BookingHead = {
   id: string;
-  user_id: string | null;
+  user_id?: string | null;
+  customer_id?: string | null;
   payment_status?: string | null;
   status: string | null;
   payment_link: string | null;
@@ -138,9 +140,10 @@ export async function POST(request: Request) {
     typeof body.cleaner_slot_override_reason === "string" ? body.cleaner_slot_override_reason.trim().slice(0, 500) : "";
   const cleanerSlotOverrideReasonForDb =
     ignoreCleanerSlotConflict && cleanerSlotOverrideReasonRaw.length > 0 ? cleanerSlotOverrideReasonRaw : null;
+  const headSelect = HEAD_SELECT.replace("user_id", await resolveBookingOwnershipColumn(admin));
 
   if (bookingIdFromBody && !forceNewCheckout) {
-    const { data: existing, error: exErr } = await admin.from("bookings").select(HEAD_SELECT).eq("id", bookingIdFromBody).maybeSingle();
+    const { data: existing, error: exErr } = await admin.from("bookings").select(headSelect).eq("id", bookingIdFromBody).maybeSingle();
 
     if (exErr) {
       await reportOperationalIssue("error", "admin/bookings/with-payment", exErr.message, { bookingId: bookingIdFromBody });
@@ -201,6 +204,7 @@ export async function POST(request: Request) {
         },
       });
 
+      let notificationsSent = false;
       if (resendNotifications) {
         const gate = paymentLinkSendAllowed(row);
         if (!gate.allowed) {
@@ -209,7 +213,7 @@ export async function POST(request: Request) {
             { status: 429, headers: { "Retry-After": String(gate.retryAfterSec) } },
           );
         }
-        await sendAdminPaystackDeliveryForRow(admin, {
+        notificationsSent = await sendAdminPaystackDeliveryForRow(admin, {
           row,
           authorizationUrl: row.payment_link,
           reference: row.paystack_reference,
@@ -227,7 +231,7 @@ export async function POST(request: Request) {
         bookingId: row.id,
         payment_status: deriveAdminClientPaymentStatus(row),
         payment_link_expires_at: row.payment_link_expires_at,
-        notificationsSent: resendNotifications,
+        notificationsSent,
       });
     }
   }
@@ -304,7 +308,7 @@ export async function POST(request: Request) {
     return bail(NextResponse.json({ error: finalized.error }, { status: 500 }));
   }
 
-  const { data: row } = await admin.from("bookings").select(HEAD_SELECT).eq("id", result.bookingId!).maybeSingle();
+  const { data: row } = await admin.from("bookings").select(headSelect).eq("id", result.bookingId!).maybeSingle();
   const head = row && typeof row === "object" ? (row as BookingHead) : null;
 
   const responseBody: Record<string, unknown> = {

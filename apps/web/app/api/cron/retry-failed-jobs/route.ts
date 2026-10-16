@@ -31,6 +31,7 @@ import {
   recordPaystackSalesDocumentPayment,
 } from "@/lib/payments/recordPaystackSettlement";
 import { applyRecurringOccurrenceRosterContinuity } from "@/lib/recurring/applyRecurringOccurrenceRosterContinuity";
+import { processPaymentConfirmationRetries } from "@/lib/notifications/paymentConfirmationRetry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -125,6 +126,7 @@ export async function POST(request: Request) {
     context: { route: ROUTE, timestamp: runStartedAtIso },
   });
 
+  const paymentConfirmationRetries = await processPaymentConfirmationRetries(supabase);
   await retryHistoricalPaymentEffects(supabase);
 
   const failedJobsThreshold = Number(process.env.FAILED_JOBS_ALERT_THRESHOLD ?? "5");
@@ -788,6 +790,7 @@ export async function POST(request: Request) {
 
   const resultPayload = {
     ok: true as const,
+    paymentConfirmationRetries,
     bookingInsertRetried,
     bookingInsertSucceeded,
     lifecycleRetried,
@@ -829,6 +832,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ok: true,
+    paymentConfirmationRetries,
     bookingInsert: {
       retried: bookingInsertRetried,
       succeeded: bookingInsertSucceeded,

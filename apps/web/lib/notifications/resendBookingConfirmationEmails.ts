@@ -8,6 +8,7 @@ import {
 } from "@/lib/email/sendBookingEmail";
 import { buildBookingNotifyFieldsFromRow, formatAdminDateTimeLine } from "@/lib/notifications/bookingNotifyFormat";
 import { bookingEmailRowOverlayFromRecord } from "@/lib/email/resolveBookingEmailFields";
+import { adminNotificationRecipientSetting } from "@/lib/email/adminNotificationRecipients";
 
 export type ResendBookingConfirmationEmailsResult = {
   customer: { attempted: boolean; sent: boolean; error?: string };
@@ -61,7 +62,7 @@ export async function resendBookingConfirmationEmails(
   const { data: row, error } = await supabase
     .from("bookings")
     .select(
-      "id, customer_email, paystack_reference, amount_paid_cents, booking_snapshot, assignment_type, fallback_reason, selected_cleaner_id, cleaner_id, date, time, location, suburb, service, service_slug, booking_reference, extras, selected_extras, booking_type, recurring_frequency, recurring_days",
+      "id, customer_email, customer_name, paystack_reference, amount_paid_cents, booking_snapshot, assignment_type, fallback_reason, selected_cleaner_id, cleaner_id, date, time, location, suburb, service, service_slug, booking_reference, extras, selected_extras, booking_type, recurring_frequency, recurring_days",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -144,7 +145,7 @@ export async function resendBookingConfirmationEmails(
 
   if (includeAdmin) {
     result.admin.attempted = true;
-    if (!process.env.ADMIN_NOTIFICATION_EMAIL?.trim()) {
+    if (!adminNotificationRecipientSetting()) {
       result.admin.error = "ADMIN_NOTIFICATION_EMAIL not configured.";
     } else {
       const payFields = buildBookingNotifyFieldsFromRow(bookingId, head);

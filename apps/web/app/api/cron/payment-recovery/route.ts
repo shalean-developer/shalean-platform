@@ -4,6 +4,7 @@ import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import {
   processPaymentRecoveryJob,
+  recoverStalePaymentRecoveryJobs,
   type PaymentRecoveryJobRow,
 } from "@/lib/booking/processPaymentRecoveryJob";
 import { logSystemEvent, reportOperationalIssue, logCronRun } from "@/lib/logging/systemLog";
@@ -46,6 +47,7 @@ export async function POST(request: Request) {
       context: { started },
     });
 
+    await recoverStalePaymentRecoveryJobs(supabase);
     const nowIso = new Date().toISOString();
     const { data: jobs, error: jobErr } = await supabase
       .from("booking_payment_recovery_jobs")
@@ -70,8 +72,14 @@ export async function POST(request: Request) {
     let retry = 0;
     let terminal = 0;
     let skipped = 0;
+    let deferredByBudget = 0;
+    const deadline = Date.now() + 4 * 60_000;
 
-    for (const row of jobs ?? []) {
+    for (const [index, row] of (jobs ?? []).entries()) {
+      if (Date.now() >= deadline) {
+        deferredByBudget = (jobs?.length ?? 0) - index;
+        break;
+      }
       const r = await processPaymentRecoveryJob(supabase, row as PaymentRecoveryJobRow);
       if (r === "sent") sent++;
       else if (r === "retry") retry++;
@@ -88,6 +96,7 @@ export async function POST(request: Request) {
       terminalFailures: terminal,
       skipped,
       batchSize: jobs?.length ?? 0,
+      deferredByBudget,
     };
 
     await logSystemEvent({

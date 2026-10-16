@@ -11,6 +11,8 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getServiceLabel, type BookingServiceId } from "@/components/booking/serviceCategories";
 import { trustPayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import { recordPaymentLinkDecision, resolvePaymentLinkDispatchDecision } from "@/lib/pay/paymentDecisionDispatch";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
+import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,7 +26,8 @@ function twilioRefPreview(sid: string | null | undefined): string | null {
 
 type Row = {
   id: string;
-  user_id: string | null;
+  user_id?: string | null;
+  customer_id?: string | null;
   status: string | null;
   payment_link: string | null;
   payment_link_expires_at: string | null;
@@ -101,10 +104,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
   }
 
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const { data: row, error } = await admin
     .from("bookings")
     .select(
-      "id, user_id, status, payment_link, payment_link_expires_at, payment_link_last_sent_at, paystack_reference, customer_name, customer_phone, customer_email, service, date, time, total_price, total_paid_zar, booking_snapshot, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel",
+      `id, ${ownershipColumn}, status, payment_link, payment_link_expires_at, payment_link_last_sent_at, paystack_reference, customer_name, customer_phone, customer_email, service, date, time, total_price, total_paid_zar, booking_snapshot, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel`,
     )
     .eq("id", bookingId.trim())
     .maybeSingle();
@@ -217,7 +221,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     mode: notificationMode,
     supabaseAdmin: admin,
     bookingId: r.id,
-    userId: r.user_id,
+    userId: bookingCustomerKey(r) || null,
     skipSms,
     phoneTryOrder: decision.phoneTryOrder.length ? decision.phoneTryOrder : undefined,
     emailPayload: {
@@ -240,6 +244,16 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     },
     context: { bookingId: r.id, stage: "admin_payment_link_resend" },
   });
+
+  if (delivery.suppressedReason) {
+    return NextResponse.json({
+      ok: false,
+      error: delivery.suppressedRetryable
+        ? "Payment notifications were not sent because the current payment status could not be confirmed. Please try again shortly."
+        : "Payment notifications were not sent because this booking is no longer eligible for a payment request. Refresh the booking before trying again.",
+      reason: delivery.suppressedReason,
+    }, { status: delivery.suppressedRetryable ? 503 : 409 });
+  }
 
   await persistPaymentLinkDelivery(admin, r.id, delivery, { pass: "admin_resend", passType: "admin_resend" });
 
