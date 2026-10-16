@@ -17,6 +17,8 @@ import { applySendDelayIfNeeded } from "@/lib/ai-autonomy/optimizeTiming";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { normalizePhoneTryOrder } from "@/lib/pay/paymentDecisionEngine";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { checkPaymentLinkEligibility } from "@/lib/pay/paymentLinkEligibility";
 
 /** @deprecated Delivery order is always email first, then SMS if needed. Kept for API compatibility. */
 export type AdminPaymentLinkDeliveryMode = "chain" | "chain_plus_email";
@@ -70,6 +72,15 @@ function buildDeliveryTrace(
   return { email, sms: smsLabel };
 }
 
+function suppressedDelivery(reason: string): AdminPaymentLinkDeliveryResult {
+  return {
+    whatsappOk: null, smsOk: null, emailOk: null, twilioSmsSid: null, primaryChannel: "none",
+    fallbackTrace: `payment_link_suppressed:${reason}`,
+    byChannel: { whatsapp: "skipped", sms: "skipped", email: "skipped" },
+    smsDeliveryRole: "none", delivery: { email: "skipped", sms: "skipped" },
+  };
+}
+
 /**
  * Customer payment link delivery: **email first**, SMS **only** if email is missing or failed.
  * Customer WhatsApp is never used (policy); `phoneTryOrder` may list `whatsapp` — those steps are skipped.
@@ -100,6 +111,12 @@ export async function deliverAdminPaymentLink(params: {
   let emailOk: boolean | null = null;
   let primaryChannel: AdminPaymentLinkDeliveryResult["primaryChannel"] = "none";
   const trace: string[] = ["email_first_enforced"];
+  const blockedDelivery = async (): Promise<AdminPaymentLinkDeliveryResult | null> => {
+    const admin = params.supabaseAdmin ?? getSupabaseAdmin();
+    if (!admin) return suppressedDelivery("database_unavailable");
+    const eligibility = await checkPaymentLinkEligibility(admin, params.emailPayload.bookingId, params.emailPayload.paystackReference);
+    return eligibility.allowed ? null : suppressedDelivery(eligibility.reason);
+  };
 
   if (!email && !phone) {
     await logSystemEvent({
@@ -164,6 +181,8 @@ export async function deliverAdminPaymentLink(params: {
       };
 
       if (deferAsync) {
+        const blocked = await blockedDelivery();
+        if (blocked) return blocked;
         const { runAtIso } = await enqueueDeferredPaymentLinkEmail(admin, {
           bookingId: bid,
           delaySeconds: delaySec,
@@ -190,6 +209,8 @@ export async function deliverAdminPaymentLink(params: {
     }
 
     if (!emailDeferredUntilIso) {
+      const blocked = await blockedDelivery();
+      if (blocked) return blocked;
       const em = await sendPaymentLinkEmail(emailPayload);
       emailOk = em.sent;
       if (em.sent) {
@@ -225,6 +246,8 @@ export async function deliverAdminPaymentLink(params: {
   let twilioSmsSid: string | null = null;
 
   if (needSms) {
+    const blocked = await blockedDelivery();
+    if (blocked) return blocked;
     smsDeliveryRole = email && !emailResolved ? "fallback" : "primary";
     const order = normalizePhoneTryOrder(params.phoneTryOrder?.length ? params.phoneTryOrder : ["whatsapp", "sms"]);
     let phoneDelivered = false;

@@ -12,6 +12,7 @@ import {
 } from "@/lib/email/paymentRecoveryEmails";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { expirePendingPaymentTerminal } from "@/lib/booking/expirePendingPaymentTerminal";
+import { checkPaymentLinkEligibility, claimAutomaticPaymentReminder, releaseAutomaticPaymentReminder } from "@/lib/pay/paymentLinkEligibility";
 
 export type PaymentRecoveryJobRow = {
   id: string;
@@ -152,6 +153,23 @@ export async function processPaymentRecoveryJob(
   }
 
   let bookingRow = booking as Record<string, unknown>;
+  const paymentReference = String(bookingRow.paystack_reference ?? "").trim();
+  const messageEligibility = await checkPaymentLinkEligibility(supabase, bookingId, paymentReference, {
+    allowExpired: jobType === "booking_payment_expired",
+  });
+  if (!messageEligibility.allowed) {
+    if (messageEligibility.retryable) {
+      const attempts = attempts0 + 1;
+      const terminal = attempts >= TERMINAL_FAILURE_ATTEMPTS;
+      await supabase.from("booking_payment_recovery_jobs").update({
+        attempts, status: terminal ? "failed_terminal" : "failed_retryable",
+        last_error: `eligibility:${messageEligibility.reason}`, processed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      }).eq("id", jobId);
+      return terminal ? "terminal" : "retry";
+    }
+    await markCancelled(supabase, jobId, messageEligibility.reason);
+    return "skipped";
+  }
   if (jobType === "booking_payment_expired" && String(bookingRow.status ?? "").trim().toLowerCase() === "pending_payment") {
     const expired = await expirePendingPaymentTerminal(supabase, {
       bookingId,
@@ -189,6 +207,12 @@ export async function processPaymentRecoveryJob(
   }
   ctx.to = to;
 
+  const reminderStage = jobType === "payment_reminder_1h" ? "first" : jobType === "payment_reminder_24h" ? "final" : null;
+  if (reminderStage && !await claimAutomaticPaymentReminder(supabase, bookingId, paymentReference, reminderStage)) {
+    await markSkipped(supabase, jobId, "automatic_reminder_already_claimed");
+    return "skipped";
+  }
+
   const result = await sendPaymentRecoveryEmail(jobType as PaymentRecoveryJobType, ctx);
 
   if (result.sent) {
@@ -217,6 +241,7 @@ export async function processPaymentRecoveryJob(
   }
 
   const nextAttempts = attempts0 + 1;
+  if (reminderStage) await releaseAutomaticPaymentReminder(supabase, paymentReference, reminderStage);
   const errorClass = classifySendError(result.error);
   const terminal = errorClass === "terminal" || nextAttempts >= TERMINAL_FAILURE_ATTEMPTS;
 

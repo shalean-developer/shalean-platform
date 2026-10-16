@@ -7,6 +7,7 @@ import type { PaymentLinkEmailInput } from "@/lib/email/sendBookingEmail";
 import { sendPaymentLinkEmail } from "@/lib/email/sendBookingEmail";
 import type { PaymentLinkDeliveryJson } from "@/lib/admin/persistPaymentLinkDelivery";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { checkPaymentLinkEligibility } from "@/lib/pay/paymentLinkEligibility";
 
 const DEFERRED_EMAIL_MAX_FAILURES = 3;
 const DEFERRED_EMAIL_RETRY_BASE_SECONDS = 300;
@@ -237,6 +238,22 @@ export async function processDueDeferredPaymentLinkEmails(
     }
 
     const ctx = (row.delivery_context ?? {}) as Record<string, unknown>;
+    const eligibility = await checkPaymentLinkEligibility(admin, row.booking_id, row.email_payload.paystackReference);
+    if (!eligibility.allowed) {
+      if (eligibility.retryable) {
+        const retry = await releaseClaimForRetry(admin, row, `eligibility:${eligibility.reason}`);
+        if (retry.released) { retriesScheduled++; continue; }
+        if (retry.failureCount < DEFERRED_EMAIL_MAX_FAILURES) { errors++; continue; }
+        deliveryFailures++;
+        await reportOperationalIssue("error", "deferred_payment_link_email/eligibility", eligibility.reason, { bookingId: row.booking_id });
+      }
+      const completed = await completeClaim(admin, row, { last_error: `suppressed:${eligibility.reason}` });
+      if (!completed) errors++;
+      else await mergeDeferredEmailCompletion(admin, row.booking_id, {
+        email: "skipped", email_deferred_until: null, updated_at: new Date().toISOString(),
+      });
+      continue;
+    }
     const em = await sendPaymentLinkEmail(row.email_payload);
     if (em.sent) {
       const completed = await completeClaim(admin, row, { last_error: null });
@@ -264,6 +281,11 @@ export async function processDueDeferredPaymentLinkEmails(
     const wa = row.wa_payload;
     let smsOk = false;
     if (phone && wa && typeof wa === "object") {
+      const smsEligibility = await checkPaymentLinkEligibility(admin, row.booking_id, row.email_payload.paystackReference);
+      if (!smsEligibility.allowed) {
+        if (!await completeClaim(admin, row, { last_error: `suppressed:${smsEligibility.reason}` })) errors++;
+        continue;
+      }
       const sms = await sendCustomerSmsPaymentLink({
         phone,
         payload: wa,

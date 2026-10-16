@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   sendBookingConfirmationEmailMock,
@@ -8,6 +8,7 @@ const {
   reportOperationalIssueMock,
   logPipelineEmailTelemetryMock,
   logPaymentStructuredMock,
+  adminEmailMock,
 } = vi.hoisted(() => ({
   sendBookingConfirmationEmailMock: vi.fn(),
   tryClaimNotificationIdempotencyMock: vi.fn(),
@@ -16,6 +17,7 @@ const {
   reportOperationalIssueMock: vi.fn(),
   logPipelineEmailTelemetryMock: vi.fn(),
   logPaymentStructuredMock: vi.fn(),
+  adminEmailMock: vi.fn(async () => ({ sent: true })),
 }));
 
 vi.mock("@/lib/email/sendBookingEmail", async (importOriginal) => {
@@ -28,7 +30,7 @@ vi.mock("@/lib/email/sendBookingEmail", async (importOriginal) => {
 });
 
 vi.mock("@/lib/email/customerEmailFromTemplate", () => ({
-  sendAdminEmailWithDbTemplateFallback: vi.fn(async () => ({ sent: true })),
+  sendAdminEmailWithDbTemplateFallback: adminEmailMock,
 }));
 
 vi.mock("@/lib/notifications/notificationIdempotencyClaim", () => ({
@@ -57,6 +59,10 @@ vi.mock("@/lib/booking/failedJobs", () => ({
   enqueueFailedJob: vi.fn(async () => undefined),
 }));
 
+vi.mock("@/lib/customer/customerBookingsForUser", () => ({
+  resolveBookingOwnershipColumn: vi.fn(async () => "customer_id"),
+}));
+
 vi.mock("@/lib/ai-autonomy/optimizeTiming", () => ({
   applyFallbackDelayIfNeeded: vi.fn(async () => undefined),
 }));
@@ -68,6 +74,9 @@ vi.mock("@/lib/notifications/customerUserNotifications", () => ({
 
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
+import { buildBookingConfirmedTemplateData } from "@/lib/templates/bookingConfirmedData";
+
+afterEach(() => vi.unstubAllEnvs());
 
 function makeAdmin(row: Record<string, unknown> | null = null) {
   return {
@@ -102,6 +111,7 @@ describe("notifyBookingEvent payment_confirmed delivery result", () => {
     reportOperationalIssueMock.mockReset();
     logPipelineEmailTelemetryMock.mockReset();
     logPaymentStructuredMock.mockReset();
+    adminEmailMock.mockClear();
     process.env.RESEND_API_KEY = "re_test";
   });
 
@@ -172,5 +182,50 @@ describe("notifyBookingEvent payment_confirmed delivery result", () => {
     expect(result.dedupeSkipped).toBe(true);
     expect(result.customerEmailSent).toBe(false);
     expect(sendBookingConfirmationEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("loads canonical ownership and complete booking details when Paystack metadata is sparse", async () => {
+    tryClaimNotificationIdempotencyMock.mockResolvedValue(true);
+    sendBookingConfirmationEmailMock.mockResolvedValue({ sent: true });
+    const admin = makeAdmin({
+      customer_id: "customer-1", customer_email: "pat@example.com", customer_name: "Pat Customer",
+      service: "regular-cleaning", date: "2026-10-18", time: "09:00", location: "12 Example Road",
+      suburb: "Claremont", booking_reference: "SHL-BK-009999", booking_snapshot: {},
+    });
+    const result = await notifyBookingEvent({ type: "payment_confirmed", supabase: admin,
+      bookingId: "b1", snapshot: null, customerEmail: "pat@example.com", amountCents: 45800, paymentReference: "bps_test" });
+    expect(result.customerEmailSent).toBe(true);
+    expect(sendBookingConfirmationEmailMock).toHaveBeenCalledWith(expect.objectContaining({
+      customerName: "Pat Customer", serviceLabel: "Regular Cleaning", timeLabel: "09:00",
+      location: "12 Example Road, Claremont", bookingReference: "SHL-BK-009999", totalPaidZar: 458,
+      dateLabel: expect.stringContaining("18"),
+    }));
+    const selects = vi.mocked((admin as unknown as { from: ReturnType<typeof vi.fn> }).from).mock.results
+      .flatMap((entry) => entry.value.select.mock.calls.map((call: string[]) => call[0]));
+    expect(selects[0]).toContain("customer_id");
+    expect(selects[0]).not.toMatch(/\buser_id\b/);
+    expect(buildBookingConfirmedTemplateData(sendBookingConfirmationEmailMock.mock.calls[0][0])).toMatchObject({
+      customer_name: "Pat Customer", booking_reference: "SHL-BK-009999", service_name: "Regular Cleaning",
+      booking_date: "Sunday, 18 Oct", booking_time: "09:00", booking_address: "12 Example Road, Claremont",
+    });
+  });
+
+  it("reports a booking query failure instead of emailing fabricated Pending details", async () => {
+    const admin = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({
+      data: null, error: { message: "database unavailable" },
+    }) }) }) }) } as never;
+    const result = await notifyBookingEvent({ type: "payment_confirmed", supabase: admin,
+      bookingId: "b1", snapshot: null, customerEmail: "pat@example.com", amountCents: 45800, paymentReference: "bps_test" });
+    expect(result.failed).toBe(true);
+    expect(result.error).toContain("payment_confirmation_booking_load_failed");
+    expect(sendBookingConfirmationEmailMock).not.toHaveBeenCalled();
+  });
+  it("dispatches office alerts with the approved production fallback when the environment setting is absent", async () => {
+    vi.stubEnv("SHALEAN_APP_ENV", "production"); vi.stubEnv("ADMIN_NOTIFICATION_EMAIL", "");
+    tryClaimNotificationIdempotencyMock.mockResolvedValue(true);
+    sendBookingConfirmationEmailMock.mockResolvedValue({ sent: true });
+    await notifyBookingEvent({ type: "payment_confirmed", supabase: makeAdmin({ customer_email: "pat@example.com" }),
+      bookingId: "b1", snapshot, customerEmail: "pat@example.com", amountCents: 45000, paymentReference: "bps_office_test" });
+    expect(adminEmailMock).toHaveBeenCalledWith(expect.objectContaining({ templateKey: "admin_payment_confirmed", bookingId: "b1" }));
   });
 });

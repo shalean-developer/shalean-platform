@@ -49,6 +49,9 @@ import { enqueueReviewSmsPromptQueue } from "@/lib/reviews/reviewPromptSms";
 import { ensureReviewFollowUpForCompletedBooking } from "@/lib/reviews/ensureReviewFollowUp";
 import { evaluateCustomerReviewPromptEligibility } from "@/lib/reviews/customerReviewFollowUpContract";
 import { sendSmsFallback } from "@/lib/notifications/smsFallback";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
+import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
+import { adminNotificationRecipientSetting } from "@/lib/email/adminNotificationRecipients";
 
 export type NotifyBookingEventInput =
   | {
@@ -118,7 +121,7 @@ async function sendAdminIfConfigured(
   send: () => Promise<void>,
 ): Promise<void> {
   if (!shouldSendAdminBookingMail(adminType)) return;
-  if (!process.env.ADMIN_NOTIFICATION_EMAIL?.trim()) {
+  if (!adminNotificationRecipientSetting()) {
     console.warn("Admin email not configured");
     return;
   }
@@ -234,13 +237,16 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     let debugSmsClaimed: boolean | null = null;
     let debugCustomerSmsOk: boolean | null = null;
     let delivery: NotifyBookingEventDeliveryResult = emptyNotifyDeliveryResult();
-    const { data: bookingHead } = await supabase
+    const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
+    const { data: bookingHead, error: bookingHeadError } = await supabase
       .from("bookings")
       .select(
-        "user_id, assignment_type, fallback_reason, customer_email, selected_cleaner_id, cleaner_id, date, time, location, suburb, service, service_slug, booking_snapshot, booking_reference, extras, selected_extras, booking_type, recurring_frequency, recurring_days",
+        `${ownershipColumn}, assignment_type, fallback_reason, customer_email, customer_name, customer_phone, selected_cleaner_id, cleaner_id, date, time, location, suburb, service, service_slug, booking_snapshot, booking_reference, extras, selected_extras, booking_type, recurring_frequency, recurring_days`,
       )
       .eq("id", event.bookingId)
       .maybeSingle();
+    if (bookingHeadError) throw new Error(`payment_confirmation_booking_load_failed: ${bookingHeadError.message}`);
+    if (!bookingHead) throw new Error("payment_confirmation_booking_not_found");
     const head =
       bookingHead && typeof bookingHead === "object" ? (bookingHead as Record<string, unknown>) : null;
     const rowCustomerEmailRaw = head ? String((head as { customer_email?: string | null }).customer_email ?? "") : "";
@@ -258,7 +264,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       }
     }
     const hasEmail = Boolean(resolvedEmail);
-    const custPhone = event.snapshot?.customer?.phone?.trim();
+    const custPhone = String(head?.customer_phone ?? event.snapshot?.customer?.phone ?? "").trim();
 
     if (!process.env.RESEND_API_KEY?.trim()) {
       notifyBookingDebug("payment_confirmed_resend_missing", { bookingId: event.bookingId });
@@ -314,7 +320,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     }
 
     let preferredNotificationChannel: "whatsapp" | "sms" | "email" | null = null;
-    const payUserId = head ? String(head.user_id ?? "").trim() : "";
+    const payUserId = head ? bookingCustomerKey(head) : "";
     if (payUserId) {
       const { data: profRow, error: profErr } = await supabase
         .from("user_profiles")

@@ -25,6 +25,7 @@ import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsFo
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { trustPayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import { trustedBookingPayableZar } from "@/lib/booking/ensureBookingPaymentSession";
+import { claimAutomaticPaymentReminder, releaseAutomaticPaymentReminder } from "@/lib/pay/paymentLinkEligibility";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -241,6 +242,11 @@ export async function POST(request: Request) {
       );
 
       const linkForMessaging = trustPayPageUrl(row.id, row.paystack_reference, row.payment_link);
+      const reminderStage = send15m ? "final" : "first";
+      if (!await claimAutomaticPaymentReminder(admin, row.id, row.paystack_reference, reminderStage)) {
+        skipped++;
+        continue;
+      }
       const delivery = await deliverAdminPaymentLink({
         phone: phone || null,
         email: email || null,
@@ -269,6 +275,12 @@ export async function POST(request: Request) {
         },
         context: { bookingId: row.id, stage: pass },
       });
+
+      if (!delivery.emailOk && !delivery.smsOk && !delivery.emailDeferredUntilIso) {
+        await releaseAutomaticPaymentReminder(admin, row.paystack_reference, reminderStage);
+        skipped++;
+        continue;
+      }
 
       await persistPaymentLinkDelivery(admin, row.id, delivery, {
         pass,
