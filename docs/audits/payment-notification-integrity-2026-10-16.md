@@ -16,6 +16,7 @@ Owner request: fix misleading payment reminders, incomplete booking confirmation
 2. Both first-reminder paths and legacy reminders share a database-unique claim in the existing notification idempotency table. The final reminder is a separate event. Failed deliveries release their claim; claim errors suppress sending. Abandonment recovery sends SMS only after email is missing/fails.
 3. Confirmation queries resolve the actual customer ownership column, include persisted customer name/contact, and report load failures rather than sending fabricated booking details. Existing row/snapshot presentation helpers and template variables remain canonical.
 4. All office notification paths use one validated recipient resolver. Explicit environment configuration wins; the approved fallback is restricted to the production deployment. Multi-inbox delivery retains explicit To/Bcc handling.
+5. `/api/payment/webhook` is a compatibility URL that re-exports the canonical POST handler. Outstanding Paystack retries to the previously configured URL retain exact signature/idempotency validation and use the same financial finalizer. The canonical saved URL remains `/api/paystack/webhook`.
 
 ## Verification and release evidence
 
