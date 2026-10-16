@@ -1,5 +1,5 @@
 import { optionalCentsFromDb } from "@/lib/cleaner/cleanerJobDisplayEarningsResolve";
-import { resolveBookingWideCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
+import { resolveBookingWideCleanerEarningsCents, type BookingWideCleanerEarningsInput } from "@/lib/cleaner/resolveCleanerEarnings";
 import {
   computeBookingProfit,
   type BookingProfitBreakdown,
@@ -7,11 +7,7 @@ import {
 
 export const INCOMPLETE_TEAM_EARNINGS_WARNING = "Incomplete team earnings";
 
-export type BookingProfitabilityCleanerCostInput = {
-  is_team_job?: boolean | null;
-  cleaner_earnings_total_cents?: unknown;
-  display_earnings_cents?: unknown;
-};
+export type BookingProfitabilityCleanerCostInput = BookingWideCleanerEarningsInput;
 
 export type BookingProfitabilityCleanerCost = {
   cleaner_cost_cents: number | null;

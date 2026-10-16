@@ -42,3 +42,16 @@ than disappearing from positive-only bonus columns. The preview reads distinct
 actual roster participants and internal obligation, including unequal adjustments.
 These additions still require CI, independent review and fresh staging verification.
 Production has not been promoted and October records have not been corrected.
+
+Further release review coverage: roster changes also rebuild summaries/member
+rails and replace/remove the direct owner when that owner leaves the actual
+roster. An adjustment exceeding the visit financial cap aborts atomically.
+Unpaid visits expose no member payable; financial-field changes restore payable
+rails after settlement. Shared finance/October cleaner readers consume adjusted
+participant totals, while May–September and stale solo basis locks are preserved.
+
+Additional exploratory persistence-suite check: the same 12 legacy April-date
+cases fail on the untouched production baseline 71121295 and this branch because
+historical persistence is deferred. The 23 canonical/paired unit cases pass.
+These baseline failures are outside the enforced critical suite and this October
+scope; historical mutation guards were not relaxed to satisfy those old tests.

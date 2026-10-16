@@ -310,7 +310,7 @@ export function perCleanerAllocationsForBooking(
     | "cleaner_earnings_total_cents"
     | "payout_frozen_cents"
     | "metadata"
-  >,
+  > & { date?: string | null },
   roster: readonly RosterCleanerRef[],
   teamMemberPayouts?: readonly { cleaner_id: string; payout_cents: number; cleaner_payout_id?: string | null }[],
 ): CleanerVisitAllocation[] {

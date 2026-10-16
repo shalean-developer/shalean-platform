@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { resolveCanonicalCleanerPayout } from "@/lib/payout/canonicalCleanerPayout";
+import { resolveBookingProfitabilityCleanerCost } from "@/lib/admin/expenses/bookingProfitabilityCleanerCost";
+import { perCleanerAllocationsForBooking } from "@/lib/admin/payouts/officePayoutPeriodReport";
+import { resolveCleanerDashboardEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { buildBookingRosterMemberPayoutRows } from "@/lib/payout/pairedRosterPayout";
 import { applyLockedRecurringBasis } from "@/lib/payout/applyLockedRecurringBasis";
 
@@ -50,6 +53,22 @@ describe("locked October recurring earning basis", () => {
     expect(buildBookingRosterMemberPayoutRows({bookingId:"test",summary:result.earningsSummary!,leaderId:lead})).toEqual([
       {booking_id:"test",cleaner_id:member,payout_cents:26000,bonus_cents:200,status:"pending"}
     ]);
+  });
+  it.each([500,-300])("keeps October reports and cleaner display on net participant amounts %i", amount=>{
+    const result=applyLockedRecurringBasis(calculated(true),26000,[{cleaner_id:lead,amount_cents:amount}]);
+    const b={date:"2026-10-16",earnings_summary:result.earningsSummary,cleaner_id:lead,payout_owner_cleaner_id:lead,
+      display_earnings_cents:26000,cleaner_payout_cents:result.cleanerPayoutCents,
+      cleaner_earnings_total_cents:52000,payout_frozen_cents:null,metadata:{}};
+    expect(perCleanerAllocationsForBooking(b,[{cleaner_id:lead},{cleaner_id:member}]).map(r=>r.cents)).toEqual([26000+amount,26000]);
+    expect(resolveCleanerDashboardEarningsCents(b,lead)).toBe(26000+amount);
+    expect(resolveBookingProfitabilityCleanerCost(b).cleaner_cost_cents).toBe(52000+amount);
+    expect(resolveCleanerDashboardEarningsCents({...b,date:"2026-09-30"},lead)).toBe(26000);
+  });
+  it("accounts for a signed solo adjustment in finance without replacing the fixed basis",()=>{
+    const result=applyLockedRecurringBasis(calculated(),26000,[{cleaner_id:lead,amount_cents:500}]);
+    const b={date:"2026-10-16",display_earnings_cents:26000,earnings_summary:result.earningsSummary};
+    expect(resolveBookingProfitabilityCleanerCost(b).cleaner_cost_cents).toBe(26500);
+    expect(resolveCleanerDashboardEarningsCents(b,lead)).toBe(26500);
   });
   it.each([0,-1,NaN,28000.5])("rejects an invalid fixed basis %s", basis=>{
     expect(()=>applyLockedRecurringBasis(calculated(),basis,[])).toThrow("locked_recurring_earnings_basis_invalid");

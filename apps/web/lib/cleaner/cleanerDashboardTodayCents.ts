@@ -46,6 +46,7 @@ const DAILY_GOAL_CEILING_CENTS = 500_000;
 function wireRowEarningsCents(row: CleanerDashboardEarningsWireRow, cleanerId: string): number {
   return resolveCleanerDashboardEarningsCents(
     {
+      date: row.date,
       viewer_payout_cents: row.viewer_payout_cents,
       earnings_summary: row.earnings_summary,
       cleaner_earnings_total_cents: row.cleaner_earnings_total_cents,
