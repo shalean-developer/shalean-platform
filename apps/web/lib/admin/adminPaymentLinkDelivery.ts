@@ -103,6 +103,8 @@ export async function deliverAdminPaymentLink(params: {
   userId?: string | null;
   /** Admin resend: skip Twilio/SMS (e.g. after SMS failure when email is available). */
   skipSms?: boolean;
+  /** Record acceptance before telemetry/persistence so retries cannot duplicate a delivered message. */
+  onDeliveryAccepted?: () => void;
 }): Promise<AdminPaymentLinkDeliveryResult> {
   const phone = params.phone?.trim() || "";
   const email = params.email?.trim() || "";
@@ -192,6 +194,7 @@ export async function deliverAdminPaymentLink(params: {
           context: params.context,
         });
         emailDeferredUntilIso = runAtIso;
+        params.onDeliveryAccepted?.();
         trace.push("email_deferred_async_queue");
       }
     }
@@ -214,6 +217,7 @@ export async function deliverAdminPaymentLink(params: {
       const em = await sendPaymentLinkEmail(emailPayload);
       emailOk = em.sent;
       if (em.sent) {
+        params.onDeliveryAccepted?.();
         primaryChannel = "email";
         trace.push("email_sent");
         emailOutcome = "sent";
@@ -269,6 +273,7 @@ export async function deliverAdminPaymentLink(params: {
       smsOk = sms.ok;
       if (sms.twilioSid) twilioSmsSid = sms.twilioSid;
       if (sms.ok) {
+        params.onDeliveryAccepted?.();
         phoneDelivered = true;
         if (primaryChannel === "none") primaryChannel = "sms";
         trace.push(smsDeliveryRole === "fallback" ? "sms_ok_fallback" : "sms_ok_primary");

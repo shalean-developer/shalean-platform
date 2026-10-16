@@ -283,6 +283,13 @@ export async function processDueDeferredPaymentLinkEmails(
     if (phone && wa && typeof wa === "object") {
       const smsEligibility = await checkPaymentLinkEligibility(admin, row.booking_id, row.email_payload.paystackReference);
       if (!smsEligibility.allowed) {
+        if (smsEligibility.retryable) {
+          const retry = await releaseClaimForRetry(admin, row, `eligibility:${smsEligibility.reason}`);
+          if (retry.released) { retriesScheduled++; continue; }
+          if (retry.failureCount < DEFERRED_EMAIL_MAX_FAILURES) { errors++; continue; }
+          deliveryFailures++;
+          await reportOperationalIssue("error", "deferred_payment_link_email/eligibility", smsEligibility.reason, { bookingId: row.booking_id });
+        }
         if (!await completeClaim(admin, row, { last_error: `suppressed:${smsEligibility.reason}` })) errors++;
         continue;
       }

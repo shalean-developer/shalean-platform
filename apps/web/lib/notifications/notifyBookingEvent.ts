@@ -594,7 +594,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       },
     );
 
-    const uid = head ? String(head.user_id ?? "").trim() : "";
+    const uid = payUserId;
     if (uid) {
       const claimedInApp = await tryClaimNotificationIdempotency(supabase, {
         reference: event.paymentReference,

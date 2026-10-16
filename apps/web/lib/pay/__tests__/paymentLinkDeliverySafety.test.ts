@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { eligibility, claim, release, email, abandonedEmail, sms } = vi.hoisted(() => ({
   eligibility: vi.fn(), claim: vi.fn(), release: vi.fn(), email: vi.fn(), abandonedEmail: vi.fn(), sms: vi.fn(),
 }));
-const { recoveryEmail, expire } = vi.hoisted(() => ({ recoveryEmail: vi.fn(), expire: vi.fn() }));
+const { recoveryEmail, expire, adminMock, persist } = vi.hoisted(() => ({ recoveryEmail: vi.fn(), expire: vi.fn(), adminMock: vi.fn(), persist: vi.fn() }));
 vi.mock("@/lib/email/paymentRecoveryEmails", () => ({ buildPaymentRecoveryEmailContext: vi.fn(), sendPaymentRecoveryEmail: recoveryEmail }));
 vi.mock("@/lib/booking/expirePendingPaymentTerminal", () => ({ expirePendingPaymentTerminal: expire }));
 vi.mock("@/lib/pay/paymentLinkEligibility", () => ({ checkPaymentLinkEligibility: eligibility,
@@ -16,12 +16,19 @@ vi.mock("@/lib/conversion/assignConversionExperiment", () => ({
 vi.mock("@/lib/ai-autonomy/optimizeTiming", () => ({ applySendDelayIfNeeded: vi.fn() }));
 vi.mock("@/lib/logging/systemLog", () => ({ logSystemEvent: vi.fn(), reportOperationalIssue: vi.fn() }));
 vi.mock("@/lib/notifications/notificationEmailTelemetry", () => ({ logPipelineEmailTelemetry: vi.fn() }));
-vi.mock("@/lib/supabase/admin", () => ({ getSupabaseAdmin: () => null }));
+vi.mock("@/lib/supabase/admin", () => ({ getSupabaseAdmin: adminMock }));
+vi.mock("@/lib/cron/cronLock", () => ({ acquireCronLock: vi.fn(async () => ({ ok: true, jobName: "reminders", holderId: "lock" })), releaseCronLock: vi.fn() }));
+vi.mock("@/lib/customer/customerBookingsForUser", () => ({ resolveBookingOwnershipColumn: vi.fn(async () => "customer_id") }));
+vi.mock("@/lib/pay/priorPaymentConversionBucket", () => ({ priorPaymentConversionBucketForCustomer: vi.fn(async () => null) }));
+vi.mock("@/lib/pay/paymentDecisionDispatch", () => ({ fetchRecentPaymentLinkChannelStats: vi.fn(async () => ({})),
+  resolvePaymentLinkDispatchDecision: vi.fn(async () => ({ send_now: true, phoneTryOrder: [] })), recordPaymentLinkDecision: vi.fn() }));
+vi.mock("@/lib/admin/persistPaymentLinkDelivery", () => ({ persistPaymentLinkDelivery: persist }));
 
 import { deliverAdminPaymentLink } from "@/lib/admin/adminPaymentLinkDelivery";
 import { processDueDeferredPaymentLinkEmails } from "@/lib/conversion/deferredPaymentLinkEmailQueue";
 import { processAbandonCheckoutReminders } from "@/lib/conversion/abandonCheckoutReminder";
 import { processPaymentRecoveryJob } from "@/lib/booking/processPaymentRecoveryJob";
+import { POST as runReminderCron } from "@/app/api/cron/payment-link-reminders/route";
 
 const payload = { customerEmail: "customer@example.com", customerName: "Pat", serviceLabel: "Regular Cleaning",
   dateLabel: "2026-10-18", timeLabel: "09:00", amountZar: 458, paymentUrl: "https://checkout.paystack.com/test",
@@ -49,7 +56,37 @@ function makeAdmin() {
 beforeEach(() => {
   vi.clearAllMocks();
   eligibility.mockResolvedValue({ allowed: true }); claim.mockResolvedValue(true);
+  adminMock.mockReturnValue(null); persist.mockReset();
   email.mockResolvedValue({ sent: true }); abandonedEmail.mockResolvedValue({ sent: true }); sms.mockResolvedValue({ ok: true });
+});
+
+function cronAdmin() {
+  const chain = { select: () => chain, eq: () => chain, not: () => chain, gte: () => chain, lte: () => chain,
+    update: vi.fn(() => chain), limit: async () => ({ error: null, data: [{ id: "booking-1", customer_email: payload.customerEmail,
+      paystack_reference: "bps_test", payment_link: payload.paymentUrl, payment_link_expires_at: new Date(Date.now() + 60 * 60_000).toISOString(),
+      total_price: 458, payment_link_send_count: 0 }] }) };
+  return { from: () => chain };
+}
+
+describe("reminder cron claim lifetime", () => {
+  const request = () => new Request("https://example.com/api/cron/payment-link-reminders", { method: "POST", headers: { authorization: "Bearer test" } });
+  beforeEach(() => { vi.stubEnv("CRON_SECRET", "test"); adminMock.mockReturnValue(cronAdmin()); });
+  it("releases its claim after an exception before delivery", async () => {
+    email.mockRejectedValueOnce(new Error("provider unavailable"));
+    expect((await runReminderCron(request())).status).toBe(200);
+    expect(release).toHaveBeenCalledWith(expect.anything(), "bps_test", "first");
+  });
+  it("retains its claim when persistence fails after accepted delivery", async () => {
+    persist.mockRejectedValueOnce(new Error("database unavailable"));
+    expect((await runReminderCron(request())).status).toBe(200);
+    expect(email).toHaveBeenCalledOnce(); expect(release).not.toHaveBeenCalled();
+  });
+  it("retains its claim when delivery telemetry fails after provider acceptance", async () => {
+    const { logSystemEvent } = await import("@/lib/logging/systemLog");
+    vi.mocked(logSystemEvent).mockRejectedValueOnce(new Error("telemetry unavailable"));
+    expect((await runReminderCron(request())).status).toBe(200);
+    expect(email).toHaveBeenCalledOnce(); expect(release).not.toHaveBeenCalled();
+  });
 });
 
 describe("actual payment message entry points", () => {
@@ -92,6 +129,34 @@ describe("actual payment message entry points", () => {
     await processAbandonCheckoutReminders(makeAdmin().admin);
     expect(abandonedEmail).not.toHaveBeenCalled(); expect(sms).not.toHaveBeenCalled();
   });
+  it("releases an abandoned reminder claim when the SMS eligibility recheck is transient", async () => {
+    abandonedEmail.mockResolvedValue({ sent: false });
+    eligibility.mockResolvedValueOnce({ allowed: true }).mockResolvedValueOnce({ allowed: false, reason: "gateway_unavailable", retryable: true });
+    await processAbandonCheckoutReminders(makeAdmin().admin);
+    expect(sms).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledWith(expect.anything(), "bps_test", "first");
+  });
+  it("releases an abandoned reminder claim after a provider exception", async () => {
+    abandonedEmail.mockRejectedValueOnce(new Error("provider unavailable"));
+    await processAbandonCheckoutReminders(makeAdmin().admin);
+    expect(release).toHaveBeenCalledWith(expect.anything(), "bps_test", "first");
+  });
+  it("retains the abandoned reminder claim after accepted email and telemetry failure", async () => {
+    const { logPipelineEmailTelemetry } = await import("@/lib/notifications/notificationEmailTelemetry");
+    vi.mocked(logPipelineEmailTelemetry).mockRejectedValueOnce(new Error("telemetry unavailable"));
+    await processAbandonCheckoutReminders(makeAdmin().admin);
+    expect(release).not.toHaveBeenCalled();
+    expect(sms).not.toHaveBeenCalled();
+  });
+  it("records provider acceptance before delivery telemetry can throw", async () => {
+    const { logSystemEvent } = await import("@/lib/logging/systemLog");
+    vi.mocked(logSystemEvent).mockRejectedValueOnce(new Error("telemetry unavailable"));
+    const accepted = vi.fn();
+    await expect(deliverAdminPaymentLink({ phone: null, email: payload.customerEmail, emailPayload: payload,
+      waPayload: wa, context: { stage: "reminder_1h" }, mode: "chain", supabaseAdmin: makeAdmin().admin,
+      bookingId: "booking-1", onDeliveryAccepted: accepted })).rejects.toThrow("telemetry unavailable");
+    expect(accepted).toHaveBeenCalledOnce();
+  });
   it.each(["payment_reminder_1h", "payment_reminder_24h", "booking_payment_expired"])(
     "suppresses legacy %s jobs before email or expiration when Paystack is paid", async (jobType) => {
       eligibility.mockResolvedValue({ allowed: false, reason: "gateway_paid" });
@@ -106,5 +171,12 @@ describe("actual payment message entry points", () => {
     expect(result.retriesScheduled).toBe(1);
     expect(updates).toContainEqual(expect.objectContaining({ last_error: "eligibility:gateway_unavailable", processing_token: null }));
     expect(email).not.toHaveBeenCalled(); expect(sms).not.toHaveBeenCalled();
+  });
+  it("retries a deferred request when the SMS eligibility recheck is transient", async () => {
+    email.mockResolvedValue({ sent: false, error: "email_unavailable" });
+    eligibility.mockResolvedValueOnce({ allowed: true }).mockResolvedValueOnce({ allowed: false, reason: "gateway_unavailable", retryable: true });
+    const result = await processDueDeferredPaymentLinkEmails(makeAdmin().admin);
+    expect(result.retriesScheduled).toBe(1);
+    expect(sms).not.toHaveBeenCalled();
   });
 });

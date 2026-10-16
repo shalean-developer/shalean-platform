@@ -201,6 +201,9 @@ export async function POST(request: Request) {
       total_paid_zar: row.total_paid_zar,
     });
 
+    const reminderStage = send15m ? "final" : "first";
+    let reminderClaimed = false;
+    let deliveryAccepted = false;
     try {
       const decision = await resolvePaymentLinkDispatchDecision(
         admin,
@@ -242,12 +245,13 @@ export async function POST(request: Request) {
       );
 
       const linkForMessaging = trustPayPageUrl(row.id, row.paystack_reference, row.payment_link);
-      const reminderStage = send15m ? "final" : "first";
       if (!await claimAutomaticPaymentReminder(admin, row.id, row.paystack_reference, reminderStage)) {
         skipped++;
         continue;
       }
+      reminderClaimed = true;
       const delivery = await deliverAdminPaymentLink({
+        onDeliveryAccepted: () => { deliveryAccepted = true; },
         phone: phone || null,
         email: email || null,
         mode: "chain",
@@ -276,8 +280,8 @@ export async function POST(request: Request) {
         context: { bookingId: row.id, stage: pass },
       });
 
-      if (!delivery.emailOk && !delivery.smsOk && !delivery.emailDeferredUntilIso) {
-        await releaseAutomaticPaymentReminder(admin, row.paystack_reference, reminderStage);
+      deliveryAccepted ||= Boolean(delivery.emailOk || delivery.smsOk || delivery.emailDeferredUntilIso);
+      if (!deliveryAccepted) {
         skipped++;
         continue;
       }
@@ -299,6 +303,10 @@ export async function POST(request: Request) {
     } catch (e) {
       await reportOperationalIssue("error", "cron/payment-link-reminders", String(e), { bookingId: row.id });
       skipped++;
+    } finally {
+      if (reminderClaimed && !deliveryAccepted) {
+        await releaseAutomaticPaymentReminder(admin, row.paystack_reference, reminderStage);
+      }
     }
   }
 

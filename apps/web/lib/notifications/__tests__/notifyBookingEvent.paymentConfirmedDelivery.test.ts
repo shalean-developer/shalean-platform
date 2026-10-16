@@ -9,6 +9,7 @@ const {
   logPipelineEmailTelemetryMock,
   logPaymentStructuredMock,
   adminEmailMock,
+  inAppMock,
 } = vi.hoisted(() => ({
   sendBookingConfirmationEmailMock: vi.fn(),
   tryClaimNotificationIdempotencyMock: vi.fn(),
@@ -18,6 +19,7 @@ const {
   logPipelineEmailTelemetryMock: vi.fn(),
   logPaymentStructuredMock: vi.fn(),
   adminEmailMock: vi.fn(async () => ({ sent: true })),
+  inAppMock: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/email/sendBookingEmail", async (importOriginal) => {
@@ -68,7 +70,7 @@ vi.mock("@/lib/ai-autonomy/optimizeTiming", () => ({
 }));
 
 vi.mock("@/lib/notifications/customerUserNotifications", () => ({
-  notifyCustomerBookingPlaced: vi.fn(async () => undefined),
+  notifyCustomerBookingPlaced: inAppMock,
   notifyCustomerCleanerAssigned: vi.fn(async () => undefined),
 }));
 
@@ -112,6 +114,7 @@ describe("notifyBookingEvent payment_confirmed delivery result", () => {
     logPipelineEmailTelemetryMock.mockReset();
     logPaymentStructuredMock.mockReset();
     adminEmailMock.mockClear();
+    inAppMock.mockClear();
     process.env.RESEND_API_KEY = "re_test";
   });
 
@@ -204,6 +207,7 @@ describe("notifyBookingEvent payment_confirmed delivery result", () => {
       .flatMap((entry) => entry.value.select.mock.calls.map((call: string[]) => call[0]));
     expect(selects[0]).toContain("customer_id");
     expect(selects[0]).not.toMatch(/\buser_id\b/);
+    expect(inAppMock).toHaveBeenCalledWith(admin, expect.objectContaining({ userId: "customer-1", bookingId: "b1" }));
     expect(buildBookingConfirmedTemplateData(sendBookingConfirmationEmailMock.mock.calls[0][0])).toMatchObject({
       customer_name: "Pat Customer", booking_reference: "SHL-BK-009999", service_name: "Regular Cleaning",
       booking_date: "Sunday, 18 Oct", booking_time: "09:00", booking_address: "12 Example Road, Claremont",
