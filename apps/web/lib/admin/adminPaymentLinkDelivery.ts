@@ -34,6 +34,8 @@ export type PaymentLinkDeliveryTrace = {
 };
 
 export type AdminPaymentLinkDeliveryResult = {
+  /** Eligibility rejected the attempt; never count it as a send or activate resend cooldowns. */
+  suppressedReason?: string;
   whatsappOk: boolean | null;
   smsOk: boolean | null;
   emailOk: boolean | null;
@@ -74,6 +76,7 @@ function buildDeliveryTrace(
 
 function suppressedDelivery(reason: string): AdminPaymentLinkDeliveryResult {
   return {
+    suppressedReason: reason,
     whatsappOk: null, smsOk: null, emailOk: null, twilioSmsSid: null, primaryChannel: "none",
     fallbackTrace: `payment_link_suppressed:${reason}`,
     byChannel: { whatsapp: "skipped", sms: "skipped", email: "skipped" },
