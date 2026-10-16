@@ -45,7 +45,9 @@ export async function enqueueFailedJob(type: string, payload: unknown): Promise<
       console.error("[FAILED JOB INSERT ERROR]", { type, err: "no_supabase_admin" });
       return false;
     }
-    const { error } = await supabase.from("failed_jobs").insert({ type, payload });
+    const { error } = type === PAYMENT_CONFIRMATION_NOTIFICATION_JOB
+      ? await supabase.rpc("enqueue_payment_confirmation_notification", { p_payload: payload })
+      : await supabase.from("failed_jobs").insert({ type, payload });
     if (error) {
       await reportOperationalIssue("critical", "enqueueFailedJob", `failed_jobs insert failed: ${error.message}`, {
         type,

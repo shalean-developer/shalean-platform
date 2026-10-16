@@ -452,7 +452,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     }
 
     const emailSent = hasEmail && cust.sent;
-    if (custPhone && (!hasEmail || !cust.sent)) {
+    if (custPhone && (!hasEmail || (!cust.sent && !delivery.dedupeSkipped))) {
       const claimedSms = await tryClaimNotificationIdempotency(supabase, {
         reference: event.paymentReference,
         eventType: "payment_confirmed",
@@ -514,6 +514,9 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           });
           debugCustomerSmsOk = smsRet.ok;
           if (smsRet.ok) delivery = { ...delivery, failed: false, error: undefined };
+          else await releaseNotificationIdempotencyClaim(supabase, {
+            reference: event.paymentReference, eventType: "payment_confirmed", channel: "sms", bookingId: event.bookingId,
+          });
           notifyBookingDebug("payment_confirmed_customer_sms_result", {
             bookingId: event.bookingId,
             ok: smsRet.ok,
@@ -523,6 +526,9 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           debugCustomerSmsOk = false;
+          await releaseNotificationIdempotencyClaim(supabase, {
+            reference: event.paymentReference, eventType: "payment_confirmed", channel: "sms", bookingId: event.bookingId,
+          });
           notifyBookingDebug("payment_confirmed_customer_sms_throw", { bookingId: event.bookingId, message: msg });
           await enqueueNotificationDeliveryFailure({
             retryManaged: event.confirmationRetry,
@@ -600,6 +606,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             }),
         });
         if (!adminResult.sent) {
+          delivery = { ...delivery, failed: true, error: adminResult.error ?? "admin_confirmation_not_accepted" };
           await releaseNotificationIdempotencyClaim(supabase, {
             reference: event.paymentReference,
             eventType: "payment_confirmed_admin",
@@ -631,6 +638,10 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           console.error("[IN_APP NOTIFY FAILED]", { bookingId: event.bookingId, err });
+          delivery = { ...delivery, failed: true, error: msg };
+          await releaseNotificationIdempotencyClaim(supabase, {
+            reference: event.paymentReference, eventType: "payment_confirmed", channel: "in_app", bookingId: event.bookingId,
+          });
           await enqueueNotificationDeliveryFailure({
             retryManaged: event.confirmationRetry,
             bookingId: event.bookingId,
