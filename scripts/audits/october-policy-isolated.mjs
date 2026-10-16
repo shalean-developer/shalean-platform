@@ -130,6 +130,20 @@ assert.equal(row.internal_earnings_cents,0);checks++;
 assert.equal(row.earnings_summary.total_cleaner_earnings_cents,0);checks++;
 await db.query('insert into booking_cleaners(booking_id,cleaner_id) values($1,$2),($1,$3)',[bid,lead,member]);
 await assertPayable(26000,26000);
+// Roster replacement may insert the member before its declared lead. Rebuild
+// identity, roles and net payable rails from the final lead, not a transient owner.
+await db.query('insert into cleaner_earnings_adjustments(booking_id,cleaner_id,amount_cents) values($1,$2,500),($1,$3,-300)',[bid,lead,member]);
+await db.query('delete from booking_cleaners where booking_id=$1',[bid]);
+await db.query("insert into booking_cleaners(booking_id,cleaner_id,role) values($1,$2,'member')",[bid,member]);
+await db.query("insert into booking_cleaners(booking_id,cleaner_id,role) values($1,$2,'lead')",[bid,lead]);
+row=(await db.query('select * from bookings')).rows[0];
+assert.equal(row.cleaner_id,lead);checks++;
+assert.equal(row.payout_owner_cleaner_id,lead);checks++;
+assert.equal(row.earnings_summary.team_leader_id,lead);checks++;
+assert.equal(row.earnings_summary.per_cleaner_earnings.find(r=>r.cleaner_id===lead).role,'lead');checks++;
+await assertPayable(26500,25700);
+await db.query('delete from cleaner_earnings_adjustments where booking_id=$1',[bid]);
+await assertPayable(26000,26000);
 // A bonus cannot create an independently batchable member amount over the cap.
 await db.exec('update bookings set total_paid_cents=52000,base_amount_cents=52000;');
 await assert.rejects(db.query('insert into cleaner_earnings_adjustments(booking_id,cleaner_id,amount_cents) values($1,$2,500)',[bid,member]),/payout_exceeds_financial_cap/);checks++;
@@ -143,8 +157,19 @@ await db.exec("update bookings set billing_type='recurring_invoice',payment_stat
 assert.equal((await db.query('select cleaner_payout_cents from bookings')).rows[0].cleaner_payout_cents,null);checks++;
 assert.equal((await db.query('select payout_cents+bonus_cents total from booking_roster_member_payouts')).rows[0].total,0);checks++;
 assert.equal((await db.query('select internal_earnings_cents from bookings')).rows[0].internal_earnings_cents,52500);checks++;
+const unpaidDispute='00000000-0000-4000-8000-000000000087';
+await db.query("insert into cleaner_earnings_disputes(id,booking_id,cleaner_id,status) values($1,$2,$3,'open')",[unpaidDispute,bid,member]);
+await db.query("select public.resolve_cleaner_dispute_with_adjustment($1,-300,'Earned deduction','Reviewed',$2,'admin@example.com')",[unpaidDispute,lead]);
+assert.equal((await db.query('select status from cleaner_earnings_disputes where id=$1',[unpaidDispute])).rows[0].status,'resolved');checks++;
+assert.equal((await db.query('select internal_earnings_cents from bookings')).rows[0].internal_earnings_cents,52200);checks++;
+assert.equal((await db.query('select cleaner_payout_cents from bookings')).rows[0].cleaner_payout_cents,null);checks++;
+assert.equal((await db.query('select payout_cents+bonus_cents total from booking_roster_member_payouts')).rows[0].total,0);checks++;
+// A decrease remains possible even if the pre-write header/summary was stale.
+await db.exec('alter table bookings disable trigger policy; update bookings set internal_earnings_cents=1; alter table bookings enable trigger policy;');
+await db.query('update cleaner_earnings_adjustments set amount_cents=-400 where amount_cents=-300');
+assert.equal((await db.query('select internal_earnings_cents from bookings')).rows[0].internal_earnings_cents,52100);checks++;
 await db.exec("update bookings set payment_status='success',total_paid_cents=66000;");
-await assertPayable(26000,26500);
+await assertPayable(26000,26100);
 // Dispute closure, adjustment insertion and payable refresh are one transaction.
 await db.query('delete from cleaner_earnings_adjustments where cleaner_id=$1',[member]);
 const dispute='00000000-0000-4000-8000-000000000088';
@@ -181,6 +206,14 @@ await db.exec(`update bookings set is_team_job=false,metadata='{"payout_attribut
 preserved=await financial();
 await assert.rejects(db.query('update cleaner_earnings_adjustments set amount_cents=700 where cleaner_id=$1',[member]),/payout_attribution_removed/);checks++;
 assert.deepEqual(await financial(),preserved);checks++;
+// An intentional removal remains suppressed, but a real replacement cleaner
+// must not inherit the old cleaner's removal marker.
+await db.query('delete from booking_cleaners where cleaner_id=$1',[lead]);
+row=(await db.query('select * from bookings')).rows[0];
+assert.equal(row.cleaner_id,member);checks++;
+assert.equal(row.cleaner_payout_cents+row.cleaner_bonus_cents,26500);checks++;
+assert.equal(row.earnings_summary.cleaner_count,1);checks++;
+assert.equal(row.metadata.payout_attribution_removal_v1.active,true);checks++;
 assert.equal((await db.query("select has_function_privilege('anon','public.refresh_current_locked_booking_policy()','execute') as allowed")).rows[0].allowed,false);checks++;
 assert.equal((await db.query("select has_function_privilege('authenticated','public.apply_booking_earnings_policy_lock()','execute') as allowed")).rows[0].allowed,false);checks++;
 console.log(`${checks} isolated October policy checks passed; no remote connection.`);

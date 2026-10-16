@@ -164,8 +164,14 @@ returns trigger language plpgsql security definer set search_path=pg_catalog as 
 declare
   v_id uuid; v_ids uuid[]; b public.bookings%rowtype;
   v_lead uuid; v_base integer; v_rows jsonb; v_summary jsonb;
-  v_bonus jsonb; v_deductions jsonb; v_total integer; v_written integer; v_expected integer;
+  v_added_booking uuid; v_added_cleaner uuid; v_added_amount bigint:=0;
+  v_removed_booking uuid; v_removed_cleaner uuid; v_removed_amount bigint:=0;
+  v_bonus jsonb; v_deductions jsonb; v_total integer; v_previous_total bigint; v_written integer; v_expected integer;
 begin
+  if tg_table_name='cleaner_earnings_adjustments' then
+    if tg_op<>'DELETE' then v_added_booking:=new.booking_id;v_added_cleaner:=new.cleaner_id;v_added_amount:=new.amount_cents; end if;
+    if tg_op<>'INSERT' then v_removed_booking:=old.booking_id;v_removed_cleaner:=old.cleaner_id;v_removed_amount:=old.amount_cents; end if;
+  end if;
   if tg_table_name='bookings' then v_ids:=array[new.id];
   elsif tg_op='INSERT' then v_ids:=array[new.booking_id];
   elsif tg_op='DELETE' then v_ids:=array[old.booking_id];
@@ -192,14 +198,15 @@ begin
       continue;
     end if;
     -- Honor attribution removals and only refresh supported fixed-policy services.
-    if coalesce((b.metadata->'payout_attribution_removal_v1'->>'active')::boolean,false) then
-      if tg_table_name='cleaner_earnings_adjustments' then raise exception 'payout_attribution_removed' using errcode='55000'; end if;
-      continue;
-    end if;
     if lower(coalesce(b.service_slug,b.service,'')) not in ('standard','regular-cleaning','airbnb') then continue; end if;
     v_lead:=coalesce(b.payout_owner_cleaner_id,b.cleaner_id);
     if exists(select 1 from public.booking_cleaners where booking_id=v_id) then
-      if v_lead is null or not exists(select 1 from public.booking_cleaners where booking_id=v_id and cleaner_id=v_lead) then
+      if tg_table_name='booking_cleaners' and exists(select 1 from public.booking_cleaners where booking_id=v_id and role='lead') then
+        -- Atomic roster replacement may insert members before the declared lead.
+        -- Never retain that transient owner after a declared lead becomes visible.
+        select cleaner_id into v_lead from public.booking_cleaners where booking_id=v_id and role='lead'
+          order by cleaner_id limit 1;
+      elsif v_lead is null or not exists(select 1 from public.booking_cleaners where booking_id=v_id and cleaner_id=v_lead) then
         select cleaner_id into v_lead from public.booking_cleaners where booking_id=v_id
         order by case when role='lead' then 0 else 1 end,cleaner_id limit 1;
       end if;
@@ -207,16 +214,22 @@ begin
       -- A removed last roster participant cannot retain the direct payout rail.
       v_lead:=null;
     end if;
+    -- Removal markers apply only to the removed header cleaner. A real roster
+    -- replacement makes the old marker non-authoritative, as in the policy lock.
+    if coalesce((b.metadata->'payout_attribution_removal_v1'->>'active')::boolean,false)
+      and coalesce(nullif(btrim(b.metadata->'payout_attribution_removal_v1'->>'header_cleaner_id_at_removal'),''),
+        nullif(btrim(b.metadata->'payout_attribution_removal_v1'->>'cleaner_id'),'')) is not null
+      and (v_lead is null or v_lead::text=coalesce(
+        nullif(btrim(b.metadata->'payout_attribution_removal_v1'->>'header_cleaner_id_at_removal'),''),
+        nullif(btrim(b.metadata->'payout_attribution_removal_v1'->>'cleaner_id'),''))) then
+      if tg_table_name='cleaner_earnings_adjustments' then raise exception 'payout_attribution_removed' using errcode='55000'; end if;
+      continue;
+    end if;
     if tg_table_name='booking_cleaners' then
       update public.bookings set cleaner_id=v_lead,payout_owner_cleaner_id=v_lead,
         internal_earnings_cents=internal_earnings_cents where id=v_id returning * into b;
     else
       update public.bookings set internal_earnings_cents=internal_earnings_cents where id=v_id returning * into b;
-    end if;
-    -- Reject an over-cap adjustment in the same statement. Unpaid roster/booking
-    -- refreshes retain earned obligations but expose no payable member amount.
-    if tg_table_name='cleaner_earnings_adjustments' and b.cleaner_payout_cents is null then
-      raise exception 'payout_exceeds_financial_cap' using errcode='23514';
     end if;
     v_base:=b.display_earnings_cents;
     if coalesce(v_base,0)<=0 then raise exception 'locked_recurring_earnings_basis_invalid'; end if;
@@ -235,8 +248,20 @@ begin
       'role',case when cleaner_id=v_lead then 'lead' else 'member' end,
       'base_earning_cents',v_base,'bonus_cents',bonus,'deduction_cents',deduction,
       'total_cents',greatest(v_base+bonus-deduction,0)) order by cleaner_id),'[]'::jsonb),
-      coalesce(sum(greatest(v_base+bonus-deduction,0)),0)::integer
-    into v_rows,v_total from amounts;
+      coalesce(sum(greatest(v_base+bonus-deduction,0)),0)::integer,
+      coalesce(sum(greatest(v_base::bigint+bonus-deduction
+        -case when v_added_booking=v_id and v_added_cleaner=cleaner_id then v_added_amount else 0 end
+        +case when v_removed_booking=v_id and v_removed_cleaner=cleaner_id then v_removed_amount else 0 end,0)),0)
+    into v_rows,v_total,v_previous_total from amounts;
+    -- An unfunded visit already has an earned obligation above its cash cap.
+    -- Permit non-increasing corrections (including deductions) while all payable
+    -- rails stay suppressed; reject a net increase beyond the applicable cap.
+    -- Reconstruct the pre-write obligation from actual participants/OLD/NEW so
+    -- stale headers and participant-level zero floors cannot hide an increase.
+    if tg_table_name='cleaner_earnings_adjustments' and b.cleaner_payout_cents is null
+      and v_total>v_previous_total then
+      raise exception 'payout_exceeds_financial_cap' using errcode='23514';
+    end if;
     -- A present summary is refreshed completely; absence remains explicit until
     -- the guarded canonical persistence flow initializes it.
     if b.earnings_summary is not null then
@@ -323,7 +348,13 @@ begin
       and (x.status is distinct from 'pending' or x.cleaner_payout_id is not null)) then
     raise exception 'booking_payout_locked' using errcode='55000';
   end if;
-  if coalesce((b.metadata->'payout_attribution_removal_v1'->>'active')::boolean,false) then
+  if coalesce((b.metadata->'payout_attribution_removal_v1'->>'active')::boolean,false)
+    and coalesce(nullif(btrim(b.metadata->'payout_attribution_removal_v1'->>'header_cleaner_id_at_removal'),''),
+      nullif(btrim(b.metadata->'payout_attribution_removal_v1'->>'cleaner_id'),'')) is not null
+    and (coalesce(b.cleaner_id,b.payout_owner_cleaner_id) is null
+      or coalesce(b.cleaner_id,b.payout_owner_cleaner_id)::text=coalesce(
+        nullif(btrim(b.metadata->'payout_attribution_removal_v1'->>'header_cleaner_id_at_removal'),''),
+        nullif(btrim(b.metadata->'payout_attribution_removal_v1'->>'cleaner_id'),''))) then
     raise exception 'payout_attribution_removed' using errcode='55000';
   end if;
   if not exists(select 1 from public.team_job_member_payouts where booking_id=b.id and cleaner_id=d.cleaner_id)

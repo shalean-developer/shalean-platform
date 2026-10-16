@@ -79,6 +79,15 @@ describe("locked October recurring earning basis", () => {
     expect(perCleanerAllocationsForBooking(b,[{cleaner_id:lead}])[0].cents).toBe(26000+amount);
     expect(resolveCleanerDashboardEarningsCents({...b,date:"2026-09-30"},lead)).toBe(26000);
   });
+  it("keeps an unfunded solo deduction visible without exposing a payable",()=>{
+    const b={date:"2026-10-16",earnings_policy:"legacy_july",cleaner_id:lead,payout_owner_cleaner_id:lead,
+      display_earnings_cents:26000,internal_earnings_cents:25700,cleaner_payout_cents:null,
+      cleaner_bonus_cents:0,cleaner_earnings_total_cents:26000,payout_frozen_cents:null,earnings_summary:null,
+      roster_cleaner_count:1,metadata:{}};
+    expect(resolveBookingProfitabilityCleanerCost(b).cleaner_cost_cents).toBe(25700);
+    expect(resolveCleanerDashboardEarningsCents(b,lead)).toBe(25700);
+    expect(perCleanerAllocationsForBooking(b,[{cleaner_id:lead}])[0].cents).toBe(25700);
+  });
   it.each([0,-1,NaN,28000.5])("rejects an invalid fixed basis %s", basis=>{
     expect(()=>applyLockedRecurringBasis(calculated(),basis,[])).toThrow("locked_recurring_earnings_basis_invalid");
   });
