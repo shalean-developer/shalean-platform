@@ -264,6 +264,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         ? ((n) => (Number.isFinite(n) && n > 0 ? n : null))(Number(totalPaidZarRaw.trim()))
         : null;
   const {
+    earnings_summary: _internalEarningsSummary,
     cleaner_payout_cents: _legacyPayout,
     earnings_policy:_policy,internal_earnings_cents:_internal,cleaner_bonus_cents:_bonus,
     booking_cleaners:_participants,booking_roster_member_payouts:_peerAmounts,

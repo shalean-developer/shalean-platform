@@ -349,7 +349,7 @@ export async function GET(request: Request) {
 
   const stripInternalMetadata = (rows: Record<string, unknown>[]) =>
     rows.map((row) => {
-      const { metadata:_internalMetadata,
+      const { metadata:_internalMetadata, earnings_summary:_internalEarningsSummary,
         earnings_policy:_policy,internal_earnings_cents:_internal,cleaner_payout_cents:_payable,
         cleaner_bonus_cents:_bonus,booking_cleaners:_participants,booking_roster_member_payouts:_peerAmounts,
         ...safeRow } = row;

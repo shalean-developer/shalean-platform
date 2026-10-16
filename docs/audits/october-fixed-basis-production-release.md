@@ -38,6 +38,8 @@ readers load policy and actual participant evidence. The unfunded lead can be
 resolved from total earned obligation minus a complete set of member earned
 rows. Partial peer coverage cannot manufacture an allocation. Internal inputs
 are removed from cleaner API responses after resolving the viewer's amount.
+Full participant summaries and adjustment reasons are also stripped from all job
+list modes and job detail, verified through the actual endpoint handlers.
 Historical, formal-team, undated and stale unrelated solo behavior is preserved.
 Summary-absent company share follows obligation deltas, retaining its nonnegative
 database constraint. A validated internal margin-capacity cache preserves the
@@ -57,7 +59,7 @@ final baseline reset preview showed current R520, projected R520, change R0.
 Fixture retirement returned exit zero; fresh reads confirmed is_test=true,
 paused schedule, retained history and no financial links.
 
-Local follow-up validation: 1,120 critical tests, TypeScript, booking-core lint,
+Local follow-up validation: 1,124 critical tests, TypeScript, booking-core lint,
 migration checks and 217 isolated PostgreSQL assertions. The governed staging
 acceptance SQL also passes isolated execution, rollback preservation and wrong
 fixture rejection. It is staging-only tooling, excluded from production.
