@@ -14,7 +14,7 @@ try {
  create table booking_roster_member_payouts(booking_id uuid,cleaner_id uuid,payout_cents integer,bonus_cents integer,status text,cleaner_payout_id uuid,unique(booking_id,cleaner_id));
  create table team_job_member_payouts(booking_id uuid,cleaner_id uuid,status text,cleaner_payout_id uuid);
  create table bookings(id uuid primary key,recurring_id uuid,customer_id uuid,service_slug text,service text,date text,is_team_job boolean,
- earnings_summary jsonb,company_revenue_cents integer,cleaner_bonus_cents integer,metadata jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,earnings_policy text,display_earnings_cents integer,internal_earnings_cents integer,
+ earnings_summary jsonb,company_revenue_cents integer constraint bookings_company_revenue_cents_nonnegative check(company_revenue_cents is null or company_revenue_cents>=0),cleaner_bonus_cents integer,metadata jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,earnings_policy text,display_earnings_cents integer,internal_earnings_cents integer,
  billing_type text,is_monthly_billing_booking boolean,payment_status text,monthly_invoice_id uuid,total_paid_cents integer,total_paid_zar integer,amount_paid_cents integer,
  cleaner_payout_cents integer,payout_earnings_cents integer,payout_status text,payout_frozen_cents integer,earnings_model_version text,earnings_percentage_applied numeric,
  earnings_cap_cents_applied integer,earnings_tenure_months_at_assignment numeric,earnings_policy_locked_at timestamptz,
@@ -187,7 +187,8 @@ await db.query('insert into booking_cleaners(booking_id,cleaner_id) values($1,$2
 assert.equal((await db.query('select company_revenue_cents from bookings')).rows[0].company_revenue_cents,13900);checks++;
 await db.exec('update bookings set company_revenue_cents=100;');
 await db.query('insert into cleaner_earnings_adjustments(booking_id,cleaner_id,amount_cents) values($1,$2,500)',[bid,lead]);
-assert.equal((await db.query('select company_revenue_cents from bookings')).rows[0].company_revenue_cents,-400);checks++;
+assert.equal((await db.query('select company_revenue_cents from bookings')).rows[0].company_revenue_cents,0);checks++;
+assert.equal((await db.query("select (metadata->'locked_policy_company_basis_v1'->>'capacity_cents')::integer n from bookings")).rows[0].n,52200);checks++;
 await db.query('delete from cleaner_earnings_adjustments where booking_id=$1 and cleaner_id=$2',[bid,lead]);
 assert.equal((await db.query('select company_revenue_cents from bookings')).rows[0].company_revenue_cents,100);checks++;
 await db.exec("update bookings set company_revenue_cents=13900,earnings_summary=jsonb_build_object('customer_total_cents',66000,'costs_cents',0);");
