@@ -71,6 +71,8 @@ import {
   formatBookingProfitMarginPercent,
   type BookingExpensesProfit,
 } from "@/lib/admin/expenses/bookingExpensesProfitDisplay";
+import type { BookingEarningsPreview } from "@/lib/admin/buildBookingEarningsPreview";
+import { bookingEarningsPreviewComparison } from "@/lib/admin/bookingEarningsPreviewComparison";
 import type { AdminEarningsDisplay } from "@/lib/payout/bookingEarningsSummary";
 import {
   describeBookingOperationalState,
@@ -278,15 +280,7 @@ type DispatchOfferAdminRow = {
 
 type ToastState = { kind: "success" | "error" | "info"; text: string } | null;
 
-type EarningsPreviewResponse = {
-  current: {
-    display_earnings_cents: number | null;
-    cleaner_earnings_total_cents: number | null;
-    line_items_count: number;
-  };
-  computed_preview: { cleaner_earnings_total_cents: number; diff_cents: number } | null;
-  preview_unavailable_reason?: string;
-};
+type EarningsPreviewResponse = BookingEarningsPreview;
 
 type BookingNotificationLogRow = {
   id: string;
@@ -954,6 +948,7 @@ export default function BookingDetailsView({
   /** From GET /api/admin/bookings/[id] — used to disable reset before hitting the API. */
   const [ledgerCleanerEarnings, setLedgerCleanerEarnings] = useState<Array<{ id: string; status: string | null }>>([]);
   const [earningsPreview, setEarningsPreview] = useState<EarningsPreviewResponse | null>(null);
+  const resetEarningsComparison = bookingEarningsPreviewComparison(earningsPreview);
   const [earningsPreviewLoading, setEarningsPreviewLoading] = useState(false);
   const [issueResolveBusyId, setIssueResolveBusyId] = useState<string | null>(null);
   const [issueReportNowMs, setIssueReportNowMs] = useState(() => Date.now());
@@ -4434,27 +4429,17 @@ export default function BookingDetailsView({
                 <Loader2 size={14} className="animate-spin" />
                 Loading earnings preview…
               </p>
-            ) : earningsPreview?.preview_unavailable_reason === "team_job" ? (
-              <p className="mt-3 text-sm text-zinc-600">Dry-run preview is not available for team jobs.</p>
-            ) : earningsPreview?.preview_unavailable_reason === "no_line_items" ? (
-              <p className="mt-3 text-sm text-amber-900">
-                No line items on this booking — line-total preview cannot be computed.
-              </p>
-            ) : earningsPreview?.computed_preview ? (
+            ) : resetEarningsComparison ? (
               <p className="mt-3 text-sm font-medium text-zinc-800">
-                After reset, line-based cleaner total would be about{" "}
-                {formatZar(centsToZar(earningsPreview.computed_preview.cleaner_earnings_total_cents) ?? 0)} (shown now{" "}
-                {formatZar(
-                  centsToZar(
-                    earningsPreview.current.display_earnings_cents ??
-                      earningsPreview.current.cleaner_earnings_total_cents ??
-                      0,
-                  ) ?? 0,
-                )}
-                , Δ {earningsPreview.computed_preview.diff_cents >= 0 ? "+" : ""}
-                {formatZar(centsToZar(Math.abs(earningsPreview.computed_preview.diff_cents)) ?? 0)}).
+                After reset: {formatZar(centsToZar(resetEarningsComparison.projectedTotalCents) ?? 0)}
+                {" "}(current {formatZar(centsToZar(resetEarningsComparison.currentTotalCents) ?? 0)},
+                {" "}change {resetEarningsComparison.diffCents >= 0 ? "+" : "−"}
+                {formatZar(centsToZar(Math.abs(resetEarningsComparison.diffCents)) ?? 0)}).
               </p>
-            ) : null}
+            ) : (
+              <p className="mt-3 text-sm text-amber-900">Earnings preview unavailable.</p>
+            )}
+
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"

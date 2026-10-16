@@ -7,6 +7,7 @@ import { parseBookingEarningsSummary, type BookingEarningsSummary } from "@/lib/
 
 export type BookingEarningsPreview = {
   current: {
+    is_team_job: boolean;
     display_earnings_cents: number | null;
     cleaner_earnings_total_cents: number | null;
     earnings_summary: BookingEarningsSummary | null;
@@ -60,6 +61,7 @@ export async function buildBookingEarningsPreview(
     ok: true,
     preview: {
       current: {
+        is_team_job: b.is_team_job === true,
         display_earnings_cents: roundCents((b as { display_earnings_cents?: unknown }).display_earnings_cents),
         cleaner_earnings_total_cents: roundCents(
           (b as { cleaner_earnings_total_cents?: unknown }).cleaner_earnings_total_cents,
