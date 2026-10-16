@@ -22,13 +22,16 @@ export async function checkPaymentLinkEligibility(
         (reason.startsWith("gateway_") && reason !== "gateway_paid" && reason !== "gateway_reversed") ? { retryable: true } : {}) };
   };
   const { data: booking, error } = await admin.from("bookings")
-    .select("status, payment_status, payment_completed_at, paid_at, payment_transaction_id, paystack_reference, payment_link, monthly_invoice_id, is_monthly_billing_booking")
+    .select("status, payment_status, payment_completed_at, paid_at, payment_transaction_id, paystack_reference, payment_link, payment_link_expires_at, monthly_invoice_id, is_monthly_billing_booking")
     .eq("id", bookingId).maybeSingle();
   if (error || !booking) return suppress("booking_unavailable");
   if (bookingHasAuthoritativeSettledPaymentStatus(booking.payment_status) || booking.payment_completed_at ||
       booking.paid_at || booking.payment_transaction_id) return suppress("booking_paid");
   if (!eligibleStatus(booking.status)) return suppress("booking_not_pending_payment");
   if (booking.monthly_invoice_id || booking.is_monthly_billing_booking) return suppress("monthly_billing");
+  const linkExpired = (row: { payment_link_expires_at?: string | null }) => !options?.allowExpired &&
+    Boolean(row.payment_link_expires_at && Date.parse(row.payment_link_expires_at) <= Date.now());
+  if (linkExpired(booking)) return suppress("payment_link_expired");
   const storedReference = String(booking.paystack_reference ?? "").trim();
   const canRecoverUninitialized = Boolean(options?.allowUninitialized && !String(booking.payment_link ?? "").trim());
   if (reference !== storedReference || (!reference && !canRecoverUninitialized)) return suppress("stale_reference");
@@ -59,10 +62,10 @@ export async function checkPaymentLinkEligibility(
 
   // Payment/webhook or reference replacement can race the remote request above.
   const { data: latest, error: latestError } = await admin.from("bookings")
-    .select("status, payment_status, payment_completed_at, paid_at, payment_transaction_id, paystack_reference, payment_link, monthly_invoice_id, is_monthly_billing_booking")
+    .select("status, payment_status, payment_completed_at, paid_at, payment_transaction_id, paystack_reference, payment_link, payment_link_expires_at, monthly_invoice_id, is_monthly_billing_booking")
     .eq("id", bookingId).maybeSingle();
   if (latestError || !latest) return suppress("booking_unavailable");
-  if (!eligibleStatus(latest.status) || String(latest.paystack_reference ?? "").trim() !== reference ||
+  if (!eligibleStatus(latest.status) || linkExpired(latest) || String(latest.paystack_reference ?? "").trim() !== reference ||
       (uninitialized && String(latest.payment_link ?? "").trim()) || latest.monthly_invoice_id || latest.is_monthly_billing_booking ||
       bookingHasAuthoritativeSettledPaymentStatus(latest.payment_status) || latest.payment_completed_at ||
       latest.paid_at || latest.payment_transaction_id) return suppress("booking_changed");

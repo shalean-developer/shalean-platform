@@ -11,6 +11,7 @@ const {
   adminEmailMock,
   inAppMock,
   customerSmsMock,
+  enqueueMock,
 } = vi.hoisted(() => ({
   sendBookingConfirmationEmailMock: vi.fn(),
   tryClaimNotificationIdempotencyMock: vi.fn(),
@@ -22,6 +23,7 @@ const {
   adminEmailMock: vi.fn(async () => ({ sent: true })),
   inAppMock: vi.fn(async () => undefined),
   customerSmsMock: vi.fn(async () => ({ ok: true })),
+  enqueueMock: vi.fn(async () => true),
 }));
 
 vi.mock("@/lib/email/sendBookingEmail", async (importOriginal) => {
@@ -60,7 +62,8 @@ vi.mock("@/lib/observability/paymentStructuredLog", () => ({
 }));
 
 vi.mock("@/lib/booking/failedJobs", () => ({
-  enqueueFailedJob: vi.fn(async () => undefined),
+  enqueueFailedJob: enqueueMock,
+  PAYMENT_CONFIRMATION_NOTIFICATION_JOB: "payment_confirmation_notification",
 }));
 
 vi.mock("@/lib/customer/customerBookingsForUser", () => ({
@@ -120,6 +123,7 @@ describe("notifyBookingEvent payment_confirmed delivery result", () => {
     adminEmailMock.mockClear();
     inAppMock.mockClear();
     customerSmsMock.mockClear();
+    enqueueMock.mockClear();
     process.env.RESEND_API_KEY = "re_test";
   });
 
@@ -228,6 +232,7 @@ describe("notifyBookingEvent payment_confirmed delivery result", () => {
     expect(result.failed).toBe(true);
     expect(result.error).toContain("payment_confirmation_booking_load_failed");
     expect(sendBookingConfirmationEmailMock).not.toHaveBeenCalled();
+    expect(enqueueMock).toHaveBeenCalledWith("payment_confirmation_notification", expect.objectContaining({ bookingId: "b1", paymentReference: "bps_test", amountCents: 45800 }));
   });
   it("uses a snapshot phone when the stored phone is blank and confirmation email fails", async () => {
     tryClaimNotificationIdempotencyMock.mockResolvedValue(true);
@@ -236,6 +241,12 @@ describe("notifyBookingEvent payment_confirmed delivery result", () => {
       bookingId: "b1", snapshot: { ...snapshot, customer: { ...snapshot.customer!, phone: "+27000000000" } },
       customerEmail: "pat@example.com", amountCents: 45000, paymentReference: "bps_phone_test" });
     expect(customerSmsMock).toHaveBeenCalledWith(expect.objectContaining({ phone: "+27000000000", smsRole: "fallback" }));
+  });
+  it("keeps a worker replay on its existing durable job after another enrichment failure", async () => {
+    const admin = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { message: "offline" } }) }) }) }) } as never;
+    const result = await notifyBookingEvent({ type: "payment_confirmed", supabase: admin, bookingId: "b1", snapshot: null,
+      customerEmail: "pat@example.com", amountCents: 45800, paymentReference: "bps_retry", confirmationRetry: true });
+    expect(result.failed).toBe(true); expect(enqueueMock).not.toHaveBeenCalled();
   });
   it("dispatches office alerts with the approved production fallback when the environment setting is absent", async () => {
     vi.stubEnv("SHALEAN_APP_ENV", "production"); vi.stubEnv("ADMIN_NOTIFICATION_EMAIL", "");

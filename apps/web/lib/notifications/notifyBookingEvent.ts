@@ -33,7 +33,7 @@ import {
 import { cleanerJobDeepLinkForSms } from "@/lib/cleaner/cleanerJobMagicLink";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
-import { enqueueFailedJob } from "@/lib/booking/failedJobs";
+import { enqueueFailedJob, PAYMENT_CONFIRMATION_NOTIFICATION_JOB } from "@/lib/booking/failedJobs";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
 import {
@@ -62,6 +62,8 @@ export type NotifyBookingEventInput =
       customerEmail: string;
       amountCents: number;
       paymentReference: string;
+      /** Internal worker replay: retain its current job rather than enqueue a duplicate. */
+      confirmationRetry?: boolean;
     }
   | { type: "assigned"; supabase: SupabaseClient; bookingId: string; cleanerId: string }
   | { type: "completed"; supabase: SupabaseClient; bookingId: string }
@@ -165,7 +167,9 @@ async function enqueueNotificationDeliveryFailure(payload: {
   eventType: string;
   channel: string;
   error: string;
+  retryManaged?: boolean;
 }): Promise<void> {
+  if (payload.retryManaged) return;
   const ok = await enqueueFailedJob("notification_delivery", {
     bookingId: payload.bookingId,
     eventType: payload.eventType,
@@ -179,6 +183,14 @@ async function enqueueNotificationDeliveryFailure(payload: {
       channel: payload.channel,
     });
   }
+}
+
+async function queuePaymentConfirmationRetry(event: Extract<NotifyBookingEventInput, { type: "payment_confirmed" }>, error: string) {
+  if (event.confirmationRetry) return;
+  await enqueueFailedJob(PAYMENT_CONFIRMATION_NOTIFICATION_JOB, {
+    bookingId: event.bookingId, paymentReference: event.paymentReference, amountCents: event.amountCents,
+    customerEmail: event.customerEmail, snapshot: event.snapshot, last_error: error.slice(0, 4000),
+  });
 }
 
 /**
@@ -375,6 +387,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             bookingId: event.bookingId,
           });
           await enqueueNotificationDeliveryFailure({
+            retryManaged: event.confirmationRetry,
             bookingId: event.bookingId,
             eventType: "payment_confirmed",
             channel: "email",
@@ -393,6 +406,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             bookingId: event.bookingId,
           });
           await enqueueNotificationDeliveryFailure({
+            retryManaged: event.confirmationRetry,
             bookingId: event.bookingId,
             eventType: "payment_confirmed",
             channel: "email",
@@ -510,6 +524,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           debugCustomerSmsOk = false;
           notifyBookingDebug("payment_confirmed_customer_sms_throw", { bookingId: event.bookingId, message: msg });
           await enqueueNotificationDeliveryFailure({
+            retryManaged: event.confirmationRetry,
             bookingId: event.bookingId,
             eventType: "payment_confirmed",
             channel: "sms",
@@ -616,6 +631,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           const msg = err instanceof Error ? err.message : String(err);
           console.error("[IN_APP NOTIFY FAILED]", { bookingId: event.bookingId, err });
           await enqueueNotificationDeliveryFailure({
+            retryManaged: event.confirmationRetry,
             bookingId: event.bookingId,
             eventType: "payment_confirmed",
             channel: "in_app",
@@ -639,6 +655,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       dedupeSkipped: delivery.dedupeSkipped,
       failed: delivery.failed,
     });
+    if (delivery.failed) await queuePaymentConfirmationRetry(event, delivery.error ?? "confirmation_delivery_failed");
     return delivery;
   }
 
@@ -1085,6 +1102,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[notifyBookingEvent] unhandled failure", msg);
+    if (event.type === "payment_confirmed") await queuePaymentConfirmationRetry(event, msg);
     await reportOperationalIssue("error", "notifyBookingEvent/unhandled", msg, {
       eventType: event.type,
       bookingId: "bookingId" in event ? (event as { bookingId?: string }).bookingId : undefined,

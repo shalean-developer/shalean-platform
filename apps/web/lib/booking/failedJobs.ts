@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { PaystackChargePayload } from "@/lib/payments/paymentTransactionTypes";
 
 export const FAILED_JOBS_ENQUEUE_ERROR = "FAILED_JOBS_ENQUEUE_FAILED";
+export const PAYMENT_CONFIRMATION_NOTIFICATION_JOB = "payment_confirmation_notification";
 
 export type BookingInsertFailedPayload = {
   paystackReference: string;
