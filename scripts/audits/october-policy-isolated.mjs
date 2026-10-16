@@ -3,13 +3,15 @@ import {readFile} from 'node:fs/promises';
 const {PGlite}=await import(process.env.AUDIT_PGLITE_MODULE||'@electric-sql/pglite');
 const db=new PGlite();let checks=0;
 try {
- await db.exec(`create role anon; create role authenticated;
+ await db.exec(`create role anon; create role authenticated; create role service_role; create schema auth;
+ create function auth.role() returns text language sql as $$ select coalesce(current_setting('request.jwt.claim.role',true),'service_role') $$;
  create table recurring_bookings(id uuid, earnings_policy text, legacy_earnings_cents integer);
  create table customer_earnings_policies(customer_id uuid, earnings_policy text, legacy_earnings_cents integer, applies_to_services text[]);
- create table cleaner_earnings_adjustments(id integer generated always as identity,booking_id uuid,cleaner_id uuid,amount_cents integer,reason text);
+ create table cleaner_earnings_adjustments(id integer generated always as identity,booking_id uuid,cleaner_id uuid,amount_cents integer,reason text,dispute_id uuid,created_by uuid,created_by_email text);
+ create table cleaner_earnings_disputes(id uuid primary key,booking_id uuid,cleaner_id uuid,status text,admin_response text,reviewed_by uuid,reviewed_by_email text,reviewed_at timestamptz,resolved_by uuid,resolved_by_email text,resolved_at timestamptz);
  create table cleaner_earnings(booking_id uuid,status text,disbursement_id uuid,paid_at timestamptz);
  create table booking_roster_member_payouts(booking_id uuid,cleaner_id uuid,payout_cents integer,bonus_cents integer,status text,cleaner_payout_id uuid,unique(booking_id,cleaner_id));
- create table team_job_member_payouts(booking_id uuid,status text,cleaner_payout_id uuid);
+ create table team_job_member_payouts(booking_id uuid,cleaner_id uuid,status text,cleaner_payout_id uuid);
  create table bookings(id uuid primary key,recurring_id uuid,customer_id uuid,service_slug text,service text,date text,is_team_job boolean,
  earnings_summary jsonb,company_revenue_cents integer,cleaner_bonus_cents integer,metadata jsonb,cleaner_id uuid,payout_owner_cleaner_id uuid,earnings_policy text,display_earnings_cents integer,internal_earnings_cents integer,
  billing_type text,is_monthly_billing_booking boolean,payment_status text,monthly_invoice_id uuid,total_paid_cents integer,total_paid_zar integer,amount_paid_cents integer,
@@ -50,9 +52,11 @@ await db.exec("update bookings set date='2026-10-15'; update cleaner_earnings_ad
 assert.equal((await db.query('select internal_earnings_cents from bookings')).rows[0].internal_earnings_cents,52400);checks++;
 await db.exec('delete from cleaner_earnings_adjustments;');
 assert.equal((await db.query('select internal_earnings_cents from bookings')).rows[0].internal_earnings_cents,52000);checks++;
-await db.exec("update bookings set payout_run_id='00000000-0000-4000-8000-000000000099'; insert into cleaner_earnings_adjustments(booking_id,cleaner_id,amount_cents) values('00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003',500);");
+await db.exec("update bookings set payout_run_id='00000000-0000-4000-8000-000000000099';");
+await assert.rejects(db.exec("insert into cleaner_earnings_adjustments(booking_id,cleaner_id,amount_cents) values('00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003',500);"),/booking_payout_locked/);checks++;
 assert.equal((await db.query('select internal_earnings_cents from bookings')).rows[0].internal_earnings_cents,52000);checks++;
-await db.exec("update bookings set payout_run_id=null; insert into cleaner_earnings values('00000000-0000-4000-8000-000000000002','paid',null,now()); update cleaner_earnings_adjustments set amount_cents=900;");
+await db.exec("update bookings set payout_run_id=null; insert into cleaner_earnings values('00000000-0000-4000-8000-000000000002','paid',null,now());");
+await assert.rejects(db.exec("insert into cleaner_earnings_adjustments(booking_id,cleaner_id,amount_cents) values('00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003',900);"),/booking_payout_locked/);checks++;
 assert.equal((await db.query('select internal_earnings_cents from bookings')).rows[0].internal_earnings_cents,52000);checks++;
 // Payable columns, participant summary and member rows must change with the
 // adjustment statement, including insert/update/delete and rollback on failure.
@@ -86,7 +90,8 @@ await assertPayable(26000,26500);
 // Linked/non-pending member history is never refreshed by a new adjustment.
 const lockedBefore=(await db.query('select earnings_summary,internal_earnings_cents,cleaner_payout_cents,cleaner_bonus_cents from bookings')).rows[0];
 await db.exec("update booking_roster_member_payouts set status='batched';");
-await db.query('update cleaner_earnings_adjustments set amount_cents=900 where cleaner_id=$1',[member]);
+await assert.rejects(db.query('update cleaner_earnings_adjustments set amount_cents=900 where cleaner_id=$1',[member]),/booking_payout_locked/);checks++;
+await assert.rejects(db.query('delete from cleaner_earnings_adjustments where cleaner_id=$1',[member]),/booking_payout_locked/);checks++;
 assert.deepEqual((await db.query('select earnings_summary,internal_earnings_cents,cleaner_payout_cents,cleaner_bonus_cents from bookings')).rows[0],lockedBefore);checks++;
 assert.equal((await db.query('select payout_cents+bonus_cents as total from booking_roster_member_payouts')).rows[0].total,26500);checks++;
 await db.exec("update booking_roster_member_payouts set status='pending';");
@@ -140,6 +145,29 @@ assert.equal((await db.query('select payout_cents+bonus_cents total from booking
 assert.equal((await db.query('select internal_earnings_cents from bookings')).rows[0].internal_earnings_cents,52500);checks++;
 await db.exec("update bookings set payment_status='success',total_paid_cents=66000;");
 await assertPayable(26000,26500);
+// Dispute closure, adjustment insertion and payable refresh are one transaction.
+await db.query('delete from cleaner_earnings_adjustments where cleaner_id=$1',[member]);
+const dispute='00000000-0000-4000-8000-000000000088';
+const actor='00000000-0000-4000-8000-000000000099';
+await db.query("insert into cleaner_earnings_disputes(id,booking_id,cleaner_id,status) values($1,$2,$3,'open')",[dispute,bid,member]);
+const resolve=()=>db.query("select public.resolve_cleaner_dispute_with_adjustment($1,15000,'Audit correction','Reviewed',$2,'admin@example.com')",[dispute,actor]);
+await assert.rejects(resolve(),/payout_exceeds_financial_cap/);checks++;
+assert.equal((await db.query('select status from cleaner_earnings_disputes where id=$1',[dispute])).rows[0].status,'open');checks++;
+assert.equal((await db.query('select count(*)::integer n from cleaner_earnings_adjustments')).rows[0].n,0);checks++;
+await db.exec("update booking_roster_member_payouts set status='batched';");
+await assert.rejects(resolve(),/booking_payout_locked/);checks++;
+assert.equal((await db.query('select status from cleaner_earnings_disputes where id=$1',[dispute])).rows[0].status,'open');checks++;
+await db.exec("update booking_roster_member_payouts set status='pending';");
+await db.query("select public.resolve_cleaner_dispute_with_adjustment($1,500,'Audit correction','Reviewed',$2,'admin@example.com')",[dispute,actor]);
+row=(await db.query('select * from cleaner_earnings_disputes where id=$1',[dispute])).rows[0];
+assert.equal(row.status,'resolved');checks++;
+assert.equal(row.resolved_by,actor);checks++;
+assert.equal(row.reviewed_by_email,'admin@example.com');checks++;
+assert.equal((await db.query('select created_by from cleaner_earnings_adjustments')).rows[0].created_by,actor);checks++;
+await assertPayable(26000,26500);
+await assert.rejects(resolve(),/dispute_already_closed/);checks++;
+assert.equal((await db.query('select count(*)::integer n from cleaner_earnings_adjustments')).rows[0].n,1);checks++;
+assert.equal((await db.query("select has_function_privilege('anon','public.resolve_cleaner_dispute_with_adjustment(uuid,integer,text,text,uuid,text)','execute') allowed")).rows[0].allowed,false);checks++;
 const financial=async()=> (await db.query('select display_earnings_cents,internal_earnings_cents,cleaner_payout_cents,cleaner_bonus_cents,earnings_summary from bookings')).rows[0];
 await db.exec("update bookings set date='2026-09-30';");
 let preserved=await financial();
@@ -151,7 +179,7 @@ await db.query('update cleaner_earnings_adjustments set amount_cents=500 where c
 assert.deepEqual(await financial(),preserved);checks++;
 await db.exec(`update bookings set is_team_job=false,metadata='{"payout_attribution_removal_v1":{"active":true,"cleaner_id":"00000000-0000-4000-8000-000000000003"}}';`);
 preserved=await financial();
-await db.query('update cleaner_earnings_adjustments set amount_cents=700 where cleaner_id=$1',[member]);
+await assert.rejects(db.query('update cleaner_earnings_adjustments set amount_cents=700 where cleaner_id=$1',[member]),/payout_attribution_removed/);checks++;
 assert.deepEqual(await financial(),preserved);checks++;
 assert.equal((await db.query("select has_function_privilege('anon','public.refresh_current_locked_booking_policy()','execute') as allowed")).rows[0].allowed,false);checks++;
 assert.equal((await db.query("select has_function_privilege('authenticated','public.apply_booking_earnings_policy_lock()','execute') as allowed")).rows[0].allowed,false);checks++;

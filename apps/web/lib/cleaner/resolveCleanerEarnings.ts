@@ -45,6 +45,9 @@ export type BookingWideCleanerEarningsInput = {
   cleaner_earnings_total_cents?: unknown;
   display_earnings_cents?: unknown;
   internal_earnings_cents?: unknown;
+  earnings_policy?: string | null;
+  cleaner_payout_cents?: unknown;
+  cleaner_bonus_cents?: unknown;
   earnings_summary?: unknown;
   roster_cleaner_count?: number;
   booking_cleaners?: Array<{ cleaner_id?: string | null }> | null;
@@ -81,6 +84,12 @@ export function resolveBookingWideCleanerEarningsCents(row: BookingWideCleanerEa
     const rosterCount = row.roster_cleaner_count ?? (row.booking_cleaners == null ? null
       : new Set(row.booking_cleaners.map(r => String(r.cleaner_id ?? "").trim()).filter(Boolean)).size);
     const paired = rosterCount == null ? (summary?.cleaner_count ?? 0) > 1 : rosterCount > 1;
+    const directPayout = optionalCentsFromDb(row.cleaner_payout_cents);
+    if (row.date != null && row.date >= "2026-10-01" && row.earnings_policy === "legacy_july"
+      && rosterCount != null && rosterCount <= 1 && directPayout != null) {
+      return {cleaner_cost_cents:Math.max(0,directPayout+(optionalCentsFromDb(row.cleaner_bonus_cents)??0)),
+        incomplete_team_earnings:false,included_in_trusted_totals:true};
+    }
     const obligation = summary?.total_cleaner_earnings_cents
       ?? optionalCentsFromDb(row.internal_earnings_cents) ?? total;
     const solo = summary?.cleaner_count === 1 ? summary.per_cleaner_earnings[0] : null;
@@ -111,6 +120,11 @@ export function resolveBookingWideCleanerEarningsCents(row: BookingWideCleanerEa
 export function resolveCleanerDashboardEarningsCents(
   booking: {
     date?: string | null;
+    earnings_policy?: string | null;
+    cleaner_id?: string | null;
+    payout_owner_cleaner_id?: string | null;
+    cleaner_payout_cents?: unknown;
+    cleaner_bonus_cents?: unknown;
     viewer_payout_cents?: unknown;
     earnings_summary?: unknown;
     cleaner_earnings_total_cents?: unknown;
@@ -147,6 +161,12 @@ export function resolveCleanerDashboardEarningsCents(
     return facing.total_cents;
   }
 
+  const direct = optionalCentsFromDb(booking.cleaner_payout_cents);
+  if (booking.date != null && booking.date >= "2026-10-01" && booking.earnings_policy === "legacy_july"
+    && cleanerId === (booking.payout_owner_cleaner_id ?? booking.cleaner_id)
+    && !summary && direct != null && !(frozen != null && frozen > 0)) {
+    return Math.max(0,direct+(optionalCentsFromDb(booking.cleaner_bonus_cents)??0));
+  }
   const locked = resolveCleanerEarningsCents(booking);
   if (locked !== null) return Math.max(0, Math.round(locked));
 

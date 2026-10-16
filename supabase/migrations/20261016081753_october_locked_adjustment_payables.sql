@@ -173,9 +173,12 @@ begin
   for v_id in select distinct x from unnest(v_ids) x order by x loop
     select * into b from public.bookings where id=v_id for update;
     if not found or b.date is null or b.date<'2026-10-01'
-      or b.earnings_policy is distinct from 'legacy_july' or coalesce(b.is_team_job,false)
-      or b.payout_status is distinct from 'pending' or b.payout_id is not null
-      or b.payout_run_id is not null or b.payout_paid_at is not null then continue; end if;
+      or b.earnings_policy is distinct from 'legacy_july' or coalesce(b.is_team_job,false) then continue; end if;
+    if b.payout_status is distinct from 'pending' or b.payout_id is not null
+      or b.payout_run_id is not null or b.payout_paid_at is not null then
+      if tg_table_name='cleaner_earnings_adjustments' then raise exception 'booking_payout_locked' using errcode='55000'; end if;
+      continue;
+    end if;
     perform 1 from public.cleaner_earnings where booking_id=v_id for update;
     perform 1 from public.booking_roster_member_payouts where booking_id=v_id for update;
     perform 1 from public.team_job_member_payouts where booking_id=v_id for update;
@@ -184,10 +187,16 @@ begin
       or exists(select 1 from public.booking_roster_member_payouts mp where mp.booking_id=v_id
         and (mp.status is distinct from 'pending' or mp.cleaner_payout_id is not null))
       or exists(select 1 from public.team_job_member_payouts mp where mp.booking_id=v_id
-        and (mp.status is distinct from 'pending' or mp.cleaner_payout_id is not null)) then continue; end if;
+        and (mp.status is distinct from 'pending' or mp.cleaner_payout_id is not null)) then
+      if tg_table_name='cleaner_earnings_adjustments' then raise exception 'booking_payout_locked' using errcode='55000'; end if;
+      continue;
+    end if;
     -- Honor attribution removals and only refresh supported fixed-policy services.
-    if coalesce((b.metadata->'payout_attribution_removal_v1'->>'active')::boolean,false)
-      or lower(coalesce(b.service_slug,b.service,'')) not in ('standard','regular-cleaning','airbnb') then continue; end if;
+    if coalesce((b.metadata->'payout_attribution_removal_v1'->>'active')::boolean,false) then
+      if tg_table_name='cleaner_earnings_adjustments' then raise exception 'payout_attribution_removed' using errcode='55000'; end if;
+      continue;
+    end if;
+    if lower(coalesce(b.service_slug,b.service,'')) not in ('standard','regular-cleaning','airbnb') then continue; end if;
     v_lead:=coalesce(b.payout_owner_cleaner_id,b.cleaner_id);
     if exists(select 1 from public.booking_cleaners where booking_id=v_id) then
       if v_lead is null or not exists(select 1 from public.booking_cleaners where booking_id=v_id and cleaner_id=v_lead) then
@@ -280,4 +289,63 @@ after update of recurring_id,customer_id,service,service_slug,display_earnings_c
   billing_type,is_monthly_billing_booking,monthly_invoice_id,total_paid_cents,
   total_paid_zar,amount_paid_cents,payment_status,base_amount_cents on public.bookings
 for each row execute function public.refresh_current_locked_booking_policy();
+
+-- Posting an entitlement adjustment and resolving its dispute are one transaction.
+-- The API still owns payout.prepare authority; the RPC is server-role-only and
+-- rechecks dates/locks under row locks before changing either representation.
+create or replace function public.resolve_cleaner_dispute_with_adjustment(
+  p_dispute_id uuid,p_amount_cents integer,p_reason text,p_response text,
+  p_admin_user_id uuid,p_admin_email text
+) returns jsonb language plpgsql security definer set search_path=pg_catalog as $rpc$
+declare d public.cleaner_earnings_disputes%rowtype; b public.bookings%rowtype; t timestamptz:=clock_timestamp();
+begin
+  if auth.role() is distinct from 'service_role' then raise exception 'service_role required' using errcode='42501'; end if;
+  if coalesce(p_amount_cents,0)=0 or length(btrim(coalesce(p_reason,'')))<2
+    or length(p_reason)>4000 or length(btrim(coalesce(p_response,'')))<1 or length(p_response)>8000 then
+    raise exception 'invalid_dispute_adjustment' using errcode='22023';
+  end if;
+  select * into d from public.cleaner_earnings_disputes where id=p_dispute_id for update;
+  if not found then raise exception 'dispute_not_found' using errcode='P0002'; end if;
+  if d.status in ('resolved','rejected') then raise exception 'dispute_already_closed' using errcode='55000'; end if;
+  select * into b from public.bookings where id=d.booking_id for update;
+  if not found then raise exception 'booking_not_found' using errcode='P0002'; end if;
+  if b.date is null or b.date::date<date '2026-10-01' then raise exception 'historical_payout_item_deferred' using errcode='23514'; end if;
+  perform 1 from public.cleaner_earnings where booking_id=b.id for update;
+  perform 1 from public.booking_roster_member_payouts where booking_id=b.id for update;
+  perform 1 from public.team_job_member_payouts where booking_id=b.id for update;
+  if b.payout_status is distinct from 'pending' or b.payout_id is not null
+    or b.payout_run_id is not null or b.payout_paid_at is not null
+    or exists(select 1 from public.cleaner_earnings x where x.booking_id=b.id
+      and (x.status is distinct from 'pending' or x.disbursement_id is not null or x.paid_at is not null))
+    or exists(select 1 from public.booking_roster_member_payouts x where x.booking_id=b.id
+      and (x.status is distinct from 'pending' or x.cleaner_payout_id is not null))
+    or exists(select 1 from public.team_job_member_payouts x where x.booking_id=b.id
+      and (x.status is distinct from 'pending' or x.cleaner_payout_id is not null)) then
+    raise exception 'booking_payout_locked' using errcode='55000';
+  end if;
+  if coalesce((b.metadata->'payout_attribution_removal_v1'->>'active')::boolean,false) then
+    raise exception 'payout_attribution_removed' using errcode='55000';
+  end if;
+  if not exists(select 1 from public.team_job_member_payouts where booking_id=b.id and cleaner_id=d.cleaner_id)
+    and not exists(select 1 from public.booking_cleaners where booking_id=b.id and cleaner_id=d.cleaner_id)
+    and (exists(select 1 from public.booking_cleaners where booking_id=b.id)
+      or d.cleaner_id is distinct from coalesce(b.payout_owner_cleaner_id,b.cleaner_id)) then
+    raise exception 'dispute_cleaner_not_assigned' using errcode='23514';
+  end if;
+  insert into public.cleaner_earnings_adjustments(booking_id,cleaner_id,amount_cents,reason,dispute_id,created_by,created_by_email)
+    values(b.id,d.cleaner_id,p_amount_cents,btrim(p_reason),d.id,p_admin_user_id,nullif(btrim(p_admin_email),''));
+  -- Any adjustment-trigger/cap/child-write error above aborts before closure.
+  update public.cleaner_earnings_disputes set status='resolved',resolved_at=t,
+    admin_response=btrim(p_response),resolved_by=p_admin_user_id,resolved_by_email=nullif(btrim(p_admin_email),''),
+    reviewed_by=coalesce(d.reviewed_by,p_admin_user_id),
+    reviewed_by_email=case when d.reviewed_by is null and p_admin_user_id is not null then nullif(btrim(p_admin_email),'') else d.reviewed_by_email end,
+    reviewed_at=case when d.reviewed_by is null and p_admin_user_id is not null then t else d.reviewed_at end
+    where id=d.id returning * into d;
+  return jsonb_build_object('id',d.id,'status',d.status,'admin_response',d.admin_response,'resolved_at',d.resolved_at,
+    'reviewed_by',d.reviewed_by,'reviewed_by_email',d.reviewed_by_email,'reviewed_at',d.reviewed_at,
+    'resolved_by',d.resolved_by,'resolved_by_email',d.resolved_by_email);
+end;
+$rpc$;
+revoke all on function public.resolve_cleaner_dispute_with_adjustment(uuid,integer,text,text,uuid,text) from public,anon,authenticated;
+grant execute on function public.resolve_cleaner_dispute_with_adjustment(uuid,integer,text,text,uuid,text) to service_role;
 commit;
