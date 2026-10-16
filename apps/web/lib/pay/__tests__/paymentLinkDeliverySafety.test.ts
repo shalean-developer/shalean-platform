@@ -41,7 +41,7 @@ vi.mock("@/lib/admin/persistPaymentLinkDelivery", () => ({ persistPaymentLinkDel
 import { deliverAdminPaymentLink } from "@/lib/admin/adminPaymentLinkDelivery";
 import { processDueDeferredPaymentLinkEmails } from "@/lib/conversion/deferredPaymentLinkEmailQueue";
 import { processAbandonCheckoutReminders } from "@/lib/conversion/abandonCheckoutReminder";
-import { processPaymentRecoveryJob } from "@/lib/booking/processPaymentRecoveryJob";
+import { processPaymentRecoveryJob, recoverStalePaymentRecoveryJobs } from "@/lib/booking/processPaymentRecoveryJob";
 import { POST as runReminderCron } from "@/app/api/cron/payment-link-reminders/route";
 import { POST as runAdminResend } from "@/app/api/admin/bookings/[id]/resend-payment-link/route";
 import { sendAdminPaystackDeliveryForRow, type AdminPaystackBookingHead } from "@/lib/admin/adminPaystackPostInitialize";
@@ -52,7 +52,7 @@ const payload = { customerEmail: "customer@example.com", customerName: "Pat", se
   bookingId: "booking-1", paystackReference: "bps_test" };
 const wa = { customerName: "Pat", paymentLink: payload.paymentUrl, service: payload.serviceLabel, date: payload.dateLabel, time: payload.timeLabel };
 
-function makeAdmin(reference: string | null = "bps_test", recoveryAttempts = 0, candidateCount = 1) {
+function makeAdmin(reference: string | null = "bps_test", recoveryAttempts = 0, candidateCount = 1, writeError = false) {
   const updates: Record<string, unknown>[] = [];
   const admin = { from: (table: string) => {
     const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), is: vi.fn(() => chain),
@@ -63,6 +63,7 @@ function makeAdmin(reference: string | null = "bps_test", recoveryAttempts = 0, 
         : { id: "booking-1", status: "pending_payment", paystack_reference: reference, payment_link_delivery: {} }, error: null })),
       limit: vi.fn(async () => ({ data: Array.from({ length: candidateCount }, (_, index) => ({ id: `booking-${index + 1}`, customer_email: payload.customerEmail,
         customer_phone: "+27000000000", paystack_reference: reference })), error: null })),
+      then: (resolve: (value: unknown) => unknown) => resolve({ error: writeError ? { message: "queue write unavailable" } : null }),
     };
     return chain;
   }, rpc: vi.fn(async () => ({ data: [{ id: "queue-1", booking_id: "booking-1", processing_token: "token",
@@ -78,6 +79,37 @@ beforeEach(() => {
   initialize.mockResolvedValue({ ok: true, bookingId: "booking-1", authorizationUrl: payload.paymentUrl, reference: "bps_test" });
   queueEmail.mockResolvedValue({ runAtIso: new Date(Date.now() + 1000).toISOString() }); scheduleRecovery.mockResolvedValue({ ok: true });
   email.mockResolvedValue({ sent: true }); abandonedEmail.mockResolvedValue({ sent: true }); sms.mockResolvedValue({ ok: true });
+});
+
+describe("recovery queue write failures", () => {
+  it("does not report retry when the eligibility retry write failed", async () => {
+    eligibility.mockResolvedValue({ allowed: false, retryable: true, reason: "gateway_unavailable" });
+    await expect(processPaymentRecoveryJob(makeAdmin("bps_test", 0, 1, true).admin, {
+      id: "job-1", booking_id: "booking-1", job_type: "payment_reminder_1h", customer_email: "customer@example.com", attempts: 0,
+    })).rejects.toThrow("eligibility_retry_update_failed");
+    expect(recoveryEmail).not.toHaveBeenCalled();
+  });
+  it("recovers only unsent processing work older than the cron lease", async () => {
+    const now = Date.now();
+    const rows = [
+      { status: "processing", sent_at: null, processed_at: new Date(now - 20 * 60_000).toISOString() },
+      { status: "processing", sent_at: null, processed_at: new Date(now - 60_000).toISOString() },
+      { status: "processing", sent_at: new Date(now).toISOString(), processed_at: new Date(now - 20 * 60_000).toISOString() },
+    ];
+    const predicates: ((row: typeof rows[number]) => boolean)[] = []; let patch = {};
+    const chain = { update: (value: object) => { patch = value; return chain; },
+      eq: (key: string, value: unknown) => { predicates.push(row => row[key as keyof typeof row] === value); return chain; },
+      is: (key: string, value: unknown) => { predicates.push(row => row[key as keyof typeof row] === value); return chain; },
+      lt: (_key: string, value: string) => { predicates.push(row => row.processed_at < value); return chain; },
+      then: (resolve: (value: unknown) => unknown) => { rows.filter(row => predicates.every(p => p(row))).forEach(row => Object.assign(row, patch)); return resolve({ error: null }); },
+    };
+    await recoverStalePaymentRecoveryJobs({ from: () => chain } as never);
+    expect(rows.map(row => row.status)).toEqual(["failed_retryable", "processing", "processing"]);
+  });
+  it("surfaces stale-lease write failure instead of claiming the queue recovered", async () => {
+    const chain = { update: () => chain, eq: () => chain, is: () => chain, lt: async () => ({ error: { message: "database unavailable" } }) };
+    await expect(recoverStalePaymentRecoveryJobs({ from: () => chain } as never)).rejects.toThrow("stale_lease_update_failed");
+  });
 });
 
 function cronAdmin(count = 1) {

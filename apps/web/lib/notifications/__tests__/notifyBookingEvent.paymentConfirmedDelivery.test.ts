@@ -89,15 +89,14 @@ import { buildBookingConfirmedTemplateData } from "@/lib/templates/bookingConfir
 
 afterEach(() => vi.unstubAllEnvs());
 
-function makeAdmin(row: Record<string, unknown> | null = null) {
+function makeAdmin(row: Record<string, unknown> | null = null, acceptedReceipt = true) {
   return {
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          maybeSingle: vi.fn(async () => ({ data: row, error: null })),
-        })),
-      })),
-    })),
+    from: vi.fn((table: string) => {
+      const data = ["notification_logs", "user_notifications"].includes(table) ? (acceptedReceipt ? { id: "accepted-receipt" } : null) : row;
+      const chain = { select: vi.fn(() => chain), eq: () => chain, in: vi.fn(() => chain), limit: () => chain,
+        maybeSingle: vi.fn(async () => ({ data, error: null })) };
+      return chain;
+    }),
   } as never;
 }
 
@@ -329,5 +328,22 @@ describe("notifyBookingEvent payment_confirmed delivery result", () => {
     expect(result.failed).toBe(true);
     expect(releaseNotificationIdempotencyClaimMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: "payment_confirmed_admin" }));
     expect(enqueueMock).toHaveBeenCalledWith("payment_confirmation_notification", expect.anything());
+  });
+  it.each([
+    ["email", "payment_confirmed", false], ["email", "payment_confirmed", true],
+    ["sms", "payment_confirmed", false], ["sms", "payment_confirmed", true],
+    ["email", "payment_confirmed_admin", false], ["email", "payment_confirmed_admin", true],
+    ["in_app", "payment_confirmed", false], ["in_app", "payment_confirmed", true],
+  ])("requires delivery evidence for a worker's duplicate %s/%s claim (accepted=%s)", async (channel, eventType, accepted) => {
+    vi.stubEnv("SHALEAN_APP_ENV", "production"); vi.stubEnv("ADMIN_NOTIFICATION_EMAIL", "");
+    tryClaimNotificationIdempotencyMock.mockImplementation(async (_admin, claim) => claim.channel !== channel || claim.eventType !== eventType);
+    sendBookingConfirmationEmailMock.mockResolvedValue({ sent: true });
+    const email = channel === "sms" ? "" : "pat@example.com";
+    const result = await notifyBookingEvent({ type: "payment_confirmed", confirmationRetry: true,
+      supabase: makeAdmin({ customer_id: "customer-1", customer_email: email, customer_phone: "+27000000000" }, accepted),
+      bookingId: "b1", snapshot: null, customerEmail: email, amountCents: 45800, paymentReference: "bps_inflight" });
+    expect(result.failed).toBe(!accepted);
+    if (!accepted) expect(result.error).toContain("claim_pending");
+    expect(enqueueMock).not.toHaveBeenCalled();
   });
 });

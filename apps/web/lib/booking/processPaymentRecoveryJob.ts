@@ -24,6 +24,16 @@ export type PaymentRecoveryJobRow = {
 
 export type ProcessPaymentRecoveryResult = "sent" | "skipped" | "retry" | "terminal";
 
+/** Recover abandoned processing leases after the cron's ten-minute lease has expired. */
+export async function recoverStalePaymentRecoveryJobs(supabase: SupabaseClient): Promise<void> {
+  const now = Date.now();
+  const { error } = await supabase.from("booking_payment_recovery_jobs").update({
+    status: "failed_retryable", scheduled_for: new Date(now).toISOString(), updated_at: new Date(now).toISOString(),
+    last_error: "stale_processing_lease_recovered",
+  }).eq("status", "processing").is("sent_at", null).lt("processed_at", new Date(now - 15 * 60_000).toISOString());
+  if (error) throw new Error(`payment_recovery_stale_lease_update_failed: ${error.message}`);
+}
+
 async function markSkipped(
   supabase: SupabaseClient,
   jobId: string,
@@ -159,11 +169,12 @@ export async function processPaymentRecoveryJob(
     if (blocked.retryable) {
       const attempts = attempts0 + 1;
       const terminal = jobType !== "booking_payment_expired" && attempts >= TERMINAL_FAILURE_ATTEMPTS;
-      await supabase.from("booking_payment_recovery_jobs").update({
+      const { error } = await supabase.from("booking_payment_recovery_jobs").update({
         attempts, status: terminal ? "failed_terminal" : "failed_retryable",
         ...(jobType === "booking_payment_expired" ? { scheduled_for: new Date(Date.now() + 15 * 60_000).toISOString() } : {}),
         last_error: `eligibility:${blocked.reason}`, processed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       }).eq("id", jobId);
+      if (error) throw new Error(`payment_recovery_eligibility_retry_update_failed: ${error.message}`);
       return terminal ? "terminal" : "retry";
     }
     await markCancelled(supabase, jobId, blocked.reason);

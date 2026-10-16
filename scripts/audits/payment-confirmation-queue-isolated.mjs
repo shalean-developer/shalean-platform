@@ -41,5 +41,20 @@ try {
   const privileges = (await db.query(`select prosecdef,proconfig from pg_proc where oid='public.enqueue_payment_confirmation_notification(jsonb)'::regprocedure`)).rows[0];
   assert.equal(privileges.prosecdef, false); checks++;
   assert(privileges.proconfig.some(value => value.startsWith('search_path='))); checks++;
+  // Execute the existing baseline constraints: booking identity survives a
+  // synthetic checkout reference becoming a real Paystack reference.
+  await db.exec(`create table public.notification_idempotency_claims
+    (booking_id uuid, reference text, event_type text, channel text);`);
+  const baseline = await readFile(new URL('../../supabase/migrations/20260714010000_production_baseline.sql', import.meta.url), 'utf8');
+  const constraints = baseline.match(/ALTER TABLE ONLY "public"\."notification_idempotency_claims"\s+ADD CONSTRAINT "[^"]+" UNIQUE [^;]+;/g);
+  assert.equal(constraints.length, 2);
+  await db.exec(constraints.join('\n'));
+  const reminder = async (reference, stage = 'first', bookingId = payload.bookingId) => db.query(
+    `insert into public.notification_idempotency_claims values ($1,$2,$3,'email')`,
+    [bookingId, reference, `automatic_payment_reminder_${stage}`]);
+  await reminder(`checkout:${payload.bookingId}`);
+  await assert.rejects(() => reminder('bps_initialized_later'), error => error.code === '23505'); checks++;
+  await reminder('bps_initialized_later', 'final'); checks++;
+  await reminder('bps_other_booking', 'first', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'); checks++;
   console.log(`${checks} isolated payment-confirmation queue checks passed; no remote connection.`);
 } finally { await db.close(); }

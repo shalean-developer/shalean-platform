@@ -104,7 +104,15 @@ export async function claimAutomaticPaymentReminder(
 export async function releaseAutomaticPaymentReminder(
   admin: SupabaseClient, reference: string, stage: AutomaticPaymentReminderStage,
 ): Promise<void> {
-  const { error } = await admin.from("notification_idempotency_claims").delete()
-    .eq("reference", reference).eq("event_type", `automatic_payment_reminder_${stage}`).eq("channel", "email");
-  if (error) await reportOperationalIssue("warn", "paymentReminderClaim/release", error.message, { reference });
+  let lastError = "claim release failed";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const { error } = await admin.from("notification_idempotency_claims").delete()
+        .eq("reference", reference).eq("event_type", `automatic_payment_reminder_${stage}`).eq("channel", "email");
+      if (!error) return;
+      lastError = error.message;
+    } catch (error) { lastError = error instanceof Error ? error.message : String(error); }
+  }
+  await reportOperationalIssue("critical", "paymentReminderClaim/release", lastError, { reference, stage, attempts: 3 });
+  throw new Error(`automatic_reminder_claim_release_failed: ${lastError}`);
 }
