@@ -3,11 +3,11 @@ vi.mock("server-only",()=>({}));
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveBookingCanonicalPayout } from "@/lib/payout/resolveBookingCanonicalPayout";
 const lead="796e3ad7-07f3-44eb-b4cf-bed439a59f8b", member="cd36e0a6-10f9-452c-99fd-cc7318c76901";
-function db({paired=false,error=false,basis=28000}:{paired?:boolean;error?:boolean;basis?:number}={}) {
+function db({paired=false,error=false,adjustmentError=false,basis=28000}:{paired?:boolean;error?:boolean;adjustmentError?:boolean;basis?:number}={}) {
  const queried:string[]=[];
  const admin={from:(table:string)=>{
    queried.push(table);
-   const answer=()=>({data:table==="bookings"?{earnings_policy:"legacy_july",display_earnings_cents:basis}:table==="cleaners"?{joined_at:"2025-01-01"}:table==="booking_cleaners"&&paired?[{cleaner_id:lead,role:"lead"},{cleaner_id:member,role:"member"}]:[],error:table==="bookings"&&error?{message:"unavailable"}:null});
+   const answer=()=>({data:table==="bookings"?{earnings_policy:"legacy_july",display_earnings_cents:basis}:table==="cleaners"?{joined_at:"2025-01-01"}:table==="booking_cleaners"&&paired?[{cleaner_id:lead,role:"lead"},{cleaner_id:member,role:"member"}]:[],error:(table==="bookings"&&error || table==="cleaner_earnings_adjustments"&&adjustmentError)?{message:"unavailable"}:null});
    const q={select:()=>q,eq:()=>q,order:()=>q,maybeSingle:async()=>answer(),then:(done:(x:unknown)=>unknown)=>Promise.resolve(answer()).then(done)};return q;
  }} as unknown as SupabaseClient;
  return {admin,queried};
@@ -24,6 +24,10 @@ describe("recurring policy integration",()=>{
  });
  it.each(["2026-05-15","2026-06-15","2026-07-15","2026-08-15","2026-09-30"])("leaves %s outside the new policy read",async date=>{
   const {admin,queried}=db({error:true});await resolveBookingCanonicalPayout(admin,{bookingId:"booking",row:row(date)});expect(queried).not.toContain("bookings");
+ });
+ it("fails closed when adjustment reads fail",async()=>{
+  const {admin}=db({adjustmentError:true});
+  await expect(resolveBookingCanonicalPayout(admin,{bookingId:"booking",row:row()})).rejects.toThrow("Could not verify cleaner earnings adjustments");
  });
  it("fails closed if the policy cannot be read",async()=>{
   const {admin}=db({error:true});await expect(resolveBookingCanonicalPayout(admin,{bookingId:"booking",row:row()})).rejects.toThrow("Could not verify booking earnings policy");

@@ -27,6 +27,19 @@ describe("reset preview booking-wide comparison",()=>{
     const p=preview([26000,26000],[26000,26000]);p.current.earnings_summary=null;
     expect(bookingEarningsPreviewComparison(p)?.currentTotalCents).toBe(52000);
   });
+  it.each([52500, 51700])("uses actual paired obligation %i without a stored summary", total => {
+    const p=preview([26000,26000],[26000,total-26000]);
+    p.current.earnings_summary=null;
+    p.current.roster_cleaner_count=2;
+    p.current.internal_earnings_cents=total;
+    p.current.cleaner_earnings_total_cents=52000; // old line total is not current cost
+    expect(bookingEarningsPreviewComparison(p)).toEqual({currentTotalCents:total,projectedTotalCents:total,diffCents:0});
+  });
+  it("does not trust a stale solo internal total",()=>{
+    const p=preview([25000],[28000]);p.current.earnings_summary=null;
+    p.current.roster_cleaner_count=1;p.current.internal_earnings_cents=99999;
+    expect(bookingEarningsPreviewComparison(p)?.currentTotalCents).toBe(25000);
+  });
   it("keeps a real zero instead of falling through to the display amount",()=>{
     const p=preview([26000],[26000]);p.current.earnings_summary=null;p.current.cleaner_earnings_total_cents=0;p.current.display_earnings_cents=0;
     expect(bookingEarningsPreviewComparison(p)?.diffCents).toBe(26000);

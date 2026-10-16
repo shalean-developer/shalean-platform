@@ -55,7 +55,8 @@ async function loadAdjustments(
     .from("cleaner_earnings_adjustments")
     .select("cleaner_id, amount_cents, reason")
     .eq("booking_id", bookingId);
-  if (error || !data?.length) return [];
+  if (error) throw new Error("Could not verify cleaner earnings adjustments");
+  if (!data?.length) return [];
   return (data as Array<{ cleaner_id?: string; amount_cents?: number; reason?: string | null }>)
     .map((row) => ({
       cleaner_id: String(row.cleaner_id ?? "").trim(),

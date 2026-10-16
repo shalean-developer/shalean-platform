@@ -1,3 +1,4 @@
+import { payableEarningsFromSummaryRow } from "@/lib/payout/bookingEarningsSummary";
 import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import {
   type CleanerPayoutResult,
@@ -1113,8 +1114,8 @@ async function persistCleanerPayoutIfUnsetCore(
       bookingCleanerId: r.cleaner_id,
     });
     const leadRow = leadEarningsRowFromSummary(soloSummary, leaderId);
-    const leadPayoutCents = Math.max(0, Math.round(leadRow?.base_earning_cents ?? 0));
-    const leadBonusCents = Math.max(0, Math.round(leadRow?.bonus_cents ?? 0));
+    const { payoutCents: leadPayoutCents, bonusCents: leadBonusCents } = leadRow
+      ? payableEarningsFromSummaryRow(leadRow) : { payoutCents: 0, bonusCents: 0 };
 
     const capRow = {
       billing_type: r.billing_type,

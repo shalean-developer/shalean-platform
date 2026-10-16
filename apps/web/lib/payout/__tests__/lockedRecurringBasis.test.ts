@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveCanonicalCleanerPayout } from "@/lib/payout/canonicalCleanerPayout";
+import { buildBookingRosterMemberPayoutRows } from "@/lib/payout/pairedRosterPayout";
 import { applyLockedRecurringBasis } from "@/lib/payout/applyLockedRecurringBasis";
 
 const lead = "796e3ad7-07f3-44eb-b4cf-bed439a59f8b";
@@ -36,6 +37,19 @@ describe("locked October recurring earning basis", () => {
     expect(result.earningsSummary?.per_cleaner_earnings[1].bonus_cents).toBe(500);
     expect(result.earningsSummary?.per_cleaner_earnings[1].total_cents).toBe(26500);
     expect(result.internalEarningsCents).toBe(52500);
+  });
+  it.each([500,-300,-30000])("keeps solo payable columns on the net signed adjustment %i", amount => {
+    const result=applyLockedRecurringBasis(calculated(),26000,[{cleaner_id:lead,amount_cents:amount}]);
+    const total=Math.max(0,26000+amount);
+    expect(result.cleanerPayoutCents+result.cleanerBonusCents).toBe(total);
+    expect(result.payoutEarningsCents).toBe(total);
+    expect(result.earningsSummary?.total_cleaner_earnings_cents).toBe(total);
+  });
+  it("rebuilds pending member payable columns from net earnings",()=>{
+    const result=applyLockedRecurringBasis(calculated(true),26000,[{cleaner_id:member,amount_cents:-300},{cleaner_id:member,amount_cents:500}]);
+    expect(buildBookingRosterMemberPayoutRows({bookingId:"test",summary:result.earningsSummary!,leaderId:lead})).toEqual([
+      {booking_id:"test",cleaner_id:member,payout_cents:26000,bonus_cents:200,status:"pending"}
+    ]);
   });
   it.each([0,-1,NaN,28000.5])("rejects an invalid fixed basis %s", basis=>{
     expect(()=>applyLockedRecurringBasis(calculated(),basis,[])).toThrow("locked_recurring_earnings_basis_invalid");

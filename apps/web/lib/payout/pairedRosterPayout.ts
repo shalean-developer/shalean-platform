@@ -13,7 +13,7 @@ import {
   type CanonicalPayoutInput,
   type CanonicalPayoutResult,
 } from "@/lib/payout/canonicalCleanerPayout";
-import { buildBookingEarningsSummary, type BookingEarningsSummary } from "@/lib/payout/bookingEarningsSummary";
+import { buildBookingEarningsSummary, payableEarningsFromSummaryRow, type BookingEarningsSummary } from "@/lib/payout/bookingEarningsSummary";
 import {
   resolveTeamPayoutParticipantIds,
   type BookingCleanerRosterRow,
@@ -365,11 +365,14 @@ export function buildBookingRosterMemberPayoutRows(params: {
   summary: BookingEarningsSummary;
   leaderId: string | null;
 }): BookingRosterMemberPayoutInsertRow[] {
-  return rosterMemberRowsFromSummary(params.summary, params.leaderId).map((row) => ({
-    booking_id: params.bookingId,
-    cleaner_id: row.cleaner_id,
-    payout_cents: Math.max(0, Math.round(row.base_earning_cents ?? 0)),
-    bonus_cents: Math.max(0, Math.round(row.bonus_cents ?? 0)),
-    status: "pending",
-  }));
+  return rosterMemberRowsFromSummary(params.summary, params.leaderId).map((row) => {
+    const payable = payableEarningsFromSummaryRow(row);
+    return {
+      booking_id: params.bookingId,
+      cleaner_id: row.cleaner_id,
+      payout_cents: payable.payoutCents,
+      bonus_cents: payable.bonusCents,
+      status: "pending",
+    };
+  });
 }
