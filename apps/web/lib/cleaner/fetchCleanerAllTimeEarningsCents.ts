@@ -9,6 +9,10 @@ const ID_CHUNK_SIZE = 100;
 
 export type CleanerAllTimeEarningsBookingRow = {
   id: string;
+  date?: string | null;
+  earnings_policy?: string | null;
+  cleaner_payout_cents?: number | null;
+  cleaner_bonus_cents?: number | null;
   cleaner_id?: string | null;
   payout_owner_cleaner_id?: string | null;
   payout_frozen_cents?: number | null;
@@ -20,7 +24,7 @@ export type CleanerAllTimeEarningsBookingRow = {
 };
 
 const BOOKING_SELECT =
-  "id, cleaner_id, payout_owner_cleaner_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, is_team_job, earnings_summary, metadata";
+  "id, date, earnings_policy, cleaner_payout_cents, cleaner_bonus_cents, cleaner_id, payout_owner_cleaner_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, is_team_job, earnings_summary, metadata";
 
 function chunks<T>(values: readonly T[], size = ID_CHUNK_SIZE): T[][] {
   const out: T[][] = [];

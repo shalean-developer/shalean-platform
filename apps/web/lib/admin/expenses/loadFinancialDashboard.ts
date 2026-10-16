@@ -108,6 +108,7 @@ type BookingFinancialRow = {
   amount_paid_cents: number | null;
   total_paid_cents: number | null;
   company_revenue_cents: number | null;
+  earnings_policy?: string | null;
   earnings_summary?: unknown;
   internal_earnings_cents?: number | null;
   booking_cleaners?: Array<{ cleaner_id: string }> | null;
@@ -163,7 +164,7 @@ export async function loadFinancialDashboard(
   let bookingsQuery = admin
     .from("bookings")
     .select(
-      "id, date, city_id, is_team_job, total_paid_zar, amount_paid_cents, total_paid_cents, company_revenue_cents, earnings_summary, internal_earnings_cents, booking_cleaners ( cleaner_id ), cleaner_payout_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_bonus_cents, payout_frozen_cents",
+      "id, date, city_id, is_team_job, total_paid_zar, amount_paid_cents, total_paid_cents, company_revenue_cents, earnings_summary, earnings_policy, internal_earnings_cents, booking_cleaners ( cleaner_id ), cleaner_payout_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_bonus_cents, payout_frozen_cents",
     )
     .eq("status", "completed")
     .eq("is_test", false)

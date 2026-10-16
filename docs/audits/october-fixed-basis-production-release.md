@@ -55,3 +55,11 @@ cases fail on the untouched production baseline 71121295 and this branch because
 historical persistence is deferred. The 23 canonical/paired unit cases pass.
 These baseline failures are outside the enforced critical suite and this October
 scope; historical mutation guards were not relaxed to satisfy those old tests.
+
+Final review follow-up adds a server-role-only transactional dispute adjustment
+RPC: cap/lock/write failures leave the dispute open and no adjustment commits.
+Direct locked adjustment writes fail explicitly. Policy-qualified solo direct
+payables now feed summary-absent preview, finance and cleaner/Office allocation.
+The governed rollback-only staging acceptance SQL uses only the already retired,
+owned synthetic AUDIT956 fixture and refuses settlement/history/ownership drift.
+It is staging tooling and is excluded from the bounded production release.

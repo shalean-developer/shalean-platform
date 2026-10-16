@@ -84,6 +84,8 @@ type BookingPeriodRow = {
   display_earnings_cents: number | null;
   cleaner_earnings_total_cents: number | null;
   cleaner_payout_cents: number | null;
+  cleaner_bonus_cents?: number | null;
+  earnings_policy?: string | null;
   total_paid_zar: number | null;
   amount_paid_cents: number | null;
   total_paid_cents: number | null;
@@ -310,7 +312,7 @@ export function perCleanerAllocationsForBooking(
     | "cleaner_earnings_total_cents"
     | "payout_frozen_cents"
     | "metadata"
-  > & { date?: string | null },
+  > & { date?: string | null; cleaner_bonus_cents?: number | null; earnings_policy?: string | null },
   roster: readonly RosterCleanerRef[],
   teamMemberPayouts?: readonly { cleaner_id: string; payout_cents: number; cleaner_payout_id?: string | null }[],
 ): CleanerVisitAllocation[] {
@@ -541,7 +543,7 @@ export async function loadOfficePayoutPeriodReport(
     admin
       .from("bookings")
       .select(
-        "id, date, cleaner_id, payout_owner_cleaner_id, payout_status, payout_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, total_paid_zar, total_paid_cents, amount_paid_cents, company_revenue_cents, earnings_summary, metadata",
+        "id, date, cleaner_id, payout_owner_cleaner_id, payout_status, payout_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_bonus_cents, earnings_policy, total_paid_zar, total_paid_cents, amount_paid_cents, company_revenue_cents, earnings_summary, metadata",
       )
       .eq("status", "completed")
       .eq("is_test", false)

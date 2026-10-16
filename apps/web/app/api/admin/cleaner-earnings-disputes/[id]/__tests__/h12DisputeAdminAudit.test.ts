@@ -43,7 +43,7 @@ type Captured = {
   adjustmentInserts: Array<Record<string, unknown>>;
 };
 
-function makeAdmin(existing: ExistingRow | null, overrides: { updateError?: string; insertError?: string; bookingDate?: string | null; bookingReadError?: string } = {}) {
+function makeAdmin(existing: ExistingRow | null, overrides: { updateError?: string; insertError?: string; bookingDate?: string | null; bookingReadError?: string; rpcError?: {code:string;message:string} } = {}) {
   const captured: Captured = {
     selectedColumns: [],
     updatePatches: [],
@@ -51,6 +51,13 @@ function makeAdmin(existing: ExistingRow | null, overrides: { updateError?: stri
   };
 
   const admin = {
+    rpc:vi.fn(async (_name:string,args:Record<string,unknown>)=>{
+      if(overrides.rpcError) return {data:null,error:overrides.rpcError};
+      captured.adjustmentInserts.push({cleaner_id:existing?.cleaner_id,booking_id:existing?.booking_id,
+        amount_cents:args.p_amount_cents,reason:args.p_reason,dispute_id:args.p_dispute_id,
+        created_by:args.p_admin_user_id,created_by_email:args.p_admin_email});
+      return {data:{id:existing?.id,status:"resolved",admin_response:args.p_response},error:null};
+    }),
     from: vi.fn((table: string) => {
       if (table === "cleaner_earnings_disputes") {
         return {
@@ -234,7 +241,7 @@ describe("H-12: dispute PATCH stamps admin identity + audit log", () => {
     expect(patch.reviewed_at).toBeUndefined();
   });
 
-  it("adjustment insert stamps created_by + created_by_email", async () => {
+  it("atomic adjustment RPC stamps created_by + created_by_email", async () => {
     vi.mocked(requireAdminApi).mockResolvedValue({ ok: true, userId: ADMIN_ID, email: ADMIN_EMAIL });
     const { admin, captured } = makeAdmin(baseExisting);
     vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
@@ -402,6 +409,19 @@ describe("H-12: source content guards", () => {
     // does not silently overwrite first-reviewer
     expect(src).toMatch(/!row\.reviewed_by/);
   });
+});
+
+describe("atomic dispute adjustment failures",()=>{
+ beforeEach(()=>{vi.mocked(requireAdminApi).mockResolvedValue({ok:true,userId:ADMIN_ID,email:ADMIN_EMAIL});vi.mocked(logAdminEarningsAction).mockClear();});
+ it.each(["23514","55000","40001"])("does not close a dispute on RPC rejection %s",async code=>{
+   const {admin,captured}=makeAdmin(baseExisting,{rpcError:{code,message:"Adjustment rejected"}});
+   vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
+   const response=await PATCH(patchRequest({status:"resolved",admin_response:"Reviewed",adjustment_amount_cents:500,adjustment_reason:"Correction"}),paramsCtx());
+   expect(response.status).toBe(409);
+   expect(admin.rpc).toHaveBeenCalledWith("resolve_cleaner_dispute_with_adjustment",expect.objectContaining({p_dispute_id:DISPUTE_ID,p_amount_cents:500}));
+   expect(captured.updatePatches).toEqual([]);expect(captured.adjustmentInserts).toEqual([]);
+   expect(logAdminEarningsAction).not.toHaveBeenCalled();
+ });
 });
 
 describe("historical adjustment boundary before dispute resolution",()=>{
