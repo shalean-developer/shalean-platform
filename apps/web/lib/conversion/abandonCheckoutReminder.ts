@@ -4,7 +4,7 @@ import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { sendAbandonedCheckoutReminderEmail } from "@/lib/email/sendBookingEmail";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { logPipelineEmailTelemetry } from "@/lib/notifications/notificationEmailTelemetry";
-import { tryClaimNotificationDedupe } from "@/lib/notifications/notificationDedupe";
+import { checkPaymentLinkEligibility, claimAutomaticPaymentReminder, releaseAutomaticPaymentReminder } from "@/lib/pay/paymentLinkEligibility";
 import { sendCustomerSmsPaymentLink } from "@/lib/templates/customerOutbound";
 import { CUSTOMER_SUPPORT_WHATSAPP_URL } from "@/lib/site/customerSupport";
 
@@ -55,7 +55,11 @@ export async function processAbandonCheckoutReminders(
   let skipped = 0;
   const base = getPublicAppUrlBase();
 
-  for (const raw of rows ?? []) {
+  for (const [candidateIndex, raw] of (rows ?? []).entries()) {
+    if (Date.now() - now >= 4 * 60_000) {
+      skipped += (rows?.length ?? 0) - candidateIndex;
+      break;
+    }
     const row = raw as {
       id: string;
       customer_email?: string | null;
@@ -75,9 +79,10 @@ export async function processAbandonCheckoutReminders(
       continue;
     }
 
-    const claimed = await tryClaimNotificationDedupe(supabase, "abandon_checkout_reminder_sent", {
-      bookingId: row.id,
-    });
+    const eligibility = await checkPaymentLinkEligibility(supabase, row.id, ref, { allowUninitialized: true });
+    if (!eligibility.allowed) { skipped++; continue; }
+    const claimReference = ref || `checkout:${row.id}`;
+    const claimed = await claimAutomaticPaymentReminder(supabase, row.id, claimReference, "first");
     if (!claimed) {
       skipped++;
       continue;
@@ -91,39 +96,52 @@ export async function processAbandonCheckoutReminders(
       ? `${base}/pay/${encodeURIComponent(row.id)}?ref=${encodeURIComponent(ref)}`
       : `${base}${bookingFlowHref("checkout")}`;
     const whatsappUrl = buildSupportWhatsappRecoveryUrl(checkoutUrl, serviceLabel);
-    if (email && email.includes("@")) {
-      const r = await sendAbandonedCheckoutReminderEmail({
-        customerEmail: email,
-        firstName,
-        checkoutUrl,
-        serviceLabel,
-        whatsappUrl,
-      });
-      if (r.sent) sent++;
-      else skipped++;
-      await logPipelineEmailTelemetry({
-        role: "customer",
-        channel: "abandon_checkout_reminder",
-        sent: r.sent,
-        error: r.error,
-        bookingId: row.id,
-      });
-    }
+    let emailSent = false;
+    let delivered = false;
+    try {
+      if (email && email.includes("@")) {
+        const latest = await checkPaymentLinkEligibility(supabase, row.id, ref, { allowUninitialized: true });
+        if (!latest.allowed) { skipped++; continue; }
+        const r = await sendAbandonedCheckoutReminderEmail({
+          customerEmail: email,
+          firstName,
+          checkoutUrl,
+          serviceLabel,
+          whatsappUrl,
+        });
+        if (r.sent) { sent++; emailSent = true; delivered = true; }
+        else skipped++;
+        await logPipelineEmailTelemetry({
+          role: "customer",
+          channel: "abandon_checkout_reminder",
+          sent: r.sent,
+          error: r.error,
+          bookingId: row.id,
+        });
+      }
 
-    if (phone && ref) {
-      const sms = await sendCustomerSmsPaymentLink({
-        phone,
-        payload: {
-          customerName: firstName,
-          paymentLink: checkoutUrl,
-          service: serviceLabel,
-          date: String(row.date ?? "your selected date"),
-          time: String(row.time ?? "your selected time"),
-        },
-        context: { bookingId: row.id, source: "abandon_checkout_recovery", paystack_reference: ref },
-        smsRole: email && email.includes("@") ? "fallback" : "primary",
-      });
-      if (sms.ok) smsSent++;
+      if (phone && ref && !emailSent) {
+        const smsEligibility = await checkPaymentLinkEligibility(supabase, row.id, ref, { allowUninitialized: true });
+        if (!smsEligibility.allowed) continue;
+        const sms = await sendCustomerSmsPaymentLink({
+          phone,
+          payload: {
+            customerName: firstName,
+            paymentLink: checkoutUrl,
+            service: serviceLabel,
+            date: String(row.date ?? "your selected date"),
+            time: String(row.time ?? "your selected time"),
+          },
+          context: { bookingId: row.id, source: "abandon_checkout_recovery", paystack_reference: ref },
+          smsRole: email && email.includes("@") ? "fallback" : "primary",
+        });
+        if (sms.ok) { smsSent++; delivered = true; }
+      }
+    } catch (error) {
+      console.error("[abandonCheckoutReminder] delivery failed", { bookingId: row.id, error });
+      skipped++;
+    } finally {
+      if (!delivered) await releaseAutomaticPaymentReminder(supabase, claimReference, "first");
     }
   }
 

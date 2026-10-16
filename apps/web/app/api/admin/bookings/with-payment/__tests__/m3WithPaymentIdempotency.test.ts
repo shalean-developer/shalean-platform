@@ -27,6 +27,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const authState = vi.hoisted(() => ({
   userEmail: "ops@example.com",
 }));
+vi.mock("@/lib/customer/customerBookingsForUser", () => ({ resolveBookingOwnershipColumn: async () => "user_id" }));
 
 type IdempotencyRow = {
   id: string;
@@ -121,7 +122,7 @@ function makeFromBookingsBuilder(bookingId: string) {
     },
     async maybeSingle() {
       idempotencyState.bookingsSelectCallCount += 1;
-      return { data: { ...row, payment_status: "pending", payment_link: null } as Record<string, unknown>, error: null };
+      return { data: { payment_status: "pending", payment_link: null, ...row } as Record<string, unknown>, error: null };
     },
   };
 }
@@ -331,6 +332,17 @@ describe("M-3 POST /api/admin/bookings/with-payment idempotency", () => {
       ok: true,
       expiresAt: "2026-06-02T00:00:00.000Z",
     });
+  });
+
+  it.each([false, true])("reused checkout reports the actual notification outcome %s", async (sent) => {
+    idempotencyState.bookings.push(Object.assign({ id: "existing", user_id: fakeCustomerUid, status: "pending_payment" }, {
+      payment_link: "https://checkout.paystack.com/existing", paystack_reference: "bps_existing",
+      payment_link_expires_at: new Date(Date.now() + 3600_000).toISOString(),
+    }));
+    sendAdminPaystackDeliveryForRowMock.mockResolvedValue(sent);
+    const response = await POST(makeRequest({ ...buildPayloadBody(), bookingId: "existing", resendNotifications: true }, null));
+    expect(response.status).toBe(200); expect(await response.json()).toMatchObject({ reused: true, notificationsSent: sent });
+    expect(processPaystackInitializeBodyMock).not.toHaveBeenCalled();
   });
 
   it("first submit creates one booking + payment link; second submit with same Idempotency-Key replays cached body", async () => {

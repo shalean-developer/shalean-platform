@@ -4,6 +4,7 @@ import { sendEmailFromTemplateKey } from "@/lib/email/sendTemplateEmail";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
 import { getTemplate } from "@/lib/templates/store";
+import { getAdminNotificationRecipients } from "@/lib/email/adminNotificationRecipients";
 
 export type DbTemplateAttempt = { usedRow: false } | { usedRow: true; sent: boolean; error?: string };
 
@@ -154,7 +155,14 @@ export async function sendAdminEmailWithDbTemplateFallback(params: {
   legacyHtml: string;
   sendLegacy: () => Promise<{ sent: boolean; error?: string }>;
 }): Promise<{ sent: boolean; error?: string }> {
-  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL?.trim();
+  // Multi-inbox mail keeps the legacy sender's explicit To/Bcc handling.
+  let adminEmail: string | undefined;
+  try {
+    const recipients = getAdminNotificationRecipients();
+    if (recipients.length === 1) adminEmail = recipients[0];
+  } catch {
+    // The legacy path records configuration failures with the original context.
+  }
   const template = adminEmail ? await getTemplate(params.templateKey, "email") : null;
 
   if (template && adminEmail) {

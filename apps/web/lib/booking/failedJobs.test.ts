@@ -58,4 +58,12 @@ describe("enqueueFailedJob", () => {
     const ok = await enqueueFailedJob("booking_insert", { paystackReference: "ref-3" });
     expect(ok).toBe(true);
   });
+  it("uses the atomic confirmation enqueue RPC instead of a raw duplicate-prone insert", async () => {
+    const rpc = vi.fn(async () => ({ data: "job-1", error: null })); const from = vi.fn();
+    getSupabaseAdminMock.mockReturnValue({ rpc, from } as never);
+    const payload = { bookingId: "11111111-1111-4111-8111-111111111111", paymentReference: "bps_test" };
+    expect(await enqueueFailedJob("payment_confirmation_notification", payload)).toBe(true);
+    expect(rpc).toHaveBeenCalledWith("enqueue_payment_confirmation_notification", { p_payload: payload });
+    expect(from).not.toHaveBeenCalled();
+  });
 });

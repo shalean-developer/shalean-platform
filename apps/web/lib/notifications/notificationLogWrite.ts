@@ -75,76 +75,80 @@ function shrinkPayload(payload: Record<string, unknown>): Record<string, unknown
  * Best-effort insert; never throws — failures are reported once to operational logs.
  */
 export async function writeNotificationLog(input: NotificationLogWriteInput): Promise<void> {
-  const admin = getSupabaseAdmin();
-  if (!admin) return;
+  try {
+    const admin = getSupabaseAdmin();
+    if (!admin) return;
 
-  const template_key = String(input.template_key ?? "unknown").trim().slice(0, 160) || "unknown";
-  const recipient = String(input.recipient ?? "").trim().slice(0, MAX_RECIPIENT);
-  if (!recipient) return;
-  const payload = shrinkPayload(
-    withCostDefaults(
-      input.channel,
-      input.payload && typeof input.payload === "object" && !Array.isArray(input.payload)
-        ? (input.payload as Record<string, unknown>)
-        : {},
-    ),
-  ) as Record<string, unknown>;
+    const template_key = String(input.template_key ?? "unknown").trim().slice(0, 160) || "unknown";
+    const recipient = String(input.recipient ?? "").trim().slice(0, MAX_RECIPIENT);
+    if (!recipient) return;
+    const payload = shrinkPayload(
+      withCostDefaults(
+        input.channel,
+        input.payload && typeof input.payload === "object" && !Array.isArray(input.payload)
+          ? (input.payload as Record<string, unknown>)
+          : {},
+      ),
+    ) as Record<string, unknown>;
 
-  /**
-   * M-20: normalise malformed booking_id values to NULL so the audit row
-   * still gets persisted (instead of being lost to a CHECK violation), and
-   * surface a one-shot operational warning so the offending caller can be
-   * fixed. Notification delivery is unaffected: this only protects the
-   * audit field. Defense in depth — the SQL constraint
-   * `notification_logs_booking_id_uuid_or_null_chk` rejects the same shape
-   * at the DB layer regardless of writer.
-   */
-  const trimmedBookingId = input.booking_id?.trim() ? input.booking_id.trim().slice(0, 128) : null;
-  const normalizedBookingId =
-    trimmedBookingId == null
-      ? null
-      : M20_BOOKING_ID_UUID_RE.test(trimmedBookingId)
-        ? trimmedBookingId
-        : null;
-  if (trimmedBookingId != null && normalizedBookingId == null) {
-    void reportOperationalIssue(
-      "warn",
-      "writeNotificationLog",
-      "non_uuid_booking_id_normalized_to_null",
-      {
-        channel: input.channel,
-        template_key,
-        sample: trimmedBookingId.slice(0, 32),
-      },
-    );
-  }
+    /**
+     * M-20: normalise malformed booking_id values to NULL so the audit row
+     * still gets persisted (instead of being lost to a CHECK violation), and
+     * surface a one-shot operational warning so the offending caller can be
+     * fixed. Notification delivery is unaffected: this only protects the
+     * audit field. Defense in depth — the SQL constraint
+     * `notification_logs_booking_id_uuid_or_null_chk` rejects the same shape
+     * at the DB layer regardless of writer.
+     */
+    const trimmedBookingId = input.booking_id?.trim() ? input.booking_id.trim().slice(0, 128) : null;
+    const normalizedBookingId =
+      trimmedBookingId == null
+        ? null
+        : M20_BOOKING_ID_UUID_RE.test(trimmedBookingId)
+          ? trimmedBookingId
+          : null;
+    if (trimmedBookingId != null && normalizedBookingId == null) {
+      void reportOperationalIssue(
+        "warn",
+        "writeNotificationLog",
+        "non_uuid_booking_id_normalized_to_null",
+        {
+          channel: input.channel,
+          template_key,
+          sample: trimmedBookingId.slice(0, 32),
+        },
+      );
+    }
 
-  const row = {
-    booking_id: normalizedBookingId,
-    channel: input.channel,
-    template_key,
-    recipient,
-    status: input.status,
-    error: input.error ? String(input.error).slice(0, MAX_ERROR) : null,
-    provider: input.provider,
-    role: input.role?.trim() ? input.role.trim().slice(0, 64) : null,
-    event_type: input.event_type?.trim() ? input.event_type.trim().slice(0, 96) : null,
-    decision: payloadDecision(payload),
-    payload,
-  };
-
-  const { error } = await admin.from("notification_logs").insert(row);
-  if (error) {
-    void reportOperationalIssue("warn", "writeNotificationLog", error.message, {
+    const row = {
+      booking_id: normalizedBookingId,
       channel: input.channel,
       template_key,
-    });
-    return;
-  }
+      recipient,
+      status: input.status,
+      error: input.error ? String(input.error).slice(0, MAX_ERROR) : null,
+      provider: input.provider,
+      role: input.role?.trim() ? input.role.trim().slice(0, 64) : null,
+      event_type: input.event_type?.trim() ? input.event_type.trim().slice(0, 96) : null,
+      decision: payloadDecision(payload),
+      payload,
+    };
 
-  scheduleCustomerContactHealthRefresh({
-    role: input.role ?? null,
-    channel: input.channel,
-    recipient,
-  });
+    const { error } = await admin.from("notification_logs").insert(row);
+    if (error) {
+      void reportOperationalIssue("warn", "writeNotificationLog", error.message, {
+        channel: input.channel,
+        template_key,
+      });
+      return;
+    }
+
+    scheduleCustomerContactHealthRefresh({
+      role: input.role ?? null,
+      channel: input.channel,
+      recipient,
+    });
+  } catch (error) {
+    console.warn("Notification audit write failed", { message: error instanceof Error ? error.message : String(error) });
+  }
 }

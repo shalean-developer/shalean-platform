@@ -14,6 +14,7 @@ export async function expirePendingPaymentTerminal(
     paymentNeedsFollowUp?: boolean;
     clearLinkExpiry?: boolean;
     extraPatch?: Record<string, unknown>;
+    preserveRecoveryJobId?: string;
   },
 ): Promise<TerminalPaymentExpirationResult> {
   const nowIso = new Date().toISOString();
@@ -41,6 +42,7 @@ export async function expirePendingPaymentTerminal(
     return { ok: false, error: `Cleaning Credit release failed: ${credit.error}` };
   }
 
-  await cancelUnsentBookingPaymentRecoveryJobs(admin, params.bookingId, params.reason);
+  await cancelUnsentBookingPaymentRecoveryJobs(admin, params.bookingId, params.reason,
+    params.preserveRecoveryJobId ? { preserveJobId: params.preserveRecoveryJobId } : undefined);
   return { ok: true, transitioned: true, creditReleased: credit.ok };
 }

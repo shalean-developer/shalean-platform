@@ -38,6 +38,7 @@ import {
 } from "@/lib/templates/bookingEmailTemplateData";
 import { wrapBrandedEmailContent } from "@/lib/email/emailBrandShell";
 import type { BookingEmailPayload } from "@/lib/email/bookingEmailPayload";
+import { getAdminNotificationRecipients } from "@/lib/email/adminNotificationRecipients";
 
 export type { BookingEmailPayload } from "@/lib/email/bookingEmailPayload";
 export { buildBookingConfirmedTemplateData };
@@ -347,20 +348,7 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
 }
 
 /** Comma-separated admin inboxes for operational alerts (required in production for notifyBookingEvent). */
-export function getAdminNotificationRecipients(): string[] {
-  const raw = process.env.ADMIN_NOTIFICATION_EMAIL?.trim();
-  if (!raw) {
-    throw new Error("ADMIN_NOTIFICATION_EMAIL is required for admin booking notifications");
-  }
-  const list = raw
-    .split(",")
-    .map((e) => e.trim())
-    .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
-  if (!list.length) {
-    throw new Error("ADMIN_NOTIFICATION_EMAIL must contain at least one valid email");
-  }
-  return list;
-}
+export { getAdminNotificationRecipients };
 
 export async function sendAdminHtmlEmail(params: {
   subject: string;
@@ -1140,7 +1128,7 @@ export function buildBookingEmailPayload(params: {
   /** Assigned cleaner display name when known. */
   assignedCleanerName?: string | null;
 }): BookingEmailPayload {
-  const custName = params.snapshot?.customer?.name?.trim();
+  const custName = params.bookingRow?.customer_name?.trim() || params.snapshot?.customer?.name?.trim();
   const totalPaidZar =
     resolveCustomerTotalPaidZar({
       amountCents: params.amountCents,
