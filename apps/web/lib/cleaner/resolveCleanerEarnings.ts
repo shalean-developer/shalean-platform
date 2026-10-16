@@ -203,6 +203,17 @@ export function resolveCleanerDashboardEarningsCents(
   return 0;
 }
 
+/** Job detail uses the shared net amount for current visits, preserving old detail semantics. */
+export function resolveCleanerJobDetailEarningsCents(
+  booking: Parameters<typeof resolveCleanerDashboardEarningsCents>[0],
+  cleanerId: string,
+  legacyFallback: number | null,
+): number | null {
+  return booking.date != null && booking.date >= "2026-10-01"
+    ? resolveCleanerDashboardEarningsCents(booking, cleanerId)
+    : legacyFallback;
+}
+
 /** Basis used when moving a booking to `payout_status = eligible` (cleaner cents only). */
 export function resolveCleanerFrozenCentsForSettlement(row: {
   display_earnings_cents?: unknown;

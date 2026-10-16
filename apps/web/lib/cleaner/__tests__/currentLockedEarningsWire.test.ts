@@ -1,3 +1,4 @@
+import { resolveCleanerJobDetailEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { describe,expect,it,vi } from "vitest";
 vi.mock("@/lib/payout/persistCleanerPayout",()=>({previewDisplayEarningsCentsForCleanerJob:vi.fn(async()=>null)}));
 import { cleanerEarningsReadInputs,CLEANER_EARNINGS_READ_SELECT } from "@/lib/cleaner/cleanerEarningsReadInputs";
@@ -26,6 +27,13 @@ describe("current fixed earning read pipeline",()=>{
   const override=viewer===member?new Map([[id,25700]]):new Map<string,number>();
   expect(sumCleanerAllTimeEarningsFromRows([b],String(viewer),override)).toBe(earned);
   expect(todayCentsAndBreakdownFromBookings([{...b,viewer_payout_cents:override.get(id)}],new Date("2026-10-16T10:00:00Z"),String(viewer)).today_cents).toBe(earned);
+ });
+ it("uses the net summary amount on job details after a lead deduction",()=>{
+  const b={...wire(),earnings_summary:{model_version:"test",cleaner_count:2,team_leader_id:lead,total_cleaner_earnings_cents:51700,
+   per_cleaner_earnings:[{cleaner_id:lead,role:"lead",base_earning_cents:26000,bonus_cents:0,deduction_cents:300,total_cents:25700},
+    {cleaner_id:member,role:"member",base_earning_cents:26000,bonus_cents:0,deduction_cents:0,total_cents:26000}]}};
+  expect(resolveCleanerJobDetailEarningsCents(b,lead,26000)).toBe(25700);
+  expect(resolveCleanerJobDetailEarningsCents({...b,date:"2026-09-30"},lead,26000)).toBe(26000);
  });
  it("keeps Office allocations aligned with the cleaner earning pipeline",()=>{
   const b=wire();
