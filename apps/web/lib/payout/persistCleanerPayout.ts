@@ -384,6 +384,7 @@ async function resolveTeamCleanerCountForCanonical(
 }
 
 export type PersistBookingRowForEarnings = {
+  earnings_policy?: string | null;
   is_team_job?: boolean | null;
   team_id?: string | null;
   team_member_count_snapshot?: number | null;
@@ -681,14 +682,15 @@ export async function previewDisplayEarningsCentsForCleanerJobDiagnostic(
 
   if (!isTeamJob) {
     const rosterRows = await loadBookingRosterRows(admin, bookingId);
-    if (isPairedRosterSoloJob({ isTeamJob: false, rosterRows })) {
+    const paired = isPairedRosterSoloJob({ isTeamJob: false, rosterRows });
+    if (paired || (isCurrentPayoutVisitDate(r.date?.trim()) && r.earnings_policy === "legacy_july")) {
       const canonical = await resolveBookingCanonicalPayout(admin, {
         bookingId,
         row: r as BookingRowForCanonicalPayout,
         expectedCleanerId: cleanerId,
       });
       const cents = perCleanerTotalFromCanonical(canonical, cleanerId);
-      if (cents != null) {
+      if (cents != null && (paired || canonical.earningsModelVersion === "legacy_july_locked_v1")) {
         return { ok: true, amountCents: cents, source: "persist_engine", missingReason: null };
       }
     }
@@ -1357,7 +1359,15 @@ async function persistCleanerPayoutIfUnsetCore(
       bookingId,
       cleanerId: expectedCleanerId,
       lineRows: lineItemRows,
-      earnings,
+      earnings: soloCanonical.earningsModelVersion === "legacy_july_locked_v1" ? {
+        ...earnings,
+        display_earnings_cents: soloCanonical.displayEarningsCents,
+        payout_earnings_cents: soloCanonical.payoutEarningsCents,
+        internal_earnings_cents: soloCanonical.internalEarningsCents,
+        earnings_model_version: soloCanonical.earningsModelVersion,
+        earnings_percentage_applied: soloCanonical.earningsPercentageApplied ?? undefined,
+        earnings_cap_cents_applied: soloCanonical.earningsCapCentsApplied ?? undefined,
+      } : earnings,
     });
     if (!snap.ok) {
       void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", `booking_cleaner_earnings_snapshot: ${snap.error}`, {

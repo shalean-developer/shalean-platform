@@ -39,7 +39,7 @@ jobs:
           CHANGED="$(git diff --name-only "$BASE" "$HEAD" || true)"
           echo "Changed paths:"
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -Eq '^(apps/web/|packages/|supabase/migrations/|\.github/workflows/web-test\.yml)'; then
+          if echo "$CHANGED" | grep -Eq '^(apps/web/|packages/|supabase/migrations/|scripts/audits/october-policy-isolated\.mjs|\.github/workflows/web-test\.yml)'; then
             echo "run_suite=true" >> "$GITHUB_OUTPUT"
             echo "Web/package paths changed — running vitest suite."
           else
@@ -102,6 +102,11 @@ jobs:
           set -euo pipefail
           npm install --prefix "$RUNNER_TEMP/paired-ledger" --no-save --package-lock=false --ignore-scripts @electric-sql/pglite@0.5.10
           AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node scripts/audits/paired-ledger-isolated.mjs
+
+      - name: October fixed-policy isolated PostgreSQL regression
+        if: steps.filter.outputs.run_suite == 'true'
+        working-directory: .
+        run: AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node scripts/audits/october-policy-isolated.mjs
 
       - name: Mandatory privileged Office email verification security contract
         if: steps.filter.outputs.run_suite == 'true'
