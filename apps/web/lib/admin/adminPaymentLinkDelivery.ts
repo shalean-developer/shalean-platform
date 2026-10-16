@@ -152,13 +152,13 @@ export async function deliverAdminPaymentLink(params: {
 
   let emailOutcome: PaymentLinkChannelOutcome = "skipped";
   let emailDeferredUntilIso: string | null = null;
+  const skipTimingDelays = /reminder|resend/i.test(String(params.context?.stage ?? ""));
   if (email) {
     let emailPayload = params.emailPayload;
     const bid = params.bookingId?.trim() || "";
     const admin = params.supabaseAdmin;
     if (admin && bid) {
-      const stageStr = String(params.context?.stage ?? "");
-      const skipEmailTimingDelay = /reminder|resend/i.test(stageStr);
+      const skipEmailTimingDelay = skipTimingDelays;
       const timing = await assignConversionExperimentVariant(admin, {
         subjectId: bid,
         experimentKey: "payment_email_timing",
@@ -204,7 +204,7 @@ export async function deliverAdminPaymentLink(params: {
       }
     }
 
-    if (!emailDeferredUntilIso && admin && bid && params.userId?.trim()) {
+    if (!skipTimingDelays && !emailDeferredUntilIso && admin && bid && params.userId?.trim()) {
       await applySendDelayIfNeeded(
         admin,
         params.userId.trim(),

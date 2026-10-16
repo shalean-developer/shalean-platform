@@ -44,14 +44,14 @@ const payload = { customerEmail: "customer@example.com", customerName: "Pat", se
   bookingId: "booking-1", paystackReference: "bps_test" };
 const wa = { customerName: "Pat", paymentLink: payload.paymentUrl, service: payload.serviceLabel, date: payload.dateLabel, time: payload.timeLabel };
 
-function makeAdmin(reference: string | null = "bps_test") {
+function makeAdmin(reference: string | null = "bps_test", recoveryAttempts = 0) {
   const updates: Record<string, unknown>[] = [];
   const admin = { from: (table: string) => {
     const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), is: vi.fn(() => chain),
       gte: vi.fn(() => chain), lte: vi.fn(() => chain), order: vi.fn(() => chain), in: vi.fn(() => chain),
       update: vi.fn((patch: Record<string, unknown>) => { updates.push(patch); return chain; }),
       maybeSingle: vi.fn(async () => ({ data: table === "booking_payment_recovery_jobs"
-        ? { id: "job-1", status: "pending", attempts: 0 }
+        ? { id: "job-1", status: "pending", attempts: recoveryAttempts }
         : { id: "booking-1", status: "pending_payment", paystack_reference: reference, payment_link_delivery: {} }, error: null })),
       limit: vi.fn(async () => ({ data: [{ id: "booking-1", customer_email: payload.customerEmail,
         customer_phone: "+27000000000", paystack_reference: reference }], error: null })),
@@ -70,17 +70,27 @@ beforeEach(() => {
   email.mockResolvedValue({ sent: true }); abandonedEmail.mockResolvedValue({ sent: true }); sms.mockResolvedValue({ ok: true });
 });
 
-function cronAdmin() {
-  const chain = { select: () => chain, eq: () => chain, not: () => chain, gte: () => chain, lte: () => chain,
-    update: vi.fn(() => chain), limit: async () => ({ error: null, data: [{ id: "booking-1", customer_email: payload.customerEmail,
+function cronAdmin(count = 1) {
+  const chain = { select: () => chain, eq: () => chain, not: () => chain, gte: () => chain, lte: () => chain, order: () => chain,
+    update: vi.fn(() => chain), limit: async () => ({ error: null, data: Array.from({ length: count }, (_, index) => ({ id: `booking-${index + 1}`, customer_email: payload.customerEmail,
       paystack_reference: "bps_test", payment_link: payload.paymentUrl, payment_link_expires_at: new Date(Date.now() + 60 * 60_000).toISOString(),
-      total_price: 458, payment_link_send_count: 0 }] }) };
+      total_price: 458, payment_link_send_count: 0 })) }) };
   return { from: () => chain };
 }
 
 describe("reminder cron claim lifetime", () => {
   const request = () => new Request("https://example.com/api/cron/payment-link-reminders", { method: "POST", headers: { authorization: "Bearer test" } });
   beforeEach(() => { vi.stubEnv("CRON_SECRET", "test"); adminMock.mockReturnValue(cronAdmin()); });
+  it("leaves remaining candidates for the next invocation when its time budget is reached", async () => {
+    vi.useFakeTimers();
+    try {
+      const started = Date.now(); adminMock.mockReturnValue(cronAdmin(2));
+      email.mockImplementationOnce(async () => { vi.setSystemTime(started + 4 * 60_000 + 1); return { sent: true }; });
+      const response = await runReminderCron(request());
+      expect(await response.json()).toMatchObject({ deferredByBudget: 1 });
+      expect(email).toHaveBeenCalledOnce(); expect(claim).toHaveBeenCalledOnce();
+    } finally { vi.useRealTimers(); }
+  });
   it("releases its claim after an exception before delivery", async () => {
     email.mockRejectedValueOnce(new Error("provider unavailable"));
     expect((await runReminderCron(request())).status).toBe(200);
@@ -208,6 +218,20 @@ describe("actual payment message entry points", () => {
     expect(eligibility).toHaveBeenCalledWith(expect.anything(), "booking-1", "", { allowExpired: true, allowUninitialized: true });
     expect(expire).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ bookingId: "booking-1" }));
   });
+  it("retries expiry beyond the email failure budget and resumes after gateway recovery", async () => {
+    eligibility.mockResolvedValueOnce({ allowed: false, reason: "gateway_unavailable", retryable: true }).mockResolvedValue({ allowed: true });
+    const { admin, updates } = makeAdmin("bps_test", 5);
+    const job = { id: "job-1", booking_id: "booking-1", job_type: "booking_payment_expired", customer_email: payload.customerEmail, attempts: 5 };
+    expect(await processPaymentRecoveryJob(admin, job)).toBe("retry");
+    expect(updates).toContainEqual(expect.objectContaining({ status: "failed_retryable", attempts: 6, scheduled_for: expect.any(String) }));
+    expect(expire).not.toHaveBeenCalled();
+    expire.mockResolvedValueOnce({ ok: false, error: "temporary transition failure" }).mockResolvedValueOnce({ ok: true, transitioned: true });
+    recoveryEmail.mockResolvedValue({ sent: false });
+    expect(await processPaymentRecoveryJob(admin, job)).toBe("retry");
+    expect(updates).toContainEqual(expect.objectContaining({ status: "failed_retryable", last_error: "temporary transition failure" }));
+    await processPaymentRecoveryJob(admin, job);
+    expect(expire).toHaveBeenCalledTimes(2);
+  });
   it("retries an unverified deferred payment request without sending email or SMS", async () => {
     eligibility.mockResolvedValue({ allowed: false, reason: "gateway_unavailable", retryable: true });
     const { admin, updates } = makeAdmin();
@@ -273,5 +297,7 @@ describe("admin resend reflects actual delivery eligibility", () => {
     expect(response.status).toBe(200); expect(await response.json()).toMatchObject({ ok: true, primary_channel: "email" });
     expect(chain.select.mock.calls[0][0]).toContain("customer_id");
     expect(email).toHaveBeenCalledOnce(); expect(persist).toHaveBeenCalledOnce();
+    const { applySendDelayIfNeeded } = await import("@/lib/ai-autonomy/optimizeTiming");
+    expect(applySendDelayIfNeeded).not.toHaveBeenCalled();
   });
 });

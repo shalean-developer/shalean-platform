@@ -161,9 +161,10 @@ export async function processPaymentRecoveryJob(
   if (!messageEligibility.allowed) {
     if (messageEligibility.retryable) {
       const attempts = attempts0 + 1;
-      const terminal = attempts >= TERMINAL_FAILURE_ATTEMPTS;
+      const terminal = jobType !== "booking_payment_expired" && attempts >= TERMINAL_FAILURE_ATTEMPTS;
       await supabase.from("booking_payment_recovery_jobs").update({
         attempts, status: terminal ? "failed_terminal" : "failed_retryable",
+        ...(jobType === "booking_payment_expired" ? { scheduled_for: new Date(Date.now() + 15 * 60_000).toISOString() } : {}),
         last_error: `eligibility:${messageEligibility.reason}`, processed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       }).eq("id", jobId);
       return terminal ? "terminal" : "retry";
@@ -178,6 +179,10 @@ export async function processPaymentRecoveryJob(
       paymentNeedsFollowUp: false,
     });
     if (!expired.ok) {
+      await supabase.from("booking_payment_recovery_jobs").update({
+        status: "failed_retryable", attempts: attempts0 + 1, last_error: expired.error,
+        scheduled_for: new Date(Date.now() + 15 * 60_000).toISOString(), updated_at: new Date().toISOString(),
+      }).eq("id", jobId);
       await reportOperationalIssue("error", "processPaymentRecoveryJob", expired.error, { jobId, bookingId });
       return "retry";
     }
