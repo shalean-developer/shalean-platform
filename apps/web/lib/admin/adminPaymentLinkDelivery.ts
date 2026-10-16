@@ -36,6 +36,7 @@ export type PaymentLinkDeliveryTrace = {
 export type AdminPaymentLinkDeliveryResult = {
   /** Eligibility rejected the attempt; never count it as a send or activate resend cooldowns. */
   suppressedReason?: string;
+  suppressedRetryable?: boolean;
   whatsappOk: boolean | null;
   smsOk: boolean | null;
   emailOk: boolean | null;
@@ -74,9 +75,10 @@ function buildDeliveryTrace(
   return { email, sms: smsLabel };
 }
 
-function suppressedDelivery(reason: string): AdminPaymentLinkDeliveryResult {
+function suppressedDelivery(reason: string, retryable = false): AdminPaymentLinkDeliveryResult {
   return {
     suppressedReason: reason,
+    suppressedRetryable: retryable,
     whatsappOk: null, smsOk: null, emailOk: null, twilioSmsSid: null, primaryChannel: "none",
     fallbackTrace: `payment_link_suppressed:${reason}`,
     byChannel: { whatsapp: "skipped", sms: "skipped", email: "skipped" },
@@ -118,9 +120,9 @@ export async function deliverAdminPaymentLink(params: {
   const trace: string[] = ["email_first_enforced"];
   const blockedDelivery = async (): Promise<AdminPaymentLinkDeliveryResult | null> => {
     const admin = params.supabaseAdmin ?? getSupabaseAdmin();
-    if (!admin) return suppressedDelivery("database_unavailable");
+    if (!admin) return suppressedDelivery("database_unavailable", true);
     const eligibility = await checkPaymentLinkEligibility(admin, params.emailPayload.bookingId, params.emailPayload.paystackReference);
-    return eligibility.allowed ? null : suppressedDelivery(eligibility.reason);
+    return eligibility.allowed ? null : suppressedDelivery(eligibility.reason, eligibility.retryable);
   };
 
   if (!email && !phone) {

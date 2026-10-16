@@ -22,6 +22,8 @@ vi.mock("@/lib/ai-autonomy/optimizeTiming", () => ({ applySendDelayIfNeeded: vi.
 vi.mock("@/lib/logging/systemLog", () => ({ logSystemEvent: vi.fn(), reportOperationalIssue: vi.fn() }));
 vi.mock("@/lib/notifications/notificationEmailTelemetry", () => ({ logPipelineEmailTelemetry: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ getSupabaseAdmin: adminMock }));
+vi.mock("@supabase/supabase-js", () => ({ createClient: () => ({ auth: { getUser: async () => ({ data: { user: { id: "admin-1", email: "admin@example.com" } }, error: null }) } }) }));
+vi.mock("@/lib/auth/evaluateAdminAccess", () => ({ requireAdminUser: async () => ({ ok: true, userId: "admin-1" }) }));
 vi.mock("@/lib/cron/cronLock", () => ({ acquireCronLock: vi.fn(async () => ({ ok: true, jobName: "reminders", holderId: "lock" })), releaseCronLock: vi.fn() }));
 vi.mock("@/lib/customer/customerBookingsForUser", () => ({ resolveBookingOwnershipColumn: vi.fn(async () => "customer_id") }));
 vi.mock("@/lib/pay/priorPaymentConversionBucket", () => ({ priorPaymentConversionBucketForCustomer: vi.fn(async () => null) }));
@@ -34,6 +36,7 @@ import { processDueDeferredPaymentLinkEmails } from "@/lib/conversion/deferredPa
 import { processAbandonCheckoutReminders } from "@/lib/conversion/abandonCheckoutReminder";
 import { processPaymentRecoveryJob } from "@/lib/booking/processPaymentRecoveryJob";
 import { POST as runReminderCron } from "@/app/api/cron/payment-link-reminders/route";
+import { POST as runAdminResend } from "@/app/api/admin/bookings/[id]/resend-payment-link/route";
 
 const payload = { customerEmail: "customer@example.com", customerName: "Pat", serviceLabel: "Regular Cleaning",
   dateLabel: "2026-10-18", timeLabel: "09:00", amountZar: 458, paymentUrl: "https://checkout.paystack.com/test",
@@ -230,5 +233,34 @@ describe("provider acceptance survives recovery-record failures", () => {
     expect(await safeResendSend({ from: "office@example.com", to: "customer@example.com", subject: "Payment reminder", text: "Synthetic test" }))
       .toEqual({ data: { id: "email-accepted" }, error: null });
     expect(providerSend).toHaveBeenCalledOnce();
+  });
+});
+
+describe("admin resend reflects actual delivery eligibility", () => {
+  const request = () => new Request("https://example.com/api/admin/bookings/booking-1/resend-payment-link", {
+    method: "POST", headers: { authorization: "Bearer test", "Content-Type": "application/json" }, body: "{}" });
+  function setup() {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-key");
+    const chain = { select: vi.fn((_columns: string) => chain), eq: () => chain, maybeSingle: async () => ({ error: null, data: {
+      id: "booking-1", customer_id: "customer-1", status: "pending_payment", payment_link: payload.paymentUrl,
+      payment_link_expires_at: new Date(Date.now() + 60 * 60_000).toISOString(), paystack_reference: "bps_test",
+      customer_email: payload.customerEmail, total_price: 458, payment_link_send_count: 0,
+    } }) };
+    adminMock.mockReturnValue({ from: () => chain });
+    return chain;
+  }
+  it.each([{ reason: "gateway_paid", retryable: false, status: 409 }, { reason: "gateway_unavailable", retryable: true, status: 503 }])(
+    "reports suppression as a non-success for $reason", async ({ reason, retryable, status }) => {
+      setup(); eligibility.mockResolvedValue({ allowed: false, reason, retryable });
+      const response = await runAdminResend(request(), { params: Promise.resolve({ id: "booking-1" }) });
+      expect(response.status).toBe(status); expect(await response.json()).toMatchObject({ ok: false, reason });
+      expect(email).not.toHaveBeenCalled(); expect(sms).not.toHaveBeenCalled(); expect(persist).not.toHaveBeenCalled();
+    });
+  it("still resends eligible links using the canonical customer ownership column", async () => {
+    const chain = setup();
+    const response = await runAdminResend(request(), { params: Promise.resolve({ id: "booking-1" }) });
+    expect(response.status).toBe(200); expect(await response.json()).toMatchObject({ ok: true, primary_channel: "email" });
+    expect(chain.select.mock.calls[0][0]).toContain("customer_id");
+    expect(email).toHaveBeenCalledOnce(); expect(persist).toHaveBeenCalledOnce();
   });
 });
