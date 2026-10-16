@@ -156,6 +156,7 @@ export async function processPaymentRecoveryJob(
   const paymentReference = String(bookingRow.paystack_reference ?? "").trim();
   const messageEligibility = await checkPaymentLinkEligibility(supabase, bookingId, paymentReference, {
     allowExpired: jobType === "booking_payment_expired",
+    allowUninitialized: jobType === "booking_payment_expired",
   });
   if (!messageEligibility.allowed) {
     if (messageEligibility.retryable) {

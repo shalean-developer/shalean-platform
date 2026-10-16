@@ -85,9 +85,13 @@ describe("payment requests require current unpaid evidence", () => {
 });
 
 describe("shared automatic reminder claims", () => {
+  function legacyQuery(data: unknown = null, error: unknown = null) {
+    const chain = { select: () => chain, eq: () => chain, maybeSingle: async () => ({ data, error }) };
+    return chain;
+  }
   it("allows only one of two concurrent workers for the same first reminder", async () => {
     const claims = new Set();
-    const admin = { from: () => ({ insert: async (row: { reference: string; event_type: string; channel: string }) => {
+    const admin = { from: (table: string) => table === "bookings" ? legacyQuery({}) : table === "system_logs" ? legacyQuery() : ({ insert: async (row: { reference: string; event_type: string; channel: string }) => {
       const key = `${row.reference}:${row.event_type}:${row.channel}`;
       if (claims.has(key)) return { error: { code: "23505" } };
       claims.add(key); return { error: null };
@@ -100,7 +104,27 @@ describe("shared automatic reminder claims", () => {
     expect(await claimAutomaticPaymentReminder(admin, "booking", reference, "final")).toBe(true);
   });
   it("does not send when the database cannot establish ownership", async () => {
-    const admin = { from: () => ({ insert: async () => ({ error: { code: "08006", message: "offline" } }) }) } as never;
+    const admin = { from: (table: string) => table === "bookings" ? legacyQuery({}) : table === "system_logs" ? legacyQuery() : ({ insert: async () => ({ error: { code: "08006", message: "offline" } }) }) } as never;
     expect(await claimAutomaticPaymentReminder(admin, "booking", reference, "first")).toBe(false);
+  });
+  it("honors legacy abandonment claims during rollout while keeping the final reminder separate", async () => {
+    const insert = vi.fn(async () => ({ error: null }));
+    const admin = { from: (table: string) => table === "bookings" ? legacyQuery({}) : table === "system_logs" ? legacyQuery({ id: "old-claim" }) : { insert } } as never;
+    expect(await claimAutomaticPaymentReminder(admin, "booking", reference, "first")).toBe(false);
+    expect(insert).not.toHaveBeenCalled();
+    expect(await claimAutomaticPaymentReminder(admin, "booking", reference, "final")).toBe(true);
+  });
+  it("suppresses first reminders when legacy history cannot be checked", async () => {
+    const insert = vi.fn();
+    const admin = { from: (table: string) => table === "bookings" ? legacyQuery({}) : table === "system_logs" ? legacyQuery(null, { message: "offline" }) : { insert } } as never;
+    expect(await claimAutomaticPaymentReminder(admin, "booking", reference, "first")).toBe(false);
+    expect(insert).not.toHaveBeenCalled();
+  });
+  it.each(["first", "final"] as const)("honors pre-rollout adaptive %s reminder timestamps", async (stage) => {
+    const insert = vi.fn();
+    const admin = { from: (table: string) => table === "bookings" ? legacyQuery({ payment_link_reminder_1h_sent_at: "2026-10-16T12:00:00Z",
+      payment_link_reminder_15m_sent_at: "2026-10-16T12:15:00Z" }) : { insert } } as never;
+    expect(await claimAutomaticPaymentReminder(admin, "booking", reference, stage)).toBe(false);
+    expect(insert).not.toHaveBeenCalled();
   });
 });

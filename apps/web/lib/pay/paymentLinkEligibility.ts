@@ -75,6 +75,20 @@ export async function claimAutomaticPaymentReminder(
   admin: SupabaseClient, bookingId: string, reference: string, stage: AutomaticPaymentReminderStage,
 ): Promise<boolean> {
   if (!bookingId || !reference) return false;
+  const sentColumn = stage === "first" ? "payment_link_reminder_1h_sent_at" : "payment_link_reminder_15m_sent_at";
+  const { data: booking, error: bookingError } = await admin.from("bookings")
+    .select("payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at").eq("id", bookingId).maybeSingle();
+  if (bookingError || !booking || booking[sentColumn]) return false;
+  if (stage === "first") {
+    // Preserve pre-rollout abandonment claims across all competing first-reminder jobs.
+    const { data: legacy, error: legacyError } = await admin.from("system_logs").select("id")
+      .eq("source", "abandon_checkout_reminder_sent").eq("context->>bookingId", bookingId).maybeSingle();
+    if (legacyError) {
+      await reportOperationalIssue("warn", "paymentReminderClaim/legacy", legacyError.message, { bookingId });
+      return false;
+    }
+    if (legacy) return false;
+  }
   const { error } = await admin.from("notification_idempotency_claims").insert({
     booking_id: bookingId, reference, event_type: `automatic_payment_reminder_${stage}`, channel: "email",
   });
