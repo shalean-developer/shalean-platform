@@ -335,7 +335,7 @@ export function perCleanerAllocationsForBooking(
         const cents = Math.max(0, Math.round(Number(row.payout_cents) || 0));
         return [cleanerId, cents] as const;
       })
-      .filter(([cleanerId, cents]) => cleanerId && cents > 0),
+      .filter(([cleanerId]) => Boolean(cleanerId)),
   );
   const teamPayoutIdByCleanerId = new Map(
     (teamMemberPayouts ?? [])

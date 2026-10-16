@@ -209,9 +209,15 @@ export function resolveCleanerJobDetailEarningsCents(
   cleanerId: string,
   legacyFallback: number | null,
 ): number | null {
-  return booking.date != null && booking.date >= "2026-10-01"
-    ? resolveCleanerDashboardEarningsCents(booking, cleanerId)
-    : legacyFallback;
+  if (booking.date == null || booking.date < "2026-10-01") return legacyFallback;
+  const net = resolveCleanerDashboardEarningsCents(booking, cleanerId);
+  const facing = resolveCleanerFacingEarnings(parseBookingEarningsSummary(booking.earnings_summary), cleanerId);
+  // A real zero allocation (including a full deduction) is authoritative. Empty
+  // persisted fields are not: retain the positive runtime preview or null state.
+  const hasAllocation = optionalCentsFromDb(booking.viewer_payout_cents) != null
+    || (optionalCentsFromDb(booking.display_earnings_cents) ?? 0) > 0
+    || (facing?.job_earning_cents ?? 0) > 0;
+  return net > 0 || hasAllocation ? net : legacyFallback;
 }
 
 /** Basis used when moving a booking to `payout_status = eligible` (cleaner cents only). */

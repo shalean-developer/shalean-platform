@@ -242,6 +242,31 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
     expect(json.earnings_ledger_flip_ready).toBe(false);
   });
 
+  it("keeps summary-absent adjusted earnings aligned across today and daily goal", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-16T10:00:00Z"));
+    try {
+      mockState.admin = new MockSupabaseClient({
+        cleaners: [{ id: "cleaner-1" }],
+        bookings: Array.from({ length: 12 }, (_, i) => ({
+          id: `11111111-1111-4111-8111-${String(i).padStart(12,"0")}`,
+          cleaner_id: "cleaner-1", payout_owner_cleaner_id: "cleaner-1", status: "completed", is_test: false,
+          is_team_job: false, date: "2026-10-16", completed_at: "2026-10-16T07:00:00Z",
+          earnings_policy: "legacy_july", display_earnings_cents: 26000, cleaner_payout_cents: 26000,
+          cleaner_bonus_cents: 500, internal_earnings_cents: 26500, earnings_summary: null,
+          payout_status: "pending", payout_frozen_cents: null,
+        })),
+      });
+      const { GET } = await import("@/app/api/cleaner/earnings/route");
+      const res = await GET(new Request("http://localhost/api/cleaner/earnings"));
+      const json = await res.json();
+      expect(res.status).toBe(200);
+      expect(json.rows.every((r: { amount_cents:number }) => r.amount_cents === 26500)).toBe(true);
+      expect(json.summary.today_cents).toBe(318000);
+      expect(json.summary.suggested_daily_goal_cents).toBe(Math.round(318000 / 7 * 1.1));
+    } finally { vi.useRealTimers(); }
+  });
+
   it("earnings feed excludes a completed visit whose payout attribution was explicitly removed", async () => {
     mockState.admin = new MockSupabaseClient({
       cleaners: [{ id: "cleaner-1", full_name: "Cleaner One" }],
