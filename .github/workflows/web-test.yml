@@ -103,6 +103,7 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/paired-ledger" --no-save --package-lock=false --ignore-scripts @electric-sql/pglite@0.5.10
           AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node scripts/audits/paired-ledger-isolated.mjs
           AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node --test scripts/audits/paired-ui-fixture.test.mjs
+          AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node scripts/audits/payment-confirmation-queue-isolated.mjs
 
       - name: October fixed-policy isolated PostgreSQL regression
         if: steps.filter.outputs.run_suite == 'true'

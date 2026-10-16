@@ -182,6 +182,7 @@ describe("notifyBookingEvent payment_confirmed delivery result", () => {
       type: "payment_confirmed",
       supabase: makeAdmin({
         customer_email: "pat@example.com",
+        customer_phone: "+27000000000",
         booking_snapshot: snapshot,
       }),
       bookingId: "b1",
@@ -194,6 +195,7 @@ describe("notifyBookingEvent payment_confirmed delivery result", () => {
     expect(result.dedupeSkipped).toBe(true);
     expect(result.customerEmailSent).toBe(false);
     expect(sendBookingConfirmationEmailMock).not.toHaveBeenCalled();
+    expect(customerSmsMock).not.toHaveBeenCalled();
   });
 
   it("loads canonical ownership and complete booking details when Paystack metadata is sparse", async () => {
@@ -254,6 +256,39 @@ describe("notifyBookingEvent payment_confirmed delivery result", () => {
       bookingId: "b1", snapshot: null, customerEmail: "", amountCents: 45800, paymentReference: "bps_phone_only" });
     expect(result).toMatchObject({ failed: false, customerEmailSent: false });
     expect(customerSmsMock).toHaveBeenCalledOnce(); expect(enqueueMock).not.toHaveBeenCalled();
+  });
+  it.each(["failure", "exception"])("releases an SMS claim after %s so the worker can retry", async (kind) => {
+    tryClaimNotificationIdempotencyMock.mockResolvedValue(true);
+    if (kind === "failure") customerSmsMock.mockResolvedValueOnce({ ok: false });
+    else customerSmsMock.mockRejectedValueOnce(new Error("SMS unavailable"));
+    const input = { type: "payment_confirmed" as const, supabase: makeAdmin({ customer_phone: "+27000000000" }),
+      bookingId: "b1", snapshot: null, customerEmail: "", amountCents: 45800, paymentReference: "bps_sms_retry" };
+    expect((await notifyBookingEvent(input)).failed).toBe(true);
+    expect(releaseNotificationIdempotencyClaimMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ channel: "sms" }));
+    expect((await notifyBookingEvent({ ...input, confirmationRetry: true })).failed).toBe(false);
+    expect(customerSmsMock).toHaveBeenCalledTimes(2);
+  });
+  it("retries failed in-app delivery while preserving the accepted email claim", async () => {
+    tryClaimNotificationIdempotencyMock.mockResolvedValue(true); sendBookingConfirmationEmailMock.mockResolvedValue({ sent: true });
+    inAppMock.mockRejectedValueOnce(new Error("in-app unavailable"));
+    const input = { type: "payment_confirmed" as const, supabase: makeAdmin({ customer_id: "customer-1", customer_email: "pat@example.com", customer_phone: "+27000000000" }),
+      bookingId: "b1", snapshot: null, customerEmail: "pat@example.com", amountCents: 45800, paymentReference: "bps_inapp_retry" };
+    expect((await notifyBookingEvent(input)).failed).toBe(true);
+    expect(releaseNotificationIdempotencyClaimMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ channel: "in_app" }));
+    tryClaimNotificationIdempotencyMock.mockImplementation(async (_admin, claim) => claim.channel !== "email");
+    expect((await notifyBookingEvent({ ...input, confirmationRetry: true })).failed).toBe(false);
+    expect(inAppMock).toHaveBeenCalledTimes(2); expect(sendBookingConfirmationEmailMock).toHaveBeenCalledOnce(); expect(customerSmsMock).not.toHaveBeenCalled();
+  });
+  it("keeps failed office delivery retryable after customer email acceptance", async () => {
+    vi.stubEnv("SHALEAN_APP_ENV", "production"); vi.stubEnv("ADMIN_NOTIFICATION_EMAIL", "");
+    tryClaimNotificationIdempotencyMock.mockResolvedValue(true); sendBookingConfirmationEmailMock.mockResolvedValue({ sent: true });
+    adminEmailMock.mockResolvedValueOnce({ sent: false });
+    const input = { type: "payment_confirmed" as const, supabase: makeAdmin({ customer_email: "pat@example.com" }),
+      bookingId: "b1", snapshot: null, customerEmail: "pat@example.com", amountCents: 45800, paymentReference: "bps_office_retry" };
+    expect((await notifyBookingEvent(input)).failed).toBe(true);
+    tryClaimNotificationIdempotencyMock.mockImplementation(async (_admin, claim) => claim.eventType === "payment_confirmed_admin");
+    expect((await notifyBookingEvent({ ...input, confirmationRetry: true })).failed).toBe(false);
+    expect(adminEmailMock).toHaveBeenCalledTimes(2); expect(sendBookingConfirmationEmailMock).toHaveBeenCalledOnce();
   });
   it("dispatches office alerts with the approved production fallback when the environment setting is absent", async () => {
     vi.stubEnv("SHALEAN_APP_ENV", "production"); vi.stubEnv("ADMIN_NOTIFICATION_EMAIL", "");

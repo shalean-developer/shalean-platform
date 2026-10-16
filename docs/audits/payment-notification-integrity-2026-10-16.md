@@ -20,9 +20,9 @@ Owner request: fix misleading payment reminders, incomplete booking confirmation
 
 ## Verification and release evidence
 
-- Local required checks: critical suite (1,275 tests), TypeScript, core lint and focused lint pass.
+- Local required checks: critical suite (1,280 tests), TypeScript, core lint and focused lint pass. The actual queue migration passes 18 isolated PostgreSQL checks, including repeated enqueue, preserved backoff, and service-role-only access.
 - Behavior regressions cover gateway success before booking finalization, captured ledger rows, monthly/cancelled bookings, reference replacement, unavailable gateway/DB, concurrent claims, deferred sends, payment during email/SMS fallback, legacy expiry, actual notification payload and template variables.
-- Production schema was inspected read-only: canonical booking ownership and existing `(reference,event_type,channel)` / `(booking_id,event_type,channel)` unique claims are available. No migration is required.
+- Production schema was inspected read-only: canonical booking ownership and existing `(reference,event_type,channel)` / `(booking_id,event_type,channel)` unique claims are available. Additive migration `20261016155032_payment_confirmation_retry_idempotency.sql` adds a notification-only queue key and invoker enqueue function, accessible only to the service role. Repeated callbacks preserve the original job, attempts and scheduled backoff. Staging and production require this migration before code activation. No booking, payment or ledger rows are changed.
 - Broader optional notification tests expose two pre-existing `communicationPolicy` assertions that also fail in the unchanged baseline checkout. Their implementation/test files are untouched; these are not required CI gates.
 - Repository CI and independent automated review are required on the final PR head. Staging activation, live SHA, synthetic/read-only checks and production promotion remain pending at this source commit. Record their evidence on the PR without claiming delivery from endpoint reachability alone.
 
