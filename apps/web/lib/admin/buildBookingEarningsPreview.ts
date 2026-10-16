@@ -8,6 +8,8 @@ import { parseBookingEarningsSummary, type BookingEarningsSummary } from "@/lib/
 export type BookingEarningsPreview = {
   current: {
     is_team_job: boolean;
+    roster_cleaner_count?: number;
+    internal_earnings_cents?: number | null;
     display_earnings_cents: number | null;
     cleaner_earnings_total_cents: number | null;
     earnings_summary: BookingEarningsSummary | null;
@@ -39,13 +41,18 @@ export async function buildBookingEarningsPreview(
   const { data: b, error: bErr } = await admin
     .from("bookings")
     .select(
-      "id, is_team_job, display_earnings_cents, cleaner_earnings_total_cents, cleaner_id, payout_owner_cleaner_id, team_id, base_amount_cents, service_fee_cents, total_paid_zar, total_paid_cents, amount_paid_cents, service, booking_snapshot, date, time, price_snapshot, earnings_summary",
+      "id, is_team_job, internal_earnings_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_id, payout_owner_cleaner_id, team_id, base_amount_cents, service_fee_cents, total_paid_zar, total_paid_cents, amount_paid_cents, service, booking_snapshot, date, time, price_snapshot, earnings_summary",
     )
     .eq("id", bid)
     .maybeSingle();
   if (bErr || !b) {
     return { ok: false, error: bErr?.message ?? "Booking not found." };
   }
+
+  const { data: roster, error: rosterError } = await admin.from("booking_cleaners")
+    .select("cleaner_id").eq("booking_id", bid);
+  if (rosterError) return { ok: false, error: "Could not verify booking earnings participants." };
+  const rosterCount = new Set((roster ?? []).map(row => String(row.cleaner_id ?? "").trim()).filter(Boolean)).size;
 
   const storedSummary = parseBookingEarningsSummary((b as { earnings_summary?: unknown }).earnings_summary);
   const earningsDisplay = await buildAdminEarningsDisplayForBooking(admin, b);
@@ -62,6 +69,8 @@ export async function buildBookingEarningsPreview(
     preview: {
       current: {
         is_team_job: b.is_team_job === true,
+        roster_cleaner_count: rosterCount,
+        internal_earnings_cents: roundCents(b.internal_earnings_cents),
         display_earnings_cents: roundCents((b as { display_earnings_cents?: unknown }).display_earnings_cents),
         cleaner_earnings_total_cents: roundCents(
           (b as { cleaner_earnings_total_cents?: unknown }).cleaner_earnings_total_cents,

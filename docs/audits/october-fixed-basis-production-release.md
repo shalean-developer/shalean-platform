@@ -18,8 +18,9 @@ showed one booking/two visits/R520, ready/batched/paid0, generation disabled.
 On the final runtime the reset confirmation showed exactly After reset R520,
 current R520, change +R0. Cancelled the preview without another mutation.
 
-Staging fixture retirement is pending through the governed seed command and must
-be verified before production promotion. No private keys are available to the agent.
+Staging fixture retirement passed with exit 0. A fresh database read confirmed
+is_test=true, retained history, paused schedule and no payment/batch/transfer links.
+No private keys are available to the agent.
 
 Include only earnings source, preview, reset safety, focused regressions and the
 new policy migration. Preserve production workflow and add only the required
@@ -32,3 +33,12 @@ compare representations and unchanged financial/history evidence. The migration
 changes functions/triggers only and repairs no existing records. Before each
 repair re-read identity/date/payout locks, stop on any error/skip, and verify each
 result before continuing. No payment, transfer, batch or approval is authorized.
+
+Release review found two further blockers. The proposed follow-up atomically
+refreshes fixed-policy pending payable columns, member rows and present summaries
+on adjustment INSERT/UPDATE/DELETE. It preserves frozen line items/snapshots and
+historical/settled records. Negative adjustments reduce the net payable rather
+than disappearing from positive-only bonus columns. The preview reads distinct
+actual roster participants and internal obligation, including unequal adjustments.
+These additions still require CI, independent review and fresh staging verification.
+Production has not been promoted and October records have not been corrected.
