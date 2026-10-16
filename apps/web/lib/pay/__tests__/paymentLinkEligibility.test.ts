@@ -35,6 +35,11 @@ describe("payment requests require current unpaid evidence", () => {
       verify.mockResolvedValue({ status: true, data: { status, reference } });
       expect((await checkPaymentLinkEligibility(makeAdmin(), "booking", reference)).allowed).toBe(false);
     });
+  it.each(["", "new_gateway_state"])("keeps unrecognized gateway status %s retryable without sending", async (status) => {
+    verify.mockResolvedValue({ status: true, data: { status, reference } });
+    expect(await checkPaymentLinkEligibility(makeAdmin(), "booking", reference))
+      .toEqual({ allowed: false, reason: `gateway_${status || "unknown"}`, retryable: true });
+  });
   it.each([
     { payment_status: "success" }, { payment_status: "paid" }, { payment_status: "pending_monthly" },
     { payment_completed_at: "2026-10-16T12:00:00Z" }, { paid_at: "2026-10-16T12:00:00Z" },

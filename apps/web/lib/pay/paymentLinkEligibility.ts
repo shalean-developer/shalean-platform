@@ -18,7 +18,8 @@ export async function checkPaymentLinkEligibility(
     await logSystemEvent({ level: "info", source: "payment_link_suppressed", message: reason,
       context: { bookingId, reference } });
     return { allowed: false, reason,
-      ...(["booking_unavailable", "payment_lookup_failed", "gateway_unavailable", "gateway_pending", "gateway_processing", "gateway_ongoing", "gateway_queued"].includes(reason) ? { retryable: true } : {}) };
+      ...(["booking_unavailable", "payment_lookup_failed"].includes(reason) ||
+        (reason.startsWith("gateway_") && reason !== "gateway_paid" && reason !== "gateway_reversed") ? { retryable: true } : {}) };
   };
   const { data: booking, error } = await admin.from("bookings")
     .select("status, payment_status, payment_completed_at, paid_at, payment_transaction_id, paystack_reference, payment_link, monthly_invoice_id, is_monthly_billing_booking")

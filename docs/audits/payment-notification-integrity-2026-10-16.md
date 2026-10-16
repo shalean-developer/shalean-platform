@@ -20,7 +20,7 @@ Owner request: fix misleading payment reminders, incomplete booking confirmation
 
 ## Verification and release evidence
 
-- Local required checks: critical suite (1,234 tests), TypeScript, core lint and focused lint pass.
+- Local required checks: critical suite (1,239 tests), TypeScript, core lint and focused lint pass.
 - Behavior regressions cover gateway success before booking finalization, captured ledger rows, monthly/cancelled bookings, reference replacement, unavailable gateway/DB, concurrent claims, deferred sends, payment during email/SMS fallback, legacy expiry, actual notification payload and template variables.
 - Production schema was inspected read-only: canonical booking ownership and existing `(reference,event_type,channel)` / `(booking_id,event_type,channel)` unique claims are available. No migration is required.
 - Broader optional notification tests expose two pre-existing `communicationPolicy` assertions that also fail in the unchanged baseline checkout. Their implementation/test files are untouched; these are not required CI gates.
