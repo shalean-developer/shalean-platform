@@ -191,6 +191,9 @@ assert.equal((await db.query('select company_revenue_cents from bookings')).rows
 assert.equal((await db.query("select (metadata->'locked_policy_company_basis_v1'->>'capacity_cents')::integer n from bookings")).rows[0].n,52200);checks++;
 await db.query('delete from cleaner_earnings_adjustments where booking_id=$1 and cleaner_id=$2',[bid,lead]);
 assert.equal((await db.query('select company_revenue_cents from bookings')).rows[0].company_revenue_cents,100);checks++;
+await db.exec('update bookings set base_amount_cents=70000,company_revenue_cents=17900;');
+assert.equal((await db.query('select company_revenue_cents from bookings')).rows[0].company_revenue_cents,17900);checks++;
+assert.equal((await db.query("select (metadata->'locked_policy_company_basis_v1'->>'capacity_cents')::integer n from bookings")).rows[0].n,70000);checks++;
 await db.exec("update bookings set company_revenue_cents=13900,earnings_summary=jsonb_build_object('customer_total_cents',66000,'costs_cents',0);");
 // Dispute closure, adjustment insertion and payable refresh are one transaction.
 await db.query('delete from cleaner_earnings_adjustments where cleaner_id=$1',[member]);

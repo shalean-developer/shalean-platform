@@ -166,7 +166,7 @@ declare
   v_lead uuid; v_base integer; v_rows jsonb; v_summary jsonb;
   v_added_booking uuid; v_added_cleaner uuid; v_added_amount bigint:=0;
   v_removed_booking uuid; v_removed_cleaner uuid; v_removed_amount bigint:=0;
-  v_bonus jsonb; v_deductions jsonb; v_total integer; v_prior_obligation bigint; v_previous_total bigint; v_margin_basis bigint; v_company integer; v_margin jsonb; v_written integer; v_expected integer;
+  v_bonus jsonb; v_deductions jsonb; v_total integer; v_prior_obligation bigint; v_previous_total bigint; v_margin_basis bigint; v_company integer; v_margin jsonb; v_margin_replaced boolean; v_written integer; v_expected integer;
 begin
   -- FK ON DELETE SET NULL may remove the creator identity while retaining the
   -- immutable audit email. This changes no entitlement and must not touch a
@@ -232,7 +232,10 @@ begin
       if tg_table_name='cleaner_earnings_adjustments' then raise exception 'payout_attribution_removed' using errcode='55000'; end if;
       continue;
     end if;
-    if tg_table_name='bookings' then v_prior_obligation:=old.internal_earnings_cents;
+    v_margin_replaced:=false;
+    if tg_table_name='bookings' then
+      v_prior_obligation:=old.internal_earnings_cents;
+      v_margin_replaced:=old.company_revenue_cents is distinct from new.company_revenue_cents;
     else v_prior_obligation:=b.internal_earnings_cents; end if;
     if tg_table_name='booking_cleaners' then
       update public.bookings set cleaner_id=v_lead,payout_owner_cleaner_id=v_lead,
@@ -301,6 +304,10 @@ begin
       v_prior_obligation:=coalesce(case when tg_table_name='cleaner_earnings_adjustments'
         then v_previous_total else v_prior_obligation end,v_total);
       v_margin:=b.metadata->'locked_policy_company_basis_v1';
+      if v_margin_replaced then
+        -- A canonical caller already supplied the post-write company share.
+        v_prior_obligation:=v_total; v_margin:=null;
+      end if;
       if jsonb_typeof(v_margin)='object'
         and v_margin->'last_obligation_cents'=to_jsonb(v_prior_obligation)
         and v_margin->'last_company_cents'=to_jsonb(b.company_revenue_cents)

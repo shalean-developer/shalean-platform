@@ -39,7 +39,8 @@ Historical, formal-team, undated and stale unrelated solo behavior is preserved.
 Summary-absent company share follows obligation deltas, retaining its nonnegative
 database constraint. A validated internal margin-capacity cache preserves the
 original margin on reversal after zero-floor saturation; canonical value changes
-invalidate it, and present summaries remove it. Cleaner bonus/base breakdowns use the net payable
+invalidate it, explicit canonical margin updates are not applied twice, and present
+summaries remove it. Cleaner bonus/base breakdowns use the net payable
 above fixed basis when a summary is absent.
 Today and daily-goal calculations reuse the complete earnings wire. Explicit zero
 member allocations survive Office maps and cleaner cards; missing persisted job
@@ -54,7 +55,7 @@ Fixture retirement returned exit zero; fresh reads confirmed is_test=true,
 paused schedule, retained history and no financial links.
 
 Local follow-up validation: 1,119 critical tests, TypeScript, booking-core lint,
-migration checks and 182 isolated PostgreSQL assertions. The governed staging
+migration checks and 184 isolated PostgreSQL assertions. The governed staging
 acceptance SQL also passes isolated execution, rollback preservation and wrong
 fixture rejection. It is staging-only tooling, excluded from production.
 Twelve exploratory April-date persistence cases also fail on untouched production
