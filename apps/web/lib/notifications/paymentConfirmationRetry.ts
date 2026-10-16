@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PAYMENT_CONFIRMATION_NOTIFICATION_JOB } from "@/lib/booking/failedJobs";
-import { bookingHasAuthoritativeSettledPaymentStatus } from "@/lib/booking/bookingPaymentSettlementState";
+import { bookingIsCustomerPaymentSettled } from "@/lib/booking/bookingPaymentSettlementState";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -36,9 +36,9 @@ export async function processPaymentConfirmationRetries(admin: SupabaseClient) {
     }
     try {
       const { data: booking, error: readError } = await admin.from("bookings")
-        .select("status, payment_status, paystack_reference").eq("id", bookingId).maybeSingle();
+        .select("status, payment_status, paystack_reference, paid_at, payment_completed_at, amount_paid_cents, total_paid_cents, total_paid_zar").eq("id", bookingId).maybeSingle();
       if (readError) throw new Error(readError.message);
-      const stale = !booking || !bookingHasAuthoritativeSettledPaymentStatus(booking.payment_status) ||
+      const stale = !booking || !bookingIsCustomerPaymentSettled(booking) ||
         String(booking.status ?? "").toLowerCase() === "cancelled" ||
         Boolean(booking.paystack_reference && booking.paystack_reference !== reference);
       if (!stale) {
@@ -59,13 +59,18 @@ export async function processPaymentConfirmationRetries(admin: SupabaseClient) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const attempts = Number(job.attempts ?? 0) + 1;
+      // Missing receipts cannot prove whether the provider accepted a send before
+      // a worker stopped. Keep the claim/job and escalate; blind reclaim risks duplicates.
+      const manualReview = message.endsWith("_claim_pending") && attempts >= 3;
+      const newManualReview = manualReview && payload.notification_manual_review_required !== true;
       const retryAt = new Date(Date.now() + Math.min(3600, 60 * 2 ** Math.min(attempts, 6)) * 1000).toISOString();
       const { error: updateError } = await admin.from("failed_jobs").update({
-        attempts, payload: { ...payload, last_error: message.slice(0, 4000), notification_retry_at: retryAt },
+        attempts, payload: { ...payload, last_error: message.slice(0, 4000), notification_retry_at: retryAt,
+          ...(manualReview ? { notification_manual_review_required: true } : {}) },
       }).eq("id", job.id);
       stats.retained++;
       if (updateError) stats.errors++;
-      if (attempts === 25 || updateError) await reportOperationalIssue("critical", "payment_confirmation_retry",
+      if (newManualReview || attempts === 25 || updateError) await reportOperationalIssue("critical", "payment_confirmation_retry",
         updateError?.message ?? "confirmation retry requires operational attention", { bookingId, attempts });
     }
   }
