@@ -74,7 +74,7 @@ export async function checkPaymentLinkEligibility(
 
 export type AutomaticPaymentReminderStage = "first" | "final";
 
-/** Both automatic reminder jobs compete for the same DB-unique claim. Fail closed on DB errors. */
+/** Reminder jobs share DB-unique claims. Conflicts return false; infrastructure errors throw for retry. */
 export async function claimAutomaticPaymentReminder(
   admin: SupabaseClient, bookingId: string, reference: string, stage: AutomaticPaymentReminderStage,
 ): Promise<boolean> {
@@ -82,14 +82,18 @@ export async function claimAutomaticPaymentReminder(
   const sentColumn = stage === "first" ? "payment_link_reminder_1h_sent_at" : "payment_link_reminder_15m_sent_at";
   const { data: booking, error: bookingError } = await admin.from("bookings")
     .select("payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at").eq("id", bookingId).maybeSingle();
-  if (bookingError || !booking || booking[sentColumn]) return false;
+  if (bookingError) {
+    await reportOperationalIssue("warn", "paymentReminderClaim/booking", bookingError.message, { bookingId });
+    throw new Error(`automatic_reminder_claim_store_unavailable: ${bookingError.message}`);
+  }
+  if (!booking || booking[sentColumn]) return false;
   if (stage === "first") {
     // Preserve pre-rollout abandonment claims across all competing first-reminder jobs.
     const { data: legacy, error: legacyError } = await admin.from("system_logs").select("id")
       .eq("source", "abandon_checkout_reminder_sent").eq("context->>bookingId", bookingId).maybeSingle();
     if (legacyError) {
       await reportOperationalIssue("warn", "paymentReminderClaim/legacy", legacyError.message, { bookingId });
-      return false;
+      throw new Error(`automatic_reminder_claim_store_unavailable: ${legacyError.message}`);
     }
     if (legacy) return false;
   }
@@ -97,8 +101,9 @@ export async function claimAutomaticPaymentReminder(
     booking_id: bookingId, reference, event_type: `automatic_payment_reminder_${stage}`, channel: "email",
   });
   if (!error) return true;
-  if (error.code !== "23505") await reportOperationalIssue("warn", "paymentReminderClaim", error.message, { bookingId });
-  return false;
+  if (error.code === "23505") return false;
+  await reportOperationalIssue("warn", "paymentReminderClaim", error.message, { bookingId });
+  throw new Error(`automatic_reminder_claim_store_unavailable: ${error.message}`);
 }
 
 export async function releaseAutomaticPaymentReminder(

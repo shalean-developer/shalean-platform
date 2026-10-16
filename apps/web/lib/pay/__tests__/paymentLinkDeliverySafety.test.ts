@@ -52,7 +52,7 @@ const payload = { customerEmail: "customer@example.com", customerName: "Pat", se
   bookingId: "booking-1", paystackReference: "bps_test" };
 const wa = { customerName: "Pat", paymentLink: payload.paymentUrl, service: payload.serviceLabel, date: payload.dateLabel, time: payload.timeLabel };
 
-function makeAdmin(reference: string | null = "bps_test", recoveryAttempts = 0, candidateCount = 1, writeError = false) {
+function makeAdmin(reference: string | null = "bps_test", recoveryAttempts = 0, candidateCount = 1, writeError: boolean | "sent" = false) {
   const updates: Record<string, unknown>[] = [];
   const admin = { from: (table: string) => {
     const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), is: vi.fn(() => chain),
@@ -60,10 +60,11 @@ function makeAdmin(reference: string | null = "bps_test", recoveryAttempts = 0, 
       update: vi.fn((patch: Record<string, unknown>) => { updates.push(patch); return chain; }),
       maybeSingle: vi.fn(async () => ({ data: table === "booking_payment_recovery_jobs"
         ? { id: "job-1", status: "pending", attempts: recoveryAttempts }
-        : { id: "booking-1", status: "pending_payment", paystack_reference: reference, payment_link_delivery: {} }, error: null })),
+        : { id: "booking-1", status: "pending_payment", paystack_reference: reference, payment_link_delivery: {} },
+        error: writeError === true && updates.at(-1)?.last_error === "expiry_delivery_in_progress" ? { message: "checkpoint unavailable" } : null })),
       limit: vi.fn(async () => ({ data: Array.from({ length: candidateCount }, (_, index) => ({ id: `booking-${index + 1}`, customer_email: payload.customerEmail,
         customer_phone: "+27000000000", paystack_reference: reference })), error: null })),
-      then: (resolve: (value: unknown) => unknown) => resolve({ error: writeError ? { message: "queue write unavailable" } : null }),
+      then: (resolve: (value: unknown) => unknown) => resolve({ error: (writeError === true || (writeError === "sent" && updates.at(-1)?.status === "sent")) ? { message: "queue write unavailable" } : null }),
     };
     return chain;
   }, rpc: vi.fn(async () => ({ data: [{ id: "queue-1", booking_id: "booking-1", processing_token: "token",
@@ -73,6 +74,7 @@ function makeAdmin(reference: string | null = "bps_test", recoveryAttempts = 0, 
 
 beforeEach(() => {
   vi.clearAllMocks();
+  recoveryEmail.mockReset(); expire.mockReset();
   eligibility.mockResolvedValue({ allowed: true }); claim.mockResolvedValue(true);
   adminMock.mockReturnValue(null); persist.mockReset();
   providerSend.mockResolvedValue({ data: { id: "email-accepted" }, error: null });
@@ -92,23 +94,65 @@ describe("recovery queue write failures", () => {
   it("recovers only unsent processing work older than the cron lease", async () => {
     const now = Date.now();
     const rows = [
-      { status: "processing", sent_at: null, processed_at: new Date(now - 20 * 60_000).toISOString() },
-      { status: "processing", sent_at: null, processed_at: new Date(now - 60_000).toISOString() },
-      { status: "processing", sent_at: new Date(now).toISOString(), processed_at: new Date(now - 20 * 60_000).toISOString() },
+      { job_type: "payment_reminder_1h", last_error: null, status: "processing", sent_at: null, processed_at: new Date(now - 20 * 60_000).toISOString() },
+      { job_type: "payment_reminder_1h", last_error: null, status: "processing", sent_at: null, processed_at: new Date(now - 60_000).toISOString() },
+      { job_type: "payment_reminder_1h", last_error: null, status: "processing", sent_at: new Date(now).toISOString(), processed_at: new Date(now - 20 * 60_000).toISOString() },
+      ...[null, "processing_pre_delivery", "expiry_delivery_in_progress"].map(last_error => ({ job_type: "booking_payment_expired", last_error,
+        status: "processing", sent_at: null, processed_at: new Date(now - 20 * 60_000).toISOString() })),
     ];
     const predicates: ((row: typeof rows[number]) => boolean)[] = []; let patch = {};
     const chain = { update: (value: object) => { patch = value; return chain; },
       eq: (key: string, value: unknown) => { predicates.push(row => row[key as keyof typeof row] === value); return chain; },
       is: (key: string, value: unknown) => { predicates.push(row => row[key as keyof typeof row] === value); return chain; },
       lt: (_key: string, value: string) => { predicates.push(row => row.processed_at < value); return chain; },
+      or: () => { predicates.push(row => row.job_type !== "booking_payment_expired" || row.last_error === "processing_pre_delivery"); return chain; },
       then: (resolve: (value: unknown) => unknown) => { rows.filter(row => predicates.every(p => p(row))).forEach(row => Object.assign(row, patch)); return resolve({ error: null }); },
     };
     await recoverStalePaymentRecoveryJobs({ from: () => chain } as never);
-    expect(rows.map(row => row.status)).toEqual(["failed_retryable", "processing", "processing"]);
+    expect(rows.map(row => row.status)).toEqual(["failed_retryable", "processing", "processing", "processing", "failed_retryable", "processing"]);
   });
   it("surfaces stale-lease write failure instead of claiming the queue recovered", async () => {
-    const chain = { update: () => chain, eq: () => chain, is: () => chain, lt: async () => ({ error: { message: "database unavailable" } }) };
+    const chain = { update: () => chain, eq: () => chain, is: () => chain, lt: () => chain, or: async () => ({ error: { message: "database unavailable" } }) };
     await expect(recoverStalePaymentRecoveryJobs({ from: () => chain } as never)).rejects.toThrow("stale_lease_update_failed");
+  });
+  it("does not spend reminder attempts when the claim store is unavailable", async () => {
+    const { buildPaymentRecoveryEmailContext } = await import("@/lib/email/paymentRecoveryEmails");
+    vi.mocked(buildPaymentRecoveryEmailContext).mockReturnValue({ bookingId: "booking-1", to: payload.customerEmail,
+      customerName: "Pat", serviceLabel: payload.serviceLabel, dateLabel: payload.dateLabel, timeLabel: payload.timeLabel,
+      amountZar: 458, paymentUrl: payload.paymentUrl, paystackReference: "bps_test" });
+    claim.mockRejectedValueOnce(new Error("automatic_reminder_claim_store_unavailable"));
+    const { admin, updates } = makeAdmin();
+    await expect(processPaymentRecoveryJob(admin, { id: "job-1", booking_id: "booking-1", job_type: "payment_reminder_1h",
+      customer_email: payload.customerEmail, attempts: 0 })).rejects.toThrow("claim_store_unavailable");
+    expect(updates.every(patch => !("attempts" in patch))).toBe(true);
+    expect(recoveryEmail).not.toHaveBeenCalled();
+  });
+  it.each([true, "sent"] as const)("checkpoints expiry delivery before the provider and preserves uncertainty on %s write failure", async (failure) => {
+    const { buildPaymentRecoveryEmailContext } = await import("@/lib/email/paymentRecoveryEmails");
+    vi.mocked(buildPaymentRecoveryEmailContext).mockReturnValue({ bookingId: "booking-1", to: payload.customerEmail,
+      customerName: "Pat", serviceLabel: payload.serviceLabel, dateLabel: payload.dateLabel, timeLabel: payload.timeLabel,
+      amountZar: 458, paymentUrl: payload.paymentUrl, paystackReference: "bps_test" });
+    expire.mockResolvedValueOnce({ ok: true, transitioned: true }); recoveryEmail.mockResolvedValueOnce({ sent: true });
+    const { admin, updates } = makeAdmin("bps_test", 0, 1, failure);
+    const result = processPaymentRecoveryJob(admin, { id: "job-1", booking_id: "booking-1", job_type: "booking_payment_expired",
+      customer_email: payload.customerEmail, attempts: 0 });
+    if (failure === true) { await expect(result).rejects.toThrow("expiry_delivery_checkpoint_write_failed"); expect(recoveryEmail).not.toHaveBeenCalled(); }
+    else {
+      await result; expect(recoveryEmail).toHaveBeenCalledOnce();
+      const { reportOperationalIssue } = await import("@/lib/logging/systemLog");
+      expect(reportOperationalIssue).toHaveBeenCalledWith("critical", "processPaymentRecoveryJob", expect.stringContaining("Provider accepted"), expect.anything());
+    }
+    expect(updates).toContainEqual(expect.objectContaining({ last_error: "expiry_delivery_in_progress" }));
+  });
+  it("surfaces a failed-send retry write instead of reporting queued recovery", async () => {
+    const { buildPaymentRecoveryEmailContext } = await import("@/lib/email/paymentRecoveryEmails");
+    vi.mocked(buildPaymentRecoveryEmailContext).mockReturnValue({ bookingId: "booking-1", to: payload.customerEmail,
+      customerName: "Pat", serviceLabel: payload.serviceLabel, dateLabel: payload.dateLabel, timeLabel: payload.timeLabel,
+      amountZar: 458, paymentUrl: payload.paymentUrl, paystackReference: "bps_test" });
+    recoveryEmail.mockResolvedValueOnce({ sent: false, error: "temporary provider failure" });
+    await expect(processPaymentRecoveryJob(makeAdmin("bps_test", 0, 1, true).admin, { id: "job-1", booking_id: "booking-1",
+      job_type: "payment_reminder_1h", customer_email: payload.customerEmail, attempts: 0 })).rejects.toThrow("delivery_retry_update_failed");
+    expect(release).toHaveBeenCalledOnce();
   });
 });
 
