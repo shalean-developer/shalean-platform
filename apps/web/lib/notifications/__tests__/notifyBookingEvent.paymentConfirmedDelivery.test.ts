@@ -10,6 +10,7 @@ const {
   logPaymentStructuredMock,
   adminEmailMock,
   inAppMock,
+  customerSmsMock,
 } = vi.hoisted(() => ({
   sendBookingConfirmationEmailMock: vi.fn(),
   tryClaimNotificationIdempotencyMock: vi.fn(),
@@ -20,6 +21,7 @@ const {
   logPaymentStructuredMock: vi.fn(),
   adminEmailMock: vi.fn(async () => ({ sent: true })),
   inAppMock: vi.fn(async () => undefined),
+  customerSmsMock: vi.fn(async () => ({ ok: true })),
 }));
 
 vi.mock("@/lib/email/sendBookingEmail", async (importOriginal) => {
@@ -73,6 +75,8 @@ vi.mock("@/lib/notifications/customerUserNotifications", () => ({
   notifyCustomerBookingPlaced: inAppMock,
   notifyCustomerCleanerAssigned: vi.fn(async () => undefined),
 }));
+vi.mock("@/lib/templates/customerOutbound", () => ({ sendCustomerSmsFromTemplate: customerSmsMock }));
+vi.mock("@/lib/notifications/customerContactHealth", () => ({ getCustomerContactHealthScore: vi.fn(async () => null) }));
 
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
@@ -115,6 +119,7 @@ describe("notifyBookingEvent payment_confirmed delivery result", () => {
     logPaymentStructuredMock.mockReset();
     adminEmailMock.mockClear();
     inAppMock.mockClear();
+    customerSmsMock.mockClear();
     process.env.RESEND_API_KEY = "re_test";
   });
 
@@ -223,6 +228,14 @@ describe("notifyBookingEvent payment_confirmed delivery result", () => {
     expect(result.failed).toBe(true);
     expect(result.error).toContain("payment_confirmation_booking_load_failed");
     expect(sendBookingConfirmationEmailMock).not.toHaveBeenCalled();
+  });
+  it("uses a snapshot phone when the stored phone is blank and confirmation email fails", async () => {
+    tryClaimNotificationIdempotencyMock.mockResolvedValue(true);
+    sendBookingConfirmationEmailMock.mockResolvedValue({ sent: false, error: "email_unavailable" });
+    await notifyBookingEvent({ type: "payment_confirmed", supabase: makeAdmin({ customer_email: "pat@example.com", customer_phone: "  " }),
+      bookingId: "b1", snapshot: { ...snapshot, customer: { ...snapshot.customer!, phone: "+27000000000" } },
+      customerEmail: "pat@example.com", amountCents: 45000, paymentReference: "bps_phone_test" });
+    expect(customerSmsMock).toHaveBeenCalledWith(expect.objectContaining({ phone: "+27000000000", smsRole: "fallback" }));
   });
   it("dispatches office alerts with the approved production fallback when the environment setting is absent", async () => {
     vi.stubEnv("SHALEAN_APP_ENV", "production"); vi.stubEnv("ADMIN_NOTIFICATION_EMAIL", "");

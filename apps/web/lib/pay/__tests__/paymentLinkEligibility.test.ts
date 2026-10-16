@@ -61,6 +61,27 @@ describe("payment requests require current unpaid evidence", () => {
     expect(await checkPaymentLinkEligibility(makeAdmin([unpaid, latest]), "booking", reference))
       .toEqual({ allowed: false, reason: "booking_changed" });
   });
+  it("recovers a booking created before its gateway reference exists only when explicitly enabled", async () => {
+    verify.mockResolvedValue({ status: false, message: "Transaction reference not found" });
+    expect((await checkPaymentLinkEligibility(makeAdmin(), "booking", reference)).allowed).toBe(false);
+    expect(await checkPaymentLinkEligibility(makeAdmin(), "booking", reference, { allowUninitialized: true })).toEqual({ allowed: true });
+    expect((await checkPaymentLinkEligibility(makeAdmin([{ ...unpaid, payment_link: "https://checkout.paystack.com/existing" }]),
+      "booking", reference, { allowUninitialized: true })).allowed).toBe(false);
+  });
+  it("recovers checkout without a reference only after checking booking-level payment evidence", async () => {
+    const noReference = { ...unpaid, paystack_reference: null };
+    expect(await checkPaymentLinkEligibility(makeAdmin([noReference]), "booking", "", { allowUninitialized: true })).toEqual({ allowed: true });
+    expect(verify).not.toHaveBeenCalled();
+    expect((await checkPaymentLinkEligibility(makeAdmin([noReference], { payment: { id: "tx" } }), "booking", "", { allowUninitialized: true })).allowed).toBe(false);
+  });
+  it("still fails closed on gateway outages and payment/initialization races during recovery", async () => {
+    verify.mockResolvedValue({ status: false, message: "timeout" });
+    expect((await checkPaymentLinkEligibility(makeAdmin(), "booking", reference, { allowUninitialized: true })).allowed).toBe(false);
+    verify.mockResolvedValue({ status: false, message: "Transaction reference not found" });
+    for (const update of [{ payment_status: "success" }, { payment_link: "https://checkout.paystack.com/new" }]) {
+      expect((await checkPaymentLinkEligibility(makeAdmin([unpaid, { ...unpaid, ...update }]), "booking", reference, { allowUninitialized: true })).allowed).toBe(false);
+    }
+  });
 });
 
 describe("shared automatic reminder claims", () => {

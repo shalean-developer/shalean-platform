@@ -35,7 +35,7 @@ const payload = { customerEmail: "customer@example.com", customerName: "Pat", se
   bookingId: "booking-1", paystackReference: "bps_test" };
 const wa = { customerName: "Pat", paymentLink: payload.paymentUrl, service: payload.serviceLabel, date: payload.dateLabel, time: payload.timeLabel };
 
-function makeAdmin() {
+function makeAdmin(reference: string | null = "bps_test") {
   const updates: Record<string, unknown>[] = [];
   const admin = { from: (table: string) => {
     const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), is: vi.fn(() => chain),
@@ -45,7 +45,7 @@ function makeAdmin() {
         ? { id: "job-1", status: "pending", attempts: 0 }
         : { id: "queue-1", status: "pending_payment", paystack_reference: "bps_test", payment_link_delivery: {} }, error: null })),
       limit: vi.fn(async () => ({ data: [{ id: "booking-1", customer_email: payload.customerEmail,
-        customer_phone: "+27000000000", paystack_reference: "bps_test" }], error: null })),
+        customer_phone: "+27000000000", paystack_reference: reference }], error: null })),
     };
     return chain;
   }, rpc: vi.fn(async () => ({ data: [{ id: "queue-1", booking_id: "booking-1", processing_token: "token",
@@ -123,6 +123,12 @@ describe("actual payment message entry points", () => {
     await processAbandonCheckoutReminders(makeAdmin().admin);
     expect(claim).toHaveBeenCalledWith(expect.anything(), "booking-1", "bps_test", "first");
     expect(abandonedEmail).toHaveBeenCalledOnce(); expect(sms).not.toHaveBeenCalled();
+  });
+  it("keeps checkout recovery available before a gateway reference has been created", async () => {
+    await processAbandonCheckoutReminders(makeAdmin(null).admin);
+    expect(eligibility).toHaveBeenCalledWith(expect.anything(), "booking-1", "", { allowUninitialized: true });
+    expect(claim).toHaveBeenCalledWith(expect.anything(), "booking-1", "checkout:booking-1", "first");
+    expect(abandonedEmail).toHaveBeenCalledWith(expect.objectContaining({ checkoutUrl: expect.stringMatching(/\/book(?:\?|$)/) }));
   });
   it("does not send the abandoned email after another job wins the first-reminder claim", async () => {
     claim.mockResolvedValue(false);

@@ -75,9 +75,10 @@ export async function processAbandonCheckoutReminders(
       continue;
     }
 
-    const eligibility = await checkPaymentLinkEligibility(supabase, row.id, ref);
+    const eligibility = await checkPaymentLinkEligibility(supabase, row.id, ref, { allowUninitialized: true });
     if (!eligibility.allowed) { skipped++; continue; }
-    const claimed = await claimAutomaticPaymentReminder(supabase, row.id, ref, "first");
+    const claimReference = ref || `checkout:${row.id}`;
+    const claimed = await claimAutomaticPaymentReminder(supabase, row.id, claimReference, "first");
     if (!claimed) {
       skipped++;
       continue;
@@ -114,7 +115,7 @@ export async function processAbandonCheckoutReminders(
       }
 
       if (phone && ref && !emailSent) {
-        const smsEligibility = await checkPaymentLinkEligibility(supabase, row.id, ref);
+        const smsEligibility = await checkPaymentLinkEligibility(supabase, row.id, ref, { allowUninitialized: true });
         if (!smsEligibility.allowed) continue;
         const sms = await sendCustomerSmsPaymentLink({
           phone,
@@ -134,7 +135,7 @@ export async function processAbandonCheckoutReminders(
       console.error("[abandonCheckoutReminder] delivery failed", { bookingId: row.id, error });
       skipped++;
     } finally {
-      if (!delivered) await releaseAutomaticPaymentReminder(supabase, ref, "first");
+      if (!delivered) await releaseAutomaticPaymentReminder(supabase, claimReference, "first");
     }
   }
 
