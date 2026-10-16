@@ -1,14 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PAYMENT_RECOVERY_SKIP } from "@/lib/booking/paymentRecoverySkipReasons";
 
-/** Cancel all unsent payment recovery jobs for a booking (audit history preserved). */
+/** Cancel unsent recovery work; an expiry worker may preserve its own active job. */
 export async function cancelUnsentBookingPaymentRecoveryJobs(
   supabase: SupabaseClient,
   bookingId: string,
   reason: string = PAYMENT_RECOVERY_SKIP.paymentCancelledOnSuccess,
+  options?: { preserveJobId?: string },
 ): Promise<void> {
   const now = new Date().toISOString();
-  await supabase
+  let query = supabase
     .from("booking_payment_recovery_jobs")
     .update({
       status: "cancelled",
@@ -20,4 +21,6 @@ export async function cancelUnsentBookingPaymentRecoveryJobs(
     .eq("booking_id", bookingId)
     .is("sent_at", null)
     .in("status", ["pending", "failed_retryable", "processing"]);
+  if (options?.preserveJobId) query = query.neq("id", options.preserveJobId);
+  await query;
 }

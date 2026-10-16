@@ -188,6 +188,7 @@ export async function processPaymentRecoveryJob(
       bookingId,
       reason: "booking_payment_expired",
       paymentNeedsFollowUp: false,
+      preserveRecoveryJobId: jobId,
     });
     if (!expired.ok) {
       await supabase.from("booking_payment_recovery_jobs").update({
