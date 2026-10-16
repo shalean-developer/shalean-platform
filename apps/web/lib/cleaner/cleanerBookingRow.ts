@@ -54,6 +54,14 @@ export type CleanerBookingRow = {
   teamMemberCount?: number | null;
   /** Null for team-assigned bookings; UI must not assume a cleaner id exists. */
   cleaner_id?: string | null;
+  /** Internal server-side earning inputs; API serializers remove these. */
+  payout_owner_cleaner_id?: string | null;
+  earnings_policy?: string | null;
+  internal_earnings_cents?: number | null;
+  cleaner_payout_cents?: number | null;
+  cleaner_bonus_cents?: number | null;
+  booking_cleaners?: Array<{cleaner_id:string}> | null;
+  booking_roster_member_payouts?: Array<{cleaner_id:string;payout_cents:number;bonus_cents:number}> | null;
   /** DB `cleaner_response_status` — `accepted` unlocks "On the way". */
   cleaner_response_status?: string | null;
   displayEarningsCents?: number | null;

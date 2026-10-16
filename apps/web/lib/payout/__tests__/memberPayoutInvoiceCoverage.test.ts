@@ -4,11 +4,11 @@ import { listRosterMemberWeeklyPayoutCandidates as roster } from "@/lib/payout/r
 import { listTeamJobMemberWeeklyPayoutCandidates as team } from "@/lib/payout/teamJobMemberWeeklyPayoutCandidates";
 for (const [rail, list] of [["roster", roster], ["team", team]] as const) {
  describe(`${rail} invoice coverage`, () => {
-  function client(status = "paid", fail = "", date = "2026-10-05") {
+  function client(status = "paid", fail = "", date = "2026-10-05", missingBookingBasis=false) {
    return { from(table: string) {
     const q = { select() { return q; }, eq() { return q; }, is() { return q; }, order() { return q; }, range() { return q; }, in() { return q; },
      then(resolve: (v: unknown) => unknown) { return Promise.resolve(resolve({ error: table === fail ? { message: "unavailable" } : null,
-      data: table === "monthly_invoices" ? [{ id: "invoice", status }] : table === "bookings" ? [{ id: "booking", status: "completed", date, completed_at: `${date}T12:00:00Z`, billing_type: "recurring_invoice", monthly_invoice_id: "invoice", payment_status: "success", payout_status: "eligible", payout_frozen_cents: 25000, cleaner_payout_cents: rail === "team" ? 0 : 25000, is_test: false }] : [{ id: "member", booking_id: "booking", payout_cents: 25000, bonus_cents: 0 }]
+      data: table === "monthly_invoices" ? [{ id: "invoice", status }] : table === "bookings" ? [{ id: "booking", status: "completed", date, completed_at: `${date}T12:00:00Z`, billing_type: "recurring_invoice", monthly_invoice_id: "invoice", payment_status: "success", payout_status: "eligible", payout_frozen_cents: 25000, cleaner_payout_cents: missingBookingBasis ? null : rail === "team" ? 0 : 25000, is_test: false }] : [{ id: "member", booking_id: "booking", payout_cents: 25000, bonus_cents: 0 }]
      })); }
     }; return q;
    } } as unknown as SupabaseClient;
@@ -17,6 +17,9 @@ for (const [rail, list] of [["roster", roster], ["team", team]] as const) {
   it("includes paid member-only invoices missing from the direct-cleaner map", async () => {
    expect(await list({ ...params, admin: client() })).toHaveLength(1);
    expect(params.invoiceStatusById.size).toBe(0);
+  });
+  if(rail==="roster") it("retains earned member amounts but excludes an unfunded booking even with paid invoice signals",async()=>{
+    expect(await list({...params,admin:client("paid","","2026-10-05",true)})).toHaveLength(0);
   });
   it("excludes unpaid invoices", async () => { expect(await list({ ...params, admin: client("sent") })).toHaveLength(0); });
   for (const table of ["monthly_invoices", "bookings", rail === "team" ? "team_job_member_payouts" : "booking_roster_member_payouts"]) {

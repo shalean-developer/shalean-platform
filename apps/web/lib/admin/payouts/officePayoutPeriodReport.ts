@@ -351,6 +351,8 @@ export function perCleanerAllocationsForBooking(
       {
         ...booking,
         roster_cleaner_count:rosterIds.length,
+        booking_cleaners:rosterIds.map(cleaner_id=>({cleaner_id})),
+        booking_roster_member_payouts:teamMemberPayouts?.map(row=>({cleaner_id:row.cleaner_id,payout_cents:row.payout_cents,bonus_cents:0})),
         viewer_payout_cents: teamPayoutCentsByCleanerId.get(cleanerId),
       },
       cleanerId,

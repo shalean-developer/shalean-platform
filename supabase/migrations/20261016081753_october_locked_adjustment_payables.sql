@@ -168,6 +168,13 @@ declare
   v_removed_booking uuid; v_removed_cleaner uuid; v_removed_amount bigint:=0;
   v_bonus jsonb; v_deductions jsonb; v_total integer; v_previous_total bigint; v_written integer; v_expected integer;
 begin
+  -- FK ON DELETE SET NULL may remove the creator identity while retaining the
+  -- immutable audit email. This changes no entitlement and must not touch a
+  -- locked payout. The existing BEFORE audit guard still owns write authority.
+  if tg_table_name='cleaner_earnings_adjustments' and tg_op='UPDATE' then
+    if old.created_by is not null and new.created_by is null
+      and (to_jsonb(old)-'created_by') is not distinct from (to_jsonb(new)-'created_by') then return null; end if;
+  end if;
   if tg_table_name='cleaner_earnings_adjustments' then
     if tg_op<>'DELETE' then v_added_booking:=new.booking_id;v_added_cleaner:=new.cleaner_id;v_added_amount:=new.amount_cents; end if;
     if tg_op<>'INSERT' then v_removed_booking:=old.booking_id;v_removed_cleaner:=old.cleaner_id;v_removed_amount:=old.amount_cents; end if;
@@ -254,8 +261,8 @@ begin
         +case when v_removed_booking=v_id and v_removed_cleaner=cleaner_id then v_removed_amount else 0 end,0)),0)
     into v_rows,v_total,v_previous_total from amounts;
     -- An unfunded visit already has an earned obligation above its cash cap.
-    -- Permit non-increasing corrections (including deductions) while all payable
-    -- rails stay suppressed; reject a net increase beyond the applicable cap.
+    -- Permit non-increasing corrections (including deductions) while payment
+    -- eligibility stays blocked; reject a net increase beyond the applicable cap.
     -- Reconstruct the pre-write obligation from actual participants/OLD/NEW so
     -- stale headers and participant-level zero floors cannot hide an increase.
     if tg_table_name='cleaner_earnings_adjustments' and b.cleaner_payout_cents is null
@@ -290,10 +297,13 @@ begin
         where r->>'cleaner_id'=mp.cleaner_id::text));
     select count(*) into v_expected from jsonb_array_elements(v_rows) r
       where r->>'cleaner_id' is distinct from v_lead::text;
+    -- Pending member rows are also the cleaner earned-basis read model. Retain
+    -- the net amount while unfunded; weekly candidates/link RPCs still require
+    -- a non-null positive booking payout basis plus invoice/payment eligibility.
     insert into public.booking_roster_member_payouts(booking_id,cleaner_id,payout_cents,bonus_cents,status)
     select v_id,(r->>'cleaner_id')::uuid,
-      case when b.cleaner_payout_cents is null then 0 else least(v_base,(r->>'total_cents')::integer) end,
-      case when b.cleaner_payout_cents is null then 0 else greatest((r->>'total_cents')::integer-v_base,0) end,'pending'
+      least(v_base,(r->>'total_cents')::integer),
+      greatest((r->>'total_cents')::integer-v_base,0),'pending'
     from jsonb_array_elements(v_rows) r where r->>'cleaner_id' is distinct from v_lead::text
     on conflict(booking_id,cleaner_id) do update
       set payout_cents=excluded.payout_cents,bonus_cents=excluded.bonus_cents

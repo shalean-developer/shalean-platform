@@ -13,6 +13,7 @@ export type CleanerAllTimeEarningsBookingRow = {
   earnings_policy?: string | null;
   internal_earnings_cents?: number | null;
   booking_cleaners?: Array<{ cleaner_id:string }> | null;
+  booking_roster_member_payouts?: Array<{cleaner_id:string;payout_cents:number;bonus_cents:number}> | null;
   cleaner_payout_cents?: number | null;
   cleaner_bonus_cents?: number | null;
   cleaner_id?: string | null;
@@ -26,7 +27,7 @@ export type CleanerAllTimeEarningsBookingRow = {
 };
 
 const BOOKING_SELECT =
-  "id, date, earnings_policy, internal_earnings_cents, booking_cleaners ( cleaner_id ), cleaner_payout_cents, cleaner_bonus_cents, cleaner_id, payout_owner_cleaner_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, is_team_job, earnings_summary, metadata";
+  "id, date, earnings_policy, internal_earnings_cents, booking_cleaners ( cleaner_id ), booking_roster_member_payouts ( cleaner_id, payout_cents, bonus_cents ), cleaner_payout_cents, cleaner_bonus_cents, cleaner_id, payout_owner_cleaner_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, is_team_job, earnings_summary, metadata";
 
 function chunks<T>(values: readonly T[], size = ID_CHUNK_SIZE): T[][] {
   const out: T[][] = [];
