@@ -1,3 +1,4 @@
+import { CLEANER_EARNINGS_READ_SELECT, cleanerEarningsReadInputs } from "@/lib/cleaner/cleanerEarningsReadInputs";
 import { NextResponse } from "next/server";
 import {
   bookingMatchesRecurringCleanerPendingPayment,
@@ -32,7 +33,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DASHBOARD_BOOKING_SELECT =
-  "id, date, time, location, status, dispatch_status, service, service_slug, customer_name, completed_at, created_at, cleaner_response_status, assigned_at, accepted_at, en_route_at, started_at, cleaner_earnings_total_cents, payout_frozen_cents, display_earnings_cents, earnings_summary, is_team_job, team_id, cleaner_id, selected_cleaner_id, cleaner_count, assignment_type, fallback_reason, payment_needs_follow_up, is_recurring_generated, billing_type, monthly_invoice_id, metadata";
+  "id, date, time, location, status, dispatch_status, service, service_slug, customer_name, completed_at, created_at, cleaner_response_status, assigned_at, accepted_at, en_route_at, started_at, cleaner_earnings_total_cents, payout_frozen_cents, display_earnings_cents, earnings_summary, is_team_job, team_id, cleaner_id, selected_cleaner_id, cleaner_count, assignment_type, fallback_reason, payment_needs_follow_up, is_recurring_generated, billing_type, monthly_invoice_id, metadata" + ", " + CLEANER_EARNINGS_READ_SELECT;
 
 function wireDashboardJob(raw: Record<string, unknown>): CleanerBookingRow {
   return {
@@ -58,6 +59,7 @@ function wireDashboardJob(raw: Record<string, unknown>): CleanerBookingRow {
     payout_frozen_cents: raw.payout_frozen_cents as number | null | undefined,
     display_earnings_cents: raw.display_earnings_cents as number | null | undefined,
     earnings_summary: raw.earnings_summary,
+    ...cleanerEarningsReadInputs(raw),
     is_team_job: raw.is_team_job === true,
     team_id: (raw.team_id as string | null | undefined) ?? null,
     cleaner_id: (raw.cleaner_id as string | null | undefined) ?? undefined,
@@ -128,6 +130,8 @@ export async function GET(request: Request) {
     const {
       metadata: _internalMetadata,
       earnings_summary: _internalEarningsSummary,
+      earnings_policy:_policy,internal_earnings_cents:_internal,cleaner_payout_cents:_payable,
+      cleaner_bonus_cents:_bonus,booking_cleaners:_participants,booking_roster_member_payouts:_peerAmounts,payout_owner_cleaner_id:_owner,
       ...safeJob
     } = job;
     return safeJob;

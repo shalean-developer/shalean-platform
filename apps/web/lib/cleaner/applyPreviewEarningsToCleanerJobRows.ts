@@ -18,6 +18,7 @@ function resolvedEarningsCentsFromWireRow(
       cleaner_id:typeof rec.cleaner_id === "string" ? rec.cleaner_id : null,
       payout_owner_cleaner_id:typeof rec.payout_owner_cleaner_id === "string" ? rec.payout_owner_cleaner_id : null,
       internal_earnings_cents:rec.internal_earnings_cents,
+      booking_roster_member_payouts:Array.isArray(rec.booking_roster_member_payouts) ? rec.booking_roster_member_payouts as Array<{cleaner_id:string;payout_cents:number;bonus_cents:number}> : null,
       booking_cleaners:Array.isArray(rec.booking_cleaners) ? rec.booking_cleaners as Array<{cleaner_id:string}> : null,
       cleaner_payout_cents:rec.cleaner_payout_cents,cleaner_bonus_cents:rec.cleaner_bonus_cents,
       viewer_payout_cents: rec.viewer_payout_cents,

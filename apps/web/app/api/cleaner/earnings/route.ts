@@ -61,6 +61,7 @@ type BookingEarningsRow = {
   earnings_policy?: string | null;
   internal_earnings_cents?: number | null;
   booking_cleaners?: Array<{ cleaner_id:string }> | null;
+  booking_roster_member_payouts?: Array<{cleaner_id:string;payout_cents:number;bonus_cents:number}> | null;
   is_team_job: boolean | null;
   payout_paid_at: string | null;
   payout_run_id: string | null;
@@ -205,7 +206,7 @@ export async function GET(request: Request) {
   ] = await Promise.all([
       fetchCleanerVisibleBookingsMerged(admin, session.cleanerId, {
         select:
-          "id, status, service, date, completed_at, cleaner_id, payout_owner_cleaner_id, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_bonus_cents, earnings_policy, internal_earnings_cents, booking_cleaners ( cleaner_id ), is_team_job, payout_paid_at, payout_run_id, total_paid_zar, amount_paid_cents, earnings_summary, admin_recurring_unpaid_completion_override_at, metadata",
+          "id, status, service, date, completed_at, cleaner_id, payout_owner_cleaner_id, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_bonus_cents, earnings_policy, internal_earnings_cents, booking_cleaners ( cleaner_id ), booking_roster_member_payouts ( cleaner_id, payout_cents, bonus_cents ), is_team_job, payout_paid_at, payout_run_id, total_paid_zar, amount_paid_cents, earnings_summary, admin_recurring_unpaid_completion_override_at, metadata",
         perBranchLimit: 300,
         applyEachBranch: (q) =>
           q

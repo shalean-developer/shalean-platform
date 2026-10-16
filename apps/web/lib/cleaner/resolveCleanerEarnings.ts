@@ -131,6 +131,7 @@ export function resolveCleanerDashboardEarningsCents(
     internal_earnings_cents?: unknown;
     roster_cleaner_count?: number;
     booking_cleaners?: Array<{ cleaner_id?: string | null }> | null;
+    booking_roster_member_payouts?: Array<{cleaner_id:string;payout_cents:number;bonus_cents?:number}> | null;
     viewer_payout_cents?: unknown;
     earnings_summary?: unknown;
     cleaner_earnings_total_cents?: unknown;
@@ -180,6 +181,21 @@ export function resolveCleanerDashboardEarningsCents(
     && cleanerId === (booking.payout_owner_cleaner_id ?? booking.cleaner_id) && !summary
     && direct == null && participantCount != null && participantCount <= 1 && obligation != null
     && !(frozen != null && frozen > 0)) return obligation;
+  // When cash readiness suppresses the direct header and the summary is absent,
+  // the current fixed-policy lead's earned share is the actual booking obligation
+  // less the complete set of non-lead earned-basis rows. Never use a partial rail.
+  if (booking.date != null && booking.date >= "2026-10-01" && booking.earnings_policy === "legacy_july"
+    && booking.is_team_job !== true && cleanerId === (booking.payout_owner_cleaner_id ?? booking.cleaner_id)
+    && !summary && direct == null && !(frozen != null && frozen > 0) && obligation != null) {
+    const ids=[...new Set((booking.booking_cleaners??[]).map(r=>String(r.cleaner_id??"").trim()).filter(Boolean))];
+    const peers=ids.filter(id=>id!==cleanerId);
+    const rows=booking.booking_roster_member_payouts;
+    if(ids.includes(cleanerId)&&peers.length>0&&rows&&rows.length===peers.length
+      &&new Set(rows.map(r=>r.cleaner_id)).size===peers.length&&rows.every(r=>peers.includes(r.cleaner_id))) {
+      const total=rows.reduce((sum,r)=>sum+Number(r.payout_cents)+Number(r.bonus_cents??0),0);
+      if(Number.isSafeInteger(total)&&total>=0&&total<=obligation) return obligation-total;
+    }
+  }
   const locked = resolveCleanerEarningsCents(booking);
   if (locked !== null) return Math.max(0, Math.round(locked));
 
