@@ -1,4 +1,4 @@
-import { resolveCleanerDashboardEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
+import { resolveCleanerJobDetailEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { NextResponse } from "next/server";
 import {
   assignmentSourceForVisibilityLog,
@@ -405,12 +405,13 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       );
     }
   }
-  if (!earningsSummary) {
-    displayEarningsCents=resolveCleanerDashboardEarningsCents({...record,viewer_payout_cents:viewerPayoutCents},session.cleanerId);
-  }
   const jobEarningCents = attributionRemoved
     ? null
-    : (viewerPayoutCents ?? cleanerFacing?.job_earning_cents ?? displayEarningsCents);
+    : resolveCleanerJobDetailEarningsCents(
+        { ...record, viewer_payout_cents: viewerPayoutCents },
+        session.cleanerId,
+        viewerPayoutCents ?? cleanerFacing?.job_earning_cents ?? displayEarningsCents,
+      );
   const bonusCents = attributionRemoved ? 0 : (cleanerFacing?.bonus_cents ?? 0);
 
   const jobPayload = {
