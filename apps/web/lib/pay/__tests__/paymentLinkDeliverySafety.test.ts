@@ -3,6 +3,11 @@ const { eligibility, claim, release, email, abandonedEmail, sms } = vi.hoisted((
   eligibility: vi.fn(), claim: vi.fn(), release: vi.fn(), email: vi.fn(), abandonedEmail: vi.fn(), sms: vi.fn(),
 }));
 const { recoveryEmail, expire, adminMock, persist } = vi.hoisted(() => ({ recoveryEmail: vi.fn(), expire: vi.fn(), adminMock: vi.fn(), persist: vi.fn() }));
+const { providerSend } = vi.hoisted(() => ({ providerSend: vi.fn() }));
+vi.mock("@/lib/email/resendFrom", () => ({ getResend: () => ({ emails: { send: providerSend } }) }));
+vi.mock("@/lib/email/recipientSafety", () => ({ validateEmailRecipients: () => ({ allowed: true }) }));
+vi.mock("@/lib/env/outboundMessagingSafety", () => ({ decideOutboundEmail: () => ({ allowed: true }), applyOutboundSubjectPrefix: (subject: string) => subject }));
+vi.mock("@/lib/email/syncResendAudienceContact", () => ({ syncResendAudienceContact: vi.fn() }));
 vi.mock("@/lib/email/paymentRecoveryEmails", () => ({ buildPaymentRecoveryEmailContext: vi.fn(), sendPaymentRecoveryEmail: recoveryEmail }));
 vi.mock("@/lib/booking/expirePendingPaymentTerminal", () => ({ expirePendingPaymentTerminal: expire }));
 vi.mock("@/lib/pay/paymentLinkEligibility", () => ({ checkPaymentLinkEligibility: eligibility,
@@ -57,6 +62,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   eligibility.mockResolvedValue({ allowed: true }); claim.mockResolvedValue(true);
   adminMock.mockReturnValue(null); persist.mockReset();
+  providerSend.mockResolvedValue({ data: { id: "email-accepted" }, error: null });
   email.mockResolvedValue({ sent: true }); abandonedEmail.mockResolvedValue({ sent: true }); sms.mockResolvedValue({ ok: true });
 });
 
@@ -97,6 +103,10 @@ describe("actual payment message entry points", () => {
       supabaseAdmin: makeAdmin().admin, bookingId: "booking-1" });
     expect(result.fallbackTrace).toBe("payment_link_suppressed:gateway_paid");
     expect(email).not.toHaveBeenCalled(); expect(sms).not.toHaveBeenCalled();
+    const actual = await vi.importActual<typeof import("@/lib/admin/persistPaymentLinkDelivery")>("@/lib/admin/persistPaymentLinkDelivery");
+    const trackingAdmin = { from: vi.fn(), rpc: vi.fn() };
+    await actual.persistPaymentLinkDelivery(trackingAdmin as never, "booking-1", result);
+    expect(trackingAdmin.from).not.toHaveBeenCalled(); expect(trackingAdmin.rpc).not.toHaveBeenCalled();
   });
   it("rechecks before fallback SMS when payment succeeds during the failed email attempt", async () => {
     eligibility.mockResolvedValueOnce({ allowed: true }).mockResolvedValueOnce({ allowed: false, reason: "booking_paid" });
@@ -208,5 +218,17 @@ describe("actual payment message entry points", () => {
     const result = await processDueDeferredPaymentLinkEmails(makeAdmin().admin);
     expect(result.retriesScheduled).toBe(1);
     expect(sms).not.toHaveBeenCalled();
+  });
+});
+
+describe("provider acceptance survives recovery-record failures", () => {
+  it.each(["rejected promise", "returned database error"])("preserves accepted email after %s", async (failure) => {
+    const insert = failure === "rejected promise" ? vi.fn().mockRejectedValue(new Error("database offline"))
+      : vi.fn().mockResolvedValue({ error: { message: "database offline" } });
+    adminMock.mockReturnValue({ from: () => ({ insert }) });
+    const { safeResendSend } = await import("@/lib/email/safeResendSend");
+    expect(await safeResendSend({ from: "office@example.com", to: "customer@example.com", subject: "Payment reminder", text: "Synthetic test" }))
+      .toEqual({ data: { id: "email-accepted" }, error: null });
+    expect(providerSend).toHaveBeenCalledOnce();
   });
 });

@@ -53,6 +53,7 @@ export async function persistPaymentLinkDelivery(
   result: AdminPaymentLinkDeliveryResult,
   extra?: PersistPaymentLinkDeliveryOptions,
 ): Promise<void> {
+  if (result.suppressedReason) return;
   const { touchLastSentAt, passType, ...mergeExtra } = extra ?? {};
   const passResolved = resolvePaymentLinkPassType({ passType, pass: mergeExtra.pass });
 
