@@ -1,4 +1,4 @@
-import { CLEANER_EARNINGS_READ_SELECT, cleanerEarningsReadInputs } from "@/lib/cleaner/cleanerEarningsReadInputs";
+import { CLEANER_EARNINGS_READ_SELECT, cleanerViewerMoneyFields, cleanerEarningsReadInputs } from "@/lib/cleaner/cleanerEarningsReadInputs";
 import { NextResponse } from "next/server";
 import {
   bookingMatchesRecurringCleanerPendingPayment,
@@ -134,7 +134,7 @@ export async function GET(request: Request) {
       cleaner_bonus_cents:_bonus,booking_cleaners:_participants,booking_roster_member_payouts:_peerAmounts,payout_owner_cleaner_id:_owner,
       ...safeJob
     } = job;
-    return safeJob;
+    return { ...safeJob, ...cleanerViewerMoneyFields(job, job.displayEarningsCents) };
   }) as unknown as typeof prioritized;
 
   for (const j of jobs as Record<string, unknown>[]) {

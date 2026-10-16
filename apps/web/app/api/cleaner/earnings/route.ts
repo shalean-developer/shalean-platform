@@ -389,7 +389,7 @@ export async function GET(request: Request) {
       service: normalized.service,
       location: normalized.location,
       payout_status: dashboardWire.payout_status,
-      payout_frozen_cents: normalized.payout_frozen_cents,
+      payout_frozen_cents: normalized.payout_frozen_cents == null ? null : cents,
       amount_cents: normalized.amount_cents,
       bonus_cents: bonusCents,
       job_earning_cents: facing?.job_earning_cents ?? Math.max(0, normalized.amount_cents - bonusCents),

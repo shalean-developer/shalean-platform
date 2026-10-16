@@ -1,3 +1,4 @@
+import { cleanerViewerMoneyFields } from "@/lib/cleaner/cleanerEarningsReadInputs";
 import { resolveCleanerBonusCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { resolveCleanerJobDetailEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { NextResponse } from "next/server";
@@ -418,6 +419,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const jobPayload = {
     ...safe,
+    ...cleanerViewerMoneyFields(record, jobEarningCents),
     ...(banner ? { cleaner_pending_payment_banner: banner } : {}),
     ...(visMode ? { cleaner_visibility_mode: visMode } : {}),
     ...jobPayHintWire,
