@@ -7,6 +7,7 @@
  * |-------|--------|--------------------------------|--------|
  * | `POST /api/paystack/initialize` | Initialize payment | **Creates/updates `pending_payment` row** + returns Paystack authorization URL | {@link processPaystackInitializeBody} |
  * | `POST /api/paystack/webhook` | **Authoritative charge finalizer** | **Yes** — `charge.success` → {@link finalizePaidBooking} (idempotent skip if already not `pending_payment`) | Also handles `charge.failed`, monthly invoice settlement branches |
+ * | `POST /api/payment/webhook` | Compatibility URL | Re-exports the authoritative webhook's exact POST handler | Same signature verification, idempotency and settlement pipeline; no redirect or independent finalizer |
  * | `GET/POST /api/paystack/verify` | **Verify + fallback finalizer** | **Yes** when charge `success` — {@link runPaystackVerifyFinalizePipeline} → {@link finalizePaidBooking} | Rate-limited; idempotent with webhook |
  * | `POST /api/payments/verify` | **Retired legacy verify alias** | **No** — always returns `410 Gone` | Tombstone only; older clients must move to `/api/paystack/verify` |
  * | `GET /api/booking/status` | **Retired legacy polling route** | **No** — always returns `410 Gone` | Tombstone only; use `/api/paystack/status` |

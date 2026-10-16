@@ -4,6 +4,7 @@ import { BOOKING_EXTRA_LABELS } from "@/lib/booking/extraLabels";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 
 export type BookingEmailRowOverlay = {
+  customer_name?: string | null;
   date?: string | null;
   time?: string | null;
   location?: string | null;
@@ -26,6 +27,7 @@ export function bookingEmailScalarString(raw: unknown): string | null {
 
 export function bookingEmailRowOverlayFromRecord(row: Record<string, unknown>): BookingEmailRowOverlay {
   return {
+    customer_name: bookingEmailScalarString(row.customer_name),
     date: bookingEmailScalarString(row.date),
     time: bookingEmailScalarString(row.time),
     location: bookingEmailScalarString(row.location),

@@ -25,6 +25,7 @@ import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsFo
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { trustPayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import { trustedBookingPayableZar } from "@/lib/booking/ensureBookingPaymentSession";
+import { claimAutomaticPaymentReminder, releaseAutomaticPaymentReminder } from "@/lib/pay/paymentLinkEligibility";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -200,6 +201,9 @@ export async function POST(request: Request) {
       total_paid_zar: row.total_paid_zar,
     });
 
+    const reminderStage = send15m ? "final" : "first";
+    let reminderClaimed = false;
+    let deliveryAccepted = false;
     try {
       const decision = await resolvePaymentLinkDispatchDecision(
         admin,
@@ -241,7 +245,13 @@ export async function POST(request: Request) {
       );
 
       const linkForMessaging = trustPayPageUrl(row.id, row.paystack_reference, row.payment_link);
+      if (!await claimAutomaticPaymentReminder(admin, row.id, row.paystack_reference, reminderStage)) {
+        skipped++;
+        continue;
+      }
+      reminderClaimed = true;
       const delivery = await deliverAdminPaymentLink({
+        onDeliveryAccepted: () => { deliveryAccepted = true; },
         phone: phone || null,
         email: email || null,
         mode: "chain",
@@ -270,6 +280,12 @@ export async function POST(request: Request) {
         context: { bookingId: row.id, stage: pass },
       });
 
+      deliveryAccepted ||= Boolean(delivery.emailOk || delivery.smsOk || delivery.emailDeferredUntilIso);
+      if (!deliveryAccepted) {
+        skipped++;
+        continue;
+      }
+
       await persistPaymentLinkDelivery(admin, row.id, delivery, {
         pass,
         touchLastSentAt: false,
@@ -287,6 +303,10 @@ export async function POST(request: Request) {
     } catch (e) {
       await reportOperationalIssue("error", "cron/payment-link-reminders", String(e), { bookingId: row.id });
       skipped++;
+    } finally {
+      if (reminderClaimed && !deliveryAccepted) {
+        await releaseAutomaticPaymentReminder(admin, row.paystack_reference, reminderStage);
+      }
     }
   }
 
