@@ -196,7 +196,9 @@ export async function processDueDeferredPaymentLinkEmails(
   admin: SupabaseClient,
   params?: { limit?: number },
 ): Promise<DeferredPaymentLinkEmailWorkerStats> {
-  const limit = Math.min(50, Math.max(1, params?.limit ?? 25));
+  // Each row may perform two 12-second gateway checks. Claim only a small batch
+  // so an outage cannot strand a large set behind the stale-claim lease.
+  const limit = Math.min(5, Math.max(1, params?.limit ?? 5));
 
   // The SQL function selects with FOR UPDATE SKIP LOCKED and stamps a unique
   // processing token in the same transaction. Parallel cron invocations therefore
