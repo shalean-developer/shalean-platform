@@ -209,11 +209,25 @@ export async function processPaymentRecoveryJob(
 
   const reminderStage = jobType === "payment_reminder_1h" ? "first" : jobType === "payment_reminder_24h" ? "final" : null;
   if (reminderStage && !await claimAutomaticPaymentReminder(supabase, bookingId, paymentReference, reminderStage)) {
-    await markSkipped(supabase, jobId, "automatic_reminder_already_claimed");
-    return "skipped";
+    // Another worker may still fail and release its claim. Keep the legacy job
+    // eligible for the next cron run rather than losing its recovery opportunity.
+    const attempts = attempts0 + 1;
+    const exhausted = attempts >= TERMINAL_FAILURE_ATTEMPTS;
+    await supabase.from("booking_payment_recovery_jobs").update({
+      attempts, status: exhausted ? "skipped" : "failed_retryable",
+      skipped_reason: exhausted ? "automatic_reminder_claim_retry_exhausted" : null,
+      last_error: exhausted ? null : "automatic_reminder_claim_pending",
+      processed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    }).eq("id", jobId);
+    return exhausted ? "skipped" : "retry";
   }
 
-  const result = await sendPaymentRecoveryEmail(jobType as PaymentRecoveryJobType, ctx);
+  let result: { sent: boolean; error?: string };
+  try {
+    result = await sendPaymentRecoveryEmail(jobType as PaymentRecoveryJobType, ctx);
+  } catch (error) {
+    result = { sent: false, error: error instanceof Error ? error.message : String(error) };
+  }
 
   if (result.sent) {
     const { data: updated, error: upErr } = await supabase
