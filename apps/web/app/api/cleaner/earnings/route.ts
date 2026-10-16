@@ -1,3 +1,4 @@
+import { cleanerEarningsReadInputs } from "@/lib/cleaner/cleanerEarningsReadInputs";
 import { NextResponse } from "next/server";
 import {
   fetchBookingIdsWhereCleanerOnRoster,
@@ -280,6 +281,10 @@ export async function GET(request: Request) {
 
   const now = new Date();
   const goalWire: CleanerDashboardEarningsWireRow[] = rows.map((r) => ({
+    ...cleanerEarningsReadInputs(r),
+    cleaner_id: r.cleaner_id,
+    is_team_job: r.is_team_job,
+    service: r.service,
     id: r.id,
     status: "completed",
     date: r.date,
@@ -397,22 +402,7 @@ export async function GET(request: Request) {
     };
   });
 
-  const { today_cents } = todayCentsAndBreakdownFromBookings(
-    rows.map((b) => ({
-      id: b.id,
-      service: b.service,
-      status: "completed",
-      date: b.date,
-      completed_at: b.completed_at,
-      viewer_payout_cents: b.viewer_payout_cents,
-      cleaner_earnings_total_cents: b.cleaner_earnings_total_cents,
-      payout_frozen_cents: b.payout_frozen_cents,
-      display_earnings_cents: b.display_earnings_cents,
-      earnings_summary: b.earnings_summary,
-    })),
-    now,
-    cleanerId,
-  );
+  const { today_cents } = todayCentsAndBreakdownFromBookings(goalWire, now, cleanerId);
   const { week_cents, month_cents } = earningsPeriodCentsFromRows(
     rows.map((b) => ({
       completed_at: b.completed_at,

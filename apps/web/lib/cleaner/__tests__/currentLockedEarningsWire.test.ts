@@ -13,8 +13,8 @@ function wire() {
  return {id,date:"2026-10-16",status:"completed",completed_at:"2026-10-16T07:00:00Z",cleaner_id:lead,
   display_earnings_cents:26000,cleaner_earnings_total_cents:52000,earnings_summary:null,payout_frozen_cents:null,metadata:{},...cleanerEarningsReadInputs(raw)};
 }
-function admin(viewer:string) {
- return {from:(table:string)=>{const q={select:()=>q,eq:()=>q,in:async()=>({data:table==="booking_roster_member_payouts"&&viewer===member?[{booking_id:id,payout_cents:25700,bonus_cents:0}]:[],error:null})};return q;}} as never;
+function admin(viewer:string,payout=25700) {
+ return {from:(table:string)=>{const q={select:()=>q,eq:()=>q,in:async()=>({data:table==="booking_roster_member_payouts"&&viewer===member?[{booking_id:id,payout_cents:payout,bonus_cents:0}]:[],error:null})};return q;}} as never;
 }
 describe("current fixed earning read pipeline",()=>{
  it("loads one shared projection for summary-absent dashboard/job inputs",()=>{
@@ -34,6 +34,23 @@ describe("current fixed earning read pipeline",()=>{
     {cleaner_id:member,role:"member",base_earning_cents:26000,bonus_cents:0,deduction_cents:0,total_cents:26000}]}};
   expect(resolveCleanerJobDetailEarningsCents(b,lead,26000)).toBe(25700);
   expect(resolveCleanerJobDetailEarningsCents({...b,date:"2026-09-30"},lead,26000)).toBe(26000);
+ });
+ it.each([0,null])("retains a runtime estimate when persisted basis is %s",basis=>{
+  const empty={...wire(),display_earnings_cents:basis,cleaner_earnings_total_cents:basis,earnings_policy:null,internal_earnings_cents:null,booking_roster_member_payouts:[]};
+  expect(resolveCleanerJobDetailEarningsCents(empty,lead,31500)).toBe(31500);
+  expect(resolveCleanerJobDetailEarningsCents(empty,lead,null)).toBeNull();
+ });
+ it("does not revive a fully deducted member allocation with a preview",()=>{
+  expect(resolveCleanerJobDetailEarningsCents({...wire(),viewer_payout_cents:0},member,26000)).toBe(0);
+ });
+ it("does not request an estimate for a fully deducted current member card",async()=>{
+  const rows=await applyPreviewEarningsToCleanerJobRows(admin(member,0),{cleanerId:member,rows:[wire()],maxPreviews:0});
+  expect(rows[0].displayEarningsCents).toBe(0);
+  expect(rows[0].earnings_basis_pending).toBe(false);
+ });
+ it("keeps a fully deducted member at zero in Office allocations",()=>{
+  const b={...wire(),internal_earnings_cents:26000};
+  expect(perCleanerAllocationsForBooking(b,b.booking_cleaners!,[{cleaner_id:member,payout_cents:0}]).map(r=>r.cents)).toEqual([26000,0]);
  });
  it("keeps Office allocations aligned with the cleaner earning pipeline",()=>{
   const b=wire();

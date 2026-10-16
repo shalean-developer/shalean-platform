@@ -153,6 +153,7 @@ export async function GET(request: Request) {
     if (bookingHasActivePayoutAttributionRemoval(row)) {
       return {
         ...row,
+        ...cleanerEarningsReadInputs({}),
         viewer_payout_cents: null,
         cleaner_earnings_total_cents: null,
         payout_frozen_cents: null,
