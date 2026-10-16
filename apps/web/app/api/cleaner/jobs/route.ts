@@ -1,3 +1,4 @@
+import { CLEANER_EARNINGS_READ_SELECT, cleanerViewerMoneyFields } from "@/lib/cleaner/cleanerEarningsReadInputs";
 import { NextResponse } from "next/server";
 import {
   assignmentSourceForVisibilityLog,
@@ -82,7 +83,7 @@ export async function GET(request: Request) {
   }
 
   const bookingSelect =
-    "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_count, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, earnings_summary, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by, metadata";
+    "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, cleaner_count, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, earnings_summary, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by, metadata" + ", " + CLEANER_EARNINGS_READ_SELECT;
 
   const { data: jobsRaw, error } = directAssignments
     ? await admin
@@ -108,7 +109,7 @@ export async function GET(request: Request) {
       })();
 
   const jobs = prioritizeCleanerJobsForList(
-    (jobsRaw ?? []).filter(cleanerJobsListRowPostFilter) as Record<string, unknown>[],
+    ((jobsRaw ?? []) as Record<string, unknown>[]).filter(cleanerJobsListRowPostFilter),
     100,
   );
 
@@ -139,7 +140,6 @@ export async function GET(request: Request) {
           ? ((n) => (Number.isFinite(n) && n > 0 ? n : null))(Number(totalPaidZarRaw.trim()))
           : null;
     const {
-      cleaner_payout_cents: _legacyPayout,
       display_earnings_cents: _displayRaw,
       team_member_count_snapshot: _snapCol,
       total_paid_zar: _omitPaidZar,
@@ -349,8 +349,11 @@ export async function GET(request: Request) {
 
   const stripInternalMetadata = (rows: Record<string, unknown>[]) =>
     rows.map((row) => {
-      const { metadata: _internalMetadata, ...safeRow } = row;
-      return safeRow;
+      const { metadata:_internalMetadata, earnings_summary:_internalEarningsSummary,
+        earnings_policy:_policy,internal_earnings_cents:_internal,cleaner_payout_cents:_payable,
+        cleaner_bonus_cents:_bonus,booking_cleaners:_participants,booking_roster_member_payouts:_peerAmounts,
+        ...safeRow } = row;
+      return { ...safeRow, ...cleanerViewerMoneyFields(row, row.displayEarningsCents) };
     });
 
 

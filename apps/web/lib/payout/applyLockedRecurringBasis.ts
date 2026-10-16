@@ -1,5 +1,5 @@
 import type { CanonicalPayoutResult, CanonicalEarningsAdjustment } from "@/lib/payout/canonicalCleanerPayout";
-import { buildBookingEarningsSummary } from "@/lib/payout/bookingEarningsSummary";
+import { buildBookingEarningsSummary, payableEarningsFromSummaryRow } from "@/lib/payout/bookingEarningsSummary";
 
 /** Apply the persisted fixed per-visit policy before summaries/member rows are written. */
 export function applyLockedRecurringBasis(
@@ -33,11 +33,14 @@ export function applyLockedRecurringBasis(
     costsCents: previous.costs_cents,
     computedAtIso: previous.computed_at,
   });
+  const lead = summary.per_cleaner_earnings.find(row => row.role === "lead") ?? summary.per_cleaner_earnings[0];
+  const payable = payableEarningsFromSummaryRow(lead);
   return {
     ...result,
     displayEarningsCents: baseCents,
-    payoutEarningsCents: baseCents,
-    cleanerPayoutCents: baseCents,
+    payoutEarningsCents: lead.total_cents,
+    cleanerPayoutCents: payable.payoutCents,
+    cleanerBonusCents: payable.bonusCents,
     internalEarningsCents: summary.total_cleaner_earnings_cents,
     companyRevenueFromServiceCents: summary.company_revenue_cents,
     payoutPercentage: null,

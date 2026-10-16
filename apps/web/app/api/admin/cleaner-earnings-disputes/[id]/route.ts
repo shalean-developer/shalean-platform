@@ -126,28 +126,23 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     Object.assign(patch, reviewerStamp);
   }
 
-  const { data: updated, error: upErr } = await admin
-    .from("cleaner_earnings_disputes")
-    .update(patch)
-    .eq("id", id)
-    .select(
-      "id, status, admin_response, resolved_at, reviewed_by, reviewed_by_email, reviewed_at, resolved_by, resolved_by_email",
-    )
-    .maybeSingle();
-
-  if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
-
+  let updated: unknown;
   if (adjustmentAmountCents != null) {
-    const { error: adjErr } = await admin.from("cleaner_earnings_adjustments").insert({
-      cleaner_id: row.cleaner_id,
-      booking_id: row.booking_id,
-      amount_cents: adjustmentAmountCents,
-      reason: adjReason.slice(0, 4000),
-      dispute_id: id,
-      created_by: isUuid ? adminUserId : null,
-      created_by_email: adminEmail || null,
+    const { data, error } = await admin.rpc("resolve_cleaner_dispute_with_adjustment", {
+      p_dispute_id: id, p_amount_cents: adjustmentAmountCents, p_reason: adjReason.slice(0,4000),
+      p_response: note, p_admin_user_id: isUuid ? adminUserId : null, p_admin_email: adminEmail || null,
     });
-    if (adjErr) return NextResponse.json({ error: adjErr.message }, { status: 500 });
+    if (error) {
+      const status = error.code === "P0002" ? 404 : ["55000","23514","40001"].includes(error.code ?? "") ? 409
+        : ["22023","22003"].includes(error.code ?? "") ? 400 : 500;
+      return NextResponse.json({ error: error.message, code: error.code }, { status });
+    }
+    updated=data;
+  } else {
+    const { data, error } = await admin.from("cleaner_earnings_disputes").update(patch).eq("id",id)
+      .select("id, status, admin_response, resolved_at, reviewed_by, reviewed_by_email, reviewed_at, resolved_by, resolved_by_email").maybeSingle();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    updated=data;
   }
 
   // H-12: persist a separate audit row in admin_earnings_actions so dispute lifecycle events

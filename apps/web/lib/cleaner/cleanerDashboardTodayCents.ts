@@ -9,6 +9,14 @@ import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
 
 export type CleanerDashboardEarningsWireRow = {
   id: string;
+  earnings_policy?: string | null;
+  internal_earnings_cents?: unknown;
+  booking_cleaners?: Array<{cleaner_id:string}> | null;
+  booking_roster_member_payouts?: Array<{cleaner_id:string;payout_cents:number;bonus_cents:number}> | null;
+  cleaner_id?: string | null;
+  payout_owner_cleaner_id?: string | null;
+  cleaner_payout_cents?: unknown;
+  cleaner_bonus_cents?: unknown;
   service?: string | null;
   location?: string | null;
   status?: string | null;
@@ -46,6 +54,10 @@ const DAILY_GOAL_CEILING_CENTS = 500_000;
 function wireRowEarningsCents(row: CleanerDashboardEarningsWireRow, cleanerId: string): number {
   return resolveCleanerDashboardEarningsCents(
     {
+      date: row.date,
+      earnings_policy:row.earnings_policy,cleaner_id:row.cleaner_id,payout_owner_cleaner_id:row.payout_owner_cleaner_id,
+      internal_earnings_cents:row.internal_earnings_cents,booking_cleaners:row.booking_cleaners,booking_roster_member_payouts:row.booking_roster_member_payouts,
+      cleaner_payout_cents:row.cleaner_payout_cents,cleaner_bonus_cents:row.cleaner_bonus_cents,
       viewer_payout_cents: row.viewer_payout_cents,
       earnings_summary: row.earnings_summary,
       cleaner_earnings_total_cents: row.cleaner_earnings_total_cents,

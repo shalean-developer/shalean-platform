@@ -73,7 +73,7 @@ export async function GET(request: Request) {
   const ranges = johannesburgRanges();
   const { data, error } = await fetchCleanerVisibleBookingsMerged(admin, cleanerId, {
     select:
-      "id, date, status, cleaner_id, payout_owner_cleaner_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, earnings_summary, metadata",
+      "id, date, status, cleaner_id, payout_owner_cleaner_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_bonus_cents, earnings_policy, internal_earnings_cents, booking_cleaners ( cleaner_id ), booking_roster_member_payouts ( cleaner_id, payout_cents, bonus_cents ), earnings_summary, metadata",
     perBranchLimit: 1000,
     applyEachBranch: (query) =>
       query.eq("status", "completed").gte("date", ranges.monthFrom).lt("date", ranges.monthTo),

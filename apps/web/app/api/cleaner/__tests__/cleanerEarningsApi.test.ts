@@ -242,6 +242,34 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
     expect(json.earnings_ledger_flip_ready).toBe(false);
   });
 
+  it("keeps summary-absent adjusted earnings aligned across today and daily goal", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-16T10:00:00Z"));
+    try {
+      mockState.admin = new MockSupabaseClient({
+        cleaners: [{ id: "cleaner-1" }],
+        bookings: Array.from({ length: 12 }, (_, i) => ({
+          id: `11111111-1111-4111-8111-${String(i).padStart(12,"0")}`,
+          cleaner_id: "cleaner-1", payout_owner_cleaner_id: "cleaner-1", status: "completed", is_test: false,
+          is_team_job: false, date: "2026-10-16", completed_at: "2026-10-16T07:00:00Z",
+          earnings_policy: "legacy_july", display_earnings_cents: 26000, cleaner_payout_cents: 26000,
+          cleaner_bonus_cents: 500, internal_earnings_cents: 26500, earnings_summary: null,
+          payout_status: "pending", payout_frozen_cents: null,
+        })),
+      });
+      const { GET } = await import("@/app/api/cleaner/earnings/route");
+      const res = await GET(new Request("http://localhost/api/cleaner/earnings"));
+      const json = await res.json();
+      expect(res.status).toBe(200);
+      expect(json.rows.every((r: { amount_cents:number }) => r.amount_cents === 26500)).toBe(true);
+      expect(json.summary.today_cents).toBe(318000);
+      expect(json.rows.every((r: { bonus_cents:number }) => r.bonus_cents === 500)).toBe(true);
+      expect(json.summary.bonus_total_cents).toBe(6000);
+      expect(json.rows.every((r: {job_earning_cents:number})=>r.job_earning_cents===26000)).toBe(true);
+      expect(json.summary.suggested_daily_goal_cents).toBe(Math.round(318000 / 7 * 1.1));
+    } finally { vi.useRealTimers(); }
+  });
+
   it("earnings feed excludes a completed visit whose payout attribution was explicitly removed", async () => {
     mockState.admin = new MockSupabaseClient({
       cleaners: [{ id: "cleaner-1", full_name: "Cleaner One" }],
@@ -313,6 +341,75 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
     expect(row.cleaner_bonus_cents).toBeUndefined();
     expect(row.payout_earnings_cents).toBeUndefined();
     expect(row.internal_earnings_cents).toBeUndefined();
+  });
+
+  it.each(["eligible","paid"])("keeps the member weekly chart aligned with %s earnings",async payoutStatus=>{
+    vi.useFakeTimers({toFake:["Date"]});vi.setSystemTime(new Date("2026-10-16T10:00:00Z"));
+    try {
+      mockState.cleanerId="cleaner-2";
+      const id="11111111-1111-4111-8111-111111111111";
+      mockState.admin=new MockSupabaseClient({cleaners:[{id:"cleaner-2"}],
+        bookings:[{id,cleaner_id:"cleaner-1",payout_owner_cleaner_id:"cleaner-1",status:"completed",is_test:false,
+          date:"2026-10-16",completed_at:"2026-10-16T07:00:00Z",display_earnings_cents:26000,cleaner_earnings_total_cents:51700,
+          payout_frozen_cents:25700,payout_status:payoutStatus,payout_paid_at:payoutStatus==="paid"?"2026-10-16T08:00:00Z":null}],
+        booking_cleaners:[{booking_id:id,cleaner_id:"cleaner-1"},{booking_id:id,cleaner_id:"cleaner-2"}],
+        booking_roster_member_payouts:[{booking_id:id,cleaner_id:"cleaner-2",payout_cents:26000,bonus_cents:0}]});
+      const {GET}=await import("@/app/api/cleaner/earnings/route");
+      const res=await GET(new Request("http://localhost/api/cleaner/earnings"));const json=await res.json();
+      expect(res.status).toBe(200);expect(json.rows[0].amount_cents).toBe(26000);
+      expect(json.rows[0].payout_frozen_cents).toBe(26000);expect(json.summary.today_cents).toBe(26000);
+      const {buildLast7DaysEarningsPoints}=await import("@/lib/cleaner/earningsInsightsSeries");
+      expect(buildLast7DaysEarningsPoints(json.rows,new Date()).find(p=>p.ymd==="2026-10-16")?.cents).toBe(26000);
+    } finally {vi.useRealTimers();}
+  });
+  it.each(["", "?view=card", "?lite=1", "detail", "dashboard"])("keeps client fallback money specific to the member in %s",async mode=>{
+    vi.useFakeTimers({toFake:["Date"]});vi.setSystemTime(new Date("2026-10-16T10:00:00Z"));
+    try {
+      const id="22222222-2222-4222-8222-222222222222";
+      for(const ownAmount of [26000,0]) {
+        mockState.admin=new MockSupabaseClient({cleaners:[{id:"cleaner-1"}],
+          bookings:[{id,cleaner_id:"peer",payout_owner_cleaner_id:"peer",status:"completed",is_test:false,
+            date:"2026-10-16",completed_at:"2026-10-16T07:00:00Z",display_earnings_cents:26000,
+            cleaner_earnings_total_cents:25700+ownAmount,payout_frozen_cents:25700,payout_status:"eligible",
+            customer_name:"Synthetic Customer",customer_phone:"+270000000000"}],
+          booking_cleaners:[{booking_id:id,cleaner_id:"peer"},{booking_id:id,cleaner_id:"cleaner-1"}],
+          booking_roster_member_payouts:[{booking_id:id,cleaner_id:"cleaner-1",payout_cents:ownAmount,bonus_cents:0}]});
+        let res:Response;
+        if(mode==="detail") {const {GET}=await import("@/app/api/cleaner/jobs/[id]/route");res=await GET(new Request("http://localhost/api/cleaner/jobs/"+id),{params:Promise.resolve({id})});}
+        else if(mode==="dashboard") {const {GET}=await import("@/app/api/cleaner/dashboard/route");res=await GET(new Request("http://localhost/api/cleaner/dashboard"));}
+        else {const {GET}=await import("@/app/api/cleaner/jobs/route");res=await GET(new Request("http://localhost/api/cleaner/jobs"+mode));}
+        const json=await res.json();expect(res.status).toBe(200);const job=mode==="detail"?json.job:json.jobs[0];
+        expect(job.displayEarningsCents).toBe(ownAmount);expect(job.payout_frozen_cents).toBe(ownAmount);
+        expect(job.cleaner_earnings_total_cents).toBe(ownAmount);
+        const {cleanerFacingDisplayEarningsCents}=await import("@/lib/cleaner/cleanerMobileBookingMap");
+        expect(cleanerFacingDisplayEarningsCents(job)).toBe(ownAmount);
+      }
+    } finally {vi.useRealTimers();}
+  });
+
+  it.each(["", "?view=card", "?lite=1", "detail"])("hides peer earnings and dispute reasons in %s job responses",async mode=>{
+    const booking={id:"private-summary",cleaner_id:"cleaner-1",payout_owner_cleaner_id:"cleaner-1",status:"completed",date:"2026-10-16",
+      is_test:false,is_team_job:false,display_earnings_cents:25000,cleaner_payout_cents:25000,
+      customer_name:"Synthetic Customer",customer_phone:"+270000000000",earnings_policy:"legacy_july",
+      earnings_summary:{model_version:"test",cleaner_count:2,total_cleaner_earnings_cents:52000,
+        per_cleaner_earnings:[{cleaner_id:"cleaner-1",base_earning_cents:25000,bonus_cents:0,deduction_cents:0,total_cents:25000},
+          {cleaner_id:"peer",base_earning_cents:26000,bonus_cents:1000,deduction_cents:0,total_cents:27000}],
+        bonus:{items:[{cleaner_id:"peer",amount_cents:1000,reason:"private-peer-dispute-reason"}],total_cents:1000}}};
+    mockState.admin=new MockSupabaseClient({cleaners:[{id:"cleaner-1"}],bookings:[booking]});
+    let res:Response;
+    if(mode==="detail") {
+      const {GET}=await import("@/app/api/cleaner/jobs/[id]/route");
+      res=await GET(new Request("http://localhost/api/cleaner/jobs/private-summary"),{params:Promise.resolve({id:"private-summary"})});
+    } else {
+      const {GET}=await import("@/app/api/cleaner/jobs/route");
+      res=await GET(new Request("http://localhost/api/cleaner/jobs"+mode));
+    }
+    const json=await res.json();expect(res.status).toBe(200);
+    const job=mode==="detail"?json.job:json.jobs[0];
+    expect(job.earnings_summary).toBeUndefined();
+    expect(job.displayEarningsCents).toBe(25000);
+    expect(JSON.stringify(json)).not.toContain("private-peer-dispute-reason");
+    expect(job.booking_roster_member_payouts).toBeUndefined();
   });
 
   it("offers response includes positive displayEarningsCents", async () => {
