@@ -116,7 +116,7 @@ describe("shared automatic reminder claims", () => {
   });
   it("does not send when the database cannot establish ownership", async () => {
     const admin = { from: (table: string) => table === "bookings" ? legacyQuery({}) : table === "system_logs" ? legacyQuery() : ({ insert: async () => ({ error: { code: "08006", message: "offline" } }) }) } as never;
-    expect(await claimAutomaticPaymentReminder(admin, "booking", reference, "first")).toBe(false);
+    await expect(claimAutomaticPaymentReminder(admin, "booking", reference, "first")).rejects.toThrow("claim_store_unavailable");
   });
   it("honors legacy abandonment claims during rollout while keeping the final reminder separate", async () => {
     const insert = vi.fn(async () => ({ error: null }));
@@ -128,7 +128,7 @@ describe("shared automatic reminder claims", () => {
   it("suppresses first reminders when legacy history cannot be checked", async () => {
     const insert = vi.fn();
     const admin = { from: (table: string) => table === "bookings" ? legacyQuery({}) : table === "system_logs" ? legacyQuery(null, { message: "offline" }) : { insert } } as never;
-    expect(await claimAutomaticPaymentReminder(admin, "booking", reference, "first")).toBe(false);
+    await expect(claimAutomaticPaymentReminder(admin, "booking", reference, "first")).rejects.toThrow("claim_store_unavailable");
     expect(insert).not.toHaveBeenCalled();
   });
   it.each(["first", "final"] as const)("honors pre-rollout adaptive %s reminder timestamps", async (stage) => {

@@ -30,7 +30,8 @@ export async function recoverStalePaymentRecoveryJobs(supabase: SupabaseClient):
   const { error } = await supabase.from("booking_payment_recovery_jobs").update({
     status: "failed_retryable", scheduled_for: new Date(now).toISOString(), updated_at: new Date(now).toISOString(),
     last_error: "stale_processing_lease_recovered",
-  }).eq("status", "processing").is("sent_at", null).lt("processed_at", new Date(now - 15 * 60_000).toISOString());
+  }).eq("status", "processing").is("sent_at", null).lt("processed_at", new Date(now - 15 * 60_000).toISOString())
+    .or("job_type.neq.booking_payment_expired,last_error.eq.processing_pre_delivery");
   if (error) throw new Error(`payment_recovery_stale_lease_update_failed: ${error.message}`);
 }
 
@@ -68,18 +69,18 @@ async function markCancelled(supabase: SupabaseClient, jobId: string, reason: st
 async function claimJobForProcessing(
   supabase: SupabaseClient,
   jobId: string,
-): Promise<{ ok: true; attempts: number } | { ok: false }> {
+): Promise<{ ok: true; attempts: number; claimedAt: string } | { ok: false }> {
   const now = new Date().toISOString();
   const { data, error } = await supabase
     .from("booking_payment_recovery_jobs")
-    .update({ status: "processing", processed_at: now, updated_at: now })
+    .update({ status: "processing", last_error: "processing_pre_delivery", processed_at: now, updated_at: now })
     .eq("id", jobId)
     .in("status", ["pending", "failed_retryable"])
     .select("attempts")
     .maybeSingle();
 
   if (error || !data) return { ok: false };
-  return { ok: true, attempts: typeof data.attempts === "number" ? data.attempts : 0 };
+  return { ok: true, attempts: typeof data.attempts === "number" ? data.attempts : 0, claimedAt: now };
 }
 
 /**
@@ -245,6 +246,17 @@ export async function processPaymentRecoveryJob(
   }
 
   let result: { sent: boolean; error?: string };
+  if (jobType === "booking_payment_expired") {
+    // Expiry sends have no shared reminder claim. Persist uncertainty before the
+    // provider call so stale recovery can never blindly resend an accepted email.
+    const { data: checkpoint, error } = await supabase.from("booking_payment_recovery_jobs").update({
+      last_error: "expiry_delivery_in_progress", updated_at: new Date().toISOString(),
+    }).eq("id", jobId).eq("status", "processing").eq("processed_at", claim.claimedAt).select("id").maybeSingle();
+    if (error || !checkpoint) {
+      await reportOperationalIssue("error", "processPaymentRecoveryJob", "expiry_delivery_checkpoint_write_failed", { jobId, bookingId, error: error?.message ?? "processing lease changed" });
+      throw new Error(`expiry_delivery_checkpoint_write_failed: ${error?.message ?? "processing lease changed"}`);
+    }
+  }
   try {
     result = await sendPaymentRecoveryEmail(jobType as PaymentRecoveryJobType, ctx);
   } catch (error) {
@@ -267,7 +279,8 @@ export async function processPaymentRecoveryJob(
       .select("id");
 
     if (upErr || !updated?.length) {
-      await reportOperationalIssue("warn", "processPaymentRecoveryJob", "Duplicate send prevented (already sent)", {
+      await reportOperationalIssue(upErr ? "critical" : "warn", "processPaymentRecoveryJob",
+        upErr ? "Provider accepted email but job status write failed; delivery requires review" : "Duplicate send prevented (already sent)", {
         jobId,
         bookingId,
       });
@@ -281,7 +294,7 @@ export async function processPaymentRecoveryJob(
   const errorClass = classifySendError(result.error);
   const terminal = errorClass === "terminal" || nextAttempts >= TERMINAL_FAILURE_ATTEMPTS;
 
-  await supabase
+  const { error: retryWriteError } = await supabase
     .from("booking_payment_recovery_jobs")
     .update({
       attempts: nextAttempts,
@@ -291,6 +304,11 @@ export async function processPaymentRecoveryJob(
       updated_at: new Date().toISOString(),
     })
     .eq("id", jobId);
+
+  if (retryWriteError) {
+    await reportOperationalIssue("critical", "processPaymentRecoveryJob", "Failed delivery retry status could not be saved", { jobId, bookingId, error: retryWriteError.message });
+    throw new Error(`payment_recovery_delivery_retry_update_failed: ${retryWriteError.message}`);
+  }
 
   return terminal ? "terminal" : "retry";
 }
