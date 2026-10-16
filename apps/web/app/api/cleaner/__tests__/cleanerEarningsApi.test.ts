@@ -343,6 +343,31 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
     expect(row.internal_earnings_cents).toBeUndefined();
   });
 
+  it.each(["", "?view=card", "?lite=1", "detail"])("hides peer earnings and dispute reasons in %s job responses",async mode=>{
+    const booking={id:"private-summary",cleaner_id:"cleaner-1",payout_owner_cleaner_id:"cleaner-1",status:"completed",date:"2026-10-16",
+      is_test:false,is_team_job:false,display_earnings_cents:25000,cleaner_payout_cents:25000,
+      customer_name:"Synthetic Customer",customer_phone:"+270000000000",earnings_policy:"legacy_july",
+      earnings_summary:{model_version:"test",cleaner_count:2,total_cleaner_earnings_cents:52000,
+        per_cleaner_earnings:[{cleaner_id:"cleaner-1",base_earning_cents:25000,bonus_cents:0,deduction_cents:0,total_cents:25000},
+          {cleaner_id:"peer",base_earning_cents:26000,bonus_cents:1000,deduction_cents:0,total_cents:27000}],
+        bonus:{items:[{cleaner_id:"peer",amount_cents:1000,reason:"private-peer-dispute-reason"}],total_cents:1000}}};
+    mockState.admin=new MockSupabaseClient({cleaners:[{id:"cleaner-1"}],bookings:[booking]});
+    let res:Response;
+    if(mode==="detail") {
+      const {GET}=await import("@/app/api/cleaner/jobs/[id]/route");
+      res=await GET(new Request("http://localhost/api/cleaner/jobs/private-summary"),{params:Promise.resolve({id:"private-summary"})});
+    } else {
+      const {GET}=await import("@/app/api/cleaner/jobs/route");
+      res=await GET(new Request("http://localhost/api/cleaner/jobs"+mode));
+    }
+    const json=await res.json();expect(res.status).toBe(200);
+    const job=mode==="detail"?json.job:json.jobs[0];
+    expect(job.earnings_summary).toBeUndefined();
+    expect(job.displayEarningsCents).toBe(25000);
+    expect(JSON.stringify(json)).not.toContain("private-peer-dispute-reason");
+    expect(job.booking_roster_member_payouts).toBeUndefined();
+  });
+
   it("offers response includes positive displayEarningsCents", async () => {
     mockState.admin = new MockSupabaseClient({
       dispatch_offers: [
