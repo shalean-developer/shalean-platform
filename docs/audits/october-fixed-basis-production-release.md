@@ -40,6 +40,10 @@ rows. Partial peer coverage cannot manufacture an allocation. Internal inputs
 are removed from cleaner API responses after resolving the viewer's amount.
 Full participant summaries and adjustment reasons are also stripped from all job
 list modes and job detail, verified through the actual endpoint handlers.
+Client fallback totals and frozen values on dashboard/list/detail are rewritten to
+the resolved viewer allocation. Earnings rows also carry the viewer freeze, so
+weekly charts and insights cannot use the lead's amount for a roster member.
+Actual handler-to-mobile-map checks include both positive and fully deducted members.
 Historical, formal-team, undated and stale unrelated solo behavior is preserved.
 Summary-absent company share follows obligation deltas, retaining its nonnegative
 database constraint. A validated internal margin-capacity cache preserves the
@@ -59,7 +63,7 @@ final baseline reset preview showed current R520, projected R520, change R0.
 Fixture retirement returned exit zero; fresh reads confirmed is_test=true,
 paused schedule, retained history and no financial links.
 
-Local follow-up validation: 1,124 critical tests, TypeScript, booking-core lint,
+Local follow-up validation: 1,131 critical tests, TypeScript, booking-core lint,
 migration checks and 217 isolated PostgreSQL assertions. The governed staging
 acceptance SQL also passes isolated execution, rollback preservation and wrong
 fixture rejection. It is staging-only tooling, excluded from production.

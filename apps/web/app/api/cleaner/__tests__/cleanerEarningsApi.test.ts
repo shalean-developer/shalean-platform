@@ -343,6 +343,50 @@ describe("cleaner API earnings contracts", { timeout: 60_000 }, () => {
     expect(row.internal_earnings_cents).toBeUndefined();
   });
 
+  it.each(["eligible","paid"])("keeps the member weekly chart aligned with %s earnings",async payoutStatus=>{
+    vi.useFakeTimers({toFake:["Date"]});vi.setSystemTime(new Date("2026-10-16T10:00:00Z"));
+    try {
+      mockState.cleanerId="cleaner-2";
+      const id="11111111-1111-4111-8111-111111111111";
+      mockState.admin=new MockSupabaseClient({cleaners:[{id:"cleaner-2"}],
+        bookings:[{id,cleaner_id:"cleaner-1",payout_owner_cleaner_id:"cleaner-1",status:"completed",is_test:false,
+          date:"2026-10-16",completed_at:"2026-10-16T07:00:00Z",display_earnings_cents:26000,cleaner_earnings_total_cents:51700,
+          payout_frozen_cents:25700,payout_status:payoutStatus,payout_paid_at:payoutStatus==="paid"?"2026-10-16T08:00:00Z":null}],
+        booking_cleaners:[{booking_id:id,cleaner_id:"cleaner-1"},{booking_id:id,cleaner_id:"cleaner-2"}],
+        booking_roster_member_payouts:[{booking_id:id,cleaner_id:"cleaner-2",payout_cents:26000,bonus_cents:0}]});
+      const {GET}=await import("@/app/api/cleaner/earnings/route");
+      const res=await GET(new Request("http://localhost/api/cleaner/earnings"));const json=await res.json();
+      expect(res.status).toBe(200);expect(json.rows[0].amount_cents).toBe(26000);
+      expect(json.rows[0].payout_frozen_cents).toBe(26000);expect(json.summary.today_cents).toBe(26000);
+      const {buildLast7DaysEarningsPoints}=await import("@/lib/cleaner/earningsInsightsSeries");
+      expect(buildLast7DaysEarningsPoints(json.rows,new Date()).find(p=>p.ymd==="2026-10-16")?.cents).toBe(26000);
+    } finally {vi.useRealTimers();}
+  });
+  it.each(["", "?view=card", "?lite=1", "detail", "dashboard"])("keeps client fallback money specific to the member in %s",async mode=>{
+    vi.useFakeTimers({toFake:["Date"]});vi.setSystemTime(new Date("2026-10-16T10:00:00Z"));
+    try {
+      const id="22222222-2222-4222-8222-222222222222";
+      for(const ownAmount of [26000,0]) {
+        mockState.admin=new MockSupabaseClient({cleaners:[{id:"cleaner-1"}],
+          bookings:[{id,cleaner_id:"peer",payout_owner_cleaner_id:"peer",status:"completed",is_test:false,
+            date:"2026-10-16",completed_at:"2026-10-16T07:00:00Z",display_earnings_cents:26000,
+            cleaner_earnings_total_cents:25700+ownAmount,payout_frozen_cents:25700,payout_status:"eligible",
+            customer_name:"Synthetic Customer",customer_phone:"+270000000000"}],
+          booking_cleaners:[{booking_id:id,cleaner_id:"peer"},{booking_id:id,cleaner_id:"cleaner-1"}],
+          booking_roster_member_payouts:[{booking_id:id,cleaner_id:"cleaner-1",payout_cents:ownAmount,bonus_cents:0}]});
+        let res:Response;
+        if(mode==="detail") {const {GET}=await import("@/app/api/cleaner/jobs/[id]/route");res=await GET(new Request("http://localhost/api/cleaner/jobs/"+id),{params:Promise.resolve({id})});}
+        else if(mode==="dashboard") {const {GET}=await import("@/app/api/cleaner/dashboard/route");res=await GET(new Request("http://localhost/api/cleaner/dashboard"));}
+        else {const {GET}=await import("@/app/api/cleaner/jobs/route");res=await GET(new Request("http://localhost/api/cleaner/jobs"+mode));}
+        const json=await res.json();expect(res.status).toBe(200);const job=mode==="detail"?json.job:json.jobs[0];
+        expect(job.displayEarningsCents).toBe(ownAmount);expect(job.payout_frozen_cents).toBe(ownAmount);
+        expect(job.cleaner_earnings_total_cents).toBe(ownAmount);
+        const {cleanerFacingDisplayEarningsCents}=await import("@/lib/cleaner/cleanerMobileBookingMap");
+        expect(cleanerFacingDisplayEarningsCents(job)).toBe(ownAmount);
+      }
+    } finally {vi.useRealTimers();}
+  });
+
   it.each(["", "?view=card", "?lite=1", "detail"])("hides peer earnings and dispute reasons in %s job responses",async mode=>{
     const booking={id:"private-summary",cleaner_id:"cleaner-1",payout_owner_cleaner_id:"cleaner-1",status:"completed",date:"2026-10-16",
       is_test:false,is_team_job:false,display_earnings_cents:25000,cleaner_payout_cents:25000,

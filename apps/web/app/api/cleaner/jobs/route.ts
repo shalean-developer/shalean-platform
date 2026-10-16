@@ -1,4 +1,4 @@
-import { CLEANER_EARNINGS_READ_SELECT } from "@/lib/cleaner/cleanerEarningsReadInputs";
+import { CLEANER_EARNINGS_READ_SELECT, cleanerViewerMoneyFields } from "@/lib/cleaner/cleanerEarningsReadInputs";
 import { NextResponse } from "next/server";
 import {
   assignmentSourceForVisibilityLog,
@@ -353,7 +353,7 @@ export async function GET(request: Request) {
         earnings_policy:_policy,internal_earnings_cents:_internal,cleaner_payout_cents:_payable,
         cleaner_bonus_cents:_bonus,booking_cleaners:_participants,booking_roster_member_payouts:_peerAmounts,
         ...safeRow } = row;
-      return safeRow;
+      return { ...safeRow, ...cleanerViewerMoneyFields(row, row.displayEarningsCents) };
     });
 
 
