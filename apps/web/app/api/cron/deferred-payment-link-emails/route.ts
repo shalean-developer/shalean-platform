@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const stats = await processDueDeferredPaymentLinkEmails(admin, { limit: 30 });
+    const stats = await processDueDeferredPaymentLinkEmails(admin, { limit: 5 });
 
     // Empty healthy runs happen every few minutes and are not operational events.
     // Only persist activity or a genuine problem so system health stays signal-rich.

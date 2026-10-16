@@ -4,6 +4,12 @@ const { eligibility, claim, release, email, abandonedEmail, sms } = vi.hoisted((
 }));
 const { recoveryEmail, expire, adminMock, persist } = vi.hoisted(() => ({ recoveryEmail: vi.fn(), expire: vi.fn(), adminMock: vi.fn(), persist: vi.fn() }));
 const { providerSend } = vi.hoisted(() => ({ providerSend: vi.fn() }));
+const { initialize, queueEmail, scheduleRecovery } = vi.hoisted(() => ({ initialize: vi.fn(), queueEmail: vi.fn(), scheduleRecovery: vi.fn() }));
+vi.mock("@/lib/booking/paystackInitializeCore", () => ({ processPaystackInitializeBody: initialize }));
+vi.mock("@/lib/booking/bookingPaymentRecoveryJobs", () => ({ scheduleBookingPaymentRecoveryJobs: scheduleRecovery }));
+vi.mock("@/lib/conversion/deferredPaymentLinkEmailQueue", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/conversion/deferredPaymentLinkEmailQueue")>(), enqueueDeferredPaymentLinkEmail: queueEmail,
+}));
 vi.mock("@/lib/email/resendFrom", () => ({ getResend: () => ({ emails: { send: providerSend } }), getDefaultFromAddress: () => "office@example.com" }));
 vi.mock("@/lib/templates/store", () => ({ getTemplate: async () => null }));
 vi.mock("@/lib/email/recipientSafety", () => ({ validateEmailRecipients: () => ({ allowed: true }) }));
@@ -38,6 +44,8 @@ import { processAbandonCheckoutReminders } from "@/lib/conversion/abandonCheckou
 import { processPaymentRecoveryJob } from "@/lib/booking/processPaymentRecoveryJob";
 import { POST as runReminderCron } from "@/app/api/cron/payment-link-reminders/route";
 import { POST as runAdminResend } from "@/app/api/admin/bookings/[id]/resend-payment-link/route";
+import { sendAdminPaystackDeliveryForRow, type AdminPaystackBookingHead } from "@/lib/admin/adminPaystackPostInitialize";
+import { runRecurringPaymentLinkFallback } from "@/lib/recurring/recurringPaymentLinkFallback";
 
 const payload = { customerEmail: "customer@example.com", customerName: "Pat", serviceLabel: "Regular Cleaning",
   dateLabel: "2026-10-18", timeLabel: "09:00", amountZar: 458, paymentUrl: "https://checkout.paystack.com/test",
@@ -67,6 +75,8 @@ beforeEach(() => {
   eligibility.mockResolvedValue({ allowed: true }); claim.mockResolvedValue(true);
   adminMock.mockReturnValue(null); persist.mockReset();
   providerSend.mockResolvedValue({ data: { id: "email-accepted" }, error: null });
+  initialize.mockResolvedValue({ ok: true, bookingId: "booking-1", authorizationUrl: payload.paymentUrl, reference: "bps_test" });
+  queueEmail.mockResolvedValue({ runAtIso: new Date(Date.now() + 1000).toISOString() }); scheduleRecovery.mockResolvedValue({ ok: true });
   email.mockResolvedValue({ sent: true }); abandonedEmail.mockResolvedValue({ sent: true }); sms.mockResolvedValue({ ok: true });
 });
 
@@ -132,7 +142,8 @@ describe("actual payment message entry points", () => {
   it("retires a queued payment email after payment, without SMS fallback", async () => {
     eligibility.mockResolvedValue({ allowed: false, reason: "booking_paid" });
     const { admin, updates } = makeAdmin();
-    const result = await processDueDeferredPaymentLinkEmails(admin);
+    const result = await processDueDeferredPaymentLinkEmails(admin, { limit: 30 });
+    expect((admin as unknown as { rpc: ReturnType<typeof vi.fn> }).rpc).toHaveBeenCalledWith("claim_due_deferred_payment_link_emails", expect.objectContaining({ p_limit: 5 }));
     expect(result).toMatchObject({ processed: 1, emailed: 0, smsFallback: 0, errors: 0 });
     expect(updates).toContainEqual(expect.objectContaining({ last_error: "suppressed:booking_paid", processing_token: null }));
     expect(email).not.toHaveBeenCalled(); expect(sms).not.toHaveBeenCalled();
@@ -299,5 +310,28 @@ describe("admin resend reflects actual delivery eligibility", () => {
     expect(email).toHaveBeenCalledOnce(); expect(persist).toHaveBeenCalledOnce();
     const { applySendDelayIfNeeded } = await import("@/lib/ai-autonomy/optimizeTiming");
     expect(applySendDelayIfNeeded).not.toHaveBeenCalled();
+  });
+});
+
+describe("initial and recurring delivery outcomes", () => {
+  const row = { id: "booking-1", customer_id: "customer-1", status: "pending_payment", customer_name: "Pat Customer",
+    customer_email: payload.customerEmail, customer_phone: "+27000000000", total_price: 458,
+    booking_snapshot: { locked: { service: "regular-cleaning", date: "2026-10-18", time: "09:00" } } };
+  it.each([false, true])("reports actual provider acceptance as %s for reused checkout notifications", async (allowed) => {
+    eligibility.mockResolvedValue(allowed ? { allowed: true } : { allowed: false, reason: "gateway_unavailable", retryable: true });
+    const sent = await sendAdminPaystackDeliveryForRow(makeAdmin().admin, { row: row as unknown as AdminPaystackBookingHead,
+      authorizationUrl: payload.paymentUrl, reference: "bps_test", notificationMode: "chain", locked: {} });
+    expect(sent).toBe(allowed);
+    if (!allowed) { expect(email).not.toHaveBeenCalled(); expect(persist).not.toHaveBeenCalled(); }
+  });
+  it.each([false, true])("marks recurring fallback only after durable queue acceptance: %s", async (queueOk) => {
+    const updates: Record<string, unknown>[] = [];
+    const chain = { select: () => chain, eq: () => chain, maybeSingle: async () => ({ data: row, error: null }),
+      update: (patch: Record<string, unknown>) => { updates.push(patch); return chain; } };
+    if (!queueOk) queueEmail.mockRejectedValueOnce(new Error("queue unavailable"));
+    expect(await runRecurringPaymentLinkFallback({ from: () => chain } as never, "booking-1")).toBe(queueOk);
+    expect(queueEmail).toHaveBeenCalledOnce(); expect(email).not.toHaveBeenCalled(); expect(sms).not.toHaveBeenCalled();
+    expect(updates.some(patch => "recurring_fallback_at" in patch)).toBe(queueOk);
+    if (queueOk) expect(persist).toHaveBeenCalledWith(expect.anything(), "booking-1", expect.objectContaining({ emailDeferredUntilIso: expect.any(String) }), expect.anything());
   });
 });
