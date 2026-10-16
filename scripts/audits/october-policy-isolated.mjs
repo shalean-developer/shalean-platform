@@ -258,5 +258,65 @@ await db.query('delete from auth.users where id=$1',[actor]);
 assert.equal((await db.query('select created_by from cleaner_earnings_adjustments')).rows[0].created_by,null);checks++;
 assert.equal((await db.query('select created_by_email from cleaner_earnings_adjustments')).rows[0].created_by_email,'admin@example.com');checks++;
 assert.deepEqual((await db.query('select to_jsonb(b) value from bookings b')).rows,beforeAuthDelete);checks++;
+// Real member-link RPCs, in memory only. The existing month gate runs with a
+// controlled test clock so the same October fixture can prove open/closed cases.
+await db.exec(`truncate bookings,booking_cleaners,cleaner_earnings_adjustments,cleaner_earnings,booking_roster_member_payouts,team_job_member_payouts,cleaner_earnings_disputes;
+alter table bookings add status text,add is_test boolean,add refunded_at timestamptz,add refund_status text;
+alter table booking_roster_member_payouts add id uuid default gen_random_uuid();
+alter table team_job_member_payouts add id uuid default gen_random_uuid(),add payout_cents integer;
+create table monthly_invoices(id uuid primary key,status text);
+create table cleaner_payout_runs(id uuid primary key,status text,total_amount_cents bigint);
+create table cleaner_payouts(id uuid primary key default gen_random_uuid(),cleaner_id uuid,total_amount_cents bigint,calculated_amount_cents bigint,
+status text,period_start date,period_end date,created_by uuid,payout_run_id uuid,adjustment_note text,amount_adjusted_at timestamptz,amount_adjusted_by uuid);`);
+const dateSource=await readFile(new URL('../../supabase/migrations/20261014155906_audit_03c02_protect_historical_item_deletes.sql',import.meta.url),'utf8');
+await db.exec(dateSource.match(/create or replace function public\.audit_03c02_trim[\s\S]*?\$\$;/i)[0]);
+await db.exec(dateSource.match(/create or replace function public\.audit_03c02_visit_date[\s\S]*?\$\$;/i)[0]);
+const rpcSource=await readFile(new URL('../../supabase/migrations/20261014142019_audit_03c02_october_rpc_fences.sql',import.meta.url),'utf8');
+const monthGate=rpcSource.match(/create or replace function public\.audit_03c02_assert_closed_period[\s\S]*?\$\$;/i)[0];
+await db.exec(monthGate.replace('now()',"coalesce(nullif(current_setting('test.now',true),''),'2026-11-01T00:00:00Z')::timestamptz"));
+await db.exec(await readFile(new URL('../../supabase/migrations/20261016102000_october_zero_lead_member_eligibility.sql',import.meta.url),'utf8'));
+const invoice='00000000-0000-4000-8000-000000000201',memberRow='00000000-0000-4000-8000-000000000202',run='00000000-0000-4000-8000-000000000203';
+async function zeroLeadFixture({basis=0,invoiceStatus='paid',payment='success',status='eligible',date='2026-10-16',refund=null}={}) {
+ await db.exec('truncate bookings,booking_cleaners,booking_roster_member_payouts,cleaner_payouts,monthly_invoices,cleaner_payout_runs;');
+ await db.query('insert into monthly_invoices values($1,$2)',[invoice,invoiceStatus]);
+ await db.exec('alter table bookings disable trigger policy;');
+ await db.query(`insert into bookings(id,date,status,is_test,cleaner_id,payout_owner_cleaner_id,cleaner_payout_cents,cleaner_bonus_cents,
+ billing_type,monthly_invoice_id,payment_status,payout_status,payout_frozen_cents,refunded_at) values($1,$2,'completed',false,$3,$3,$4,0,'recurring_invoice',$5,$6,$7,0,$8)`,[bid,date,lead,basis,invoice,payment,status,refund]);
+ await db.exec('alter table bookings enable trigger policy;');
+ await db.query("insert into booking_roster_member_payouts(id,booking_id,cleaner_id,payout_cents,bonus_cents,status) values($1,$2,$3,26000,0,'pending')",[memberRow,bid,member]);
+}
+async function linkZeroLead() {
+ return (await db.query("select public.upsert_pending_payout_earnings(null,$1,'2026-10-01','2026-10-31',array[]::uuid[],array[$2]::uuid[],array[]::uuid[],$3) result",[member,memberRow,lead])).rows[0].result;
+}
+await zeroLeadFixture();
+await db.exec("set test.now='2026-10-16T12:00:00Z';");
+await assert.rejects(linkZeroLead(),/closed_october_or_later_month_required/);checks++;
+assert.equal((await db.query('select count(*)::integer n from cleaner_payouts')).rows[0].n,0);checks++;
+await db.exec("set test.now='2026-11-01T00:00:00Z';");
+let linked=await linkZeroLead();
+assert.equal(linked.linked_count,1);checks++;
+assert.equal(linked.total_amount_cents,26000);checks++;
+assert.equal((await db.query('select status from booking_roster_member_payouts')).rows[0].status,'batched');checks++;
+for(const patch of [{basis:null},{invoiceStatus:'sent'},{payment:'pending_monthly'},{status:'pending'},{date:'2026-09-30'},{refund:'2026-10-16T08:00:00Z'}]) {
+ await zeroLeadFixture(patch);linked=await linkZeroLead();
+ assert.equal(linked.linked_count,0);checks++;
+ assert.equal((await db.query('select count(*)::integer n from cleaner_payouts')).rows[0].n,0);checks++;
+ assert.equal((await db.query('select cleaner_payout_id from booking_roster_member_payouts')).rows[0].cleaner_payout_id,null);checks++;
+}
+// The draft-run append path must use the identical member predicate.
+for(const basis of [0,null]) {
+ await zeroLeadFixture({basis});
+ await db.query("insert into cleaner_payout_runs values($1,'draft',0)",[run]);
+ const payout=(await db.query("insert into cleaner_payouts(cleaner_id,total_amount_cents,calculated_amount_cents,status,period_start,period_end,payout_run_id) values($1,0,0,'frozen','2026-10-01','2026-10-31',$2) returning id",[member,run])).rows[0].id;
+ const count=(await db.query('select public.append_draft_run_payout_earnings($1,$2,array[]::uuid[],array[$3]::uuid[],array[]::uuid[]) n',[payout,member,memberRow])).rows[0].n;
+ assert.equal(count,basis===0?1:0);checks++;
+ assert.equal(Number((await db.query('select total_amount_cents from cleaner_payout_runs')).rows[0].total_amount_cents),basis===0?26000:0);checks++;
+}
+for(const fn of ['upsert_pending_payout_earnings(uuid,uuid,date,date,uuid[],uuid[],uuid[],uuid)','append_draft_run_payout_earnings(uuid,uuid,uuid[],uuid[],uuid[])']) {
+ for(const role of ['anon','authenticated','service_role']) {
+  assert.equal((await db.query('select has_function_privilege($1,$2,\'execute\') allowed',[role,fn])).rows[0].allowed,role==='service_role');checks++;
+ }
+}
+// End member-link RPCs.
 console.log(`${checks} isolated October policy checks passed; no remote connection.`);
 }finally{await db.close();}
