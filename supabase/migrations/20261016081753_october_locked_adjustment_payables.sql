@@ -76,12 +76,13 @@ begin
         select distinct bc.cleaner_id from public.booking_cleaners bc where bc.booking_id=new.id
         union all
         select coalesce(new.cleaner_id,new.payout_owner_cleaner_id)
-        where not exists(select 1 from public.booking_cleaners bc where bc.booking_id=new.id)
+        where coalesce(new.cleaner_id,new.payout_owner_cleaner_id) is not null
+          and not exists(select 1 from public.booking_cleaners bc where bc.booking_id=new.id)
       )
       select coalesce(sum(greatest(v_legacy_cents + coalesce((
         select sum(a.amount_cents) from public.cleaner_earnings_adjustments a
         where a.booking_id=new.id and a.cleaner_id=p.cleaner_id
-      ),0),0)),v_legacy_cents)::integer into new.internal_earnings_cents from participants p;
+      ),0),0)),0)::integer into new.internal_earnings_cents from participants p;
     end if;
 
     v_financial_cap_cents := case
@@ -122,7 +123,7 @@ begin
         select coalesce(sum(a.amount_cents),0) into v_lead_adjustment
         from public.cleaner_earnings_adjustments a
         where a.booking_id=new.id and a.cleaner_id=v_owner;
-        v_lead_total := greatest(v_legacy_cents + v_lead_adjustment,0);
+        v_lead_total := case when v_owner is null then 0 else greatest(v_legacy_cents + v_lead_adjustment,0) end;
         new.cleaner_payout_cents := least(v_legacy_cents,v_lead_total);
         new.cleaner_bonus_cents := greatest(v_lead_total-v_legacy_cents,0);
         new.payout_earnings_cents := v_lead_total;
@@ -136,6 +137,7 @@ begin
     else
       new.cleaner_payout_cents := null;
       new.payout_earnings_cents := null;
+      if new.date >= '2026-10-01' and not coalesce(new.is_team_job,false) then new.cleaner_bonus_cents:=0; end if;
       if new.payout_status is distinct from 'eligible' then
         new.payout_frozen_cents := null;
       end if;
@@ -164,7 +166,8 @@ declare
   v_lead uuid; v_base integer; v_rows jsonb; v_summary jsonb;
   v_bonus jsonb; v_deductions jsonb; v_total integer; v_written integer; v_expected integer;
 begin
-  if tg_op='INSERT' then v_ids:=array[new.booking_id];
+  if tg_table_name='bookings' then v_ids:=array[new.id];
+  elsif tg_op='INSERT' then v_ids:=array[new.booking_id];
   elsif tg_op='DELETE' then v_ids:=array[old.booking_id];
   else v_ids:=array[old.booking_id,new.booking_id]; end if;
   for v_id in select distinct x from unnest(v_ids) x order by x loop
@@ -182,19 +185,32 @@ begin
         and (mp.status is distinct from 'pending' or mp.cleaner_payout_id is not null))
       or exists(select 1 from public.team_job_member_payouts mp where mp.booking_id=v_id
         and (mp.status is distinct from 'pending' or mp.cleaner_payout_id is not null)) then continue; end if;
-    update public.bookings set internal_earnings_cents=internal_earnings_cents where id=v_id returning * into b;
-    if tg_table_name <> 'cleaner_earnings_adjustments' then continue; end if;
     -- Honor attribution removals and only refresh supported fixed-policy services.
     if coalesce((b.metadata->'payout_attribution_removal_v1'->>'active')::boolean,false)
       or lower(coalesce(b.service_slug,b.service,'')) not in ('standard','regular-cleaning','airbnb') then continue; end if;
+    v_lead:=coalesce(b.payout_owner_cleaner_id,b.cleaner_id);
+    if exists(select 1 from public.booking_cleaners where booking_id=v_id) then
+      if v_lead is null or not exists(select 1 from public.booking_cleaners where booking_id=v_id and cleaner_id=v_lead) then
+        select cleaner_id into v_lead from public.booking_cleaners where booking_id=v_id
+        order by case when role='lead' then 0 else 1 end,cleaner_id limit 1;
+      end if;
+    elsif tg_table_name='booking_cleaners' and tg_op='DELETE' then
+      -- A removed last roster participant cannot retain the direct payout rail.
+      v_lead:=null;
+    end if;
+    if tg_table_name='booking_cleaners' then
+      update public.bookings set cleaner_id=v_lead,payout_owner_cleaner_id=v_lead,
+        internal_earnings_cents=internal_earnings_cents where id=v_id returning * into b;
+    else
+      update public.bookings set internal_earnings_cents=internal_earnings_cents where id=v_id returning * into b;
+    end if;
+    -- Reject an over-cap adjustment in the same statement. Unpaid roster/booking
+    -- refreshes retain earned obligations but expose no payable member amount.
+    if tg_table_name='cleaner_earnings_adjustments' and b.cleaner_payout_cents is null then
+      raise exception 'payout_exceeds_financial_cap' using errcode='23514';
+    end if;
     v_base:=b.display_earnings_cents;
     if coalesce(v_base,0)<=0 then raise exception 'locked_recurring_earnings_basis_invalid'; end if;
-    v_lead:=coalesce(b.payout_owner_cleaner_id,b.cleaner_id);
-    if v_lead is null or (exists(select 1 from public.booking_cleaners where booking_id=v_id)
-      and not exists(select 1 from public.booking_cleaners where booking_id=v_id and cleaner_id=v_lead)) then
-      select cleaner_id into v_lead from public.booking_cleaners where booking_id=v_id
-      order by case when role='lead' then 0 else 1 end,cleaner_id limit 1;
-    end if;
     with participants as (
       select distinct cleaner_id from public.booking_cleaners where booking_id=v_id
       union select v_lead where v_lead is not null
@@ -241,8 +257,9 @@ begin
     select count(*) into v_expected from jsonb_array_elements(v_rows) r
       where r->>'cleaner_id' is distinct from v_lead::text;
     insert into public.booking_roster_member_payouts(booking_id,cleaner_id,payout_cents,bonus_cents,status)
-    select v_id,(r->>'cleaner_id')::uuid,least(v_base,(r->>'total_cents')::integer),
-      greatest((r->>'total_cents')::integer-v_base,0),'pending'
+    select v_id,(r->>'cleaner_id')::uuid,
+      case when b.cleaner_payout_cents is null then 0 else least(v_base,(r->>'total_cents')::integer) end,
+      case when b.cleaner_payout_cents is null then 0 else greatest((r->>'total_cents')::integer-v_base,0) end,'pending'
     from jsonb_array_elements(v_rows) r where r->>'cleaner_id' is distinct from v_lead::text
     on conflict(booking_id,cleaner_id) do update
       set payout_cents=excluded.payout_cents,bonus_cents=excluded.bonus_cents
@@ -255,4 +272,12 @@ begin
 end;
 $$;
 revoke all on function public.refresh_current_locked_booking_policy() from public,anon,authenticated;
+-- A previously unpaid visit can become payable without another roster/adjustment
+-- write. The refresh updates internal/summary columns only, so it cannot recurse
+-- through this column-specific trigger.
+create trigger booking_financial_refresh_current_locked_policy
+after update of recurring_id,customer_id,service,service_slug,display_earnings_cents,
+  billing_type,is_monthly_billing_booking,monthly_invoice_id,total_paid_cents,
+  total_paid_zar,amount_paid_cents,payment_status,base_amount_cents on public.bookings
+for each row execute function public.refresh_current_locked_booking_policy();
 commit;

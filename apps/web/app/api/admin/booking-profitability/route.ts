@@ -31,6 +31,8 @@ type BookingProfitQueryRow = {
   service_fee_cents: number | null;
   company_revenue_cents: number | null;
   earnings_summary: unknown;
+  internal_earnings_cents: number | null;
+  booking_cleaners: Array<{ cleaner_id: string }> | null;
   cleaner_payout_cents: number | null;
   display_earnings_cents: number | null;
   cleaner_earnings_total_cents: number | null;
@@ -60,7 +62,7 @@ export async function GET(request: Request) {
   let query = admin
     .from("bookings")
     .select(
-      "id, booking_reference, date, city_id, cleaner_id, service, service_slug, is_team_job, total_paid_zar, amount_paid_cents, total_paid_cents, service_fee_cents, company_revenue_cents, earnings_summary, cleaner_payout_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_bonus_cents, cities ( name )",
+      "id, booking_reference, date, city_id, cleaner_id, service, service_slug, is_team_job, total_paid_zar, amount_paid_cents, total_paid_cents, service_fee_cents, company_revenue_cents, earnings_summary, internal_earnings_cents, booking_cleaners ( cleaner_id ), cleaner_payout_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_bonus_cents, cities ( name )",
     )
     .eq("status", "completed")
     .eq("is_test", false)
@@ -91,6 +93,10 @@ export async function GET(request: Request) {
       const profit = computeBookingProfitabilityRow(
         {
           is_team_job: b.is_team_job === true,
+          date: b.date,
+          earnings_summary: b.earnings_summary,
+          internal_earnings_cents: b.internal_earnings_cents,
+          booking_cleaners: b.booking_cleaners,
           cleaner_earnings_total_cents: b.cleaner_earnings_total_cents,
           display_earnings_cents: b.display_earnings_cents,
         },

@@ -26,7 +26,7 @@ export async function GET(_request: Request, ctx: RouteCtx) {
   const { data: booking, error } = await admin
     .from("bookings")
     .select(
-      "id, is_team_job, total_paid_zar, amount_paid_cents, total_paid_cents, service_fee_cents, company_revenue_cents, earnings_summary, cleaner_payout_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_bonus_cents",
+      "id, date, is_team_job, total_paid_zar, amount_paid_cents, total_paid_cents, service_fee_cents, company_revenue_cents, earnings_summary, internal_earnings_cents, booking_cleaners ( cleaner_id ), cleaner_payout_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_bonus_cents",
     )
     .eq("id", id)
     .maybeSingle();
@@ -41,6 +41,10 @@ export async function GET(_request: Request, ctx: RouteCtx) {
   const profit = computeBookingProfitabilityRow(
     {
       is_team_job: booking.is_team_job === true,
+      date: booking.date,
+      earnings_summary: booking.earnings_summary,
+      internal_earnings_cents: booking.internal_earnings_cents,
+      booking_cleaners: booking.booking_cleaners,
       cleaner_earnings_total_cents: booking.cleaner_earnings_total_cents,
       display_earnings_cents: booking.display_earnings_cents,
     },

@@ -13,6 +13,7 @@ function resolvedEarningsCentsFromWireRow(
 ): number | null {
   const cents = resolveCleanerDashboardEarningsCents(
     {
+      date: typeof rec.date === "string" ? rec.date : null,
       viewer_payout_cents: rec.viewer_payout_cents,
       earnings_summary: rec.earnings_summary,
       cleaner_earnings_total_cents: rec.cleaner_earnings_total_cents,
