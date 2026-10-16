@@ -166,7 +166,7 @@ declare
   v_lead uuid; v_base integer; v_rows jsonb; v_summary jsonb;
   v_added_booking uuid; v_added_cleaner uuid; v_added_amount bigint:=0;
   v_removed_booking uuid; v_removed_cleaner uuid; v_removed_amount bigint:=0;
-  v_bonus jsonb; v_deductions jsonb; v_total integer; v_prior_obligation bigint; v_previous_total bigint; v_written integer; v_expected integer;
+  v_bonus jsonb; v_deductions jsonb; v_total integer; v_prior_obligation bigint; v_previous_total bigint; v_margin_basis bigint; v_company integer; v_margin jsonb; v_written integer; v_expected integer;
 begin
   -- FK ON DELETE SET NULL may remove the creator identity while retaining the
   -- immutable audit email. This changes no entitlement and must not touch a
@@ -292,14 +292,26 @@ begin
         'company_revenue_cents',greatest(coalesce((b.earnings_summary->>'customer_total_cents')::integer,0)-v_total-coalesce((b.earnings_summary->>'costs_cents')::integer,0),0),
         'computed_at',clock_timestamp());
       update public.bookings set earnings_summary=v_summary,
+        metadata=coalesce(b.metadata,'{}'::jsonb)-'locked_policy_company_basis_v1',
         company_revenue_cents=(v_summary->>'company_revenue_cents')::integer where id=v_id;
     elsif b.company_revenue_cents is not null then
-      -- Preserve the existing customer/cost basis while the summary is absent.
-      -- Keep the signed delta so removing a loss-making adjustment restores the
-      -- original margin rather than manufacturing revenue after a zero clamp.
-      update public.bookings set company_revenue_cents=b.company_revenue_cents
-        +coalesce(case when tg_table_name='cleaner_earnings_adjustments' then v_previous_total
-          else v_prior_obligation end,v_total)-v_total where id=v_id;
+      -- The stored share is constrained nonnegative. Retain its customer/cost
+      -- capacity while applying the zero floor so adjustment reversal restores
+      -- the original share. Invalidate this cache if canonical totals changed.
+      v_prior_obligation:=coalesce(case when tg_table_name='cleaner_earnings_adjustments'
+        then v_previous_total else v_prior_obligation end,v_total);
+      v_margin:=b.metadata->'locked_policy_company_basis_v1';
+      if jsonb_typeof(v_margin)='object'
+        and v_margin->'last_obligation_cents'=to_jsonb(v_prior_obligation)
+        and v_margin->'last_company_cents'=to_jsonb(b.company_revenue_cents)
+        and (v_margin->>'capacity_cents') ~ '^[0-9]{1,10}$' then
+        v_margin_basis:=(v_margin->>'capacity_cents')::bigint;
+      else v_margin_basis:=b.company_revenue_cents::bigint+v_prior_obligation; end if;
+      v_company:=greatest(v_margin_basis-v_total,0)::integer;
+      update public.bookings set company_revenue_cents=v_company,
+        metadata=coalesce(b.metadata,'{}'::jsonb)||jsonb_build_object('locked_policy_company_basis_v1',
+          jsonb_build_object('capacity_cents',v_margin_basis,'last_obligation_cents',v_total,
+            'last_company_cents',v_company)) where id=v_id;
     end if;
     delete from public.booking_roster_member_payouts mp where mp.booking_id=v_id
       and (mp.cleaner_id=v_lead or not exists(select 1 from jsonb_array_elements(v_rows) r
