@@ -27,7 +27,8 @@ Declared roster leads retain their participant-specific adjustment, regardless
 of insertion order. Locked financial adjustments reject explicitly; creator-only
 FK nulling retains the immutable audit email without refreshing locked payouts.
 Dispute closure and an adjustment share one service-role-only transaction, so
-rejected adjustments leave the dispute open. Retry cannot double-post.
+rejected adjustments leave the dispute open. Retry cannot double-post. Unsupported
+policies, services and formal-team adjustments reject before closing a dispute.
 
 Summary-absent Office, finance, all-time, monthly, dashboard, jobs and job-detail
 readers load policy and actual participant evidence. The unfunded lead can be
@@ -35,6 +36,9 @@ resolved from total earned obligation minus a complete set of member earned
 rows. Partial peer coverage cannot manufacture an allocation. Internal inputs
 are removed from cleaner API responses after resolving the viewer's amount.
 Historical, formal-team, undated and stale unrelated solo behavior is preserved.
+Summary-absent company share follows signed obligation deltas without losing the
+original margin on reversal. Cleaner bonus/base breakdowns use the net payable
+above fixed basis when a summary is absent.
 Today and daily-goal calculations reuse the complete earnings wire. Explicit zero
 member allocations survive Office maps and cleaner cards; missing persisted job
 earnings retain their valid runtime estimate or unavailable state.
@@ -47,8 +51,8 @@ final baseline reset preview showed current R520, projected R520, change R0.
 Fixture retirement returned exit zero; fresh reads confirmed is_test=true,
 paused schedule, retained history and no financial links.
 
-Local follow-up validation: 1,118 critical tests, TypeScript, booking-core lint,
-migration checks and 166 isolated PostgreSQL assertions. The governed staging
+Local follow-up validation: 1,119 critical tests, TypeScript, booking-core lint,
+migration checks and 181 isolated PostgreSQL assertions. The governed staging
 acceptance SQL also passes isolated execution, rollback preservation and wrong
 fixture rejection. It is staging-only tooling, excluded from production.
 Twelve exploratory April-date persistence cases also fail on untouched production
