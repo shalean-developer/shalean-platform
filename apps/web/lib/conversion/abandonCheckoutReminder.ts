@@ -55,7 +55,11 @@ export async function processAbandonCheckoutReminders(
   let skipped = 0;
   const base = getPublicAppUrlBase();
 
-  for (const raw of rows ?? []) {
+  for (const [candidateIndex, raw] of (rows ?? []).entries()) {
+    if (Date.now() - now >= 4 * 60_000) {
+      skipped += (rows?.length ?? 0) - candidateIndex;
+      break;
+    }
     const row = raw as {
       id: string;
       customer_email?: string | null;
@@ -96,6 +100,8 @@ export async function processAbandonCheckoutReminders(
     let delivered = false;
     try {
       if (email && email.includes("@")) {
+        const latest = await checkPaymentLinkEligibility(supabase, row.id, ref, { allowUninitialized: true });
+        if (!latest.allowed) { skipped++; continue; }
         const r = await sendAbandonedCheckoutReminderEmail({
           customerEmail: email,
           firstName,

@@ -52,7 +52,7 @@ const payload = { customerEmail: "customer@example.com", customerName: "Pat", se
   bookingId: "booking-1", paystackReference: "bps_test" };
 const wa = { customerName: "Pat", paymentLink: payload.paymentUrl, service: payload.serviceLabel, date: payload.dateLabel, time: payload.timeLabel };
 
-function makeAdmin(reference: string | null = "bps_test", recoveryAttempts = 0) {
+function makeAdmin(reference: string | null = "bps_test", recoveryAttempts = 0, candidateCount = 1) {
   const updates: Record<string, unknown>[] = [];
   const admin = { from: (table: string) => {
     const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), is: vi.fn(() => chain),
@@ -61,8 +61,8 @@ function makeAdmin(reference: string | null = "bps_test", recoveryAttempts = 0) 
       maybeSingle: vi.fn(async () => ({ data: table === "booking_payment_recovery_jobs"
         ? { id: "job-1", status: "pending", attempts: recoveryAttempts }
         : { id: "booking-1", status: "pending_payment", paystack_reference: reference, payment_link_delivery: {} }, error: null })),
-      limit: vi.fn(async () => ({ data: [{ id: "booking-1", customer_email: payload.customerEmail,
-        customer_phone: "+27000000000", paystack_reference: reference }], error: null })),
+      limit: vi.fn(async () => ({ data: Array.from({ length: candidateCount }, (_, index) => ({ id: `booking-${index + 1}`, customer_email: payload.customerEmail,
+        customer_phone: "+27000000000", paystack_reference: reference })), error: null })),
     };
     return chain;
   }, rpc: vi.fn(async () => ({ data: [{ id: "queue-1", booking_id: "booking-1", processing_token: "token",
@@ -172,10 +172,25 @@ describe("actual payment message entry points", () => {
   });
   it("releases an abandoned reminder claim when the SMS eligibility recheck is transient", async () => {
     abandonedEmail.mockResolvedValue({ sent: false });
-    eligibility.mockResolvedValueOnce({ allowed: true }).mockResolvedValueOnce({ allowed: false, reason: "gateway_unavailable", retryable: true });
+    eligibility.mockResolvedValueOnce({ allowed: true }).mockResolvedValueOnce({ allowed: true }).mockResolvedValueOnce({ allowed: false, reason: "gateway_unavailable", retryable: true });
     await processAbandonCheckoutReminders(makeAdmin().admin);
     expect(sms).not.toHaveBeenCalled();
     expect(release).toHaveBeenCalledWith(expect.anything(), "bps_test", "first");
+  });
+  it("suppresses abandonment delivery when payment settles during claim acquisition", async () => {
+    eligibility.mockResolvedValueOnce({ allowed: true }).mockResolvedValueOnce({ allowed: false, reason: "booking_paid" });
+    await processAbandonCheckoutReminders(makeAdmin().admin);
+    expect(abandonedEmail).not.toHaveBeenCalled(); expect(sms).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledWith(expect.anything(), "bps_test", "first");
+  });
+  it("bounds abandonment verification work within its run budget", async () => {
+    vi.useFakeTimers();
+    try {
+      const started = Date.now();
+      abandonedEmail.mockImplementationOnce(async () => { vi.setSystemTime(started + 4 * 60_000 + 1); return { sent: true }; });
+      expect(await processAbandonCheckoutReminders(makeAdmin("bps_test", 0, 2).admin)).toMatchObject({ sent: 1, skipped: 1 });
+      expect(abandonedEmail).toHaveBeenCalledOnce();
+    } finally { vi.useRealTimers(); }
   });
   it("releases an abandoned reminder claim after a provider exception", async () => {
     abandonedEmail.mockRejectedValueOnce(new Error("provider unavailable"));
@@ -220,6 +235,16 @@ describe("actual payment message entry points", () => {
     await processPaymentRecoveryJob(admin, job);
     expect(recoveryEmail).toHaveBeenCalledOnce();
     expect(release).toHaveBeenCalledWith(admin, "bps_test", "first");
+  });
+  it("suppresses a legacy reminder after payment settles while its claim is acquired", async () => {
+    const { buildPaymentRecoveryEmailContext } = await import("@/lib/email/paymentRecoveryEmails");
+    vi.mocked(buildPaymentRecoveryEmailContext).mockReturnValue({ bookingId: "booking-1", to: payload.customerEmail,
+      customerName: "Pat", serviceLabel: payload.serviceLabel, dateLabel: payload.dateLabel, timeLabel: payload.timeLabel,
+      amountZar: 458, paymentUrl: payload.paymentUrl, paystackReference: "bps_test" });
+    eligibility.mockResolvedValueOnce({ allowed: true }).mockResolvedValueOnce({ allowed: false, reason: "booking_paid" });
+    expect(await processPaymentRecoveryJob(makeAdmin().admin, { id: "job-1", booking_id: "booking-1", job_type: "payment_reminder_1h",
+      customer_email: payload.customerEmail, attempts: 0 })).toBe("skipped");
+    expect(recoveryEmail).not.toHaveBeenCalled(); expect(release).toHaveBeenCalledWith(expect.anything(), "bps_test", "first");
   });
   it("allows expiry recovery to evaluate a booking that never received a gateway reference", async () => {
     expire.mockResolvedValueOnce({ ok: true, transitioned: true });
@@ -329,9 +354,23 @@ describe("initial and recurring delivery outcomes", () => {
     const chain = { select: () => chain, eq: () => chain, maybeSingle: async () => ({ data: row, error: null }),
       update: (patch: Record<string, unknown>) => { updates.push(patch); return chain; } };
     if (!queueOk) queueEmail.mockRejectedValueOnce(new Error("queue unavailable"));
-    expect(await runRecurringPaymentLinkFallback({ from: () => chain } as never, "booking-1")).toBe(queueOk);
+    const queueLookup = { select: () => queueLookup, eq: () => queueLookup, limit: () => queueLookup, maybeSingle: async () => ({ data: null, error: null }) };
+    expect(await runRecurringPaymentLinkFallback({ from: (table: string) => table === "bookings" ? chain : queueLookup } as never, "booking-1")).toBe(queueOk);
     expect(queueEmail).toHaveBeenCalledOnce(); expect(email).not.toHaveBeenCalled(); expect(sms).not.toHaveBeenCalled();
     expect(updates.some(patch => "recurring_fallback_at" in patch)).toBe(queueOk);
     if (queueOk) expect(persist).toHaveBeenCalledWith(expect.anything(), "booking-1", expect.objectContaining({ emailDeferredUntilIso: expect.any(String) }), expect.anything());
+  });
+  it("repairs a failed recurring marker without replacing queued work or initializing another reference", async () => {
+    let queued = false; let markerFailures = 1; let patch: Record<string, unknown> = {};
+    const booking = { select: () => booking, eq: () => booking, maybeSingle: async () => ({ data: row, error: null }),
+      update: (next: Record<string, unknown>) => { patch = next; return booking; },
+      then: (resolve: (value: unknown) => unknown) => resolve({ error: "recurring_fallback_at" in patch && markerFailures-- > 0 ? { message: "marker unavailable" } : null }) };
+    const queueLookup = { select: () => queueLookup, eq: () => queueLookup, limit: () => queueLookup,
+      maybeSingle: async () => ({ data: queued ? { id: "queued-1" } : null, error: null }) };
+    queueEmail.mockImplementationOnce(async () => { queued = true; return { runAtIso: new Date().toISOString() }; });
+    const admin = { from: (table: string) => table === "bookings" ? booking : queueLookup } as never;
+    expect(await runRecurringPaymentLinkFallback(admin, "booking-1")).toBe(false);
+    expect(await runRecurringPaymentLinkFallback(admin, "booking-1")).toBe(true);
+    expect(queueEmail).toHaveBeenCalledOnce(); expect(initialize).toHaveBeenCalledOnce();
   });
 });
