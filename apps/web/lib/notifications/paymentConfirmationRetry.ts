@@ -9,7 +9,9 @@ import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog"
 export async function processPaymentConfirmationRetries(admin: SupabaseClient) {
   const stats = { processed: 0, completed: 0, retained: 0, errors: 0 };
   const { data: jobs, error } = await admin.from("failed_jobs").select("id, payload, attempts")
-    .eq("type", PAYMENT_CONFIRMATION_NOTIFICATION_JOB).order("created_at", { ascending: true }).limit(5);
+    .eq("type", PAYMENT_CONFIRMATION_NOTIFICATION_JOB)
+    .or(`payload->>notification_retry_at.is.null,payload->>notification_retry_at.lte.${new Date().toISOString()}`)
+    .order("created_at", { ascending: true }).limit(5);
   if (error) {
     await reportOperationalIssue("error", "payment_confirmation_retry", error.message);
     return { ...stats, errors: 1 };
@@ -57,8 +59,9 @@ export async function processPaymentConfirmationRetries(admin: SupabaseClient) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const attempts = Number(job.attempts ?? 0) + 1;
+      const retryAt = new Date(Date.now() + Math.min(3600, 60 * 2 ** Math.min(attempts, 6)) * 1000).toISOString();
       const { error: updateError } = await admin.from("failed_jobs").update({
-        attempts, payload: { ...payload, last_error: message.slice(0, 4000) },
+        attempts, payload: { ...payload, last_error: message.slice(0, 4000), notification_retry_at: retryAt },
       }).eq("id", job.id);
       stats.retained++;
       if (updateError) stats.errors++;

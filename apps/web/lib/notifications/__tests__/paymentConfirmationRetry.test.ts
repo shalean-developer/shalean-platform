@@ -8,8 +8,9 @@ const payload = { bookingId: "11111111-1111-4111-8111-111111111111", paymentRefe
   customerEmail: "customer@example.com", snapshot: null };
 function setup(options?: { readError?: boolean; invalid?: boolean; paid?: boolean }) {
   const updates: Record<string, unknown>[] = []; const deleted: string[] = [];
+  const filters: string[] = [];
   const admin = { from: (table: string) => {
-    const chain = { select: () => chain, eq: () => chain, order: () => chain,
+    const chain = { select: () => chain, eq: () => chain, order: () => chain, or: (filter: string) => { filters.push(filter); return chain; },
       limit: async () => ({ data: [{ id: "job-1", attempts: 2, payload: options?.invalid ? {} : payload }], error: null }),
       maybeSingle: async () => ({ data: { status: "pending", payment_status: options?.paid === false ? "pending" : "success", paystack_reference: "bps_paid" },
         error: options?.readError ? { message: "database unavailable" } : null }),
@@ -18,7 +19,7 @@ function setup(options?: { readError?: boolean; invalid?: boolean; paid?: boolea
       then: (resolve: (value: unknown) => unknown) => resolve({ error: null }),
     }; return chain;
   } } as never;
-  return { admin, updates, deleted };
+  return { admin, updates, deleted, filters };
 }
 beforeEach(() => { vi.clearAllMocks(); notify.mockResolvedValue({ failed: false, customerEmailSent: true, dedupeSkipped: false }); });
 describe("durable payment confirmation recovery", () => {
@@ -33,6 +34,8 @@ describe("durable payment confirmation recovery", () => {
     expect(await processPaymentConfirmationRetries(offline.admin)).toMatchObject({ retained: 1, completed: 0 });
     expect(notify).not.toHaveBeenCalled(); expect(offline.deleted).toEqual([]);
     expect(offline.updates).toContainEqual(expect.objectContaining({ attempts: 3 }));
+    expect(offline.updates).toContainEqual(expect.objectContaining({ payload: expect.objectContaining({ notification_retry_at: expect.any(String) }) }));
+    expect(offline.filters[0]).toContain("notification_retry_at.lte.");
     notify.mockResolvedValueOnce({ failed: true, error: "provider unavailable" });
     expect(await processPaymentConfirmationRetries(setup().admin)).toMatchObject({ retained: 1, completed: 0 });
   });
@@ -46,5 +49,24 @@ describe("durable payment confirmation recovery", () => {
     expect(await processPaymentConfirmationRetries(admin)).toMatchObject({ errors: 1 });
     expect(updates).toContainEqual({ type: "payment_confirmation_notification_invalid_payload" });
     expect(notify).not.toHaveBeenCalled();
+  });
+  it("processes newer due work while five older confirmations are in backoff", async () => {
+    const jobs = [...Array.from({ length: 5 }, (_, i) => ({ id: `old-${i}`, payload: { ...payload,
+      notification_retry_at: new Date(Date.now() + 3600_000).toISOString() }, attempts: 3 })),
+    { id: "new-job", payload, attempts: 0 }];
+    const deleted: string[] = [];
+    const admin = { from: (table: string) => {
+      let dueOnly = false; let deleting = false;
+      const chain = { select: () => chain, order: () => chain, or: () => { dueOnly = true; return chain; },
+        eq: (_column: string, value: string) => { if (deleting) deleted.push(value); return chain; },
+        limit: async (limit: number) => ({ data: jobs.filter(job => !dueOnly || !("notification_retry_at" in job.payload) ||
+          Date.parse(String(job.payload.notification_retry_at)) <= Date.now()).slice(0, limit), error: null }),
+        maybeSingle: async () => ({ data: { status: "pending", payment_status: "success", paystack_reference: "bps_paid" }, error: null }),
+        delete: () => { deleting = table === "failed_jobs"; return chain; },
+        then: (resolve: (value: unknown) => unknown) => resolve({ error: null }),
+      }; return chain;
+    } } as never;
+    expect(await processPaymentConfirmationRetries(admin)).toMatchObject({ completed: 1, processed: 1 });
+    expect(deleted).toEqual(["new-job"]); expect(notify).toHaveBeenCalledOnce();
   });
 });

@@ -351,12 +351,21 @@ describe("initial and recurring delivery outcomes", () => {
   const row = { id: "booking-1", customer_id: "customer-1", status: "pending_payment", customer_name: "Pat Customer",
     customer_email: payload.customerEmail, customer_phone: "+27000000000", total_price: 458,
     booking_snapshot: { locked: { service: "regular-cleaning", date: "2026-10-18", time: "09:00" } } };
+  it("never queues an initial payment request after payment succeeds", async () => {
+    eligibility.mockResolvedValue({ allowed: false, reason: "gateway_paid" });
+    expect(await sendAdminPaystackDeliveryForRow(makeAdmin().admin, { row: row as unknown as AdminPaystackBookingHead,
+      authorizationUrl: payload.paymentUrl, reference: "bps_test", notificationMode: "chain", locked: {} })).toBe(false);
+    expect(queueEmail).not.toHaveBeenCalled(); expect(persist).not.toHaveBeenCalled(); expect(email).not.toHaveBeenCalled();
+  });
   it.each([false, true])("reports actual provider acceptance as %s for reused checkout notifications", async (allowed) => {
     eligibility.mockResolvedValue(allowed ? { allowed: true } : { allowed: false, reason: "gateway_unavailable", retryable: true });
     const sent = await sendAdminPaystackDeliveryForRow(makeAdmin().admin, { row: row as unknown as AdminPaystackBookingHead,
       authorizationUrl: payload.paymentUrl, reference: "bps_test", notificationMode: "chain", locked: {} });
     expect(sent).toBe(allowed);
-    if (!allowed) { expect(email).not.toHaveBeenCalled(); expect(persist).not.toHaveBeenCalled(); }
+    if (!allowed) {
+      expect(email).not.toHaveBeenCalled(); expect(queueEmail).toHaveBeenCalledOnce();
+      expect(persist).toHaveBeenCalledWith(expect.anything(), "booking-1", expect.objectContaining({ emailDeferredUntilIso: expect.any(String), suppressedReason: undefined }), expect.anything());
+    }
   });
   it.each([false, true])("marks recurring fallback only after durable queue acceptance: %s", async (queueOk) => {
     const updates: Record<string, unknown>[] = [];
