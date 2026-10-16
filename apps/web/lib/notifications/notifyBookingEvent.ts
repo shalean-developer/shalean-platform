@@ -461,6 +461,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       });
       debugSmsClaimed = claimedSms;
       if (claimedSms) {
+        try {
         const phoneNotifyCtx = { bookingId: event.bookingId, stage: "payment_confirmed", channel: "customer_sms" };
         const country = inferCustomerCountryForNotifications({ phone: custPhone, snapshot: event.snapshot });
         const contactHealth = await getCustomerContactHealthScore({
@@ -490,7 +491,6 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             : "email_failed_sms_fallback";
 
         const paymentSmsRole: SmsRole = hasEmail && !cust.sent ? "fallback" : "primary";
-        try {
           await applyFallbackDelayIfNeeded(supabase, {
             userId: payUserId || null,
             bookingId: event.bookingId,
@@ -539,6 +539,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           });
         }
       } else {
+        delivery = { ...delivery, failed: false, error: undefined, dedupeSkipped: true };
         notifyBookingDebug("payment_confirmed_customer_sms_dedupe_skip", { bookingId: event.bookingId });
       }
     } else if (custPhone && emailSent) {
@@ -568,6 +569,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           bookingId: event.bookingId,
         });
         if (!claimedAdminEmail) return;
+        try {
         const adminAssignmentNote =
           payload.showCleanerSubstitutionNotice && payload.fallbackReason
             ? `<p style="font-family:system-ui,sans-serif;font-size:14px;color:#92400e"><strong>Checkout assignment:</strong> auto_fallback — ${escapeHtml(payload.fallbackReason)}</p>`
@@ -612,6 +614,12 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             eventType: "payment_confirmed_admin",
             channel: "email",
             bookingId: event.bookingId,
+          });
+        }
+        } catch (error) {
+          delivery = { ...delivery, failed: true, error: error instanceof Error ? error.message : String(error) };
+          await releaseNotificationIdempotencyClaim(supabase, {
+            reference: event.paymentReference, eventType: "payment_confirmed_admin", channel: "email", bookingId: event.bookingId,
           });
         }
       },
