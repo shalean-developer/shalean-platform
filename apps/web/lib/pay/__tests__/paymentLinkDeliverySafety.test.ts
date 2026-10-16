@@ -4,7 +4,8 @@ const { eligibility, claim, release, email, abandonedEmail, sms } = vi.hoisted((
 }));
 const { recoveryEmail, expire, adminMock, persist } = vi.hoisted(() => ({ recoveryEmail: vi.fn(), expire: vi.fn(), adminMock: vi.fn(), persist: vi.fn() }));
 const { providerSend } = vi.hoisted(() => ({ providerSend: vi.fn() }));
-vi.mock("@/lib/email/resendFrom", () => ({ getResend: () => ({ emails: { send: providerSend } }) }));
+vi.mock("@/lib/email/resendFrom", () => ({ getResend: () => ({ emails: { send: providerSend } }), getDefaultFromAddress: () => "office@example.com" }));
+vi.mock("@/lib/templates/store", () => ({ getTemplate: async () => null }));
 vi.mock("@/lib/email/recipientSafety", () => ({ validateEmailRecipients: () => ({ allowed: true }) }));
 vi.mock("@/lib/env/outboundMessagingSafety", () => ({ decideOutboundEmail: () => ({ allowed: true }), applyOutboundSubjectPrefix: (subject: string) => subject }));
 vi.mock("@/lib/email/syncResendAudienceContact", () => ({ syncResendAudienceContact: vi.fn() }));
@@ -232,6 +233,16 @@ describe("provider acceptance survives recovery-record failures", () => {
     const { safeResendSend } = await import("@/lib/email/safeResendSend");
     expect(await safeResendSend({ from: "office@example.com", to: "customer@example.com", subject: "Payment reminder", text: "Synthetic test" }))
       .toEqual({ data: { id: "email-accepted" }, error: null });
+    expect(providerSend).toHaveBeenCalledOnce();
+  });
+  it.each(["notification_logs", "all"])("keeps actual customer delivery accepted after %s audit failure", async (failedTable) => {
+    adminMock.mockReturnValue({ from: (table: string) => ({ insert: async () => {
+      if (failedTable === "all" || failedTable === table) throw new Error("audit database offline");
+      return { error: null };
+    } }) });
+    const { sendCustomerEmailWithDbTemplateFallback } = await import("@/lib/email/customerEmailFromTemplate");
+    expect(await sendCustomerEmailWithDbTemplateFallback({ to: "customer@example.com", templateKey: "payment_link", data: {},
+      logEventType: "payment_link_sent", buildLegacy: () => ({ subject: "Payment reminder", html: "Synthetic test" }) })).toEqual({ sent: true });
     expect(providerSend).toHaveBeenCalledOnce();
   });
 });
