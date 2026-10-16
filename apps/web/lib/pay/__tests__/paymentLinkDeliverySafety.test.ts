@@ -43,7 +43,7 @@ function makeAdmin(reference: string | null = "bps_test") {
       update: vi.fn((patch: Record<string, unknown>) => { updates.push(patch); return chain; }),
       maybeSingle: vi.fn(async () => ({ data: table === "booking_payment_recovery_jobs"
         ? { id: "job-1", status: "pending", attempts: 0 }
-        : { id: "queue-1", status: "pending_payment", paystack_reference: "bps_test", payment_link_delivery: {} }, error: null })),
+        : { id: "booking-1", status: "pending_payment", paystack_reference: reference, payment_link_delivery: {} }, error: null })),
       limit: vi.fn(async () => ({ data: [{ id: "booking-1", customer_email: payload.customerEmail,
         customer_phone: "+27000000000", paystack_reference: reference }], error: null })),
     };
@@ -185,6 +185,14 @@ describe("actual payment message entry points", () => {
     await processPaymentRecoveryJob(admin, job);
     expect(recoveryEmail).toHaveBeenCalledOnce();
     expect(release).toHaveBeenCalledWith(admin, "bps_test", "first");
+  });
+  it("allows expiry recovery to evaluate a booking that never received a gateway reference", async () => {
+    expire.mockResolvedValueOnce({ ok: true, transitioned: true });
+    recoveryEmail.mockResolvedValue({ sent: false, error: "email unavailable" });
+    await processPaymentRecoveryJob(makeAdmin(null).admin, { id: "job-1", booking_id: "booking-1", job_type: "booking_payment_expired",
+      customer_email: payload.customerEmail, attempts: 0 });
+    expect(eligibility).toHaveBeenCalledWith(expect.anything(), "booking-1", "", { allowExpired: true, allowUninitialized: true });
+    expect(expire).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ bookingId: "booking-1" }));
   });
   it("retries an unverified deferred payment request without sending email or SMS", async () => {
     eligibility.mockResolvedValue({ allowed: false, reason: "gateway_unavailable", retryable: true });
