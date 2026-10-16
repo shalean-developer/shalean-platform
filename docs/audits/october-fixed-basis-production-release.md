@@ -63,3 +63,22 @@ payables now feed summary-absent preview, finance and cleaner/Office allocation.
 The governed rollback-only staging acceptance SQL uses only the already retired,
 owned synthetic AUDIT956 fixture and refuses settlement/history/ownership drift.
 It is staging tooling and is excluded from the bounded production release.
+
+Unfunded invoice corrections: signed deductions/non-increasing obligation
+changes are accepted while direct/member payable rails remain suppressed.
+The pre-write obligation is reconstructed from actual participants and OLD/NEW
+adjustment values, including individual zero floors; stale headers cannot cause
+a valid deduction to fail or mask an obligation increase. Net increases beyond
+the financial cap still reject atomically. Summary-absent solo earned obligations
+remain visible using explicit policy/roster evidence even while unfunded.
+
+Roster replacement order is covered explicitly: a member inserted before a
+later declared lead cannot retain the header/direct payout ownership. Every
+roster-triggered rebuild follows the declared lead and keeps participant-specific
+adjustments on the correct cleaner. The replacement-order regression verifies
+header ownership, summary roles and both payable rails.
+
+Removal-marker scope remains tied to the removed header cleaner. Real roster
+replacements restore the fixed basis without deleting or deactivating the old
+marker; the intentionally removed October bookings remain suppressed. Undated
+financial projections also retain their prior resolution behavior.

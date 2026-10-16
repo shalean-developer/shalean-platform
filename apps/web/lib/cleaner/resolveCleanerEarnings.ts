@@ -79,15 +79,18 @@ export function resolveBookingWideCleanerEarningsCents(row: BookingWideCleanerEa
   // October forward: unequal participant adjustments are not exact multiples of
   // a display basis. Actual roster evidence (or a persisted participant summary
   // when the caller has no roster projection) identifies a booking-wide amount.
-  if (row.date == null || row.date >= "2026-10-01") {
+  if ((row.date != null && row.date >= "2026-10-01")
+    || (row.date === undefined && row.roster_cleaner_count != null)) {
     const summary = parseBookingEarningsSummary(row.earnings_summary);
     const rosterCount = row.roster_cleaner_count ?? (row.booking_cleaners == null ? null
       : new Set(row.booking_cleaners.map(r => String(r.cleaner_id ?? "").trim()).filter(Boolean)).size);
     const paired = rosterCount == null ? (summary?.cleaner_count ?? 0) > 1 : rosterCount > 1;
     const directPayout = optionalCentsFromDb(row.cleaner_payout_cents);
     if (row.date != null && row.date >= "2026-10-01" && row.earnings_policy === "legacy_july"
-      && rosterCount != null && rosterCount <= 1 && directPayout != null) {
-      return {cleaner_cost_cents:Math.max(0,directPayout+(optionalCentsFromDb(row.cleaner_bonus_cents)??0)),
+      && rosterCount != null && rosterCount <= 1
+      && (directPayout != null || optionalCentsFromDb(row.internal_earnings_cents) != null)) {
+      return {cleaner_cost_cents:directPayout == null ? optionalCentsFromDb(row.internal_earnings_cents)!
+        : Math.max(0,directPayout+(optionalCentsFromDb(row.cleaner_bonus_cents)??0)),
         incomplete_team_earnings:false,included_in_trusted_totals:true};
     }
     const obligation = summary?.total_cleaner_earnings_cents
@@ -125,6 +128,9 @@ export function resolveCleanerDashboardEarningsCents(
     payout_owner_cleaner_id?: string | null;
     cleaner_payout_cents?: unknown;
     cleaner_bonus_cents?: unknown;
+    internal_earnings_cents?: unknown;
+    roster_cleaner_count?: number;
+    booking_cleaners?: Array<{ cleaner_id?: string | null }> | null;
     viewer_payout_cents?: unknown;
     earnings_summary?: unknown;
     cleaner_earnings_total_cents?: unknown;
@@ -167,6 +173,13 @@ export function resolveCleanerDashboardEarningsCents(
     && !summary && direct != null && !(frozen != null && frozen > 0)) {
     return Math.max(0,direct+(optionalCentsFromDb(booking.cleaner_bonus_cents)??0));
   }
+  const participantCount=booking.roster_cleaner_count ?? (booking.booking_cleaners == null ? null
+    : new Set(booking.booking_cleaners.map(r=>r.cleaner_id).filter(Boolean)).size);
+  const obligation=optionalCentsFromDb(booking.internal_earnings_cents);
+  if (booking.date != null && booking.date >= "2026-10-01" && booking.earnings_policy === "legacy_july"
+    && cleanerId === (booking.payout_owner_cleaner_id ?? booking.cleaner_id) && !summary
+    && direct == null && participantCount != null && participantCount <= 1 && obligation != null
+    && !(frozen != null && frozen > 0)) return obligation;
   const locked = resolveCleanerEarningsCents(booking);
   if (locked !== null) return Math.max(0, Math.round(locked));
 

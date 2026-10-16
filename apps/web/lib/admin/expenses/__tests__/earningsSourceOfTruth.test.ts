@@ -62,6 +62,11 @@ describe("October adjusted paired financial cost",()=>{
       booking_cleaners:[{cleaner_id:"lead"},{cleaner_id:"member"}]};
     expect(resolveBookingProfitabilityCleanerCost(b).cleaner_cost_cents).toBe(52000);
   });
+  it("preserves undated historical financial resolution",()=>{
+    expect(resolveBookingProfitabilityCleanerCost({date:null,is_team_job:false,
+      display_earnings_cents:26000,cleaner_earnings_total_cents:52000,internal_earnings_cents:52500,
+      booking_cleaners:[{cleaner_id:"lead"},{cleaner_id:"member"}]}).cleaner_cost_cents).toBe(52000);
+  });
   it("does not let a solo internal aggregate override the display lock",()=>{
     expect(resolveBookingProfitabilityCleanerCost({date:"2026-10-16",is_team_job:false,
       display_earnings_cents:26000,cleaner_earnings_total_cents:99999,internal_earnings_cents:99999,
