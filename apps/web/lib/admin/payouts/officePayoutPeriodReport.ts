@@ -84,6 +84,9 @@ type BookingPeriodRow = {
   display_earnings_cents: number | null;
   cleaner_earnings_total_cents: number | null;
   cleaner_payout_cents: number | null;
+  cleaner_bonus_cents?: number | null;
+  earnings_policy?: string | null;
+  internal_earnings_cents?: number | null;
   total_paid_zar: number | null;
   amount_paid_cents: number | null;
   total_paid_cents: number | null;
@@ -310,7 +313,7 @@ export function perCleanerAllocationsForBooking(
     | "cleaner_earnings_total_cents"
     | "payout_frozen_cents"
     | "metadata"
-  >,
+  > & { date?: string | null; cleaner_bonus_cents?: number | null; earnings_policy?: string | null; internal_earnings_cents?: number | null },
   roster: readonly RosterCleanerRef[],
   teamMemberPayouts?: readonly { cleaner_id: string; payout_cents: number; cleaner_payout_id?: string | null }[],
 ): CleanerVisitAllocation[] {
@@ -332,7 +335,7 @@ export function perCleanerAllocationsForBooking(
         const cents = Math.max(0, Math.round(Number(row.payout_cents) || 0));
         return [cleanerId, cents] as const;
       })
-      .filter(([cleanerId, cents]) => cleanerId && cents > 0),
+      .filter(([cleanerId]) => Boolean(cleanerId)),
   );
   const teamPayoutIdByCleanerId = new Map(
     (teamMemberPayouts ?? [])
@@ -347,6 +350,9 @@ export function perCleanerAllocationsForBooking(
     resolveCleanerDashboardEarningsCents(
       {
         ...booking,
+        roster_cleaner_count:rosterIds.length,
+        booking_cleaners:rosterIds.map(cleaner_id=>({cleaner_id})),
+        booking_roster_member_payouts:teamMemberPayouts?.map(row=>({cleaner_id:row.cleaner_id,payout_cents:row.payout_cents,bonus_cents:0})),
         viewer_payout_cents: teamPayoutCentsByCleanerId.get(cleanerId),
       },
       cleanerId,
@@ -541,7 +547,7 @@ export async function loadOfficePayoutPeriodReport(
     admin
       .from("bookings")
       .select(
-        "id, date, cleaner_id, payout_owner_cleaner_id, payout_status, payout_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, total_paid_zar, total_paid_cents, amount_paid_cents, company_revenue_cents, earnings_summary, metadata",
+        "id, date, cleaner_id, payout_owner_cleaner_id, payout_status, payout_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_bonus_cents, earnings_policy, internal_earnings_cents, total_paid_zar, total_paid_cents, amount_paid_cents, company_revenue_cents, earnings_summary, metadata",
       )
       .eq("status", "completed")
       .eq("is_test", false)

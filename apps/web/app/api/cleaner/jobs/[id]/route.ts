@@ -1,3 +1,6 @@
+import { cleanerViewerMoneyFields } from "@/lib/cleaner/cleanerEarningsReadInputs";
+import { resolveCleanerBonusCents } from "@/lib/cleaner/resolveCleanerEarnings";
+import { resolveCleanerJobDetailEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { NextResponse } from "next/server";
 import {
   assignmentSourceForVisibilityLog,
@@ -133,7 +136,7 @@ function buildBookingDetailSelect(ownershipColumn: BookingCustomerOwnershipColum
   return [
     "id, service, service_slug, rooms, bathrooms, date, time, location, suburb, status, dispatch_status, pricing_version_id, customer_name, customer_phone, customer_email",
     ownershipColumn,
-    "extras, selected_extras, service_details, pricing_summary, duration_minutes, access_instructions, gate_code, parking_instructions, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, earnings_summary, total_paid_zar, total_price, amount_paid_cents, base_amount_cents, service_fee_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by, metadata",
+    "extras, selected_extras, service_details, pricing_summary, duration_minutes, access_instructions, gate_code, parking_instructions, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, earnings_policy, internal_earnings_cents, cleaner_bonus_cents, booking_cleaners ( cleaner_id ), booking_roster_member_payouts ( cleaner_id, payout_cents, bonus_cents ), payout_status, payout_paid_at, payout_frozen_cents, earnings_summary, total_paid_zar, total_price, amount_paid_cents, base_amount_cents, service_fee_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by, metadata",
   ].join(", ");
 }
 
@@ -262,7 +265,10 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         ? ((n) => (Number.isFinite(n) && n > 0 ? n : null))(Number(totalPaidZarRaw.trim()))
         : null;
   const {
+    earnings_summary: _internalEarningsSummary,
     cleaner_payout_cents: _legacyPayout,
+    earnings_policy:_policy,internal_earnings_cents:_internal,cleaner_bonus_cents:_bonus,
+    booking_cleaners:_participants,booking_roster_member_payouts:_peerAmounts,
     display_earnings_cents: _displayRaw,
     team_member_count_snapshot: _snapOmit,
     total_paid_zar: _omitPaidZar,
@@ -404,11 +410,16 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   }
   const jobEarningCents = attributionRemoved
     ? null
-    : (viewerPayoutCents ?? cleanerFacing?.job_earning_cents ?? displayEarningsCents);
-  const bonusCents = attributionRemoved ? 0 : (cleanerFacing?.bonus_cents ?? 0);
+    : resolveCleanerJobDetailEarningsCents(
+        { ...record, viewer_payout_cents: viewerPayoutCents },
+        session.cleanerId,
+        viewerPayoutCents ?? cleanerFacing?.job_earning_cents ?? displayEarningsCents,
+      );
+  const bonusCents = attributionRemoved ? 0 : resolveCleanerBonusCents({...record,viewer_payout_cents:viewerPayoutCents},session.cleanerId);
 
   const jobPayload = {
     ...safe,
+    ...cleanerViewerMoneyFields(record, jobEarningCents),
     ...(banner ? { cleaner_pending_payment_banner: banner } : {}),
     ...(visMode ? { cleaner_visibility_mode: visMode } : {}),
     ...jobPayHintWire,

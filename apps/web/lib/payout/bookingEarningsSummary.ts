@@ -15,6 +15,13 @@ export type PerCleanerEarningRow = {
   total_cents: number;
 };
 
+/** Non-negative payout columns whose sum equals the net participant obligation. */
+export function payableEarningsFromSummaryRow(row: PerCleanerEarningRow) {
+  const total = Math.max(0, Math.round(row.total_cents));
+  const payoutCents = Math.min(Math.max(0, Math.round(row.base_earning_cents)), total);
+  return { payoutCents, bonusCents: total - payoutCents };
+}
+
 export type EarningsAdjustmentItem = {
   type: string;
   amount_cents: number;

@@ -1,4 +1,5 @@
 import "server-only";
+import { applyLockedRecurringBasis } from "@/lib/payout/applyLockedRecurringBasis";
 import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -54,7 +55,8 @@ async function loadAdjustments(
     .from("cleaner_earnings_adjustments")
     .select("cleaner_id, amount_cents, reason")
     .eq("booking_id", bookingId);
-  if (error || !data?.length) return [];
+  if (error) throw new Error("Could not verify cleaner earnings adjustments");
+  if (!data?.length) return [];
   return (data as Array<{ cleaner_id?: string; amount_cents?: number; reason?: string | null }>)
     .map((row) => ({
       cleaner_id: String(row.cleaner_id ?? "").trim(),
@@ -116,6 +118,22 @@ export async function resolveBookingCanonicalPayout(
   const apptIso = bookingAppointmentIsoUtc(r.date, r.time);
   const adjustments = await loadAdjustments(admin, bookingId);
 
+  // May–September and formal teams retain their existing behavior. For current
+  // standard/Airbnb jobs, the database policy lock also owns generated summaries.
+  let lockedBasis: number | null = null;
+  if (!isTeamJob && isCurrentPayoutVisitDate(r.date?.trim()) && ["standard", "airbnb"].includes(serviceId)) {
+    const { data: policy, error } = await admin.from("bookings")
+      .select("earnings_policy, display_earnings_cents").eq("id", bookingId).maybeSingle();
+    if (error) throw new Error("Could not verify booking earnings policy");
+    if (policy?.earnings_policy === "legacy_july") {
+      const cents = Number(policy.display_earnings_cents);
+      if (!Number.isSafeInteger(cents) || cents <= 0) throw new Error("locked_recurring_earnings_basis_invalid");
+      lockedBasis = cents;
+    }
+  }
+  const applyPolicy = (result: CanonicalPayoutResult) => lockedBasis === null
+    ? result : applyLockedRecurringBasis(result, lockedBasis, adjustments);
+
   if (!isTeamJob) {
     const rosterRows = await loadBookingRosterRows(admin, bookingId);
     if (isPairedRosterSoloJob({ isTeamJob: false, rosterRows })) {
@@ -131,7 +149,7 @@ export async function resolveBookingCanonicalPayout(
       });
       const leadJoinedAt = teamLeaderId ? await loadCleanerJoinedAt(admin, teamLeaderId) : null;
 
-      return resolvePairedRosterCanonicalPayout(
+      return applyPolicy(resolvePairedRosterCanonicalPayout(
         buildPairedRosterCanonicalInput({
           bookingId,
           serviceId,
@@ -147,14 +165,14 @@ export async function resolveBookingCanonicalPayout(
           adjustments,
           computedAtIso: params.computedAtIso,
         }),
-      );
+      ));
     }
 
     const soloCleanerId =
       String(params.expectedCleanerId ?? r.cleaner_id ?? r.payout_owner_cleaner_id ?? "").trim() || null;
     const joinedAt = soloCleanerId ? await loadCleanerJoinedAt(admin, soloCleanerId) : null;
 
-    return resolveCanonicalCleanerPayout({
+    return applyPolicy(resolveCanonicalCleanerPayout({
       bookingId,
       serviceId,
       serviceLabel: r.service ?? null,
@@ -167,7 +185,7 @@ export async function resolveBookingCanonicalPayout(
       adjustments,
       soloCleanerId,
       computedAtIso: params.computedAtIso,
-    });
+    }));
   }
 
   const teamId = String(r.team_id ?? "").trim();

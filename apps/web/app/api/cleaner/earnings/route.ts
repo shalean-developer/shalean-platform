@@ -1,3 +1,5 @@
+import { resolveCleanerBonusCents } from "@/lib/cleaner/resolveCleanerEarnings";
+import { cleanerEarningsReadInputs } from "@/lib/cleaner/cleanerEarningsReadInputs";
 import { NextResponse } from "next/server";
 import {
   fetchBookingIdsWhereCleanerOnRoster,
@@ -57,6 +59,11 @@ type BookingEarningsRow = {
   display_earnings_cents: number | null;
   cleaner_earnings_total_cents: number | null;
   cleaner_payout_cents: number | null;
+  cleaner_bonus_cents?: number | null;
+  earnings_policy?: string | null;
+  internal_earnings_cents?: number | null;
+  booking_cleaners?: Array<{ cleaner_id:string }> | null;
+  booking_roster_member_payouts?: Array<{cleaner_id:string;payout_cents:number;bonus_cents:number}> | null;
   is_team_job: boolean | null;
   payout_paid_at: string | null;
   payout_run_id: string | null;
@@ -201,7 +208,7 @@ export async function GET(request: Request) {
   ] = await Promise.all([
       fetchCleanerVisibleBookingsMerged(admin, session.cleanerId, {
         select:
-          "id, status, service, date, completed_at, cleaner_id, payout_owner_cleaner_id, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job, payout_paid_at, payout_run_id, total_paid_zar, amount_paid_cents, earnings_summary, admin_recurring_unpaid_completion_override_at, metadata",
+          "id, status, service, date, completed_at, cleaner_id, payout_owner_cleaner_id, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, cleaner_bonus_cents, earnings_policy, internal_earnings_cents, booking_cleaners ( cleaner_id ), booking_roster_member_payouts ( cleaner_id, payout_cents, bonus_cents ), is_team_job, payout_paid_at, payout_run_id, total_paid_zar, amount_paid_cents, earnings_summary, admin_recurring_unpaid_completion_override_at, metadata",
         perBranchLimit: 300,
         applyEachBranch: (q) =>
           q
@@ -275,6 +282,10 @@ export async function GET(request: Request) {
 
   const now = new Date();
   const goalWire: CleanerDashboardEarningsWireRow[] = rows.map((r) => ({
+    ...cleanerEarningsReadInputs(r),
+    cleaner_id: r.cleaner_id,
+    is_team_job: r.is_team_job,
+    service: r.service,
     id: r.id,
     status: "completed",
     date: r.date,
@@ -320,7 +331,7 @@ export async function GET(request: Request) {
     }
     const facing = resolveCleanerFacingEarnings(parseBookingEarningsSummary(b.earnings_summary), cleanerId);
     const cents = amountCentsForRow(b, cleanerId);
-    const bonusCents = facing?.bonus_cents ?? 0;
+    const bonusCents = resolveCleanerBonusCents(b, cleanerId);
     bonus_total_cents += bonusCents;
     const customerPaid = bookingTotalCents(b);
     if (customerPaid != null && customerPaid < cents) {
@@ -378,10 +389,10 @@ export async function GET(request: Request) {
       service: normalized.service,
       location: normalized.location,
       payout_status: dashboardWire.payout_status,
-      payout_frozen_cents: normalized.payout_frozen_cents,
+      payout_frozen_cents: normalized.payout_frozen_cents == null ? null : cents,
       amount_cents: normalized.amount_cents,
       bonus_cents: bonusCents,
-      job_earning_cents: facing?.job_earning_cents ?? normalized.amount_cents,
+      job_earning_cents: facing?.job_earning_cents ?? Math.max(0, normalized.amount_cents - bonusCents),
       payout_paid_at: dashboardWire.payout_paid_at,
       payout_run_id: dashboardWire.payout_run_id,
       in_frozen_batch: dashboardWire.in_frozen_batch,
@@ -392,22 +403,7 @@ export async function GET(request: Request) {
     };
   });
 
-  const { today_cents } = todayCentsAndBreakdownFromBookings(
-    rows.map((b) => ({
-      id: b.id,
-      service: b.service,
-      status: "completed",
-      date: b.date,
-      completed_at: b.completed_at,
-      viewer_payout_cents: b.viewer_payout_cents,
-      cleaner_earnings_total_cents: b.cleaner_earnings_total_cents,
-      payout_frozen_cents: b.payout_frozen_cents,
-      display_earnings_cents: b.display_earnings_cents,
-      earnings_summary: b.earnings_summary,
-    })),
-    now,
-    cleanerId,
-  );
+  const { today_cents } = todayCentsAndBreakdownFromBookings(goalWire, now, cleanerId);
   const { week_cents, month_cents } = earningsPeriodCentsFromRows(
     rows.map((b) => ({
       completed_at: b.completed_at,

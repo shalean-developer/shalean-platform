@@ -91,12 +91,14 @@ export async function listRosterMemberWeeklyPayoutCandidates(params: {
     const ymd = currentPayoutBatchDayYmd(booking);
     if (!ymd || !isYmdInInclusiveRange(ymd, periodStart, periodEnd)) continue;
 
-    const gate = bookingPayableForWeeklyBatch(booking, memberInvoiceStatuses);
-    if (!gate.payable) continue;
-
     const payoutCents = Math.max(0, Math.floor(Number(member.payout_cents) || 0));
     const bonusCents = Math.max(0, Math.floor(Number(member.bonus_cents) || 0));
-    if (payoutCents + bonusCents <= 0) continue;
+    if (payoutCents + bonusCents <= 0 || booking.cleaner_payout_cents == null
+      || !Number.isFinite(booking.cleaner_payout_cents) || booking.cleaner_payout_cents < 0) continue;
+    const gate = bookingPayableForWeeklyBatch(booking, memberInvoiceStatuses, {
+      payoutBasisCents: payoutCents + bonusCents,
+    });
+    if (!gate.payable) continue;
 
     out.push({
       id,
