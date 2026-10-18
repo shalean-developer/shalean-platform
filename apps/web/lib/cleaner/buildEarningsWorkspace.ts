@@ -109,6 +109,7 @@ export function buildEarningsWorkspace(input: {
   const acceptedDisbursements = new Set<string>();
   const preparingTransferVisits = new Set<string>();
   const approvedLedgerVisits = new Set<string>();
+  const dualRailVisits = new Set<string>();
   let paymentReviewCount = 0;
   let unassignedPaymentRecords = 0;
   // These are distinct settlement records, not per-visit booking amounts.
@@ -232,16 +233,20 @@ export function buildEarningsWorkspace(input: {
       settlement?.status === "approved" &&
       !settlement.disbursement_id &&
       !payoutId;
+    const dualRail = Boolean(payoutId && settlement?.disbursement_id);
+    if (dualRail) dualRailVisits.add(booking.id);
     if (date && date >= PAYOUT_PROCESSING_START_YMD) {
-      if (transferPreparing && !batch) preparingTransferVisits.add(booking.id);
+      if (transferPreparing && !payoutId)
+        preparingTransferVisits.add(booking.id);
       if (ledgerApproved) approvedLedgerVisits.add(booking.id);
     }
     let state: WorkspaceEarning["state"] = "awaiting_review";
     if (amount == null || !date) state = "needs_review";
+    else if (dualRail) state = "needs_review";
     else if ((batch && acceptedBatches.has(batch.id)) || transferPaid)
       state = "paid";
     else if (date < PAYOUT_PROCESSING_START_YMD) state = "historical_review";
-    else if (transferPreparing) {
+    else if (transferPreparing && !payoutId) {
       state = "preparing";
     } else if (settlement?.disbursement_id || settlement?.status === "paid")
       state = "needs_review";
@@ -372,6 +377,7 @@ export function buildEarningsWorkspace(input: {
         : selectedPayments.reduce((n, p) => n + p.amount_cents, 0),
       payment_review_count: paymentReviewCount,
       payment_issue_count:
+        selected.filter((r) => dualRailVisits.has(r.id)).length +
         periodBatches.filter((b) =>
           ["failed", "partial_failed"].includes(b.payment_status ?? ""),
         ).length +

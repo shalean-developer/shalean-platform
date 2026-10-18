@@ -66,6 +66,55 @@ const base = {
 };
 
 describe("earnings workspace financial presentation", () => {
+  it("flags a viewer's dual-rail payment claim without confusing the lead's batch with a member's transfer", () => {
+    const common = {
+      ...base,
+      now: new Date("2026-11-03T12:00:00Z"),
+      settlementLinks: [
+        {
+          booking_id: "conflict",
+          status: "processing",
+          disbursement_id: "processing",
+        },
+      ],
+      disbursements: [
+        { ...transfer("processing"), status: "processing", paid_at: null },
+      ],
+    };
+    for (const status of ["pending", "approved", "paid", "missing"]) {
+      const result = buildEarningsWorkspace({
+        ...common,
+        bookings: [{ ...booking("conflict"), payout_id: "batch" }],
+        batches:
+          status === "missing"
+            ? []
+            : [{ ...batch("batch", "2026-10-31T12:00:00Z", 30000), status }],
+      });
+      expect(result.earnings[0].state).toBe("needs_review");
+      expect(result.period.payment_issue_count).toBe(1);
+      expect(result.period.unbatched_cents).toBe(0);
+      expect(result.period.preparing_cents).toBe(
+        status === "pending" ? 30000 : 0,
+      );
+    }
+    const member = buildEarningsWorkspace({
+      ...common,
+      bookings: [
+        { ...booking("conflict"), cleaner_id: "lead", payout_id: "lead-batch" },
+      ],
+      rosterMembers: [
+        {
+          booking_id: "conflict",
+          payout_cents: 26000,
+          status: "pending",
+          cleaner_payout_id: null,
+        },
+      ],
+    });
+    expect(member.earnings[0].state).toBe("preparing");
+    expect(member.period.preparing_cents).toBe(26000);
+    expect(member.period.payment_issue_count).toBe(0);
+  });
   it("shows approved ledger visits using canonical direct/member amounts without double-counting a batch", () => {
     const result = buildEarningsWorkspace({
       ...base,
