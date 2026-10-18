@@ -304,8 +304,25 @@ export function buildEarningsWorkspace(input: {
         ),
         ...input.batches.flatMap((b) => {
           const date = normalizePayoutVisitDate(b.period_start);
-          return date ? [date.slice(0, 7)] : [];
+          const paidAt = instant(b.paid_at);
+          return [
+            ...(date ? [date.slice(0, 7)] : []),
+            ...(paidAt
+              ? [johannesburgCalendarYmd(new Date(paidAt)).slice(0, 7)]
+              : []),
+          ];
         }),
+        ...input.disbursements.flatMap((t) =>
+          [
+            t.paid_at,
+            t.status === "failed" ? (t.created_at ?? null) : null,
+          ].flatMap((value) => {
+            const date = instant(value);
+            return date
+              ? [johannesburgCalendarYmd(new Date(date)).slice(0, 7)]
+              : [];
+          }),
+        ),
       ]),
     ]
       .sort()

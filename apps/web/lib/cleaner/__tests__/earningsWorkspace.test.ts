@@ -66,6 +66,42 @@ const base = {
 };
 
 describe("earnings workspace financial presentation", () => {
+  it.each(["failed-transfer", "incomplete-transfer", "incomplete-batch"])(
+    "makes a month containing only a %s selectable for review",
+    (kind) => {
+      const november = "2026-10-31T22:00:00Z";
+      const input = {
+        ...base,
+        now: new Date("2026-12-15T12:00:00Z"),
+        bookings: [booking("october")],
+        disbursements:
+          kind === "incomplete-batch"
+            ? []
+            : [
+                {
+                  ...transfer("attempt"),
+                  paid_at: kind === "failed-transfer" ? null : november,
+                  status: kind === "failed-transfer" ? "failed" : "paid",
+                  paystack_reference: null,
+                  created_at: november,
+                },
+              ],
+        batches:
+          kind === "incomplete-batch"
+            ? [{ ...batch("attempt", november), payment_reference: null }]
+            : [],
+      };
+      const december = buildEarningsWorkspace({ ...input, month: "2026-12" });
+      expect(december.months).toContain("2026-11");
+      const selected = buildEarningsWorkspace({ ...input, month: "2026-11" });
+      expect(selected.period.completed_visits).toBe(0);
+      expect(selected.payments).toHaveLength(0);
+      expect(
+        selected.period.payment_issue_count +
+          selected.period.payment_review_count,
+      ).toBe(1);
+    },
+  );
   it("links completed ledger-rail payments to direct and roster visits without using ledger amounts", () => {
     const result = buildEarningsWorkspace({
       ...base,
