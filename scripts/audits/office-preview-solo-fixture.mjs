@@ -1,10 +1,16 @@
--- AUDIT963: governed, synthetic solo Office preview fixture.
+/** Governed plan-only seed adapter; execution uses the selected managed staging connection. */
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { lockedFixture } from './paired-ui-fixture.mjs';
+
+const TEMPLATE = String.raw`-- AUDIT963: governed, synthetic solo Office preview fixture.
 -- Operator: use ONLY the explicitly selected staging project after fresh health
 -- proves staging, the expected staging ref, Paystack test/test, outbound disabled,
 -- issues=[] and the reviewed #963 application SHA. Never select production.
 -- Two existing retired AUDIT956 controls below independently reject a wrong target.
--- Default is a rollback rehearsal. After successful rehearsal and read-only
--- preservation checks, replace ONLY the final ROLLBACK with COMMIT to apply.
+-- Emitted only by seed-dev.mjs after target/environment/health checks.
+-- The managed SQL adapter must bind project_id to the plan projectRef.
+-- Apply plans require the binding of a successful rollback rehearsal.
 -- No real customer, new identity, recurring schedule or money movement is created.
 -- Existing synthetic cleaner tenure is retained; 16 March 2027 is five months
 -- after its October 2026 creation, so the current standard R360 basis yields R252.
@@ -15,6 +21,7 @@ DO $audit963$
 DECLARE
   v_before jsonb;
   v_after jsonb;
+  v_crm uuid;
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM public.bookings
@@ -32,14 +39,25 @@ BEGIN
     RAISE EXCEPTION 'AUDIT963 wrong-target or changed synthetic control; no writes allowed';
   END IF;
 
+  SELECT b.crm_customer_id INTO v_crm
+  FROM public.bookings b JOIN public.customers c ON c.id=b.crm_customer_id
+  WHERE b.id='95610000-0000-4000-8000-000000000001'
+    AND c.primary_email='audit956.customer@example.com' AND c.status='active';
+  IF v_crm IS NULL THEN
+    RAISE EXCEPTION 'AUDIT963 verified pre-existing synthetic CRM customer required';
+  END IF;
+
   IF EXISTS (SELECT 1 FROM public.bookings
       WHERE (id='96310000-0000-4000-8000-000000000001'
-          OR paystack_reference='AUDIT963-PREVIEW-LINE-BASIS')
+          OR paystack_reference='AUDIT963-PREVIEW-LINE-BASIS'
+          OR lower(booking_reference)=lower('AUDIT963-R252'))
         AND (id='96310000-0000-4000-8000-000000000001'
           AND paystack_reference='AUDIT963-PREVIEW-LINE-BASIS' AND is_test
           AND metadata->>'audit_fixture'='AUDIT963-PREVIEW-LINE-BASIS'
           AND metadata->>'synthetic'='true'
-          AND customer_email='audit963.customer@example.com'
+          AND booking_reference='AUDIT963-R252' AND crm_customer_id=v_crm
+          AND customer_email IS NULL AND customer_phone IS NULL
+          AND customer_name='Audit963 Synthetic Customer'
           AND customer_id IS NULL AND recurring_id IS NULL
           AND cleaner_id='95610000-0000-4000-8000-000000000002'
           AND payout_owner_cleaner_id='95610000-0000-4000-8000-000000000002'
@@ -89,6 +107,10 @@ BEGIN
   v_before := jsonb_build_object(
     'bookings',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by id),'')) from public.bookings t where id <> '96310000-0000-4000-8000-000000000001'),
     'lines',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by id),'')) from public.booking_line_items t where booking_id <> '96310000-0000-4000-8000-000000000001'),
+    'customers',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.customers t),
+    'customer_identity_aliases',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.customer_identity_aliases t),
+    'profiles',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.profiles t),
+    'reference_sequence',(select jsonb_build_object('last_value',last_value,'is_called',is_called) from public.bookings_reference_seq),
     'cleaners',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.cleaners t),
     'booking_cleaners',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.booking_cleaners t),
     'cleaner_earnings',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.cleaner_earnings t),
@@ -108,7 +130,7 @@ BEGIN
   );
 
   INSERT INTO public.bookings (
-    id,paystack_reference,customer_name,customer_email,customer_phone,
+    id,paystack_reference,booking_reference,crm_customer_id,customer_name,customer_email,customer_phone,
     service_slug,service,date,time,is_test,is_team_job,status,dispatch_status,
     amount_paid_cents,total_paid_zar,currency,payment_status,billing_type,
     cleaner_id,payout_owner_cleaner_id,payout_status,display_earnings_cents,
@@ -117,7 +139,7 @@ BEGIN
     base_amount_cents,service_fee_cents,price_snapshot,booking_snapshot,metadata
   ) SELECT
     '96310000-0000-4000-8000-000000000001','AUDIT963-PREVIEW-LINE-BASIS',
-    'Audit963 Synthetic Customer','audit963.customer@example.com','+270000009633',
+    'AUDIT963-R252',v_crm,'Audit963 Synthetic Customer',NULL,NULL,
     'standard','Standard','2027-03-16','09:00',true,false,'assigned','assigned',
     0,360,'ZAR','pending','pay_later',
     '95610000-0000-4000-8000-000000000002','95610000-0000-4000-8000-000000000002',
@@ -139,12 +161,15 @@ BEGIN
   -- Repeat ownership, pricing and no-link guards after all insert triggers.
   IF EXISTS (SELECT 1 FROM public.bookings
       WHERE (id='96310000-0000-4000-8000-000000000001'
-          OR paystack_reference='AUDIT963-PREVIEW-LINE-BASIS')
+          OR paystack_reference='AUDIT963-PREVIEW-LINE-BASIS'
+          OR lower(booking_reference)=lower('AUDIT963-R252'))
         AND (id='96310000-0000-4000-8000-000000000001'
           AND paystack_reference='AUDIT963-PREVIEW-LINE-BASIS' AND is_test
           AND metadata->>'audit_fixture'='AUDIT963-PREVIEW-LINE-BASIS'
           AND metadata->>'synthetic'='true'
-          AND customer_email='audit963.customer@example.com'
+          AND booking_reference='AUDIT963-R252' AND crm_customer_id=v_crm
+          AND customer_email IS NULL AND customer_phone IS NULL
+          AND customer_name='Audit963 Synthetic Customer'
           AND customer_id IS NULL AND recurring_id IS NULL
           AND cleaner_id='95610000-0000-4000-8000-000000000002'
           AND payout_owner_cleaner_id='95610000-0000-4000-8000-000000000002'
@@ -204,6 +229,10 @@ BEGIN
   v_after := jsonb_build_object(
     'bookings',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by id),'')) from public.bookings t where id <> '96310000-0000-4000-8000-000000000001'),
     'lines',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by id),'')) from public.booking_line_items t where booking_id <> '96310000-0000-4000-8000-000000000001'),
+    'customers',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.customers t),
+    'customer_identity_aliases',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.customer_identity_aliases t),
+    'profiles',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.profiles t),
+    'reference_sequence',(select jsonb_build_object('last_value',last_value,'is_called',is_called) from public.bookings_reference_seq),
     'cleaners',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.cleaners t),
     'booking_cleaners',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.booking_cleaners t),
     'cleaner_earnings',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.cleaner_earnings t),
@@ -232,3 +261,51 @@ SELECT id,date,is_test,status,earnings_policy,display_earnings_cents,
 FROM public.bookings WHERE id='96310000-0000-4000-8000-000000000001';
 
 ROLLBACK;
+`;
+const replacements = [
+  ['96310000', '96320000'],
+  ['AUDIT963-PREVIEW-LINE-BASIS', 'AUDIT963-PREVIEW-LINE-BASIS-R280'],
+  ['Audit963 Synthetic Customer', 'Audit963 R280 Synthetic Customer'],
+  ['2027-03-16', '2027-03-17'], ['16 March 2027', '17 March 2027'],
+  ['R360', 'R400'], ['R252', 'R280'],
+  ['36000', '40000'], ['25200', '28000'], ['10800', '12000'],
+  ['total_paid_zar=360', 'total_paid_zar=400'],
+  ["0,360,'ZAR'", "0,400,'ZAR'"],
+  ['"base_price":360', '"base_price":400'], ['"total_price":360', '"total_price":400'],
+];
+
+export function assertPreviewSeedTarget(env, health) {
+  lockedFixture.assertTarget(env, health);
+  assert.equal(health.status, 'ok');
+  const allowed = (env.SEED_ALLOWED_PROJECT_REFS ?? '').split(',').map(x => x.trim()).filter(Boolean);
+  assert(allowed.length > 0 && allowed.includes(env.AUDIT_STAGING_REF), 'Explicit staging seed allowlist required');
+  assert(/^[0-9a-f]{40}$/.test(env.AUDIT_EXPECTED_RELEASE_SHA ?? ''), 'Expected reviewed release SHA required');
+  assert.equal(health.releaseSha, env.AUDIT_EXPECTED_RELEASE_SHA, 'Reviewed staging release required');
+  const captured = Date.parse(health.timestamp ?? '');
+  assert(Number.isFinite(captured) && Math.abs(Date.now() - captured) <= 120000, 'Fresh staging health required');
+}
+
+export async function buildPreviewSoloSeedPlan(env, scenario, { apply = false, fetchImpl = fetch } = {}) {
+  assert(['r252', 'r280'].includes(scenario), 'Choose r252 or r280');
+  const origin = new URL(env.NEXT_PUBLIC_SITE_URL);
+  assert.equal(origin.protocol, 'https:');
+  const response = await fetchImpl(new URL('/api/health/environment?audit963=' + Date.now(), origin), { cache: 'no-store' });
+  assert(response.ok, 'Staging health request failed');
+  const health = await response.json();
+  assertPreviewSeedTarget(env, health);
+  let sql = TEMPLATE;
+  if (scenario === 'r280') for (const [from, to] of replacements) {
+    assert(sql.includes(from), 'Reviewed fixture template changed');
+    sql = sql.split(from).join(to);
+  }
+  assert(sql.endsWith('\nROLLBACK;\n'), 'Rollback-first plan required');
+  const binding = createHash('sha256').update(env.AUDIT_STAGING_REF + ':' + health.releaseSha + ':' + scenario + ':' + sql).digest('hex');
+  if (apply) {
+    assert.equal(env.AUDIT_PREVIEW_REHEARSAL_BINDING, binding, 'Matching successful rehearsal binding required');
+    sql = sql.slice(0, -'ROLLBACK;\n'.length) + 'COMMIT;\n';
+  }
+  return { tag: 'AUDIT963-PREVIEW-LINE-BASIS', scenario, projectRef: env.AUDIT_STAGING_REF,
+    releaseSha: health.releaseSha, healthTimestamp: health.timestamp,
+    phase: apply ? 'apply' : 'rollback-rehearsal', rehearsalBinding: binding,
+    sqlSha256: createHash('sha256').update(sql).digest('hex'), sql };
+}
