@@ -2,7 +2,7 @@
 
 ## 1. Document control
 
-ID: OCT-PREVIEW-LINES-20261018. Version 1, 18 October 2026.
+ID: OCT-PREVIEW-LINES-20261018. Version 2, 18 October 2026.
 Status: owner authorized the bounded review/staging/production sequence on
 18 October 2026 after reviewing the prepared fix and test results. Engineering owns
 implementation; the Shalean owner owns release authorization. Final technical
@@ -73,8 +73,11 @@ included.
 `computeLiveBookingEarningsSummary` reads line identity, classification,
 metadata, eligibility and price fields. It calls
 `sumEligibleLineItemsSubtotalCents`, passing a positive subtotal to the existing
-canonical resolver. A read error withholds the computed projection. When no
-positive eligible subtotal exists, the existing booking fallback remains.
+canonical resolver. A read error, absent lines or non-positive eligible subtotal withholds the
+computed projection. Reset can backfill absent lines, so the pre-backfill
+snapshot fallback is not quoted for approval. Confirm reset is disabled while
+the preview is loading or unavailable; the submit handler enforces the same
+guard. A verified zero-earnings projection after deductions remains valid.
 The new integration tests are included in `test:critical`.
 
 ## 9. Non-functional assessment
@@ -89,12 +92,12 @@ are introduced. The extra query is bounded to the requested booking.
 
 The new integration suite covers the R252 reproduction, eligible extras and
 excluded charges, failed line reads, locked R280 solo and R260/R260 paired
-amounts, empty/zero eligible subtotal fallback, historical/invalid dates,
+amounts, absent/zero eligible subtotal withholding, historical/invalid dates,
 formal-team path preservation and read-only execution.
 
-Local validation passed: 1,325 critical tests across 113 files, including 12 new
+Local validation passed: 1,326 critical tests across 113 files, including 13 new
 integration cases; TypeScript; booking-core lint (four existing warnings);
-changed-file lint; whitespace checks. Results are recorded in the PR959 evidence
+changed-file lint (six existing component warnings); whitespace checks. Results are recorded in the PR959 evidence
 checkpoint.
 Fresh hosted CI and independent technical review remain release gates.
 
@@ -111,8 +114,9 @@ corrections still stop on errors, skips, mismatched amounts or preservation drif
 ## 12. Residual risk
 
 A preview alone does not prove the subsequent guarded reset succeeded. Continue
-per-record direct database reconciliation. Generic price-snapshot fallback when
-no positive eligible lines exist is unchanged. The separate stale summary UI
+per-record direct database reconciliation. Current non-team reset previews without a positive eligible line basis are
+unavailable and cannot be confirmed through Office. Generic snapshot fallback
+for other callers is unchanged. The separate stale summary UI
 finding, missing production cleaner login and historical comparison limitations
 remain open. Production acceptance cannot be claimed from local tests.
 
@@ -128,6 +132,11 @@ Local code preparation: PASS when the recorded local checks pass.
 Shared release: NO-GO until technical review, CI and staging
 acceptance are complete. Production corrections remain blocked pending a
 verified deployed fix and correct preview.
+
+Independent review of head 3389112296574185521ed937f680bb75cf71bcdc raised
+two P1 findings: absent-line backfill parity and confirmation despite an
+unavailable preview. Version 2 addresses both; a clean review on the final
+head remains required.
 
 ## 15. Handover
 

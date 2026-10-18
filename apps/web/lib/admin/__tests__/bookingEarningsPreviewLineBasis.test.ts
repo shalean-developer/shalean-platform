@@ -17,6 +17,7 @@ function fixture(options: {
   lineError?: boolean;
   lines?: EarningsLineItemInput[];
   baseCents?: number;
+  deductionCents?: number;
 } = {}) {
   const amountCents = options.paired ? 66_000 : 36_000;
   const basis = options.lockedBasis ?? 25_200;
@@ -56,7 +57,10 @@ function fixture(options: {
         data: table === "bookings" ? booking
           : table === "cleaners" ? { joined_at: "2026-05-01" }
             : table === "booking_line_items"
-              ? lines : table === "booking_cleaners" ? roster : [],
+              ? lines : table === "booking_cleaners" ? roster
+                : table === "cleaner_earnings_adjustments" && options.deductionCents
+                  ? [{ cleaner_id: cleanerId, amount_cents: -options.deductionCents, reason: "test deduction" }]
+                  : [],
         error: table === "booking_line_items" && options.lineError ? { message: "unavailable" } : null,
       };
       const q = {
@@ -126,13 +130,26 @@ describe("reset preview uses the stored eligible line price", () => {
     { lines: [] },
     { lines: [{ id: "fee", item_type: "adjustment", name: "Service fee", total_price_cents: 1_000 }] },
   ])(
-    "retains the existing booking fallback when no positive eligible line basis exists (%j)",
+    "withholds approval rather than quoting a fallback when no positive eligible line basis exists (%j)",
     async ({ lines }) => {
       const { admin } = fixture({ lines, baseCents: 36_000 });
       const result = await buildBookingEarningsPreview(admin, bookingId);
-      expect(result.ok && result.preview.computed_preview?.total_cleaner_earnings_cents).toBe(25_200);
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error(result.error);
+      expect(result.preview.computed_preview).toBeNull();
+      expect(bookingEarningsPreviewComparison(result.preview)).toBeNull();
     },
   );
+
+  it("keeps a verified zero-earnings projection available after a full deduction", async () => {
+    const { admin } = fixture({ deductionCents: 30_000 });
+    const result = await buildBookingEarningsPreview(admin, bookingId);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.error);
+    expect(bookingEarningsPreviewComparison(result.preview)).toEqual({
+      currentTotalCents: 25_200, projectedTotalCents: 0, diffCents: -25_200,
+    });
+  });
 
   it.each(["2026-05-15", "2026-09-30", "", "2026-10-32"])(
     "preserves the prior preview path for historical or invalid visit date %s", async date => {

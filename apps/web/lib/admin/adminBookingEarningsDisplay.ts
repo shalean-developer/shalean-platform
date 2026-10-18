@@ -48,7 +48,10 @@ export async function computeLiveBookingEarningsSummary(
     // Recompute prefers eligible service lines in cents. Legacy price snapshots
     // can store ZAR values, so the preview must use the same verified line basis.
     const subtotal = sumEligibleLineItemsSubtotalCents(lines ?? []);
-    if (subtotal > 0) eligibleAmountCents = subtotal;
+    // Reset can backfill absent lines before recomputing. Do not quote the
+    // pre-backfill snapshot fallback as though it were the approval amount.
+    if (subtotal <= 0) throw new Error("Verified earnings line basis unavailable");
+    eligibleAmountCents = subtotal;
   }
 
   const canonical = await resolveBookingCanonicalPayout(admin, {
