@@ -61,6 +61,57 @@ class Query {
 }
 
 describe("complete cleaner workspace loader", () => {
+  it("retains roster-only visits as unavailable when their own payout allocation is missing", async () => {
+    const calls: string[] = [];
+    const db: Record<string, Row[]> = {
+      bookings: [
+        {
+          id: "roster-only",
+          cleaner_id: "lead",
+          payout_owner_cleaner_id: "lead",
+          status: "completed",
+          is_test: false,
+          date: "2026-10-15",
+          service: "Regular",
+          completed_at: "2026-10-15T12:00:00Z",
+          display_earnings_cents: 99999,
+          payout_frozen_cents: 90000,
+          payout_id: "lead-batch",
+          payout_status: "paid",
+        },
+      ],
+      booking_cleaners: [
+        { id: "r1", booking_id: "roster-only", cleaner_id: "own" },
+      ],
+      cleaner_payouts: [
+        {
+          id: "lead-batch",
+          cleaner_id: "lead",
+          status: "paid",
+          payment_reference: "DoNotLeak",
+        },
+      ],
+    };
+    const admin = {
+      from: (table: string) => new Query(table, db, calls),
+    } as unknown as SupabaseClient;
+    const result = await fetchEarningsWorkspace(
+      admin,
+      "own",
+      "2026-10",
+      new Date("2026-11-03T12:00:00Z"),
+    );
+    expect(result.earnings).toHaveLength(1);
+    expect(result.earnings[0]).toMatchObject({
+      amount_cents: null,
+      state: "needs_review",
+    });
+    expect(result.period.unavailable_visits).toBe(1);
+    expect(result.period.earned_cents).toBeNull();
+    expect(JSON.stringify(result)).not.toMatch(
+      /DoNotLeak|99999|90000|lead-batch/,
+    );
+  });
   it("paginates own settlement lineage, excludes foreign links and never expands earnings from orphaned ledger rows", async () => {
     const calls: string[] = [];
     const visits = Array.from({ length: 601 }, (_, i) => ({

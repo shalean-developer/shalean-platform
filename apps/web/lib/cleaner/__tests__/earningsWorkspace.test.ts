@@ -66,6 +66,106 @@ const base = {
 };
 
 describe("earnings workspace financial presentation", () => {
+  it("does not expose a lead's header amount when an own participant allocation is missing", () => {
+    for (const row of [
+      {
+        ...booking("roster-only"),
+        cleaner_id: "lead",
+        payout_owner_cleaner_id: "lead",
+        booking_cleaners: [{ cleaner_id: cleanerId }, { cleaner_id: "lead" }],
+      },
+      { ...booking("other-owner"), payout_owner_cleaner_id: "lead" },
+      { ...booking("team-pool"), is_team_job: true },
+    ]) {
+      const result = buildEarningsWorkspace({
+        ...base,
+        bookings: [
+          {
+            ...row,
+            display_earnings_cents: 99999,
+            payout_frozen_cents: 90000,
+            cleaner_earnings_total_cents: 99999,
+            cleaner_bonus_cents: 8000,
+            payout_status: "paid",
+            payout_id: "lead-batch",
+          },
+        ],
+      });
+      expect(result.earnings[0]).toMatchObject({
+        amount_cents: null,
+        base_cents: null,
+        bonus_cents: 0,
+        state: "needs_review",
+      });
+      expect(result.period.earned_cents).toBeNull();
+      expect(result.period.unavailable_visits).toBe(1);
+      expect(result.payments).toHaveLength(0);
+    }
+  });
+  it("accepts an own summary allocation including zero without inheriting the lead's freeze or payment state", () => {
+    for (const ownAmount of [0, 26000]) {
+      const summary = buildBookingEarningsSummary({
+        serviceType: "standard",
+        customerTotalCents: 65000,
+        eligibleAmountCents: 65000,
+        isTeamJob: false,
+        participantCleanerIds: ["lead", cleanerId],
+        perCleanerBaseCents: new Map([
+          ["lead", 28000],
+          [cleanerId, ownAmount],
+        ]),
+        adjustments: [],
+        tenureMonths: null,
+        cleanerPercentage: null,
+        fixedServicePayoutApplied: true,
+        minimumEarningCents: 0,
+        maximumEarningCents: 65000,
+      });
+      const result = buildEarningsWorkspace({
+        ...base,
+        now: new Date("2026-11-03T12:00:00Z"),
+        bookings: [
+          {
+            ...booking(),
+            cleaner_id: "lead",
+            payout_owner_cleaner_id: "lead",
+            earnings_summary: summary,
+            payout_frozen_cents: 90000,
+            display_earnings_cents: 99999,
+            payout_id: "lead-batch",
+            payout_status: "paid",
+          },
+        ],
+      });
+      expect(result.earnings[0].amount_cents).toBe(ownAmount);
+      expect(result.earnings[0].state).toBe("awaiting_review");
+      expect(result.period.unbatched_cents).toBe(ownAmount);
+      expect(result.period.unavailable_visits).toBe(0);
+    }
+  });
+  it("counts dated unknown historical visits and keeps the historical balance unavailable", () => {
+    const result = buildEarningsWorkspace({
+      ...base,
+      month: "2026-06",
+      bookings: [
+        booking("unknown-old", "2026-06-15", null),
+        booking("zero-old", "2026-06-16", 0),
+        { ...booking("recorded-old", "2026-06-17"), payout_id: "real" },
+      ],
+      batches: [
+        {
+          ...batch("real", "2026-06-20T12:00:00Z", 26000),
+          period_start: "2026-06-01",
+          period_end: "2026-06-30",
+        },
+      ],
+    });
+    expect(result.historical.completed_visits).toBe(2);
+    expect(result.historical.unreviewed_cents).toBeNull();
+    expect(result.lifetime.completed_visits).toBe(3);
+    expect(result.period.unavailable_visits).toBe(1);
+    expect(result.period.recorded_payments_cents).toBe(26000);
+  });
   it("flags a viewer's dual-rail payment claim without confusing the lead's batch with a member's transfer", () => {
     const common = {
       ...base,
