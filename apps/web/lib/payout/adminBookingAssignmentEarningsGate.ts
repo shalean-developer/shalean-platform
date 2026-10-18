@@ -13,12 +13,48 @@ import {
 /** Columns loaded before admin PATCH so we can preflight earnings and revert a failed paid-solo assignment. */
 export function adminBookingBeforeAssignmentPatchSelectList(): string {
   return (
-    "user_id, cleaner_id, status, completed_at, payout_owner_cleaner_id, is_team_job, team_id, date, time, selected_cleaner_id, billing_type, monthly_invoice_id, is_recurring_generated, dispatch_status, cleaner_response_status, assigned_at, en_route_at, started_at, duration_minutes, estimated_duration_minutes, pricing_summary, display_earnings_cents, payout_earnings_cents, internal_earnings_cents, earnings_model_version, earnings_percentage_applied, earnings_cap_cents_applied, earnings_tenure_months_at_assignment, cleaner_earnings_total_cents, cleaner_line_earnings_finalized_at, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_percentage, payout_type, total_paid_zar, total_paid_cents, amount_paid_cents, base_amount_cents, service_fee_cents, payment_status, booking_snapshot, service, payout_id, metadata" +
+    "cleaner_id, status, completed_at, payout_owner_cleaner_id, is_team_job, team_id, date, time, selected_cleaner_id, billing_type, monthly_invoice_id, is_recurring_generated, dispatch_status, cleaner_response_status, assigned_at, en_route_at, started_at, duration_minutes, estimated_duration_minutes, pricing_summary, display_earnings_cents, payout_earnings_cents, internal_earnings_cents, earnings_model_version, earnings_percentage_applied, earnings_cap_cents_applied, earnings_tenure_months_at_assignment, cleaner_earnings_total_cents, cleaner_line_earnings_finalized_at, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_percentage, payout_type, total_paid_zar, total_paid_cents, amount_paid_cents, base_amount_cents, service_fee_cents, payment_status, booking_snapshot, service, payout_id, metadata" +
     bookingsPersistFullFinancialSelectSuffix()
   );
 }
 
 export type AdminBookingAssignmentBeforeRow = Record<string, unknown>;
+
+/** Never classify an unavailable pre-update read as a historical/undated visit. */
+export async function loadAdminBookingBeforeAssignmentPatch(
+  admin: SupabaseClient,
+  bookingId: string,
+): Promise<
+  | { ok: true; booking: AdminBookingAssignmentBeforeRow }
+  | { ok: false; status: 404 | 503; error: string; code: string }
+> {
+  const unavailable = {
+    ok: false as const,
+    status: 503 as const,
+    error: "Booking could not be loaded. Please refresh and try again.",
+    code: "booking_read_failed",
+  };
+  try {
+    const { data, error } = await admin
+      .from("bookings")
+      .select(adminBookingBeforeAssignmentPatchSelectList())
+      .eq("id", bookingId)
+      .maybeSingle();
+    if (error) return unavailable;
+    if (!data)
+      return {
+        ok: false,
+        status: 404,
+        error: "Booking not found.",
+        code: "booking_not_found",
+      };
+    const booking: unknown = data;
+    if (typeof booking !== "object" || Array.isArray(booking)) return unavailable;
+    return { ok: true, booking: booking as AdminBookingAssignmentBeforeRow };
+  } catch {
+    return unavailable;
+  }
+}
 
 /**
  * Customer-paid signal for earnings/cleaner gates.
