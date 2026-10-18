@@ -1793,6 +1793,9 @@ async function main() {
   // Plan-only managed-SQL adapter: reuse the governed target guard without
   // requesting a service-role key. The caller binds execution to plan.projectRef.
   const previewPlanIndex = args.indexOf('--preview-solo-sql-plan');
+  if (args.includes('--commit-preview-fixture') && previewPlanIndex < 0) {
+    throw new Error('Commit preview fixture requires --preview-solo-sql-plan and a scenario');
+  }
   if (previewPlanIndex >= 0) {
     if (reset || dryRun || args.includes('--paired-ui-only')) throw new Error('Incompatible preview fixture mode');
     assertNonProductionSeed(url, envVars);

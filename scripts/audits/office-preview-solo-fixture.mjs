@@ -1,6 +1,7 @@
 /** Governed plan-only seed adapter; execution uses the selected managed staging connection. */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { lockedFixture } from './paired-ui-fixture.mjs';
 
 const TEMPLATE = String.raw`-- AUDIT963: governed, synthetic solo Office preview fixture.
@@ -10,7 +11,7 @@ const TEMPLATE = String.raw`-- AUDIT963: governed, synthetic solo Office preview
 -- Two existing retired AUDIT956 controls below independently reject a wrong target.
 -- Emitted only by seed-dev.mjs after target/environment/health checks.
 -- The managed SQL adapter must bind project_id to the plan projectRef.
--- Apply plans require the binding of a successful rollback rehearsal.
+-- Apply plans require the managed executor receipt of a successful rollback rehearsal.
 -- No real customer, new identity, recurring schedule or money movement is created.
 -- Existing synthetic cleaner tenure is retained; 16 March 2027 is five months
 -- after its October 2026 creation, so the current standard R360 basis yields R252.
@@ -109,7 +110,7 @@ BEGIN
     'lines',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by id),'')) from public.booking_line_items t where booking_id <> '96310000-0000-4000-8000-000000000001'),
     'customers',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.customers t),
     'customer_identity_aliases',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.customer_identity_aliases t),
-    'profiles',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.profiles t),
+    'user_profiles',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.user_profiles t),
     'reference_sequence',(select jsonb_build_object('last_value',last_value,'is_called',is_called) from public.bookings_reference_seq),
     'cleaners',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.cleaners t),
     'booking_cleaners',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.booking_cleaners t),
@@ -231,7 +232,7 @@ BEGIN
     'lines',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by id),'')) from public.booking_line_items t where booking_id <> '96310000-0000-4000-8000-000000000001'),
     'customers',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.customers t),
     'customer_identity_aliases',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.customer_identity_aliases t),
-    'profiles',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.profiles t),
+    'user_profiles',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.user_profiles t),
     'reference_sequence',(select jsonb_build_object('last_value',last_value,'is_called',is_called) from public.bookings_reference_seq),
     'cleaners',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.cleaners t),
     'booking_cleaners',(select md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.booking_cleaners t),
@@ -301,9 +302,32 @@ export async function buildPreviewSoloSeedPlan(env, scenario, { apply = false, f
   assert(sql.endsWith('\nROLLBACK;\n'), 'Rollback-first plan required');
   const binding = createHash('sha256').update(env.AUDIT_STAGING_REF + ':' + health.releaseSha + ':' + scenario + ':' + sql).digest('hex');
   if (apply) {
-    assert.equal(env.AUDIT_PREVIEW_REHEARSAL_BINDING, binding, 'Matching successful rehearsal binding required');
+    assert(env.AUDIT_PREVIEW_REHEARSAL_RECEIPT_PATH, 'Managed executor rehearsal receipt required');
+    const receipt = JSON.parse(await readFile(env.AUDIT_PREVIEW_REHEARSAL_RECEIPT_PATH, 'utf8'));
+    assert(!receipt.isError, 'Rehearsal executor reported an error');
+    const payload = JSON.parse(receipt.content?.find(c => c.type === 'text')?.text ?? '{}');
+    assert(!payload.error, 'Rehearsal SQL reported an error');
+    const data = String(payload.result).match(/\n<untrusted-data-[^>]+>\s*\n([\s\S]*?)\n<\/untrusted-data-/);
+    assert(data, 'Managed executor result rows required');
+    const rows = JSON.parse(data[1]);
+    assert.equal(rows.length, 1);
+    const attestation = rows[0].audit963_execution;
+    assert.equal(attestation?.phase, 'rollback-rehearsal');
+    assert.equal(attestation?.rehearsal_binding, binding, 'Matching executed rehearsal required');
+    assert.equal(attestation?.project_ref, env.AUDIT_STAGING_REF);
+    assert.equal(attestation?.release_sha, health.releaseSha);
+    assert.equal(attestation?.scenario, scenario);
+    const completed = Date.parse(attestation?.completed_at ?? '');
+    assert(Number.isFinite(completed) && completed <= Date.now() + 30000 && completed >= Date.now() - 600000,
+      'Fresh successful managed executor rehearsal required');
     sql = sql.slice(0, -'ROLLBACK;\n'.length) + 'COMMIT;\n';
   }
+  // This final SELECT is after transaction completion. Only the managed executor's
+  // successful rollback receipt can unlock apply; a generated plan is insufficient.
+  sql += `SELECT jsonb_build_object('phase','${apply ? 'apply' : 'rollback-rehearsal'}',` +
+    `'project_ref','${env.AUDIT_STAGING_REF}','release_sha','${health.releaseSha}',` +
+    `'scenario','${scenario}','rehearsal_binding','${binding}',` +
+    `'completed_at',clock_timestamp()) AS audit963_execution;\n`;
   return { tag: 'AUDIT963-PREVIEW-LINE-BASIS', scenario, projectRef: env.AUDIT_STAGING_REF,
     releaseSha: health.releaseSha, healthTimestamp: health.timestamp,
     phase: apply ? 'apply' : 'rollback-rehearsal', rehearsalBinding: binding,
