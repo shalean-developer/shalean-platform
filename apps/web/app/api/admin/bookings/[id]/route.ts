@@ -19,7 +19,7 @@ import {
   readPayoutAttributionRemovalMarker,
 } from "@/lib/payout/bookingPayoutAttributionRemoval";
 import {
-  adminBookingBeforeAssignmentPatchSelectList,
+  loadAdminBookingBeforeAssignmentPatch,
   bookingRequiresPersistedEarningsBeforeCleanerNotify,
   revertAdminBookingAssignmentToBeforeRow,
 } from "@/lib/payout/adminBookingAssignmentEarningsGate";
@@ -650,7 +650,14 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   let assignmentRevertedForEarnings = false;
 
-  const { data: before } = await admin.from("bookings").select(adminBookingBeforeAssignmentPatchSelectList()).eq("id", id).maybeSingle();
+  const beforeRead = await loadAdminBookingBeforeAssignmentPatch(admin, id);
+  if (!beforeRead.ok) {
+    return NextResponse.json(
+      { error: beforeRead.error, code: beforeRead.code },
+      { status: beforeRead.status },
+    );
+  }
+  const before = beforeRead.booking;
   const beforeRow = before as {
     cleaner_id?: string | null;
     status?: string | null;
