@@ -70,15 +70,15 @@ export function JobsBottomNav() {
               aria-label={ariaLabel}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "relative flex min-h-[3.25rem] min-w-[56px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-xs font-medium transition-all duration-200 active:scale-95",
+                "relative flex min-h-[3.25rem] min-w-[56px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-xs font-medium transition-all duration-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-offset-2",
                 active
-                  ? "bg-blue-50 text-blue-600"
-                  : "text-slate-400 hover:text-slate-600",
+                  ? "bg-blue-50 text-blue-700"
+                  : "text-slate-600 hover:text-slate-800",
               )}
             >
               <span className="relative inline-flex">
                 <Icon
-                  className={cn("size-5", active ? "text-blue-600" : "text-slate-400")}
+                  className={cn("size-5", active ? "text-blue-700" : "text-slate-600")}
                   aria-hidden
                   strokeWidth={active ? 2.25 : 1.75}
                 />
