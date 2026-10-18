@@ -171,27 +171,35 @@ export function buildEarningsWorkspace(input: {
   ).values()) {
     if (bookingHasActivePayoutAttributionRemoval(booking)) continue;
     const member = team.get(booking.id) ?? roster.get(booking.id);
-    const viewerAmount =
-      member == null
-        ? null
-        : member.payout_cents +
-          (team.has(booking.id) ? 0 : (member.bonus_cents ?? 0));
-    const wire = { ...booking, viewer_payout_cents: viewerAmount };
     const facing = resolveCleanerFacingEarnings(
       parseBookingEarningsSummary(booking.earnings_summary),
       cleanerId,
     );
+    // Roster membership is participation evidence, never a claim on the lead's
+    // header amount or payment batch. Formal teams also require an own allocation.
+    const directOwner =
+      (booking.payout_owner_cleaner_id ?? booking.cleaner_id) === cleanerId;
+    const allocationRequired = !directOwner || booking.is_team_job === true;
+    const memberContext = member != null || !directOwner;
+    const viewerAmount = member
+      ? member.payout_cents +
+        (team.has(booking.id) ? 0 : (member.bonus_cents ?? 0))
+      : allocationRequired
+        ? (facing?.total_cents ?? null)
+        : null;
+    const wire = { ...booking, viewer_payout_cents: viewerAmount };
     const hasAmount =
       viewerAmount != null ||
       facing != null ||
-      [
-        booking.display_earnings_cents,
-        booking.payout_frozen_cents,
-        booking.cleaner_earnings_total_cents,
-        booking.cleaner_payout_cents,
-      ].some(validCents) ||
-      (booking.earnings_policy === "legacy_july" &&
-        validCents(booking.internal_earnings_cents));
+      (!allocationRequired &&
+        ([
+          booking.display_earnings_cents,
+          booking.payout_frozen_cents,
+          booking.cleaner_earnings_total_cents,
+          booking.cleaner_payout_cents,
+        ].some(validCents) ||
+          (booking.earnings_policy === "legacy_july" &&
+            validCents(booking.internal_earnings_cents))));
     const amount = hasAmount
       ? resolveCleanerDashboardEarningsCents(wire, cleanerId)
       : null;
@@ -208,14 +216,25 @@ export function buildEarningsWorkspace(input: {
         ? team.has(booking.id)
           ? 0
           : (member.bonus_cents ?? 0)
-        : Math.min(amount ?? 0, resolveCleanerBonusCents(wire, cleanerId));
+        : allocationRequired
+          ? (facing?.bonus_cents ?? 0)
+          : Math.min(amount ?? 0, resolveCleanerBonusCents(wire, cleanerId));
     const date =
       normalizePayoutVisitDate(booking.date) ??
       (instant(booking.completed_at)
         ? johannesburgCalendarYmd(new Date(booking.completed_at!))
         : null);
     // A member must never inherit the lead's payment status or batch.
-    const payoutId = member ? member.cleaner_payout_id : booking.payout_id;
+    const payoutId = member
+      ? member.cleaner_payout_id
+      : memberContext
+        ? null
+        : booking.payout_id;
+    const payoutStatus = member
+      ? member.status
+      : memberContext
+        ? null
+        : booking.payout_status;
     const batch = payoutId ? batches.get(payoutId) : null;
     const settlement = settlementLinks.get(booking.id);
     const transfer = settlement?.disbursement_id
@@ -258,8 +277,7 @@ export function buildEarningsWorkspace(input: {
       state = "approved";
     } else if (batch && ["pending", "frozen"].includes(batch.status))
       state = "preparing";
-    else if (payoutId || (member?.status ?? booking.payout_status) === "paid")
-      state = "needs_review";
+    else if (payoutId || payoutStatus === "paid") state = "needs_review";
     else if (date.slice(0, 7) >= currentMonth) state = "month_open";
     all.push({
       id: booking.id,
@@ -291,7 +309,9 @@ export function buildEarningsWorkspace(input: {
   for (const b of periodBatches)
     if (!validCents(b.total_amount_cents))
       throw new Error("Invalid payout amount");
-  const historical = all.filter((r) => r.state === "historical_review");
+  const historical = all.filter(
+    (r) => r.date && r.date < PAYOUT_PROCESSING_START_YMD && r.state !== "paid",
+  );
   const preparingVisitCents = sum(
     selected.filter((r) => preparingTransferVisits.has(r.id)),
   );
