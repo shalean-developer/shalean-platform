@@ -52,6 +52,8 @@ BEGIN
           AND payout_id IS NULL AND payout_run_id IS NULL
           AND payout_paid_at IS NULL AND payout_frozen_cents IS NULL
           AND display_earnings_cents=25200 AND cleaner_payout_cents=25200
+          AND payout_earnings_cents=25200 AND cleaner_bonus_cents=0
+          AND company_revenue_cents=10800
           AND internal_earnings_cents=25200 AND total_paid_zar=360
           AND service_slug='standard' AND currency='ZAR' AND billing_type='pay_later'
           AND base_amount_cents IS NULL AND service_fee_cents=0
@@ -133,6 +135,61 @@ BEGIN
     1,36000,36000,true,25000,'exact_source_lines_v1',
     '{"audit_fixture":"AUDIT963-PREVIEW-LINE-BASIS"}'::jsonb
   WHERE NOT EXISTS (SELECT 1 FROM public.booking_line_items WHERE id='96310000-0000-4000-8000-000000000002');
+
+  -- Repeat ownership, pricing and no-link guards after all insert triggers.
+  IF EXISTS (SELECT 1 FROM public.bookings
+      WHERE (id='96310000-0000-4000-8000-000000000001'
+          OR paystack_reference='AUDIT963-PREVIEW-LINE-BASIS')
+        AND (id='96310000-0000-4000-8000-000000000001'
+          AND paystack_reference='AUDIT963-PREVIEW-LINE-BASIS' AND is_test
+          AND metadata->>'audit_fixture'='AUDIT963-PREVIEW-LINE-BASIS'
+          AND metadata->>'synthetic'='true'
+          AND customer_email='audit963.customer@example.com'
+          AND customer_id IS NULL AND recurring_id IS NULL
+          AND cleaner_id='95610000-0000-4000-8000-000000000002'
+          AND payout_owner_cleaner_id='95610000-0000-4000-8000-000000000002'
+          AND date='2027-03-16' AND status='assigned'
+          AND earnings_policy='current_v1' AND NOT is_team_job
+          AND amount_paid_cents=0 AND coalesce(total_paid_cents,0)=0
+          AND payment_status='pending' AND payout_status='pending'
+          AND monthly_invoice_id IS NULL AND zoho_invoice_id IS NULL
+          AND payment_transaction_id IS NULL AND paid_at IS NULL
+          AND payout_id IS NULL AND payout_run_id IS NULL
+          AND payout_paid_at IS NULL AND payout_frozen_cents IS NULL
+          AND display_earnings_cents=25200 AND cleaner_payout_cents=25200
+          AND payout_earnings_cents=25200 AND cleaner_bonus_cents=0
+          AND company_revenue_cents=10800
+          AND internal_earnings_cents=25200 AND total_paid_zar=360
+          AND service_slug='standard' AND currency='ZAR' AND billing_type='pay_later'
+          AND base_amount_cents IS NULL AND service_fee_cents=0
+          AND earnings_summary IS NULL AND cleaner_earnings_total_cents=25000
+          AND cleaner_line_earnings_finalized_at IS NULL AND team_id IS NULL
+          AND payment_completed_at IS NULL AND payment_reference_external IS NULL
+          AND marked_paid_by_admin_id IS NULL AND coalesce(deposit_paid_cents,0)=0
+          AND refunded_at IS NULL AND refund_status IS NULL
+          AND price_snapshot='{"v":1,"base_price":360,"total_price":360,"service_type":"standard"}'::jsonb
+        ) IS NOT TRUE) THEN
+    RAISE EXCEPTION 'AUDIT963 booking collision or changed/linked fixture; no writes allowed';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.booking_line_items
+      WHERE (id='96310000-0000-4000-8000-000000000002'
+          OR booking_id='96310000-0000-4000-8000-000000000001')
+        AND (id='96310000-0000-4000-8000-000000000002'
+          AND booking_id='96310000-0000-4000-8000-000000000001'
+          AND item_type='base' AND name='Audit963 synthetic service'
+          AND quantity=1 AND unit_price_cents=36000 AND total_price_cents=36000
+          AND earns_cleaner AND cleaner_earnings_cents=25000
+          AND metadata->>'audit_fixture'='AUDIT963-PREVIEW-LINE-BASIS') IS NOT TRUE) THEN
+    RAISE EXCEPTION 'AUDIT963 line collision or changed fixture; no writes allowed';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.booking_cleaners WHERE booking_id='96310000-0000-4000-8000-000000000001')
+    OR EXISTS (SELECT 1 FROM public.cleaner_earnings WHERE booking_id='96310000-0000-4000-8000-000000000001')
+    OR EXISTS (SELECT 1 FROM public.booking_roster_member_payouts WHERE booking_id='96310000-0000-4000-8000-000000000001')
+    OR EXISTS (SELECT 1 FROM public.team_job_member_payouts WHERE booking_id='96310000-0000-4000-8000-000000000001')
+    OR EXISTS (SELECT 1 FROM public.cleaner_earnings_adjustments WHERE booking_id='96310000-0000-4000-8000-000000000001')
+    OR EXISTS (SELECT 1 FROM public.payment_transactions WHERE booking_id='96310000-0000-4000-8000-000000000001') THEN
+    RAISE EXCEPTION 'AUDIT963 unexpected participation or financial rows; no writes allowed';
+  END IF;
 
   IF (SELECT count(*) FROM public.bookings
       WHERE id='96310000-0000-4000-8000-000000000001' AND is_test
