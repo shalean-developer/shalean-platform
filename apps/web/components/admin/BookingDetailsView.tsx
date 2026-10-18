@@ -2202,6 +2202,14 @@ export default function BookingDetailsView({
 
   const handleConfirmResetEarnings = async () => {
     if (!fullBooking?.id) return;
+    if (resetEarningsBusy) return;
+    if (resetEarningsClientBlockReason || earningsPreviewLoading || !resetEarningsComparison) {
+      setToast({
+        kind: "error",
+        text: resetEarningsClientBlockReason ?? "Wait for an available earnings preview before confirming reset.",
+      });
+      return;
+    }
     setResetEarningsBusy(true);
     try {
       const token = (await getAdminToken()) ?? undefined;
@@ -4437,7 +4445,7 @@ export default function BookingDetailsView({
                 {formatZar(centsToZar(Math.abs(resetEarningsComparison.diffCents)) ?? 0)}).
               </p>
             ) : (
-              <p className="mt-3 text-sm text-amber-900">Earnings preview unavailable.</p>
+              <p className="mt-3 text-sm text-amber-900">Earnings preview unavailable. Close and try again before resetting.</p>
             )}
 
             <div className="mt-5 flex justify-end gap-2">
@@ -4451,7 +4459,7 @@ export default function BookingDetailsView({
               </button>
               <button
                 type="button"
-                disabled={resetEarningsBusy || Boolean(resetEarningsClientBlockReason)}
+                disabled={resetEarningsBusy || Boolean(resetEarningsClientBlockReason) || earningsPreviewLoading || !resetEarningsComparison}
                 onClick={() => void handleConfirmResetEarnings()}
                 className="rounded-md bg-amber-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-50"
               >
