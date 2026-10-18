@@ -10,6 +10,7 @@ import {
   type WorkspaceBatch,
   type WorkspaceDisbursement,
   type WorkspaceMember,
+  type WorkspaceSettlementLink,
 } from "./buildEarningsWorkspace";
 
 const BOOKING_SELECT =
@@ -29,6 +30,7 @@ export async function fetchEarningsWorkspace(
     rosterMembers,
     batches,
     disbursements,
+    settlementLinks,
     bank,
   ] = await Promise.all([
     fetchAllPayoutRows((from, to) =>
@@ -89,6 +91,15 @@ export async function fetchEarningsWorkspace(
         .order("id")
         .range(from, to),
     ),
+    fetchAllPayoutRows((from, to) =>
+      admin
+        .from("cleaner_earnings")
+        .select("id,booking_id,status,disbursement_id")
+        .eq("cleaner_id", cleanerId)
+        .in("status", ["paid", "processing"])
+        .order("id")
+        .range(from, to),
+    ),
     admin
       .from("cleaner_payment_details")
       .select("account_number,bank_code,account_name")
@@ -125,6 +136,7 @@ export async function fetchEarningsWorkspace(
     rosterMembers: rosterMembers as unknown as WorkspaceMember[],
     batches: batches as unknown as WorkspaceBatch[],
     disbursements: disbursements as unknown as WorkspaceDisbursement[],
+    settlementLinks: settlementLinks as unknown as WorkspaceSettlementLink[],
     bankReady: Boolean(
       details?.account_number?.trim() &&
         details?.bank_code?.trim() &&

@@ -87,9 +87,74 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe("earnings workspace interface", () => {
+  it("keeps keyboard focus and month selection available during background refresh", async () => {
+    const props = {
+      data: data(),
+      refreshing: false,
+      error: null,
+      onRefresh: vi.fn(),
+      onMonthChange: vi.fn(),
+    };
+    await render(React.createElement(EarningsWorkspaceView, props));
+    const select = host.querySelector("select")!;
+    select.focus();
+    await render(
+      React.createElement(EarningsWorkspaceView, {
+        ...props,
+        refreshing: true,
+      }),
+    );
+    expect(document.activeElement).toBe(select);
+    expect(select.disabled).toBe(false);
+    await act(async () => {
+      select.value = "2026-09";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(props.onMonthChange).toHaveBeenCalledWith("2026-09");
+    const refresh = [...host.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("Refreshing"),
+    )!;
+    expect(refresh.disabled).toBe(false);
+    expect(refresh.getAttribute("aria-disabled")).toBe("true");
+    await act(async () => refresh.click());
+    expect(props.onRefresh).not.toHaveBeenCalled();
+  });
+  it.each([false, true])(
+    "recovers from a stalled request while retaining any known figures (loaded: %s)",
+    async (loaded) => {
+      vi.useFakeTimers();
+      if (loaded)
+        mocks.fetch.mockResolvedValueOnce(
+          new Response(JSON.stringify(data()), { status: 200 }),
+        );
+      let signal!: AbortSignal;
+      mocks.fetch.mockImplementationOnce((_url, init) => {
+        signal = init.signal;
+        return new Promise(() => {});
+      });
+      await render(React.createElement(CleanerEarningsWorkspace));
+      if (loaded) await click("Refresh");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+      expect(signal.aborted).toBe(true);
+      expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+        "took too long",
+      );
+      if (loaded) expect(host.textContent).toContain("October 2026 earnings");
+      else expect(host.textContent).not.toContain("R0");
+      mocks.fetch.mockResolvedValueOnce(
+        new Response(JSON.stringify(data()), { status: 200 }),
+      );
+      await click(loaded ? "Refresh" : "Try again");
+      expect(host.querySelector('[role="alert"]')).toBeNull();
+      expect(host.textContent).toContain("October 2026 earnings");
+    },
+  );
   it("provides full earnings pages, a separate complete payment total and bank/help actions", async () => {
     await render(
       React.createElement(EarningsWorkspaceView, {
@@ -163,6 +228,14 @@ describe("earnings workspace interface", () => {
     });
     expect(host.querySelectorAll('a[href^="/jobs/job/"]')).toHaveLength(1);
     expect(host.textContent).toContain("Deep cleaning");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!.call(input, "15 Oct 2026");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(host.querySelectorAll('a[href^="/jobs/job/"]')).toHaveLength(10);
     const select = host.querySelector("select")!;
     await act(async () => {
       select.value = "2026-09";

@@ -3,6 +3,7 @@ import {
   buildEarningsWorkspace,
   type WorkspaceBooking,
   type WorkspaceBatch,
+  type WorkspaceDisbursement,
 } from "@/lib/cleaner/buildEarningsWorkspace";
 import {
   earningsDateLabel,
@@ -41,6 +42,17 @@ function batch(id: string, paid_at: string, amount = 25000): WorkspaceBatch {
     period_end: "2026-10-31",
   };
 }
+function transfer(id: string): WorkspaceDisbursement {
+  return {
+    id,
+    total_amount_cents: 52000,
+    status: "paid",
+    paid_at: "2026-11-02T12:00:00Z",
+    paystack_reference: `Receipt ${id}`,
+    transfer_code: null,
+    paystack_transfer_code: null,
+  };
+}
 const base = {
   cleanerId,
   bookings: [] as WorkspaceBooking[],
@@ -54,6 +66,98 @@ const base = {
 };
 
 describe("earnings workspace financial presentation", () => {
+  it("links completed ledger-rail payments to direct and roster visits without using ledger amounts", () => {
+    const result = buildEarningsWorkspace({
+      ...base,
+      now: new Date("2026-11-03T12:00:00Z"),
+      bookings: [
+        { ...booking("direct"), payout_status: "paid" },
+        {
+          ...booking("member"),
+          cleaner_id: "lead",
+          display_earnings_cents: 99999,
+        },
+        booking("unlinked"),
+      ],
+      rosterMembers: [
+        {
+          booking_id: "member",
+          payout_cents: 26000,
+          status: "pending",
+          cleaner_payout_id: null,
+        },
+      ],
+      settlementLinks: ["direct", "member"].map((booking_id) => ({
+        booking_id,
+        status: "paid",
+        disbursement_id: "actual-transfer",
+      })),
+      disbursements: [transfer("actual-transfer")],
+    });
+    expect(result.earnings.find((r) => r.id === "direct")?.state).toBe("paid");
+    expect(result.earnings.find((r) => r.id === "member")).toMatchObject({
+      state: "paid",
+      amount_cents: 26000,
+    });
+    expect(result.earnings.find((r) => r.id === "unlinked")?.state).toBe(
+      "awaiting_review",
+    );
+    expect(result.period.unbatched_cents).toBe(26000);
+    expect(result.period.earned_cents).toBe(78000);
+    expect(result.period.recorded_payments_cents).toBe(0);
+    const paymentMonth = buildEarningsWorkspace({
+      ...base,
+      month: "2026-11",
+      disbursements: [transfer("actual-transfer")],
+    });
+    expect(paymentMonth.period.recorded_payments_cents).toBe(52000);
+  });
+  it("keeps unsupported ledger payment links under review instead of treating them as unpaid or settled", () => {
+    for (const disbursements of [
+      [],
+      [{ ...transfer("incomplete"), paystack_reference: null }],
+      [{ ...transfer("incomplete"), status: "failed" }],
+    ]) {
+      const result = buildEarningsWorkspace({
+        ...base,
+        now: new Date("2026-11-03T12:00:00Z"),
+        bookings: [booking("linked")],
+        settlementLinks: [
+          {
+            booking_id: "linked",
+            status: "paid",
+            disbursement_id: "incomplete",
+          },
+        ],
+        disbursements,
+      });
+      expect(result.earnings[0].state).toBe("needs_review");
+      expect(result.period.unbatched_cents).toBe(0);
+      expect(result.period.recorded_payments_cents).toBe(0);
+    }
+  });
+  it("allocates processing transfer progress by canonical visit month without repeating a multi-month transfer total", () => {
+    const input = {
+      ...base,
+      now: new Date("2027-01-03T12:00:00Z"),
+      bookings: [booking("october"), booking("november", "2026-11-15")],
+      settlementLinks: ["october", "november"].map((booking_id) => ({
+        booking_id,
+        status: "processing",
+        disbursement_id: "processing",
+      })),
+      disbursements: [
+        { ...transfer("processing"), status: "processing", paid_at: null },
+      ],
+    };
+    for (const month of ["2026-10", "2026-11"]) {
+      const result = buildEarningsWorkspace({ ...input, month });
+      expect(result.earnings[0].state).toBe("preparing");
+      expect(result.period.preparing_cents).toBe(26000);
+      expect(result.period.unbatched_cents).toBe(0);
+      expect(result.period.recorded_payments_cents).toBe(0);
+    }
+  });
   it("retains approved October amounts, visit dates and roster-member allocation including zero", () => {
     const rows = [
       booking("a", "2026-10-01"),

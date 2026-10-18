@@ -109,7 +109,7 @@ export function EarningsWorkspaceView({
   const closeLabel = earningsDateLabel(nextMonth.toISOString(), true);
   const query = search.trim().toLowerCase();
   const filtered = data.earnings.filter((row) =>
-    `${row.service} ${row.reference} ${row.date ?? ""}`
+    `${row.service} ${row.reference} ${row.date ?? ""} ${earningsDateLabel(row.date)}`
       .toLowerCase()
       .includes(query),
   );
@@ -162,7 +162,6 @@ export function EarningsWorkspaceView({
             id="earnings-month"
             className={`min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 ${FOCUS}`}
             value={data.month}
-            disabled={refreshing}
             onChange={(event) => {
               setEarningPage(1);
               setPaymentPage(1);
@@ -179,8 +178,10 @@ export function EarningsWorkspaceView({
         <button
           type="button"
           className={BUTTON}
-          disabled={refreshing}
-          onClick={onRefresh}
+          aria-disabled={refreshing}
+          onClick={() => {
+            if (!refreshing) onRefresh();
+          }}
         >
           <RefreshCw
             className={`size-4 ${refreshing ? "animate-spin" : ""}`}
@@ -292,7 +293,7 @@ export function EarningsWorkspaceView({
             <MoneyRow
               label="Payment being prepared"
               cents={data.period.preparing_cents}
-              hint="Recorded batch amounts"
+              hint="Recorded batch amounts and linked transfer visits"
             />
             <MoneyRow
               label="Approved batches"
@@ -599,8 +600,23 @@ export function CleanerEarningsWorkspace() {
     const controller = new AbortController();
     request.current = controller;
     setLoading(true);
+    const deadline = window.setTimeout(() => {
+      if (!controller.signal.aborted && request.current === controller) {
+        controller.abort();
+        setError(
+          "The request took too long. Please check your connection and try again.",
+        );
+        setLoading(false);
+      }
+    }, 20_000);
+    controller.signal.addEventListener(
+      "abort",
+      () => window.clearTimeout(deadline),
+      { once: true },
+    );
     try {
       const headers = await getCleanerAuthHeaders();
+      if (controller.signal.aborted) return;
       if (!headers) throw new Error("Please sign in to view your earnings.");
       const response = await cleanerAuthenticatedFetch(
         `/api/cleaner/earnings/workspace${selectedMonth ? `?month=${encodeURIComponent(selectedMonth)}` : ""}`,
@@ -625,6 +641,7 @@ export function CleanerEarningsWorkspace() {
             : "Earnings are temporarily unavailable.",
         );
     } finally {
+      window.clearTimeout(deadline);
       if (!controller.signal.aborted) setLoading(false);
     }
   }, []);

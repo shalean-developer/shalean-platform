@@ -58,6 +58,12 @@ export type WorkspaceDisbursement = {
   paystack_transfer_code: string | null;
   created_at?: string | null;
 };
+/** Payment lineage only. Ledger amounts never replace booking/member earnings. */
+export type WorkspaceSettlementLink = {
+  booking_id: string;
+  status: string;
+  disbursement_id: string | null;
+};
 
 function validCents(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
@@ -82,6 +88,7 @@ export function buildEarningsWorkspace(input: {
   rosterMembers: WorkspaceMember[];
   batches: WorkspaceBatch[];
   disbursements: WorkspaceDisbursement[];
+  settlementLinks?: WorkspaceSettlementLink[];
   bankReady: boolean;
   month: string;
   now: Date;
@@ -93,8 +100,14 @@ export function buildEarningsWorkspace(input: {
   const team = new Map(input.teamMembers.map((r) => [r.booking_id, r]));
   const roster = new Map(input.rosterMembers.map((r) => [r.booking_id, r]));
   const batches = new Map(input.batches.map((r) => [r.id, r]));
+  const disbursements = new Map(input.disbursements.map((r) => [r.id, r]));
+  const settlementLinks = new Map(
+    (input.settlementLinks ?? []).map((r) => [r.booking_id, r]),
+  );
   const payments: WorkspacePayment[] = [];
   const acceptedBatches = new Set<string>();
+  const acceptedDisbursements = new Set<string>();
+  const preparingTransferVisits = new Set<string>();
   let paymentReviewCount = 0;
   let unassignedPaymentRecords = 0;
   // These are distinct settlement records, not per-visit booking amounts.
@@ -140,6 +153,7 @@ export function buildEarningsWorkspace(input: {
         paymentReviewCount++;
       continue;
     }
+    acceptedDisbursements.add(transfer.id);
     payments.push({
       id: `transfer-${transfer.id}`,
       paid_at: paidAt,
@@ -201,10 +215,28 @@ export function buildEarningsWorkspace(input: {
     // A member must never inherit the lead's payment status or batch.
     const payoutId = member ? member.cleaner_payout_id : booking.payout_id;
     const batch = payoutId ? batches.get(payoutId) : null;
+    const settlement = settlementLinks.get(booking.id);
+    const transfer = settlement?.disbursement_id
+      ? disbursements.get(settlement.disbursement_id)
+      : null;
+    const transferPaid =
+      settlement?.status === "paid" &&
+      transfer != null &&
+      acceptedDisbursements.has(transfer.id);
+    const transferPreparing =
+      settlement?.status === "processing" &&
+      transfer?.status === "processing" &&
+      validCents(transfer.total_amount_cents);
     let state: WorkspaceEarning["state"] = "awaiting_review";
     if (amount == null || !date) state = "needs_review";
-    else if (batch && acceptedBatches.has(batch.id)) state = "paid";
+    else if ((batch && acceptedBatches.has(batch.id)) || transferPaid)
+      state = "paid";
     else if (date < PAYOUT_PROCESSING_START_YMD) state = "historical_review";
+    else if (transferPreparing) {
+      state = "preparing";
+      if (!batch) preparingTransferVisits.add(booking.id);
+    } else if (settlement?.disbursement_id || settlement?.status === "paid")
+      state = "needs_review";
     else if (date.slice(0, 7) >= currentMonth) state = "month_open";
     else if (
       batch?.status === "approved" &&
@@ -289,9 +321,13 @@ export function buildEarningsWorkspace(input: {
               ["month_open", "awaiting_review"].includes(r.state),
             ),
           ),
-      preparing_cents: periodBatches
-        .filter((b) => ["pending", "frozen"].includes(b.status))
-        .reduce((n, b) => n + b.total_amount_cents, 0),
+      preparing_cents:
+        periodBatches
+          .filter((b) => ["pending", "frozen"].includes(b.status))
+          .reduce((n, b) => n + b.total_amount_cents, 0) +
+        selected
+          .filter((r) => preparingTransferVisits.has(r.id))
+          .reduce((n, r) => n + (r.amount_cents ?? 0), 0),
       approved_cents: periodBatches
         .filter((b) => b.status === "approved")
         .reduce((n, b) => n + b.total_amount_cents, 0),
