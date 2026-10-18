@@ -96,7 +96,7 @@ export async function fetchEarningsWorkspace(
         .from("cleaner_earnings")
         .select("id,booking_id,status,disbursement_id")
         .eq("cleaner_id", cleanerId)
-        .in("status", ["paid", "processing"])
+        .in("status", ["approved", "paid", "processing"])
         .order("id")
         .range(from, to),
     ),

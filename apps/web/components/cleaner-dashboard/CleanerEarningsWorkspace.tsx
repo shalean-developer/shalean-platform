@@ -296,7 +296,7 @@ export function EarningsWorkspaceView({
               hint="Recorded batch amounts and linked transfer visits"
             />
             <MoneyRow
-              label="Approved batches"
+              label="Approved for payment"
               cents={data.period.approved_cents}
               hint="Approval does not mean payment has been received"
             />
@@ -594,6 +594,7 @@ export function CleanerEarningsWorkspace() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const month = useRef<string | null>(null);
+  const committedMonth = useRef<string | null>(null);
   const request = useRef<AbortController | null>(null);
   const load = useCallback(async (selectedMonth: string | null) => {
     request.current?.abort();
@@ -603,6 +604,7 @@ export function CleanerEarningsWorkspace() {
     const deadline = window.setTimeout(() => {
       if (!controller.signal.aborted && request.current === controller) {
         controller.abort();
+        month.current = committedMonth.current;
         setError(
           "The request took too long. Please check your connection and try again.",
         );
@@ -631,15 +633,19 @@ export function CleanerEarningsWorkspace() {
         (selectedMonth && parsed.data.month !== selectedMonth)
       )
         throw new Error("Earnings could not be refreshed. Please try again.");
+      committedMonth.current = selectedMonth;
+      month.current = selectedMonth;
       setData(parsed.data);
       setError(null);
     } catch (cause) {
-      if (!controller.signal.aborted)
+      if (!controller.signal.aborted) {
+        month.current = committedMonth.current;
         setError(
           cause instanceof Error
             ? cause.message
             : "Earnings are temporarily unavailable.",
         );
+      }
     } finally {
       window.clearTimeout(deadline);
       if (!controller.signal.aborted) setLoading(false);
