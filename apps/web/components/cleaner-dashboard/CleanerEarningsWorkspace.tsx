@@ -17,7 +17,7 @@ import { PAYOUT_PROCESSING_START_YMD } from "@/lib/payout/payoutProcessingCutoff
 
 const FOCUS =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-offset-2";
-const BUTTON = `inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 disabled:opacity-50 ${FOCUS}`;
+const BUTTON = `inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-500 bg-white px-3 text-sm font-semibold text-slate-800 disabled:opacity-50 ${FOCUS}`;
 const PAGE_SIZE = 10;
 function money(cents: number | null) {
   return cents == null ? "Unavailable" : formatZarFromCents(cents);
@@ -160,7 +160,7 @@ export function EarningsWorkspaceView({
           </label>
           <select
             id="earnings-month"
-            className={`min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 ${FOCUS}`}
+            className={`min-h-11 w-full rounded-xl border border-slate-500 bg-white px-3 text-sm text-slate-900 ${FOCUS}`}
             value={data.month}
             onChange={(event) => {
               setEarningPage(1);
@@ -343,7 +343,7 @@ export function EarningsWorkspaceView({
               type="button"
               aria-pressed={tab === value}
               onClick={() => setTab(value)}
-              className={`min-h-11 rounded-xl px-2 text-sm font-semibold ${FOCUS} ${tab === value ? "bg-white text-blue-900 shadow-sm" : "text-slate-700"}`}
+              className={`min-h-11 rounded-xl border px-2 text-sm font-semibold ${FOCUS} ${tab === value ? "border-blue-700 bg-white text-blue-900 shadow-sm" : "border-transparent text-slate-700"}`}
             >
               {value === "earnings" ? "Earning details" : "Payment statements"}
             </button>
@@ -373,7 +373,7 @@ export function EarningsWorkspaceView({
                 setSearch(event.target.value);
                 setEarningPage(1);
               }}
-              className={`mb-3 min-h-11 w-full rounded-xl border border-slate-300 px-3 text-sm ${FOCUS}`}
+              className={`mb-3 min-h-11 w-full rounded-xl border border-slate-500 px-3 text-sm ${FOCUS}`}
             />
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
               {filtered.length ? (
