@@ -68,6 +68,7 @@ export function JobsBottomNav() {
               key={href}
               href={href}
               aria-label={ariaLabel}
+              aria-current={active ? "page" : undefined}
               className={cn(
                 "relative flex min-h-[3.25rem] min-w-[56px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-xs font-medium transition-all duration-200 active:scale-95",
                 active

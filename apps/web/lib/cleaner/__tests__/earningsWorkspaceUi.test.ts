@@ -1,0 +1,243 @@
+// @vitest-environment jsdom
+import React, { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+const mocks = vi.hoisted(() => ({ fetch: vi.fn(), headers: vi.fn() }));
+vi.mock("next/link", () => ({
+  default: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) =>
+    React.createElement("a", props),
+}));
+vi.mock("@/lib/cleaner/cleanerAuthenticatedFetch", () => ({
+  cleanerAuthenticatedFetch: mocks.fetch,
+}));
+vi.mock("@/lib/cleaner/cleanerClientHeaders", () => ({
+  getCleanerAuthHeaders: mocks.headers,
+}));
+import {
+  EarningsWorkspaceView,
+  CleanerEarningsWorkspace,
+} from "@/components/cleaner-dashboard/CleanerEarningsWorkspace";
+import {
+  buildEarningsWorkspace,
+  type WorkspaceBatch,
+  type WorkspaceBooking,
+} from "@/lib/cleaner/buildEarningsWorkspace";
+
+function data() {
+  const bookings: WorkspaceBooking[] = Array.from({ length: 21 }, (_, i) => ({
+    id: `job-${String(i).padStart(3, "0")}`,
+    date: "2026-10-15",
+    service: i === 20 ? "Deep cleaning" : "Regular cleaning",
+    completed_at: "2026-10-15T12:00:00Z",
+    cleaner_id: "own",
+    payout_owner_cleaner_id: "own",
+    payout_id: null,
+    payout_status: "pending",
+    display_earnings_cents: 25000,
+  }));
+  const batches: WorkspaceBatch[] = Array.from({ length: 21 }, (_, i) => ({
+    id: `pay-${i}`,
+    total_amount_cents: 25000,
+    status: "paid",
+    payment_status: "success",
+    payment_method: "bank_transfer",
+    payment_reference: `Receipt-${i}`,
+    paid_at: "2026-10-18T12:00:00Z",
+    period_start: "2026-09-01",
+    period_end: "2026-09-30",
+  }));
+  return buildEarningsWorkspace({
+    cleanerId: "own",
+    bookings,
+    batches,
+    rosterMembers: [],
+    teamMembers: [],
+    disbursements: [],
+    bankReady: false,
+    month: "2026-10",
+    now: new Date("2026-10-18T12:00:00Z"),
+  });
+}
+let host: HTMLDivElement;
+let root: Root;
+async function render(element: React.ReactElement) {
+  await act(async () => {
+    root.render(element);
+  });
+}
+async function click(label: string) {
+  const button = [...host.querySelectorAll("button")].find(
+    (b) => b.textContent?.trim() === label,
+  );
+  expect(button, `button ${label}`).toBeDefined();
+  await act(async () => {
+    button!.click();
+  });
+}
+beforeEach(() => {
+  vi.stubGlobal("React", React);
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  host = document.createElement("div");
+  document.body.appendChild(host);
+  root = createRoot(host);
+  mocks.headers.mockResolvedValue({ Authorization: "Bearer test-only" });
+  mocks.fetch.mockReset();
+});
+afterEach(async () => {
+  await act(async () => root.unmount());
+  host.remove();
+  vi.unstubAllGlobals();
+});
+
+describe("earnings workspace interface", () => {
+  it("provides full earnings pages, a separate complete payment total and bank/help actions", async () => {
+    await render(
+      React.createElement(EarningsWorkspaceView, {
+        data: data(),
+        refreshing: false,
+        error: null,
+        onRefresh: vi.fn(),
+        onMonthChange: vi.fn(),
+      }),
+    );
+    expect(host.textContent).toContain("October 2026 earnings");
+    expect(host.textContent).toContain("Month open");
+    expect(host.textContent).toContain("1 Nov 2026");
+    expect(host.querySelectorAll('a[href^="/jobs/job/"]')).toHaveLength(10);
+    await click("Next");
+    expect(host.textContent).toContain("Page 2 of 3");
+    await click("Next");
+    expect(host.querySelectorAll('a[href^="/jobs/job/"]')).toHaveLength(1);
+    expect(host.textContent).toContain("Deep cleaning");
+    await click("Payment statements");
+    expect(host.textContent).toContain("21 recorded payments");
+    expect(host.textContent).toMatch(/5[\s\u00a0,]250/);
+    expect(host.querySelectorAll("li")).toHaveLength(10);
+    expect(host.querySelector('a[href="/jobs/profile/payout"]')).not.toBeNull();
+    expect(host.querySelector('a[href="/jobs/profile/help"]')).not.toBeNull();
+    expect(host.querySelector('button[aria-pressed="true"]')?.textContent).toBe(
+      "Payment statements",
+    );
+  });
+  it("keeps known figures and exposes stale status when refresh fails", async () => {
+    const payload = data();
+    mocks.fetch.mockResolvedValueOnce(
+      new Response(JSON.stringify(payload), { status: 200 }),
+    );
+    await render(React.createElement(CleanerEarningsWorkspace));
+    expect(host.textContent).toContain("October 2026 earnings");
+    mocks.fetch.mockResolvedValueOnce(new Response("{}", { status: 200 }));
+    await click("Refresh");
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+      "last successful figures",
+    );
+    expect(host.textContent).toContain("October 2026 earnings");
+  });
+  it("rejects partial successful payloads instead of displaying zero balances", async () => {
+    mocks.fetch.mockResolvedValueOnce(new Response("{}", { status: 200 }));
+    await render(React.createElement(CleanerEarningsWorkspace));
+    expect(host.querySelector('[role="alert"]')).not.toBeNull();
+    expect(host.textContent).not.toContain("R0");
+    expect(host.textContent).toContain("Try again");
+  });
+  it("searches all earning pages and exposes month selection", async () => {
+    const changed = vi.fn();
+    await render(
+      React.createElement(EarningsWorkspaceView, {
+        data: data(),
+        refreshing: false,
+        error: null,
+        onRefresh: vi.fn(),
+        onMonthChange: changed,
+      }),
+    );
+    const input = host.querySelector(
+      'input[type="search"]',
+    ) as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!.call(input, "Deep");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(host.querySelectorAll('a[href^="/jobs/job/"]')).toHaveLength(1);
+    expect(host.textContent).toContain("Deep cleaning");
+    const select = host.querySelector("select")!;
+    await act(async () => {
+      select.value = "2026-09";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(changed).toHaveBeenCalledWith("2026-09");
+  });
+  it("ignores an older aborted response after a newer request succeeds", async () => {
+    let resolveOld!: (response: Response) => void;
+    mocks.fetch.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveOld = resolve;
+        }),
+    );
+    await render(React.createElement(CleanerEarningsWorkspace));
+    mocks.fetch.mockResolvedValueOnce(
+      new Response(JSON.stringify(data()), { status: 200 }),
+    );
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(host.textContent).toContain("October 2026 earnings");
+    await act(async () => {
+      resolveOld(new Response("{}", { status: 200 }));
+    });
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(host.textContent).toContain("October 2026 earnings");
+  });
+  it("refreshes the server's current period at rollover instead of freezing a client month", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    try {
+      mocks.fetch.mockResolvedValueOnce(
+        new Response(JSON.stringify(data()), { status: 200 }),
+      );
+      await render(React.createElement(CleanerEarningsWorkspace));
+      const next = {
+        ...data(),
+        month: "2026-11",
+        today: "2026-11-01",
+        as_of: "2026-10-31T22:00:01.000Z",
+        months: ["2026-11", "2026-10"],
+      };
+      mocks.fetch.mockResolvedValueOnce(
+        new Response(JSON.stringify(next), { status: 200 }),
+      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60000);
+      });
+      expect(host.textContent).toContain("November 2026 earnings");
+      expect(mocks.fetch.mock.calls.at(-1)?.[0]).toBe(
+        "/api/cleaner/earnings/workspace",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("shows unknown amounts, payment review and failure states without a colour-only message", async () => {
+    const payload = data();
+    payload.period.earned_cents = null;
+    payload.period.unavailable_visits = 1;
+    payload.period.payment_issue_count = 1;
+    payload.period.payment_review_count = 1;
+    await render(
+      React.createElement(EarningsWorkspaceView, {
+        data: payload,
+        refreshing: false,
+        error: null,
+        onRefresh: vi.fn(),
+        onMonthChange: vi.fn(),
+      }),
+    );
+    expect(host.textContent).toContain("Unavailable");
+    expect(host.textContent).toContain("A payment needs attention");
+    await click("Payment statements");
+    expect(host.textContent).toContain("excluded from this recorded total");
+  });
+});
