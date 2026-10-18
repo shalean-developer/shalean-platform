@@ -66,6 +66,92 @@ const base = {
 };
 
 describe("earnings workspace financial presentation", () => {
+  it("shows approved ledger visits using canonical direct/member amounts without double-counting a batch", () => {
+    const result = buildEarningsWorkspace({
+      ...base,
+      now: new Date("2026-11-03T12:00:00Z"),
+      bookings: [
+        booking("direct"),
+        {
+          ...booking("member"),
+          cleaner_id: "lead",
+          display_earnings_cents: 99999,
+        },
+        { ...booking("batched"), payout_id: "approved-batch" },
+        booking("pending", "2026-10-15", 25200),
+      ],
+      rosterMembers: [
+        {
+          booking_id: "member",
+          payout_cents: 28000,
+          status: "pending",
+          cleaner_payout_id: null,
+        },
+      ],
+      settlementLinks: ["direct", "member", "batched"].map((booking_id) => ({
+        booking_id,
+        status: "approved",
+        disbursement_id: null,
+      })),
+      batches: [
+        {
+          ...batch("approved-batch", "2026-11-02T12:00:00Z", 26000),
+          status: "approved",
+          paid_at: null,
+        },
+      ],
+      disbursements: [
+        {
+          ...transfer("previous-attempt"),
+          status: "failed",
+          paid_at: null,
+          created_at: "2026-11-01T12:00:00Z",
+        },
+      ],
+    });
+    expect(result.period.approved_cents).toBe(80000);
+    expect(result.period.unbatched_cents).toBe(25200);
+    expect(result.earnings.filter((r) => r.state === "approved")).toHaveLength(
+      3,
+    );
+    expect(result.earnings.find((r) => r.id === "member")?.amount_cents).toBe(
+      28000,
+    );
+    expect(result.period.recorded_payments_cents).toBe(0);
+  });
+  it("keeps missing canonical amounts unavailable in approved and processing progress", () => {
+    for (const status of ["approved", "processing"]) {
+      const result = buildEarningsWorkspace({
+        ...base,
+        now: new Date("2026-11-03T12:00:00Z"),
+        bookings: [booking("unknown", "2026-10-15", null)],
+        settlementLinks: [
+          {
+            booking_id: "unknown",
+            status,
+            disbursement_id: status === "processing" ? "processing" : null,
+          },
+        ],
+        disbursements:
+          status === "processing"
+            ? [
+                {
+                  ...transfer("processing"),
+                  status: "processing",
+                  paid_at: null,
+                },
+              ]
+            : [],
+      });
+      expect(result.period.earned_cents).toBeNull();
+      expect(
+        status === "approved"
+          ? result.period.approved_cents
+          : result.period.preparing_cents,
+      ).toBeNull();
+      expect(result.earnings[0].state).toBe("needs_review");
+    }
+  });
   it.each(["failed-transfer", "incomplete-transfer", "incomplete-batch"])(
     "makes a month containing only a %s selectable for review",
     (kind) => {

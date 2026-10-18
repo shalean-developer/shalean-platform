@@ -108,6 +108,7 @@ export function buildEarningsWorkspace(input: {
   const acceptedBatches = new Set<string>();
   const acceptedDisbursements = new Set<string>();
   const preparingTransferVisits = new Set<string>();
+  const approvedLedgerVisits = new Set<string>();
   let paymentReviewCount = 0;
   let unassignedPaymentRecords = 0;
   // These are distinct settlement records, not per-visit booking amounts.
@@ -227,6 +228,14 @@ export function buildEarningsWorkspace(input: {
       settlement?.status === "processing" &&
       transfer?.status === "processing" &&
       validCents(transfer.total_amount_cents);
+    const ledgerApproved =
+      settlement?.status === "approved" &&
+      !settlement.disbursement_id &&
+      !payoutId;
+    if (date && date >= PAYOUT_PROCESSING_START_YMD) {
+      if (transferPreparing && !batch) preparingTransferVisits.add(booking.id);
+      if (ledgerApproved) approvedLedgerVisits.add(booking.id);
+    }
     let state: WorkspaceEarning["state"] = "awaiting_review";
     if (amount == null || !date) state = "needs_review";
     else if ((batch && acceptedBatches.has(batch.id)) || transferPaid)
@@ -234,19 +243,19 @@ export function buildEarningsWorkspace(input: {
     else if (date < PAYOUT_PROCESSING_START_YMD) state = "historical_review";
     else if (transferPreparing) {
       state = "preparing";
-      if (!batch) preparingTransferVisits.add(booking.id);
     } else if (settlement?.disbursement_id || settlement?.status === "paid")
       state = "needs_review";
-    else if (date.slice(0, 7) >= currentMonth) state = "month_open";
     else if (
-      batch?.status === "approved" &&
-      !["failed", "partial_failed"].includes(batch.payment_status ?? "")
-    )
+      (batch?.status === "approved" &&
+        !["failed", "partial_failed"].includes(batch.payment_status ?? "")) ||
+      ledgerApproved
+    ) {
       state = "approved";
-    else if (batch && ["pending", "frozen"].includes(batch.status))
+    } else if (batch && ["pending", "frozen"].includes(batch.status))
       state = "preparing";
     else if (payoutId || (member?.status ?? booking.payout_status) === "paid")
       state = "needs_review";
+    else if (date.slice(0, 7) >= currentMonth) state = "month_open";
     all.push({
       id: booking.id,
       date,
@@ -278,6 +287,12 @@ export function buildEarningsWorkspace(input: {
     if (!validCents(b.total_amount_cents))
       throw new Error("Invalid payout amount");
   const historical = all.filter((r) => r.state === "historical_review");
+  const preparingVisitCents = sum(
+    selected.filter((r) => preparingTransferVisits.has(r.id)),
+  );
+  const approvedVisitCents = sum(
+    selected.filter((r) => approvedLedgerVisits.has(r.id)),
+  );
   // Ambiguous receipt records must not silently double a payment total.
   const receiptKeys = new Set<string>();
   let conflictingReceipts = false;
@@ -339,15 +354,19 @@ export function buildEarningsWorkspace(input: {
             ),
           ),
       preparing_cents:
-        periodBatches
-          .filter((b) => ["pending", "frozen"].includes(b.status))
-          .reduce((n, b) => n + b.total_amount_cents, 0) +
-        selected
-          .filter((r) => preparingTransferVisits.has(r.id))
-          .reduce((n, r) => n + (r.amount_cents ?? 0), 0),
-      approved_cents: periodBatches
-        .filter((b) => b.status === "approved")
-        .reduce((n, b) => n + b.total_amount_cents, 0),
+        preparingVisitCents == null
+          ? null
+          : periodBatches
+              .filter((b) => ["pending", "frozen"].includes(b.status))
+              .reduce((n, b) => n + b.total_amount_cents, 0) +
+            preparingVisitCents,
+      approved_cents:
+        approvedVisitCents == null
+          ? null
+          : periodBatches
+              .filter((b) => b.status === "approved")
+              .reduce((n, b) => n + b.total_amount_cents, 0) +
+            approvedVisitCents,
       recorded_payments_cents: conflictingReceipts
         ? null
         : selectedPayments.reduce((n, p) => n + p.amount_cents, 0),

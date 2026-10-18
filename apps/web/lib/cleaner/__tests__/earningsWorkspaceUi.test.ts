@@ -91,6 +91,75 @@ afterEach(async () => {
 });
 
 describe("earnings workspace interface", () => {
+  it.each([
+    ["http", false],
+    ["timeout", false],
+    ["http", true],
+  ] as const)(
+    "restores the visible month refresh target after %s navigation failure (explicit prior month: %s)",
+    async (failure, explicit) => {
+      vi.useFakeTimers();
+      const october = data();
+      const september = {
+        ...october,
+        month: "2026-09",
+        earnings: [],
+        payments: [],
+        period: {
+          ...october.period,
+          earned_cents: 0,
+          unbatched_cents: 0,
+          completed_visits: 0,
+          recorded_payments_cents: 0,
+        },
+      };
+      mocks.fetch.mockResolvedValueOnce(
+        new Response(JSON.stringify(october), { status: 200 }),
+      );
+      await render(React.createElement(CleanerEarningsWorkspace));
+      const choose = async (value: string) => {
+        const select = host.querySelector("select")!;
+        await act(async () => {
+          select.value = value;
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+      };
+      if (explicit) {
+        mocks.fetch.mockResolvedValueOnce(
+          new Response(JSON.stringify(september), { status: 200 }),
+        );
+        await choose("2026-09");
+      }
+      if (failure === "timeout")
+        mocks.fetch.mockImplementationOnce(() => new Promise(() => {}));
+      else
+        mocks.fetch.mockResolvedValueOnce(new Response("{}", { status: 503 }));
+      await choose(explicit ? "2026-10" : "2026-09");
+      if (failure === "timeout")
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(20_000);
+        });
+      expect(host.querySelector("select")!.value).toBe(
+        explicit ? "2026-09" : "2026-10",
+      );
+      expect(host.querySelector('[role="alert"]')).not.toBeNull();
+      mocks.fetch.mockResolvedValueOnce(
+        new Response(JSON.stringify(explicit ? september : october), {
+          status: 200,
+        }),
+      );
+      await click("Refresh");
+      expect(mocks.fetch.mock.calls.at(-1)?.[0]).toBe(
+        explicit
+          ? "/api/cleaner/earnings/workspace?month=2026-09"
+          : "/api/cleaner/earnings/workspace",
+      );
+      expect(host.querySelector('[role="alert"]')).toBeNull();
+      expect(host.querySelector("select")!.value).toBe(
+        explicit ? "2026-09" : "2026-10",
+      );
+    },
+  );
   it("keeps keyboard focus and month selection available during background refresh", async () => {
     const props = {
       data: data(),

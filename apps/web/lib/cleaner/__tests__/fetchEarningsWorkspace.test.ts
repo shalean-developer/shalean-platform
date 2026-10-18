@@ -77,24 +77,30 @@ describe("complete cleaner workspace loader", () => {
       payout_status: "pending",
     }));
     const db: Record<string, Row[]> = {
-      bookings: visits,
+      bookings: [...visits, { ...visits[0], id: "approved-visit" }],
       cleaner_earnings: [
-        ...visits
-          .slice(0, 600)
-          .map((r) => ({
-            id: `e-${r.id}`,
-            cleaner_id: "own",
-            booking_id: r.id,
-            status: "paid",
-            disbursement_id: "own-transfer",
-            amount_cents: 1,
-          })),
+        ...visits.slice(0, 600).map((r) => ({
+          id: `e-${r.id}`,
+          cleaner_id: "own",
+          booking_id: r.id,
+          status: "paid",
+          disbursement_id: "own-transfer",
+          amount_cents: 1,
+        })),
         {
           id: "orphan",
           cleaner_id: "own",
           booking_id: "not-a-viewer-visit",
           status: "paid",
           disbursement_id: "own-transfer",
+        },
+        {
+          id: "approved",
+          cleaner_id: "own",
+          booking_id: "approved-visit",
+          status: "approved",
+          disbursement_id: null,
+          amount_cents: 99999,
         },
         {
           id: "foreign",
@@ -132,13 +138,17 @@ describe("complete cleaner workspace loader", () => {
       "2026-10",
       new Date("2026-11-03T12:00:00Z"),
     );
-    expect(result.earnings).toHaveLength(601);
+    expect(result.earnings).toHaveLength(602);
     expect(result.earnings.filter((r) => r.state === "paid")).toHaveLength(600);
     expect(result.earnings.find((r) => r.id === "visit-600")?.state).toBe(
       "awaiting_review",
     );
     expect(result.period.unbatched_cents).toBe(26000);
-    expect(result.period.earned_cents).toBe(601 * 26000);
+    expect(result.period.earned_cents).toBe(602 * 26000);
+    expect(result.period.approved_cents).toBe(26000);
+    expect(result.earnings.find((r) => r.id === "approved-visit")?.state).toBe(
+      "approved",
+    );
     expect(calls).toContain("cleaner_earnings:500-999");
     expect(calls).toContain(
       "cleaner_earnings.select:id,booking_id,status,disbursement_id",
