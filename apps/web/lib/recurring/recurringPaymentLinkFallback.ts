@@ -6,7 +6,7 @@ import { trustedBookingPayableZar } from "@/lib/booking/ensureBookingPaymentSess
 import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { processPaystackInitializeBody } from "@/lib/booking/paystackInitializeCore";
-import { deliverAdminPaymentLink } from "@/lib/admin/adminPaymentLinkDelivery";
+import { enqueueDeferredPaymentLinkEmail } from "@/lib/conversion/deferredPaymentLinkEmailQueue";
 import { persistPaymentLinkDelivery } from "@/lib/admin/persistPaymentLinkDelivery";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { recordPaymentLinkDecision, resolvePaymentLinkDispatchDecision } from "@/lib/pay/paymentDecisionDispatch";
@@ -35,7 +35,7 @@ const HEAD_SELECT =
   "id, customer_name, customer_phone, customer_email, service, date, time, total_price, total_paid_zar, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel";
 
 /**
- * Phase 1 payment-link + decision engine, invoked when recurring auto-charge fails.
+ * Initialize and durably queue a payment link when recurring auto-charge fails.
  */
 export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, bookingId: string): Promise<boolean> {
   const ownershipColumn = await resolveBookingOwnershipColumn(admin);
@@ -49,6 +49,25 @@ export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, boo
     await reportOperationalIssue("error", "recurring/fallback", error?.message ?? "booking missing", { bookingId });
     return false;
   }
+
+  const markFallback = async (): Promise<boolean> => {
+    try {
+      const { error: markError } = await admin.from("bookings").update({ recurring_fallback_at: new Date().toISOString() }).eq("id", bookingId);
+      if (!markError) return true;
+      await reportOperationalIssue("error", "recurring/fallback/marker", markError.message, { bookingId });
+    } catch (error) {
+      await reportOperationalIssue("error", "recurring/fallback/marker", String(error), { bookingId });
+    }
+    return false;
+  };
+  // Repair a failed marker without reinitializing Paystack or replacing accepted queue work.
+  const { data: queuedWork, error: queueReadError } = await admin.from("conversion_deferred_payment_link_emails")
+    .select("id").eq("booking_id", bookingId).eq("delivery_context->>stage", "recurring_auto_charge_fallback").limit(1).maybeSingle();
+  if (queueReadError) {
+    await reportOperationalIssue("error", "recurring/fallback/queue_lookup", queueReadError.message, { bookingId });
+    return false;
+  }
+  if (queuedWork) return markFallback();
 
   const snap = (row as { booking_snapshot?: unknown }).booking_snapshot;
   const locked =
@@ -130,11 +149,9 @@ export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, boo
     );
   }
 
-  await admin.from("bookings").update({ recurring_fallback_at: new Date().toISOString() }).eq("id", bookingId);
-
   const { data: headRow } = await admin.from("bookings").select(HEAD_SELECT).eq("id", bookingId).maybeSingle();
   const head = headRow as BookingHead | null;
-  if (!head) return true;
+  if (!head) return false;
 
   const lockedRec = locked as Record<string, unknown>;
   const serviceId = lockedRec?.service;
@@ -152,6 +169,7 @@ export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, boo
     total_paid_zar: head.total_paid_zar,
   });
 
+  let queued = false;
   try {
     const decision = await resolvePaymentLinkDispatchDecision(
       admin,
@@ -184,13 +202,10 @@ export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, boo
     );
 
     const linkForMessaging = trustPayPageUrl(head.id, init.reference, init.authorizationUrl);
-    const delivery = await deliverAdminPaymentLink({
+    const { runAtIso } = await enqueueDeferredPaymentLinkEmail(admin, {
+      delaySeconds: 1,
       phone: String(head.customer_phone ?? "").trim() || null,
-      email: String(head.customer_email ?? "").trim() || null,
-      mode: "chain_plus_email",
-      supabaseAdmin: admin,
       bookingId: head.id,
-      phoneTryOrder: decision.phoneTryOrder.length ? decision.phoneTryOrder : undefined,
       emailPayload: {
         customerEmail: String(head.customer_email ?? "").trim(),
         customerName: String(head.customer_name ?? "").trim() || null,
@@ -211,7 +226,13 @@ export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, boo
       },
       context: { bookingId: head.id, stage: "recurring_auto_charge_fallback" },
     });
-    await persistPaymentLinkDelivery(admin, head.id, delivery, { passType: "admin_initial" });
+    queued = true;
+    if (!await markFallback()) return false;
+    await persistPaymentLinkDelivery(admin, head.id, {
+      whatsappOk: null, smsOk: null, emailOk: false, twilioSmsSid: null, primaryChannel: "none",
+      fallbackTrace: "recurring_payment_link_queued", byChannel: { whatsapp: "skipped", sms: "skipped", email: "skipped" },
+      smsDeliveryRole: "none", delivery: { email: "skipped", sms: "skipped" }, emailDeferredUntilIso: runAtIso,
+    }, { passType: "admin_initial" });
   } catch (e) {
     await reportOperationalIssue("error", "recurring/fallback/delivery", String(e), { bookingId });
   }
@@ -219,9 +240,9 @@ export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, boo
   await logSystemEvent({
     level: "info",
     source: "recurring/payment_link_fallback",
-    message: "recurring_payment_link_initialized",
-    context: { booking_id: bookingId, reference: init.reference },
+    message: queued ? "recurring_payment_link_queued" : "recurring_payment_link_delivery_not_queued",
+    context: { booking_id: bookingId, reference: init.reference, queued },
   });
 
-  return true;
+  return queued;
 }

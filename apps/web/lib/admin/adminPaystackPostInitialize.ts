@@ -11,10 +11,14 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
 import type { PaymentLinkPassType } from "@/lib/pay/paymentLinkDeliveryEvents";
 import { trustPayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import { recordPaymentLinkDecision, resolvePaymentLinkDispatchDecision } from "@/lib/pay/paymentDecisionDispatch";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
+import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
+import { enqueueDeferredPaymentLinkEmail } from "@/lib/conversion/deferredPaymentLinkEmailQueue";
 
 export type AdminPaystackBookingHead = {
   id: string;
-  user_id: string | null;
+  user_id?: string | null;
+  customer_id?: string | null;
   payment_status?: string | null;
   status: string | null;
   payment_link: string | null;
@@ -117,7 +121,8 @@ export async function finalizeAdminPaystackCheckout(params: {
     });
   }
 
-  const { data: row, error: rowErr } = await admin.from("bookings").select(HEAD_SELECT).eq("id", result.bookingId).maybeSingle();
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
+  const { data: row, error: rowErr } = await admin.from("bookings").select(HEAD_SELECT.replace("user_id", ownershipColumn)).eq("id", result.bookingId).maybeSingle();
 
   if (rowErr) {
     await reportOperationalIssue("warn", "adminPaystackPostInitialize", rowErr.message, {
@@ -161,7 +166,7 @@ export async function sendAdminPaystackDeliveryForRow(
     locked: unknown;
     passType?: PaymentLinkPassType;
   },
-): Promise<void> {
+): Promise<boolean> {
   const { row, authorizationUrl, reference, notificationMode, locked, passType = "admin_initial" } = params;
   const name = String(row.customer_name ?? "").trim();
   const phone = String(row.customer_phone ?? "").trim();
@@ -183,6 +188,8 @@ export async function sendAdminPaystackDeliveryForRow(
     total_paid_zar: row.total_paid_zar,
   });
 
+  let accepted = false;
+  let sent = false;
   try {
     const intent = passType === "admin_resend" ? "admin_resend" : "initial_send";
     const decision = await resolvePaymentLinkDispatchDecision(
@@ -216,13 +223,13 @@ export async function sendAdminPaystackDeliveryForRow(
     );
 
     const linkForMessaging = trustPayPageUrl(row.id, reference, authorizationUrl);
-    const delivery = await deliverAdminPaymentLink({
+    const deliveryParams: Parameters<typeof deliverAdminPaymentLink>[0] = {
       phone: phone || null,
       email: email || null,
       mode: notificationMode,
       supabaseAdmin: admin,
       bookingId: row.id,
-      userId: row.user_id,
+      userId: bookingCustomerKey(row) || null,
       phoneTryOrder: decision.phoneTryOrder.length ? decision.phoneTryOrder : undefined,
       emailPayload: {
         customerEmail: email,
@@ -242,12 +249,28 @@ export async function sendAdminPaystackDeliveryForRow(
         date: dateLabel,
         time: timeLabel,
       },
-      context: { bookingId: row.id, stage: "admin_payment_link" },
-    });
-    await persistPaymentLinkDelivery(admin, row.id, delivery, { passType });
+      context: { bookingId: row.id, stage: passType === "admin_resend" ? "admin_payment_link_resend" : "admin_payment_link" },
+    };
+    const delivery = await deliverAdminPaymentLink(deliveryParams);
+    if (delivery.suppressedReason) {
+      if (delivery.suppressedRetryable) {
+        const { runAtIso } = await enqueueDeferredPaymentLinkEmail(admin, { bookingId: row.id, delaySeconds: 60,
+          emailPayload: deliveryParams.emailPayload, waPayload: deliveryParams.waPayload, phone: phone || null,
+          context: { ...deliveryParams.context, stage: "admin_initial_eligibility_retry" },
+        });
+        await persistPaymentLinkDelivery(admin, row.id, { ...delivery, suppressedReason: undefined,
+          suppressedRetryable: undefined, emailDeferredUntilIso: runAtIso, fallbackTrace: "initial_payment_link_queued_after_eligibility_outage",
+        }, { passType });
+      }
+      return false;
+    }
+    accepted = Boolean(delivery.emailOk || delivery.smsOk || delivery.emailDeferredUntilIso);
+    sent = Boolean(delivery.emailOk || delivery.smsOk);
+    if (accepted) await persistPaymentLinkDelivery(admin, row.id, delivery, { passType });
   } catch (e) {
     await reportOperationalIssue("error", "adminPaystackPostInitialize/delivery", String(e), {
       bookingId: row.id,
     });
   }
+  return sent;
 }

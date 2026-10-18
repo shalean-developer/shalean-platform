@@ -72,28 +72,35 @@ export async function safeResendSend(payload: SafeResendPayload): Promise<{
     });
   }
 
-  const admin = getSupabaseAdmin();
-  if (admin) {
-    const retryable = !payload.attachments?.length;
-    await admin.from("email_outbound_messages").insert({
-      resend_email_id: result.data?.id ?? null,
-      recipient_email: recipientEmail,
-      sender_email: payload.from,
-      subject,
-      html_body: retryable ? payload.html ?? null : null,
-      text_body: retryable ? payload.text ?? null : null,
-      reply_to: payload.replyTo ? (Array.isArray(payload.replyTo) ? payload.replyTo : [payload.replyTo]) : [],
-      headers: payload.headers ?? {},
-      tags: mergedTags,
-      booking_id: context?.bookingId ?? null,
-      customer_id: context?.customerId ?? null,
-      message_type: context?.messageType ?? null,
-      campaign_id: context?.campaignId ?? null,
-      delivery_status: result.error ? "send_failed" : "sent",
-      failure_reason: result.error?.message ?? null,
-      retry_status: retryable && result.error ? "queued" : retryable ? "none" : "blocked",
-      next_retry_at: retryable && result.error ? new Date(Date.now() + 5 * 60_000).toISOString() : null,
-    });
+  try {
+    const admin = getSupabaseAdmin();
+    if (admin) {
+      const retryable = !payload.attachments?.length;
+      const { error: trackingError } = await admin.from("email_outbound_messages").insert({
+        resend_email_id: result.data?.id ?? null,
+        recipient_email: recipientEmail,
+        sender_email: payload.from,
+        subject,
+        html_body: retryable ? payload.html ?? null : null,
+        text_body: retryable ? payload.text ?? null : null,
+        reply_to: payload.replyTo ? (Array.isArray(payload.replyTo) ? payload.replyTo : [payload.replyTo]) : [],
+        headers: payload.headers ?? {},
+        tags: mergedTags,
+        booking_id: context?.bookingId ?? null,
+        customer_id: context?.customerId ?? null,
+        message_type: context?.messageType ?? null,
+        campaign_id: context?.campaignId ?? null,
+        delivery_status: result.error ? "send_failed" : "sent",
+        failure_reason: result.error?.message ?? null,
+        retry_status: retryable && result.error ? "queued" : retryable ? "none" : "blocked",
+        next_retry_at: retryable && result.error ? new Date(Date.now() + 5 * 60_000).toISOString() : null,
+      });
+      if (trackingError) console.warn("Email recovery record failed", { message: trackingError.message, resendEmailId: result.data?.id ?? null });
+    }
+  } catch (error) {
+    // Provider acceptance is authoritative. Audit storage cannot convert an accepted
+    // email into a failed send and trigger another email or SMS fallback.
+    console.warn("Email recovery record failed", { message: error instanceof Error ? error.message : String(error), resendEmailId: result.data?.id ?? null });
   }
 
   return {

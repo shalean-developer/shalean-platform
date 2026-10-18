@@ -7,6 +7,7 @@ import type { PaymentLinkEmailInput } from "@/lib/email/sendBookingEmail";
 import { sendPaymentLinkEmail } from "@/lib/email/sendBookingEmail";
 import type { PaymentLinkDeliveryJson } from "@/lib/admin/persistPaymentLinkDelivery";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { checkPaymentLinkEligibility } from "@/lib/pay/paymentLinkEligibility";
 
 const DEFERRED_EMAIL_MAX_FAILURES = 3;
 const DEFERRED_EMAIL_RETRY_BASE_SECONDS = 300;
@@ -143,22 +144,27 @@ async function releaseClaimForRetry(
   admin: SupabaseClient,
   row: DeferredRow,
   errorMessage: string,
+  options?: { eligibility?: boolean },
 ): Promise<{ released: boolean; failureCount: number; runAtIso: string | null }> {
-  const failureCount = deferredEmailFailureCount(row.delivery_context ?? {}) + 1;
-  if (failureCount >= DEFERRED_EMAIL_MAX_FAILURES) {
+  const context = row.delivery_context ?? {};
+  const failureCount = deferredEmailFailureCount(context) + (options?.eligibility ? 0 : 1);
+  if (!options?.eligibility && failureCount >= DEFERRED_EMAIL_MAX_FAILURES) {
     return { released: false, failureCount, runAtIso: null };
   }
 
-  const runAtIso = new Date(Date.now() + deferredEmailRetryDelaySeconds(failureCount) * 1000).toISOString();
+  const priorEligibility = Number(context.deferred_eligibility_retry_count ?? 0);
+  const eligibilityAttempts = (Number.isFinite(priorEligibility) && priorEligibility >= 0 ? Math.floor(priorEligibility) : 0) + 1;
+  const delaySeconds = options?.eligibility ? Math.min(900, 60 * 2 ** Math.min(eligibilityAttempts - 1, 4)) : deferredEmailRetryDelaySeconds(failureCount);
+  const runAtIso = new Date(Date.now() + delaySeconds * 1000).toISOString();
   const { data, error } = await admin
     .from("conversion_deferred_payment_link_emails")
     .update({
       run_at: runAtIso,
       last_error: errorMessage,
       delivery_context: {
-        ...(row.delivery_context ?? {}),
-        deferred_email_failure_count: failureCount,
-        deferred_email_last_failed_at: new Date().toISOString(),
+        ...context,
+        ...(options?.eligibility ? { deferred_eligibility_retry_count: eligibilityAttempts, deferred_eligibility_last_failed_at: new Date().toISOString() }
+          : { deferred_email_failure_count: failureCount, deferred_email_last_failed_at: new Date().toISOString() }),
       },
       processing_started_at: null,
       processing_token: null,
@@ -195,7 +201,9 @@ export async function processDueDeferredPaymentLinkEmails(
   admin: SupabaseClient,
   params?: { limit?: number },
 ): Promise<DeferredPaymentLinkEmailWorkerStats> {
-  const limit = Math.min(50, Math.max(1, params?.limit ?? 25));
+  // Each row may perform two 12-second gateway checks. Claim only a small batch
+  // so an outage cannot strand a large set behind the stale-claim lease.
+  const limit = Math.min(5, Math.max(1, params?.limit ?? 5));
 
   // The SQL function selects with FOR UPDATE SKIP LOCKED and stamps a unique
   // processing token in the same transaction. Parallel cron invocations therefore
@@ -237,6 +245,20 @@ export async function processDueDeferredPaymentLinkEmails(
     }
 
     const ctx = (row.delivery_context ?? {}) as Record<string, unknown>;
+    const eligibility = await checkPaymentLinkEligibility(admin, row.booking_id, row.email_payload.paystackReference);
+    if (!eligibility.allowed) {
+      if (eligibility.retryable) {
+        const retry = await releaseClaimForRetry(admin, row, `eligibility:${eligibility.reason}`, { eligibility: true });
+        if (retry.released) retriesScheduled++; else errors++;
+        continue;
+      }
+      const completed = await completeClaim(admin, row, { last_error: `suppressed:${eligibility.reason}` });
+      if (!completed) errors++;
+      else await mergeDeferredEmailCompletion(admin, row.booking_id, {
+        email: "skipped", email_deferred_until: null, updated_at: new Date().toISOString(),
+      });
+      continue;
+    }
     const em = await sendPaymentLinkEmail(row.email_payload);
     if (em.sent) {
       const completed = await completeClaim(admin, row, { last_error: null });
@@ -264,6 +286,16 @@ export async function processDueDeferredPaymentLinkEmails(
     const wa = row.wa_payload;
     let smsOk = false;
     if (phone && wa && typeof wa === "object") {
+      const smsEligibility = await checkPaymentLinkEligibility(admin, row.booking_id, row.email_payload.paystackReference);
+      if (!smsEligibility.allowed) {
+        if (smsEligibility.retryable) {
+          const retry = await releaseClaimForRetry(admin, row, `eligibility:${smsEligibility.reason}`, { eligibility: true });
+          if (retry.released) retriesScheduled++; else errors++;
+          continue;
+        }
+        if (!await completeClaim(admin, row, { last_error: `suppressed:${smsEligibility.reason}` })) errors++;
+        continue;
+      }
       const sms = await sendCustomerSmsPaymentLink({
         phone,
         payload: wa,

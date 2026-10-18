@@ -33,7 +33,7 @@ import {
 import { cleanerJobDeepLinkForSms } from "@/lib/cleaner/cleanerJobMagicLink";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
-import { enqueueFailedJob } from "@/lib/booking/failedJobs";
+import { enqueueFailedJob, PAYMENT_CONFIRMATION_NOTIFICATION_JOB } from "@/lib/booking/failedJobs";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
 import {
@@ -49,6 +49,9 @@ import { enqueueReviewSmsPromptQueue } from "@/lib/reviews/reviewPromptSms";
 import { ensureReviewFollowUpForCompletedBooking } from "@/lib/reviews/ensureReviewFollowUp";
 import { evaluateCustomerReviewPromptEligibility } from "@/lib/reviews/customerReviewFollowUpContract";
 import { sendSmsFallback } from "@/lib/notifications/smsFallback";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
+import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
+import { adminNotificationRecipientSetting } from "@/lib/email/adminNotificationRecipients";
 
 export type NotifyBookingEventInput =
   | {
@@ -59,6 +62,8 @@ export type NotifyBookingEventInput =
       customerEmail: string;
       amountCents: number;
       paymentReference: string;
+      /** Internal worker replay: retain its current job rather than enqueue a duplicate. */
+      confirmationRetry?: boolean;
     }
   | { type: "assigned"; supabase: SupabaseClient; bookingId: string; cleanerId: string }
   | { type: "completed"; supabase: SupabaseClient; bookingId: string }
@@ -118,7 +123,7 @@ async function sendAdminIfConfigured(
   send: () => Promise<void>,
 ): Promise<void> {
   if (!shouldSendAdminBookingMail(adminType)) return;
-  if (!process.env.ADMIN_NOTIFICATION_EMAIL?.trim()) {
+  if (!adminNotificationRecipientSetting()) {
     console.warn("Admin email not configured");
     return;
   }
@@ -162,7 +167,9 @@ async function enqueueNotificationDeliveryFailure(payload: {
   eventType: string;
   channel: string;
   error: string;
+  retryManaged?: boolean;
 }): Promise<void> {
+  if (payload.retryManaged) return;
   const ok = await enqueueFailedJob("notification_delivery", {
     bookingId: payload.bookingId,
     eventType: payload.eventType,
@@ -176,6 +183,14 @@ async function enqueueNotificationDeliveryFailure(payload: {
       channel: payload.channel,
     });
   }
+}
+
+async function queuePaymentConfirmationRetry(event: Extract<NotifyBookingEventInput, { type: "payment_confirmed" }>, error: string) {
+  if (event.confirmationRetry) return;
+  await enqueueFailedJob(PAYMENT_CONFIRMATION_NOTIFICATION_JOB, {
+    bookingId: event.bookingId, paymentReference: event.paymentReference, amountCents: event.amountCents,
+    customerEmail: event.customerEmail, snapshot: event.snapshot, last_error: error.slice(0, 4000),
+  });
 }
 
 /**
@@ -230,17 +245,32 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
   });
 
   if (event.type === "payment_confirmed") {
+    // A pre-send claim can belong to a callback that is still running. Retry workers
+    // require accepted-delivery evidence before treating a duplicate as complete.
+    const acceptedConfirmation = async (channel: "email" | "sms" | "in_app", role: "customer" | "admin" = "customer") => {
+      if (!event.confirmationRetry) return true;
+      const query = channel === "in_app"
+        ? supabase.from("user_notifications").select("id").eq("booking_id", event.bookingId).eq("type", "confirmed")
+        : supabase.from("notification_logs").select("id").eq("booking_id", event.bookingId)
+          .eq("role", role).eq("channel", channel).eq("status", "sent")
+          .in("event_type", role === "admin" ? ["payment_confirmed", "payment_confirmed_admin"] : ["payment_confirmed"]);
+      const { data, error } = await query.limit(1).maybeSingle();
+      return !error && Boolean(data);
+    };
     let debugEmailClaimed: boolean | null = null;
     let debugSmsClaimed: boolean | null = null;
     let debugCustomerSmsOk: boolean | null = null;
     let delivery: NotifyBookingEventDeliveryResult = emptyNotifyDeliveryResult();
-    const { data: bookingHead } = await supabase
+    const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
+    const { data: bookingHead, error: bookingHeadError } = await supabase
       .from("bookings")
       .select(
-        "user_id, assignment_type, fallback_reason, customer_email, selected_cleaner_id, cleaner_id, date, time, location, suburb, service, service_slug, booking_snapshot, booking_reference, extras, selected_extras, booking_type, recurring_frequency, recurring_days",
+        `${ownershipColumn}, assignment_type, fallback_reason, customer_email, customer_name, customer_phone, selected_cleaner_id, cleaner_id, date, time, location, suburb, service, service_slug, booking_snapshot, booking_reference, extras, selected_extras, booking_type, recurring_frequency, recurring_days`,
       )
       .eq("id", event.bookingId)
       .maybeSingle();
+    if (bookingHeadError) throw new Error(`payment_confirmation_booking_load_failed: ${bookingHeadError.message}`);
+    if (!bookingHead) throw new Error("payment_confirmation_booking_not_found");
     const head =
       bookingHead && typeof bookingHead === "object" ? (bookingHead as Record<string, unknown>) : null;
     const rowCustomerEmailRaw = head ? String((head as { customer_email?: string | null }).customer_email ?? "") : "";
@@ -258,7 +288,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       }
     }
     const hasEmail = Boolean(resolvedEmail);
-    const custPhone = event.snapshot?.customer?.phone?.trim();
+    const custPhone = String(head?.customer_phone ?? "").trim() || String(event.snapshot?.customer?.phone ?? "").trim();
 
     if (!process.env.RESEND_API_KEY?.trim()) {
       notifyBookingDebug("payment_confirmed_resend_missing", { bookingId: event.bookingId });
@@ -314,7 +344,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     }
 
     let preferredNotificationChannel: "whatsapp" | "sms" | "email" | null = null;
-    const payUserId = head ? String(head.user_id ?? "").trim() : "";
+    const payUserId = head ? bookingCustomerKey(head) : "";
     if (payUserId) {
       const { data: profRow, error: profErr } = await supabase
         .from("user_profiles")
@@ -369,6 +399,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             bookingId: event.bookingId,
           });
           await enqueueNotificationDeliveryFailure({
+            retryManaged: event.confirmationRetry,
             bookingId: event.bookingId,
             eventType: "payment_confirmed",
             channel: "email",
@@ -387,6 +418,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             bookingId: event.bookingId,
           });
           await enqueueNotificationDeliveryFailure({
+            retryManaged: event.confirmationRetry,
             bookingId: event.bookingId,
             eventType: "payment_confirmed",
             channel: "email",
@@ -421,7 +453,9 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           error: "dedupe_skip",
           bookingId: event.bookingId,
         });
-        delivery = emptyNotifyDeliveryResult({ dedupeSkipped: true });
+        const accepted = await acceptedConfirmation("email");
+        delivery = emptyNotifyDeliveryResult({ dedupeSkipped: true,
+          ...(!accepted ? { failed: true, error: "customer_email_claim_pending" } : {}) });
       }
       notifyBookingDebug("payment_confirmed_email_result", {
         bookingId: event.bookingId,
@@ -432,7 +466,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     }
 
     const emailSent = hasEmail && cust.sent;
-    if (custPhone && (!hasEmail || !cust.sent)) {
+    if (custPhone && (!hasEmail || (!cust.sent && !delivery.dedupeSkipped))) {
       const claimedSms = await tryClaimNotificationIdempotency(supabase, {
         reference: event.paymentReference,
         eventType: "payment_confirmed",
@@ -441,6 +475,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       });
       debugSmsClaimed = claimedSms;
       if (claimedSms) {
+        try {
         const phoneNotifyCtx = { bookingId: event.bookingId, stage: "payment_confirmed", channel: "customer_sms" };
         const country = inferCustomerCountryForNotifications({ phone: custPhone, snapshot: event.snapshot });
         const contactHealth = await getCustomerContactHealthScore({
@@ -470,7 +505,6 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             : "email_failed_sms_fallback";
 
         const paymentSmsRole: SmsRole = hasEmail && !cust.sent ? "fallback" : "primary";
-        try {
           await applyFallbackDelayIfNeeded(supabase, {
             userId: payUserId || null,
             bookingId: event.bookingId,
@@ -493,6 +527,10 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             },
           });
           debugCustomerSmsOk = smsRet.ok;
+          if (smsRet.ok) delivery = { ...delivery, failed: false, error: undefined };
+          else await releaseNotificationIdempotencyClaim(supabase, {
+            reference: event.paymentReference, eventType: "payment_confirmed", channel: "sms", bookingId: event.bookingId,
+          });
           notifyBookingDebug("payment_confirmed_customer_sms_result", {
             bookingId: event.bookingId,
             ok: smsRet.ok,
@@ -502,8 +540,12 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           debugCustomerSmsOk = false;
+          await releaseNotificationIdempotencyClaim(supabase, {
+            reference: event.paymentReference, eventType: "payment_confirmed", channel: "sms", bookingId: event.bookingId,
+          });
           notifyBookingDebug("payment_confirmed_customer_sms_throw", { bookingId: event.bookingId, message: msg });
           await enqueueNotificationDeliveryFailure({
+            retryManaged: event.confirmationRetry,
             bookingId: event.bookingId,
             eventType: "payment_confirmed",
             channel: "sms",
@@ -511,6 +553,8 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           });
         }
       } else {
+        const accepted = await acceptedConfirmation("sms");
+        delivery = { ...delivery, failed: !accepted, error: accepted ? undefined : "customer_sms_claim_pending", dedupeSkipped: true };
         notifyBookingDebug("payment_confirmed_customer_sms_dedupe_skip", { bookingId: event.bookingId });
       }
     } else if (custPhone && emailSent) {
@@ -539,7 +583,11 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           channel: "email",
           bookingId: event.bookingId,
         });
-        if (!claimedAdminEmail) return;
+        if (!claimedAdminEmail) {
+          if (!(await acceptedConfirmation("email", "admin"))) delivery = { ...delivery, failed: true, error: "admin_email_claim_pending" };
+          return;
+        }
+        try {
         const adminAssignmentNote =
           payload.showCleanerSubstitutionNotice && payload.fallbackReason
             ? `<p style="font-family:system-ui,sans-serif;font-size:14px;color:#92400e"><strong>Checkout assignment:</strong> auto_fallback — ${escapeHtml(payload.fallbackReason)}</p>`
@@ -578,6 +626,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             }),
         });
         if (!adminResult.sent) {
+          delivery = { ...delivery, failed: true, error: adminResult.error ?? "admin_confirmation_not_accepted" };
           await releaseNotificationIdempotencyClaim(supabase, {
             reference: event.paymentReference,
             eventType: "payment_confirmed_admin",
@@ -585,10 +634,16 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             bookingId: event.bookingId,
           });
         }
+        } catch (error) {
+          delivery = { ...delivery, failed: true, error: error instanceof Error ? error.message : String(error) };
+          await releaseNotificationIdempotencyClaim(supabase, {
+            reference: event.paymentReference, eventType: "payment_confirmed_admin", channel: "email", bookingId: event.bookingId,
+          });
+        }
       },
     );
 
-    const uid = head ? String(head.user_id ?? "").trim() : "";
+    const uid = payUserId;
     if (uid) {
       const claimedInApp = await tryClaimNotificationIdempotency(supabase, {
         reference: event.paymentReference,
@@ -609,13 +664,20 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           console.error("[IN_APP NOTIFY FAILED]", { bookingId: event.bookingId, err });
+          delivery = { ...delivery, failed: true, error: msg };
+          await releaseNotificationIdempotencyClaim(supabase, {
+            reference: event.paymentReference, eventType: "payment_confirmed", channel: "in_app", bookingId: event.bookingId,
+          });
           await enqueueNotificationDeliveryFailure({
+            retryManaged: event.confirmationRetry,
             bookingId: event.bookingId,
             eventType: "payment_confirmed",
             channel: "in_app",
             error: msg,
           });
         }
+      } else if (!(await acceptedConfirmation("in_app"))) {
+        delivery = { ...delivery, failed: true, error: "in_app_claim_pending" };
       }
     }
 
@@ -633,6 +695,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       dedupeSkipped: delivery.dedupeSkipped,
       failed: delivery.failed,
     });
+    if (delivery.failed) await queuePaymentConfirmationRetry(event, delivery.error ?? "confirmation_delivery_failed");
     return delivery;
   }
 
@@ -1079,6 +1142,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[notifyBookingEvent] unhandled failure", msg);
+    if (event.type === "payment_confirmed") await queuePaymentConfirmationRetry(event, msg);
     await reportOperationalIssue("error", "notifyBookingEvent/unhandled", msg, {
       eventType: event.type,
       bookingId: "bookingId" in event ? (event as { bookingId?: string }).bookingId : undefined,

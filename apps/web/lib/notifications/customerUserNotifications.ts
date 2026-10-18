@@ -54,7 +54,7 @@ async function hasReminderForBooking(admin: SupabaseClient, bookingId: string): 
 
 /**
  * In-app dashboard notification (`user_notifications`). Inserts via service role — RLS has no insert for anon.
- * Failures are logged only so booking flows are not blocked.
+ * Failures are logged; payment confirmation opts into propagation for durable recovery.
  */
 export async function insertCustomerUserNotification(
   admin: SupabaseClient,
@@ -64,6 +64,7 @@ export async function insertCustomerUserNotification(
     body: string;
     type?: CustomerNotificationType;
     bookingId?: string | null;
+    throwOnError?: boolean;
   },
 ): Promise<void> {
   const uid = params.userId.trim();
@@ -89,6 +90,7 @@ export async function insertCustomerUserNotification(
       type,
       bookingId: bid,
     });
+    if (params.throwOnError) throw new Error(`customer_notification_insert_failed: ${error.message}`);
   }
 }
 
@@ -113,6 +115,7 @@ export async function notifyCustomerBookingPlaced(
     title: `Your ${svc} is confirmed`,
     body: `We’ve received your payment. Your visit is scheduled for ${when}. We’ll notify you when a cleaner is assigned.`,
     bookingId: params.bookingId,
+    throwOnError: true,
   });
 }
 
