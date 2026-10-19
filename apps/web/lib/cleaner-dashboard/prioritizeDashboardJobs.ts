@@ -106,8 +106,8 @@ export function prioritizeDashboardJobsForDisplay(
   /** Earliest future-dated open booking (date > JHB today). Never drop entirely when truncating — avoids “no next job” while tomorrow is assigned. */
   const earliestFuture = future[0];
   const head = merged.slice(0, max);
-  if (earliestFuture && !head.some((r) => r.id === earliestFuture.id)) {
-    return [earliestFuture, ...merged.filter((r) => r.id !== earliestFuture.id).slice(0, max - 1)];
+  if (active.length < max && earliestFuture && !head.some((r) => r.id === earliestFuture.id)) {
+    return [...head.slice(0, max - 1), earliestFuture];
   }
   return head;
 }
