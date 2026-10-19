@@ -12,6 +12,7 @@ import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { isCleanerJobEarningPositive, JOB_EARNING_BLOCK_COMPLETION_MESSAGE, resolveCleanerJobEarning } from "@/lib/cleaner/cleanerJobEarning";
 import { cleanerLifecycleFailureMessage } from "@/lib/cleaner/cleanerLifecycleClientErrors";
 import { cleanerUiCompletionTimingBlocked } from "@/lib/cleaner/cleanerJobCompletionGate";
+import { recurringAssignmentAcceptanceOverdue } from "@/lib/cleaner/cleanerAssignedOfferExpiry";
 
 type CleanerJobPrimaryActionButtonProps = {
   bookingId: string;
@@ -168,6 +169,11 @@ export function CleanerJobPrimaryActionButton({
 
   return (
     <div className="min-w-0 flex-1 space-y-1">
+      {recurringAssignmentAcceptanceOverdue(effectiveRow, nowMs) ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-900" role="status">
+          Acceptance overdue. This recurring job is still assigned to you. Accept the job to continue.
+        </p>
+      ) : null}
       {confirmComplete && cta.kind === "lifecycle" && cta.action === "complete" ? (
         <div className="mb-1 flex gap-2">
           <button type="button" className={cn(buttonClass, "flex-1")} disabled={busy || completeBlocked} onClick={() => void runLifecycle("complete")}>{busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}Yes, complete</button>

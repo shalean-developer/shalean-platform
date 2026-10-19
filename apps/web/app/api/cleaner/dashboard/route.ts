@@ -63,6 +63,9 @@ function wireDashboardJob(raw: Record<string, unknown>): CleanerBookingRow {
     is_team_job: raw.is_team_job === true,
     team_id: (raw.team_id as string | null | undefined) ?? null,
     cleaner_id: (raw.cleaner_id as string | null | undefined) ?? undefined,
+    is_recurring_generated: raw.is_recurring_generated === true,
+    billing_type: (raw.billing_type as string | null | undefined) ?? null,
+    monthly_invoice_id: (raw.monthly_invoice_id as string | null | undefined) ?? null,
   };
 }
 
