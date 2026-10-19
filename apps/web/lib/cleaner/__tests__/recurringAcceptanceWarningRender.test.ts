@@ -3,6 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CleanerJobPrimaryActionButton } from "@/components/cleaner/CleanerJobPrimaryActionButton";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
+import { augmentCleanerBookingWire } from "@/lib/cleaner/cleanerJobWireAugment";
+import { acceptanceOverdueMessage } from "../../../../mobile/lib/jobs/acceptanceOverdueMessage";
+import type { CleanerJobWire } from "../../../../mobile/services/types/cleanerJobs";
 
 afterEach(() => vi.useRealTimers());
 
@@ -30,5 +33,15 @@ describe("recurring acceptance warning", () => {
     }));
     expect(html).not.toContain("Acceptance overdue.");
     expect(html).toContain("On my way");
+  });
+
+  it("carries the same warning from the jobs API projection to the native notice", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-19T08:45:00Z"));
+    const wire = { ...booking, ...augmentCleanerBookingWire(booking) } as CleanerJobWire;
+    expect(wire.acceptance_overdue_message).toContain("Acceptance overdue.");
+    expect(acceptanceOverdueMessage(wire)).toContain("Acceptance overdue.");
+    expect(acceptanceOverdueMessage({ ...wire, accepted_at: "2026-10-19T08:40:00Z", cleaner_response_status: "accepted" })).toBeNull();
+    expect(acceptanceOverdueMessage({ ...wire, status: "cancelled" })).toBeNull();
   });
 });

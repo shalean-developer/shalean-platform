@@ -12,7 +12,7 @@ import {
   todayCentsAndBreakdownFromBookings,
   type CleanerDashboardEarningsWireRow,
 } from "@/lib/cleaner/cleanerDashboardTodayCents";
-import { assignedOfferPastAcceptanceDeadline } from "@/lib/cleaner/cleanerAssignedOfferExpiry";
+import { assignedOfferPastAcceptanceDeadline, recurringAssignmentAcceptanceOverdue, RECURRING_ACCEPTANCE_OVERDUE_MESSAGE } from "@/lib/cleaner/cleanerAssignedOfferExpiry";
 import { dedupeBookingsById, prioritizeDashboardJobsForDisplay } from "@/lib/cleaner-dashboard/prioritizeDashboardJobs";
 import { getJhbTodayRange } from "@/lib/dashboard/johannesburgMonth";
 import { resolveCleanerIdFromRequest } from "@/lib/cleaner/session";
@@ -85,20 +85,33 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Not a cleaner account." }, { status: 403 });
   }
 
-  const { data: mergedRows, error } = await fetchCleanerVisibleBookingsMerged(admin, cleanerId, {
-    select: DASHBOARD_BOOKING_SELECT,
-    perBranchLimit: 240,
-    applyEachBranch: (q) =>
-      q.not("status", "eq", "failed").not("status", "eq", "payment_expired").order("date", { ascending: true }).order("time", { ascending: true }),
-  });
+  const now = new Date();
+  const { todayYmd } = getJhbTodayRange(now);
+  // Fetch current/future work independently so unresolved history cannot crowd it out.
+  const [history, scheduled] = await Promise.all([
+    fetchCleanerVisibleBookingsMerged(admin, cleanerId, {
+      select: DASHBOARD_BOOKING_SELECT,
+      perBranchLimit: 240,
+      applyEachBranch: (q) =>
+        q.not("status", "eq", "failed").not("status", "eq", "payment_expired").order("date", { ascending: true }).order("time", { ascending: true }),
+    }),
+    fetchCleanerVisibleBookingsMerged(admin, cleanerId, {
+      select: DASHBOARD_BOOKING_SELECT,
+      perBranchLimit: 240,
+      applyEachBranch: (q) => q.gte("date", todayYmd)
+        .not("status", "in", "(completed,cancelled,failed,payment_expired)")
+        .order("date", { ascending: true }).order("time", { ascending: true }),
+    }),
+  ]);
+  const error = history.error ?? scheduled.error;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const rawList = sortBookingsByDateThenTime((mergedRows ?? []) as Record<string, unknown>[]).slice(0, 80);
-  const now = new Date();
-  const { todayYmd } = getJhbTodayRange(now);
+  const byId = new Map<string, Record<string, unknown>>();
+  for (const row of [...(history.data ?? []), ...(scheduled.data ?? [])]) byId.set(String(row.id), row);
+  const rawList = sortBookingsByDateThenTime([...byId.values()]);
   const wired = rawList
     .map((raw) => {
       const row = wireDashboardJob(raw);
@@ -109,7 +122,10 @@ export async function GET(request: Request) {
           ? ("recurring_pending_payment" as const)
           : null;
       const dashboardLifecycle = buildDashboardLifecycleAlignmentWire(rec);
-      const base = { ...row, dashboardLifecycle, metadata: rec.metadata };
+      const base = { ...row, dashboardLifecycle, metadata: rec.metadata,
+        acceptance_overdue_message: recurringAssignmentAcceptanceOverdue(row, now.getTime())
+          ? RECURRING_ACCEPTANCE_OVERDUE_MESSAGE : null,
+      };
       if (!banner && !visMode) return base;
       return {
         ...base,

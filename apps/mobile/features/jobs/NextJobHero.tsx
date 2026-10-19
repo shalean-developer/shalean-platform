@@ -19,6 +19,7 @@ import {
 } from "@/lib/jobs/jobDisplay";
 import type { CleanerJobWire } from "@/services/types/cleanerJobs";
 import { colors, shadows } from "@/theme";
+import { AcceptanceOverdueNotice } from "./AcceptanceOverdueNotice";
 
 type Props = { job: CleanerJobWire };
 
@@ -77,6 +78,7 @@ export function NextJobHero({ job }: Props) {
         </View>
       </Pressable>
 
+      <AcceptanceOverdueNotice job={job} />
       <View className="flex-row items-center gap-2 px-4 py-4">
         <AppButton
           label={cta.label === "Open" ? "Open job" : cta.label}

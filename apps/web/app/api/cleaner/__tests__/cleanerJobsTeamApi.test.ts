@@ -46,6 +46,7 @@ class BookingsQuery {
   private idEq: string | null = null;
   private isTeamJobEqTrue = false;
   private statusNot = new Set<string>();
+  private minimumDate: string | null = null;
 
   constructor(private rows: Row[]) {}
 
@@ -83,8 +84,13 @@ class BookingsQuery {
     }
     return this;
   }
-  not(_col: string, _op: string, val: unknown) {
-    this.statusNot.add(String(val));
+  not(_col: string, op: string, val: unknown) {
+    const values = op === "in" ? String(val).replace(/^\(|\)$/g, "").split(",") : [String(val)];
+    for (const value of values) this.statusNot.add(value);
+    return this;
+  }
+  gte(col: string, value: unknown) {
+    if (col === "date") this.minimumDate = String(value);
     return this;
   }
   order() {
@@ -99,6 +105,7 @@ class BookingsQuery {
     return Promise.resolve({ data: hit ? { ...hit } : null, error: null });
   }
   private matches(row: Row): boolean {
+    if (this.minimumDate && String(row.date ?? "") < this.minimumDate) return false;
     if (this.idEq && String(row.id ?? "") !== this.idEq) return false;
     for (const st of this.statusNot) {
       if (String(row.status ?? "") === st) return false;
