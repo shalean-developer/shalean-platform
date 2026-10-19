@@ -355,27 +355,13 @@ describe("getAvailableCleaners /api/booking/cleaners pool", () => {
           };
         }
         if (table === "reviews") {
-          return {
-            select() {
-              return {
-                eq() {
-                  return {
-                    eq() {
-                      return {
-                        order() {
-                          return {
-                            limit() {
-                              return Promise.resolve({ data: [], error: null });
-                            },
-                          };
-                        },
-                      };
-                    },
-                  };
-                },
-              };
-            },
+          const query = {
+            select: () => query,
+            eq: () => query,
+            order: () => query,
+            limit: async () => ({ data: [], error: null }),
           };
+          return query;
         }
         throw new Error(`unexpected table ${table}`);
       },
