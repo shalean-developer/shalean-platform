@@ -19,6 +19,8 @@ type ReviewRow = {
   service: string | null;
   is_public: boolean | null;
   is_hidden?: boolean | null;
+  homepage_approved: boolean;
+  public_display_consent: boolean;
 };
 
 type ReviewsResponse = {
@@ -47,6 +49,7 @@ function formatDate(iso: string): string {
 export default function ReviewsPage() {
   const [search, setSearch] = useState("");
   const [ratingFilter, setRatingFilter] = useState<number | "all">("all");
+  const [permissionConfirmed, setPermissionConfirmed] = useState<Record<string, { comment: string | null; consent: boolean } | undefined>>({});
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const { data, loading, error, refetch } = useAdminData<ReviewsResponse>("/api/admin/reviews", {
@@ -68,6 +71,27 @@ export default function ReviewsPage() {
     } else {
       showToast(res.error ?? "Could not update review", "error");
     }
+  }
+
+  function hasPublicationAttestation(review: ReviewRow): boolean {
+    const checked = permissionConfirmed[review.id];
+    return checked !== undefined && checked.comment === review.comment && checked.consent === (review.public_display_consent === true);
+  }
+
+  async function setHomepagePublication(review: ReviewRow) {
+    if (!review.homepage_approved && !hasPublicationAttestation(review)) return;
+    setActionLoading(`${review.id}-homepage`);
+    try {
+      const res = await adminFetch(`/api/admin/reviews/${review.id}/homepage`, {
+        method: "POST",
+        body: JSON.stringify({ approved: !review.homepage_approved, expectedComment: review.comment, expectedConsent: review.public_display_consent === true, permissionConfirmed: hasPublicationAttestation(review) }),
+      });
+      if (res.ok) {
+        showToast(review.homepage_approved ? "Removed from homepage" : "Approved for homepage", "success");
+        setPermissionConfirmed((current) => ({ ...current, [review.id]: undefined }));
+        await refetch();
+      } else showToast(res.error ?? "Could not update homepage publication", "error");
+    } finally { setActionLoading(null); }
   }
 
   const filtered = reviews.filter((r) => {
@@ -191,11 +215,25 @@ export default function ReviewsPage() {
                     </div>
                     <StarRating rating={r.rating} />
                     {r.comment && (
-                      <p className="mt-1.5 text-sm text-slate-600 line-clamp-2">{r.comment}</p>
+                      <p className="mt-1.5 text-sm text-slate-600 whitespace-pre-wrap break-words">{r.comment}</p>
                     )}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-2">
                     <p className="text-xs text-slate-400">{formatDate(r.created_at)}</p>
+                    {r.homepage_approved ? <span className="text-xs font-semibold text-emerald-700">Approved for homepage</span> : null}
+                    {r.rating === 5 && r.comment?.trim() && !r.is_hidden ? (
+                      <div className="max-w-xs space-y-2">
+                        {!r.homepage_approved ? <label className="flex items-start gap-2 text-xs text-slate-600">
+                          <input type="checkbox" checked={hasPublicationAttestation(r)} onChange={(e) => { const checked = e.target.checked; setPermissionConfirmed((current) => ({ ...current, [r.id]: checked ? { comment: r.comment, consent: r.public_display_consent === true } : undefined })); }} />
+                          <span>{r.public_display_consent ? "I checked this comment for private details. The customer allowed anonymous website display." : "I confirm customer permission for anonymous website display and have checked the comment for private details."}</span>
+                        </label> : null}
+                        <button type="button" onClick={() => void setHomepagePublication(r)}
+                          disabled={actionLoading !== null || (!r.homepage_approved && !hasPublicationAttestation(r))}
+                          className="rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 disabled:opacity-50">
+                          {actionLoading === `${r.id}-homepage` ? "Saving…" : r.homepage_approved ? "Remove from homepage" : "Approve for homepage"}
+                        </button>
+                      </div>
+                    ) : null}
                     <button
                       type="button"
                       disabled={actionLoading === `${r.id}-hide`}

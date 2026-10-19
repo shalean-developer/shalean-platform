@@ -14,14 +14,6 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-function anonymizeName(raw: string | null | undefined): string {
-  const first = String(raw ?? "")
-    .trim()
-    .split(/\s+/)[0];
-  if (!first) return "Customer";
-  return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
-}
-
 /**
  * Public cleaner profile enrichment for booking funnel (reviews + weekday availability).
  * Does not expose phone/email/auth fields.
@@ -67,8 +59,12 @@ export async function GET(_request: Request, context: RouteContext) {
 
   const { data: reviewRows, error: reviewErr } = await admin
     .from("reviews")
-    .select("id, rating, comment, created_at, booking_id, is_hidden")
+    .select("id, rating, comment, created_at, is_hidden, bookings!inner(status, completed_at, is_test)")
     .eq("cleaner_id", id)
+    .eq("public_display_consent", true)
+    .or("status.eq.completed,completed_at.not.is.null", { referencedTable: "bookings" })
+    .not("bookings.status", "in", "(cancelled,failed,payment_expired,pending_payment)")
+    .eq("bookings.is_test", false)
     .or("is_hidden.is.null,is_hidden.eq.false")
     .order("created_at", { ascending: false })
     .limit(8);
@@ -82,23 +78,8 @@ export async function GET(_request: Request, context: RouteContext) {
     rating: number;
     comment: string | null;
     created_at: string;
-    booking_id: string;
     is_hidden?: boolean | null;
   }[];
-
-  const bookingIds = [...new Set(rows.map((r) => r.booking_id).filter(Boolean))];
-  const bookingNameMap = new Map<string, string | null>();
-  if (bookingIds.length) {
-    const { data: bookings } = await admin
-      .from("bookings")
-      .select("id, customer_name")
-      .in("id", bookingIds);
-    for (const b of bookings ?? []) {
-      const row = b as { id?: string; customer_name?: string | null };
-      const bid = String(row.id ?? "").trim();
-      if (bid) bookingNameMap.set(bid, row.customer_name?.trim() || null);
-    }
-  }
 
   const { count: reviewCount } = await admin
     .from("reviews")
@@ -111,7 +92,7 @@ export async function GET(_request: Request, context: RouteContext) {
     rating: Number(r.rating) || 0,
     comment: r.comment?.trim() || null,
     createdAt: r.created_at,
-    reviewerName: anonymizeName(bookingNameMap.get(r.booking_id)),
+    reviewerName: "Verified customer",
   }));
 
   const start = (cleaner as { availability_start?: string | null }).availability_start?.trim() || null;

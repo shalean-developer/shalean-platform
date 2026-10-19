@@ -5,6 +5,7 @@ import { Suspense, useMemo } from "react";
 import { MessageSquare, Star, ThumbsUp } from "lucide-react";
 import { useReviewedBookingIds, useReviews } from "@/hooks/useReviews";
 import { useBookings } from "@/hooks/useBookings";
+import { ReviewDisplayPreference } from "@/components/review/ReviewDisplayPreference";
 import { HelpCard } from "@/components/account/HelpCard";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,7 +51,7 @@ function StarPicker({ value, onChange }: { value: number; onChange: (v: number) 
 }
 
 function ReviewsContent() {
-  const { reviews, loading: revLoading, error: revError } = useReviews();
+  const { reviews, loading: revLoading, error: revError, refetch } = useReviews();
   const { reviewBookings: bookings, reviewHistoryComplete, loading: bookLoading } = useBookings({
     includeCompleteReviewHistory: true,
   });
@@ -198,6 +199,7 @@ function ReviewsContent() {
                       })}
                     </p>
                   </div>
+                  <ReviewDisplayPreference bookingId={r.booking_id} allowed={r.public_display_consent === true} onSaved={refetch} />
                 </div>
               </li>
             ))}

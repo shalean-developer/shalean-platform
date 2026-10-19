@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { connection } from "next/server";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
 export type LocationHubMarketingReviewSnippet = {
@@ -43,6 +44,8 @@ function normalizeReviewerLabel(raw: string): string {
  */
 export const getLocationHubMarketingReviews = cache(
   async (areaName: string, limit = 4): Promise<LocationHubMarketingReviewSnippet[]> => {
+    // Consent withdrawal must take effect without waiting for a location-page rebuild.
+    await connection();
     const sb = getSupabaseServer();
     if (!sb) return [];
     const { data, error } = await sb.rpc("public_marketing_reviews_for_area", {

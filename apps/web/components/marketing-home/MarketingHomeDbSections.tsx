@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { MarketingHomeReviewsSection } from "@/components/marketing-home/sections/MarketingHomeReviewsSection";
 import StructuredData from "@/components/home/StructuredData";
 import { MarketingHomeCoreServicesSection } from "@/components/marketing-home/sections/MarketingHomeCoreServicesSection";
 import { MarketingAreasSection } from "@/components/marketing-home/sections/MarketingAreasSection";
@@ -25,6 +27,7 @@ export async function MarketingHomeDbSections() {
       <MarketingHomeCoreServicesSection cards={serviceCards} layout="grouped" />
       <MarketingHomeHowItWorksSection />
       <MarketingHomeTrustSection />
+      <Suspense fallback={null}><MarketingHomeReviewsSection /></Suspense>
       <MarketingHomeServicesSection />
       <PromotionFeaturedCard />
       <MarketingHomeReferralSection />
