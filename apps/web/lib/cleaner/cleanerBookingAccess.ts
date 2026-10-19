@@ -124,14 +124,24 @@ export function cleanerTeamMembershipMatchesBookingDate(
 export async function fetchCleanerTeamMemberships(
   admin: SupabaseClient,
   cleanerId: string,
+  pageAll = false,
 ): Promise<CleanerTeamMembershipRow[]> {
-  const { data, error } = await admin
+  const query = admin
     .from("team_members")
     .select("team_id, cleaner_id, active_from, active_to")
     .eq("cleaner_id", cleanerId)
     .not("team_id", "is", null);
-  if (error || !data?.length) return [];
-  return data as CleanerTeamMembershipRow[];
+  if (!pageAll || typeof query.range !== "function") {
+    const { data, error } = await query;
+    return error ? [] : (data ?? []) as CleanerTeamMembershipRow[];
+  }
+  const rows: CleanerTeamMembershipRow[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await query.order("id", { ascending: true }).range(offset, offset + 499);
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as CleanerTeamMembershipRow[]));
+    if ((data?.length ?? 0) < 500) return rows;
+  }
 }
 
 /**
@@ -155,7 +165,7 @@ export async function fetchCleanerVisibleBookingsMerged(
   if (!cid) return { data: [], error: null };
 
   const [teamMemberships, rosterBookingIds] = await Promise.all([
-    fetchCleanerTeamMemberships(admin, cid),
+    fetchCleanerTeamMemberships(admin, cid, params.pageAllBranches),
     fetchBookingIdsWhereCleanerOnRoster(admin, cid, 500, params.pageAllBranches),
   ]);
   const teamIds = [
@@ -198,12 +208,12 @@ export async function fetchCleanerVisibleBookingsMerged(
     return null;
   };
 
-  const execTeamDateAware = async (): Promise<PostgrestError | null> => {
+  const execTeamDateAware = async (batchTeamIds: string[]): Promise<PostgrestError | null> => {
     const pageSize = Math.min(1000, Math.max(lim, 100));
     let offset = 0;
     let accepted = 0;
     while (params.pageAllBranches || accepted < lim) {
-      const seed = admin.from("bookings").select(params.select).eq("is_team_job", true).in("team_id", teamIds);
+      const seed = admin.from("bookings").select(params.select).eq("is_team_job", true).in("team_id", batchTeamIds);
       const applied = params.pageAllBranches ? apply(seed).order("id", { ascending: true }) : apply(seed);
       const supportsRange = typeof applied?.range === "function";
       const q = supportsRange
@@ -228,8 +238,8 @@ export async function fetchCleanerVisibleBookingsMerged(
   );
   if (err) return { data: null, error: err };
 
-  if (teamIds.length > 0) {
-    err = await execTeamDateAware();
+  for (let offset = 0; offset < teamIds.length; offset += 100) {
+    err = await execTeamDateAware(teamIds.slice(offset, offset + 100));
     if (err) return { data: null, error: err };
   }
 
