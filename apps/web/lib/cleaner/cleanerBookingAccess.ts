@@ -156,7 +156,7 @@ export async function fetchCleanerVisibleBookingsMerged(
 
   const [teamMemberships, rosterBookingIds] = await Promise.all([
     fetchCleanerTeamMemberships(admin, cid),
-    fetchBookingIdsWhereCleanerOnRoster(admin, cid),
+    fetchBookingIdsWhereCleanerOnRoster(admin, cid, 500, params.pageAllBranches),
   ]);
   const teamIds = [
     ...new Set(
@@ -233,8 +233,9 @@ export async function fetchCleanerVisibleBookingsMerged(
     if (err) return { data: null, error: err };
   }
 
-  if (safeRoster.length > 0) {
-    err = await exec(admin.from("bookings").select(params.select).in("id", safeRoster));
+  // Bound each roster-ID filter as well as paging booking rows.
+  for (let offset = 0; offset < safeRoster.length; offset += 100) {
+    err = await exec(admin.from("bookings").select(params.select).in("id", safeRoster.slice(offset, offset + 100)));
     if (err) return { data: null, error: err };
   }
 
@@ -286,18 +287,27 @@ export async function fetchBookingIdsWhereCleanerOnRoster(
   admin: SupabaseClient,
   cleanerId: string,
   limit = 500,
+  pageAll = false,
 ): Promise<string[]> {
-  const { data, error } = await admin
+  const query = admin
     .from("booking_cleaners")
     .select("booking_id")
     .eq("cleaner_id", cleanerId)
-    .order("assigned_at", { ascending: false })
-    .limit(limit);
-  if (error || !data?.length) return [];
+    .order("assigned_at", { ascending: false });
   const out = new Set<string>();
-  for (const raw of data) {
-    const id = String((raw as { booking_id?: string | null }).booking_id ?? "").trim();
-    if (id) out.add(id);
+  const pageSize = Math.min(1000, Math.max(1, limit));
+  const paged = pageAll && typeof query.range === "function";
+  const ordered = paged ? query.order("booking_id", { ascending: true }) : query;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await (paged
+      ? ordered.range(offset, offset + pageSize - 1)
+      : ordered.limit(limit));
+    if (error) throw new Error(error.message);
+    for (const raw of data ?? []) {
+      const id = String((raw as { booking_id?: string | null }).booking_id ?? "").trim();
+      if (id) out.add(id);
+    }
+    if (!paged || (data?.length ?? 0) < pageSize) break;
   }
   return [...out];
 }

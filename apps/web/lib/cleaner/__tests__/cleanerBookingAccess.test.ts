@@ -4,6 +4,7 @@ import {
   bookingsVisibilityOrFilter,
   cleanerHasBookingAccess,
   fetchCleanerTeamIds,
+  fetchCleanerVisibleBookingsMerged,
   isExplicitCleanerBookingAttribution,
 } from "@/lib/cleaner/cleanerBookingAccess";
 
@@ -163,5 +164,39 @@ describe("cleanerHasBookingAccess", () => {
     });
     expect(ok).toBe(true);
     expect(admin.from).toHaveBeenCalledWith("booking_cleaners");
+  });
+});
+
+
+describe("open roster visibility pagination", () => {
+  it("retains roster-only work beyond the 500 most recent memberships with bounded ID filters", async () => {
+    const ids = Array.from({ length: 501 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`);
+    const batches: string[][] = [];
+    const rosterPages: number[] = [];
+    const admin = { from: (table: string) => {
+      let selected: string[] = [];
+      const query = {
+        select: () => query, eq: () => query, not: () => query, order: () => query, or: () => query,
+        in: (_column: string, values: string[]) => { selected = values; batches.push(values); return query; },
+        range: async (start: number, end: number) => {
+          if (table === "booking_cleaners") {
+            rosterPages.push(start);
+            return { data: ids.slice(start, end + 1).map((booking_id) => ({ booking_id })), error: null };
+          }
+          return { data: selected.slice(start, end + 1).map((id) => ({ id, status: "assigned" })), error: null };
+        },
+        limit: async () => ({ data: [], error: null }),
+        then: (resolve: (v: { data: unknown[]; error: null }) => unknown) => Promise.resolve(resolve({ data: [], error: null })),
+      };
+      return query;
+    } };
+    const result = await fetchCleanerVisibleBookingsMerged(admin as never, "cleaner", {
+      select: "id,status", perBranchLimit: 300, pageAllBranches: true,
+    });
+    expect(result.error).toBeNull();
+    expect(result.data).toHaveLength(501);
+    expect(result.data?.at(-1)?.id).toBe(ids[500]);
+    expect(rosterPages).toEqual([0, 500]);
+    expect(batches.every((ids) => ids.length <= 100)).toBe(true);
   });
 });
