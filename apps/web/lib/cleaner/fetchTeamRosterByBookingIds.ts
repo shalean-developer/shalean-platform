@@ -1,3 +1,4 @@
+import { readCleanerQueryPages } from "@/lib/cleaner/readCleanerQueryPages";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type TeamRosterMemberWire = {
@@ -18,12 +19,12 @@ export async function fetchTeamRosterByBookingIds(
   if (!ids.length) return out;
 
   for (let offset = 0; offset < ids.length; offset += 100) {
-    const { data: bcRows, error: bcErr } = await admin
+    const { data: bcRows, error: bcErr } = await readCleanerQueryPages(admin
       .from("booking_cleaners")
       .select("booking_id, cleaner_id, role")
       .in("booking_id", ids.slice(offset, offset + 100))
       .order("role", { ascending: true })
-      .order("cleaner_id", { ascending: true });
+      .order("cleaner_id", { ascending: true }).order("booking_id", { ascending: true }));
     if (bcErr || !bcRows?.length) continue;
 
     const cleanerIds = [

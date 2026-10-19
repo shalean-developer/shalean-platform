@@ -1,3 +1,4 @@
+import { readCleanerQueryPages } from "@/lib/cleaner/readCleanerQueryPages";
 import { CLEANER_EARNINGS_READ_SELECT, cleanerViewerMoneyFields } from "@/lib/cleaner/cleanerEarningsReadInputs";
 import { NextResponse } from "next/server";
 import {
@@ -209,11 +210,11 @@ export async function GET(request: Request) {
 
   const membersByTeam: Record<string, MemberRow[]> = {};
   for (let offset = 0; offset < teamIdsForRoster.length; offset += 100) {
-    const { data: rosterRows, error: rosterErr } = await admin
+    const { data: rosterRows, error: rosterErr } = await readCleanerQueryPages(admin
       .from("team_members")
       .select("team_id, cleaner_id, active_from, active_to")
       .in("team_id", teamIdsForRoster.slice(offset, offset + 100))
-      .not("cleaner_id", "is", null);
+      .not("cleaner_id", "is", null).order("id", { ascending: true }));
     if (!rosterErr && rosterRows?.length) {
       for (const raw of rosterRows as MemberRow[]) {
         const tid = String(raw.team_id ?? "").trim();
