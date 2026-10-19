@@ -4,6 +4,7 @@ import {
   bookingsVisibilityOrFilter,
   cleanerHasBookingAccess,
   fetchCleanerTeamIds,
+  fetchCleanerTeamMemberships,
   fetchCleanerVisibleBookingsMerged,
   isExplicitCleanerBookingAttribution,
 } from "@/lib/cleaner/cleanerBookingAccess";
@@ -198,5 +199,23 @@ describe("open roster visibility pagination", () => {
     expect(result.data?.at(-1)?.id).toBe(ids[500]);
     expect(rosterPages).toEqual([0, 500]);
     expect(batches.every((ids) => ids.length <= 100)).toBe(true);
+  });
+});
+
+
+describe("open team membership pagination", () => {
+  it("includes memberships beyond the PostgREST first-page cap", async () => {
+    const memberships = Array.from({ length: 1101 }, (_, i) => ({ team_id: `team-${i}` }));
+    const pages: number[] = [];
+    const query = {
+      select: () => query, eq: () => query, not: () => query, order: () => query,
+      range: async (start: number, end: number) => {
+        pages.push(start);
+        return { data: memberships.slice(start, end + 1), error: null };
+      },
+    };
+    const result = await fetchCleanerTeamMemberships({ from: () => query } as never, "cleaner", true);
+    expect(result).toEqual(memberships);
+    expect(pages).toEqual([0, 500, 1000]);
   });
 });

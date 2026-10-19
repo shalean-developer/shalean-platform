@@ -96,31 +96,34 @@ export async function fetchRosterLifecycleByBookingIds(
   const ids = [...new Set(bookingIds.map((x) => String(x ?? "").trim()).filter(Boolean))];
   if (!ids.length) return out;
 
-  const { data, error } = await admin
-    .from("booking_cleaners")
-    .select("booking_id, cleaner_id, role, completed_at")
-    .in("booking_id", ids)
-    .order("role", { ascending: true })
-    .order("cleaner_id", { ascending: true });
-  if (error || !data?.length) return out;
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    const { data, error } = await admin
+      .from("booking_cleaners")
+      .select("booking_id, cleaner_id, role, completed_at")
+      .in("booking_id", ids.slice(offset, offset + 100))
+      .order("role", { ascending: true })
+      .order("cleaner_id", { ascending: true });
+    if (error) throw new Error(error.message);
 
-  for (const raw of data as {
-    booking_id?: string;
-    cleaner_id?: string;
-    role?: string;
-    completed_at?: string | null;
-  }[]) {
-    const bid = String(raw.booking_id ?? "").trim();
-    const cid = String(raw.cleaner_id ?? "").trim();
-    if (!bid || !cid) continue;
-    const list = out.get(bid) ?? [];
-    list.push({
-      cleaner_id: cid,
-      role: normalizeRosterRole(raw.role),
-      completed_at: rosterRowCompletedAt(raw.completed_at),
-    });
-    out.set(bid, list);
+    for (const raw of data as {
+      booking_id?: string;
+      cleaner_id?: string;
+      role?: string;
+      completed_at?: string | null;
+    }[]) {
+      const bid = String(raw.booking_id ?? "").trim();
+      const cid = String(raw.cleaner_id ?? "").trim();
+      if (!bid || !cid) continue;
+      const list = out.get(bid) ?? [];
+      list.push({
+        cleaner_id: cid,
+        role: normalizeRosterRole(raw.role),
+        completed_at: rosterRowCompletedAt(raw.completed_at),
+      });
+      out.set(bid, list);
+    }
   }
+
   return out;
 }
 

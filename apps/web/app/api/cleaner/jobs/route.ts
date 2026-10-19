@@ -208,11 +208,11 @@ export async function GET(request: Request) {
   };
 
   const membersByTeam: Record<string, MemberRow[]> = {};
-  if (teamIdsForRoster.length > 0) {
+  for (let offset = 0; offset < teamIdsForRoster.length; offset += 100) {
     const { data: rosterRows, error: rosterErr } = await admin
       .from("team_members")
       .select("team_id, cleaner_id, active_from, active_to")
-      .in("team_id", teamIdsForRoster)
+      .in("team_id", teamIdsForRoster.slice(offset, offset + 100))
       .not("cleaner_id", "is", null);
     if (!rosterErr && rosterRows?.length) {
       for (const raw of rosterRows as MemberRow[]) {
@@ -264,11 +264,11 @@ export async function GET(request: Request) {
     .filter(Boolean);
 
   const reportedIds = new Set<string>();
-  if (!slimWire && bookingIds.length > 0) {
+  for (let offset = 0; !slimWire && offset < bookingIds.length; offset += 100) {
     const { data: repRows, error: repErr } = await admin
       .from("cleaner_job_issue_reports")
       .select("booking_id")
-      .in("booking_id", bookingIds)
+      .in("booking_id", bookingIds.slice(offset, offset + 100))
       .eq("cleaner_id", viewerCleanerId);
     if (!repErr && repRows?.length) {
       for (const r of repRows as { booking_id?: string }[]) {
