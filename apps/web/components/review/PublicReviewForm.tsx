@@ -210,7 +210,7 @@ export function PublicReviewForm({ initialBookingId }: Props) {
 
         <label className="flex items-start gap-3 text-sm text-zinc-600">
           <input type="checkbox" checked={publicDisplayConsent} onChange={(e) => setPublicDisplayConsent(e.target.checked)} disabled={busy} className="mt-1 h-4 w-4" />
-          <span>Shalean may display my review anonymously on its website. This is optional and does not affect submitting feedback. Please leave out contact details and addresses.</span>
+          <span>Shalean may display my written review anonymously on its website. This is optional. My star rating still contributes to overall ratings. Please leave out contact details and addresses.</span>
         </label>
 
         <Button type="submit" size="lg" className="w-full rounded-xl sm:w-auto" disabled={busy}>
