@@ -1,6 +1,6 @@
 import { Text } from "react-native";
 import type { CleanerJobWire } from "../../services/types/cleanerJobs";
-import { acceptanceOverdueMessage } from "../../lib/jobs/acceptanceOverdueMessage";
+import { acceptanceOverdueMessage } from "@shalean/utils";
 
 /** Only pending active assignments display a server-confirmed overdue warning. */
 export function AcceptanceOverdueNotice({ job }: { job: CleanerJobWire }) {
