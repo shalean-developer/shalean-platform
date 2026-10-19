@@ -42,6 +42,7 @@ export function PublicReviewForm({ initialBookingId }: Props) {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
+  const [publicDisplayConsent, setPublicDisplayConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -97,7 +98,7 @@ export function PublicReviewForm({ initialBookingId }: Props) {
       const res = await fetch("/api/bookings/review", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ bookingId, rating, comment }),
+        body: JSON.stringify({ bookingId, rating, comment, publicDisplayConsent }),
       });
       const j = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
@@ -206,6 +207,11 @@ export function PublicReviewForm({ initialBookingId }: Props) {
             maxLength={2000}
           />
         </div>
+
+        <label className="flex items-start gap-3 text-sm text-zinc-600">
+          <input type="checkbox" checked={publicDisplayConsent} onChange={(e) => setPublicDisplayConsent(e.target.checked)} disabled={busy} className="mt-1 h-4 w-4" />
+          <span>Shalean may display my review anonymously on its website. This is optional and does not affect submitting feedback. Please leave out contact details and addresses.</span>
+        </label>
 
         <Button type="submit" size="lg" className="w-full rounded-xl sm:w-auto" disabled={busy}>
           {busy ? "Submitting…" : "Submit review"}
