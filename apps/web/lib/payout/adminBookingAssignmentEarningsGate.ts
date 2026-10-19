@@ -13,22 +13,130 @@ import {
 /** Columns loaded before admin PATCH so we can preflight earnings and revert a failed paid-solo assignment. */
 export function adminBookingBeforeAssignmentPatchSelectList(): string {
   return (
-    "user_id, cleaner_id, status, completed_at, payout_owner_cleaner_id, is_team_job, team_id, date, time, selected_cleaner_id, billing_type, monthly_invoice_id, is_recurring_generated, dispatch_status, cleaner_response_status, assigned_at, en_route_at, started_at, duration_minutes, estimated_duration_minutes, pricing_summary, display_earnings_cents, payout_earnings_cents, internal_earnings_cents, earnings_model_version, earnings_percentage_applied, earnings_cap_cents_applied, earnings_tenure_months_at_assignment, cleaner_earnings_total_cents, cleaner_line_earnings_finalized_at, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_percentage, payout_type, total_paid_zar, total_paid_cents, amount_paid_cents, base_amount_cents, service_fee_cents, payment_status, booking_snapshot, service, payout_id, metadata" +
+    "cleaner_id, status, completed_at, payout_owner_cleaner_id, is_team_job, team_id, date, time, selected_cleaner_id, billing_type, monthly_invoice_id, is_recurring_generated, dispatch_status, cleaner_response_status, assigned_at, en_route_at, started_at, duration_minutes, estimated_duration_minutes, pricing_summary, display_earnings_cents, payout_earnings_cents, internal_earnings_cents, earnings_model_version, earnings_percentage_applied, earnings_cap_cents_applied, earnings_tenure_months_at_assignment, cleaner_earnings_total_cents, cleaner_line_earnings_finalized_at, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, payout_percentage, payout_type, total_paid_zar, total_paid_cents, amount_paid_cents, base_amount_cents, service_fee_cents, payment_status, booking_snapshot, service, payout_id, metadata" +
     bookingsPersistFullFinancialSelectSuffix()
   );
 }
 
 export type AdminBookingAssignmentBeforeRow = Record<string, unknown>;
 
+/** Never classify an unavailable pre-update read as a historical/undated visit. */
+export async function loadAdminBookingBeforeAssignmentPatch(
+  admin: SupabaseClient,
+  bookingId: string,
+): Promise<
+  | { ok: true; booking: AdminBookingAssignmentBeforeRow }
+  | { ok: false; status: 404 | 503; error: string; code: string }
+> {
+  const unavailable = {
+    ok: false as const,
+    status: 503 as const,
+    error: "Booking could not be loaded. Please refresh and try again.",
+    code: "booking_read_failed",
+  };
+  try {
+    const { data, error } = await admin
+      .from("bookings")
+      .select(adminBookingBeforeAssignmentPatchSelectList())
+      .eq("id", bookingId)
+      .maybeSingle();
+    if (error) return unavailable;
+    if (!data)
+      return {
+        ok: false,
+        status: 404,
+        error: "Booking not found.",
+        code: "booking_not_found",
+      };
+    const booking: unknown = data;
+    if (typeof booking !== "object" || Array.isArray(booking))
+      return unavailable;
+    const row = booking as AdminBookingAssignmentBeforeRow;
+    const numberColumns = new Set([
+      "duration_minutes",
+      "estimated_duration_minutes",
+      "display_earnings_cents",
+      "payout_earnings_cents",
+      "internal_earnings_cents",
+      "earnings_percentage_applied",
+      "earnings_cap_cents_applied",
+      "earnings_tenure_months_at_assignment",
+      "cleaner_earnings_total_cents",
+      "cleaner_payout_cents",
+      "cleaner_bonus_cents",
+      "company_revenue_cents",
+      "payout_percentage",
+      "total_paid_zar",
+      "total_paid_cents",
+      "amount_paid_cents",
+      "base_amount_cents",
+      "service_fee_cents",
+    ]);
+    const booleanColumns = new Set(["is_team_job", "is_recurring_generated"]);
+    const requiredColumns = new Set([
+      "status",
+      "dispatch_status",
+      "billing_type",
+      "is_team_job",
+      "is_recurring_generated",
+      "amount_paid_cents",
+      "service_fee_cents",
+      "metadata",
+    ]);
+    const jsonColumns = new Set([
+      "pricing_summary",
+      "booking_snapshot",
+      "metadata",
+    ]);
+    // A partial object is not an authoritative before-image. Explicit nulls are
+    // valid database values; absent or incorrectly typed fields are unavailable.
+    for (const column of adminBookingBeforeAssignmentPatchSelectList()
+      .split(",")
+      .map((c) => c.trim())) {
+      if (!Object.hasOwn(row, column) || row[column] === undefined)
+        return unavailable;
+      const value = row[column];
+      if (value === null) {
+        if (requiredColumns.has(column)) return unavailable;
+        continue;
+      }
+      if (column === "status" && (typeof value !== "string" || !value.trim()))
+        return unavailable;
+      if (jsonColumns.has(column)) continue;
+      if (numberColumns.has(column)) {
+        if (typeof value !== "number" || !Number.isFinite(value))
+          return unavailable;
+      } else if (booleanColumns.has(column)) {
+        if (typeof value !== "boolean") return unavailable;
+      } else if (typeof value !== "string") {
+        return unavailable;
+      }
+    }
+    return { ok: true, booking: row };
+  } catch {
+    return unavailable;
+  }
+}
+
 /**
  * Customer-paid signal for earnings/cleaner gates.
  * Does not treat pending_payment cash anomalies as settled (BK-001).
  */
-export function bookingPaidCustomerSignalsPresent(row: BookingPaidSignalRow): boolean {
+export function bookingPaidCustomerSignalsPresent(
+  row: BookingPaidSignalRow,
+): boolean {
   if (bookingIsCustomerPaymentSettled(row)) return true;
-  const st = String(row.status ?? "").trim().toLowerCase();
+  const st = String(row.status ?? "")
+    .trim()
+    .toLowerCase();
   if (st === "pending_payment" || st === "payment_expired") return false;
-  if (resolveTotalPaidCents(row.total_paid_zar, row.total_paid_cents ?? row.amount_paid_cents) > 0) return true;
+  if (
+    resolveTotalPaidCents(
+      row.total_paid_zar,
+      row.total_paid_cents ?? row.amount_paid_cents,
+    ) > 0
+  )
+    return true;
   return bookingSignalsPaidForZeroDisplayRecompute(row);
 }
 
@@ -36,13 +144,15 @@ export function bookingPaidCustomerSignalsPresent(row: BookingPaidSignalRow): bo
  * Paid solo (non-team, non-invoice) jobs must not be exposed to cleaners without a persisted
  * display earnings basis — customer cash is settled and completion integrity requires it.
  */
-export function bookingRequiresPersistedEarningsBeforeCleanerNotify(row: {
-  is_team_job?: boolean | null;
-  billing_type?: string | null;
-  is_monthly_billing_booking?: boolean | null;
-  monthly_invoice_id?: string | null;
-  status?: string | null;
-} & BookingPaidSignalRow): boolean {
+export function bookingRequiresPersistedEarningsBeforeCleanerNotify(
+  row: {
+    is_team_job?: boolean | null;
+    billing_type?: string | null;
+    is_monthly_billing_booking?: boolean | null;
+    monthly_invoice_id?: string | null;
+    status?: string | null;
+  } & BookingPaidSignalRow,
+): boolean {
   if (row.is_team_job === true) return false;
   const st = String(row.status ?? "").toLowerCase();
   if (st === "cancelled" || st === "failed") return false;
@@ -64,7 +174,8 @@ export async function revertAdminBookingAssignmentToBeforeRow(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const patch: Record<string, unknown> = {
     cleaner_id: (before.cleaner_id as string | null | undefined) ?? null,
-    payout_owner_cleaner_id: (before.payout_owner_cleaner_id as string | null | undefined) ?? null,
+    payout_owner_cleaner_id:
+      (before.payout_owner_cleaner_id as string | null | undefined) ?? null,
     status: before.status ?? "pending",
     dispatch_status: before.dispatch_status ?? null,
     cleaner_response_status: before.cleaner_response_status ?? null,
@@ -77,9 +188,11 @@ export async function revertAdminBookingAssignmentToBeforeRow(
     earnings_model_version: before.earnings_model_version ?? null,
     earnings_percentage_applied: before.earnings_percentage_applied ?? null,
     earnings_cap_cents_applied: before.earnings_cap_cents_applied ?? null,
-    earnings_tenure_months_at_assignment: before.earnings_tenure_months_at_assignment ?? null,
+    earnings_tenure_months_at_assignment:
+      before.earnings_tenure_months_at_assignment ?? null,
     cleaner_earnings_total_cents: before.cleaner_earnings_total_cents ?? null,
-    cleaner_line_earnings_finalized_at: before.cleaner_line_earnings_finalized_at ?? null,
+    cleaner_line_earnings_finalized_at:
+      before.cleaner_line_earnings_finalized_at ?? null,
     cleaner_payout_cents: before.cleaner_payout_cents ?? null,
     cleaner_bonus_cents: before.cleaner_bonus_cents ?? null,
     company_revenue_cents: before.company_revenue_cents ?? null,
@@ -87,7 +200,10 @@ export async function revertAdminBookingAssignmentToBeforeRow(
     payout_type: before.payout_type ?? null,
     metadata: before.metadata ?? null,
   };
-  const { error } = await admin.from("bookings").update(patch).eq("id", bookingId);
+  const { error } = await admin
+    .from("bookings")
+    .update(patch)
+    .eq("id", bookingId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
