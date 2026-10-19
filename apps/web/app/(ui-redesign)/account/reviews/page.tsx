@@ -149,7 +149,6 @@ function ReviewsContent() {
                       </Button>
                     </div>
                   </div>
-                  <ReviewDisplayPreference bookingId={r.booking_id} allowed={r.public_display_consent === true} onSaved={refetch} />
                 </div>
               </li>
             ))}
