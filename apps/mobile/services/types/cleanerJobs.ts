@@ -57,6 +57,7 @@ export type CleanerJobWire = {
   duration_minutes?: number | null;
   job_notes?: string | null;
   cleaner_response_status?: string | null;
+  acceptance_overdue_message?: string | null;
   is_team_job?: boolean | null;
   is_lead_cleaner?: boolean | null;
   displayEarningsCents?: number | null;

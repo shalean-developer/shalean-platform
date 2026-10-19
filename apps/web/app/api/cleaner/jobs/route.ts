@@ -1,3 +1,4 @@
+import { readCleanerQueryPages } from "@/lib/cleaner/readCleanerQueryPages";
 import { CLEANER_EARNINGS_READ_SELECT, cleanerViewerMoneyFields } from "@/lib/cleaner/cleanerEarningsReadInputs";
 import { NextResponse } from "next/server";
 import {
@@ -85,28 +86,40 @@ export async function GET(request: Request) {
   const bookingSelect =
     "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, cleaner_count, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, earnings_summary, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by, metadata" + ", " + CLEANER_EARNINGS_READ_SELECT;
 
-  const { data: jobsRaw, error } = directAssignments
-    ? await admin
+  const fetchRows = async (openOnly: boolean) => {
+    if (directAssignments) {
+      let query = admin
         .from("bookings")
         .select(bookingSelect)
         .eq("cleaner_id", viewerCleanerId)
         .not("status", "eq", "failed")
-        .not("status", "eq", "payment_expired")
-        .order("date", { ascending: true })
-        .order("time", { ascending: true })
-        .limit(300)
-    : await (async () => {
-        const { data: merged, error: mergeErr } = await fetchCleanerVisibleBookingsMerged(admin, viewerCleanerId, {
-          select: bookingSelect,
-          perBranchLimit: 300,
-          applyEachBranch: (q) =>
-            q.not("status", "eq", "failed").not("status", "eq", "payment_expired").order("date", { ascending: true }).order("time", { ascending: true }),
-        });
-        return {
-          data: (merged ?? []) as Record<string, unknown>[],
-          error: mergeErr,
-        };
-      })();
+        .not("status", "eq", "payment_expired");
+      if (openOnly) query = query.not("status", "in", "(completed,cancelled)");
+      query = query.order("date", { ascending: true }).order("time", { ascending: true }).order("id", { ascending: true });
+      if (!openOnly) return await query.limit(300);
+      const rows: Record<string, unknown>[] = [];
+      for (let offset = 0; ; offset += 300) {
+        const result = await query.range(offset, offset + 299);
+        if (result.error) return { data: null, error: result.error };
+        rows.push(...((result.data ?? []) as unknown as Record<string, unknown>[]));
+        if ((result.data?.length ?? 0) < 300) return { data: rows, error: null };
+      }
+    }
+    return fetchCleanerVisibleBookingsMerged(admin, viewerCleanerId, {
+      select: bookingSelect,
+      perBranchLimit: 300,
+      pageAllBranches: openOnly,
+      applyEachBranch: (q) => {
+        let query = q.not("status", "eq", "failed").not("status", "eq", "payment_expired");
+        if (openOnly) query = query.not("status", "in", "(completed,cancelled)");
+        return query.order("date", { ascending: true }).order("time", { ascending: true });
+      },
+    });
+  };
+  // Page every open assignment independently of schedule date; cap only historical candidates.
+  const [history, openWork] = await Promise.all([fetchRows(false), fetchRows(true)]);
+  const error = history.error ?? openWork.error;
+  const jobsRaw = [...(history.data ?? []), ...(openWork.data ?? [])];
 
   const jobs = prioritizeCleanerJobsForList(
     ((jobsRaw ?? []) as Record<string, unknown>[]).filter(cleanerJobsListRowPostFilter),
@@ -196,12 +209,12 @@ export async function GET(request: Request) {
   };
 
   const membersByTeam: Record<string, MemberRow[]> = {};
-  if (teamIdsForRoster.length > 0) {
-    const { data: rosterRows, error: rosterErr } = await admin
+  for (let offset = 0; offset < teamIdsForRoster.length; offset += 100) {
+    const { data: rosterRows, error: rosterErr } = await readCleanerQueryPages(admin
       .from("team_members")
       .select("team_id, cleaner_id, active_from, active_to")
-      .in("team_id", teamIdsForRoster)
-      .not("cleaner_id", "is", null);
+      .in("team_id", teamIdsForRoster.slice(offset, offset + 100))
+      .not("cleaner_id", "is", null).order("id", { ascending: true }));
     if (!rosterErr && rosterRows?.length) {
       for (const raw of rosterRows as MemberRow[]) {
         const tid = String(raw.team_id ?? "").trim();
@@ -252,11 +265,11 @@ export async function GET(request: Request) {
     .filter(Boolean);
 
   const reportedIds = new Set<string>();
-  if (!slimWire && bookingIds.length > 0) {
+  for (let offset = 0; !slimWire && offset < bookingIds.length; offset += 100) {
     const { data: repRows, error: repErr } = await admin
       .from("cleaner_job_issue_reports")
       .select("booking_id")
-      .in("booking_id", bookingIds)
+      .in("booking_id", bookingIds.slice(offset, offset + 100))
       .eq("cleaner_id", viewerCleanerId);
     if (!repErr && repRows?.length) {
       for (const r of repRows as { booking_id?: string }[]) {

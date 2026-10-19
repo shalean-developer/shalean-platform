@@ -50,4 +50,20 @@ describe("prioritizeDashboardJobsForDisplay", () => {
     const merged = prioritizeDashboardJobsForDisplay([noDate, badDate], new Date("2026-05-07T12:00:00Z"), 12, todayY);
     expect(merged.map((r) => r.id).sort()).toEqual(["bad-date", "no-date"]);
   });
+  it("does not displace active work to reserve a future assignment", () => {
+    const active = Array.from({ length: 12 }, (_, i) => row({ id: `active-${i}`, date: "2026-05-02", status: "in_progress" }));
+    const future = row({ id: "future", date: "2026-05-04" });
+    const result = prioritizeDashboardJobsForDisplay([...active, future], new Date("2026-05-03T12:00:00Z"));
+    expect(result.map((r) => r.id)).toEqual(active.map((r) => r.id));
+  });
+
+  it("keeps active work first when there is room for the future reservation", () => {
+    const active = row({ id: "active", date: "2026-05-02", status: "en_route" });
+    const waiting = Array.from({ length: 12 }, (_, i) => row({ id: `waiting-${i}`, date: "2026-05-03" }));
+    const future = row({ id: "future", date: "2026-05-04" });
+    const result = prioritizeDashboardJobsForDisplay([active, ...waiting, future], new Date("2026-05-03T12:00:00Z"));
+    expect(result[0].id).toBe("active");
+    expect(result.at(-1)?.id).toBe("future");
+  });
+
 });

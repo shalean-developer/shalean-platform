@@ -46,6 +46,9 @@ class BookingsQuery {
   private idEq: string | null = null;
   private isTeamJobEqTrue = false;
   private statusNot = new Set<string>();
+  private minimumDate: string | null = null;
+  private maxRows = Number.POSITIVE_INFINITY;
+  private offset = 0;
 
   constructor(private rows: Row[]) {}
 
@@ -83,14 +86,25 @@ class BookingsQuery {
     }
     return this;
   }
-  not(_col: string, _op: string, val: unknown) {
-    this.statusNot.add(String(val));
+  not(_col: string, op: string, val: unknown) {
+    const values = op === "in" ? String(val).replace(/^\(|\)$/g, "").split(",") : [String(val)];
+    for (const value of values) this.statusNot.add(value);
+    return this;
+  }
+  gte(col: string, value: unknown) {
+    if (col === "date") this.minimumDate = String(value);
     return this;
   }
   order() {
     return this;
   }
-  limit() {
+  limit(max: number) {
+    this.maxRows = max;
+    return this;
+  }
+  range(start: number, end: number) {
+    this.offset = start;
+    this.maxRows = end - start + 1;
     return this;
   }
   maybeSingle() {
@@ -99,6 +113,7 @@ class BookingsQuery {
     return Promise.resolve({ data: hit ? { ...hit } : null, error: null });
   }
   private matches(row: Row): boolean {
+    if (this.minimumDate && String(row.date ?? "") < this.minimumDate) return false;
     if (this.idEq && String(row.id ?? "") !== this.idEq) return false;
     for (const st of this.statusNot) {
       if (String(row.status ?? "") === st) return false;
@@ -124,7 +139,8 @@ class BookingsQuery {
   }
   then(onfulfilled?: (value: { data: Row[]; error: null }) => void): Promise<{ data: Row[]; error: null }> {
     const filtered = this.rows.filter((row) => this.matches(row));
-    const data = filtered.map((r) => ({ ...r }));
+    const data = filtered.sort((a, b) => String(a.date ?? "\uffff").localeCompare(String(b.date ?? "\uffff")))
+      .slice(this.offset, this.offset + this.maxRows).map((r) => ({ ...r }));
     const payload = { data, error: null as null };
     if (onfulfilled) onfulfilled(payload);
     return Promise.resolve(payload);
@@ -243,6 +259,8 @@ class TeamMembersQuery {
   private teamIdIn: string[] | null = null;
   private excludeNullCleaner = false;
   private excludeNullTeam = false;
+  private offset = 0;
+  private pageSize = Number.POSITIVE_INFINITY;
 
   constructor(private db: MockSupabase) {}
 
@@ -263,6 +281,12 @@ class TeamMembersQuery {
     if (col === "team_id" && val === null) this.excludeNullTeam = true;
     return this;
   }
+  order() { return this; }
+  range(start: number, end: number) {
+    this.offset = start;
+    this.pageSize = end - start + 1;
+    return this;
+  }
   maybeSingle() {
     const rows = this.resolve();
     const hit = rows[0] ?? null;
@@ -281,7 +305,7 @@ class TeamMembersQuery {
     if (this.teamIdIn?.length) rows = rows.filter((r) => this.teamIdIn!.includes(String(r.team_id ?? "")));
     if (this.excludeNullCleaner) rows = rows.filter((r) => r.cleaner_id != null && String(r.cleaner_id).trim() !== "");
     if (this.excludeNullTeam) rows = rows.filter((r) => r.team_id != null && String(r.team_id).trim() !== "");
-    return rows;
+    return rows.slice(this.offset, this.offset + this.pageSize);
   }
 }
 
@@ -702,6 +726,30 @@ describe("GET /api/cleaner/jobs — team visibility", { timeout: 60_000 }, () =>
     expect(row.lineItems).toBeNull();
     expect(Array.isArray(row.scope_lines)).toBe(true);
     expect((row.scope_lines ?? []).length).toBeGreaterThan(0);
+  });
+});
+
+describe("GET /api/cleaner/jobs — retained recurring backlog", () => {
+  it.each(["?view=card", "?assignments=direct"])("preserves current and upcoming work in %s", async (query) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-19T08:45:00Z"));
+    try {
+      const pending = { cleaner_id: "cleaner-1", status: "assigned", cleaner_response_status: "pending", is_recurring_generated: true,
+        time: "09:00", display_earnings_cents: 25000, cleaner_earnings_total_cents: 25000 };
+      mockState.admin = new MockSupabase({ cleaners: [{ id: "cleaner-1" }], bookings: [
+        ...Array.from({ length: 300 }, (_, i) => ({ ...pending, id: `old-${i}`, date: "2026-10-01" })),
+        { ...pending, id: "current", date: "2026-10-19" },
+        { ...pending, id: "next", date: "2026-10-22" },
+        { ...pending, id: "active", date: "2026-10-18", status: "in_progress" },
+        { ...pending, id: "missing-date", date: null },
+      ] });
+      const { GET } = await import("@/app/api/cleaner/jobs/route");
+      const response = await GET(new Request(`http://localhost/api/cleaner/jobs${query}`));
+      expect(response.status).toBe(200);
+      const body = await response.json() as { jobs: Array<{ id: string; acceptance_overdue_message: string | null }> };
+      expect(body.jobs.map((job) => job.id)).toEqual(expect.arrayContaining(["current", "next", "active", "missing-date"]));
+      expect(body.jobs.find((job) => job.id === "current")?.acceptance_overdue_message).toContain("Acceptance overdue");
+    } finally { vi.useRealTimers(); }
   });
 });
 

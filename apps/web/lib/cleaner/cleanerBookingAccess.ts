@@ -124,14 +124,24 @@ export function cleanerTeamMembershipMatchesBookingDate(
 export async function fetchCleanerTeamMemberships(
   admin: SupabaseClient,
   cleanerId: string,
+  pageAll = false,
 ): Promise<CleanerTeamMembershipRow[]> {
-  const { data, error } = await admin
+  const query = admin
     .from("team_members")
     .select("team_id, cleaner_id, active_from, active_to")
     .eq("cleaner_id", cleanerId)
     .not("team_id", "is", null);
-  if (error || !data?.length) return [];
-  return data as CleanerTeamMembershipRow[];
+  if (!pageAll || typeof query.range !== "function") {
+    const { data, error } = await query;
+    return error ? [] : (data ?? []) as CleanerTeamMembershipRow[];
+  }
+  const rows: CleanerTeamMembershipRow[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await query.order("id", { ascending: true }).range(offset, offset + 499);
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as CleanerTeamMembershipRow[]));
+    if ((data?.length ?? 0) < 500) return rows;
+  }
 }
 
 /**
@@ -147,14 +157,16 @@ export async function fetchCleanerVisibleBookingsMerged(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase query builder chain
     applyEachBranch?: (q: any) => any;
     perBranchLimit: number;
+    /** Open-work reads page every authorized branch; history callers retain their existing cap. */
+    pageAllBranches?: boolean;
   },
 ): Promise<{ data: Record<string, unknown>[] | null; error: PostgrestError | null }> {
   const cid = cleanerId.trim();
   if (!cid) return { data: [], error: null };
 
   const [teamMemberships, rosterBookingIds] = await Promise.all([
-    fetchCleanerTeamMemberships(admin, cid),
-    fetchBookingIdsWhereCleanerOnRoster(admin, cid),
+    fetchCleanerTeamMemberships(admin, cid, params.pageAllBranches),
+    fetchBookingIdsWhereCleanerOnRoster(admin, cid, 500, params.pageAllBranches),
   ]);
   const teamIds = [
     ...new Set(
@@ -180,20 +192,29 @@ export async function fetchCleanerVisibleBookingsMerged(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const exec = async (seed: any): Promise<PostgrestError | null> => {
-    const q = apply(seed).limit(lim);
-    const { data, error } = await q;
-    if (error) return error;
-    consume((data ?? []) as Record<string, unknown>[]);
+    const applied = params.pageAllBranches ? apply(seed).order("id", { ascending: true }) : apply(seed);
+    const paged = params.pageAllBranches === true && typeof applied?.range === "function";
+    let offset = 0;
+    const pageSize = Math.min(lim, 1000);
+    do {
+      const q = paged ? applied.range(offset, offset + pageSize - 1) : applied.limit(lim);
+      const { data, error } = await q;
+      if (error) return error;
+      const rows = (data ?? []) as Record<string, unknown>[];
+      consume(rows);
+      if (!paged || rows.length < pageSize) break;
+      offset += pageSize;
+    } while (paged);
     return null;
   };
 
-  const execTeamDateAware = async (): Promise<PostgrestError | null> => {
+  const execTeamDateAware = async (batchTeamIds: string[]): Promise<PostgrestError | null> => {
     const pageSize = Math.min(1000, Math.max(lim, 100));
     let offset = 0;
     let accepted = 0;
-    while (accepted < lim) {
-      const seed = admin.from("bookings").select(params.select).eq("is_team_job", true).in("team_id", teamIds);
-      const applied = apply(seed);
+    while (params.pageAllBranches || accepted < lim) {
+      const seed = admin.from("bookings").select(params.select).eq("is_team_job", true).in("team_id", batchTeamIds);
+      const applied = params.pageAllBranches ? apply(seed).order("id", { ascending: true }) : apply(seed);
       const supportsRange = typeof applied?.range === "function";
       const q = supportsRange
         ? applied.range(offset, offset + pageSize - 1)
@@ -203,7 +224,7 @@ export async function fetchCleanerVisibleBookingsMerged(
       const rows = (data ?? []) as Record<string, unknown>[];
       const eligible = rows.filter((row) => cleanerTeamMembershipMatchesBookingDate(row, teamMemberships));
       const remaining = lim - accepted;
-      const acceptedRows = eligible.slice(0, remaining);
+      const acceptedRows = params.pageAllBranches ? eligible : eligible.slice(0, remaining);
       consume(acceptedRows);
       accepted += acceptedRows.length;
       if (!supportsRange || rows.length < pageSize) break;
@@ -217,13 +238,14 @@ export async function fetchCleanerVisibleBookingsMerged(
   );
   if (err) return { data: null, error: err };
 
-  if (teamIds.length > 0) {
-    err = await execTeamDateAware();
+  for (let offset = 0; offset < teamIds.length; offset += 100) {
+    err = await execTeamDateAware(teamIds.slice(offset, offset + 100));
     if (err) return { data: null, error: err };
   }
 
-  if (safeRoster.length > 0) {
-    err = await exec(admin.from("bookings").select(params.select).in("id", safeRoster));
+  // Bound each roster-ID filter as well as paging booking rows.
+  for (let offset = 0; offset < safeRoster.length; offset += 100) {
+    err = await exec(admin.from("bookings").select(params.select).in("id", safeRoster.slice(offset, offset + 100)));
     if (err) return { data: null, error: err };
   }
 
@@ -275,18 +297,27 @@ export async function fetchBookingIdsWhereCleanerOnRoster(
   admin: SupabaseClient,
   cleanerId: string,
   limit = 500,
+  pageAll = false,
 ): Promise<string[]> {
-  const { data, error } = await admin
+  const query = admin
     .from("booking_cleaners")
     .select("booking_id")
     .eq("cleaner_id", cleanerId)
-    .order("assigned_at", { ascending: false })
-    .limit(limit);
-  if (error || !data?.length) return [];
+    .order("assigned_at", { ascending: false });
   const out = new Set<string>();
-  for (const raw of data) {
-    const id = String((raw as { booking_id?: string | null }).booking_id ?? "").trim();
-    if (id) out.add(id);
+  const pageSize = Math.min(1000, Math.max(1, limit));
+  const paged = pageAll && typeof query.range === "function";
+  const ordered = paged ? query.order("booking_id", { ascending: true }) : query;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await (paged
+      ? ordered.range(offset, offset + pageSize - 1)
+      : ordered.limit(limit));
+    if (error) throw new Error(error.message);
+    for (const raw of data ?? []) {
+      const id = String((raw as { booking_id?: string | null }).booking_id ?? "").trim();
+      if (id) out.add(id);
+    }
+    if (!paged || (data?.length ?? 0) < pageSize) break;
   }
   return [...out];
 }
