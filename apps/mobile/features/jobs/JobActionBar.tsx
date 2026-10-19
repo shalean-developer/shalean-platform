@@ -6,6 +6,7 @@ import { useJobLifecycleMutation } from "@/hooks/useJobActions";
 import { useConnectivity } from "@/providers/ConnectivityProvider";
 import type { CleanerJobWire, CleanerLifecycleAction } from "@/services/types/cleanerJobs";
 import { colors } from "@/theme";
+import { AcceptanceOverdueNotice } from "./AcceptanceOverdueNotice";
 
 type Props = { job: CleanerJobWire };
 
@@ -67,6 +68,7 @@ export function JobActionBar({ job }: Props) {
 
   return (
     <View className="gap-2">
+      <AcceptanceOverdueNotice job={job} />
       {!isOnline ? (
         <Text className="mb-1 text-center text-xs text-ink-muted" accessibilityLiveRegion="polite">
           Offline — actions will queue and sync later

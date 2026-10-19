@@ -20,3 +20,4 @@ export * from "./customerProfileContactFields";
 export * from "./customerSupport";
 
 export * from "./cleanerPayoutCadence";
+export { acceptanceOverdueMessage } from "./acceptanceOverdueMessage";

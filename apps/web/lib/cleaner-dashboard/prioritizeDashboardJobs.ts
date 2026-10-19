@@ -62,6 +62,9 @@ export function prioritizeDashboardJobsForDisplay(
   const ov = String(todayYmdOverride ?? "").trim().slice(0, 10);
   const todayY = /^\d{4}-\d{2}-\d{2}$/.test(ov) ? ov : getJhbTodayRange(now).todayYmd;
   const deduped = dedupeBookingsById(rows);
+  const active = deduped.filter((r) => isOpen(r) && (
+    statusOf(r) === "in_progress" || statusOf(r) === "en_route" || Boolean(r.en_route_at) || Boolean(r.started_at)
+  )).sort(sortByDateThenTimeAsc);
 
   const todayOpen = deduped
     .filter((r) => isOpen(r) && scheduleDateYmd(r) === todayY)
@@ -96,14 +99,15 @@ export function prioritizeDashboardJobsForDisplay(
     })
     .sort(sortByCompletedAtDesc);
 
-  const merged = [...todayOpen, ...overdue, ...future, ...completedToday];
+  const activeIds = new Set(active.map((r) => r.id));
+  const merged = [...active, ...[...todayOpen, ...overdue, ...future, ...completedToday].filter((r) => !activeIds.has(r.id))];
   if (merged.length <= max) return merged;
 
   /** Earliest future-dated open booking (date > JHB today). Never drop entirely when truncating — avoids “no next job” while tomorrow is assigned. */
   const earliestFuture = future[0];
   const head = merged.slice(0, max);
-  if (earliestFuture && !head.some((r) => r.id === earliestFuture.id)) {
-    return [earliestFuture, ...merged.filter((r) => r.id !== earliestFuture.id).slice(0, max - 1)];
+  if (active.length < max && earliestFuture && !head.some((r) => r.id === earliestFuture.id)) {
+    return [...head.slice(0, max - 1), earliestFuture];
   }
   return head;
 }

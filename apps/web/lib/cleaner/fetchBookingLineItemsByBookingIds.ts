@@ -1,4 +1,5 @@
 import "server-only";
+import { readCleanerQueryPages } from "@/lib/cleaner/readCleanerQueryPages";
 
 import type { CleanerBookingLineItemWire } from "@/lib/cleaner/cleanerBookingRow";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -18,11 +19,11 @@ export async function fetchBookingLineItemsByBookingIds(
 
   for (let i = 0; i < ids.length; i += CHUNK) {
     const slice = ids.slice(i, i + CHUNK);
-    const { data, error } = await admin
+    const { data, error } = await readCleanerQueryPages(admin
       .from("booking_line_items")
       .select("booking_id, item_type, slug, name, quantity")
       .in("booking_id", slice)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: true }).order("id", { ascending: true }));
     if (error) {
       console.error("[fetchBookingLineItemsByBookingIds]", error.message);
       continue;

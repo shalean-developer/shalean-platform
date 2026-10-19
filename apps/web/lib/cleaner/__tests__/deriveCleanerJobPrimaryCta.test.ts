@@ -30,6 +30,14 @@ const bookingDayMs = Date.parse("2026-04-30T07:15:00.000Z");
 const dayBeforeMs = Date.parse("2026-04-29T10:00:00.000Z");
 
 describe("deriveCleanerJobPrimaryCta", () => {
+  it("keeps late recurring acceptance available while one-off acceptance still expires", () => {
+    const late = Date.parse("2026-04-30T08:45:00Z");
+    const pending = baseRow({ cleaner_response_status: "pending" });
+    expect(deriveCleanerJobPrimaryCta({ row: pending, nowMs: late })).toEqual({ kind: "hidden" });
+    expect(deriveCleanerJobPrimaryCta({ row: { ...pending, is_recurring_generated: true }, nowMs: late }))
+      .toEqual({ kind: "lifecycle", label: "Accept job", action: "accept" });
+  });
+
   it("shows Accept job when phase is accept", () => {
     expect(
       deriveCleanerJobPrimaryCta({

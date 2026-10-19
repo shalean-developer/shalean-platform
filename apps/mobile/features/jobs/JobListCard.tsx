@@ -19,6 +19,7 @@ import {
 } from "@/lib/jobs/jobDisplay";
 import type { CleanerJobWire } from "@/services/types/cleanerJobs";
 import { colors, shadows } from "@/theme";
+import { AcceptanceOverdueNotice } from "./AcceptanceOverdueNotice";
 
 type Props = {
   job: CleanerJobWire;
@@ -91,6 +92,7 @@ export function JobListCard({ job, compact = false }: Props) {
         </View>
       </Pressable>
 
+      <AcceptanceOverdueNotice job={job} />
       {!compact && cta.kind === "accept" ? (
         <View className="border-t border-border px-4 py-3">
           <AppButton

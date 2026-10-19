@@ -1,3 +1,4 @@
+import { readCleanerQueryPages } from "@/lib/cleaner/readCleanerQueryPages";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type TeamRosterMemberWire = {
@@ -17,45 +18,48 @@ export async function fetchTeamRosterByBookingIds(
   const ids = [...new Set(bookingIds.map((x) => String(x ?? "").trim()).filter(Boolean))];
   if (!ids.length) return out;
 
-  const { data: bcRows, error: bcErr } = await admin
-    .from("booking_cleaners")
-    .select("booking_id, cleaner_id, role")
-    .in("booking_id", ids)
-    .order("role", { ascending: true })
-    .order("cleaner_id", { ascending: true });
-  if (bcErr || !bcRows?.length) return out;
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    const { data: bcRows, error: bcErr } = await readCleanerQueryPages(admin
+      .from("booking_cleaners")
+      .select("booking_id, cleaner_id, role")
+      .in("booking_id", ids.slice(offset, offset + 100))
+      .order("role", { ascending: true })
+      .order("cleaner_id", { ascending: true }).order("booking_id", { ascending: true }));
+    if (bcErr || !bcRows?.length) continue;
 
-  const cleanerIds = [
-    ...new Set(
-      (bcRows as { cleaner_id?: string | null }[])
-        .map((r) => String(r.cleaner_id ?? "").trim())
-        .filter(Boolean),
-    ),
-  ];
-  const names = new Map<string, string | null>();
-  if (cleanerIds.length > 0) {
-    const { data: clRows } = await admin.from("cleaners").select("id, full_name").in("id", cleanerIds);
-    for (const c of clRows ?? []) {
-      const row = c as { id?: string; full_name?: string | null };
-      const id = String(row.id ?? "").trim();
-      if (!id) continue;
-      names.set(id, row.full_name?.trim() ? row.full_name.trim() : null);
+    const cleanerIds = [
+      ...new Set(
+        (bcRows as { cleaner_id?: string | null }[])
+          .map((r) => String(r.cleaner_id ?? "").trim())
+          .filter(Boolean),
+      ),
+    ];
+    const names = new Map<string, string | null>();
+    for (let nameOffset = 0; nameOffset < cleanerIds.length; nameOffset += 100) {
+      const { data: clRows } = await admin.from("cleaners").select("id, full_name").in("id", cleanerIds.slice(nameOffset, nameOffset + 100));
+      for (const c of clRows ?? []) {
+        const row = c as { id?: string; full_name?: string | null };
+        const id = String(row.id ?? "").trim();
+        if (!id) continue;
+        names.set(id, row.full_name?.trim() ? row.full_name.trim() : null);
+      }
+    }
+
+    for (const raw of bcRows as { booking_id?: string; cleaner_id?: string; role?: string }[]) {
+      const bid = String(raw.booking_id ?? "").trim();
+      const cid = String(raw.cleaner_id ?? "").trim();
+      if (!bid || !cid) continue;
+      const role = String(raw.role ?? "member").toLowerCase() === "lead" ? "lead" : "member";
+      const list = out.get(bid) ?? [];
+      list.push({
+        cleaner_id: cid,
+        full_name: names.get(cid) ?? null,
+        role,
+      });
+      out.set(bid, list);
     }
   }
 
-  for (const raw of bcRows as { booking_id?: string; cleaner_id?: string; role?: string }[]) {
-    const bid = String(raw.booking_id ?? "").trim();
-    const cid = String(raw.cleaner_id ?? "").trim();
-    if (!bid || !cid) continue;
-    const role = String(raw.role ?? "member").toLowerCase() === "lead" ? "lead" : "member";
-    const list = out.get(bid) ?? [];
-    list.push({
-      cleaner_id: cid,
-      full_name: names.get(cid) ?? null,
-      role,
-    });
-    out.set(bid, list);
-  }
   return out;
 }
 
