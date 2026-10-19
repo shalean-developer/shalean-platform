@@ -10,6 +10,7 @@ User-approved scope: homepage testimonials from five-star database reviews, anon
 - Existing location-page and cleaner-profile comments also require customer display consent and use anonymous attribution. Aggregate star ratings remain based on all non-hidden ratings.
 - New web submissions have an unchecked optional anonymous-publication permission checkbox. Other clients remain compatible and default to no consent.
 - Office reviews exposes separate homepage approval/removal controls. Approval requires `content.publish`, an explicit permission/private-detail attestation and the exact comment the publisher reviewed. An atomic database function locks the review and refuses stale text.
+- Customers can withdraw or restore anonymous display permission in Account → Reviews at any time, independently of the 24-hour text-edit window. Withdrawal removes homepage approval and prevents public comment feeds from returning the text. Office-confirmed permission updates this same customer-visible preference.
 - Permission is recorded as customer opt-in or Office-confirmed permission; approver and time are retained privately. Existing reviews are not automatically approved or backfilled.
 - Editing comment/rating/consent/ownership or changing Hide/Unhide removes approval. A booking must still be completed when the homepage reads it.
 - Review, Google rating and aggregate-stat records are not rewritten.
