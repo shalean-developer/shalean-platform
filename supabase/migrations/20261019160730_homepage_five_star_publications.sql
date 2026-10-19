@@ -13,7 +13,7 @@ grant select, insert, update, delete on public.review_homepage_publications to s
 
 -- Executable only by the server. The authenticated Office route independently requires content.publish.
 create or replace function public.set_review_homepage_publication(
-  p_review_id uuid, p_publish boolean, p_actor_id uuid, p_permission_confirmed boolean, p_expected_comment text
+  p_review_id uuid, p_publish boolean, p_actor_id uuid, p_permission_confirmed boolean, p_expected_comment text, p_expected_consent boolean
 ) returns void language plpgsql security invoker set search_path = '' as $function$
 declare r public.reviews%rowtype;
 begin
@@ -25,6 +25,9 @@ begin
   end if;
   if r.comment is distinct from p_expected_comment then
     raise exception 'Review changed. Refresh and check the current comment before approving.';
+  end if;
+  if r.public_display_consent is distinct from p_expected_consent then
+    raise exception 'Display permission changed. Refresh and check current permission before approving.';
   end if;
   if p_actor_id is null then raise exception 'Publishing actor required.'; end if;
   if p_permission_confirmed is not true then
@@ -50,8 +53,8 @@ begin
       permission_source = excluded.permission_source;
 end;
 $function$;
-revoke all on function public.set_review_homepage_publication(uuid, boolean, uuid, boolean, text) from public, anon, authenticated;
-grant execute on function public.set_review_homepage_publication(uuid, boolean, uuid, boolean, text) to service_role;
+revoke all on function public.set_review_homepage_publication(uuid, boolean, uuid, boolean, text, boolean) from public, anon, authenticated;
+grant execute on function public.set_review_homepage_publication(uuid, boolean, uuid, boolean, text, boolean) to service_role;
 
 -- Trigger-only definer: customers cannot forge approval via direct review inserts/updates.
 create or replace function public.invalidate_review_homepage_publication()
