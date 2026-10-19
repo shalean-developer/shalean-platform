@@ -59,9 +59,11 @@ export async function GET(_request: Request, context: RouteContext) {
 
   const { data: reviewRows, error: reviewErr } = await admin
     .from("reviews")
-    .select("id, rating, comment, created_at, is_hidden")
+    .select("id, rating, comment, created_at, is_hidden, bookings!inner(status, is_test)")
     .eq("cleaner_id", id)
     .eq("public_display_consent", true)
+    .eq("bookings.status", "completed")
+    .eq("bookings.is_test", false)
     .or("is_hidden.is.null,is_hidden.eq.false")
     .order("created_at", { ascending: false })
     .limit(8);

@@ -34,7 +34,7 @@ begin
     raise exception 'Only visible five-star reviews with a written comment can be approved.';
   end if;
   if not exists (
-    select 1 from public.bookings b where b.id = r.booking_id and b.status = 'completed'
+    select 1 from public.bookings b where b.id = r.booking_id and b.status = 'completed' and b.is_test = false
       and coalesce(b.booking_reference,'') not ilike 'DEVSEED%'
       and coalesce(b.customer_email,'') not ilike '%@example.com'
       and coalesce(b.customer_email,'') not ilike '%@example.invalid'
@@ -73,7 +73,7 @@ language sql stable security invoker set search_path = '' as $function$
   join public.reviews r on r.id = p.review_id
   join public.bookings b on b.id = r.booking_id
   where r.rating = 5 and r.is_hidden = false and nullif(btrim(r.comment),'') is not null
-    and b.status = 'completed'
+    and b.status = 'completed' and b.is_test = false
     and coalesce(b.booking_reference,'') not ilike 'DEVSEED%'
     and coalesce(b.customer_email,'') not ilike '%@example.com'
     and coalesce(b.customer_email,'') not ilike '%@example.invalid'
@@ -94,7 +94,7 @@ returns jsonb language sql stable security definer set search_path = '' as $func
     select r.id, r.rating, left(btrim(r.comment),220) as comment_excerpt, r.created_at
     from public.reviews r join public.bookings b on b.id=r.booking_id cross join params p
     where r.public_display_consent = true and r.is_hidden = false and r.rating >= 4
-      and length(btrim(coalesce(r.comment,''))) >= 20 and b.status = 'completed'
+      and length(btrim(coalesce(r.comment,''))) >= 20 and b.status = 'completed' and b.is_test = false
       and p.q is not null and lower(coalesce(b.location,'')) like '%' || p.q || '%'
       and coalesce(b.booking_reference,'') not ilike 'DEVSEED%'
       and coalesce(b.customer_email,'') not ilike '%@example.com'
