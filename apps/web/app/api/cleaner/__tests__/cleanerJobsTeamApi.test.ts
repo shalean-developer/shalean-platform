@@ -259,6 +259,8 @@ class TeamMembersQuery {
   private teamIdIn: string[] | null = null;
   private excludeNullCleaner = false;
   private excludeNullTeam = false;
+  private offset = 0;
+  private pageSize = Number.POSITIVE_INFINITY;
 
   constructor(private db: MockSupabase) {}
 
@@ -279,6 +281,12 @@ class TeamMembersQuery {
     if (col === "team_id" && val === null) this.excludeNullTeam = true;
     return this;
   }
+  order() { return this; }
+  range(start: number, end: number) {
+    this.offset = start;
+    this.pageSize = end - start + 1;
+    return this;
+  }
   maybeSingle() {
     const rows = this.resolve();
     const hit = rows[0] ?? null;
@@ -297,7 +305,7 @@ class TeamMembersQuery {
     if (this.teamIdIn?.length) rows = rows.filter((r) => this.teamIdIn!.includes(String(r.team_id ?? "")));
     if (this.excludeNullCleaner) rows = rows.filter((r) => r.cleaner_id != null && String(r.cleaner_id).trim() !== "");
     if (this.excludeNullTeam) rows = rows.filter((r) => r.team_id != null && String(r.team_id).trim() !== "");
-    return rows;
+    return rows.slice(this.offset, this.offset + this.pageSize);
   }
 }
 
