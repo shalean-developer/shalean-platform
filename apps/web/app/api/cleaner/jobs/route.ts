@@ -34,6 +34,7 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
 import { augmentCleanerJobsWithViewerRosterContext } from "@/lib/cleaner/pairedRosterMemberLifecycle";
 import { prioritizeCleanerJobsForList } from "@/lib/cleaner/prioritizeCleanerJobsForList";
 import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
+import { getJhbTodayRange } from "@/lib/dashboard/johannesburgMonth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -85,28 +86,32 @@ export async function GET(request: Request) {
   const bookingSelect =
     "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, cleaner_count, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, earnings_summary, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by, metadata" + ", " + CLEANER_EARNINGS_READ_SELECT;
 
-  const { data: jobsRaw, error } = directAssignments
-    ? await admin
+  const { todayYmd } = getJhbTodayRange(new Date());
+  const fetchRows = async (currentOnly: boolean) => {
+    if (directAssignments) {
+      let query = admin
         .from("bookings")
         .select(bookingSelect)
         .eq("cleaner_id", viewerCleanerId)
         .not("status", "eq", "failed")
-        .not("status", "eq", "payment_expired")
-        .order("date", { ascending: true })
-        .order("time", { ascending: true })
-        .limit(300)
-    : await (async () => {
-        const { data: merged, error: mergeErr } = await fetchCleanerVisibleBookingsMerged(admin, viewerCleanerId, {
-          select: bookingSelect,
-          perBranchLimit: 300,
-          applyEachBranch: (q) =>
-            q.not("status", "eq", "failed").not("status", "eq", "payment_expired").order("date", { ascending: true }).order("time", { ascending: true }),
-        });
-        return {
-          data: (merged ?? []) as Record<string, unknown>[],
-          error: mergeErr,
-        };
-      })();
+        .not("status", "eq", "payment_expired");
+      if (currentOnly) query = query.gte("date", todayYmd).not("status", "in", "(completed,cancelled)");
+      return await query.order("date", { ascending: true }).order("time", { ascending: true }).limit(300);
+    }
+    return fetchCleanerVisibleBookingsMerged(admin, viewerCleanerId, {
+      select: bookingSelect,
+      perBranchLimit: 300,
+      applyEachBranch: (q) => {
+        let query = q.not("status", "eq", "failed").not("status", "eq", "payment_expired");
+        if (currentOnly) query = query.gte("date", todayYmd).not("status", "in", "(completed,cancelled)");
+        return query.order("date", { ascending: true }).order("time", { ascending: true });
+      },
+    });
+  };
+  // Protect current/future assignments before the oldest-first branch limits are applied.
+  const [history, scheduled] = await Promise.all([fetchRows(false), fetchRows(true)]);
+  const error = history.error ?? scheduled.error;
+  const jobsRaw = [...(history.data ?? []), ...(scheduled.data ?? [])];
 
   const jobs = prioritizeCleanerJobsForList(
     ((jobsRaw ?? []) as Record<string, unknown>[]).filter(cleanerJobsListRowPostFilter),

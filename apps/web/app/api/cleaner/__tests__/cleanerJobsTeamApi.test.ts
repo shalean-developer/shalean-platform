@@ -47,6 +47,7 @@ class BookingsQuery {
   private isTeamJobEqTrue = false;
   private statusNot = new Set<string>();
   private minimumDate: string | null = null;
+  private maxRows = Number.POSITIVE_INFINITY;
 
   constructor(private rows: Row[]) {}
 
@@ -96,7 +97,8 @@ class BookingsQuery {
   order() {
     return this;
   }
-  limit() {
+  limit(max: number) {
+    this.maxRows = max;
     return this;
   }
   maybeSingle() {
@@ -131,7 +133,8 @@ class BookingsQuery {
   }
   then(onfulfilled?: (value: { data: Row[]; error: null }) => void): Promise<{ data: Row[]; error: null }> {
     const filtered = this.rows.filter((row) => this.matches(row));
-    const data = filtered.map((r) => ({ ...r }));
+    const data = filtered.sort((a, b) => String(a.date ?? "").localeCompare(String(b.date ?? "")))
+      .slice(0, this.maxRows).map((r) => ({ ...r }));
     const payload = { data, error: null as null };
     if (onfulfilled) onfulfilled(payload);
     return Promise.resolve(payload);
@@ -709,6 +712,28 @@ describe("GET /api/cleaner/jobs — team visibility", { timeout: 60_000 }, () =>
     expect(row.lineItems).toBeNull();
     expect(Array.isArray(row.scope_lines)).toBe(true);
     expect((row.scope_lines ?? []).length).toBeGreaterThan(0);
+  });
+});
+
+describe("GET /api/cleaner/jobs — retained recurring backlog", () => {
+  it.each(["?view=card", "?assignments=direct"])("preserves current and upcoming work in %s", async (query) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-19T08:45:00Z"));
+    try {
+      const pending = { cleaner_id: "cleaner-1", status: "assigned", cleaner_response_status: "pending", is_recurring_generated: true,
+        time: "09:00", display_earnings_cents: 25000, cleaner_earnings_total_cents: 25000 };
+      mockState.admin = new MockSupabase({ cleaners: [{ id: "cleaner-1" }], bookings: [
+        ...Array.from({ length: 300 }, (_, i) => ({ ...pending, id: `old-${i}`, date: "2026-10-01" })),
+        { ...pending, id: "current", date: "2026-10-19" },
+        { ...pending, id: "next", date: "2026-10-22" },
+      ] });
+      const { GET } = await import("@/app/api/cleaner/jobs/route");
+      const response = await GET(new Request(`http://localhost/api/cleaner/jobs${query}`));
+      expect(response.status).toBe(200);
+      const body = await response.json() as { jobs: Array<{ id: string; acceptance_overdue_message: string | null }> };
+      expect(body.jobs.map((job) => job.id)).toEqual(expect.arrayContaining(["current", "next"]));
+      expect(body.jobs.find((job) => job.id === "current")?.acceptance_overdue_message).toContain("Acceptance overdue");
+    } finally { vi.useRealTimers(); }
   });
 });
 
