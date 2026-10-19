@@ -4,6 +4,8 @@ import { jobStartMsJohannesburg } from "@/lib/cleaner/jobStartJohannesburgMs";
 
 /** One-off solo assigned jobs: allow accept until scheduled start + this grace (ms). */
 export const ASSIGNED_ACCEPT_GRACE_MS = 30 * 60 * 1000;
+export const RECURRING_ACCEPTANCE_OVERDUE_MESSAGE =
+  "Acceptance overdue. This recurring job is still assigned to you. Accept the job to continue.";
 
 type OfferExpiryRow = Pick<
   CleanerBookingRow,

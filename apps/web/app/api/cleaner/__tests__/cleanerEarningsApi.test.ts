@@ -64,7 +64,7 @@ function matchesBookingsBranchOr(row: Row, expr: string): boolean {
 }
 
 class QueryBuilder {
-  private filters: Array<{ kind: "eq" | "in" | "not_eq" | "gt"; column: string; value: unknown }> = [];
+  private filters: Array<{ kind: "eq" | "in" | "not_eq" | "not_in" | "gt" | "gte"; column: string; value: unknown }> = [];
   private single = false;
   private selectedColumns: string[] | null = null;
   private orExpr: string | null = null;
@@ -98,6 +98,7 @@ class QueryBuilder {
 
   not(column: string, op: string, value: unknown) {
     if (op === "eq") this.filters.push({ kind: "not_eq", column, value });
+    if (op === "in") this.filters.push({ kind: "not_in", column, value: String(value).replace(/^\(|\)$/g, "").split(",") });
     return this;
   }
 
@@ -108,6 +109,11 @@ class QueryBuilder {
 
   gt(column: string, value: unknown) {
     this.filters.push({ kind: "gt", column, value });
+    return this;
+  }
+
+  gte(column: string, value: unknown) {
+    this.filters.push({ kind: "gte", column, value });
     return this;
   }
 
@@ -154,6 +160,8 @@ class QueryBuilder {
     for (const f of this.filters) {
       if (f.kind === "eq" && row[f.column] !== f.value) return false;
       if (f.kind === "not_eq" && row[f.column] === f.value) return false;
+      if (f.kind === "not_in" && Array.isArray(f.value) && f.value.includes(row[f.column])) return false;
+      if (f.kind === "gte" && (row[f.column] == null || String(row[f.column]) < String(f.value))) return false;
       if (f.kind === "in") {
         const values = Array.isArray(f.value) ? f.value : [];
         if (!values.includes(row[f.column])) return false;

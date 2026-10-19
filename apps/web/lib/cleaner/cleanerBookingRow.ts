@@ -64,6 +64,7 @@ export type CleanerBookingRow = {
   booking_roster_member_payouts?: Array<{cleaner_id:string;payout_cents:number;bonus_cents:number}> | null;
   /** DB `cleaner_response_status` — `accepted` unlocks "On the way". */
   cleaner_response_status?: string | null;
+  acceptance_overdue_message?: string | null;
   displayEarningsCents?: number | null;
   /** Snake_case mirror from some APIs (e.g. dashboard select); prefer `displayEarningsCents` when both exist. */
   display_earnings_cents?: number | null;

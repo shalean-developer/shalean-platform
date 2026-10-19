@@ -5,6 +5,8 @@ import {
 } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { resolvePersistedBookingDurationMinutes } from "@/lib/booking/quote/bookingQuotePersistence";
 import { durationHoursFromMinutes } from "@/lib/booking/quote/resolveBookingDurationWorkload";
+import { recurringAssignmentAcceptanceOverdue, RECURRING_ACCEPTANCE_OVERDUE_MESSAGE } from "@/lib/cleaner/cleanerAssignedOfferExpiry";
+import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 
 /** Extra fields for cleaner job APIs (snapshot-derived; not always DB columns). */
 export function augmentCleanerBookingWire(
@@ -18,6 +20,7 @@ export function augmentCleanerBookingWire(
   service_type: string | null;
   /** True when this cleaner is the payroll lead (`payout_owner_cleaner_id`) for team jobs. */
   is_lead_cleaner: boolean;
+  acceptance_overdue_message: string | null;
 } {
   const snap = row.booking_snapshot;
   const duration_minutes = resolvePersistedBookingDurationMinutes(row);
@@ -42,5 +45,7 @@ export function augmentCleanerBookingWire(
     service_name,
     service_type: slug || null,
     is_lead_cleaner,
+    acceptance_overdue_message: recurringAssignmentAcceptanceOverdue(row as CleanerBookingRow)
+      ? RECURRING_ACCEPTANCE_OVERDUE_MESSAGE : null,
   };
 }
