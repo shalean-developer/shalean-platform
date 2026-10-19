@@ -134,6 +134,7 @@ async function fetchRecentPublicReviewsForCleaners(
       const { data, error } = await admin
         .from("reviews")
         .select("rating, comment")
+        .eq("public_display_consent", true)
         .eq("cleaner_id", cleanerId)
         .eq("is_hidden", false)
         .order("created_at", { ascending: false })
