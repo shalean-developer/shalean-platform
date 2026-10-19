@@ -34,7 +34,7 @@ const completedBooking = {
   customer_email: "guest@example.com",
   status: "completed",
   completed_at: new Date().toISOString(),
-  cleaner_id: "c1",
+  cleaner_id: "11111111-1111-4111-8111-111111111111",
   is_team_job: false,
   team_id: null,
   booking_snapshot: null,

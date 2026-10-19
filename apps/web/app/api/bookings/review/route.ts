@@ -49,9 +49,9 @@ export async function POST(request: Request) {
   if (auth instanceof NextResponse) return auth;
   const { userId, email: viewerEmail } = auth;
 
-  let body: { bookingId?: string; rating?: number; comment?: string };
+  let body: { bookingId?: string; rating?: number; comment?: string; publicDisplayConsent?: boolean };
   try {
-    body = (await request.json()) as { bookingId?: string; rating?: number; comment?: string };
+    body = (await request.json()) as { bookingId?: string; rating?: number; comment?: string; publicDisplayConsent?: boolean };
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
@@ -116,6 +116,7 @@ export async function POST(request: Request) {
     cleaner_id: cleanerId,
     rating,
     comment: comment || null,
+    public_display_consent: body.publicDisplayConsent === true,
   });
 
   if (insErr) {

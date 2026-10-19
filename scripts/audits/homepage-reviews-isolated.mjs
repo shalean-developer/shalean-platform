@@ -1,0 +1,68 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+const { PGlite } = await import(process.env.AUDIT_PGLITE_MODULE || '@electric-sql/pglite');
+const db = new PGlite();
+await db.exec(`
+ create role anon; create role authenticated; create role service_role bypassrls;
+ create schema auth;
+ create table auth.users(id uuid primary key);
+ create table public.bookings(id uuid primary key, status text, booking_reference text, customer_email text);
+ create table public.reviews(id uuid primary key, booking_id uuid references bookings(id), user_id uuid,
+   rating smallint, comment text, is_hidden boolean default false, created_at timestamptz default now());
+ grant usage on schema public,auth to anon,authenticated,service_role;
+ grant all on public.bookings,public.reviews to service_role;
+ grant select, update on public.reviews to authenticated;
+ insert into auth.users values ('11111111-1111-4111-8111-111111111111');
+ insert into public.bookings values
+ ('22222222-2222-4222-8222-222222222222','completed','SHL-BK-ISOLATED','customer@invalid.local');
+ insert into public.reviews(id,booking_id,rating,comment) values
+ ('33333333-3333-4333-8333-333333333333','22222222-2222-4222-8222-222222222222',5,'Excellent clean');
+`);
+await db.exec(await readFile(new URL('../../supabase/migrations/20261019160730_homepage_five_star_publications.sql', import.meta.url), 'utf8'));
+const id='33333333-3333-4333-8333-333333333333';
+const actor='11111111-1111-4111-8111-111111111111';
+const publish = async (permission=true, expectedComment) => {
+  const comment = expectedComment ?? (await db.query('select comment from public.reviews where id=$1',[id])).rows[0].comment;
+  return db.query(`select public.set_review_homepage_publication($1,true,$2,$3,$4)`,[id,actor,permission,comment]);
+};
+const feed = () => db.query('select * from public.homepage_five_star_reviews()');
+await db.exec('set role service_role');
+assert.equal((await feed()).rows.length,0,'existing reviews must not be automatically published');
+await assert.rejects(publish(false),/Confirm permission/);
+await assert.rejects(publish(true,"stale comment"),/Review changed/);
+await publish();
+let rows=(await feed()).rows;
+assert.equal(rows.length,1);
+assert.deepEqual(Object.keys(rows[0]).sort(),['id','rating','comment','created_at'].sort());
+for (const [column,value] of [['comment','Changed comment'],['rating',4],['is_hidden',true],['public_display_consent',true]]) {
+  await db.exec(`update public.reviews set rating=5,is_hidden=false,comment='Excellent clean' where id='${id}'`);
+  await publish();
+  await db.query(`update public.reviews set ${column}=$1 where id=$2`,[value,id]);
+  assert.equal((await db.query('select count(*)::int as count from public.review_homepage_publications')).rows[0].count,0,`${column} changes revoke approval`);
+}
+await db.exec(`update public.reviews set rating=4,is_hidden=false,comment='Good' where id='${id}'`);
+await assert.rejects(publish(),/Only visible five-star/);
+await db.exec(`update public.reviews set rating=5,comment=' ' where id='${id}'`);
+await assert.rejects(publish(),/written comment/);
+await db.exec(`update public.reviews set comment='Excellent',is_hidden=true where id='${id}'`);
+await assert.rejects(publish(),/Only visible/);
+await db.exec(`update public.reviews set is_hidden=false where id='${id}'; update public.bookings set status='assigned'`);
+await assert.rejects(publish(),/completed, non-test/);
+await db.exec(`update public.bookings set status='completed',booking_reference='DEVSEED-OCT2026-X'`);
+await assert.rejects(publish(),/completed, non-test/);
+await db.exec(`update public.bookings set booking_reference='SHL-BK-ISOLATED'`);
+await publish();
+await db.exec(`update public.bookings set status='cancelled'`);
+assert.equal((await feed()).rows.length,0,'a cancelled booking cannot remain on the homepage');
+await db.exec('reset role; set role anon');
+await assert.rejects(feed(),/permission denied/);
+await assert.rejects(publish(),/permission denied/);
+await db.exec('reset role; set role authenticated');
+await assert.rejects(publish(),/permission denied/);
+await assert.rejects(db.query(`insert into public.review_homepage_publications(review_id,approved_by,permission_source) values($1,$2,'office_confirmed')`,[id,actor]),/permission denied/);
+await db.exec(`update public.reviews set comment='Owner edit' where id='${id}'`);
+await db.exec('reset role');
+assert.equal((await db.query('select count(*)::int as count from public.review_homepage_publications')).rows[0].count,0,'owner edits revoke approval without granting publication access');
+assert.equal((await db.query(`select has_function_privilege('anon','public.invalidate_review_homepage_publication()','execute') as allowed`)).rows[0].allowed,false);
+await db.close();
+console.log('PASS: homepage review projection, approval, revocation, eligibility and role boundaries');

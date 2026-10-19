@@ -11,6 +11,8 @@ export type AdminReviewListRow = {
   comment: string | null;
   created_at: string;
   service: string | null;
+  public_display_consent: boolean;
+  homepage_approved: boolean;
   is_public: boolean;
   is_hidden: boolean;
 };
@@ -24,6 +26,7 @@ type ReviewDbRow = {
   comment: string | null;
   created_at: string;
   is_hidden: boolean | null;
+  public_display_consent: boolean;
 };
 
 export async function loadAdminReviewsList(
@@ -34,7 +37,7 @@ export async function loadAdminReviewsList(
 
   const { data, error } = await admin
     .from("reviews")
-    .select("id, booking_id, cleaner_id, user_id, rating, comment, created_at, is_hidden")
+    .select("id, booking_id, cleaner_id, user_id, rating, comment, created_at, is_hidden, public_display_consent")
     .order("created_at", { ascending: false })
     .limit(cappedLimit);
 
@@ -42,6 +45,14 @@ export async function loadAdminReviewsList(
 
   const rows = (data ?? []) as ReviewDbRow[];
   if (rows.length === 0) return { reviews: [] };
+
+  const published = new Set<string>();
+  for (let offset = 0; offset < rows.length; offset += 100) {
+    const { data: approvals, error: approvalError } = await admin.from("review_homepage_publications")
+      .select("review_id").in("review_id", rows.slice(offset, offset + 100).map((row) => row.id));
+    if (approvalError) return { error: approvalError.message };
+    for (const approval of approvals ?? []) published.add(String(approval.review_id));
+  }
 
   const bookingIds = [...new Set(rows.map((r) => r.booking_id).filter(Boolean))];
   const cleanerIds = [...new Set(rows.map((r) => r.cleaner_id).filter(Boolean))];
@@ -125,6 +136,8 @@ export async function loadAdminReviewsList(
       comment: row.comment,
       created_at: row.created_at,
       service: booking?.service ?? null,
+      public_display_consent: row.public_display_consent === true,
+      homepage_approved: published.has(row.id),
       is_public: !hidden,
       is_hidden: hidden,
     };
