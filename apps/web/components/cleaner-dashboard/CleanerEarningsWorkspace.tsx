@@ -233,8 +233,11 @@ export function EarningsWorkspaceView({
           role="status"
           className="rounded-xl bg-amber-50 p-3 text-sm text-amber-950"
         >
-          {data.period.unavailable_visits} visit amount(s) need review. The
-          total is unavailable until these amounts are confirmed.
+          {data.period.unavailable_visits}{" "}
+          {data.period.unavailable_visits === 1
+            ? "visit amount needs review."
+            : "visit amounts need review."}{" "}
+          The total is unavailable until all amounts are confirmed.
         </p>
       ) : null}
       {data.undated_visits > 0 ? (
@@ -242,9 +245,12 @@ export function EarningsWorkspaceView({
           role="status"
           className="rounded-xl bg-amber-50 p-3 text-sm text-amber-950"
         >
-          {data.undated_visits} completed visit(s) have no confirmed date. They
-          remain in lifetime records and are excluded from date-based totals
-          until reviewed.{" "}
+          {data.undated_visits} completed{" "}
+          {data.undated_visits === 1
+            ? "visit has no confirmed date."
+            : "visits have no confirmed date."}{" "}
+          Undated records remain in lifetime records and are excluded from
+          date-based totals until reviewed.{" "}
           <Link href="/jobs/profile/help" className="font-semibold underline">
             Ask the office for help
           </Link>
@@ -356,7 +362,8 @@ export function EarningsWorkspaceView({
                 All earning details · {selected}
               </h2>
               <span className="text-sm text-slate-600">
-                {data.earnings.length} visits
+                {data.earnings.length}{" "}
+                {data.earnings.length === 1 ? "visit" : "visits"}
               </span>
             </div>
             <label
@@ -566,13 +573,14 @@ export function EarningsWorkspaceView({
           cents={data.lifetime.earned_cents}
         />
         <p className="text-sm text-slate-700">
-          {data.lifetime.completed_visits} completed cleaner visits across all
+          {data.lifetime.completed_visits} completed cleaner{" "}
+          {data.lifetime.completed_visits === 1 ? "visit" : "visits"} across all
           recorded months.
         </p>
         <MoneyRow
           label="Earlier earnings awaiting historical review"
           cents={data.historical.unreviewed_cents}
-          hint={`${data.historical.completed_visits} visits before October 2026`}
+          hint={`${data.historical.completed_visits} ${data.historical.completed_visits === 1 ? "visit" : "visits"} before October 2026`}
         />
         <p className="text-xs leading-relaxed text-slate-600">
           Use the month selector to view earlier earning records and recorded
