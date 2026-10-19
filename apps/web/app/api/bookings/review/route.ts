@@ -150,13 +150,16 @@ export async function PATCH(request: Request) {
   if (auth instanceof NextResponse) return auth;
   const { userId } = auth;
 
-  let body: { bookingId?: string; rating?: number; comment?: string | undefined };
+  let body: { bookingId?: string; rating?: number; comment?: string | undefined; publicDisplayConsent?: boolean };
   try {
-    body = (await request.json()) as { bookingId?: string; rating?: number; comment?: string };
+    body = (await request.json()) as { bookingId?: string; rating?: number; comment?: string; publicDisplayConsent?: boolean };
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
+  if (!body || typeof body !== "object") return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
+  const hasConsent = Object.prototype.hasOwnProperty.call(body, "publicDisplayConsent");
+  if (hasConsent && typeof body.publicDisplayConsent !== "boolean") return NextResponse.json({ error: "Display preference must be a boolean." }, { status: 400 });
   const bookingId = typeof body.bookingId === "string" ? body.bookingId.trim() : "";
   if (!bookingId) {
     return NextResponse.json({ error: "bookingId required." }, { status: 400 });
@@ -164,8 +167,8 @@ export async function PATCH(request: Request) {
 
   const hasRating = body.rating !== undefined && body.rating !== null;
   const hasComment = body.comment !== undefined;
-  if (!hasRating && !hasComment) {
-    return NextResponse.json({ error: "Provide rating and/or comment to update." }, { status: 400 });
+  if (!hasRating && !hasComment && !hasConsent) {
+    return NextResponse.json({ error: "Provide a rating, comment or display preference to update." }, { status: 400 });
   }
 
   let nextRating: number | undefined;
@@ -203,11 +206,12 @@ export async function PATCH(request: Request) {
   }
 
   const createdAt = new Date(String((rev as { created_at: string }).created_at)).getTime();
-  if (!Number.isFinite(createdAt) || Date.now() - createdAt > EDIT_WINDOW_MS) {
+  if ((hasRating || hasComment) && (!Number.isFinite(createdAt) || Date.now() - createdAt > EDIT_WINDOW_MS)) {
     return NextResponse.json({ error: "Reviews can only be edited within 24 hours of submission." }, { status: 400 });
   }
 
-  const patch: { rating?: number; comment?: string | null } = {};
+  const patch: { rating?: number; comment?: string | null; public_display_consent?: boolean } = {};
+  if (hasConsent) patch.public_display_consent = body.publicDisplayConsent;
   if (nextRating !== undefined) patch.rating = nextRating;
   if (hasComment) patch.comment = nextComment ?? null;
 

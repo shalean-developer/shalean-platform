@@ -6,7 +6,7 @@ await db.exec(`
  create role anon; create role authenticated; create role service_role bypassrls;
  create schema auth;
  create table auth.users(id uuid primary key);
- create table public.bookings(id uuid primary key, status text, booking_reference text, customer_email text, location text, is_test boolean not null default false);
+ create table public.bookings(id uuid primary key, status text, completed_at timestamptz, booking_reference text, customer_email text, location text, is_test boolean not null default false);
  create table public.reviews(id uuid primary key, booking_id uuid references bookings(id), user_id uuid,
    rating smallint, comment text, is_hidden boolean default false, created_at timestamptz default now());
  grant usage on schema public,auth to anon,authenticated,service_role;
@@ -40,7 +40,7 @@ await db.exec('update public.bookings set is_test=false');
 let rows=(await feed()).rows;
 assert.equal(rows.length,1);
 assert.deepEqual(Object.keys(rows[0]).sort(),['id','rating','comment','created_at'].sort());
-for (const [column,value] of [['comment','Changed comment'],['rating',4],['is_hidden',true],['public_display_consent',true]]) {
+for (const [column,value] of [['comment','Changed comment'],['rating',4],['is_hidden',true],['public_display_consent',false]]) {
   await db.exec(`update public.reviews set rating=5,is_hidden=false,comment='Excellent clean' where id='${id}'`);
   await publish();
   await db.query(`update public.reviews set ${column}=$1 where id=$2`,[value,id]);
@@ -54,7 +54,13 @@ await db.exec(`update public.reviews set comment='Excellent',is_hidden=true wher
 await assert.rejects(publish(),/Only visible/);
 await db.exec(`update public.reviews set is_hidden=false where id='${id}'; update public.bookings set status='assigned'`);
 await assert.rejects(publish(),/completed, non-test/);
-await db.exec(`update public.bookings set status='completed',booking_reference='DEVSEED-OCT2026-X'`);
+await db.exec(`update public.bookings set status='in_progress',completed_at=now()`);
+await publish();
+assert.equal((await feed()).rows.length,1,'authoritative completion timestamp permits publication');
+await db.exec(`update public.bookings set status='cancelled'`);
+assert.equal((await feed()).rows.length,0,'terminal status suppresses a booking even with completed_at');
+await assert.rejects(publish(),/completed, non-test/);
+await db.exec(`update public.bookings set status='completed',completed_at=null,booking_reference='DEVSEED-OCT2026-X'`);
 await assert.rejects(publish(),/completed, non-test/);
 await db.exec(`update public.bookings set booking_reference='SHL-BK-ISOLATED'`);
 await publish();

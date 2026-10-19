@@ -153,6 +153,7 @@ export type UserNotificationRow = {
 };
 
 export type ReviewRow = {
+  public_display_consent?: boolean;
   id: string;
   booking_id: string;
   user_id: string | null;

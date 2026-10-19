@@ -59,10 +59,11 @@ export async function GET(_request: Request, context: RouteContext) {
 
   const { data: reviewRows, error: reviewErr } = await admin
     .from("reviews")
-    .select("id, rating, comment, created_at, is_hidden, bookings!inner(status, is_test)")
+    .select("id, rating, comment, created_at, is_hidden, bookings!inner(status, completed_at, is_test)")
     .eq("cleaner_id", id)
     .eq("public_display_consent", true)
-    .eq("bookings.status", "completed")
+    .or("status.eq.completed,completed_at.not.is.null", { referencedTable: "bookings" })
+    .not("bookings.status", "in", "(cancelled,failed,payment_expired,pending_payment)")
     .eq("bookings.is_test", false)
     .or("is_hidden.is.null,is_hidden.eq.false")
     .order("created_at", { ascending: false })

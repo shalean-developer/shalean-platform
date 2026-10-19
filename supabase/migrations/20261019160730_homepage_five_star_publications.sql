@@ -34,11 +34,16 @@ begin
     raise exception 'Only visible five-star reviews with a written comment can be approved.';
   end if;
   if not exists (
-    select 1 from public.bookings b where b.id = r.booking_id and b.status = 'completed' and b.is_test = false
+    select 1 from public.bookings b where b.id = r.booking_id and (b.status = 'completed' or b.completed_at is not null) and coalesce(b.status,'') not in ('cancelled','failed','payment_expired','pending_payment') and b.is_test = false
       and coalesce(b.booking_reference,'') not ilike 'DEVSEED%'
       and coalesce(b.customer_email,'') not ilike '%@example.com'
       and coalesce(b.customer_email,'') not ilike '%@example.invalid'
   ) then raise exception 'A completed, non-test booking is required.'; end if;
+  -- Office has explicitly confirmed customer permission. Keep the owner's preference
+  -- accurate and let their later withdrawal revoke this publication via the trigger.
+  if r.public_display_consent is not true then
+    update public.reviews set public_display_consent = true where id = p_review_id;
+  end if;
   insert into public.review_homepage_publications(review_id, approved_by, permission_source)
     values (p_review_id, p_actor_id, case when r.public_display_consent then 'customer_consent' else 'office_confirmed' end)
     on conflict (review_id) do update set approved_at = now(), approved_by = excluded.approved_by,
@@ -73,7 +78,7 @@ language sql stable security invoker set search_path = '' as $function$
   join public.reviews r on r.id = p.review_id
   join public.bookings b on b.id = r.booking_id
   where r.rating = 5 and r.is_hidden = false and nullif(btrim(r.comment),'') is not null
-    and b.status = 'completed' and b.is_test = false
+    and (b.status = 'completed' or b.completed_at is not null) and coalesce(b.status,'') not in ('cancelled','failed','payment_expired','pending_payment') and b.is_test = false
     and coalesce(b.booking_reference,'') not ilike 'DEVSEED%'
     and coalesce(b.customer_email,'') not ilike '%@example.com'
     and coalesce(b.customer_email,'') not ilike '%@example.invalid'
@@ -94,7 +99,7 @@ returns jsonb language sql stable security definer set search_path = '' as $func
     select r.id, r.rating, left(btrim(r.comment),220) as comment_excerpt, r.created_at
     from public.reviews r join public.bookings b on b.id=r.booking_id cross join params p
     where r.public_display_consent = true and r.is_hidden = false and r.rating >= 4
-      and length(btrim(coalesce(r.comment,''))) >= 20 and b.status = 'completed' and b.is_test = false
+      and length(btrim(coalesce(r.comment,''))) >= 20 and (b.status = 'completed' or b.completed_at is not null) and coalesce(b.status,'') not in ('cancelled','failed','payment_expired','pending_payment') and b.is_test = false
       and p.q is not null and lower(coalesce(b.location,'')) like '%' || p.q || '%'
       and coalesce(b.booking_reference,'') not ilike 'DEVSEED%'
       and coalesce(b.customer_email,'') not ilike '%@example.com'
