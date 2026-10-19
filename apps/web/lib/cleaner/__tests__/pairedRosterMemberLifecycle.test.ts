@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildViewerRosterContext,
   augmentCleanerJobsWithViewerRosterContext,
+  fetchRosterLifecycleByBookingIds,
   pairedRosterMemberShouldShowComplete,
   viewerHasRosterVisitCompleted,
 } from "@/lib/cleaner/pairedRosterMemberLifecycle";
@@ -105,4 +106,23 @@ it("keeps paired completion context across a large open-job backlog", async () =
   expect(requests).toHaveLength(12);
   expect(requests.every((ids) => ids.length <= 100)).toBe(true);
   expect(result.every((row) => row.viewer_is_paired_roster_member === true && row.viewer_roster_completed_at)).toBe(true);
+});
+
+
+it("pages roster rows when a bounded booking batch exceeds the response cap", async () => {
+  const rows = Array.from({ length: 100 }, (_, i) => Array.from({ length: 15 }, (_, j) => ({
+    booking_id: `booking-${i}`, cleaner_id: `cleaner-${j}`, role: j === 0 ? "lead" : "member", completed_at: null,
+  }))).flat();
+  const pages: number[] = [];
+  const query = {
+    select: () => query, in: () => query, order: () => query,
+    range: async (start: number, end: number) => {
+      pages.push(start);
+      return { data: rows.slice(start, end + 1), error: null };
+    },
+  };
+  const result = await fetchRosterLifecycleByBookingIds({ from: () => query } as never, Array.from({ length: 100 }, (_, i) => `booking-${i}`));
+  expect(pages).toEqual([0, 500, 1000, 1500]);
+  expect(result.size).toBe(100);
+  expect(result.get("booking-99")).toHaveLength(15);
 });

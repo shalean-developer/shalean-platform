@@ -1,3 +1,4 @@
+import { readCleanerQueryPages } from "@/lib/cleaner/readCleanerQueryPages";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isAuthoritativeBookingCompleted } from "@/lib/booking/deriveBookingOperationalPhase";
 import { isPairedRosterSoloJob } from "@/lib/payout/isPairedRosterSoloJob";
@@ -97,12 +98,12 @@ export async function fetchRosterLifecycleByBookingIds(
   if (!ids.length) return out;
 
   for (let offset = 0; offset < ids.length; offset += 100) {
-    const { data, error } = await admin
+    const { data, error } = await readCleanerQueryPages(admin
       .from("booking_cleaners")
       .select("booking_id, cleaner_id, role, completed_at")
       .in("booking_id", ids.slice(offset, offset + 100))
       .order("role", { ascending: true })
-      .order("cleaner_id", { ascending: true });
+      .order("cleaner_id", { ascending: true }).order("booking_id", { ascending: true }));
     if (error) throw new Error(error.message);
 
     for (const raw of data as {
