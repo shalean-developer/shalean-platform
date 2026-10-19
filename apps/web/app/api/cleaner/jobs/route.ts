@@ -34,7 +34,6 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
 import { augmentCleanerJobsWithViewerRosterContext } from "@/lib/cleaner/pairedRosterMemberLifecycle";
 import { prioritizeCleanerJobsForList } from "@/lib/cleaner/prioritizeCleanerJobsForList";
 import { bookingHasActivePayoutAttributionRemoval } from "@/lib/payout/bookingPayoutAttributionRemoval";
-import { getJhbTodayRange } from "@/lib/dashboard/johannesburgMonth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -86,8 +85,7 @@ export async function GET(request: Request) {
   const bookingSelect =
     "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, cleaner_count, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, earnings_summary, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by, metadata" + ", " + CLEANER_EARNINGS_READ_SELECT;
 
-  const { todayYmd } = getJhbTodayRange(new Date());
-  const fetchRows = async (currentOnly: boolean) => {
+  const fetchRows = async (openOnly: boolean) => {
     if (directAssignments) {
       let query = admin
         .from("bookings")
@@ -95,23 +93,32 @@ export async function GET(request: Request) {
         .eq("cleaner_id", viewerCleanerId)
         .not("status", "eq", "failed")
         .not("status", "eq", "payment_expired");
-      if (currentOnly) query = query.gte("date", todayYmd).not("status", "in", "(completed,cancelled)");
-      return await query.order("date", { ascending: true }).order("time", { ascending: true }).limit(300);
+      if (openOnly) query = query.not("status", "in", "(completed,cancelled)");
+      query = query.order("date", { ascending: true }).order("time", { ascending: true }).order("id", { ascending: true });
+      if (!openOnly) return await query.limit(300);
+      const rows: Record<string, unknown>[] = [];
+      for (let offset = 0; ; offset += 300) {
+        const result = await query.range(offset, offset + 299);
+        if (result.error) return { data: null, error: result.error };
+        rows.push(...(result.data ?? []));
+        if ((result.data?.length ?? 0) < 300) return { data: rows, error: null };
+      }
     }
     return fetchCleanerVisibleBookingsMerged(admin, viewerCleanerId, {
       select: bookingSelect,
       perBranchLimit: 300,
+      pageAllBranches: openOnly,
       applyEachBranch: (q) => {
         let query = q.not("status", "eq", "failed").not("status", "eq", "payment_expired");
-        if (currentOnly) query = query.gte("date", todayYmd).not("status", "in", "(completed,cancelled)");
+        if (openOnly) query = query.not("status", "in", "(completed,cancelled)");
         return query.order("date", { ascending: true }).order("time", { ascending: true });
       },
     });
   };
-  // Protect current/future assignments before the oldest-first branch limits are applied.
-  const [history, scheduled] = await Promise.all([fetchRows(false), fetchRows(true)]);
-  const error = history.error ?? scheduled.error;
-  const jobsRaw = [...(history.data ?? []), ...(scheduled.data ?? [])];
+  // Page every open assignment independently of schedule date; cap only historical candidates.
+  const [history, openWork] = await Promise.all([fetchRows(false), fetchRows(true)]);
+  const error = history.error ?? openWork.error;
+  const jobsRaw = [...(history.data ?? []), ...(openWork.data ?? [])];
 
   const jobs = prioritizeCleanerJobsForList(
     ((jobsRaw ?? []) as Record<string, unknown>[]).filter(cleanerJobsListRowPostFilter),

@@ -48,6 +48,7 @@ class BookingsQuery {
   private statusNot = new Set<string>();
   private minimumDate: string | null = null;
   private maxRows = Number.POSITIVE_INFINITY;
+  private offset = 0;
 
   constructor(private rows: Row[]) {}
 
@@ -101,6 +102,11 @@ class BookingsQuery {
     this.maxRows = max;
     return this;
   }
+  range(start: number, end: number) {
+    this.offset = start;
+    this.maxRows = end - start + 1;
+    return this;
+  }
   maybeSingle() {
     const filtered = this.rows.filter((row) => this.matches(row));
     const hit = filtered[0] ?? null;
@@ -133,8 +139,8 @@ class BookingsQuery {
   }
   then(onfulfilled?: (value: { data: Row[]; error: null }) => void): Promise<{ data: Row[]; error: null }> {
     const filtered = this.rows.filter((row) => this.matches(row));
-    const data = filtered.sort((a, b) => String(a.date ?? "").localeCompare(String(b.date ?? "")))
-      .slice(0, this.maxRows).map((r) => ({ ...r }));
+    const data = filtered.sort((a, b) => String(a.date ?? "\uffff").localeCompare(String(b.date ?? "\uffff")))
+      .slice(this.offset, this.offset + this.maxRows).map((r) => ({ ...r }));
     const payload = { data, error: null as null };
     if (onfulfilled) onfulfilled(payload);
     return Promise.resolve(payload);
@@ -726,12 +732,14 @@ describe("GET /api/cleaner/jobs — retained recurring backlog", () => {
         ...Array.from({ length: 300 }, (_, i) => ({ ...pending, id: `old-${i}`, date: "2026-10-01" })),
         { ...pending, id: "current", date: "2026-10-19" },
         { ...pending, id: "next", date: "2026-10-22" },
+        { ...pending, id: "active", date: "2026-10-18", status: "in_progress" },
+        { ...pending, id: "missing-date", date: null },
       ] });
       const { GET } = await import("@/app/api/cleaner/jobs/route");
       const response = await GET(new Request(`http://localhost/api/cleaner/jobs${query}`));
       expect(response.status).toBe(200);
       const body = await response.json() as { jobs: Array<{ id: string; acceptance_overdue_message: string | null }> };
-      expect(body.jobs.map((job) => job.id)).toEqual(expect.arrayContaining(["current", "next"]));
+      expect(body.jobs.map((job) => job.id)).toEqual(expect.arrayContaining(["current", "next", "active", "missing-date"]));
       expect(body.jobs.find((job) => job.id === "current")?.acceptance_overdue_message).toContain("Acceptance overdue");
     } finally { vi.useRealTimers(); }
   });
