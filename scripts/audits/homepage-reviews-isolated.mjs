@@ -6,14 +6,14 @@ await db.exec(`
  create role anon; create role authenticated; create role service_role bypassrls;
  create schema auth;
  create table auth.users(id uuid primary key);
- create table public.bookings(id uuid primary key, status text, booking_reference text, customer_email text);
+ create table public.bookings(id uuid primary key, status text, booking_reference text, customer_email text, location text);
  create table public.reviews(id uuid primary key, booking_id uuid references bookings(id), user_id uuid,
    rating smallint, comment text, is_hidden boolean default false, created_at timestamptz default now());
  grant usage on schema public,auth to anon,authenticated,service_role;
  grant all on public.bookings,public.reviews to service_role;
  grant select, update on public.reviews to authenticated;
  insert into auth.users values ('11111111-1111-4111-8111-111111111111');
- insert into public.bookings values
+ insert into public.bookings(id,status,booking_reference,customer_email) values
  ('22222222-2222-4222-8222-222222222222','completed','SHL-BK-ISOLATED','customer@invalid.local');
  insert into public.reviews(id,booking_id,rating,comment) values
  ('33333333-3333-4333-8333-333333333333','22222222-2222-4222-8222-222222222222',5,'Excellent clean');
@@ -64,5 +64,14 @@ await db.exec(`update public.reviews set comment='Owner edit' where id='${id}'`)
 await db.exec('reset role');
 assert.equal((await db.query('select count(*)::int as count from public.review_homepage_publications')).rows[0].count,0,'owner edits revoke approval without granting publication access');
 assert.equal((await db.query(`select has_function_privilege('anon','public.invalidate_review_homepage_publication()','execute') as allowed`)).rows[0].allowed,false);
+await db.exec(`update public.bookings set status='completed',location='Claremont';
+  update public.reviews set public_display_consent=false,comment='Customer feedback for location verification'`);
+await db.exec('set role anon');
+assert.deepEqual((await db.query("select public.public_marketing_reviews_for_area('Claremont') as reviews")).rows[0].reviews,[], 'declining display prevents location-page publication');
+await db.exec('reset role; update public.reviews set public_display_consent=true; set role anon');
+const locationReviews=(await db.query("select public.public_marketing_reviews_for_area('Claremont') as reviews")).rows[0].reviews;
+assert.equal(locationReviews.length,1);
+assert.equal(locationReviews[0].reviewer_label,'Verified customer');
+assert.equal(locationReviews[0].suburb_label,'');
 await db.close();
 console.log('PASS: homepage review projection, approval, revocation, eligibility and role boundaries');

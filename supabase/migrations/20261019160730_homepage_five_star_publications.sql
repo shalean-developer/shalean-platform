@@ -82,3 +82,28 @@ $function$;
 revoke all on function public.homepage_five_star_reviews() from public, anon, authenticated;
 grant execute on function public.homepage_five_star_reviews() to service_role;
 comment on table public.review_homepage_publications is 'Office-approved anonymous homepage testimonials. Separate from review visibility and customer opt-in.';
+
+
+-- Honour the website-display choice on the existing public location-page projection too.
+-- Preserve the existing 4+ star location selection; only the homepage selects exactly five.
+create or replace function public.public_marketing_reviews_for_area(p_area text, p_limit integer default 4)
+returns jsonb language sql stable security definer set search_path = '' as $function$
+  with params as (
+    select nullif(regexp_replace(lower(trim(coalesce(p_area,''))), '[%_]', '', 'g'),'') as q
+  ), matched as (
+    select r.id, r.rating, left(btrim(r.comment),220) as comment_excerpt, r.created_at
+    from public.reviews r join public.bookings b on b.id=r.booking_id cross join params p
+    where r.public_display_consent = true and r.is_hidden = false and r.rating >= 4
+      and length(btrim(coalesce(r.comment,''))) >= 20 and b.status = 'completed'
+      and p.q is not null and lower(coalesce(b.location,'')) like '%' || p.q || '%'
+      and coalesce(b.booking_reference,'') not ilike 'DEVSEED%'
+      and coalesce(b.customer_email,'') not ilike '%@example.com'
+      and coalesce(b.customer_email,'') not ilike '%@example.invalid'
+    order by r.created_at desc,r.id desc limit greatest(1,least(coalesce(nullif(p_limit,0),4),8))
+  )
+  select coalesce(jsonb_agg(jsonb_build_object('id',id,'rating',rating,'comment_excerpt',comment_excerpt,
+    'suburb_label','','reviewer_label','Verified customer') order by created_at desc,id desc),'[]'::jsonb)
+  from matched;
+$function$;
+revoke all on function public.public_marketing_reviews_for_area(text, integer) from public;
+grant execute on function public.public_marketing_reviews_for_area(text, integer) to anon, authenticated, service_role;

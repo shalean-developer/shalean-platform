@@ -7,6 +7,7 @@ User-approved scope: homepage testimonials from five-star database reviews, anon
 - The homepage streams up to six approved, visible, non-empty five-star comments, newest first, from completed non-seed bookings.
 - Attribution is always “Verified customer”. The public DTO contains review ID, stars, comment and review date only. Comments render as escaped plain text.
 - The section is omitted when no eligible publications exist or the read is unavailable. Request-time rendering prevents build-time empty data or cached moderation state from persisting.
+- Existing location-page and cleaner-profile comments also require customer display consent and use anonymous attribution. Aggregate star ratings remain based on all non-hidden ratings.
 - New web submissions have an unchecked optional anonymous-publication permission checkbox. Other clients remain compatible and default to no consent.
 - Office reviews exposes separate homepage approval/removal controls. Approval requires `content.publish`, an explicit permission/private-detail attestation and the exact comment the publisher reviewed. An atomic database function locks the review and refuses stale text.
 - Permission is recorded as customer opt-in or Office-confirmed permission; approver and time are retained privately. Existing reviews are not automatically approved or backfilled.
@@ -23,6 +24,6 @@ Validation includes the critical suite, focused review/API/render tests, web Typ
 
 Apply the additive migration to staging before deploying the code. Verify roles and the empty unapproved feed; use synthetic isolated tests for approval behavior. Do not publish existing customer comments without an authorized publisher confirming permission and reviewing their contents.
 
-After clean independent review and CI, deploy through main → canonical staging → bounded production promotion, verify live SHA and Office/public UI, then apply the same migration before the production code. Never trigger deployment workflows manually. Existing hosting authentication is required for activation if automatic deployment does not complete.
+After clean independent review and CI, apply the migration to staging, deploy main to canonical staging, then verify its live SHA and Office/public UI. For production, apply and verify the same additive migration BEFORE merging the bounded production promotion. Only then build/activate production and verify its live SHA and Office/public UI. Never trigger deployment workflows manually. Existing hosting authentication is required for activation if automatic deployment does not complete.
 
 Rollback: remove a publication in Office to remove its card. Revert the code if needed; keep the additive schema and review data intact. No destructive rollback or financial mutation is required.
