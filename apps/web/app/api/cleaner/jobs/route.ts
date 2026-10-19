@@ -100,7 +100,7 @@ export async function GET(request: Request) {
       for (let offset = 0; ; offset += 300) {
         const result = await query.range(offset, offset + 299);
         if (result.error) return { data: null, error: result.error };
-        rows.push(...(result.data ?? []));
+        rows.push(...((result.data ?? []) as unknown as Record<string, unknown>[]));
         if ((result.data?.length ?? 0) < 300) return { data: rows, error: null };
       }
     }

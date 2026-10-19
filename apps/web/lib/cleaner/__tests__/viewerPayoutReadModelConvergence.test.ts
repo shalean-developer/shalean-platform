@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchViewerPayoutByBookingIds } from "../fetchViewerPayoutByBookingIds";
 
 function read(path: string): string {
   return readFileSync(join(process.cwd(), path), "utf8");
@@ -62,4 +64,44 @@ describe("AUDIT-03A02-04 viewer payout read-model convergence", () => {
     expect(source).toContain("summaryRows");
   });
 
+});
+
+
+describe("large assignment payout reads", () => {
+  it("bounds every request and preserves formal-team precedence across batches", async () => {
+    const ids = Array.from({ length: 1440 }, (_, i) => `booking-${i}`);
+    const requests: string[][] = [];
+    const admin = { from: (table: string) => {
+      const query = {
+        select: () => query,
+        eq: () => query,
+        in: async (_column: string, batch: string[]) => {
+          requests.push(batch);
+          return { error: null, data: batch.map((id) => table === "team_job_member_payouts"
+            ? { booking_id: id, payout_cents: 25000 }
+            : { booking_id: id, payout_cents: 10000, bonus_cents: 5000 }) };
+        },
+      };
+      return query;
+    } } as unknown as SupabaseClient;
+    const result = await fetchViewerPayoutByBookingIds(admin, "cleaner", [...ids, ids[0]]);
+    expect(requests).toHaveLength(30);
+    expect(requests.every((batch) => batch.length <= 100)).toBe(true);
+    expect(result.size).toBe(1440);
+    expect(result.get(ids[0])).toBe(25000);
+    expect(result.get(ids.at(-1)!)).toBe(25000);
+  });
+
+  it("does not return partial payouts when a later batch fails", async () => {
+    let calls = 0;
+    const admin = { from: () => {
+      const query = {
+        select: () => query, eq: () => query,
+        in: vi.fn(async () => ({ data: [], error: ++calls > 2 ? { message: "later batch failed" } : null })),
+      };
+      return query;
+    } } as unknown as SupabaseClient;
+    await expect(fetchViewerPayoutByBookingIds(admin, "cleaner", Array.from({ length: 101 }, (_, i) => String(i))))
+      .rejects.toThrow("later batch failed");
+  });
 });
