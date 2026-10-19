@@ -87,8 +87,8 @@ export async function GET(request: Request) {
 
   const now = new Date();
   const { todayYmd } = getJhbTodayRange(now);
-  // Fetch current/future work independently so unresolved history cannot crowd it out.
-  const [history, scheduled] = await Promise.all([
+  // Page all open work independently so history cannot hide current work, even with a stale/missing date.
+  const [history, openWork] = await Promise.all([
     fetchCleanerVisibleBookingsMerged(admin, cleanerId, {
       select: DASHBOARD_BOOKING_SELECT,
       perBranchLimit: 240,
@@ -98,19 +98,19 @@ export async function GET(request: Request) {
     fetchCleanerVisibleBookingsMerged(admin, cleanerId, {
       select: DASHBOARD_BOOKING_SELECT,
       perBranchLimit: 240,
-      applyEachBranch: (q) => q.gte("date", todayYmd)
-        .not("status", "in", "(completed,cancelled,failed,payment_expired)")
+      pageAllBranches: true,
+      applyEachBranch: (q) => q.not("status", "in", "(completed,cancelled,failed,payment_expired)")
         .order("date", { ascending: true }).order("time", { ascending: true }),
     }),
   ]);
-  const error = history.error ?? scheduled.error;
+  const error = history.error ?? openWork.error;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   const byId = new Map<string, Record<string, unknown>>();
-  for (const row of [...(history.data ?? []), ...(scheduled.data ?? [])]) byId.set(String(row.id), row);
+  for (const row of [...(history.data ?? []), ...(openWork.data ?? [])]) byId.set(String(row.id), row);
   const rawList = sortBookingsByDateThenTime([...byId.values()]);
   const wired = rawList
     .map((raw) => {

@@ -9,12 +9,13 @@ vi.mock("@/lib/supabase/admin", () => ({ getSupabaseAdmin: () => ({
 }) }));
 vi.mock("@/lib/cleaner/cleanerBookingAccess", async (original) => ({
   ...await original<object>(), fetchCleanerVisibleBookingsMerged: async (_a: unknown, _c: string, params: {
-    perBranchLimit: number; applyEachBranch: (q: unknown) => unknown;
+    perBranchLimit: number; pageAllBranches?: boolean; applyEachBranch: (q: unknown) => unknown;
   }) => {
     let fromDate = "";
     const q = { not: () => q, order: () => q, gte: (_column: string, date: string) => { fromDate = date; return q; } };
     params.applyEachBranch(q);
-    return { data: fixture.rows.filter((r) => !fromDate || String(r.date) >= fromDate).slice(0, params.perBranchLimit), error: null };
+    const rows = fixture.rows.filter((r) => !fromDate || String(r.date) >= fromDate);
+    return { data: params.pageAllBranches ? rows : rows.slice(0, params.perBranchLimit), error: null };
   },
 }));
 vi.mock("@/lib/cleaner/pairedRosterMemberLifecycle", () => ({ augmentCleanerJobsWithViewerRosterContext: async (_a: unknown, rows: unknown[]) => rows }));
@@ -55,10 +56,12 @@ describe("cleaner dashboard recurring assignment retention", () => {
       ...Array.from({ length: 300 }, (_, i) => ({ ...pending, id: `old-${i}`, date: "2026-10-01" })),
       { ...pending, id: "today", date: "2026-10-19" },
       { ...pending, id: "next", date: "2026-10-22" },
+      { ...pending, id: "active", date: "2026-10-18", status: "in_progress" },
+      { ...pending, id: "missing-date", date: null, status: "en_route" },
     ];
     const res = await GET(new Request("http://localhost/api/cleaner/dashboard"));
     const body = await res.json() as { jobs: CleanerBookingRow[] };
-    expect(body.jobs.map((j) => j.id)).toEqual(expect.arrayContaining(["today", "next"]));
+    expect(body.jobs.map((j) => j.id)).toEqual(expect.arrayContaining(["today", "next", "active", "missing-date"]));
     expect(body.jobs.length).toBeLessThanOrEqual(12);
   });
 });

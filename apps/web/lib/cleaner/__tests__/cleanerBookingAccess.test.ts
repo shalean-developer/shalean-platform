@@ -101,17 +101,8 @@ describe("cleanerHasBookingAccess", () => {
   });
 
   it("denies team job when not a member", async () => {
-    const admin = {
-      from: vi.fn(() => ({
-        select: () => ({
-          eq: () => ({
-            eq: () => ({
-              maybeSingle: () => Promise.resolve({ data: null, error: null }),
-            }),
-          }),
-        }),
-      })),
-    };
+    const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: null, error: null }) };
+    const admin = { from: vi.fn(() => query) };
     const ok = await cleanerHasBookingAccess(admin as never, "c1", {
       id: "b1",
       cleaner_id: null,

@@ -147,6 +147,8 @@ export async function fetchCleanerVisibleBookingsMerged(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase query builder chain
     applyEachBranch?: (q: any) => any;
     perBranchLimit: number;
+    /** Open-work reads page every authorized branch; history callers retain their existing cap. */
+    pageAllBranches?: boolean;
   },
 ): Promise<{ data: Record<string, unknown>[] | null; error: PostgrestError | null }> {
   const cid = cleanerId.trim();
@@ -180,10 +182,19 @@ export async function fetchCleanerVisibleBookingsMerged(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const exec = async (seed: any): Promise<PostgrestError | null> => {
-    const q = apply(seed).limit(lim);
-    const { data, error } = await q;
-    if (error) return error;
-    consume((data ?? []) as Record<string, unknown>[]);
+    const applied = params.pageAllBranches ? apply(seed).order("id", { ascending: true }) : apply(seed);
+    const paged = params.pageAllBranches === true && typeof applied?.range === "function";
+    let offset = 0;
+    const pageSize = Math.min(lim, 1000);
+    do {
+      const q = paged ? applied.range(offset, offset + pageSize - 1) : applied.limit(lim);
+      const { data, error } = await q;
+      if (error) return error;
+      const rows = (data ?? []) as Record<string, unknown>[];
+      consume(rows);
+      if (!paged || rows.length < pageSize) break;
+      offset += pageSize;
+    } while (paged);
     return null;
   };
 
@@ -191,9 +202,9 @@ export async function fetchCleanerVisibleBookingsMerged(
     const pageSize = Math.min(1000, Math.max(lim, 100));
     let offset = 0;
     let accepted = 0;
-    while (accepted < lim) {
+    while (params.pageAllBranches || accepted < lim) {
       const seed = admin.from("bookings").select(params.select).eq("is_team_job", true).in("team_id", teamIds);
-      const applied = apply(seed);
+      const applied = params.pageAllBranches ? apply(seed).order("id", { ascending: true }) : apply(seed);
       const supportsRange = typeof applied?.range === "function";
       const q = supportsRange
         ? applied.range(offset, offset + pageSize - 1)
@@ -203,7 +214,7 @@ export async function fetchCleanerVisibleBookingsMerged(
       const rows = (data ?? []) as Record<string, unknown>[];
       const eligible = rows.filter((row) => cleanerTeamMembershipMatchesBookingDate(row, teamMemberships));
       const remaining = lim - accepted;
-      const acceptedRows = eligible.slice(0, remaining);
+      const acceptedRows = params.pageAllBranches ? eligible : eligible.slice(0, remaining);
       consume(acceptedRows);
       accepted += acceptedRows.length;
       if (!supportsRange || rows.length < pageSize) break;
