@@ -182,6 +182,7 @@ async function handleRecurringPendingPaymentAccept(params: {
   const st = "pending_payment";
   if (
     assignedOfferPastAcceptanceDeadline({
+      ...bRow,
       status: bRow.status ?? null,
       cleaner_response_status: bRow.cleaner_response_status ?? null,
       date: bRow.date ?? null,
@@ -712,6 +713,7 @@ export async function runCleanerBookingLifecycleAction(params: {
     }
     if (
       assignedOfferPastAcceptanceDeadline({
+        ...bRow,
         status: bRow.status ?? null,
         cleaner_response_status: bRow.cleaner_response_status ?? null,
         date: bRow.date ?? null,
