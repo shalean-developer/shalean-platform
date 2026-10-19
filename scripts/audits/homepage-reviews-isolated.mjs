@@ -6,7 +6,7 @@ await db.exec(`
  create role anon; create role authenticated; create role service_role bypassrls;
  create schema auth;
  create table auth.users(id uuid primary key);
- create table public.bookings(id uuid primary key, status text, booking_reference text, customer_email text, location text);
+ create table public.bookings(id uuid primary key, status text, booking_reference text, customer_email text, location text, is_test boolean not null default false);
  create table public.reviews(id uuid primary key, booking_id uuid references bookings(id), user_id uuid,
    rating smallint, comment text, is_hidden boolean default false, created_at timestamptz default now());
  grant usage on schema public,auth to anon,authenticated,service_role;
@@ -30,7 +30,13 @@ await db.exec('set role service_role');
 assert.equal((await feed()).rows.length,0,'existing reviews must not be automatically published');
 await assert.rejects(publish(false),/Confirm permission/);
 await assert.rejects(publish(true,"stale comment"),/Review changed/);
+await db.exec('update public.bookings set is_test=true');
+await assert.rejects(publish(),/completed, non-test/);
+await db.exec('update public.bookings set is_test=false');
 await publish();
+await db.exec('update public.bookings set is_test=true');
+assert.equal((await feed()).rows.length,0,'test marker suppresses an already approved comment');
+await db.exec('update public.bookings set is_test=false');
 let rows=(await feed()).rows;
 assert.equal(rows.length,1);
 assert.deepEqual(Object.keys(rows[0]).sort(),['id','rating','comment','created_at'].sort());

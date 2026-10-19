@@ -18,6 +18,8 @@ describe("public cleaner feedback privacy", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(state.filters).toContainEqual(["public_display_consent", true]);
+    expect(state.filters).toContainEqual(["bookings.status", "completed"]);
+    expect(state.filters).toContainEqual(["bookings.is_test", false]);
     expect(state.tables).not.toContain("bookings");
     expect(body.reviews[0].reviewerName).toBe("Verified customer");
     expect(body.reviewCount).toBe(4);
