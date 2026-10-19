@@ -21,9 +21,11 @@ await db.exec(`
 await db.exec(await readFile(new URL('../../supabase/migrations/20261019160730_homepage_five_star_publications.sql', import.meta.url), 'utf8'));
 const id='33333333-3333-4333-8333-333333333333';
 const actor='11111111-1111-4111-8111-111111111111';
-const publish = async (permission=true, expectedComment) => {
-  const comment = expectedComment ?? (await db.query('select comment from public.reviews where id=$1',[id])).rows[0].comment;
-  return db.query(`select public.set_review_homepage_publication($1,true,$2,$3,$4)`,[id,actor,permission,comment]);
+const publish = async (permission=true, expectedComment, expectedConsent) => {
+  const row = (await db.query('select comment, public_display_consent from public.reviews where id=$1',[id])).rows[0];
+  const comment = expectedComment ?? row.comment;
+  const consent = expectedConsent ?? row.public_display_consent;
+  return db.query(`select public.set_review_homepage_publication($1,true,$2,$3,$4,$5)`,[id,actor,permission,comment,consent]);
 };
 const feed = () => db.query('select * from public.homepage_five_star_reviews()');
 await db.exec('set role service_role');
@@ -33,6 +35,11 @@ await assert.rejects(publish(true,"stale comment"),/Review changed/);
 await db.exec('update public.bookings set is_test=true');
 await assert.rejects(publish(),/completed, non-test/);
 await db.exec('update public.bookings set is_test=false');
+await publish();
+await db.exec('update public.reviews set public_display_consent=false');
+await assert.rejects(publish(true,undefined,true),/Display permission changed/);
+assert.equal((await db.query('select public_display_consent from public.reviews where id=$1',[id])).rows[0].public_display_consent,false,'stale Office approval cannot restore withdrawn consent');
+assert.equal((await feed()).rows.length,0);
 await publish();
 await db.exec('update public.bookings set is_test=true');
 assert.equal((await feed()).rows.length,0,'test marker suppresses an already approved comment');
