@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
-import { requireAdminRequest } from "@/lib/api/admin-auth-request";
+import { requireBlogRead } from "@/lib/blog/admin-blog-auth";
 import {
   BLOG_MEDIA_ALLOWED_MIME,
   BLOG_MEDIA_BUCKET,
@@ -15,13 +15,13 @@ export const dynamic = "force-dynamic";
 
 function safeFolder(raw: string | null): string {
   const t = (raw ?? "editorial").trim().toLowerCase();
-  if (!t || !/^[a-z0-9][a-z0-9-]{0,48}$/.test(t)) return "editorial";
+  if (!/^(?:(?:featured|inline)\/)?[a-z0-9][a-z0-9-]{0,120}$/.test(t)) return "editorial";
   return t;
 }
 
 export async function POST(request: Request) {
-  const auth = await requireAdminRequest(request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const auth = await requireBlogRead(request);
+  if (!auth.ok) return auth.response;
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });

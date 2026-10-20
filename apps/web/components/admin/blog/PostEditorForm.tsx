@@ -1,7 +1,8 @@
 "use client";
+import { isAllowedAuthoringBlogImageSrc } from "@/lib/blog/blog-image-validation";
 
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, Circle } from "lucide-react";
@@ -25,11 +26,8 @@ import {
   BLOG_TEMPLATE_OPTIONS,
   type BlogTemplateId,
 } from "@/lib/blog/templates";
-import { legacyParagraphToRichHtml } from "@/lib/blog/legacy-paragraph-to-rich-html";
-import {
-  mergeDocumentModeToBlocks,
-  splitBlocksForDocumentMode,
-} from "@/lib/blog/blogDocumentMode";
+import { assignStableBlogBlockIds } from "@/lib/blog/assign-stable-block-ids";
+import { preserveOrderedBlogBlocks } from "@/lib/blog/blogDocumentMode";
 import { blogPostViewLabel, buildBlogPostViewPath } from "@/lib/blog/build-blog-post-view-url";
 import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
 import { DocumentBodySection } from "./DocumentBodySection";
@@ -67,18 +65,6 @@ function newBlockId(): string {
 function withBlockId<B extends BlogContentBlock>(block: B): B {
   if (block.id && block.id.trim()) return block;
   return { ...block, id: newBlockId() };
-}
-
-/** Loads legacy `paragraph` blocks into the TipTap-powered `rich_text` shape. */
-function normalizeBlockForEditor(b: BlogContentBlock): BlogContentBlock {
-  if (b.type === "paragraph") {
-    return {
-      id: b.id,
-      type: "rich_text",
-      html: legacyParagraphToRichHtml(b.content),
-    };
-  }
-  return b;
 }
 
 function newBlock(type: AddableType): BlogContentBlock {
@@ -128,13 +114,12 @@ function toDatetimeLocalValue(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  return new Date(d.getTime() + 2 * 60 * 60 * 1000).toISOString().slice(0,16);
 }
 
 function fromDatetimeLocalValue(v: string): string | null {
   if (!v.trim()) return null;
-  const d = new Date(v);
+  const d = new Date(`${v}:00+02:00`);
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
 }
@@ -196,6 +181,7 @@ function PublishSidebarPanel({
   clusterPeerCount,
   postsListPath,
   compact = false,
+  canSchedule = false,
   viewPostUrl,
   viewPostLabel,
 }: {
@@ -217,6 +203,7 @@ function PublishSidebarPanel({
   clusterPeerCount: number;
   postsListPath: string;
   compact?: boolean;
+  canSchedule?: boolean;
   viewPostUrl?: string | null;
   viewPostLabel?: string;
 }) {
@@ -269,7 +256,7 @@ function PublishSidebarPanel({
         >
           <option value="draft">Draft</option>
           <option value="published">Published</option>
-          <option value="scheduled">Scheduled</option>
+          <option value="scheduled" disabled={!canSchedule}>Scheduled{canSchedule ? "" : " (paused)"}</option>
         </select>
       </div>
       <div className="space-y-2">
@@ -294,13 +281,14 @@ function PublishSidebarPanel({
           </Label>
           <Input
             id={`${fieldId}-pub`}
+            aria-label="Publish date and time (Africa/Johannesburg, SAST)"
             type="datetime-local"
             value={publishedAtLocal}
             onChange={(e) => onPublishedAtLocalChange(e.target.value)}
             className="rounded-lg"
           />
           <p className="text-[11px] leading-relaxed text-zinc-500">
-            Empty uses &quot;now&quot; when publishing. Drafts clear the schedule.
+            All times use Africa/Johannesburg (SAST, UTC+02:00). Empty uses &quot;now&quot; when publishing. Drafts clear the schedule.
           </p>
         </div>
       )}
@@ -328,7 +316,7 @@ function PublishSidebarPanel({
             {canonicalUrl}
           </p>
         ) : (
-          <p className="mt-1 text-[11px] text-zinc-400">Canonical inherits from slug unless set.</p>
+          <p className="mt-1 text-[11px] text-zinc-400">Canonical always uses this post’s own URL.</p>
         )}
       </div>
 
@@ -354,9 +342,9 @@ function PublishSidebarPanel({
         <ul className="mt-2 space-y-1.5 text-xs text-zinc-600 dark:text-zinc-300">
           {[
             ["FAQ block", preview.hasFaq],
-            ["CTA block", preview.hasCta],
+            ["Shared booking section", preview.hasCta],
             ["Internal links", preview.hasInternalLinks],
-            ["Booking link", preview.hasBookingLink],
+            ["Shared booking link", preview.hasBookingLink],
             ["H2 section", preview.hasH2Section],
           ].map(([label, ok]) => (
             <li key={String(label)} className="flex items-center gap-2">
@@ -450,8 +438,17 @@ export function PostEditorForm({
   const [featuredAlt, setFeaturedAlt] = useState("");
   const [noindex, setNoindex] = useState(false);
   const [blocks, setBlocks] = useState<BlogContentBlock[]>([]);
-  const [documentHtml, setDocumentHtml] = useState("<p></p>");
-  const [advancedBlocks, setAdvancedBlocks] = useState<BlogContentBlock[]>([]);
+  const originalPublishDate = useRef<string | null>(null);
+  const [revisionConflict, setRevisionConflict] = useState(false);
+  const [revision, setRevision] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState("");
+  const [recovery, setRecovery] = useState<Record<string, unknown> | null>(null);
+  const [retired, setRetired] = useState(false);
+  const [loaded, setLoaded] = useState(mode === "create");
+  const baseline = useRef<string | null>(null);
+  const saved = useRef(false);
+  const retry = useRef<{ fingerprint: string; requestId: string } | null>(null);
+  const [templateBackup, setTemplateBackup] = useState<BlogContentBlock[] | null>(null);
   const [addType, setAddType] = useState<AddableType>("rich_text");
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<string[]>([]);
@@ -474,6 +471,7 @@ export function PostEditorForm({
   const [tplA, setTplA] = useState("Regular cleaning");
   const [tplB, setTplB] = useState("Deep cleaning");
   const [tplTopic, setTplTopic] = useState("home cleaning");
+  const [canSchedule, setCanSchedule] = useState(false);
   const [draftPreviewQuery, setDraftPreviewQuery] = useState<string | null>(null);
 
   const viewPostUrl = useMemo(
@@ -482,13 +480,7 @@ export function PostEditorForm({
   );
   const viewPostLabelText = blogPostViewLabel(status);
 
-  const effectiveBlocks = useMemo(
-    () =>
-      layout === "document"
-        ? mergeDocumentModeToBlocks(documentHtml, advancedBlocks)
-        : blocks,
-    [layout, documentHtml, advancedBlocks, blocks],
-  );
+  const effectiveBlocks = blocks;
 
   const contentJson: BlogContentJson = useMemo(
     () => ({ schema_version: BLOG_CONTENT_JSON_SCHEMA_VERSION, blocks: effectiveBlocks }),
@@ -525,92 +517,7 @@ export function PostEditorForm({
     [contentJson, selectedTagSlugs, resolvedSemanticClusterKey, clusterPeers, slug, title, primaryKeyword],
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    const handle = setTimeout(() => {
-      if (cancelled) return;
-      if (!slug.trim() || !resolvedSemanticClusterKey) {
-        setClusterPeers([]);
-        return;
-      }
-      void (async () => {
-        const token = await getToken();
-        if (cancelled || !token) return;
-        const qp = new URLSearchParams();
-        qp.set("exclude_slug", slug.trim());
-        qp.set("tag_slugs", selectedTagSlugs.join(","));
-        if (semanticCluster.trim()) qp.set("semantic_cluster", semanticCluster.trim());
-        const res = await fetch(`/api/admin/blog/cluster-peers?${qp.toString()}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const json = (await res.json().catch(() => ({}))) as { peers?: ClusterPeerPost[] };
-        if (cancelled || !res.ok) return;
-        setClusterPeers(Array.isArray(json.peers) ? json.peers : []);
-      })();
-    }, 450);
-    return () => {
-      cancelled = true;
-      clearTimeout(handle);
-    };
-  }, [slug, selectedTagSlugs, semanticCluster, resolvedSemanticClusterKey]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const token = await getToken();
-      if (!token) return;
-      const res = await fetch("/api/admin/blog/taxonomy", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = (await res.json().catch(() => ({}))) as {
-        categories?: { id: string; slug: string; name: string }[];
-        tags?: { id: string; slug: string; name: string }[];
-        draft_preview_query?: string | null;
-      };
-      if (cancelled || !res.ok) return;
-      setCategories(json.categories ?? []);
-      setTags(json.tags ?? []);
-      if (json.draft_preview_query) {
-        setDraftPreviewQuery((prev) => prev ?? json.draft_preview_query ?? null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (mode !== "edit" || !postId) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setLoadError(null);
-      const token = await getToken();
-      if (!token) {
-        setLoadError("Not signed in.");
-        setLoading(false);
-        return;
-      }
-      const res = await fetch(`/api/admin/blog/posts/${postId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = (await res.json().catch(() => ({}))) as {
-        post?: Record<string, unknown>;
-        error?: string;
-        draft_preview_query?: string | null;
-      };
-      if (cancelled) return;
-      if (!res.ok) {
-        setLoadError(json.error ?? "Failed to load post.");
-        setLoading(false);
-        return;
-      }
-      const p = json.post;
-      if (!p) {
-        setLoadError("Post not found.");
-        setLoading(false);
-        return;
-      }
+  function hydratePost(p: Record<string, unknown>) {
       setTitle(String(p.title ?? ""));
       setSlug(String(p.slug ?? ""));
       setSlugAuto(false);
@@ -618,7 +525,8 @@ export function PostEditorForm({
       setExcerpt(p.excerpt == null ? "" : String(p.excerpt));
       setStatus((p.status as typeof status) ?? "draft");
       setSource((p.source as typeof source) ?? "editorial");
-      setPublishedAtLocal(toDatetimeLocalValue(p.published_at == null ? null : String(p.published_at)));
+      originalPublishDate.current = p.published_at == null ? null : String(p.published_at);
+      setPublishedAtLocal(toDatetimeLocalValue(originalPublishDate.current));
       setMetaTitle(p.meta_title == null ? "" : String(p.meta_title));
       setMetaDescription(p.meta_description == null ? "" : String(p.meta_description));
       setCanonicalUrl(p.canonical_url == null ? "" : String(p.canonical_url));
@@ -649,21 +557,111 @@ export function PostEditorForm({
       setRelatedGuideOverrideText(Array.isArray(rg) ? rg.join("\n") : "");
       const tids = (p as { tag_ids?: string[] }).tag_ids;
       setTagIds(Array.isArray(tids) ? tids : []);
-      setDraftPreviewQuery(json.draft_preview_query ?? null);
+
       const raw = p.content_json;
       const parsed = safeParseBlogContentJson(raw);
-      const parsedBlocks = parsed.success
-        ? parsed.data.blocks.map((b) => normalizeBlockForEditor(withBlockId(b)))
-        : [];
-      if (layout === "document") {
-        const split = splitBlocksForDocumentMode(parsedBlocks);
-        setDocumentHtml(split.documentHtml);
-        setAdvancedBlocks(split.advancedBlocks);
-      } else {
-        setBlocks(parsedBlocks);
+      setBlocks(parsed.success ? preserveOrderedBlogBlocks(assignStableBlogBlockIds(parsed.data).blocks) : []);
+      setRevision(p.updated_at == null ? null : String(p.updated_at));
+      setRetired(Boolean(p.retired));
+      if (p.last_schedule_error) setFormError(`Scheduled publication is held: ${String(p.last_schedule_error)}`);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      if (cancelled) return;
+      if (!slug.trim() || !resolvedSemanticClusterKey) {
+        setClusterPeers([]);
+        return;
       }
+      void (async () => {
+        const token = await getToken();
+        if (cancelled || !token) return;
+        const qp = new URLSearchParams();
+        qp.set("exclude_slug", slug.trim());
+        qp.set("tag_slugs", selectedTagSlugs.join(","));
+        if (semanticCluster.trim()) qp.set("semantic_cluster", semanticCluster.trim());
+        const res = await fetch(`/api/admin/blog/cluster-peers?${qp.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(30_000),
+        });
+        const json = (await res.json().catch(() => ({}))) as { peers?: ClusterPeerPost[] };
+        if (cancelled || !res.ok) return;
+        setClusterPeers(Array.isArray(json.peers) ? json.peers : []);
+      })().catch(() => { if (!cancelled) setClusterPeers([]); });
+    }, 450);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [slug, selectedTagSlugs, semanticCluster, resolvedSemanticClusterKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const token = await getToken();
+      if (!token) return;
+      const res = await fetch("/api/admin/blog/taxonomy", {
+        headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(30_000),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        scheduling_enabled?: boolean;
+        categories?: { id: string; slug: string; name: string }[];
+        tags?: { id: string; slug: string; name: string }[];
+        draft_preview_query?: string | null;
+      };
+      if (cancelled || !res.ok) return;
+      setCanSchedule(Boolean(json.scheduling_enabled));
+      setCategories(json.categories ?? []);
+      setTags(json.tags ?? []);
+      if (json.draft_preview_query) {
+        setDraftPreviewQuery((prev) => prev ?? json.draft_preview_query ?? null);
+      }
+    })().catch(() => { if (!cancelled) setFormError("Could not load taxonomy. Check your connection and reload before publishing."); });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (mode !== "edit" || !postId) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setLoadError(null);
+      const token = await getToken();
+      if (!token) {
+        setLoadError("Not signed in.");
+        setLoading(false);
+        return;
+      }
+      const res = await fetch(`/api/admin/blog/posts/${postId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(30_000),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        post?: Record<string, unknown>;
+        error?: string;
+        draft_preview_query?: string | null;
+      };
+      if (cancelled) return;
+      if (!res.ok) {
+        setLoadError(json.error ?? "Failed to load post.");
+        setLoading(false);
+        return;
+      }
+      const p = json.post;
+      if (!p) {
+        setLoadError("Post not found.");
+        setLoading(false);
+        return;
+      }
+      hydratePost(p);
+      setDraftPreviewQuery(json.draft_preview_query ?? null);
+      setLoaded(true);
       setLoading(false);
-    })();
+    })().catch(() => { if (!cancelled) { setLoadError("Could not load the post. Check your connection and retry."); setLoading(false); } });
     return () => {
       cancelled = true;
     };
@@ -675,6 +673,61 @@ export function PostEditorForm({
     if (mode === "edit") return;
     setSlug(slugifyTitle(title));
   }, [title, slugAuto, mode]);
+
+  const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
+  useEffect(() => {
+    void getSupabaseBrowser()?.auth.getUser().then(({ data }) => {
+      if (data.user) setRecoveryKey(`shalean.blog.recovery.v1:${data.user.id}:${postId ?? "new"}`);
+    }).catch(() => setFormError("Session check failed. Your edits stay in this page."));
+  }, [postId]);
+  const resolvedPublishDate = publishedAtLocal === toDatetimeLocalValue(originalPublishDate.current) ? originalPublishDate.current : fromDatetimeLocalValue(publishedAtLocal);
+  const snapshot = JSON.stringify({ title, slug, h1, excerpt, status, source, published_at: resolvedPublishDate,
+    meta_title: metaTitle, meta_description: metaDescription, canonical_url: canonicalUrl,
+    featured_image_url: featuredUrl, featured_image_alt: featuredAlt, noindex, content_json: contentJson,
+    primary_keyword: primaryKeyword, secondary_keywords: secondaryKwText.split(/[\n,]+/).filter(Boolean), search_intent: searchIntent,
+    category_id: categoryId, semantic_cluster: semanticCluster, related_guide_override_slugs: relatedGuideOverrideText.split(/[\n,]+/).filter(Boolean),
+    tag_ids: tagIds, updated_at: revision, seoGenSlug, seoApplySuggestions });
+  useEffect(() => {
+    if (!loaded || !recoveryKey) return;
+    if (baseline.current === null) {
+      baseline.current = snapshot;
+      try {
+        const raw = localStorage.getItem(recoveryKey);
+        if (raw) {
+          const item = JSON.parse(raw);
+          if (item.snapshot && Date.now() - item.savedAt < 7 * 86400000 && JSON.stringify(item.snapshot) !== snapshot) setRecovery(item.snapshot);
+        }
+      } catch { setFormError("Browser draft recovery is unavailable. Keep this page open until your save succeeds."); }
+      return;
+    }
+    const dirty = snapshot !== baseline.current;
+    const persist = () => {
+      if (!dirty || saved.current || recovery) return;
+      try { localStorage.setItem(recoveryKey, JSON.stringify({ savedAt: Date.now(), snapshot: JSON.parse(snapshot) })); }
+      catch { setFormError("Browser draft recovery is unavailable. Keep this page open until your save succeeds."); }
+    };
+    const beforeUnload = (event: BeforeUnloadEvent) => { if (dirty && !saved.current) { persist(); event.preventDefault(); } };
+    const navigate = (event: MouseEvent) => {
+      const link = (event.target as Element)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (dirty && !saved.current && link && link.target !== "_blank" && link.href !== location.href && !window.confirm("Leave this page? Unsaved edits are kept in browser recovery.")) { event.preventDefault(); event.stopPropagation(); }
+      else if (link) persist();
+    };
+    // Synchronous write closes the auth-redirect window; snapshots contain no credentials.
+    persist();
+    window.addEventListener("beforeunload", beforeUnload);
+    document.addEventListener("click", navigate, true);
+    return () => { window.removeEventListener("beforeunload", beforeUnload); document.removeEventListener("click", navigate, true); };
+  }, [snapshot, loaded, recoveryKey, recovery]);
+
+  const recoveryNotice = <div className="space-y-2 px-4 py-3" aria-live="polite">
+    {revisionConflict && postId ? <Link href={`${postsListPath}/${postId}`} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-700 underline">Open the latest editor in a new tab to reconcile this conflict</Link> : null}
+    {receipt ? <p role="status" className="text-sm text-green-700">{receipt}</p> : null}
+    {retired ? <p role="status">This retired slug redirects to its canonical destination. This record is read-only.</p> : null}
+    {recovery ? <div className="rounded border border-amber-300 p-3 text-sm"><p>Unsaved work was recovered from this browser. Restore it or keep the server version.</p>
+      <Button type="button" onClick={() => { hydratePost(recovery); setSeoGenSlug(Boolean(recovery.seoGenSlug)); setSeoApplySuggestions(Boolean(recovery.seoApplySuggestions)); setRecovery(null); }}>Restore recovered work</Button>
+      <Button type="button" variant="ghost" onClick={() => { setRecovery(null); if (recoveryKey) localStorage.removeItem(recoveryKey); }}>Keep server version</Button></div> : null}
+    {templateBackup ? <Button type="button" variant="outline" onClick={() => { setBlocks(templateBackup); setTemplateBackup(null); }}>Undo template replacement</Button> : null}
+  </div>;
 
   const updateBlock = useCallback((index: number, next: BlogContentBlock) => {
     setBlocks((prev) => {
@@ -703,6 +756,7 @@ export function PostEditorForm({
   const validateClient = (): boolean => {
     setFieldErrors([]);
     const errs: string[] = [];
+    if (featuredUrl.trim() && !isAllowedAuthoringBlogImageSrc(featuredUrl)) errs.push("Unsupported image URL. Upload the image or use an approved image host.");
     if (status === "scheduled" && !publishedAtLocal.trim()) {
       errs.push("Scheduled posts need a publish date/time.");
     }
@@ -727,20 +781,21 @@ export function PostEditorForm({
 
   const save = async () => {
     setFormError(null);
-    if (!validateClient()) return;
+    if (retired || saving || recovery || !validateClient()) return;
     setSaving(true);
+    try {
     const token = await getToken();
     if (!token) {
-      setFormError("Not signed in.");
+      setFormError("Your session expired. Sign in again in another tab, then retry. Your edits are retained.");
       setSaving(false);
       return;
     }
-    const published_at =
-      status === "draft"
-        ? null
-        : fromDatetimeLocalValue(publishedAtLocal) ??
-          (status === "published" ? new Date().toISOString() : null);
+    // The server supplies "now"; client clock skew cannot turn Publish into a schedule.
+    const published_at = status === "draft" ? null : resolvedPublishDate;
+    if (retry.current?.fingerprint !== snapshot) retry.current = { fingerprint: snapshot, requestId: crypto.randomUUID() };
     const body = {
+      request_id: retry.current.requestId,
+      ...(mode === "edit" ? { expected_updated_at: revision } : {}),
       ...(mode === "edit" && postId ? { id: postId } : {}),
       title: title.trim(),
       slug: slug.trim(),
@@ -751,7 +806,7 @@ export function PostEditorForm({
       published_at,
       meta_title: metaTitle.trim() || null,
       meta_description: metaDescription.trim() || null,
-      canonical_url: canonicalUrl.trim() || null,
+      canonical_url: null,
       featured_image_url: featuredUrl.trim() || null,
       featured_image_alt: featuredAlt.trim() || null,
       noindex,
@@ -777,16 +832,21 @@ export function PostEditorForm({
       method: mode === "edit" ? "PUT" : "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
     });
     const json = (await res.json().catch(() => ({}))) as {
       error?: string;
       code?: string;
       broken?: { fieldPath: string; brokenHref: string; issueType: string; recommendedFix: string }[];
-      post?: { id: string };
+      post?: Record<string, unknown> & { id: string };
+      receipt?: { saved_at: string };
+      governance_warnings?: { message: string }[];
+      draft_preview_query?: string | null;
       validation?: { issues?: { code: string; message: string }[] };
     };
     setSaving(false);
     if (!res.ok) {
+      if (json.code === "revision_conflict") setRevisionConflict(true);
       const pubIssues = json.validation?.issues?.map((i) => i.message).filter(Boolean) ?? [];
       setFieldErrors(pubIssues);
       if (json.code === "cms_link_validation" && json.broken?.length) {
@@ -796,10 +856,22 @@ export function PostEditorForm({
           .join("\n");
         setFormError(`${json.error ?? "CMS internal blog link validation failed."}\n${detail}`);
       } else {
-        setFormError(json.error ?? "Save failed.");
+        setFormError(res.status === 401 || res.status === 403 ? `${json.error ?? "Session verification required."} Sign in again in another tab and retry; your edits are retained.` : json.error ?? "Save failed.");
       }
       return;
     }
+    if (!json.post?.updated_at || !json.receipt) throw new Error("No save receipt returned. Retry safely.");
+    saved.current = true;
+    setRevisionConflict(false);
+    if (recoveryKey) { try { localStorage.removeItem(recoveryKey); } catch { /* Server receipt remains authoritative. */ } }
+    hydratePost(json.post);
+    setDraftPreviewQuery(json.draft_preview_query ?? null);
+    setSeoGenSlug(false); setSeoApplySuggestions(false);
+    retry.current = null;
+    setReceipt(`Saved ${new Date(json.receipt.saved_at).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg" })} SAST. ${json.governance_warnings?.map((w) => w.message).join(" ") ?? ""}`);
+    // Establish the normalized server response as baseline on the next render.
+    baseline.current = null;
+    setTimeout(() => { saved.current = false; }, 0);
     setFieldErrors([]);
     if (mode === "create" && json.post?.id) {
       router.push(`${postsListPath}/${json.post.id}`);
@@ -807,10 +879,14 @@ export function PostEditorForm({
       return;
     }
     router.refresh();
+    } catch (error) { setFormError(error instanceof Error && error.name === "TimeoutError" ? "Save timed out. Your edits are retained; retry safely." : error instanceof Error ? error.message : "Network error. Your edits are retained; retry when connected."); }
+    finally { setSaving(false); }
   };
 
   const applyTemplate = () => {
     if (!templateChoice) return;
+    if (blocks.length && !window.confirm("Replace the current article body with this template? You can undo the replacement.")) return;
+    setTemplateBackup(structuredClone(blocks));
     let json: BlogContentJson;
     if (templateChoice === "location") {
       json = buildBlogTemplateContent({
@@ -829,13 +905,7 @@ export function PostEditorForm({
       });
     }
     const mapped = json.blocks.map((b) => withBlockId(b));
-    if (layout === "document") {
-      const split = splitBlocksForDocumentMode(mapped);
-      setDocumentHtml(split.documentHtml);
-      setAdvancedBlocks(split.advancedBlocks);
-    } else {
-      setBlocks(mapped);
-    }
+    setBlocks(mapped);
   };
 
   if (loading) {
@@ -853,6 +923,7 @@ export function PostEditorForm({
   }
 
   const publishSidebarProps = {
+    canSchedule,
     saving,
     onSave: save,
     status,
@@ -862,7 +933,7 @@ export function PostEditorForm({
     publishedAtLocal,
     onPublishedAtLocalChange: setPublishedAtLocal,
     slug,
-    canonicalUrl,
+    canonicalUrl: `https://shalean.co.za/blog/${slug}`,
     metaTitle,
     metaDescription,
     semanticCluster,
@@ -960,8 +1031,8 @@ export function PostEditorForm({
               <Input
                 id="wp-can"
                 className="font-mono text-xs"
-                value={canonicalUrl}
-                onChange={(e) => setCanonicalUrl(e.target.value)}
+                value={`https://shalean.co.za/blog/${slug}`}
+                readOnly
                 placeholder="/blog/slug"
               />
             </WpLabeledField>
@@ -1085,6 +1156,8 @@ export function PostEditorForm({
         mode={mode}
         postsListPath={postsListPath}
         saving={saving}
+        disabled={retired}
+        status={status}
         onSave={save}
         formError={formError}
         fieldErrors={fieldErrors}
@@ -1103,18 +1176,11 @@ export function PostEditorForm({
         sidebar={documentSidebar}
         createExtras={createTemplateExtras}
         body={
-          <DocumentBodySection
-            variant="wordpress"
-            documentHtml={documentHtml}
-            onDocumentHtmlChange={setDocumentHtml}
-            advancedBlocks={advancedBlocks}
-            onAdvancedBlocksChange={setAdvancedBlocks}
-            renderAdvancedBlock={(block, _index, onChange) => (
-              <BlockFields block={block} onChange={onChange} uploadSlug={slug} />
-            )}
-            newAdvancedBlock={(type) => newBlock(type)}
-            uploadSlug={slug}
-          />
+          <><div>{recoveryNotice}</div><DocumentBodySection
+            blocks={blocks} onBlocksChange={setBlocks}
+            renderBlock={(block, _index, onChange) => <BlockFields block={block} onChange={onChange} uploadSlug={slug} />}
+            newBlock={newBlock}
+          /></>
         }
       />
     );
@@ -1122,8 +1188,9 @@ export function PostEditorForm({
 
   return (
     <div className="w-full min-w-0 pb-28 md:pb-16">
+      {recoveryNotice}
       {(formError || fieldErrors.length > 0) && (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100">
+        <div role="alert" tabIndex={-1} className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100">
           {formError ? <p className="font-medium">{formError}</p> : null}
           {fieldErrors.length > 0 ? (
             <ul className={cn("list-disc pl-5", formError ? "mt-2" : "")}>
@@ -1349,12 +1416,12 @@ export function PostEditorForm({
                 />
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="can">Canonical URL (optional)</Label>
+                <Label htmlFor="can">Canonical URL (derived from slug)</Label>
                 <Input
                   id="can"
                   className="rounded-lg font-mono text-sm"
-                  value={canonicalUrl}
-                  onChange={(e) => setCanonicalUrl(e.target.value)}
+                  value={`https://shalean.co.za/blog/${slug}`}
+                  readOnly
                   placeholder="/blog/slug"
                 />
               </div>
@@ -1516,7 +1583,6 @@ export function PostEditorForm({
                     <option value="rich_text">rich_text (WordPress-style)</option>
                     <option value="image">image</option>
                     <option value="faq">faq</option>
-                    <option value="cta">cta</option>
                     <option value="internal_links">internal_links</option>
                   </optgroup>
                   <optgroup label="Layouts">
@@ -1834,37 +1900,7 @@ function BlockFields({
         </div>
       );
     case "cta":
-      return (
-        <div className="grid gap-2 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className={lab}>Title</label>
-            <Input className={inp} value={block.title} onChange={(e) => onChange({ ...block, title: e.target.value })} />
-          </div>
-          <div className="sm:col-span-2">
-            <label className={lab}>Description (optional)</label>
-            <Textarea className={inp} value={block.description ?? ""} onChange={(e) => onChange({ ...block, description: e.target.value || undefined })} />
-          </div>
-          <div>
-            <label className={lab}>Button</label>
-            <Input className={inp} value={block.button_text} onChange={(e) => onChange({ ...block, button_text: e.target.value })} />
-          </div>
-          <div>
-            <label className={lab}>Link</label>
-            <Input className={inp} value={block.link} onChange={(e) => onChange({ ...block, link: e.target.value })} />
-          </div>
-          <div>
-            <label className={lab}>Variant</label>
-            <select
-              className={inp}
-              value={block.variant ?? "primary"}
-              onChange={(e) => onChange({ ...block, variant: e.target.value as "primary" | "secondary" })}
-            >
-              <option value="primary">primary</option>
-              <option value="secondary">secondary</option>
-            </select>
-          </div>
-        </div>
-      );
+      return <p className="text-sm text-zinc-600">Public articles use the shared booking section. This legacy CTA is retained for reference; its custom title and button are not displayed.</p>;
     case "internal_links":
       return (
         <div className="space-y-2">

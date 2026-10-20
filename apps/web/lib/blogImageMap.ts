@@ -125,7 +125,7 @@ export function resolveBlogFeaturedImageSlug(slug: string): string {
 
 export function isTrustedBlogFeaturedLocalPath(src: string): boolean {
   const p = src.trim();
-  if (!p.startsWith("/")) return false;
+  if (!/^\/(?:images|marketing)\//.test(p) || p.includes("\\") || /(?:^|\/)\.\.(?:\/|$)|%2e|%2f|%5c/i.test(p)) return false;
   if (p === DEFAULT_BLOG_FEATURED_IMAGE) return false;
   return !UNTRUSTED_BLOG_FEATURED_LOCAL_PREFIXES.some((prefix) => p.startsWith(prefix));
 }
