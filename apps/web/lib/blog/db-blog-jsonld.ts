@@ -2,7 +2,7 @@ import type { BlogContentJson } from "./content-json";
 import type { BlogFaqItem } from "./content-json";
 
 import { SITE_ORIGIN as SITE } from "@/lib/site/canonical";
-const ORGANIZATION_LOGO_ABSOLUTE = `${SITE}/images/marketing/cape-town-house-cleaning-kitchen.webp`;
+const ORGANIZATION_LOGO_ABSOLUTE = `${SITE}/images/shalean-logo.png`;
 
 export function collectFaqItemsFromContent(content: BlogContentJson): BlogFaqItem[] {
   const blocks = Array.isArray(content?.blocks) ? content.blocks : [];
