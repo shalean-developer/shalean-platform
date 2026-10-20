@@ -1,19 +1,14 @@
 import { PublishedReviewsSection } from "./PublishedReviewsSection";
 import { Suspense } from "react";
 import Link from "next/link";
-import { Star } from "lucide-react";
+import { GoogleReviewPanel } from "./ReviewSourcePanels";
+import { CUSTOMER_ACCOUNT_REVIEWS_PATH } from "@/lib/customer/customerAccountPaths";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { buildReviewsPageJsonLd } from "@/lib/seo/reviewsPageJsonLd";
-import {
-  getGoogleReviewWriteUrl,
-  GOOGLE_BUSINESS_REVIEWS,
-  googleReviewsShortTrustLine,
-} from "@/lib/seo/googleReviews";
 
 export function ReviewsPageContent({ page = 1 }: { page?: number }) {
   const bookingHref = marketingHomeBookingHref();
-  const googleWrite = getGoogleReviewWriteUrl();
   const jsonLd = buildReviewsPageJsonLd(page);
 
   return (
@@ -28,30 +23,12 @@ export function ReviewsPageContent({ page = 1 }: { page?: number }) {
             Shalean customer reviews — Cape Town
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-600 md:text-lg">
-            {googleReviewsShortTrustLine()}. The reviews below come directly from
-            completed Shalean bookings. We publish written reviews across all star ratings, with customer permission for the review and any name, suburb and service shown.
+            Read customer feedback from completed Shalean cleaning bookings in Cape Town.
+            Explore reviews shared directly with us below, or visit our separate Google Business Profile.
           </p>
-
-          <div className="mt-8 flex flex-wrap items-center gap-4">
-            <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-              <Star className="size-5 fill-amber-400 text-amber-400" aria-hidden />
-              <span className="text-sm font-semibold text-slate-900">
-                <span className="tabular-nums">{GOOGLE_BUSINESS_REVIEWS.rating}</span> / 5 on Google
-              </span>
-              <span className="text-sm text-slate-500">
-                · <span className="tabular-nums">{GOOGLE_BUSINESS_REVIEWS.count}+</span> verified reviews
-              </span>
-            </div>
-            {googleWrite ? (
-              <a
-                href={googleWrite}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex min-h-11 items-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
-              >
-                Leave a Google review
-              </a>
-            ) : null}
+          <div className="mt-6 flex flex-wrap gap-4">
+            <Link href="#booking-reviews" className="inline-flex min-h-11 items-center rounded-xl bg-sky-800 px-5 text-sm font-semibold text-white hover:bg-sky-900">Read booking reviews</Link>
+            <Link href={CUSTOMER_ACCOUNT_REVIEWS_PATH} className="inline-flex min-h-11 items-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-900 hover:bg-slate-50">Review your Shalean booking</Link>
           </div>
         </div>
       </section>
@@ -60,7 +37,9 @@ export function ReviewsPageContent({ page = 1 }: { page?: number }) {
         <PublishedReviewsSection page={page} />
       </Suspense>
 
-      <section className="border-t border-slate-200 bg-slate-50 py-12 md:py-14">
+      <GoogleReviewPanel />
+
+      <section className="bg-white py-12 md:py-14">
         <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
           <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">Ready to book a trusted clean?</h2>
           <p className="mx-auto mt-3 max-w-xl text-sm text-slate-600 sm:text-base">
