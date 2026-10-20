@@ -49,13 +49,16 @@ export async function POST(request: Request) {
   if (auth instanceof NextResponse) return auth;
   const { userId, email: viewerEmail } = auth;
 
-  let body: { bookingId?: string; rating?: number; comment?: string; publicDisplayConsent?: boolean };
+  let body: { bookingId?: string; rating?: number; comment?: string; publicDisplayConsent?: boolean; publicNameConsent?: boolean; publicAreaConsent?: boolean; publicServiceConsent?: boolean };
   try {
-    body = (await request.json()) as { bookingId?: string; rating?: number; comment?: string; publicDisplayConsent?: boolean };
+    body = (await request.json()) as { bookingId?: string; rating?: number; comment?: string; publicDisplayConsent?: boolean; publicNameConsent?: boolean; publicAreaConsent?: boolean; publicServiceConsent?: boolean };
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
+  if (!body || typeof body !== "object" || ["publicDisplayConsent", "publicNameConsent", "publicAreaConsent", "publicServiceConsent"].some((key) => Object.prototype.hasOwnProperty.call(body, key) && typeof (body as Record<string, unknown>)[key] !== "boolean")) {
+    return NextResponse.json({ error: "Display preferences must be booleans." }, { status: 400 });
+  }
   const bookingId = typeof body.bookingId === "string" ? body.bookingId.trim() : "";
   const rawRating = Number(body.rating);
   const rating = Number.isInteger(rawRating) ? rawRating : Number.NaN;
@@ -117,6 +120,9 @@ export async function POST(request: Request) {
     rating,
     comment: comment || null,
     public_display_consent: body.publicDisplayConsent === true,
+    public_name_consent: body.publicDisplayConsent === true && body.publicNameConsent === true,
+    public_area_consent: body.publicDisplayConsent === true && body.publicAreaConsent === true,
+    public_service_consent: body.publicDisplayConsent === true && body.publicServiceConsent === true,
   });
 
   if (insErr) {
@@ -150,14 +156,19 @@ export async function PATCH(request: Request) {
   if (auth instanceof NextResponse) return auth;
   const { userId } = auth;
 
-  let body: { bookingId?: string; rating?: number; comment?: string | undefined; publicDisplayConsent?: boolean };
+  let body: { bookingId?: string; rating?: number; comment?: string | undefined; publicDisplayConsent?: boolean; publicNameConsent?: boolean; publicAreaConsent?: boolean; publicServiceConsent?: boolean };
   try {
-    body = (await request.json()) as { bookingId?: string; rating?: number; comment?: string; publicDisplayConsent?: boolean };
+    body = (await request.json()) as { bookingId?: string; rating?: number; comment?: string; publicDisplayConsent?: boolean; publicNameConsent?: boolean; publicAreaConsent?: boolean; publicServiceConsent?: boolean };
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
   if (!body || typeof body !== "object") return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
+  const detailFields = { publicNameConsent: "public_name_consent", publicAreaConsent: "public_area_consent", publicServiceConsent: "public_service_consent" } as const;
+  const hasDetails = Object.keys(detailFields).some((key) => Object.prototype.hasOwnProperty.call(body, key));
+  if (Object.keys(detailFields).some((key) => Object.prototype.hasOwnProperty.call(body, key) && typeof (body as Record<string, unknown>)[key] !== "boolean")) {
+    return NextResponse.json({ error: "Detail preferences must be booleans." }, { status: 400 });
+  }
   const hasConsent = Object.prototype.hasOwnProperty.call(body, "publicDisplayConsent");
   if (hasConsent && typeof body.publicDisplayConsent !== "boolean") return NextResponse.json({ error: "Display preference must be a boolean." }, { status: 400 });
   const bookingId = typeof body.bookingId === "string" ? body.bookingId.trim() : "";
@@ -167,7 +178,7 @@ export async function PATCH(request: Request) {
 
   const hasRating = body.rating !== undefined && body.rating !== null;
   const hasComment = body.comment !== undefined;
-  if (!hasRating && !hasComment && !hasConsent) {
+  if (!hasRating && !hasComment && !hasConsent && !hasDetails) {
     return NextResponse.json({ error: "Provide a rating, comment or display preference to update." }, { status: 400 });
   }
 
@@ -210,8 +221,13 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Reviews can only be edited within 24 hours of submission." }, { status: 400 });
   }
 
-  const patch: { rating?: number; comment?: string | null; public_display_consent?: boolean } = {};
+  const patch: { rating?: number; comment?: string | null; public_display_consent?: boolean; public_name_consent?: boolean; public_area_consent?: boolean; public_service_consent?: boolean } = {};
   if (hasConsent) patch.public_display_consent = body.publicDisplayConsent;
+  for (const input of Object.keys(detailFields) as (keyof typeof detailFields)[]) {
+    const column = detailFields[input];
+    if (body.publicDisplayConsent === false) patch[column] = false;
+    else if (Object.prototype.hasOwnProperty.call(body, input)) patch[column] = body[input];
+  }
   if (nextRating !== undefined) patch.rating = nextRating;
   if (hasComment) patch.comment = nextComment ?? null;
 

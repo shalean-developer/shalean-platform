@@ -22,13 +22,14 @@ export function ReviewsPageContent() {
 
       <section className="border-b border-slate-200 bg-gradient-to-b from-sky-50/80 to-white py-12 md:py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <nav aria-label="Breadcrumb" className="mb-6 text-sm text-slate-600"><ol className="flex flex-wrap gap-2"><li><Link href="/" className="underline underline-offset-4">Home</Link></li><li aria-hidden="true">/</li><li aria-current="page">Customer reviews</li></ol></nav>
           <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">Customer feedback</p>
           <h1 className="mt-3 max-w-3xl text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
             Shalean customer reviews — Cape Town
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-600 md:text-lg">
             {googleReviewsShortTrustLine()}. Featured feedback on this page comes directly from
-            completed Shalean bookings and is published anonymously with permission.
+            completed Shalean bookings. We feature selected five-star written reviews, with customer permission for any name, suburb and service shown.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-4">
@@ -48,7 +49,7 @@ export function ReviewsPageContent() {
                 rel="noopener noreferrer"
                 className="inline-flex min-h-11 items-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
               >
-                Read reviews on Google
+                Leave a Google review
               </a>
             ) : null}
           </div>

@@ -17,10 +17,10 @@ import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 const REVIEWS_CANONICAL = absoluteCanonicalUrl("/reviews");
 
 const REVIEWS_META_DESC = clampMetaDescription(
-  "Read customer feedback from completed Shalean bookings and see our Google Business Profile rating for cleaning services across Cape Town.",
+  "Read selected five-star reviews from completed Shalean cleaning bookings in Cape Town, published with customer permission. See our separate Google rating.",
 );
 const REVIEWS_OG_DESC = clampMetaDescription(
-  "Customer feedback from completed Shalean bookings, alongside our Google Business Profile rating for Cape Town cleaning services.",
+  "Selected five-star customer feedback from completed Cape Town cleaning bookings, alongside Shalean’s separate Google Business Profile rating.",
 );
 const REVIEWS_TWITTER_DESC = clampMetaDescription(
   "See Shalean’s Google rating and real customer feedback for Cape Town home cleaning.",
