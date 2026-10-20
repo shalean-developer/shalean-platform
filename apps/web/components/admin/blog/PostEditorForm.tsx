@@ -618,19 +618,26 @@ export function PostEditorForm({
     primary_keyword: primaryKeyword, secondary_keywords: secondaryKwText.split(/[\n,]+/).filter(Boolean), search_intent: searchIntent,
     category_id: categoryId, semantic_cluster: semanticCluster, related_guide_override_slugs: relatedGuideOverrideText.split(/[\n,]+/).filter(Boolean),
     tag_ids: tagIds, updated_at: revision, seoGenSlug, seoApplySuggestions });
+  // Capture the server baseline independently of the asynchronous recovery identity lookup.
+  // Otherwise an early edit could become the baseline while auth.getUser() is pending.
   useEffect(() => {
-    if (!loaded || !recoveryKey) return;
-    if (baseline.current === null) {
+    if (loaded && baseline.current === null) {
       baseline.current = snapshot;
       setBaselineSnapshot(snapshot);
+    }
+  }, [loaded, snapshot]);
+  const recoveryReadKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (!loaded || !recoveryKey) return;
+    if (recoveryReadKey.current !== recoveryKey) {
+      recoveryReadKey.current = recoveryKey;
       try {
         const raw = localStorage.getItem(recoveryKey);
         if (raw) {
           const item = JSON.parse(raw);
-          if (item.snapshot && Date.now() - item.savedAt < 7 * 86400000 && JSON.stringify(item.snapshot) !== snapshot) setRecovery(item.snapshot);
+          if (item.snapshot && Date.now() - item.savedAt < 7 * 86400000 && JSON.stringify(item.snapshot) !== baseline.current) { setRecovery(item.snapshot); return; }
         }
       } catch { setFormError("Browser draft recovery is unavailable. Keep this page open until your save succeeds."); }
-      return;
     }
     const dirty = snapshot !== baseline.current;
     const persist = () => {
@@ -1089,7 +1096,7 @@ export function PostEditorForm({
         mode={mode}
         postsListPath={postsListPath}
         saving={saving}
-        saveState={saving ? "Saving…" : (baselineSnapshot !== null && snapshot !== baselineSnapshot) || mode === "create" ? "Unsaved changes" : "Saved"}
+        saveState={saving ? "Saving…" : mode === "create" ? "Unsaved changes" : baselineSnapshot === null ? "Checking saved state…" : snapshot !== baselineSnapshot ? "Unsaved changes" : "Saved"}
         disabled={retired}
         status={status}
         onSave={save}
