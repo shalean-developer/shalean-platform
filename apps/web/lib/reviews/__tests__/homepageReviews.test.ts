@@ -4,11 +4,16 @@ import { renderToStaticMarkup } from "react-dom/server";
 const mocks = vi.hoisted(() => ({ admin: vi.fn(), rpc: vi.fn() }));
 vi.mock("next/server", () => ({ connection: async () => {} }));
 vi.mock("@/lib/supabase/admin", () => ({ getSupabaseAdmin: mocks.admin }));
+import { getPublishedReviews, parsePublishedReviews } from "../publishedReviews";
+import { parseReviewsPage, reviewsPagePath } from "../reviewPagination";
+import { PublishedReviewsSection } from "@/components/reviews/PublishedReviewsSection";
+import { PublicReviewCards } from "@/components/reviews/PublicReviewCards";
 import { getHomepageReviews, parseHomepageReviews } from "../homepageReviews";
 import { ReviewPublicationControls } from "@/components/review/ReviewPublicationControls";
 import { ReviewDisplayOptions } from "@/components/review/ReviewDisplayOptions";
 import { buildReviewsPageJsonLd } from "@/lib/seo/reviewsPageJsonLd";
 import { MarketingHomeReviewsSection } from "@/components/marketing-home/sections/MarketingHomeReviewsSection";
+import { MarketingGoogleReviewsBand } from "@/components/marketing-home/sections/MarketingGoogleReviewsBand";
 const row = { id: "review", rating: 5, comment: "Excellent clean", created_at: "2026-10-19T15:21:00Z" };
 beforeEach(() => { vi.clearAllMocks(); mocks.admin.mockReturnValue({ rpc: mocks.rpc }); mocks.rpc.mockResolvedValue({ data: [row], error: null }); });
 describe("homepage five-star reviews", () => {
@@ -75,5 +80,60 @@ describe("homepage five-star reviews", () => {
     expect(await getHomepageReviews()).toEqual([]);
     mocks.admin.mockReturnValue(null);
     expect(await getHomepageReviews()).toEqual([]);
+  });
+});
+
+
+describe("all-rating public reviews listing", () => {
+  it("keeps the Rate your visit fallback on a submission path when Google review writing is unavailable", () => {
+    vi.stubEnv("NEXT_PUBLIC_GOOGLE_REVIEW_WRITE_URL", "");
+    try {
+      const html = renderToStaticMarkup(createElement(MarketingGoogleReviewsBand));
+      expect(html).toContain('href="/account/reviews"');
+      expect(html).toContain("Rate your visit");
+    } finally { vi.unstubAllEnvs(); }
+  });
+  it("accepts ratings one to five while Home keeps only five", () => {
+    const rows = [1, 2, 3, 4, 5].map((rating) => ({ ...row, id: String(rating), rating }));
+    expect(parsePublishedReviews(rows).map((review) => review.rating)).toEqual([1, 2, 3, 4, 5]);
+    expect(parseHomepageReviews(rows).map((review) => review.rating)).toEqual([5]);
+    expect(parsePublishedReviews([{ ...row, rating: 0 }, { ...row, rating: 6 }, { ...row, rating: 4.5 }, { ...row, comment: " " }])).toEqual([]);
+  });
+  it("reads the separate paginated projection without a five-star or six-review filter", async () => {
+    mocks.rpc.mockResolvedValue({ data: Array.from({ length: 13 }, (_, i) => ({ ...row, id: String(i), rating: 4 })), error: null });
+    const result = await getPublishedReviews(2);
+    expect(mocks.rpc).toHaveBeenCalledWith("published_customer_reviews", { p_offset: 12, p_limit: 13 });
+    expect(result?.reviews).toHaveLength(12);
+    expect(result?.hasMore).toBe(true);
+    const html = renderToStaticMarkup(await PublishedReviewsSection({ page: 2 }));
+    expect(html).toContain("4 out of 5 stars");
+    expect(html).not.toContain("5 out of 5 stars");
+    expect(html).toContain('href="/reviews"');
+    expect(html).toContain('href="/reviews?page=3"');
+    expect(html).not.toContain("Selected five-star");
+  });
+  it("renders the actual number of filled stars and escapes lower-rating comments", () => {
+    const reviews = parsePublishedReviews([{ ...row, rating: 2, comment: "<b>Needs improvement</b>", email: "Private Email" }]);
+    const html = renderToStaticMarkup(createElement(PublicReviewCards, { reviews }));
+    expect(html).toContain("2 out of 5 stars");
+    expect((html.match(/fill-current/g) || []).length).toBe(2);
+    expect(html).toContain("&lt;b&gt;Needs improvement&lt;/b&gt;");
+    expect(html).not.toContain("Private Email");
+  });
+  it("handles unavailable, empty and last-page results without inventing feedback", async () => {
+    mocks.rpc.mockResolvedValue({ data: [row], error: null });
+    expect((await getPublishedReviews(1))?.hasMore).toBe(false);
+    mocks.rpc.mockResolvedValue({ data: [], error: null });
+    expect(renderToStaticMarkup(await PublishedReviewsSection({ page: 1 }))).toContain("No published reviews");
+    mocks.rpc.mockResolvedValue({ data: null, error: { code: "PGRST202" } });
+    expect(await getPublishedReviews(1)).toBeNull();
+    expect(renderToStaticMarkup(await PublishedReviewsSection({ page: 1 }))).toContain("temporarily unavailable");
+  });
+  it("normalizes unsafe pages and gives each page its own canonical schema URL", () => {
+    for (const value of [undefined, "0", "-1", "2.5", "1e4", "99999999999999999", ["2", "3"]]) expect(parseReviewsPage(value)).toBe(1);
+    expect(parseReviewsPage("2")).toBe(2);
+    expect(reviewsPagePath(1)).toBe("/reviews");
+    expect(reviewsPagePath(2)).toBe("/reviews?page=2");
+    expect(JSON.stringify(buildReviewsPageJsonLd(2))).toContain("/reviews?page=2");
   });
 });

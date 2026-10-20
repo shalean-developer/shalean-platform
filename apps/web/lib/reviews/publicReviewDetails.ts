@@ -2,6 +2,10 @@ import { REGULAR_CLEANING_PUBLIC_NAME, REGULAR_CLEANING_SERVICE_PATH } from "@/l
 
 export type ReviewDetailChoices = { name: boolean; area: boolean; service: boolean };
 export type ReviewPublicationContext = { display_name: string | null; suburb_label: string | null; service_key: string | null };
+export type PublicReview = {
+  id: string; rating: 1 | 2 | 3 | 4 | 5; comment: string; createdAt: string;
+  displayName: string | null; suburb: string | null; serviceKey: string | null;
+};
 const SERVICES: Record<string, { title: string; href: string }> = {
   standard: { title: REGULAR_CLEANING_PUBLIC_NAME, href: REGULAR_CLEANING_SERVICE_PATH },
   deep: { title: "Deep Cleaning", href: "/services/deep-cleaning-cape-town" },
