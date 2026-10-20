@@ -33,9 +33,11 @@ export function ReviewsPageContent({ page = 1 }: { page?: number }) {
         </div>
       </section>
 
-      <Suspense fallback={null}>
-        <PublishedReviewsSection page={page} />
-      </Suspense>
+      <div id="booking-reviews" className="scroll-mt-28">
+        <Suspense fallback={<p role="status" className="mx-auto max-w-7xl px-4 py-16 text-slate-600 sm:px-6 lg:px-8">Loading booking reviews…</p>}>
+          <PublishedReviewsSection page={page} />
+        </Suspense>
+      </div>
 
       <GoogleReviewPanel />
 
