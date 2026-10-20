@@ -641,8 +641,11 @@ export function PostEditorForm({
     }
     const dirty = snapshot !== baseline.current;
     const persist = () => {
-      if (!dirty || saved.current || recovery) return;
-      try { localStorage.setItem(recoveryKey, JSON.stringify({ savedAt: Date.now(), snapshot: JSON.parse(snapshot) })); }
+      if (saved.current || recovery) return;
+      try {
+        if (dirty) localStorage.setItem(recoveryKey, JSON.stringify({ savedAt: Date.now(), snapshot: JSON.parse(snapshot) }));
+        else localStorage.removeItem(recoveryKey);
+      }
       catch { setFormError("Browser draft recovery is unavailable. Keep this page open until your save succeeds."); }
     };
     const beforeUnload = (event: BeforeUnloadEvent) => { if (dirty && !saved.current) { persist(); event.preventDefault(); } };

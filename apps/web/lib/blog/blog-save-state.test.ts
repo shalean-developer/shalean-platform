@@ -17,15 +17,23 @@ async function loadEditor() {
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
   await act(async () => root!.render(createElement(PostEditorForm, { mode: "edit", postId: "fixture" })));
 }
-async function editTitle() {
+async function editTitle(value = "Unsaved new title") {
   const input = container!.querySelector('#wp-post-title') as HTMLInputElement;
   await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Unsaved new title");
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
 
 describe("blog save state with delayed recovery identity", () => {
+  it("clears the recovery copy after edits are undone back to the saved version", async () => {
+    state.lookup = Promise.resolve({ data: { user: { id: "editor" } } });
+    await loadEditor(); await editTitle();
+    expect(localStorage.getItem("shalean.blog.recovery.v1:editor:fixture")).toContain("Unsaved new title");
+    await editTitle("Server title");
+    expect(container!.textContent).not.toContain("Unsaved changes");
+    expect(localStorage.getItem("shalean.blog.recovery.v1:editor:fixture")).toBeNull();
+  });
   it("keeps edits unsaved when identity arrives after editing", async () => {
     let resolve!: (value: { data: { user: { id: string } | null } }) => void;
     state.lookup = new Promise(done => { resolve = done; });
