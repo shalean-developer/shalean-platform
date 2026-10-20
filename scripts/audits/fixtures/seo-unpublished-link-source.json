@@ -1,0 +1,119 @@
+{
+  "blocks": [
+    {
+      "html": "<p>Cleaning harder does not always make a home cleaner. Some common habits spread dirt, leave sticky residue, waste time, or damage expensive surfaces. This guide explains ten mistakes Cape Town homeowners often make and shows a safer, more effective way to clean.</p><p>The biggest cleaning mistakes are using too much product, using one cleaner on every surface, mixing chemicals, cleaning in the wrong order, using dirty tools, scrubbing too aggressively, and leaving moisture behind. Use the correct product, work from top to bottom, clean tools regularly, and dry surfaces properly.</p><ul><li><p>More cleaning product does not always mean better results.</p></li><li><p>Never mix household cleaning chemicals.</p></li><li><p>Different surfaces need different products and tools.</p></li><li><p>Dust and vacuum before wet cleaning.</p></li><li><p>Cape Town moisture, sand and wind-blown dust need regular attention.</p></li></ul><h2>1. Using too much cleaning product</h2><p>Extra detergent can leave a sticky film that attracts dirt and makes floors, counters and cupboards look dull. Follow the label, start with the smallest recommended amount, and rinse or wipe away residue where required.</p><h2>2. Using one cleaner on every surface</h2><p>A product that works on tiles may damage wood, natural stone, painted cupboards or coated appliances. Check the surface and the manufacturer’s instructions before cleaning. Test a new product on a small hidden area first.</p><h2>3. Mixing cleaning chemicals</h2><p>Never mix bleach with ammonia, acids, vinegar or another cleaner. Dangerous gases can form. Use one product at a time, keep the room ventilated, and follow the label exactly.</p><h2>4. Cleaning from the bottom upwards</h2><p>If you mop first and then dust shelves, the dust falls onto the clean floor. Professional cleaners usually work from top to bottom: high surfaces first, then counters and furniture, and floors last.</p><h2>5. Wet-cleaning before dusting or vacuuming</h2><p>Hair, crumbs and dust turn into muddy streaks when they get wet. Remove loose dirt before wiping, mopping or scrubbing. This makes the wet-cleaning stage faster and more effective.</p><h2>6. Using the same cloth everywhere</h2><p>A cloth used in the bathroom should not be used in the kitchen. Separate cloths reduce cross-contamination. A simple colour-coded system can help: one colour for bathrooms, one for kitchens, and another for general surfaces.</p><h2>7. Wiping a product away too quickly</h2><p>Many disinfectants and degreasers need contact time to work properly. Read the label and allow the stated time before wiping. Do not let a product dry on a surface unless the instructions permit it.</p><h2>8. Leaving moisture behind</h2><p>Cape Town winters can be damp, especially in poorly ventilated rooms. Water left around showers, windows, grout and cupboards can encourage mould and damage finishes. Dry wet surfaces, improve airflow and repair leaks quickly.</p><h2>9. Scrubbing every surface aggressively</h2><p>Steel wool, rough brushes and abrasive powders can scratch glass, stainless steel, enamel, laminate and painted finishes. Start with a soft microfibre cloth or non-scratch sponge and increase strength only when the surface allows it.</p><h2>10. Waiting too long between cleans</h2><p>Grease, soap scum, dust and mineral deposits become harder to remove over time. A simple weekly routine prevents heavy buildup and reduces the need for harsh products or long scrubbing sessions.</p><h2>Three Cape Town cleaning challenges</h2><p>Local homes often deal with winter condensation, coastal sand and salt, and wind-blown dust. Use doormats, vacuum entry areas frequently, wipe salt residue gently, ventilate damp rooms, and avoid leaving windows wet after condensation.</p><p><strong>A safer cleaning routine</strong></p><ul><li><p>Open windows or use ventilation where practical.</p></li><li><p>Remove clutter, crumbs and loose dust.</p></li><li><p>Clean from high surfaces downwards.</p></li><li><p>Use the correct product for each material.</p></li><li><p>Allow the correct contact time.</p></li><li><p>Rinse or remove residue where required.</p></li><li><p>Dry surfaces and clean your tools.</p></li></ul><p></p>",
+      "type": "rich_text"
+    },
+    {
+      "id": "fe8ff217-c791-465e-a7d2-ba71914f1ab6",
+      "rows": [
+        [
+          "Too much product",
+          "Sticky residue",
+          "Use the label amount"
+        ],
+        [
+          "Wrong product",
+          "Surface damage",
+          "Check material first"
+        ],
+        [
+          "Dirty tools",
+          "Dirt spreads",
+          "Wash cloths and equipment"
+        ],
+        [
+          "Wet cleaning first",
+          "Muddy streaks",
+          "Dust and vacuum first"
+        ],
+        [
+          "Excessive scrubbing",
+          "Scratches",
+          "Use non-abrasive tools"
+        ]
+      ],
+      "type": "comparison_table",
+      "columns": [
+        "Mistake",
+        "Possible result",
+        "Better method"
+      ]
+    },
+    {
+      "id": "ce1668eb-8dc6-475d-9e12-863b0085cdd3",
+      "type": "faq",
+      "items": [
+        {
+          "answer": "No. Vinegar can damage natural stone and some finishes. Check the manufacturer’s guidance first.",
+          "question": "Is vinegar safe for every surface?"
+        },
+        {
+          "answer": "No. Use the amount and contact time stated on the label. Extra product can leave residue and may damage surfaces.",
+          "question": "Should I use more disinfectant for a better result?"
+        },
+        {
+          "answer": "High-use areas usually need weekly attention, while deeper cleaning can be scheduled monthly or when buildup becomes visible.",
+          "question": "How often should a home be cleaned?"
+        },
+        {
+          "answer": "A deep clean is useful when grease, soap scum, dust or neglected areas need more detailed work than a normal maintenance clean.",
+          "question": "When should I book a deep clean?"
+        }
+      ]
+    },
+    {
+      "id": "f54f1869-7177-46e5-9c6e-ee0426510ad1",
+      "type": "internal_links",
+      "links": [
+        {
+          "url": "/services/standard-cleaning-cape-town",
+          "label": "Standard cleaning services"
+        },
+        {
+          "url": "/services/deep-cleaning-cape-town",
+          "label": "Deep cleaning services"
+        },
+        {
+          "url": "/cleaning-prices-cape-town",
+          "label": "Cape Town cleaning prices"
+        },
+        {
+          "url": "/blog/winter-cleaning-guide-cape-town",
+          "label": "Winter cleaning guide"
+        },
+        {
+          "url": "/blog/remove-kitchen-grease-without-damaging-surfaces",
+          "label": "How to remove tough kitchen grease safely"
+        },
+        {
+          "url": "/blog/bathroom-mould-tiles-grout",
+          "label": "Bathroom mould on tiles and grout"
+        },
+        {
+          "url": "/locations",
+          "label": "Standard Cleaning in Cleaning Mistakes"
+        },
+        {
+          "url": "/locations/sea-point-cleaning-services",
+          "label": "Sea Point cleaning coverage"
+        },
+        {
+          "url": "/book",
+          "label": "Get an instant quote"
+        }
+      ],
+      "title": "Helpful Shalean guides"
+    },
+    {
+      "id": "512d52e4-ead8-4b06-aa2d-6a45783d0b18",
+      "link": "/book",
+      "type": "cta",
+      "title": "Need help getting your home back under control?",
+      "variant": "primary",
+      "button_text": "Get an instant quote",
+      "description": "Book a trusted Shalean cleaner for standard or deep cleaning in Cape Town."
+    }
+  ],
+  "schema_version": 1
+}
