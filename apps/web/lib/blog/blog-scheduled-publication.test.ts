@@ -48,6 +48,11 @@ describe("scheduled publication",()=>{
     expect((await publishScheduledBlogPosts(admin,()=>{throw new Error("Must not invalidate")},now)).held).toBe(1);
     expect(row.status).toBe("scheduled"); expect(row.last_schedule_error).toBeTruthy();
   });
+  it("records a published result and cache warning if invalidation is temporarily unavailable",async()=>{
+    const {admin,row}=database();
+    expect(await publishScheduledBlogPosts(admin,()=>{throw new Error("Cache unavailable")},now)).toEqual({published:1,held:0,superseded:0,cache_pending:1});
+    expect(row.status).toBe("published");
+  });
   it("does not overwrite an article edited while its publication was being validated",async()=>{
     const {admin,row}=database({concurrent:true});
     expect(await publishScheduledBlogPosts(admin,()=>{throw new Error("Must not invalidate")},now)).toEqual({published:0,held:0,superseded:1});

@@ -11,12 +11,12 @@ The owner authorized repairs to the 27 finding groups in the end-to-end audit, w
 | 01 | Remove mutable user-metadata authorization, revoke direct browser CMS writes, use current RBAC for editorial reads. Helpers moved out of public RPC schema. | Isolated PostgreSQL role/expiry/revocation/scope tests; staging grants and security advisors. Shared legacy non-blog helper is owner-only; verify owner analytics/sales access during runtime smoke. |
 | 02 | Require content.draft for drafts and content.publish for new/live/scheduled publication transitions; retain Office verification. | API boundary tests cover draft/publish, existing-live edits, Office verification, paused scheduling and reserved aliases. |
 | 03 | Browser recovery scoped by authenticated user and article, seven-day validity, dirty navigation warning, session-expiry guidance. | Code review; browser refresh, expired session and recovery acceptance required on staging. No credentials stored. |
-| 04 | Ordered block model replaces destructive document flattening. Preserve IDs, structured content and interleaved placement. Rich HTML tables/attribution use source editing because the visual schema cannot preserve them; switching articles remounts editor state. | Ordered-model and actual rendered layout tests; transaction round-trip test. |
+| 04 | Ordered block model replaces destructive document flattening. Preserve IDs, structured content and interleaved placement. Missing legacy IDs are stabilized to the same DOM anchors the public renderer already uses before reordering. Rich HTML tables/attribution use source editing because the visual schema cannot preserve them; switching articles remounts editor state. | Ordered-model and actual rendered layout tests; transaction round-trip test. |
 | 05 | Require exact expected_updated_at, row-lock and reject stale saves with recoverable conflict UI. | PostgreSQL stale-editor test; two-tab browser smoke pending. |
 | 06 | Transactional article, tags, prior revision and save receipt; request fingerprint and idempotency key. | PostgreSQL tag-failure rollback and duplicate-retry tests; staged RPC retry inside rolled-back transaction. |
-| 07 | Signed, ten-minute, one-post preview links; live permission recheck; server-side draft loading; noindex/no-store/no-referrer. | Expiry, tamper, scope and revocation tests. Preview route smoke on staging required. Global shared preview secret is no longer sent to browsers. |
-| 08 | Due-publication worker validates quality, links, images and current publisher permission; compare-and-swap release; explicit SAST times. | Six scheduler tests. Job registered inactive; API refuses schedules until activation. Staging cron target is not configured. |
-| 09 | Published slugs locked rather than silently stranding URLs. Invalidate public tag, old/new paths, taxonomy children and sitemap on saves/unpublish. | Historical-publication slug lock test. Runtime cache/unpublish smoke required. Renames require a separately governed redirect change. |
+| 07 | Signed, ten-minute, one-post preview links; live permission recheck; server-side draft loading; noindex/no-store/no-referrer. | Expiry, tamper, scope and revocation tests. Preview route smoke on staging required. The legacy global credential is ignored; signing uses an undisclosed server secret. Forging a token with the old exposed credential is explicitly rejected. |
+| 08 | Due-publication worker validates quality, links, images and current publisher permission; compare-and-swap release; explicit SAST times. | Seven scheduler tests; future dates cannot bypass the worker using Published status. Job registered inactive; API refuses schedules until activation. Staging cron target is not configured. |
+| 09 | Published slugs locked rather than silently stranding URLs. Invalidate public tag, old/new paths, taxonomy children and sitemap on saves/unpublish. | Historical-publication slug lock test. Save receipts survive a cache-refresh outage with an explicit warning. Runtime cache/unpublish smoke required. Renames require a separately governed redirect change. |
 | 10 | Link validation queries published/due targets, not every CMS draft. | Target-filter and missing CMS-only target regressions. |
 | 11 | Prevent publication at retired aliases; mark existing legacy rows read-only/retired. | API validation plus list/editor changes; legacy redirects retained. |
 | 12 | Apply normalized saved record, revision, preview query, receipt and governance warnings to client state. | API/transaction contracts; browser normalization smoke pending. |
@@ -33,7 +33,7 @@ The owner authorized repairs to the 27 finding groups in the end-to-end audit, w
 | 23 | Accept controlled featured/slug and inline/slug media folders. No deletion of possibly shared uploaded files. | Path regex review; staged upload/association acceptance pending. |
 | 24 | Server pagination, search, exact totals and complete status counts replace client filtering of first 500 records. | Source/type checks; multi-page browser acceptance pending. |
 | 25 | Disable StarterKit's duplicate Link extension; body toolbar allows H2-H4; sanitize authored H1 to H2 and preserve anchor IDs. | Heading sanitation regression; browser console smoke pending. |
-| 26 | Fix pricing-authority fixtures and add a dedicated blog CI regression gate. | 138 blog tests and 1,486 critical tests passed locally. |
+| 26 | Fix pricing-authority fixtures and add a dedicated blog CI regression gate. | 143 blog tests and 1,486 critical tests passed locally. |
 | 27 | Resolve repair hints through to commercial/location destinations; commercial aliases cannot be recommended as related-guide slugs. | Claremont repair-hint regression. |
 
 ## Database and staging evidence
@@ -45,18 +45,18 @@ Forward migrations, generated by Supabase CLI 2.121.0:
 3. `20261020155854_blog_schedule_publication.sql` — inactive five-minute job and service-only readiness predicate.
 4. `20261020162025_blog_editor_security_advisor_followup.sql` — private predicate schema, explicit service-only policies and pinned trigger search path.
 
-Applied only to staging project `uwvnmluiqbczeduzjgse`, using the exact source/receipt transaction emitted by `scripts/audits/blog-editor-migration-apply.mjs`. Each immutable version, name and SQL hash was read back and matched. Prior applied versions were not edited. Staging initially contained zero blog posts. The real save RPC created one isolated draft, returned an identical retry receipt, and the whole test transaction was rolled back; staging again contains zero posts, receipts and revisions. Anonymous/authenticated writes to all five CMS tables are denied. Only service_role may call the save RPC. New blog-specific advisor findings were cleared. Other pre-existing project findings are outside this repair.
+Applied only to the configured staging database, using the exact source/receipt transaction emitted by `scripts/audits/blog-editor-migration-apply.mjs`. Each immutable version, name and SQL hash was read back and matched. Prior applied versions were not edited. Staging initially contained zero blog posts. The real save RPC created one isolated draft, returned an identical retry receipt, and the whole test transaction was rolled back; staging again contains zero posts, receipts and revisions. Anonymous/authenticated writes to all five CMS tables are denied. Only service_role may call the save RPC. New blog-specific advisor findings were cleared. Other pre-existing project findings are outside this repair.
 
 The previously applied kitchen-grease migration `20261020150111` is included byte-for-byte from PR #988 so production's existing ledger version remains represented in the release source. It is not reapplied to production or rewritten. PR #988's separate evidence/test review comments remain separately reviewable; this repair does not assert that they were resolved.
 
 ## Validation
 
-- `npm run test:blog`: 138 cases across 23 files passed (including actual migration SQL in isolated PostgreSQL).
+- `npm run test:blog`: 143 cases across 23 files passed (including actual migration SQL in isolated PostgreSQL).
 - `npm run test:critical`: 1,486 cases across 128 files passed.
 - `npm run lint:booking-core`: passed.
 - Targeted ESLint errors for all changed TypeScript/TSX files: none.
 - `npm run typecheck`: passed from a clean generated-types state. An interrupted local build generated an existing Next route-export error for unchanged `booking-v2/quote/route.ts`; generated output was cleaned. No booking code or type-check configuration was changed.
-- Migration filename validation and `git diff --check`: passed.
+- Migration filename validation and `git diff --check origin/main HEAD`: passed after removing a new-file trailing blank line identified by review.
 - Local Webpack production build: stopped by SIGKILL during compilation; no successful local build is claimed. CI production build remains required.
 
 ## Release order and preservation controls
@@ -70,4 +70,4 @@ The previously applied kitchen-grease migration `20261020150111` is included byt
 
 ## Recovery
 
-Before promotion record the actual live Plesk release directory and exact rollback SHA; an earlier session's rollback directory is not a current rollback target. Keep cron inactive if acceptance fails. Database changes are additive except permission tightening and moving predicates; retain their security protections on application rollback. Never restore mutable-metadata authorization or direct browser writes. Any schema correction must be a new forward migration. Reconcile an editor conflict against the latest revision rather than replacing a whole row; preserve revision and receipt records.
+Before promotion record the actual live Plesk release directory and exact rollback SHA; an earlier session's rollback directory is not a current rollback target. Keep cron inactive if acceptance fails. Before any whole-application rollback, pause `/api/admin/blog/*` at the reverse proxy (for example, a reviewed server-level prefix rule returning 503) so older broad CMS endpoints cannot regain write access. Public blog serving and booking paths remain available. Remove that authoring pause only after a verified forward app fix. Database changes are additive except permission tightening and moving predicates; retain their security protections on application rollback. Never restore mutable-metadata authorization or direct browser writes. Any schema correction must be a new forward migration. Reconcile an editor conflict against the latest revision rather than replacing a whole row; preserve revision and receipt records.

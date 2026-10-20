@@ -26,6 +26,7 @@ import {
   BLOG_TEMPLATE_OPTIONS,
   type BlogTemplateId,
 } from "@/lib/blog/templates";
+import { assignStableBlogBlockIds } from "@/lib/blog/assign-stable-block-ids";
 import { preserveOrderedBlogBlocks } from "@/lib/blog/blogDocumentMode";
 import { blogPostViewLabel, buildBlogPostViewPath } from "@/lib/blog/build-blog-post-view-url";
 import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
@@ -446,7 +447,7 @@ export function PostEditorForm({
   const [loaded, setLoaded] = useState(mode === "create");
   const baseline = useRef<string | null>(null);
   const saved = useRef(false);
-  const retry = useRef<{ fingerprint: string; requestId: string; publishedAt: string | null } | null>(null);
+  const retry = useRef<{ fingerprint: string; requestId: string } | null>(null);
   const [templateBackup, setTemplateBackup] = useState<BlogContentBlock[] | null>(null);
   const [addType, setAddType] = useState<AddableType>("rich_text");
   const [formError, setFormError] = useState<string | null>(null);
@@ -559,7 +560,7 @@ export function PostEditorForm({
 
       const raw = p.content_json;
       const parsed = safeParseBlogContentJson(raw);
-      setBlocks(parsed.success ? preserveOrderedBlogBlocks(parsed.data.blocks) : []);
+      setBlocks(parsed.success ? preserveOrderedBlogBlocks(assignStableBlogBlockIds(parsed.data).blocks) : []);
       setRevision(p.updated_at == null ? null : String(p.updated_at));
       setRetired(Boolean(p.retired));
       if (p.last_schedule_error) setFormError(`Scheduled publication is held: ${String(p.last_schedule_error)}`);
@@ -789,12 +790,9 @@ export function PostEditorForm({
       setSaving(false);
       return;
     }
-    const published_at =
-      status === "draft"
-        ? null
-        : resolvedPublishDate ??
-          (status === "published" ? (retry.current?.fingerprint === snapshot ? retry.current.publishedAt : new Date().toISOString()) : null);
-    if (retry.current?.fingerprint !== snapshot) retry.current = { fingerprint: snapshot, requestId: crypto.randomUUID(), publishedAt: published_at };
+    // The server supplies "now"; client clock skew cannot turn Publish into a schedule.
+    const published_at = status === "draft" ? null : resolvedPublishDate;
+    if (retry.current?.fingerprint !== snapshot) retry.current = { fingerprint: snapshot, requestId: crypto.randomUUID() };
     const body = {
       request_id: retry.current.requestId,
       ...(mode === "edit" ? { expected_updated_at: revision } : {}),

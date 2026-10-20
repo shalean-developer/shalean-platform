@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { adminUserHasPermission } from "@/lib/admin/requirePermission";
 
 function secret() {
-  return process.env.BLOG_DRAFT_PREVIEW_TOKEN?.trim() || process.env.OFFICE_VERIFICATION_SECRET?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  return process.env.BLOG_PREVIEW_SIGNING_SECRET?.trim() || process.env.OFFICE_VERIFICATION_SECRET?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 }
 
 /** Minted only after live RBAC + Office verification. Never send the signing secret. */

@@ -137,6 +137,7 @@ function buildRow(
     published_at = null;
   } else if (input.status === "published") {
     if (!published_at) published_at = new Date().toISOString();
+    if (Date.parse(published_at) > Date.now()) throw new Error("future_requires_schedule");
   } else if (input.status === "scheduled") {
     if (!published_at || !Number.isFinite(Date.parse(published_at)) || Date.parse(published_at) <= Date.now()) {
       throw new Error("scheduled_requires_published_at");
@@ -281,7 +282,7 @@ export async function POST(request: Request) {
     if (msg === "scheduled_requires_published_at") {
       return NextResponse.json({ error: "Scheduled posts require a valid future publish date (Africa/Johannesburg)." }, { status: 400 });
     }
-    return NextResponse.json({ error: ({ unsupported_image: "Unsupported image URL. Upload the image or use an approved image host.", redirect_only_slug: "This slug is retired and redirects to its canonical page. Choose a new slug.", self_canonical_required: "Canonical must be this post’s own https://shalean.co.za/blog/{slug} URL." } as Record<string,string>)[msg] ?? "Invalid post settings." }, { status: 400 });
+    return NextResponse.json({ error: ({ future_requires_schedule: "Future publication must use Scheduled status and the verified publication worker.", unsupported_image: "Unsupported image URL. Upload the image or use an approved image host.", redirect_only_slug: "This slug is retired and redirects to its canonical page. Choose a new slug.", self_canonical_required: "Canonical must be this post’s own https://shalean.co.za/blog/{slug} URL." } as Record<string,string>)[msg] ?? "Invalid post settings." }, { status: 400 });
   }
 
   let injected: BlogContentJson = content;
@@ -410,7 +411,7 @@ export async function PUT(request: Request) {
     if (msg === "scheduled_requires_published_at") {
       return NextResponse.json({ error: "Scheduled posts require a valid future publish date (Africa/Johannesburg)." }, { status: 400 });
     }
-    return NextResponse.json({ error: ({ unsupported_image: "Unsupported image URL. Upload the image or use an approved image host.", redirect_only_slug: "This slug is retired and redirects to its canonical page. Choose a new slug.", self_canonical_required: "Canonical must be this post’s own https://shalean.co.za/blog/{slug} URL." } as Record<string,string>)[msg] ?? "Invalid post settings." }, { status: 400 });
+    return NextResponse.json({ error: ({ future_requires_schedule: "Future publication must use Scheduled status and the verified publication worker.", unsupported_image: "Unsupported image URL. Upload the image or use an approved image host.", redirect_only_slug: "This slug is retired and redirects to its canonical page. Choose a new slug.", self_canonical_required: "Canonical must be this post’s own https://shalean.co.za/blog/{slug} URL." } as Record<string,string>)[msg] ?? "Invalid post settings." }, { status: 400 });
   }
 
   let injected: BlogContentJson = content;
@@ -508,6 +509,11 @@ async function persistPost(
     }, { status: conflict || locked || error.code === "23505" ? 409 : error.code === "42501" ? 403 : 500 });
   }
   const result = data as { post: Record<string, unknown>; receipt: Record<string, unknown> };
-  revalidateBlog(String(result.post.slug), previous?.slug == null ? undefined : String(previous.slug));
-  return NextResponse.json({ ...result, draft_preview_query: createBlogPreviewQuery(String(result.post.slug), actorId), governance_warnings: governance?.warnings ?? [] }, { status: input.id ? 200 : 201 });
+  const warnings: { code: string; message: string }[] = [...(governance?.warnings ?? [])];
+  try { revalidateBlog(String(result.post.slug), previous?.slug == null ? undefined : String(previous.slug)); }
+  catch {
+    console.error("[blog] Saved post; cache revalidation pending", { slug: result.post.slug });
+    warnings.push({ code: "cache_refresh_pending", message: "Your post and tags were saved. Public cache refresh is pending; the public page may take up to five minutes to update." });
+  }
+  return NextResponse.json({ ...result, draft_preview_query: createBlogPreviewQuery(String(result.post.slug), actorId), governance_warnings: warnings }, { status: input.id ? 200 : 201 });
 }

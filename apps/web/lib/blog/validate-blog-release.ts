@@ -50,4 +50,3 @@ export async function runPublishGovernanceValidation(
     collisionClusterTagSlug: clusterTagForLegacy ?? undefined,
   });
 }
-

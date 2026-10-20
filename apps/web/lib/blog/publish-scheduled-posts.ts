@@ -11,6 +11,7 @@ export async function publishScheduledBlogPosts(admin: SupabaseClient, invalidat
   const { data, error } = await admin.from("blog_posts").select("*").eq("status", "scheduled").lte("published_at", now.toISOString()).order("published_at").limit(25);
   if (error) throw new Error("Unable to load scheduled posts.");
   const result = { published: 0, held: 0, superseded: 0 };
+  let cachePending = 0;
   for (const row of data ?? []) {
     let reason: string | null = null;
     try {
@@ -36,7 +37,9 @@ export async function publishScheduledBlogPosts(admin: SupabaseClient, invalidat
     const { data: published, error: publishError } = await admin.from("blog_posts").update({ status: "published", last_schedule_error: null }).eq("id",row.id).eq("updated_at",row.updated_at).eq("status","scheduled").select("slug").maybeSingle();
     if (publishError) throw new Error("Scheduled publication failed.");
     if (!published) { result.superseded++; continue; }
-    invalidate(published.slug); result.published++;
+    try { invalidate(published.slug); }
+    catch { cachePending++; console.error("[blog] Scheduled post published; cache revalidation pending", { slug: published.slug }); }
+    result.published++;
   }
-  return result;
+  return { ...result, ...(cachePending ? { cache_pending: cachePending } : {}) };
 }
