@@ -36,7 +36,7 @@ export function ReviewPublicationControls({ review, onSaved }: { review: Review;
   }
   return <fieldset className="max-w-xs space-y-3 rounded-xl border border-slate-200 p-3 text-xs text-slate-600" disabled={busy}>
     <legend className="px-1 font-semibold">Website publication</legend>
-    <p>Extra details are optional. Select only details the customer has permitted you to publish.</p>
+    <p>All star ratings can appear on the reviews page. Home features only five-star reviews. Extra details are optional. Select only details the customer has permitted you to publish.</p>
     {options.map(({ key, label, value }) => <label key={key} className="flex items-start gap-2">
       <input type="checkbox" checked={details[key]} disabled={!value && !details[key]} onChange={(event) => { setDetails({ ...details, [key]: event.target.checked }); setConfirmed(false); }} />
       <span>{label}: <strong>{value || "Unavailable"}</strong><span className="block text-slate-500">{expectedPreferences[key] ? "Customer permission on record" : "No permission on record"}</span></span>
