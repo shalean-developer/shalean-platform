@@ -1790,6 +1790,22 @@ async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || envVars.NEXT_PUBLIC_SUPABASE_URL || "";
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || envVars.SUPABASE_SERVICE_ROLE_KEY || "";
 
+  // Plan-only managed-SQL adapter: reuse the governed target guard without
+  // requesting a service-role key. The caller binds execution to plan.projectRef.
+  const previewPlanIndex = args.indexOf('--preview-solo-sql-plan');
+  if (args.includes('--commit-preview-fixture') && previewPlanIndex < 0) {
+    throw new Error('Commit preview fixture requires --preview-solo-sql-plan and a scenario');
+  }
+  if (previewPlanIndex >= 0) {
+    if (reset || dryRun || args.includes('--paired-ui-only')) throw new Error('Incompatible preview fixture mode');
+    assertNonProductionSeed(url, envVars);
+    const { buildPreviewSoloSeedPlan } = await import('./audits/office-preview-solo-fixture.mjs');
+    const plan = await buildPreviewSoloSeedPlan({ ...envVars, ...process.env, NEXT_PUBLIC_SUPABASE_URL: url },
+      args[previewPlanIndex + 1], { apply: args.includes('--commit-preview-fixture') });
+    console.log(JSON.stringify(plan));
+    return;
+  }
+
   if (!url || !serviceKey) {
     console.error("[seed-dev] ERROR: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.");
     console.error("          Set them in apps/web/.env.local or as environment variables.");
