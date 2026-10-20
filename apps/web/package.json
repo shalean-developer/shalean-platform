@@ -71,7 +71,7 @@
     "import:seo-traffic-blog-posts": "tsx scripts/import-seo-traffic-blog-posts.ts",
     "repair:zoho-targeted-10": "tsx --env-file=.env.local --conditions=react-server scripts/repairZohoTargeted10.ts",
     "repair:a02-03-02-team-lines": "tsx --env-file=.env.local --conditions=react-server scripts/repairA02A03TeamLineItems.ts",
-    "test:blog": "vitest run lib/blog app/api/admin/blog/posts/__tests__"
+    "test:blog": "vitest run lib/blog app/api/admin/blog src/features/office/__tests__/officeAccountMenu.test.ts"
   },
   "dependencies": {
     "@floating-ui/react": "^0.27.19",
