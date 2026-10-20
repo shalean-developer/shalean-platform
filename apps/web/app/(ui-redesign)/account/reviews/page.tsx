@@ -199,7 +199,7 @@ function ReviewsContent() {
                       })}
                     </p>
                   </div>
-                  <ReviewDisplayPreference bookingId={r.booking_id} allowed={r.public_display_consent === true} onSaved={refetch} />
+                  <ReviewDisplayPreference bookingId={r.booking_id} allowed={r.public_display_consent === true} nameAllowed={r.public_name_consent === true} areaAllowed={r.public_area_consent === true} serviceAllowed={r.public_service_consent === true} onSaved={refetch} />
                 </div>
               </li>
             ))}

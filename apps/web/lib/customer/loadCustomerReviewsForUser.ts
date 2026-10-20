@@ -13,7 +13,7 @@ export async function loadCustomerReviewsForUser(
 ): Promise<{ ok: true; reviews: CustomerReviewListItem[] } | { ok: false; error: string; status: number }> {
   const { data: rows, error } = await admin
     .from("reviews")
-    .select("id, booking_id, user_id, cleaner_id, rating, comment, created_at, public_display_consent")
+    .select("id, booking_id, user_id, cleaner_id, rating, comment, created_at, public_display_consent, public_name_consent, public_area_consent, public_service_consent")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(100);
