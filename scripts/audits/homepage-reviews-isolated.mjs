@@ -200,5 +200,31 @@ await db.exec('reset role; set role anon');
 await assert.rejects(allReviews(),/permission denied/);
 await db.exec('reset role; set role authenticated');
 await assert.rejects(allReviews(),/permission denied/);
+// The on-site summary includes all genuine rating values, never just published five stars.
+await db.exec('reset role');
+await db.exec(await readFile(new URL('../../supabase/migrations/20261020083137_booking_review_rating_summary.sql', import.meta.url), 'utf8'));
+await db.exec('set role service_role');
+const ratingSummary = async () => (await db.query('select * from public.booking_review_rating_summary()')).rows[0];
+let summary=await ratingSummary();
+assert.equal(Number(summary.review_count),14);
+assert.deepEqual(Object.keys(summary).sort(),['avg_rating','review_count']);
+await db.exec('update public.reviews set public_display_consent=false');
+assert.equal(Number((await ratingSummary()).review_count),14,'withdrawing written-display consent does not erase the anonymous rating');
+await db.exec(`insert into public.reviews(id,booking_id,rating,comment,public_display_consent) values ('55555555-5555-4555-8555-555555555555','22222222-2222-4222-8222-222222222222',1,null,false)`);
+assert.equal(Number((await ratingSummary()).review_count),15,'rating-only feedback and lower stars contribute');
+const expected=(await db.query('select round(avg(rating::numeric),1) as average from public.reviews')).rows[0].average;
+assert.equal(Number((await ratingSummary()).avg_rating),Number(expected));
+await db.exec("update public.reviews set is_hidden=true where id='55555555-5555-4555-8555-555555555555'");
+assert.equal(Number((await ratingSummary()).review_count),14,'hidden feedback is excluded');
+for (const [column,value] of [['is_test',true],['status','cancelled'],['booking_reference','DEVSEED-X'],['customer_email','fixture@example.com'],['customer_email','fixture@example.invalid']]) {
+  await db.query(`update public.bookings set ${column}=$1`,[value]);
+  assert.equal(Number((await ratingSummary()).review_count),0,`${column} excludes ineligible ratings`);
+  assert.equal((await ratingSummary()).avg_rating,null,'empty summary never invents a score');
+  await db.exec("update public.bookings set is_test=false,status='completed',booking_reference='SHL-BK-ISOLATED',customer_email='customer@invalid.local'");
+}
+await db.exec("update public.bookings set status='assigned',completed_at=null");
+assert.equal(Number((await ratingSummary()).review_count),0,'incomplete visits never contribute');
+await db.exec('reset role; set role anon');await assert.rejects(ratingSummary(),/permission denied/);
+await db.exec('reset role; set role authenticated');await assert.rejects(ratingSummary(),/permission denied/);
 await db.close();
-console.log('PASS: all-rating listing and five-star homepage review projection, approval, per-detail permissions, safe context snapshots, revocation, eligibility and role boundaries');
+console.log('PASS: source-specific rating summary, all-rating listing and five-star homepage review projection, approval, per-detail permissions, safe context snapshots, revocation, eligibility and role boundaries');

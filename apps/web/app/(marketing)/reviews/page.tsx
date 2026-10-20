@@ -20,10 +20,10 @@ import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 type Props = { searchParams: Promise<{ page?: string | string[] }> };
 
 const REVIEWS_META_DESC = clampMetaDescription(
-  "Read customer reviews across all star ratings from completed Shalean cleaning bookings in Cape Town, published with permission. See our separate Google rating.",
+  "Read reviews from completed Shalean cleaning bookings in Cape Town across all star ratings. Explore customer feedback and our separate Google review profile.",
 );
 const REVIEWS_OG_DESC = clampMetaDescription(
-  "Customer feedback across all star ratings from completed Cape Town cleaning bookings, alongside Shalean’s separate Google Business Profile rating.",
+  "Read genuine Shalean booking reviews from Cape Town customers across all star ratings, with a separate link to our Google Business Profile reviews.",
 );
 const REVIEWS_TWITTER_DESC = REVIEWS_META_DESC;
 
