@@ -38,7 +38,7 @@ export function ReviewPublicationControls({ review, onSaved }: { review: Review;
     <legend className="px-1 font-semibold">Website publication</legend>
     <p>Extra details are optional. Select only details the customer has permitted you to publish.</p>
     {options.map(({ key, label, value }) => <label key={key} className="flex items-start gap-2">
-      <input type="checkbox" checked={details[key]} disabled={!value} onChange={(event) => { setDetails({ ...details, [key]: event.target.checked }); setConfirmed(false); }} />
+      <input type="checkbox" checked={details[key]} disabled={!value && !details[key]} onChange={(event) => { setDetails({ ...details, [key]: event.target.checked }); setConfirmed(false); }} />
       <span>{label}: <strong>{value || "Unavailable"}</strong></span>
     </label>)}
     <div className="rounded-lg bg-sky-50 p-3" aria-label="Public review preview">
