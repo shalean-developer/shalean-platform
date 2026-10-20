@@ -78,6 +78,8 @@ The previously applied kitchen-grease migration `20261020150111` is included byt
 - The main-based critical suite passes 1,486 cases across 128 files. Typecheck, targeted ESLint and booking-core lint pass; booking lint retains four existing unused-import warnings.
 - Migration validation and whitespace checks pass. All four previously applied migration sources remain byte-for-byte unchanged. This follow-up is not applied and contains no credential values.
 
+The first #993 CI head stopped at the production dependency audit before running tests: `follow-redirects` 1.16.0 was flagged by GHSA-q3jh-wrc6-jgq8 and GHSA-8r9p-f939-6h3c. The lockfile updates exactly that transitive package to the published compatible patch 1.16.1; Axios, Twilio and every other locked package version remain unchanged. After a fresh install, the production audit passes with its pre-existing approved nanoid exception, and the 165 blog / 1,486 critical tests and typecheck pass. No audit exception or check was weakened. Maintainer advisories: https://github.com/follow-redirects/follow-redirects/security/advisories/GHSA-q3jh-wrc6-jgq8 and https://github.com/follow-redirects/follow-redirects/security/advisories/GHSA-8r9p-f939-6h3c.
+
 ## Release order and preservation controls
 
 1. Review this exact diff and all required GitHub checks; do not bypass CI or Office verification.
