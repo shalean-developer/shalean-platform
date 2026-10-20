@@ -39,7 +39,7 @@ jobs:
           CHANGED="$(git diff --name-only "$BASE" "$HEAD" || true)"
           echo "Changed paths:"
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -Eq '^(apps/web/|packages/|supabase/migrations/|scripts/audits/homepage-reviews-isolated|scripts/audits/october-policy-isolated\.mjs|\.github/workflows/web-test\.yml)'; then
+          if echo "$CHANGED" | grep -Eq '^(apps/web/|packages/|supabase/migrations/|scripts/audits/homepage-reviews-isolated|scripts/audits/seo-cms|scripts/audits/fixtures/seo-unpublished-link-source|scripts/audits/october-policy-isolated\.mjs|\.github/workflows/web-test\.yml)'; then
             echo "run_suite=true" >> "$GITHUB_OUTPUT"
             echo "Web/package paths changed — running vitest suite."
           else
@@ -104,6 +104,7 @@ jobs:
           AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node scripts/audits/paired-ledger-isolated.mjs
           AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node scripts/audits/payment-confirmation-queue-isolated.mjs
           AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node scripts/audits/homepage-reviews-isolated.mjs
+          AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node scripts/audits/seo-cms-link-migration.test.mjs
 
       - name: October fixed-policy isolated PostgreSQL regression
         if: steps.filter.outputs.run_suite == 'true'
@@ -175,6 +176,8 @@ jobs:
           lib/meta/__tests__/dataDeletion.test.ts
           lib/meta/__tests__/complianceRoutes.contract.test.ts
           lib/seo/__tests__/locationsShortSlugProxyRedirect.test.ts
+          lib/seo/__tests__/legacyMarketingRedirectMatrix.test.ts
+          lib/blog/editorialSanitize.test.ts
           app/api/meta/data-deletion/__tests__/route.test.ts
           lib/oauth/__tests__/metaFacebookOAuth.test.ts
           lib/promotions/providers/__tests__/registry.test.ts
