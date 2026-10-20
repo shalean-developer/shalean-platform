@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ABOUT_REVIEWS } from "@/lib/about/about-page-content";
+import { buildReviewsPageJsonLd } from "@/lib/seo/reviewsPageJsonLd";
 
 function read(rel: string): string {
   return readFileSync(join(process.cwd(), rel), "utf8");
@@ -19,11 +19,12 @@ describe("MARKETING-READY-01 trust and claims cleanup", () => {
     expect(about).not.toMatch(/homes cleaned weekly/i);
   });
 
-  it("keeps featured About/reviews testimonials unique", () => {
-    const keys = ABOUT_REVIEWS.map(
-      (review) => `${review.author}|${review.suburb}|${review.quote}`,
-    );
-    expect(new Set(keys).size).toBe(keys.length);
+  it("does not publish unsupported testimonial names or review claims in search markup", () => {
+    const jsonLd = JSON.stringify(buildReviewsPageJsonLd());
+    expect(jsonLd).not.toContain('"@type":"Review"');
+    expect(jsonLd).not.toContain("reviewRating");
+    expect(jsonLd).not.toMatch(/Sarah M\.|James K\.|Nadia P\./);
+    expect(jsonLd).toContain('"@type":"WebPage"');
   });
 
   it("does not reintroduce malformed support email copy", () => {
