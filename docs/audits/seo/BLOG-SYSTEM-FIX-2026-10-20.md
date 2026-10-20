@@ -11,7 +11,7 @@ The owner authorized repairs to the 27 finding groups in the end-to-end audit, w
 | 01 | Remove mutable user-metadata authorization, revoke direct browser CMS writes, use current RBAC for editorial reads. Helpers moved out of public RPC schema. | Isolated PostgreSQL role/expiry/revocation/scope tests; staging grants and security advisors. Shared legacy non-blog helper is owner-only; verify owner analytics/sales access during runtime smoke. |
 | 02 | Require content.draft for drafts and content.publish for new/live/scheduled publication transitions; retain Office verification. | API boundary tests cover draft/publish, existing-live edits, Office verification, paused scheduling and reserved aliases. |
 | 03 | Browser recovery scoped by authenticated user and article, seven-day validity, dirty navigation warning, session-expiry guidance. | Code review; browser refresh, expired session and recovery acceptance required on staging. No credentials stored. |
-| 04 | Ordered block model replaces destructive document flattening. Preserve IDs, unsupported-by-TipTap structured content and interleaved placement. | Ordered-model and actual rendered layout tests; transaction round-trip test. |
+| 04 | Ordered block model replaces destructive document flattening. Preserve IDs, structured content and interleaved placement. Rich HTML tables/attribution use source editing because the visual schema cannot preserve them; switching articles remounts editor state. | Ordered-model and actual rendered layout tests; transaction round-trip test. |
 | 05 | Require exact expected_updated_at, row-lock and reject stale saves with recoverable conflict UI. | PostgreSQL stale-editor test; two-tab browser smoke pending. |
 | 06 | Transactional article, tags, prior revision and save receipt; request fingerprint and idempotency key. | PostgreSQL tag-failure rollback and duplicate-retry tests; staged RPC retry inside rolled-back transaction. |
 | 07 | Signed, ten-minute, one-post preview links; live permission recheck; server-side draft loading; noindex/no-store/no-referrer. | Expiry, tamper, scope and revocation tests. Preview route smoke on staging required. Global shared preview secret is no longer sent to browsers. |
@@ -33,7 +33,7 @@ The owner authorized repairs to the 27 finding groups in the end-to-end audit, w
 | 23 | Accept controlled featured/slug and inline/slug media folders. No deletion of possibly shared uploaded files. | Path regex review; staged upload/association acceptance pending. |
 | 24 | Server pagination, search, exact totals and complete status counts replace client filtering of first 500 records. | Source/type checks; multi-page browser acceptance pending. |
 | 25 | Disable StarterKit's duplicate Link extension; body toolbar allows H2-H4; sanitize authored H1 to H2 and preserve anchor IDs. | Heading sanitation regression; browser console smoke pending. |
-| 26 | Fix pricing-authority fixtures and add a dedicated blog CI regression gate. | 137 blog tests and 1,486 critical tests passed locally. |
+| 26 | Fix pricing-authority fixtures and add a dedicated blog CI regression gate. | 138 blog tests and 1,486 critical tests passed locally. |
 | 27 | Resolve repair hints through to commercial/location destinations; commercial aliases cannot be recommended as related-guide slugs. | Claremont repair-hint regression. |
 
 ## Database and staging evidence
@@ -51,7 +51,7 @@ The previously applied kitchen-grease migration `20261020150111` is included byt
 
 ## Validation
 
-- `npm run test:blog`: 137 cases across 23 files passed (including actual migration SQL in isolated PostgreSQL).
+- `npm run test:blog`: 138 cases across 23 files passed (including actual migration SQL in isolated PostgreSQL).
 - `npm run test:critical`: 1,486 cases across 128 files passed.
 - `npm run lint:booking-core`: passed.
 - Targeted ESLint errors for all changed TypeScript/TSX files: none.

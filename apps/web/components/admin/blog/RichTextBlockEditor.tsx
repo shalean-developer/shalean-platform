@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -37,7 +37,22 @@ type Props = {
   uploadSlug?: string;
 };
 
-export function RichTextBlockEditor({ html, onChange, disabled, variant = "default", uploadSlug }: Props) {
+export function RichTextBlockEditor(props: Props) {
+  const sourceId = useId();
+  // TipTap's core schema cannot round-trip these supported authored HTML nodes.
+  // Preserve them verbatim rather than silently flattening a table or attribution.
+  if (/<(?:table|thead|tbody|tr|th|td|footer)\b/i.test(props.html)) {
+    return <div className="space-y-2">
+      <label htmlFor={sourceId} className="text-sm font-medium">Formatted block source</label>
+      <p className="text-xs text-zinc-500">This block includes a table or attribution. Source editing preserves that formatting.</p>
+      <textarea id={sourceId} aria-label="Formatted block source" value={props.html} disabled={props.disabled}
+        onChange={event => props.onChange(event.target.value)} rows={12} className="w-full rounded border p-3 font-mono text-sm" />
+    </div>;
+  }
+  return <VisualRichTextBlockEditor {...props} />;
+}
+
+function VisualRichTextBlockEditor({ html, onChange, disabled, variant = "default", uploadSlug }: Props) {
   const isWordPress = variant === "wordpress";
   const isDocument = variant === "document" || isWordPress;
   const imageInputRef = useRef<HTMLInputElement>(null);
