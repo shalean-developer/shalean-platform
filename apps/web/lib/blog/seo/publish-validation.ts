@@ -196,7 +196,8 @@ export function validateBlogPublish(
     }
     return false;
   });
-  const hasFaq = blocks.some((b) => b.type === "faq" && Array.isArray(b.items) && b.items.length > 0 && b.items.every(item => item.question.trim() && item.answer.trim()));
+  const faqBlocks = blocks.filter((b) => b.type === "faq");
+  const hasFaq = faqBlocks.length > 0 && faqBlocks.every(b => b.items.length > 0 && b.items.every(item => item.question.trim() && item.answer.trim()));
   // The public article template always renders its governed booking CTA.
   const hasCta = true;
   const paths = collectInternalPaths(blocks);

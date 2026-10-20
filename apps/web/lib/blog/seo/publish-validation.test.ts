@@ -71,3 +71,12 @@ describe("publication readiness requirements", () => {
     expect(result.issues.some(issue => issue.code === "faq")).toBe(true);
   });
 });
+
+it("blocks a blank FAQ in a second block even when the first FAQ is complete", () => {
+  const result = validateBlogPublish(content([
+    { type: "faq", items: [{ question: "Included?", answer: "Booked tasks." }] },
+    { type: "faq", items: [{ question: "   ", answer: "   " }] },
+  ]));
+  expect(result.hasFaq).toBe(false);
+  expect(result.issues.some(issue => issue.code === "faq")).toBe(true);
+});
