@@ -29,6 +29,7 @@ import { CLUSTER_GUIDE_INTENT_SLUGS } from "@/lib/blog/cluster-guide-intent-labe
 import { LEGACY_EDITORIAL_SLUGS } from "@/lib/blog/posts";
 import { LOCATION_HUB_SEO_IMAGE_SLUGS } from "@/lib/blog/injectLocationHubSeoImages";
 import { programmaticBlogCleanupRedirects } from "@/lib/seo/programmaticBlogCleanupRedirects";
+import { resolveLegacyMarketingExactRedirect } from "@/lib/seo/legacyMarketingRedirectMatrix";
 
 /** Normalize pathname: trim trailing slashes except root. */
 export function normalizeBlogPathname(path: string): string {
@@ -223,7 +224,7 @@ export function isValidBlogRoute(slug: string): boolean {
 }
 
 /**
- * Normalize internal blog hrefs: resolve redirect chains, preserve query/hash.
+ * Normalize editorial hrefs: resolve blog chains and known short service aliases, preserving query/hash.
  * Absolute URLs on shalean hosts are normalized to path form for matching (still returns path+suffix).
  */
 export function normalizeBlogHref(href: string): string {
@@ -262,6 +263,10 @@ export function normalizeBlogHref(href: string): string {
   }
 
   const np = normalizeBlogPathname(pathname);
-  const finalPath = np.startsWith("/blog") ? resolveBlogRedirectChain(np) : np;
+  const finalPath = np.startsWith("/blog")
+    ? resolveBlogRedirectChain(np)
+    : np.startsWith("/services/")
+      ? resolveLegacyMarketingExactRedirect(np)?.destination ?? np
+      : np;
   return `${finalPath}${suffix}`;
 }

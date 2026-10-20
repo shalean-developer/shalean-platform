@@ -24,6 +24,10 @@ export const LEGACY_MARKETING_EXACT_REDIRECTS: readonly LegacyMarketingRedirect[
   { source: "/cleaning-services", destination: "/services", status: 308 },
   { source: "/home-cleaning", destination: "/services/standard-cleaning-cape-town", status: 308 },
   { source: "/deep-cleaning", destination: "/services/deep-cleaning-cape-town", status: 308 },
+  /** Published articles still contain these short service URLs (SEO live audit, 2026-10-20). */
+  { source: "/services/carpet-cleaning", destination: "/services/carpet-cleaning-cape-town", status: 308 },
+  { source: "/services/move-out-cleaning", destination: "/services/move-out-cleaning-cape-town", status: 308 },
+  { source: "/services/window-cleaning", destination: "/services/window-cleaning-cape-town", status: 308 },
   { source: "/pricing", destination: "/cleaning-prices-cape-town", status: 308 },
   { source: "/help", destination: "/faq", status: 308 },
   { source: "/help-centre", destination: "/faq", status: 308 },

@@ -30,6 +30,19 @@ describe("legacyMarketingRedirectMatrix", () => {
     expect(resolveLegacyMarketingExactRedirect("/details/")?.destination).toBe("/book");
   });
 
+  it.each(["carpet-cleaning", "move-out-cleaning", "window-cleaning"])(
+    "recovers the exact short %s URL without redirecting its working canonical or child routes",
+    (service) => {
+      const source = `/services/${service}`;
+      const destination = `${source}-cape-town`;
+      expect(resolveLegacyMarketingExactRedirect(source)).toEqual({ source, destination, status: 308 });
+      expect(resolveLegacyMarketingExactRedirect(`${source}/`)?.destination).toBe(destination);
+      expect(resolveLegacyMarketingExactRedirect(destination)).toBeNull();
+      expect(resolveLegacyMarketingExactRedirect(`${source}/unknown-child`)).toBeNull();
+      expect(resolveLegacyMarketingExactRedirect(`/book/${service}`)).toBeNull();
+    },
+  );
+
   it("never redirects sources onto themselves (no loops)", () => {
     for (const rule of LEGACY_MARKETING_EXACT_REDIRECTS) {
       expect(rule.destination.replace(/\/+$/, "")).not.toBe(rule.source);
