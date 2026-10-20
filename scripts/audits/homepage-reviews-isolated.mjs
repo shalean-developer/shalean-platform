@@ -158,5 +158,47 @@ await assert.rejects(feed2(),/permission denied/);
 await assert.rejects(context(),/permission denied/);
 await db.exec('reset role; set role authenticated');
 await assert.rejects(db.query('select public.set_review_homepage_publication_v2($1,false,$2,false,null,null,null,null,null)',[id,actor]),/permission denied/);
+// Public listing accepts every valid star rating, with the same approval/privacy gates.
+await db.exec('reset role');
+await db.exec(await readFile(new URL('../../supabase/migrations/20261020071941_public_reviews_all_ratings.sql', import.meta.url), 'utf8'));
+await db.exec('set role service_role');
+const allReviews = async (offset=0,limit=13) => (await db.query('select * from public.published_customer_reviews($1,$2)',[offset,limit])).rows;
+assert.equal((await allReviews()).length,0,'migration never publishes an unapproved review');
+for (const rating of [1,2,3,4,5]) {
+  await db.query('update public.reviews set rating=$1',[rating]);
+  await approveDetails({name:false,area:false,service:false});
+  assert.equal((await allReviews())[0].rating,rating,'all ratings are eligible after explicit approval');
+  assert.equal((await feed2()).length,rating===5 ? 1 : 0,'Home continues to select exactly five stars');
+}
+await db.exec('update public.reviews set public_display_consent=false');
+assert.equal((await allReviews()).length,0,'root withdrawal suppresses the listing');
+await db.exec('update public.reviews set rating=4');
+await approveDetails({name:false,area:false,service:false});
+for (const [column,value] of [['is_hidden',true],['comment','Changed comment']]) {
+  await db.query(`update public.reviews set ${column}=$1 where id=$2`,[value,id]);
+  assert.equal((await allReviews()).length,0,`${column} changes revoke public listing approval`);
+  await db.exec('update public.reviews set is_hidden=false');
+  await approveDetails({name:false,area:false,service:false});
+}
+await db.exec('update public.bookings set is_test=true');
+assert.equal((await allReviews()).length,0,'test bookings never appear');
+await db.exec("update public.bookings set is_test=false,status='cancelled'");
+assert.equal((await allReviews()).length,0,'cancelled bookings never appear');
+await db.exec("update public.bookings set status='completed'");
+await db.exec(`reset role;
+  insert into public.reviews(id,booking_id,rating,comment,public_display_consent,created_at)
+  select md5('review-'||g)::uuid,'22222222-2222-4222-8222-222222222222',(g%5)+1,'Approved feedback '||g,true,'2026-10-01'::timestamptz+g*interval '1 minute' from generate_series(1,13) g;
+  insert into public.review_homepage_publications(review_id,approved_by,permission_source)
+  select id,'${actor}','customer_consent' from public.reviews where id<>'${id}';
+  set role service_role`);
+const firstPage=await allReviews(0,12),secondPage=await allReviews(12,12);
+assert.equal(firstPage.length,12);assert.equal(secondPage.length,2,'all approved reviews remain reachable beyond the Home cap');
+assert.equal(new Set([...firstPage,...secondPage].map(r=>r.id)).size,14,'stable pages do not overlap');
+assert.ok([...firstPage,...secondPage].every(r=>!('booking_id' in r)&&!('customer_email' in r)));
+assert.ok((await feed2()).every(r=>r.rating===5));
+await db.exec('reset role; set role anon');
+await assert.rejects(allReviews(),/permission denied/);
+await db.exec('reset role; set role authenticated');
+await assert.rejects(allReviews(),/permission denied/);
 await db.close();
-console.log('PASS: homepage review projection, approval, per-detail permissions, safe context snapshots, revocation, eligibility and role boundaries');
+console.log('PASS: all-rating listing and five-star homepage review projection, approval, per-detail permissions, safe context snapshots, revocation, eligibility and role boundaries');
