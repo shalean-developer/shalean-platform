@@ -1,0 +1,35 @@
+[
+  {
+    "verification": {
+      "versions": [
+        {
+          "name": "blog_cms_permission_boundary",
+          "version": "20261020155014",
+          "source_md5": "415708f4df7b97def2f49deda9080600"
+        },
+        {
+          "name": "blog_atomic_editor_save",
+          "version": "20261020155213",
+          "source_md5": "652309696d293fcd3015676c1394f3ca"
+        },
+        {
+          "name": "blog_schedule_publication",
+          "version": "20261020155854",
+          "source_md5": "77a492bfcf33722762b78f4b762f4de4"
+        },
+        {
+          "name": "blog_editor_security_advisor_followup",
+          "version": "20261020162025",
+          "source_md5": "c420751a2cd6153ca3449e0fb0f5c40f"
+        }
+      ],
+      "post_count": 0,
+      "verified_at": "2026-10-20T16:24:39.110858+00:00",
+      "receipt_count": 0,
+      "revision_count": 0,
+      "helpers_private": true,
+      "scheduler_ready": false,
+      "scheduler_active": false
+    }
+  }
+]

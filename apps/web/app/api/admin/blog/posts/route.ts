@@ -1,7 +1,13 @@
-import { revalidatePath } from "next/cache";
+import { createBlogPreviewQuery } from "@/lib/blog/blog-draft-preview";
+import { runPublishGovernanceValidation } from "@/lib/blog/validate-blog-release";
+import { createHash } from "node:crypto";
+import { revalidateBlog } from "@/lib/blog/revalidate-blog";
+import { isRedirectAliasBlogSlug } from "@/lib/blog/validBlogRoutes";
+import { isAllowedAuthoringBlogImageSrc } from "@/lib/blog/blog-image-validation";
+import { findUnsupportedBlogImages } from "@/lib/blog/blog-image-validation";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAdminRequest } from "@/lib/api/admin-auth-request";
+import { requireBlogRead, requireBlogSave } from "@/lib/blog/admin-blog-auth";
 import { computeReadingTimeMinutes } from "@/lib/blog/compute-reading-time";
 import { blogContentJsonSchema } from "@/lib/blog/content-json-schema";
 import type { BlogContentJson } from "@/lib/blog/content-json";
@@ -41,7 +47,7 @@ const basePostSchema = z.object({
   excerpt: z.string().nullable().optional(),
   status: statusEnum,
   source: sourceEnum.default("editorial"),
-  published_at: z.string().nullable().optional(),
+  published_at: z.string().datetime({ offset: true }).nullable().optional(),
   meta_title: z.string().nullable().optional(),
   meta_description: z.string().nullable().optional(),
   canonical_url: z.string().nullable().optional(),
@@ -66,79 +72,13 @@ const basePostSchema = z.object({
   seo_apply_suggestions: z.boolean().optional(),
 });
 
-const createSchema = basePostSchema;
-const updateSchema = basePostSchema.extend({ id: z.string().uuid() });
+const createSchema = basePostSchema.extend({ request_id: z.string().uuid() });
+const updateSchema = createSchema.extend({ id: z.string().uuid(), expected_updated_at: z.string().datetime({ offset: true }) });
 
 function normalizeEmpty(s?: string | null): string | null {
   if (s == null) return null;
   const t = String(s).trim();
   return t === "" ? null : t;
-}
-
-async function syncPostTags(admin: ReturnType<typeof getSupabaseAdmin>, postId: string, tagIds: string[] | undefined) {
-  if (!admin || tagIds === undefined) return;
-  await admin.from("blog_post_tags").delete().eq("post_id", postId);
-  if (tagIds.length === 0) return;
-  const rows = tagIds.map((tag_id) => ({ post_id: postId, tag_id }));
-  const { error } = await admin.from("blog_post_tags").insert(rows);
-  if (error) throw new Error(error.message);
-}
-
-async function blogTagSlugsForIds(
-  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
-  tagIds: string[] | undefined,
-): Promise<string[]> {
-  if (!tagIds?.length) return [];
-  const { data, error } = await admin.from("blog_tags").select("slug").in("id", tagIds);
-  if (error || !data) return [];
-  return (data as { slug?: string }[]).map((r) => String(r.slug ?? ""));
-}
-
-async function runPublishGovernanceValidation(
-  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
-  params: {
-    content: BlogContentJson;
-    tag_ids: string[] | undefined;
-    slug: string;
-    title: string;
-    primary_keyword: string | null;
-    semantic_cluster?: string | null;
-  },
-) {
-  const tagSlugs = await blogTagSlugsForIds(admin, params.tag_ids);
-  const semanticKey = resolveSemanticClusterKey({
-    persisted: params.semantic_cluster,
-    tags: tagSlugs,
-  });
-  const clusterTagForLegacy = semanticClusterKeyToCollisionTagSlug(semanticKey);
-  let clusterPeers: ClusterPeerPost[] = [];
-  if (params.slug.trim() && (semanticKey || clusterTagForLegacy)) {
-    clusterPeers = await fetchPublishedClusterPeersUnified(admin, {
-      excludeSlug: params.slug.trim(),
-      semanticClusterKey: semanticKey,
-      clusterTagSlug: clusterTagForLegacy,
-    });
-  }
-  return validateBlogPublish(params.content, {
-    tags: tagSlugs,
-    semanticCluster: semanticKey ?? undefined,
-    clusterPeers,
-    slug: params.slug.trim(),
-    title: params.title.trim(),
-    primaryKeyword: params.primary_keyword,
-    collisionClusterTagSlug: clusterTagForLegacy ?? undefined,
-  });
-}
-
-function revalidateBlog(slug: string) {
-  try {
-    revalidatePath("/blog");
-    revalidatePath(`/blog/${slug}`);
-    revalidatePath("/blog/category");
-    revalidatePath("/blog/tag");
-  } catch {
-    /* ignore outside Next runtime */
-  }
 }
 
 async function injectLinksForSave(
@@ -198,7 +138,7 @@ function buildRow(
   } else if (input.status === "published") {
     if (!published_at) published_at = new Date().toISOString();
   } else if (input.status === "scheduled") {
-    if (!published_at) {
+    if (!published_at || !Number.isFinite(Date.parse(published_at)) || Date.parse(published_at) <= Date.now()) {
       throw new Error("scheduled_requires_published_at");
     }
   }
@@ -231,10 +171,17 @@ function buildRow(
     slug = slugifyTitle(pk);
   }
 
+  if (isRedirectAliasBlogSlug(slug)) throw new Error("redirect_only_slug");
+  const canonical = normalizeEmpty(input.canonical_url);
+  if (canonical && canonical !== `/blog/${slug}` && canonical !== `https://shalean.co.za/blog/${slug}`) throw new Error("self_canonical_required");
   const ctxRaw = input.seo_internal_link_context;
   const seo_internal_link_context =
     ctxRaw == null ? null : parseSeoInternalLinkContext(ctxRaw) ?? null;
 
+  if (input.featured_image_url?.trim() && !isAllowedAuthoringBlogImageSrc(input.featured_image_url)) {
+    throw new Error("unsupported_image");
+  }
+  if (findUnsupportedBlogImages(content).length) throw new Error("unsupported_image");
   const featured_image_url = resolveBlogFeaturedSrc(slug, normalizeEmpty(input.featured_image_url));
   const featured_image_alt = resolveBlogFeaturedAlt(slug, normalizeEmpty(input.featured_image_alt));
 
@@ -248,7 +195,7 @@ function buildRow(
     published_at,
     meta_title,
     meta_description,
-    canonical_url: normalizeEmpty(input.canonical_url),
+    canonical_url: null, // Self canonical is derived from the governed slug.
     featured_image_url,
     featured_image_alt,
     noindex: Boolean(input.noindex),
@@ -257,7 +204,7 @@ function buildRow(
     primary_keyword: pk,
     secondary_keywords: sec.length ? sec : null,
     search_intent: intent,
-    seo_internal_link_context: seo_internal_link_context as Record<string, unknown> | null,
+    ...(input.seo_internal_link_context !== undefined ? { seo_internal_link_context: seo_internal_link_context as Record<string, unknown> | null } : {}),
     category_id: input.category_id ?? null,
     semantic_cluster: normalizeSemanticClusterInput(input.semantic_cluster),
     related_guide_override_slugs: normalizeManualRelatedGuideSlugs(input.related_guide_override_slugs, 8),
@@ -265,30 +212,31 @@ function buildRow(
 }
 
 export async function GET(request: Request) {
-  const auth = await requireAdminRequest(request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const auth = await requireBlogRead(request);
+  if (!auth.ok) return auth.response;
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
   const { searchParams } = new URL(request.url);
   const filter = searchParams.get("status") ?? "all";
-
-  let q = admin
-    .from("blog_posts")
-    .select("id,slug,title,status,source,updated_at,published_at")
-    .order("updated_at", { ascending: false })
-    .limit(500);
-  if (filter === "draft") q = q.eq("status", "draft");
-  else if (filter === "published") q = q.eq("status", "published");
-
-  const { data, error } = await q;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ posts: data ?? [] });
+  const page = Math.trunc(Math.max(1, Math.min(100000, Number(searchParams.get("page")) || 1)));
+  const pageSize = Math.trunc(Math.max(1, Math.min(100, Number(searchParams.get("page_size")) || 15)));
+  const search = (searchParams.get("search") ?? "").trim().slice(0,150);
+  // PostgREST filter punctuation is not accepted as part of a search expression.
+  const term = search.replace(/[%_(),.\\]/g, " ").trim();
+  let q = admin.from("blog_posts").select("id,slug,title,status,source,updated_at,published_at", { count: "exact" })
+    .order("updated_at", { ascending: false }).order("id").range((page - 1) * pageSize, page * pageSize - 1);
+  if (["draft","published","scheduled"].includes(filter)) q = q.eq("status", filter);
+  if (term) q = q.or(`title.ilike.%${term}%,slug.ilike.%${term}%`);
+  const [posts, ...counts] = await Promise.all([q, ...["published","draft","scheduled"].map(status => admin.from("blog_posts").select("id", { count: "exact", head: true }).eq("status",status))]);
+  if (posts.error || counts.some(c => c.error)) return NextResponse.json({ error: "Unable to load posts." }, { status: 503 });
+  const totals = { published: counts[0].count ?? 0, draft: counts[1].count ?? 0, scheduled: counts[2].count ?? 0 };
+  return NextResponse.json({ posts: (posts.data ?? []).map(post => ({ ...post, retired: isRedirectAliasBlogSlug(post.slug) })), total: posts.count ?? 0, counts: totals, page, page_size: pageSize });
 }
 
 export async function POST(request: Request) {
-  const auth = await requireAdminRequest(request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const auth = await requireBlogRead(request);
+  if (!auth.ok) return auth.response;
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
@@ -302,6 +250,13 @@ export async function POST(request: Request) {
   const parsed = createSchema.safeParse(raw);
   if (!parsed.success) {
     return NextResponse.json({ error: "Validation failed.", details: parsed.error.flatten() }, { status: 400 });
+  }
+
+  const saveAuth = await requireBlogSave(request, parsed.data.status);
+  if (!saveAuth.ok) return saveAuth.response;
+  if (parsed.data.status === "scheduled") {
+    const { data: ready, error: schedulerError } = await admin.rpc("blog_scheduler_is_enabled");
+    if (schedulerError || ready !== true) return NextResponse.json({ error: "Scheduling is paused until the publication worker is verified and activated. Save a draft instead." }, { status: 503 });
   }
 
   const contentRes = blogContentJsonSchema.safeParse(parsed.data.content_json);
@@ -324,9 +279,9 @@ export async function POST(request: Request) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
     if (msg === "scheduled_requires_published_at") {
-      return NextResponse.json({ error: "Scheduled posts require a publish date." }, { status: 400 });
+      return NextResponse.json({ error: "Scheduled posts require a valid future publish date (Africa/Johannesburg)." }, { status: 400 });
     }
-    throw e;
+    return NextResponse.json({ error: ({ unsupported_image: "Unsupported image URL. Upload the image or use an approved image host.", redirect_only_slug: "This slug is retired and redirects to its canonical page. Choose a new slug.", self_canonical_required: "Canonical must be this post’s own https://shalean.co.za/blog/{slug} URL." } as Record<string,string>)[msg] ?? "Invalid post settings." }, { status: 400 });
   }
 
   let injected: BlogContentJson = content;
@@ -373,7 +328,7 @@ export async function POST(request: Request) {
   }
 
   let publishGovernanceResult: ReturnType<typeof validateBlogPublish> | null = null;
-  if (parsed.data.status === "published") {
+  if (parsed.data.status !== "draft") {
     publishGovernanceResult = await runPublishGovernanceValidation(admin, {
       content: injected,
       tag_ids: parsed.data.tag_ids,
@@ -400,36 +355,12 @@ export async function POST(request: Request) {
     }
   }
 
-  const { data, error } = await admin.from("blog_posts").insert(row).select("id,slug").single();
-  if (error) {
-    if (error.code === "23505") return NextResponse.json({ error: "Slug already exists." }, { status: 409 });
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  if (data?.id && parsed.data.tag_ids) {
-    try {
-      await syncPostTags(admin, String(data.id), parsed.data.tag_ids);
-    } catch (e) {
-      return NextResponse.json({ error: e instanceof Error ? e.message : "Tag sync failed." }, { status: 500 });
-    }
-  }
-
-  if (parsed.data.status === "published" && data?.slug) {
-    revalidateBlog(String(data.slug));
-  }
-
-  return NextResponse.json(
-    {
-      post: data,
-      ...(publishGovernanceResult ? { governance_warnings: publishGovernanceResult.warnings } : {}),
-    },
-    { status: 201 },
-  );
+  return persistPost(admin, saveAuth.user.id, parsed.data, row, publishGovernanceResult);
 }
 
 export async function PUT(request: Request) {
-  const auth = await requireAdminRequest(request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const auth = await requireBlogRead(request);
+  if (!auth.ok) return auth.response;
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
@@ -443,6 +374,16 @@ export async function PUT(request: Request) {
   const parsed = updateSchema.safeParse(raw);
   if (!parsed.success) {
     return NextResponse.json({ error: "Validation failed.", details: parsed.error.flatten() }, { status: 400 });
+  }
+
+  const { data: previous, error: previousError } = await admin.from("blog_posts").select("*").eq("id", parsed.data.id).maybeSingle();
+  if (previousError) return NextResponse.json({ error: "Unable to load current post." }, { status: 503 });
+  if (!previous) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  const saveAuth = await requireBlogSave(request, parsed.data.status, String(previous.status));
+  if (!saveAuth.ok) return saveAuth.response;
+  if (parsed.data.status === "scheduled") {
+    const { data: ready, error: schedulerError } = await admin.rpc("blog_scheduler_is_enabled");
+    if (schedulerError || ready !== true) return NextResponse.json({ error: "Scheduling is paused until the publication worker is verified and activated. Save a draft instead." }, { status: 503 });
   }
 
   const contentRes = blogContentJsonSchema.safeParse(parsed.data.content_json);
@@ -463,12 +404,13 @@ export async function PUT(request: Request) {
   let row: Record<string, unknown>;
   try {
     row = buildRow(fields, content);
+    if (fields.seo_internal_link_context === undefined) row.seo_internal_link_context = previous.seo_internal_link_context;
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
     if (msg === "scheduled_requires_published_at") {
-      return NextResponse.json({ error: "Scheduled posts require a publish date." }, { status: 400 });
+      return NextResponse.json({ error: "Scheduled posts require a valid future publish date (Africa/Johannesburg)." }, { status: 400 });
     }
-    throw e;
+    return NextResponse.json({ error: ({ unsupported_image: "Unsupported image URL. Upload the image or use an approved image host.", redirect_only_slug: "This slug is retired and redirects to its canonical page. Choose a new slug.", self_canonical_required: "Canonical must be this post’s own https://shalean.co.za/blog/{slug} URL." } as Record<string,string>)[msg] ?? "Invalid post settings." }, { status: 400 });
   }
 
   let injected: BlogContentJson = content;
@@ -515,7 +457,7 @@ export async function PUT(request: Request) {
   }
 
   let publishGovernanceResultPut: ReturnType<typeof validateBlogPublish> | null = null;
-  if (parsed.data.status === "published") {
+  if (parsed.data.status !== "draft") {
     publishGovernanceResultPut = await runPublishGovernanceValidation(admin, {
       content: injected,
       tag_ids: parsed.data.tag_ids,
@@ -542,27 +484,30 @@ export async function PUT(request: Request) {
     }
   }
 
-  const { data, error } = await admin.from("blog_posts").update(row).eq("id", id).select("id,slug").maybeSingle();
-  if (error) {
-    if (error.code === "23505") return NextResponse.json({ error: "Slug already exists." }, { status: 409 });
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-  if (!data) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  return persistPost(admin, saveAuth.user.id, parsed.data, row, publishGovernanceResultPut, previous);
+}
 
-  if (parsed.data.tag_ids) {
-    try {
-      await syncPostTags(admin, id, parsed.data.tag_ids);
-    } catch (e) {
-      return NextResponse.json({ error: e instanceof Error ? e.message : "Tag sync failed." }, { status: 500 });
-    }
-  }
-
-  if (parsed.data.status === "published" && data.slug) {
-    revalidateBlog(String(data.slug));
-  }
-
-  return NextResponse.json({
-    post: data,
-    ...(publishGovernanceResultPut ? { governance_warnings: publishGovernanceResultPut.warnings } : {}),
+async function persistPost(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>, actorId: string,
+  input: z.infer<typeof createSchema> & { id?: string; expected_updated_at?: string },
+  row: Record<string, unknown>, governance: ReturnType<typeof validateBlogPublish> | null,
+  previous?: Record<string, unknown>,
+) {
+  const { data, error } = await admin.rpc("blog_save_post", {
+    p_actor_id: actorId, p_request_id: input.request_id,
+    p_payload_hash: createHash("sha256").update(JSON.stringify(input)).digest("hex"),
+    p_row: { ...row, scheduled_by: input.status === "scheduled" ? actorId : null, last_schedule_error: null }, p_post_id: input.id ?? null,
+    p_expected_updated_at: input.expected_updated_at ?? null, p_tag_ids: input.tag_ids ?? null,
   });
+  if (error) {
+    const conflict = /blog_revision_conflict|blog_request_reused/.test(error.message);
+    const locked = error.message.includes("blog_published_slug_locked");
+    return NextResponse.json({
+      error: conflict ? "This post changed after you opened it. Your edits are retained. Open the latest version in another tab and reconcile before saving." : locked ? "A published slug cannot be renamed here. Keep the existing URL or request a governed redirect change." : error.code === "23505" ? "Slug already exists." : "The post and tags were not saved. Please retry.",
+      code: conflict ? "revision_conflict" : locked ? "published_slug_locked" : "save_failed",
+    }, { status: conflict || locked || error.code === "23505" ? 409 : error.code === "42501" ? 403 : 500 });
+  }
+  const result = data as { post: Record<string, unknown>; receipt: Record<string, unknown> };
+  revalidateBlog(String(result.post.slug), previous?.slug == null ? undefined : String(previous.slug));
+  return NextResponse.json({ ...result, draft_preview_query: createBlogPreviewQuery(String(result.post.slug), actorId), governance_warnings: governance?.warnings ?? [] }, { status: input.id ? 200 : 201 });
 }

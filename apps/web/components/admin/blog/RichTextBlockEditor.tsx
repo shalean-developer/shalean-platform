@@ -5,9 +5,10 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
+import { Extension } from "@tiptap/core";
+import { isAllowedAuthoringBlogImageSrc } from "@/lib/blog/blog-image-validation";
 import {
   Bold,
-  Heading1,
   Heading2,
   Heading3,
   Heading4,
@@ -47,8 +48,10 @@ export function RichTextBlockEditor({ html, onChange, disabled, variant = "defau
     {
       immediatelyRender: false,
       extensions: [
+        Extension.create({ name: "blogAnchors", addGlobalAttributes() { return [{ types: ["heading", "paragraph", "blockquote"], attributes: { id: { default: null, parseHTML: element => element.getAttribute("id"), renderHTML: attrs => attrs.id ? { id: attrs.id } : {} } } }]; } }),
         StarterKit.configure({
-          heading: { levels: [1, 2, 3, 4] },
+          heading: { levels: [2, 3, 4] },
+          link: false,
           blockquote: {},
           code: false,
           codeBlock: false,
@@ -71,6 +74,7 @@ export function RichTextBlockEditor({ html, onChange, disabled, variant = "defau
       editable: !disabled,
       editorProps: {
         attributes: {
+          role: "textbox", "aria-label": "Article rich text", "aria-multiline": "true",
           class:
             isWordPress
               ? "px-4 py-4 text-[1.0625rem] leading-[1.75] text-zinc-800 focus:outline-none min-h-[520px] dark:text-zinc-100"
@@ -136,6 +140,7 @@ export function RichTextBlockEditor({ html, onChange, disabled, variant = "defau
 
   const insertImageUrl = async (src: string, alt?: string) => {
     if (!src.trim()) return;
+    if (!isAllowedAuthoringBlogImageSrc(src)) { setLocalUploadError("Unsupported image URL. Upload this image instead."); return; }
     editor.chain().focus().setImage({ src: src.trim(), alt: alt?.trim() || "" }).run();
   };
 
@@ -199,12 +204,6 @@ export function RichTextBlockEditor({ html, onChange, disabled, variant = "defau
           editor.isActive("italic"),
         )}
         <span className="mx-0.5 h-6 w-px bg-zinc-200 dark:bg-zinc-700" aria-hidden />
-        {mark(
-          "Heading 1",
-          <Heading1 className="h-4 w-4" />,
-          () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
-          editor.isActive("heading", { level: 1 }),
-        )}
         {mark(
           "Heading 2",
           <Heading2 className="h-4 w-4" />,

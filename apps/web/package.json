@@ -70,7 +70,8 @@
     "import:governed-blog-seed-drafts": "tsx scripts/import-governed-blog-seed-drafts.ts",
     "import:seo-traffic-blog-posts": "tsx scripts/import-seo-traffic-blog-posts.ts",
     "repair:zoho-targeted-10": "tsx --env-file=.env.local --conditions=react-server scripts/repairZohoTargeted10.ts",
-    "repair:a02-03-02-team-lines": "tsx --env-file=.env.local --conditions=react-server scripts/repairA02A03TeamLineItems.ts"
+    "repair:a02-03-02-team-lines": "tsx --env-file=.env.local --conditions=react-server scripts/repairA02A03TeamLineItems.ts",
+    "test:blog": "vitest run lib/blog app/api/admin/blog/posts/__tests__"
   },
   "dependencies": {
     "@floating-ui/react": "^0.27.19",
@@ -137,6 +138,7 @@
     "source-map-js": "1.2.2"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.10",
     "@next/bundle-analyzer": "16.3.8",
     "@playwright/test": "^1.58.0",
     "@tailwindcss/postcss": "^4",

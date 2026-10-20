@@ -15,10 +15,9 @@ describe("parseInternalBlogHref", () => {
     expect(parseInternalBlogHref("https://example.com/page")).toEqual({ kind: "not_blog_internal" });
   });
 
-  it("flags external host when path contains /blog/", () => {
+  it("ignores an outbound citation even when its path contains /blog/", () => {
     const r = parseInternalBlogHref("https://evil.com/blog/some-slug");
-    expect(r.kind).toBe("external_host");
-    if (r.kind === "external_host") expect(r.host).toBe("evil.com");
+    expect(r.kind).toBe("not_blog_internal");
   });
 
   it("parses relative /blog slugs", () => {
@@ -148,13 +147,13 @@ describe("validateCmsBlogDocument", () => {
     expect(broken.some((b) => b.fieldPath === "canonical_url" && b.issueType === "bad-canonical")).toBe(true);
   });
 
-  it("passes when canonical matches editorial route", () => {
+  it("passes when canonical matches the source article itself", () => {
     const content: BlogContentJson = { schema_version: BLOG_CONTENT_JSON_SCHEMA_VERSION, blocks: [] };
     const broken = validateCmsBlogDocument(
       {
         slug: "my-post",
         content,
-        canonical_url: `https://shalean.co.za${CANONICAL_DEEP_VS_STANDARD_BLOG_HREF}`,
+        canonical_url: "https://shalean.co.za/blog/my-post",
         related_guide_override_slugs: null,
       },
       new Set(),

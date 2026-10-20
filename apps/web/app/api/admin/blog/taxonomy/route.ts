@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { requireAdminRequest } from "@/lib/api/admin-auth-request";
+import { requireBlogRead } from "@/lib/blog/admin-blog-auth";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { buildBlogDraftPreviewQuery } from "@/lib/blog/build-blog-post-view-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const auth = await requireAdminRequest(request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const auth = await requireBlogRead(request);
+  if (!auth.ok) return auth.response;
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
@@ -20,9 +19,10 @@ export async function GET(request: Request) {
   if (cats.error) return NextResponse.json({ error: cats.error.message }, { status: 500 });
   if (tags.error) return NextResponse.json({ error: tags.error.message }, { status: 500 });
 
+  const scheduler = await admin.rpc("blog_scheduler_is_enabled");
   return NextResponse.json({
+    scheduling_enabled: !scheduler.error && scheduler.data === true,
     categories: cats.data ?? [],
     tags: tags.data ?? [],
-    draft_preview_query: buildBlogDraftPreviewQuery(),
   });
 }

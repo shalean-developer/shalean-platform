@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Search, Plus, Edit2, RefreshCw, AlertCircle, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,7 @@ type PostRow = {
   slug: string;
   title: string;
   status: string;
+  retired?: boolean;
   source: string;
   updated_at: string;
   published_at: string | null;
@@ -49,29 +50,16 @@ export default function BlogPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
-  const { data, loading, error, refetch } = useAdminData<{ posts: PostRow[] }>("/api/admin/blog/posts", {
-    params: { status: "all" },
+  const { data, loading, error, refetch } = useAdminData<{ posts: PostRow[]; total: number; counts: Record<PostStatus,number> }>("/api/admin/blog/posts", {
+    params: { status: statusFilter, search, page: String(page), page_size: String(pageSize) },
   });
-
   const posts = data?.posts ?? [];
-
-  const statusFiltered = useMemo(() => {
-    if (statusFilter === "all") return posts;
-    return posts.filter((p) => p.status === statusFilter);
-  }, [posts, statusFilter]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return statusFiltered;
-    return statusFiltered.filter((p) => p.title.toLowerCase().includes(q) || p.slug.toLowerCase().includes(q));
-  }, [statusFiltered, search]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
-  const pageFrom = filtered.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
-  const pageTo = Math.min(safePage * pageSize, filtered.length);
-  const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
-
+  const pageFrom = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const pageTo = Math.min(safePage * pageSize, total);
+  const pageRows = posts;
   useEffect(() => {
     setPage(1);
   }, [search, statusFilter, pageSize]);
@@ -80,14 +68,7 @@ export default function BlogPage() {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  const counts = useMemo(
-    () => ({
-      published: posts.filter((p) => p.status === "published").length,
-      draft: posts.filter((p) => p.status === "draft").length,
-      scheduled: posts.filter((p) => p.status === "scheduled").length,
-    }),
-    [posts],
-  );
+  const counts = data?.counts ?? { published: 0, draft: 0, scheduled: 0 };
 
   return (
     <div className="space-y-5">
@@ -125,7 +106,7 @@ export default function BlogPage() {
           { label: "Published", count: counts.published, color: "text-emerald-600" },
           { label: "Drafts", count: counts.draft, color: "text-slate-600" },
           { label: "Scheduled", count: counts.scheduled, color: "text-blue-600" },
-          { label: "Total posts", count: posts.length, color: "text-violet-600" },
+          { label: "Total posts", count: counts.published + counts.draft + counts.scheduled, color: "text-violet-600" },
         ].map((k) => (
           <div key={k.label} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{k.label}</p>
@@ -167,7 +148,7 @@ export default function BlogPage() {
           <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500">
             <Loader2 className="h-5 w-5 animate-spin" /> Loading posts…
           </div>
-        ) : filtered.length === 0 ? (
+        ) : total === 0 ? (
           <p className="py-16 text-center text-sm text-slate-500">No posts match this filter.</p>
         ) : (
           <div className="overflow-x-auto">
@@ -183,7 +164,7 @@ export default function BlogPage() {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {pageRows.map((p) => {
-                  const s = STATUS_MAP[p.status] ?? { label: p.status, cls: "bg-slate-100 text-slate-600" };
+                  const s = p.retired ? { label: "Retired (redirect)", cls: "bg-slate-100 text-slate-600" } : STATUS_MAP[p.status] ?? { label: p.status, cls: "bg-slate-100 text-slate-600" };
                   return (
                     <tr key={p.id} className="group hover:bg-slate-50/50">
                       <td className="px-4 py-3">
@@ -203,7 +184,7 @@ export default function BlogPage() {
                           href={`/office/blog/${p.id}`}
                           className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:underline"
                         >
-                          <Edit2 className="h-3.5 w-3.5" /> Edit
+                          <Edit2 className="h-3.5 w-3.5" /> {p.retired ? "Inspect" : "Edit"}
                         </Link>
                       </td>
                     </tr>
@@ -214,10 +195,10 @@ export default function BlogPage() {
           </div>
         )}
 
-        {!loading && filtered.length > 0 ? (
+        {!loading && total > 0 ? (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3">
             <p className="text-xs text-slate-400">
-              Showing {pageFrom}–{pageTo} of {filtered.length} post{filtered.length === 1 ? "" : "s"}
+              Showing {pageFrom}–{pageTo} of {total} post{total === 1 ? "" : "s"}
               {search.trim() ? ` matching “${search.trim()}”` : ""}
             </p>
             <div className="flex items-center gap-2">

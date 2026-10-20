@@ -1,8 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +12,8 @@ type Props = {
   mode: "create" | "edit";
   postsListPath: string;
   saving: boolean;
+  disabled?: boolean;
+  status: "draft" | "published" | "scheduled";
   onSave: () => void;
   formError: string | null;
   fieldErrors: string[];
@@ -34,6 +35,8 @@ export function WordPressPostEditorLayout({
   mode,
   postsListPath,
   saving,
+  disabled = false,
+  status,
   onSave,
   formError,
   fieldErrors,
@@ -50,10 +53,12 @@ export function WordPressPostEditorLayout({
   sidebar,
   createExtras,
 }: Props) {
+  const errorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (formError || fieldErrors.length) errorRef.current?.focus(); }, [formError, fieldErrors]);
   return (
-    <div className="w-full min-w-0 pb-28 md:pb-8">
+    <fieldset disabled={saving || disabled} className="w-full min-w-0 pb-28 md:pb-8">
       {(formError || fieldErrors.length > 0) && (
-        <div className="mb-4 rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100">
+        <div ref={errorRef} role="alert" tabIndex={-1} className="mb-4 rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100">
           {formError ? <p className="font-medium">{formError}</p> : null}
           {fieldErrors.length > 0 ? (
             <ul className={cn("list-disc pl-5", formError ? "mt-2" : "")}>
@@ -82,24 +87,14 @@ export function WordPressPostEditorLayout({
               </Link>
             </Button>
           ) : null}
-          <Button type="button" size="sm" onClick={onSave} disabled={saving}>
-            {saving ? "Saving…" : mode === "create" ? "Save draft" : "Update"}
+          <Button type="button" size="sm" onClick={onSave} disabled={saving || disabled}>
+            {saving ? "Saving…" : status === "scheduled" ? "Schedule post" : status === "published" ? (mode === "create" ? "Publish post" : "Update published post") : "Save draft"}
           </Button>
         </div>
       </div>
 
-      <div className="mb-5 lg:hidden">
-        <details className="group overflow-hidden rounded-sm border border-zinc-300 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-950">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-50 px-3 py-2.5 text-[13px] font-semibold dark:border-zinc-700 dark:bg-zinc-900 [&::-webkit-details-marker]:hidden">
-            <span>Post settings</span>
-            <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500 transition group-open:rotate-180" aria-hidden />
-          </summary>
-          <div className="space-y-3 p-3">{sidebar}</div>
-        </details>
-      </div>
-
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        <main className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1">
           <div className="rounded-sm border border-zinc-300 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-950">
             <label htmlFor="wp-post-title" className="sr-only">
               Title
@@ -158,11 +153,11 @@ export function WordPressPostEditorLayout({
           </div>
 
           {createExtras ? <div className="mt-4">{createExtras}</div> : null}
-        </main>
+        </div>
 
-        <aside className="hidden w-full shrink-0 space-y-3 lg:block lg:w-[280px]">{sidebar}</aside>
+        <aside aria-label="Post settings" className="w-full shrink-0 space-y-3 lg:w-[280px]">{sidebar}</aside>
       </div>
-    </div>
+    </fieldset>
   );
 }
 
