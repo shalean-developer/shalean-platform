@@ -4,10 +4,11 @@ import {
 } from "@/lib/seo/primaryLocalBusinessJsonLd";
 import { SITE_ORIGIN } from "@/lib/site/canonical";
 
-const REVIEWS_URL = `${SITE_ORIGIN}/reviews`;
+import { reviewsPagePath } from "@/lib/reviews/reviewPagination";
 
 /** Business identity only; never manufacture Review nodes from marketing copy. */
-export function buildReviewsPageJsonLd(): Record<string, unknown> {
+export function buildReviewsPageJsonLd(page = 1): Record<string, unknown> {
+  const REVIEWS_URL = `${SITE_ORIGIN}${reviewsPagePath(page)}`;
   const localBusiness = buildPrimaryLocalBusinessMoneyPageNode();
 
   return {

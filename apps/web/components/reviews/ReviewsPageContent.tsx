@@ -1,4 +1,4 @@
-import { MarketingHomeReviewsSection } from "@/components/marketing-home/sections/MarketingHomeReviewsSection";
+import { PublishedReviewsSection } from "./PublishedReviewsSection";
 import { Suspense } from "react";
 import Link from "next/link";
 import { Star } from "lucide-react";
@@ -11,10 +11,10 @@ import {
   googleReviewsShortTrustLine,
 } from "@/lib/seo/googleReviews";
 
-export function ReviewsPageContent() {
+export function ReviewsPageContent({ page = 1 }: { page?: number }) {
   const bookingHref = marketingHomeBookingHref();
   const googleWrite = getGoogleReviewWriteUrl();
-  const jsonLd = buildReviewsPageJsonLd();
+  const jsonLd = buildReviewsPageJsonLd(page);
 
   return (
     <>
@@ -28,8 +28,8 @@ export function ReviewsPageContent() {
             Shalean customer reviews — Cape Town
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-600 md:text-lg">
-            {googleReviewsShortTrustLine()}. Featured feedback on this page comes directly from
-            completed Shalean bookings. We feature selected five-star written reviews, with customer permission for any name, suburb and service shown.
+            {googleReviewsShortTrustLine()}. The reviews below come directly from
+            completed Shalean bookings. We publish written reviews across all star ratings, with customer permission for the review and any name, suburb and service shown.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-4">
@@ -57,7 +57,7 @@ export function ReviewsPageContent() {
       </section>
 
       <Suspense fallback={null}>
-        <MarketingHomeReviewsSection />
+        <PublishedReviewsSection page={page} />
       </Suspense>
 
       <section className="border-t border-slate-200 bg-slate-50 py-12 md:py-14">

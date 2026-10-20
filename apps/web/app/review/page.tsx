@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import BookingContainer from "@/components/layout/BookingContainer";
 import { PublicReviewForm } from "@/components/review/PublicReviewForm";
@@ -13,6 +14,7 @@ type Props = { searchParams: Promise<{ booking?: string }> };
 export default async function ReviewPage({ searchParams }: Props) {
   const sp = await searchParams;
   const bookingId = typeof sp.booking === "string" ? sp.booking.trim() : "";
+  if (!bookingId) redirect("/reviews");
 
   return (
     <BookingContainer className="py-12 sm:py-16">

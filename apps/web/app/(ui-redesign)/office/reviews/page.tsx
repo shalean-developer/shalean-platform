@@ -206,7 +206,7 @@ export default function ReviewsPage() {
                   <div className="flex shrink-0 flex-col items-end gap-2">
                     <p className="text-xs text-slate-400">{formatDate(r.created_at)}</p>
                     {r.homepage_approved ? <span className="text-xs font-semibold text-emerald-700">Approved for website</span> : null}
-                    {r.rating === 5 && r.comment?.trim() && !r.is_hidden ? (
+                    {(r.rating ?? 0) >= 1 && (r.rating ?? 0) <= 5 && r.comment?.trim() && !r.is_hidden ? (
                       <ReviewPublicationControls key={JSON.stringify([r.id, r.comment, r.public_display_consent, r.public_name_consent, r.public_area_consent, r.public_service_consent, r.publication_context, r.published_details, r.homepage_approved])} review={r} onSaved={refetch} />
                     ) : null}
                     <button
