@@ -17,7 +17,7 @@ it("undoes removal in place without reverting subsequent edits or block metadata
     ]);
     current = blocks;
     return createElement(DocumentBodySection, { blocks, onBlocksChange: setBlocks,
-      renderBlock: (block, _index, change) => block.type === "paragraph" ? createElement("button", { onClick: () => change({ ...block, content: "Edited after removal" }) }, block.content) : block.alt,
+      renderBlock: (block, _index, change) => block.type === "paragraph" ? createElement("button", { onClick: () => change({ ...block, content: "Edited after removal" }) }, block.content) : block.type === "image" ? block.alt : block.type,
       newBlock: () => ({ type: "rich_text" as const, html: "" }),
     });
   }
