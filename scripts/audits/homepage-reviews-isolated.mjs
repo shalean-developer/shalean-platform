@@ -103,6 +103,7 @@ await db.exec(`reset role;
   update public.bookings set service='regular-cleaning',service_slug='standard',location_id='44444444-4444-4444-8444-444444444444',location='12 Private Street';
   update public.reviews set user_id='11111111-1111-4111-8111-111111111111';`);
 await db.exec(await readFile(new URL('../../supabase/migrations/20261020053511_review_publication_context.sql', import.meta.url), 'utf8'));
+await db.exec(await readFile(new URL('../../supabase/migrations/20261020054531_review_publication_moving_service_alias.sql', import.meta.url), 'utf8'));
 await db.exec('set role service_role');
 await publish();
 const context = async () => (await db.query('select * from public.review_publication_context(array[$1::uuid])',[id])).rows[0];
@@ -122,6 +123,11 @@ assert.equal(projected.suburb_label,null);
 assert.equal(projected.service_key,null);
 const preview=await context();
 assert.deepEqual(preview,{review_id:id,display_name:'Amina R.',suburb_label:'Bellville',service_key:'standard'});
+for (const [slug,key] of [['regular-cleaning','standard'],['deep-cleaning','deep'],['moving-cleaning','move'],['airbnb-cleaning','airbnb'],['office-cleaning','office'],['carpet-cleaning','carpet']]) {
+  await db.query('update public.bookings set service_slug=$1',[slug]);
+  assert.equal((await context()).service_key,key,`canonical booking service ${slug} is publishable`);
+}
+await db.exec("update public.bookings set service_slug='standard'");
 await approveDetails();
 projected=(await feed2())[0];
 assert.equal(projected.display_name,'Amina R.');
