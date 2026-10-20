@@ -20,6 +20,7 @@ function parseEnvDate(value: string | undefined): Date | null {
 const STATIC_CONTENT_LASTMOD: Record<string, string> = {
   "/": "2026-10-20T00:00:00.000Z",
   "/services": "2026-07-15T00:00:00.000Z",
+  "/cleaning-prices-cape-town": "2026-09-27T00:00:00.000Z",
   "/services/standard-cleaning-cape-town": "2026-07-10T00:00:00.000Z",
   "/services/deep-cleaning-cape-town": "2026-07-10T00:00:00.000Z",
   "/services/airbnb-cleaning-cape-town": "2026-07-10T00:00:00.000Z",
