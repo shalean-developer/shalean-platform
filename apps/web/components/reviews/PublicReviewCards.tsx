@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Quote, Star } from "lucide-react";
 import { reviewServicePresentation, type PublicReview } from "@/lib/reviews/publicReviewDetails";
 
-export function PublicReviewCards({ reviews }: { reviews: PublicReview[] }) {
+export function PublicReviewCards({ reviews, showSource = false }: { reviews: PublicReview[]; showSource?: boolean }) {
   return <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
     {reviews.map((review) => {
       const service = reviewServicePresentation(review.serviceKey);
@@ -12,6 +12,7 @@ export function PublicReviewCards({ reviews }: { reviews: PublicReview[] }) {
         <div className="mb-4 flex gap-1" role="img" aria-label={`${review.rating} out of 5 stars`}>
           {Array.from({ length: 5 }, (_, i) => <Star key={i} className={`h-5 w-5 ${i < review.rating ? "fill-current text-amber-500" : "text-slate-300"}`} aria-hidden="true" />)}
         </div>
+        {showSource ? <p className="mb-3 text-xs font-semibold text-sky-800">Verified booking · Shalean</p> : null}
         <blockquote className="m-0 flex-1 whitespace-pre-wrap break-words text-base leading-relaxed text-foreground">{review.comment}</blockquote>
         <figcaption className="mt-5 text-sm text-muted-foreground">
           <div className="mb-2 flex items-center gap-3">
