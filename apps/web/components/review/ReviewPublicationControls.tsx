@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { adminFetch } from "@/hooks/useAdminData";
 import { showToast } from "@/components/ui/notifications";
 import { reviewServicePresentation, type ReviewDetailChoices, type ReviewPublicationContext } from "@/lib/reviews/publicReviewDetails";
@@ -34,7 +35,12 @@ export function ReviewPublicationControls({ review, onSaved }: { review: Review;
     } catch { showToast("Could not save website approval. Please try again.", "error"); }
     finally { setBusy(false); }
   }
-  return <fieldset className="max-w-xs space-y-3 rounded-xl border border-slate-200 p-3 text-xs text-slate-600" disabled={busy}>
+  return <details className="group max-w-xs">
+    <summary className="ml-auto flex w-fit cursor-pointer list-none items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
+      Website publication
+      <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" aria-hidden="true" />
+    </summary>
+    <fieldset className="mt-3 max-w-xs space-y-3 rounded-xl border border-slate-200 p-3 text-xs text-slate-600" disabled={busy}>
     <legend className="px-1 font-semibold">Website publication</legend>
     <p>All star ratings can appear on the reviews page. Home features only five-star reviews. Extra details are optional. Select only details the customer has permitted you to publish.</p>
     {options.map(({ key, label, value }) => <label key={key} className="flex items-start gap-2">
@@ -54,5 +60,6 @@ export function ReviewPublicationControls({ review, onSaved }: { review: Review;
       <button type="button" disabled={busy || !confirmed} onClick={() => void save(true)} className="rounded-lg border border-blue-200 px-3 py-2 font-semibold text-blue-700 disabled:opacity-50">{busy ? "Saving…" : review.homepage_approved ? "Update website approval" : "Approve for website"}</button>
       {review.homepage_approved ? <button type="button" disabled={busy} onClick={() => void save(false)} className="rounded-lg border border-slate-200 px-3 py-2">Remove from website</button> : null}
     </div>
-  </fieldset>;
+    </fieldset>
+  </details>;
 }
