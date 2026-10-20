@@ -1,0 +1,26 @@
+import { Check, Circle } from "lucide-react";
+import { MIN_WORDS_PUBLISH, type PublishValidationResult } from "@/lib/blog/seo/publish-validation";
+
+export function BlogPublishReadiness({ preview }: { preview: PublishValidationResult }) {
+  const checks = [
+    [`${preview.wordCount.toLocaleString()} / ${MIN_WORDS_PUBLISH} words`, preview.wordCount >= MIN_WORDS_PUBLISH],
+    ["H2 heading with text", preview.hasH2Section],
+    ["Complete FAQ answers", preview.hasFaq],
+    ["Internal links", preview.hasInternalLinks],
+  ] as const;
+  return <section aria-label="Publication readiness" className="space-y-3">
+    <div className={preview.ok ? "rounded-lg bg-emerald-50 p-3 text-emerald-950 dark:bg-emerald-950 dark:text-emerald-100" : "rounded-lg bg-amber-50 p-3 text-amber-950 dark:bg-amber-950 dark:text-amber-100"}>
+      <p className="text-sm font-semibold">{preview.ok ? "Ready for final checks" : "Not ready to publish"}</p>
+      <p className="mt-1 text-xs leading-relaxed">{preview.ok ? "Saving runs the final permission, link and image checks." : "You can save a draft while you finish these requirements."}</p>
+    </div>
+    <ul className="space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
+      {checks.map(([label, ok]) => <li key={label} className="flex items-center gap-2">
+        {ok ? <Check className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden /> : <Circle className="h-4 w-4 shrink-0 text-amber-600" aria-hidden />}
+        <span><span className="sr-only">{ok ? "Complete: " : "Required: "}</span>{label}</span>
+      </li>)}
+    </ul>
+    {preview.issues.length ? <ul className="space-y-1 text-xs leading-relaxed text-amber-900 dark:text-amber-200">{preview.issues.map(issue => <li key={issue.code}>{issue.message}</li>)}</ul> : null}
+    <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">Shared booking section and booking link are included on the public article.</p>
+    <p className="border-t border-zinc-200 pt-3 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">SEO indicator: {preview.seoScore}/100 · ~{Math.max(1, Math.round(preview.wordCount / 220))} min read</p>
+  </section>;
+}

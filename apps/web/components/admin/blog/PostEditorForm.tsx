@@ -4,8 +4,9 @@ import { isAllowedAuthoringBlogImageSrc } from "@/lib/blog/blog-image-validation
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, Circle } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { slugifyTitle } from "@/lib/blog/slugify-title";
 import { BLOG_CONTENT_JSON_SCHEMA_VERSION, type BlogContentBlock, type BlogContentJson } from "@/lib/blog/content-json";
@@ -16,7 +17,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import type { ClusterPeerPost } from "@/lib/blog/seo/blog-cluster-collision";
 import { validateBlogPublish, type PublishValidationResult } from "@/lib/blog/seo/publish-validation";
@@ -30,6 +30,8 @@ import { assignStableBlogBlockIds } from "@/lib/blog/assign-stable-block-ids";
 import { preserveOrderedBlogBlocks } from "@/lib/blog/blogDocumentMode";
 import { blogPostViewLabel, buildBlogPostViewPath } from "@/lib/blog/build-blog-post-view-url";
 import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
+import { BlogPublishReadiness } from "./BlogPublishReadiness";
+import { InternalLinksEditor } from "./InternalLinksEditor";
 import { DocumentBodySection } from "./DocumentBodySection";
 import { WordPressPostEditorLayout, WpLabeledField, WpTextareaField } from "./WordPressPostEditorLayout";
 import { WpMetabox } from "./WpMetabox";
@@ -210,11 +212,11 @@ function PublishSidebarPanel({
   const fieldId = useId();
   const statusVariant =
     status === "published" ? "success" : status === "scheduled" ? ("warning" as const) : ("outline" as const);
-  const readingMins = Math.max(1, Math.round(preview.wordCount / 220));
   const sourceLabel = source.replace(/_/g, " ");
 
   return (
     <div className="space-y-5">
+      <BlogPublishReadiness preview={preview} />
       {!compact ? (
         <div className="space-y-2">
           <Button type="button" className="w-full" size="lg" onClick={onSave} disabled={saving}>
@@ -231,12 +233,6 @@ function PublishSidebarPanel({
             <Link href={postsListPath}>Back to posts</Link>
           </Button>
         </div>
-      ) : viewPostUrl ? (
-        <Button type="button" variant="outline" className="w-full" asChild>
-          <Link href={viewPostUrl} target="_blank" rel="noopener noreferrer">
-            {viewPostLabel ?? "View post"}
-          </Link>
-        </Button>
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
@@ -287,115 +283,49 @@ function PublishSidebarPanel({
             onChange={(e) => onPublishedAtLocalChange(e.target.value)}
             className="rounded-lg"
           />
-          <p className="text-[11px] leading-relaxed text-zinc-500">
+          <p className="text-xs leading-relaxed text-zinc-500">
             All times use Africa/Johannesburg (SAST, UTC+02:00). Empty uses &quot;now&quot; when publishing. Drafts clear the schedule.
           </p>
         </div>
       )}
 
-      <Separator className="bg-zinc-200/80 dark:bg-zinc-800" />
-
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">SEO snapshot</p>
-        <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50">
-          {preview.seoScore}
-          <span className="text-sm font-medium text-zinc-400">/100</span>
-        </p>
-        <p className="mt-1 text-xs text-zinc-500">
-          {preview.wordCount.toLocaleString()} words · ~{readingMins} min read
-        </p>
-      </div>
-
-      <div className="rounded-xl border border-zinc-200/90 bg-white/80 p-3 text-xs dark:border-zinc-700 dark:bg-zinc-950/60">
-        <p className="font-medium text-zinc-700 dark:text-zinc-200">URL & canonical</p>
-        <p className="mt-1.5 break-all font-mono text-[11px] text-zinc-600 dark:text-zinc-400" title={slug}>
-          /blog/{slug.trim() || "…"}
-        </p>
-        {canonicalUrl.trim() ? (
-          <p className="mt-1 break-all font-mono text-[11px] text-zinc-500" title={canonicalUrl}>
-            {canonicalUrl}
-          </p>
-        ) : (
-          <p className="mt-1 text-[11px] text-zinc-400">Canonical always uses this post’s own URL.</p>
-        )}
-      </div>
-
-      <div className="rounded-xl border border-zinc-200/90 bg-white/80 p-3 text-xs dark:border-zinc-700 dark:bg-zinc-950/60">
-        <p className="font-medium text-zinc-700 dark:text-zinc-200">Cluster</p>
-        <p className="mt-1 text-zinc-600 dark:text-zinc-300">
-          {semanticCluster.trim() ? (
-            <span className="font-mono text-[11px]">{semanticCluster.trim()}</span>
-          ) : (
-            <span className="text-zinc-400">Unset — inferred from tags when applicable</span>
-          )}
-        </p>
-        {resolvedClusterKey ? (
-          <p className="mt-1.5 text-[11px] text-zinc-500">
-            Resolved for checks: <span className="font-mono text-zinc-600 dark:text-zinc-400">{resolvedClusterKey}</span>
-          </p>
-        ) : null}
-        <p className="mt-1 text-[11px] text-zinc-400">{clusterPeerCount} peer posts loaded for overlap hints</p>
-      </div>
-
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Publishing checklist</p>
-        <ul className="mt-2 space-y-1.5 text-xs text-zinc-600 dark:text-zinc-300">
-          {[
-            ["FAQ block", preview.hasFaq],
-            ["Shared booking section", preview.hasCta],
-            ["Internal links", preview.hasInternalLinks],
-            ["Shared booking link", preview.hasBookingLink],
-            ["H2 section", preview.hasH2Section],
-          ].map(([label, ok]) => (
-            <li key={String(label)} className="flex items-center gap-2">
-              {ok ? (
-                <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
-              ) : (
-                <Circle className="h-3.5 w-3.5 shrink-0 text-zinc-300 dark:text-zinc-600" aria-hidden />
-              )}
-              <span className={ok ? "" : "text-zinc-400"}>{label}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
-          Live publish still runs full validation (e.g. ≥800 words).
-        </p>
-      </div>
-
-      {(metaTitle.trim() || metaDescription.trim()) && (
-        <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
-          <p className="text-[11px] font-medium text-zinc-500">Meta in use</p>
-          <p className="mt-1 line-clamp-2 text-xs font-medium text-zinc-800 dark:text-zinc-100">{metaTitle || "—"}</p>
-          <p className="mt-1 line-clamp-3 text-[11px] text-zinc-600 dark:text-zinc-400">{metaDescription || "—"}</p>
+      <details className="rounded-lg border border-zinc-200 p-3 text-xs dark:border-zinc-800">
+        <summary className="cursor-pointer font-medium text-zinc-700 dark:text-zinc-200">URL, metadata and cluster details</summary>
+        <div className="mt-3 space-y-3 text-zinc-600 dark:text-zinc-400">
+          <p className="break-all">URL: /blog/{slug.trim() || "…"}</p>
+          <p className="break-all">Canonical: {canonicalUrl.trim() || "Uses this post’s own URL"}</p>
+          <p>Cluster: {resolvedClusterKey || semanticCluster.trim() || "Inferred from tags when available"}</p>
+          <p>{clusterPeerCount} peer posts checked for overlap</p>
+          {metaTitle.trim() ? <p>Meta title: {metaTitle}</p> : null}
+          {metaDescription.trim() ? <p>Meta description: {metaDescription}</p> : null}
         </div>
-      )}
+      </details>
 
       {preview.warnings.length > 0 ? (
         <div className="rounded-xl border border-amber-200/70 bg-amber-50/40 p-3 dark:border-amber-900/40 dark:bg-amber-950/20">
           <p className="text-xs font-medium text-amber-950 dark:text-amber-100">
             {preview.warnings.length} advisory note{preview.warnings.length > 1 ? "s" : ""}
           </p>
-          <p className="mt-1 text-[11px] leading-relaxed text-amber-900/80 dark:text-amber-100/80">
+          <p className="mt-1 text-xs leading-relaxed text-amber-900/80 dark:text-amber-100/80">
             Cluster overlap and intent hints — optional to resolve before publish.
           </p>
           <details className="group mt-2">
-            <summary className="flex cursor-pointer list-none items-center gap-1 text-[11px] font-medium text-amber-900 underline-offset-2 hover:underline dark:text-amber-100">
-              <ChevronDown className="h-3.5 w-3.5 shrink-0 transition group-open:rotate-180" aria-hidden />
+            <summary className="flex cursor-pointer list-none items-center gap-1 text-xs font-medium text-amber-900 underline-offset-2 hover:underline dark:text-amber-100">
               View details
             </summary>
             <ul className="mt-2 space-y-3 border-t border-amber-200/50 pt-2 dark:border-amber-800/40">
               {preview.warnings.map((w) => (
-                <li key={`${w.code}-${w.relatedSlug ?? ""}-${w.message.slice(0, 40)}`} className="text-[11px] leading-relaxed text-amber-950/90 dark:text-amber-50/90">
+                <li key={`${w.code}-${w.relatedSlug ?? ""}-${w.message.slice(0, 40)}`} className="text-xs leading-relaxed text-amber-950/90 dark:text-amber-50/90">
                   <span className="font-medium">{w.message}</span>
                   {(w.confidence || w.code) && (
-                    <span className="mt-0.5 block text-[10px] text-amber-800/80 dark:text-amber-200/70">
+                    <span className="mt-0.5 block text-xs text-amber-800/80 dark:text-amber-200/70">
                       {w.code}
                       {w.confidence ? ` · confidence ${w.confidence}` : ""}
                       {w.relatedSlug ? ` · ${w.relatedSlug}` : ""}
                     </span>
                   )}
                   {w.matchedSignals && w.matchedSignals.length > 0 ? (
-                    <span className="mt-1 block text-[10px] text-amber-800/75 dark:text-amber-200/65">
+                    <span className="mt-1 block text-xs text-amber-800/75 dark:text-amber-200/65">
                       Signals: {w.matchedSignals.join(", ")}
                     </span>
                   ) : null}
@@ -405,7 +335,7 @@ function PublishSidebarPanel({
           </details>
         </div>
       ) : (
-        <p className="text-[11px] text-zinc-400">No cluster overlap flags for this draft.</p>
+        <p className="text-xs text-zinc-600">No cluster overlap flags for this draft.</p>
       )}
     </div>
   );
@@ -446,6 +376,7 @@ export function PostEditorForm({
   const [retired, setRetired] = useState(false);
   const [loaded, setLoaded] = useState(mode === "create");
   const baseline = useRef<string | null>(null);
+  const [baselineSnapshot, setBaselineSnapshot] = useState<string | null>(null);
   const saved = useRef(false);
   const retry = useRef<{ fingerprint: string; requestId: string } | null>(null);
   const [templateBackup, setTemplateBackup] = useState<BlogContentBlock[] | null>(null);
@@ -687,23 +618,34 @@ export function PostEditorForm({
     primary_keyword: primaryKeyword, secondary_keywords: secondaryKwText.split(/[\n,]+/).filter(Boolean), search_intent: searchIntent,
     category_id: categoryId, semantic_cluster: semanticCluster, related_guide_override_slugs: relatedGuideOverrideText.split(/[\n,]+/).filter(Boolean),
     tag_ids: tagIds, updated_at: revision, seoGenSlug, seoApplySuggestions });
+  // Capture the server baseline independently of the asynchronous recovery identity lookup.
+  // Otherwise an early edit could become the baseline while auth.getUser() is pending.
+  useEffect(() => {
+    if (loaded && baseline.current === null) {
+      baseline.current = snapshot;
+      setBaselineSnapshot(snapshot);
+    }
+  }, [loaded, snapshot]);
+  const recoveryReadKey = useRef<string | null>(null);
   useEffect(() => {
     if (!loaded || !recoveryKey) return;
-    if (baseline.current === null) {
-      baseline.current = snapshot;
+    if (recoveryReadKey.current !== recoveryKey) {
+      recoveryReadKey.current = recoveryKey;
       try {
         const raw = localStorage.getItem(recoveryKey);
         if (raw) {
           const item = JSON.parse(raw);
-          if (item.snapshot && Date.now() - item.savedAt < 7 * 86400000 && JSON.stringify(item.snapshot) !== snapshot) setRecovery(item.snapshot);
+          if (item.snapshot && Date.now() - item.savedAt < 7 * 86400000 && JSON.stringify(item.snapshot) !== baseline.current) { setRecovery(item.snapshot); return; }
         }
       } catch { setFormError("Browser draft recovery is unavailable. Keep this page open until your save succeeds."); }
-      return;
     }
     const dirty = snapshot !== baseline.current;
     const persist = () => {
-      if (!dirty || saved.current || recovery) return;
-      try { localStorage.setItem(recoveryKey, JSON.stringify({ savedAt: Date.now(), snapshot: JSON.parse(snapshot) })); }
+      if (saved.current || recovery) return;
+      try {
+        if (dirty) localStorage.setItem(recoveryKey, JSON.stringify({ savedAt: Date.now(), snapshot: JSON.parse(snapshot) }));
+        else localStorage.removeItem(recoveryKey);
+      }
       catch { setFormError("Browser draft recovery is unavailable. Keep this page open until your save succeeds."); }
     };
     const beforeUnload = (event: BeforeUnloadEvent) => { if (dirty && !saved.current) { persist(); event.preventDefault(); } };
@@ -952,7 +894,7 @@ export function PostEditorForm({
           <PublishSidebarPanel {...publishSidebarProps} compact />
         </WpMetabox>
 
-        <WpMetabox title="Excerpt">
+        <WpMetabox title="Excerpt" defaultOpen={false}>
           <WpTextareaField
             label="Excerpt"
             id="wp-excerpt"
@@ -973,7 +915,7 @@ export function PostEditorForm({
           />
         </WpMetabox>
 
-        <WpMetabox title="Categories">
+        <WpMetabox title="Categories" defaultOpen={false}>
           <WpLabeledField label="Category" htmlFor="wp-cat">
             <select
               id="wp-cat"
@@ -991,7 +933,8 @@ export function PostEditorForm({
           </WpLabeledField>
         </WpMetabox>
 
-        <WpMetabox title="Tags">
+        <WpMetabox title="Tags" defaultOpen={false}>
+          {tags.length === 0 ? <p className="text-xs text-zinc-600 dark:text-zinc-400">No tags are available yet.</p> : null}
           <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
             {tags.map((t) => {
               const on = tagIds.includes(t.id);
@@ -1156,6 +1099,7 @@ export function PostEditorForm({
         mode={mode}
         postsListPath={postsListPath}
         saving={saving}
+        saveState={saving ? "Saving…" : mode === "create" ? "Unsaved changes" : baselineSnapshot === null ? "Checking saved state…" : snapshot !== baselineSnapshot ? "Unsaved changes" : "Saved"}
         disabled={retired}
         status={status}
         onSave={save}
@@ -1902,44 +1846,7 @@ function BlockFields({
     case "cta":
       return <p className="text-sm text-zinc-600">Public articles use the shared booking section. This legacy CTA is retained for reference; its custom title and button are not displayed.</p>;
     case "internal_links":
-      return (
-        <div className="space-y-2">
-          <div>
-            <label className={lab}>Title (optional)</label>
-            <Input className={inp} value={block.title ?? ""} onChange={(e) => onChange({ ...block, title: e.target.value || undefined })} />
-          </div>
-          {block.links.map((l, j) => (
-            <div key={j} className="flex flex-wrap gap-2 sm:flex-nowrap">
-              <Input
-                className={cn(inp, "sm:flex-1")}
-                placeholder="Label"
-                value={l.label}
-                onChange={(e) => {
-                  const links = [...block.links];
-                  links[j] = { ...links[j], label: e.target.value };
-                  onChange({ ...block, links });
-                }}
-              />
-              <Input
-                className={cn(inp, "sm:flex-1")}
-                placeholder="/path"
-                value={l.url}
-                onChange={(e) => {
-                  const links = [...block.links];
-                  links[j] = { ...links[j], url: e.target.value };
-                  onChange({ ...block, links });
-                }}
-              />
-              <Button type="button" variant="outline" size="sm" onClick={() => onChange({ ...block, links: block.links.filter((_, k) => k !== j) })}>
-                ×
-              </Button>
-            </div>
-          ))}
-          <Button type="button" size="sm" variant="secondary" onClick={() => onChange({ ...block, links: [...block.links, { label: "", url: "/" }] })}>
-            Add link
-          </Button>
-        </div>
-      );
+      return <InternalLinksEditor block={block} onChange={onChange} />;
     case "quick_answer":
       return (
         <div>

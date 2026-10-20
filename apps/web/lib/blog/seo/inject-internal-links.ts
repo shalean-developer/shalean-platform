@@ -131,7 +131,7 @@ export function injectInternalLinks(
         `Book ${serviceName} (${locationName})`,
         `${locationName} ${serviceName} services`,
       ];
-      push(anchorPick(locPrimaryAnchors, `${locationSlug}-${serviceSlug}-loc-a`, 0), locPrimary);
+      push(locPrimary === "/locations" ? "View all cleaning areas" : anchorPick(locPrimaryAnchors, `${locationSlug}-${serviceSlug}-loc-a`, 0), locPrimary);
     } else if (neighborSlug) {
       const neighbor = getLocation(neighborSlug);
       const nName = neighbor?.name ?? neighborSlug;
@@ -166,23 +166,23 @@ export function injectInternalLinks(
     const n = countPrefix(simulated, "/services");
     if (n === 0 && svcPrimary) {
       const svcPrimaryAnchors = [
-        `${serviceName} in ${cityName} (guide)`,
+        `${serviceName} in ${cityName}`,
         `Shalean ${serviceName} — ${cityName}`,
         `View ${serviceName} checklist`,
       ];
       push(anchorPick(svcPrimaryAnchors, `${serviceSlug}-svc-a`, 0), svcPrimary);
     } else if (n === 0) {
       const fallbackAAnchors = [
-        "Shalean service guide",
+        "Shalean cleaning services",
         `Browse ${serviceName}-style services`,
         "Compare Shalean service options",
       ];
       push(anchorPick(fallbackAAnchors, `${serviceSlug}-svc-fa`, 0), svcFallbackA);
     } else if (!seen.has(normPath(svcFallbackB))) {
-      const altBAnchors = ["Related Shalean service", "Another service option", "See a related service guide"];
+      const altBAnchors = ["Related Shalean service", "Another service option", "See a related cleaning service"];
       push(anchorPick(altBAnchors, `${serviceSlug}-svc-b`, 1), svcFallbackB);
     } else if (!seen.has(normPath(svcFallbackA))) {
-      const altAAnchors = ["Browse Shalean services", "More service guides", "Explore services"];
+      const altAAnchors = ["Browse Shalean services", "More cleaning services", "Explore services"];
       push(anchorPick(altAAnchors, `${serviceSlug}-svc-c`, 2), svcFallbackA);
     } else break;
   }

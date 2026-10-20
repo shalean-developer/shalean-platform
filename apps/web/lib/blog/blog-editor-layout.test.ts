@@ -5,11 +5,21 @@ vi.mock("next/navigation",()=>({useRouter:()=>({push:vi.fn(),refresh:vi.fn()})})
 import { WordPressPostEditorLayout } from "@/components/admin/blog/WordPressPostEditorLayout";
 import { PostEditorForm } from "@/components/admin/blog/PostEditorForm";
 import { RichTextBlockEditor } from "@/components/admin/blog/RichTextBlockEditor";
+import { BlogPublishReadiness } from "@/components/admin/blog/BlogPublishReadiness";
+import { validateBlogPublish } from "@/lib/blog/seo/publish-validation";
 import { DocumentBodySection } from "@/components/admin/blog/DocumentBodySection";
 vi.stubGlobal("React",React);
 afterEach(()=>vi.clearAllMocks());
 
 describe("blog editor rendered layout",()=>{
+  it("shows thin content blockers before the SEO score", () => {
+    const preview = validateBlogPublish({ schema_version: 1, blocks: [{ type: "paragraph", content: "word ".repeat(37) }] });
+    const html = renderToStaticMarkup(createElement(BlogPublishReadiness, { preview }));
+    expect(html).toContain("Not ready to publish");
+    expect(html).toContain("37 / 800 words");
+    expect(html.indexOf("Not ready to publish")).toBeLessThan(html.indexOf("SEO indicator"));
+    expect(html).toContain("Complete FAQ answers");
+  });
   it("renders one settings tree and unique IDs with no nested main landmark",()=>{
     const html=renderToStaticMarkup(createElement(PostEditorForm,{mode:"create",postsListPath:"/office/blog"}));
     const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);

@@ -190,11 +190,14 @@ export function validateBlogPublish(
       return b.level === 2 && b.content.trim().length > 0;
     }
     if (b.type === "rich_text") {
-      return /<h2\b/i.test(b.html);
+      return [...b.html.matchAll(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi)].some(match =>
+        plainTextFromHtml(match[1]).replace(/&(?:nbsp|#160|#x0*a0);/gi, " ").trim().length > 0,
+      );
     }
     return false;
   });
-  const hasFaq = blocks.some((b) => b.type === "faq" && Array.isArray(b.items) && b.items.length > 0);
+  const faqBlocks = blocks.filter((b) => b.type === "faq");
+  const hasFaq = faqBlocks.length > 0 && faqBlocks.every(b => b.items.length > 0 && b.items.every(item => item.question.trim() && item.answer.trim()));
   // The public article template always renders its governed booking CTA.
   const hasCta = true;
   const paths = collectInternalPaths(blocks);

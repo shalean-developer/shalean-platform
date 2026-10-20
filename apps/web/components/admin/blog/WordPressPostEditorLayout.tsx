@@ -12,6 +12,7 @@ type Props = {
   mode: "create" | "edit";
   postsListPath: string;
   saving: boolean;
+  saveState?: string;
   disabled?: boolean;
   status: "draft" | "published" | "scheduled";
   onSave: () => void;
@@ -35,6 +36,7 @@ export function WordPressPostEditorLayout({
   mode,
   postsListPath,
   saving,
+  saveState = "Unsaved",
   disabled = false,
   status,
   onSave,
@@ -70,7 +72,7 @@ export function WordPressPostEditorLayout({
         </div>
       )}
 
-      <div className="sticky top-0 z-20 -mx-1 mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-300 bg-zinc-100/95 px-1 py-2.5 backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-900/95">
+      <div className="sticky top-16 z-20 -mx-1 mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-white/95 px-1 py-2.5 backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-900/95">
         <div className="flex min-w-0 flex-wrap items-center gap-3">
           <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 px-2" asChild>
             <Link href={postsListPath}>← Posts</Link>
@@ -79,7 +81,8 @@ export function WordPressPostEditorLayout({
             {mode === "create" ? "Add New Post" : "Edit Post"}
           </h1>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span role="status" aria-live="polite" className="mr-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">{saveState}</span>
           {viewPostUrl ? (
             <Button type="button" size="sm" variant="outline" asChild>
               <Link href={viewPostUrl} target="_blank" rel="noopener noreferrer">
@@ -95,7 +98,7 @@ export function WordPressPostEditorLayout({
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
-          <div className="rounded-sm border border-zinc-300 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-950">
+          <div className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-950">
             <label htmlFor="wp-post-title" className="sr-only">
               Title
             </label>
@@ -155,7 +158,7 @@ export function WordPressPostEditorLayout({
           {createExtras ? <div className="mt-4">{createExtras}</div> : null}
         </div>
 
-        <aside aria-label="Post settings" className="w-full shrink-0 space-y-3 lg:w-[280px]">{sidebar}</aside>
+        <aside aria-label="Post settings" className="w-full shrink-0 space-y-3 lg:w-[300px]">{sidebar}</aside>
       </div>
     </fieldset>
   );

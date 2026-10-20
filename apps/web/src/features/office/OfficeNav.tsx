@@ -58,6 +58,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
+import { OfficeAccountMenu } from "@/components/office/OfficeAccountMenu";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { useNotifications } from "@/hooks/useNotifications";
 
 type NavIcon = ComponentType<{ className?: string; strokeWidth?: number }>;
@@ -249,11 +251,6 @@ function isModuleActive(pathname: string, module: NavModule): boolean {
   return module.children?.some((item) => isItemActive(pathname, item.href)) ?? false;
 }
 
-function truncateLabel(label: string, max = 8): string {
-  if (label.length <= max) return label;
-  return `${label.slice(0, max)}…`;
-}
-
 function userInitials(userLabel: string): string {
   if (!userLabel) return "AD";
   return (
@@ -354,7 +351,7 @@ function CollapsedModuleFlyout({ module, pathname, position, anchorRef, onClose 
             )}
           >
             <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-            <span className="truncate">{item.label}</span>
+            <span className="min-w-0 whitespace-normal break-words">{item.label}</span>
           </Link>
         );
       })}
@@ -389,7 +386,7 @@ function InlineModuleChildren({ module, pathname, onClose }: InlineModuleChildre
             )}
           >
             <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-            <span className="truncate">{item.label}</span>
+            <span className="min-w-0 whitespace-normal break-words">{item.label}</span>
           </Link>
         );
       })}
@@ -462,7 +459,7 @@ function NavModuleRow({
           )}
         >
           <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />
-          <span className="max-w-full truncate text-[10px] font-medium leading-tight">{truncateLabel(module.label, 7)}</span>
+          <span className="sr-only">{module.label}</span>
         </Link>
       );
     }
@@ -479,7 +476,7 @@ function NavModuleRow({
         )}
       >
         <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />
-        <span className="truncate">{module.label}</span>
+        <span className="min-w-0 whitespace-normal break-words">{module.label}</span>
       </Link>
     );
   }
@@ -500,7 +497,7 @@ function NavModuleRow({
           )}
         >
           <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />
-          <span className="max-w-full truncate text-[10px] font-medium leading-tight">{truncateLabel(module.label, 7)}</span>
+          <span className="sr-only">{module.label}</span>
           <span
             className="pointer-events-none absolute bottom-1.5 right-1.5 h-0 w-0 border-b-[5px] border-r-[5px] border-b-transparent border-r-[--sidebar-muted]"
             aria-hidden
@@ -539,7 +536,7 @@ function NavModuleRow({
           strokeWidth={2}
         />
         <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />
-        <span className="min-w-0 flex-1 truncate">{module.label}</span>
+        <span className="min-w-0 flex-1 whitespace-normal break-words">{module.label}</span>
       </button>
       {isOpen ? <InlineModuleChildren module={module} pathname={pathname} onClose={onClose} /> : null}
     </div>
@@ -599,18 +596,14 @@ export function OfficeSidebarContent({
         aria-label="Office navigation"
       >
         <div className={cn("space-y-1", collapsed && "space-y-1.5")}>
-          {OFFICE_NAV_MODULES.map((module) => (
-            <NavModuleRow
-              key={module.id}
-              module={module}
-              collapsed={useCollapsedNav}
-              pathname={pathname}
-              openModuleId={openModuleId}
-              setOpenModuleId={setOpenModuleId}
-              sidebarRef={sidebarRef}
-              onClose={onClose}
-            />
-          ))}
+          <TooltipProvider delayDuration={150}>
+          {OFFICE_NAV_MODULES.map((module) => useCollapsedNav ? (
+            <Tooltip key={module.id}>
+              <TooltipTrigger asChild><div><NavModuleRow module={module} collapsed pathname={pathname} openModuleId={openModuleId} setOpenModuleId={setOpenModuleId} sidebarRef={sidebarRef} onClose={onClose} /></div></TooltipTrigger>
+              <TooltipContent side="right" className="z-[110]">{module.label}</TooltipContent>
+            </Tooltip>
+          ) : <NavModuleRow key={module.id} module={module} collapsed={false} pathname={pathname} openModuleId={openModuleId} setOpenModuleId={setOpenModuleId} sidebarRef={sidebarRef} onClose={onClose} />)}
+          </TooltipProvider>
         </div>
       </nav>
 
@@ -737,20 +730,7 @@ export function OfficeTopBar({ userLabel, onMenuOpen, onLogout, onCommandPalette
           ) : null}
         </Link>
 
-        <button
-          type="button"
-          onClick={onLogout}
-          className="flex shrink-0 items-center gap-2 rounded-xl px-1.5 py-1.5 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:px-2"
-          title="Sign out"
-        >
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow-sm">
-            {initials}
-          </div>
-          <div className="hidden text-left sm:block">
-            <p className="text-xs font-semibold leading-tight text-foreground">Admin console</p>
-            <p className="max-w-[140px] truncate text-[11px] text-muted-foreground">{userLabel || "Administrator"}</p>
-          </div>
-        </button>
+        <OfficeAccountMenu userLabel={userLabel} initials={initials} onLogout={onLogout} />
       </div>
     </header>
   );
