@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Star } from "lucide-react";
 import { getGoogleReviewWriteUrl, GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
+import { CUSTOMER_ACCOUNT_REVIEWS_PATH } from "@/lib/customer/customerAccountPaths";
 
 const SNIPPET =
   "Homeowners across Cape Town mention punctual teams, clear quotes, and thorough kitchens — see why we earn strong feedback on Google.";
@@ -55,7 +56,7 @@ export function MarketingGoogleReviewsBand() {
                 Rate your visit
               </a>
             ) : (
-              <Link href="/review" className={ctaCardClass}>
+              <Link href={CUSTOMER_ACCOUNT_REVIEWS_PATH} className={ctaCardClass}>
                 Rate your visit
               </Link>
             )}
