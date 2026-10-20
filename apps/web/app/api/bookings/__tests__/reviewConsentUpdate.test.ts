@@ -11,7 +11,7 @@ beforeEach(() => { state.user = "owner"; state.owner = "owner"; state.update.moc
 describe("review display preference", () => {
   it("allows the owner to withdraw permission after the text-edit window", async () => {
     expect((await PATCH(request({ publicDisplayConsent: false }))).status).toBe(200);
-    expect(state.update).toHaveBeenCalledWith({ public_display_consent: false });
+    expect(state.update).toHaveBeenCalledWith({ public_display_consent: false, public_name_consent: false, public_area_consent: false, public_service_consent: false });
   });
   it("allows the owner to opt in later without changing the rating or text", async () => {
     expect((await PATCH(request({ publicDisplayConsent: true }))).status).toBe(200);
@@ -28,6 +28,23 @@ describe("review display preference", () => {
   });
   it("rejects string-valued consent", async () => {
     expect((await PATCH(request({ publicDisplayConsent: "false" }))).status).toBe(400);
+    expect(state.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("review detail preferences", () => {
+  it("allows individual withdrawal beyond the text-edit window", async () => {
+    expect((await PATCH(request({ publicNameConsent: false }))).status).toBe(200);
+    expect(state.update).toHaveBeenCalledWith({ public_name_consent: false });
+  });
+  it("preserves independent explicit choices", async () => {
+    expect((await PATCH(request({ publicNameConsent: true, publicAreaConsent: false, publicServiceConsent: true }))).status).toBe(200);
+    expect(state.update).toHaveBeenCalledWith({ public_name_consent: true, public_area_consent: false, public_service_consent: true });
+  });
+  it("rejects malformed detail choices and other reviewers", async () => {
+    expect((await PATCH(request({ publicAreaConsent: "true" }))).status).toBe(400);
+    state.user="other";
+    expect((await PATCH(request({ publicNameConsent: true }))).status).toBe(403);
     expect(state.update).not.toHaveBeenCalled();
   });
 });

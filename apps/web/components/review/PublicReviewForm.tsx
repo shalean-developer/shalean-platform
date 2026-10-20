@@ -1,5 +1,6 @@
 "use client";
 
+import { ReviewDisplayOptions, type ReviewDisplayChoices } from "@/components/review/ReviewDisplayOptions";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Star } from "lucide-react";
@@ -42,7 +43,7 @@ export function PublicReviewForm({ initialBookingId }: Props) {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
-  const [publicDisplayConsent, setPublicDisplayConsent] = useState(false);
+  const [displayChoices, setDisplayChoices] = useState<ReviewDisplayChoices>({ publicDisplayConsent: false, publicNameConsent: false, publicAreaConsent: false, publicServiceConsent: false });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -98,7 +99,7 @@ export function PublicReviewForm({ initialBookingId }: Props) {
       const res = await fetch("/api/bookings/review", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ bookingId, rating, comment, publicDisplayConsent }),
+        body: JSON.stringify({ bookingId, rating, comment, ...displayChoices }),
       });
       const j = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
@@ -208,10 +209,7 @@ export function PublicReviewForm({ initialBookingId }: Props) {
           />
         </div>
 
-        <label className="flex items-start gap-3 text-sm text-zinc-600">
-          <input type="checkbox" checked={publicDisplayConsent} onChange={(e) => setPublicDisplayConsent(e.target.checked)} disabled={busy} className="mt-1 h-4 w-4" />
-          <span>Shalean may display my written review anonymously on its website. This is optional. My star rating still contributes to overall ratings. Please leave out contact details and addresses.</span>
-        </label>
+        <ReviewDisplayOptions value={displayChoices} onChange={setDisplayChoices} disabled={busy} />
 
         <Button type="submit" size="lg" className="w-full rounded-xl sm:w-auto" disabled={busy}>
           {busy ? "Submitting…" : "Submit review"}

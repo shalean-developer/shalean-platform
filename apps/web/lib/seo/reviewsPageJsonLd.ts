@@ -20,6 +20,14 @@ export function buildReviewsPageJsonLd(): Record<string, unknown> {
         url: REVIEWS_URL,
         isPartOf: { "@type": "WebSite", name: "Shalean Cleaning Services", url: SITE_ORIGIN },
         about: { "@id": PRIMARY_LOCAL_BUSINESS_ID },
+        breadcrumb: { "@id": `${REVIEWS_URL}#breadcrumb` },
+      },
+      {
+        "@type": "BreadcrumbList", "@id": `${REVIEWS_URL}#breadcrumb`,
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: SITE_ORIGIN },
+          { "@type": "ListItem", position: 2, name: "Customer reviews", item: REVIEWS_URL },
+        ],
       },
       localBusiness,
     ],

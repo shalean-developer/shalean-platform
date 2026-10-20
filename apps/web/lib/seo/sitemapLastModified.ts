@@ -18,8 +18,9 @@ function parseEnvDate(value: string | undefined): Date | null {
  * Never use request time here.
  */
 const STATIC_CONTENT_LASTMOD: Record<string, string> = {
-  "/": "2026-07-15T00:00:00.000Z",
+  "/": "2026-10-20T00:00:00.000Z",
   "/services": "2026-07-15T00:00:00.000Z",
+  "/cleaning-prices-cape-town": "2026-09-27T00:00:00.000Z",
   "/services/standard-cleaning-cape-town": "2026-07-10T00:00:00.000Z",
   "/services/deep-cleaning-cape-town": "2026-07-10T00:00:00.000Z",
   "/services/airbnb-cleaning-cape-town": "2026-07-10T00:00:00.000Z",
@@ -28,10 +29,10 @@ const STATIC_CONTENT_LASTMOD: Record<string, string> = {
   "/services/carpet-cleaning-cape-town": "2026-07-10T00:00:00.000Z",
   "/services/window-cleaning-cape-town": "2026-07-10T00:00:00.000Z",
   "/contact": "2026-06-01T00:00:00.000Z",
-  "/about": "2026-06-01T00:00:00.000Z",
+  "/about": "2026-10-20T00:00:00.000Z",
   "/blog": "2026-07-15T00:00:00.000Z",
   "/faq": "2026-06-01T00:00:00.000Z",
-  "/reviews": "2026-06-01T00:00:00.000Z",
+  "/reviews": "2026-10-20T00:00:00.000Z",
   "/quote": "2026-10-02T00:00:00.000Z",
   "/privacy-policy": "2026-05-01T00:00:00.000Z",
   "/terms-of-service": "2026-05-01T00:00:00.000Z",
