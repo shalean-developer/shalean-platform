@@ -6,6 +6,7 @@ vi.mock("next/server", () => ({ connection: async () => {} }));
 vi.mock("@/lib/supabase/admin", () => ({ getSupabaseAdmin: mocks.admin }));
 import { getBookingReviewSummary, parseBookingReviewSummary } from "../bookingReviewSummary";
 import { BookingReviewSummaryCard, GoogleReviewPanel } from "@/components/reviews/ReviewSourcePanels";
+import { ReviewsPageContent } from "@/components/reviews/ReviewsPageContent";
 import { getPublishedReviews, parsePublishedReviews } from "../publishedReviews";
 import { parseReviewsPage, reviewsPagePath } from "../reviewPagination";
 import { PublishedReviewsSection } from "@/components/reviews/PublishedReviewsSection";
@@ -142,6 +143,13 @@ describe("all-rating public reviews listing", () => {
 
 
 describe("separate Shalean and Google review sources", () => {
+  it("keeps the booking jump target available while database reviews are suspended", () => {
+    const html = renderToStaticMarkup(createElement(ReviewsPageContent, { page: 1 }));
+    expect(html).toContain('href="#booking-reviews"');
+    expect((html.match(/id="booking-reviews"/g) || []).length).toBe(1);
+    expect(html).toContain("Loading booking reviews");
+    expect(html.indexOf('id="booking-reviews"')).toBeLessThan(html.indexOf("Loading booking reviews"));
+  });
   it("accepts only consistent numeric booking summaries and strips other fields", () => {
     expect(parseBookingReviewSummary([{ avg_rating: "4.5", review_count: "4", email: "private" }])).toEqual({ average: 4.5, count: 4 });
     expect(parseBookingReviewSummary([{ avg_rating: null, review_count: 0 }])).toEqual({ average: null, count: 0 });
@@ -165,7 +173,7 @@ describe("separate Shalean and Google review sources", () => {
   it("identifies direct booking reviews without changing Home's five-star selection", async () => {
     mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "booking_review_rating_summary" ? [{ avg_rating: 4.5, review_count: 4 }] : [{ ...row, rating: 4 }], error: null }));
     const html = renderToStaticMarkup(await PublishedReviewsSection({ page: 1 }));
-    expect(html).toContain('id="booking-reviews"');expect(html).toContain("Reviews from Shalean bookings");
+    expect(html).toContain('aria-label="Reviews from Shalean bookings"');expect(html).toContain("Reviews from Shalean bookings");
     expect(html).toContain("Verified booking · Shalean");expect(html).toContain("4 out of 5 stars");expect(html).toContain("4.5");expect(html).not.toContain("Google");
     expect(await MarketingHomeReviewsSection()).toBeNull();
   });

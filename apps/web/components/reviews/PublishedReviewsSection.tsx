@@ -9,7 +9,7 @@ import { BookingReviewSummaryCard } from "./ReviewSourcePanels";
 
 export async function PublishedReviewsSection({ page }: { page: number }) {
   const [result, summary] = await Promise.all([getPublishedReviews(page), getBookingReviewSummary()]);
-  return <HomeSection id="booking-reviews" className="scroll-mt-28" containerSize="marketing" aria-label="Reviews from Shalean bookings">
+  return <HomeSection containerSize="marketing" aria-label="Reviews from Shalean bookings">
     <MarketingSectionHeader eyebrow="Shared directly with Shalean" title="Reviews from Shalean bookings"
       description="Read feedback from completed cleaning bookings across all star ratings, shown newest first. Names, services and suburbs appear only with customer permission." />
     <BookingReviewSummaryCard summary={summary} />
