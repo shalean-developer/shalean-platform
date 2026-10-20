@@ -4,6 +4,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 const mocks = vi.hoisted(() => ({ admin: vi.fn(), rpc: vi.fn() }));
 vi.mock("next/server", () => ({ connection: async () => {} }));
 vi.mock("@/lib/supabase/admin", () => ({ getSupabaseAdmin: mocks.admin }));
+import { getBookingReviewSummary, parseBookingReviewSummary } from "../bookingReviewSummary";
+import { BookingReviewSummaryCard, GoogleReviewPanel } from "@/components/reviews/ReviewSourcePanels";
+import { ReviewsPageContent } from "@/components/reviews/ReviewsPageContent";
 import { getPublishedReviews, parsePublishedReviews } from "../publishedReviews";
 import { parseReviewsPage, reviewsPagePath } from "../reviewPagination";
 import { PublishedReviewsSection } from "@/components/reviews/PublishedReviewsSection";
@@ -135,5 +138,55 @@ describe("all-rating public reviews listing", () => {
     expect(reviewsPagePath(1)).toBe("/reviews");
     expect(reviewsPagePath(2)).toBe("/reviews?page=2");
     expect(JSON.stringify(buildReviewsPageJsonLd(2))).toContain("/reviews?page=2");
+  });
+});
+
+
+describe("separate Shalean and Google review sources", () => {
+  it("keeps the booking jump target available while database reviews are suspended", () => {
+    const html = renderToStaticMarkup(createElement(ReviewsPageContent, { page: 1 }));
+    expect(html).toContain('href="#booking-reviews"');
+    expect((html.match(/id="booking-reviews"/g) || []).length).toBe(1);
+    expect(html).toContain("Loading booking reviews");
+    expect(html.indexOf('id="booking-reviews"')).toBeLessThan(html.indexOf("Loading booking reviews"));
+  });
+  it("accepts only consistent numeric booking summaries and strips other fields", () => {
+    expect(parseBookingReviewSummary([{ avg_rating: "4.5", review_count: "4", email: "private" }])).toEqual({ average: 4.5, count: 4 });
+    expect(parseBookingReviewSummary([{ avg_rating: null, review_count: 0 }])).toEqual({ average: null, count: 0 });
+    for (const data of [[], [{ avg_rating: 5, review_count: 0 }], [{ avg_rating: null, review_count: 4 }], [{ avg_rating: 6, review_count: 4 }], [{ avg_rating: 4.5, review_count: -1 }]]) expect(parseBookingReviewSummary(data)).toBeNull();
+  });
+  it("uses the dedicated completed-booking summary RPC and fails closed", async () => {
+    mocks.rpc.mockResolvedValue({ data: [{ avg_rating: 4.5, review_count: 4 }], error: null });
+    expect(await getBookingReviewSummary()).toEqual({ average: 4.5, count: 4 });
+    expect(mocks.rpc).toHaveBeenCalledWith("booking_review_rating_summary");
+    mocks.rpc.mockResolvedValue({ data: null, error: { code: "PGRST202" } });
+    expect(await getBookingReviewSummary()).toBeNull();
+    mocks.rpc.mockRejectedValue(new Error("network"));expect(await getBookingReviewSummary()).toBeNull();
+  });
+  it("labels the on-site average independently and never substitutes Google statistics", () => {
+    const html = renderToStaticMarkup(createElement(BookingReviewSummaryCard, { summary: { average: 4.5, count: 4 } }));
+    expect(html).toContain("Shalean booking ratings");expect(html).toContain("4.5");expect(html).toContain("from 4 booking ratings");
+    expect(html).not.toContain("Google");expect(html).not.toContain("137");
+    expect(renderToStaticMarkup(createElement(BookingReviewSummaryCard, { summary: null }))).toBe("");
+    expect(renderToStaticMarkup(createElement(BookingReviewSummaryCard, { summary: { average: null, count: 0 } }))).toBe("");
+  });
+  it("identifies direct booking reviews without changing Home's five-star selection", async () => {
+    mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "booking_review_rating_summary" ? [{ avg_rating: 4.5, review_count: 4 }] : [{ ...row, rating: 4 }], error: null }));
+    const html = renderToStaticMarkup(await PublishedReviewsSection({ page: 1 }));
+    expect(html).toContain('aria-label="Reviews from Shalean bookings"');expect(html).toContain("Reviews from Shalean bookings");
+    expect(html).toContain("Verified booking · Shalean");expect(html).toContain("4 out of 5 stars");expect(html).toContain("4.5");expect(html).not.toContain("Google");
+    expect(await MarketingHomeReviewsSection()).toBeNull();
+  });
+  it("keeps Google counts separate, dated and linked to the approved profile", () => {
+    vi.useFakeTimers();vi.setSystemTime(new Date("2026-10-20T08:00:00Z"));vi.stubEnv("NEXT_PUBLIC_GOOGLE_REVIEW_WRITE_URL", "");
+    try {
+      const html = renderToStaticMarkup(createElement(GoogleReviewPanel));
+      expect(html).toContain("Also reviewed on Google");expect(html).toContain("137 Google reviews");expect(html).toContain("28 September 2026");
+      expect(html).toContain("Read our Google reviews");expect(html).toContain("Review us on Google");
+      expect(html).toContain("place_id:ChIJE2azv4FDzB0R6Dif-_0-vn0");expect(html).toContain("writereview?placeid=ChIJE2azv4FDzB0R6Dif-_0-vn0");
+      expect(html).not.toContain("verified reviews");expect(html).not.toContain("Verified booking");expect(html).not.toContain('aggregateRating');
+      vi.setSystemTime(new Date("2027-02-01T00:00:00Z"));
+      const stale = renderToStaticMarkup(createElement(GoogleReviewPanel));expect(stale).not.toContain("137");expect(stale).not.toContain("4.8");expect(stale).toContain("Read our Google reviews");
+    } finally { vi.useRealTimers();vi.unstubAllEnvs(); }
   });
 });
