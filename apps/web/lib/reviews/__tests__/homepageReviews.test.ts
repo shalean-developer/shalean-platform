@@ -13,6 +13,7 @@ import { ReviewPublicationControls } from "@/components/review/ReviewPublication
 import { ReviewDisplayOptions } from "@/components/review/ReviewDisplayOptions";
 import { buildReviewsPageJsonLd } from "@/lib/seo/reviewsPageJsonLd";
 import { MarketingHomeReviewsSection } from "@/components/marketing-home/sections/MarketingHomeReviewsSection";
+import { MarketingGoogleReviewsBand } from "@/components/marketing-home/sections/MarketingGoogleReviewsBand";
 const row = { id: "review", rating: 5, comment: "Excellent clean", created_at: "2026-10-19T15:21:00Z" };
 beforeEach(() => { vi.clearAllMocks(); mocks.admin.mockReturnValue({ rpc: mocks.rpc }); mocks.rpc.mockResolvedValue({ data: [row], error: null }); });
 describe("homepage five-star reviews", () => {
@@ -84,6 +85,14 @@ describe("homepage five-star reviews", () => {
 
 
 describe("all-rating public reviews listing", () => {
+  it("keeps the Rate your visit fallback on a submission path when Google review writing is unavailable", () => {
+    vi.stubEnv("NEXT_PUBLIC_GOOGLE_REVIEW_WRITE_URL", "");
+    try {
+      const html = renderToStaticMarkup(createElement(MarketingGoogleReviewsBand));
+      expect(html).toContain('href="/account/reviews"');
+      expect(html).toContain("Rate your visit");
+    } finally { vi.unstubAllEnvs(); }
+  });
   it("accepts ratings one to five while Home keeps only five", () => {
     const rows = [1, 2, 3, 4, 5].map((rating) => ({ ...row, id: String(rating), rating }));
     expect(parsePublishedReviews(rows).map((review) => review.rating)).toEqual([1, 2, 3, 4, 5]);
