@@ -11,7 +11,7 @@ type Review = {
 };
 export function ReviewPublicationControls({ review, onSaved }: { review: Review; onSaved: () => Promise<void> }) {
   const expectedPreferences = { name: review.public_name_consent, area: review.public_area_consent, service: review.public_service_consent };
-  const [details, setDetails] = useState<ReviewDetailChoices>(review.homepage_approved ? review.published_details : expectedPreferences);
+  const [details, setDetails] = useState<ReviewDetailChoices>(review.homepage_approved ? { name: review.published_details.name && expectedPreferences.name, area: review.published_details.area && expectedPreferences.area, service: review.published_details.service && expectedPreferences.service } : expectedPreferences);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const context = review.publication_context;
@@ -39,7 +39,7 @@ export function ReviewPublicationControls({ review, onSaved }: { review: Review;
     <p>Extra details are optional. Select only details the customer has permitted you to publish.</p>
     {options.map(({ key, label, value }) => <label key={key} className="flex items-start gap-2">
       <input type="checkbox" checked={details[key]} disabled={!value && !details[key]} onChange={(event) => { setDetails({ ...details, [key]: event.target.checked }); setConfirmed(false); }} />
-      <span>{label}: <strong>{value || "Unavailable"}</strong></span>
+      <span>{label}: <strong>{value || "Unavailable"}</strong><span className="block text-slate-500">{expectedPreferences[key] ? "Customer permission on record" : "No permission on record"}</span></span>
     </label>)}
     <div className="rounded-lg bg-sky-50 p-3" aria-label="Public review preview">
       <p className="font-semibold">{details.name && context.display_name ? context.display_name : "Verified customer"}</p>
