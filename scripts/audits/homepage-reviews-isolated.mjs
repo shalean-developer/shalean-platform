@@ -104,6 +104,7 @@ await db.exec(`reset role;
   update public.reviews set user_id='11111111-1111-4111-8111-111111111111';`);
 await db.exec(await readFile(new URL('../../supabase/migrations/20261020053511_review_publication_context.sql', import.meta.url), 'utf8'));
 await db.exec(await readFile(new URL('../../supabase/migrations/20261020054531_review_publication_moving_service_alias.sql', import.meta.url), 'utf8'));
+await db.exec(await readFile(new URL('../../supabase/migrations/20261020054700_review_publication_detail_scope.sql', import.meta.url), 'utf8'));
 await db.exec('set role service_role');
 await publish();
 const context = async () => (await db.query('select * from public.review_publication_context(array[$1::uuid])',[id])).rows[0];
@@ -148,6 +149,8 @@ assert.deepEqual(await context(),{review_id:id,display_name:null,suburb_label:nu
 await assert.rejects(approveDetails(),/unavailable/);
 await approveDetails({name:false,area:false,service:false});
 assert.equal((await feed2())[0].display_name,null);
+assert.deepEqual(await preferences(),{name:false,area:true,service:true},'Office omission must not clear customer permission');
+assert.equal((await feed2())[0].suburb_label,null,'Office can omit a permitted area via the snapshot');
 await db.exec('update public.reviews set public_display_consent=false');
 assert.equal((await feed2()).length,0,'text withdrawal removes the whole card');
 await db.exec('reset role; set role anon');

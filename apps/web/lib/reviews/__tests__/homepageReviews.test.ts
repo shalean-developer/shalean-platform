@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({ admin: vi.fn(), rpc: vi.fn() }));
 vi.mock("next/server", () => ({ connection: async () => {} }));
 vi.mock("@/lib/supabase/admin", () => ({ getSupabaseAdmin: mocks.admin }));
 import { getHomepageReviews, parseHomepageReviews } from "../homepageReviews";
+import { ReviewPublicationControls } from "@/components/review/ReviewPublicationControls";
 import { ReviewDisplayOptions } from "@/components/review/ReviewDisplayOptions";
 import { buildReviewsPageJsonLd } from "@/lib/seo/reviewsPageJsonLd";
 import { MarketingHomeReviewsSection } from "@/components/marketing-home/sections/MarketingHomeReviewsSection";
@@ -46,6 +47,17 @@ describe("homepage five-star reviews", () => {
     expect(html).toContain("first name and surname initial");
     expect(html).toContain("no street address");
     expect(html).toContain("Verified customer");
+  });
+  it("allows Office to uncheck a published detail whose live preview is unavailable", () => {
+    const html = renderToStaticMarkup(createElement(ReviewPublicationControls, { review: {
+      id: "review", comment: "Excellent clean", homepage_approved: true, public_display_consent: true,
+      public_name_consent: true, public_area_consent: false, public_service_consent: false,
+      publication_context: { display_name: null, suburb_label: null, service_key: null },
+      published_details: { name: true, area: false, service: false },
+    }, onSaved: async () => {} }));
+    const nameInput = html.match(/<input[^>]*>/)?.[0];
+    expect(nameInput).toContain('checked=""');
+    expect(nameInput).not.toContain("disabled");
   });
   it("uses honest page and breadcrumb schema without self-serving review ratings", () => {
     const schema = buildReviewsPageJsonLd();
