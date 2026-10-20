@@ -22,9 +22,7 @@ const REVIEWS_META_DESC = clampMetaDescription(
 const REVIEWS_OG_DESC = clampMetaDescription(
   "Selected five-star customer feedback from completed Cape Town cleaning bookings, alongside Shalean’s separate Google Business Profile rating.",
 );
-const REVIEWS_TWITTER_DESC = clampMetaDescription(
-  "See Shalean’s Google rating and real customer feedback for Cape Town home cleaning.",
-);
+const REVIEWS_TWITTER_DESC = REVIEWS_META_DESC;
 
 export const metadata: Metadata = {
   title: "Customer Reviews | Shalean Cleaning Services Cape Town",
