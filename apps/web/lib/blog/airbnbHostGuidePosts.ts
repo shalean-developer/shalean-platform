@@ -284,7 +284,7 @@ export function buildAirbnbHostGuideGraphJsonLd(post: AirbnbHostGuidePost, siteO
       url: siteOrigin,
       logo: {
         "@type": "ImageObject",
-        url: `${siteOrigin}/images/marketing/cape-town-house-cleaning-kitchen.webp`,
+        url: `${siteOrigin}/images/shalean-logo.png`,
       },
     },
     mainEntityOfPage: {
