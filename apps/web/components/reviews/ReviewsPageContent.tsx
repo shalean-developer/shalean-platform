@@ -27,9 +27,8 @@ export function ReviewsPageContent() {
             Shalean customer reviews — Cape Town
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-600 md:text-lg">
-            {googleReviewsShortTrustLine()}. Read our Google reviews using the link below. Featured
-            feedback further down this page comes directly from completed Shalean bookings and is
-            published anonymously with permission.
+            {googleReviewsShortTrustLine()}. Featured feedback on this page comes directly from
+            completed Shalean bookings and is published anonymously with permission.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-4">
