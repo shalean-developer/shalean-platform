@@ -1,3 +1,4 @@
+import type { ReviewDetailChoices, ReviewPublicationContext } from "@/lib/reviews/publicReviewDetails";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type AdminReviewListRow = {
@@ -12,7 +13,12 @@ export type AdminReviewListRow = {
   created_at: string;
   service: string | null;
   public_display_consent: boolean;
+  public_name_consent: boolean;
+  public_area_consent: boolean;
+  public_service_consent: boolean;
   homepage_approved: boolean;
+  publication_context: ReviewPublicationContext;
+  published_details: ReviewDetailChoices;
   is_public: boolean;
   is_hidden: boolean;
 };
@@ -27,6 +33,9 @@ type ReviewDbRow = {
   created_at: string;
   is_hidden: boolean | null;
   public_display_consent: boolean;
+  public_name_consent: boolean;
+  public_area_consent: boolean;
+  public_service_consent: boolean;
 };
 
 export async function loadAdminReviewsList(
@@ -37,7 +46,7 @@ export async function loadAdminReviewsList(
 
   const { data, error } = await admin
     .from("reviews")
-    .select("id, booking_id, cleaner_id, user_id, rating, comment, created_at, is_hidden, public_display_consent")
+    .select("id, booking_id, cleaner_id, user_id, rating, comment, created_at, is_hidden, public_display_consent, public_name_consent, public_area_consent, public_service_consent")
     .order("created_at", { ascending: false })
     .limit(cappedLimit);
 
@@ -46,12 +55,16 @@ export async function loadAdminReviewsList(
   const rows = (data ?? []) as ReviewDbRow[];
   if (rows.length === 0) return { reviews: [] };
 
-  const published = new Set<string>();
+  const published = new Map<string, ReviewDetailChoices>();
+  const contextById = new Map<string, ReviewPublicationContext>();
   for (let offset = 0; offset < rows.length; offset += 100) {
     const { data: approvals, error: approvalError } = await admin.from("review_homepage_publications")
-      .select("review_id").in("review_id", rows.slice(offset, offset + 100).map((row) => row.id));
+      .select("review_id, display_name, suburb_label, service_key").in("review_id", rows.slice(offset, offset + 100).map((row) => row.id));
     if (approvalError) return { error: approvalError.message };
-    for (const approval of approvals ?? []) published.add(String(approval.review_id));
+    for (const approval of approvals ?? []) published.set(String(approval.review_id), { name: !!approval.display_name, area: !!approval.suburb_label, service: !!approval.service_key });
+    const { data: contexts, error: contextError } = await admin.rpc("review_publication_context", { p_review_ids: rows.slice(offset, offset + 100).map((row) => row.id) });
+    if (contextError) return { error: contextError.message };
+    for (const context of contexts ?? []) contextById.set(context.review_id, { display_name: context.display_name, suburb_label: context.suburb_label, service_key: context.service_key });
   }
 
   const bookingIds = [...new Set(rows.map((r) => r.booking_id).filter(Boolean))];
@@ -137,6 +150,11 @@ export async function loadAdminReviewsList(
       created_at: row.created_at,
       service: booking?.service ?? null,
       public_display_consent: row.public_display_consent === true,
+      public_name_consent: row.public_name_consent === true,
+      public_area_consent: row.public_area_consent === true,
+      public_service_consent: row.public_service_consent === true,
+      publication_context: contextById.get(row.id) ?? { display_name: null, suburb_label: null, service_key: null },
+      published_details: published.get(row.id) ?? { name: false, area: false, service: false },
       homepage_approved: published.has(row.id),
       is_public: !hidden,
       is_hidden: hidden,

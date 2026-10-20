@@ -5,7 +5,7 @@ vi.mock("@/lib/supabase/admin", () => ({ getSupabaseAdmin: mocks.admin }));
 import { POST } from "../route";
 const id = "33333333-3333-4333-8333-333333333333";
 const context = { params: Promise.resolve({ id }) };
-function request(body: unknown) { return new Request("http://localhost/api/admin/reviews/" + id + "/homepage", { method: "POST", body: JSON.stringify(body) }); }
+function request(body: unknown) { return new Request("http://localhost/api/admin/reviews/" + id + "/homepage", { method: "POST", body: JSON.stringify(body && typeof body === "object" ? { expectedPreferences: { name: false, area: false, service: false }, expectedContext: { display_name: null, suburb_label: null, service_key: null }, details: { name: false, area: false, service: false }, ...body } : body) }); }
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.auth.mockResolvedValue({ ok: true, user: { id: "publisher-id" } });
@@ -22,7 +22,10 @@ describe("homepage review publishing", () => {
   it("binds approval to the authenticated actor and explicit confirmation", async () => {
     const response = await POST(request({ approved: true, expectedConsent: false, permissionConfirmed: true, expectedComment: "Checked comment", actorId: "forged" }), context);
     expect(response.status).toBe(200);
-    expect(mocks.rpc).toHaveBeenCalledWith("set_review_homepage_publication", {
+    expect(mocks.rpc).toHaveBeenCalledWith("set_review_homepage_publication_v2", {
+      p_expected_preferences: { name: false, area: false, service: false },
+      p_expected_context: { display_name: null, suburb_label: null, service_key: null },
+      p_details: { name: false, area: false, service: false },
       p_review_id: id, p_publish: true, p_actor_id: "publisher-id", p_permission_confirmed: true, p_expected_comment: "Checked comment", p_expected_consent: false,
     });
   });
@@ -42,6 +45,11 @@ describe("homepage review publishing", () => {
   it("rejects missing or string-valued reviewed consent", async () => {
     expect((await POST(request({ approved: true }), context)).status).toBe(400);
     expect((await POST(request({ approved: true, expectedConsent: "false" }), context)).status).toBe(400);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it("rejects missing or string-valued detail permissions before writing", async () => {
+    expect((await POST(request({ approved: true, expectedConsent: true, details: { name: "true", area: false, service: false } }), context)).status).toBe(400);
+    expect((await POST(request({ approved: true, expectedConsent: true, expectedPreferences: null }), context)).status).toBe(400);
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
   it("supports removal without requiring another permission attestation", async () => {
