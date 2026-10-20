@@ -17,24 +17,24 @@ import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 const REVIEWS_CANONICAL = absoluteCanonicalUrl("/reviews");
 
 const REVIEWS_META_DESC = clampMetaDescription(
-  "See Shalean’s Google Business Profile rating and verified homeowner feedback—punctual teams, clear quotes, and thorough cleans across Cape Town.",
+  "Read customer feedback from completed Shalean bookings and see our Google Business Profile rating for cleaning services across Cape Town.",
 );
 const REVIEWS_OG_DESC = clampMetaDescription(
-  "Verified homeowner feedback—punctual teams, clear quotes, and thorough cleans across Cape Town.",
+  "Customer feedback from completed Shalean bookings, alongside our Google Business Profile rating for Cape Town cleaning services.",
 );
 const REVIEWS_TWITTER_DESC = clampMetaDescription(
   "See Shalean’s Google rating and real customer feedback for Cape Town home cleaning.",
 );
 
 export const metadata: Metadata = {
-  title: "Google Reviews | Shalean Cleaning Services Cape Town",
+  title: "Customer Reviews | Shalean Cleaning Services Cape Town",
   description: REVIEWS_META_DESC,
   robots: SEO_INDEX_FOLLOW,
   alternates: { canonical: REVIEWS_CANONICAL },
   openGraph: {
     type: "website",
     url: REVIEWS_CANONICAL,
-    title: "Google Reviews | Shalean Cleaning Services Cape Town",
+    title: "Customer Reviews | Shalean Cleaning Services Cape Town",
     description: REVIEWS_OG_DESC,
     images: [
       {
@@ -47,7 +47,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Google Reviews | Shalean Cleaning Services Cape Town",
+    title: "Customer Reviews | Shalean Cleaning Services Cape Town",
     description: REVIEWS_TWITTER_DESC,
     images: [HOME_OG_IMAGE],
   },

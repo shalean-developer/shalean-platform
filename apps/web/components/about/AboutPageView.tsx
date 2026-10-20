@@ -1,3 +1,5 @@
+import { MarketingHomeReviewsSection } from "@/components/marketing-home/sections/MarketingHomeReviewsSection";
+import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -9,17 +11,12 @@ import {
   UserRoundSearch,
   Wallet,
 } from "lucide-react";
-import { AboutReviewsRotator } from "@/components/about/AboutReviewsRotator";
-import { ReviewCard } from "@/components/about/ReviewCard";
 import { StatCard } from "@/components/about/StatCard";
 import { StepItem } from "@/components/about/StepItem";
 import { TrustItem } from "@/components/about/TrustItem";
 import { GetFreeQuoteLink } from "@/components/marketing/GetFreeQuoteLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
-import {
-  ABOUT_FOUNDING_YEAR,
-  ABOUT_REVIEWS,
-} from "@/lib/about/about-page-content";
+import { ABOUT_FOUNDING_YEAR } from "@/lib/about/about-page-content";
 import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 import { FOOTER_POPULAR_LOCATION_HUBS } from "@/lib/seo/locations";
 import { CAPE_TOWN_LOCATIONS } from "@/lib/seo/capeTownLocations";
@@ -208,31 +205,9 @@ export function AboutPageView() {
           </ul>
         </section>
 
-        {/* 5. Reviews */}
-        <section className="border-t border-zinc-100 bg-white py-14" aria-labelledby="about-reviews-heading">
-          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-            <h2 id="about-reviews-heading" className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
-              Real reviews from real suburbs
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm text-zinc-600 sm:text-base">
-              Summarised themes from customers—locations called out for trust and context.
-            </p>
-            <div className="mt-10 lg:hidden">
-              <AboutReviewsRotator reviews={ABOUT_REVIEWS} />
-            </div>
-            <div className="mt-10 hidden gap-6 lg:grid lg:grid-cols-3">
-              {ABOUT_REVIEWS.map((r) => (
-                <ReviewCard
-                  key={`${r.author}-${r.suburb}`}
-                  quote={r.quote}
-                  author={r.author}
-                  initials={r.initials}
-                  suburb={r.suburb}
-                />
-              ))}
-            </div>
-          </div>
-        </section>
+        <Suspense fallback={null}>
+          <MarketingHomeReviewsSection />
+        </Suspense>
 
         {/* 6. Local authority */}
         <section className="border-t border-zinc-100 bg-zinc-50/80 py-14" aria-labelledby="about-local-heading">
