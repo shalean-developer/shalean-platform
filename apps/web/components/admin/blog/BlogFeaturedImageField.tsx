@@ -2,6 +2,7 @@
 
 import { useId, useRef } from "react";
 import Image from "next/image";
+import { isAllowedAuthoringBlogImageSrc } from "@/lib/blog/blog-image-validation";
 import { ImagePlus, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,7 +48,7 @@ export function BlogFeaturedImageField({
 
   return (
     <div className="space-y-3">
-      {previewSrc ? (
+      {previewSrc && isAllowedAuthoringBlogImageSrc(previewSrc) ? (
         <div className="relative aspect-[16/9] overflow-hidden rounded-md border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
           <Image
             src={previewSrc}
@@ -91,24 +92,25 @@ export function BlogFeaturedImageField({
         </Button>
         {previewSrc ? (
           <Button type="button" size="sm" variant="ghost" onClick={() => onImageUrlChange("")}>
-            Remove
+            Use automatic image
           </Button>
         ) : null}
       </div>
 
+      {previewSrc && !isAllowedAuthoringBlogImageSrc(previewSrc) ? <p role="alert" className="text-xs text-red-600">Unsupported image URL. Upload the image or use an approved image host.</p> : null}
       {error ? <p className="text-xs text-red-600 dark:text-red-400">{error}</p> : null}
 
-      <WpLabeledField label="Image URL" htmlFor="wp-feat">
+      <WpLabeledField label="Image URL" htmlFor={`${inputId}-url`}>
         <Input
-          id="wp-feat"
+          id={`${inputId}-url`}
           className="font-mono text-xs"
           value={imageUrl}
           onChange={(e) => onImageUrlChange(e.target.value)}
-          placeholder="https://… or /images/…"
+          placeholder="https://… or /images/… (blank uses automatic image)"
         />
       </WpLabeledField>
-      <WpLabeledField label="Alt text" htmlFor="wp-feata">
-        <Input id="wp-feata" value={altText} onChange={(e) => onAltTextChange(e.target.value)} />
+      <WpLabeledField label="Alt text" htmlFor={`${inputId}-alt`}>
+        <Input id={`${inputId}-alt`} value={altText} onChange={(e) => onAltTextChange(e.target.value)} />
       </WpLabeledField>
     </div>
   );

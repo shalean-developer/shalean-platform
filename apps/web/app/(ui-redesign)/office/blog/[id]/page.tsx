@@ -10,7 +10,7 @@ export default function OfficeBlogEditPage() {
   return (
     <div className="w-full min-w-0">
       {id ? (
-        <PostEditorForm mode="edit" postId={id} postsListPath="/office/blog" />
+        <PostEditorForm key={id} mode="edit" postId={id} postsListPath="/office/blog" />
       ) : (
         <p className="text-sm text-slate-600">Missing post id.</p>
       )}

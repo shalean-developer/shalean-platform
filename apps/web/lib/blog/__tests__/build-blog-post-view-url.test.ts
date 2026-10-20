@@ -10,9 +10,9 @@ describe("buildBlogPostViewPath", () => {
     expect(buildBlogPostViewPath("my-post", "published")).toBe("/blog/my-post");
   });
 
-  it("appends dev preview query for drafts", () => {
+  it("requires a server-minted preview even in development", () => {
     vi.stubEnv("NODE_ENV", "development");
-    expect(buildBlogPostViewPath("my-post", "draft")).toBe("/blog/my-post?preview=true");
+    expect(buildBlogPostViewPath("my-post", "draft")).toBeNull();
   });
 
   it("uses provided draft preview query", () => {
@@ -25,8 +25,8 @@ describe("buildBlogDraftPreviewQuery", () => {
     vi.unstubAllEnvs();
   });
 
-  it("returns preview=true in development", () => {
+  it("does not expose a global preview token", () => {
     vi.stubEnv("NODE_ENV", "development");
-    expect(buildBlogDraftPreviewQuery()).toBe("?preview=true");
+    expect(buildBlogDraftPreviewQuery()).toBeNull();
   });
 });

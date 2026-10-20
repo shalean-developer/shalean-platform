@@ -2,10 +2,7 @@ export type BlogPostViewStatus = "draft" | "published" | "scheduled";
 
 /** Server-side draft preview query (e.g. `?preview=true` or `?preview=<secret>`). */
 export function buildBlogDraftPreviewQuery(): string | null {
-  if (process.env.NODE_ENV === "development") return "?preview=true";
-  const token = process.env.BLOG_DRAFT_PREVIEW_TOKEN?.trim();
-  if (!token) return null;
-  return `?preview=${encodeURIComponent(token)}`;
+  return null; // Preview queries are minted per post by the authorized server endpoint.
 }
 
 /**

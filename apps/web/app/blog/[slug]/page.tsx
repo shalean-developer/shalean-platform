@@ -94,7 +94,7 @@ function safeJsonLdStringify(value: unknown, ctx: { kind: string; slug: string }
 }
 
 /** Publisher logo in JSON-LD (distinct from per-post hero art). */
-const ORGANIZATION_LOGO_ABSOLUTE = `${SITE}/images/marketing/cape-town-house-cleaning-kitchen.webp`;
+const ORGANIZATION_LOGO_ABSOLUTE = `${SITE}/images/shalean-logo.png`;
 
 /** CMS-backed posts must not be SSG-only — new `blog_posts` rows appear without rebuild. */
 export const dynamic = "force-dynamic";
@@ -161,12 +161,13 @@ async function buildBlogMetadataInner(props: Props): Promise<Metadata | null> {
   }
 
   if (process.env.NODE_ENV === "development") {
-    console.log("[blog/[slug] generateMetadata] slug:", JSON.stringify(slug), "preview:", previewTokenFromSearchParams(sp) ?? "(none)");
+    console.log("[blog/[slug] generateMetadata] slug:", JSON.stringify(slug), "preview:", Boolean(previewTokenFromSearchParams(sp)));
   }
 
   blogRouteTrace("generateMetadata_pre_fetch", { slug });
   const dbPost = await getPostBySlug(slug, getPostOptsFromSearchParams(sp));
   blogRouteTrace("generateMetadata_post_fetch", { slug, dbHit: Boolean(dbPost), id: dbPost?.id });
+  if (previewTokenFromSearchParams(sp) && !dbPost) notFound();
   if (dbPost) {
     try {
       // Always self-reference the rendered `/blog/{slug}` URL. Do not inherit homepage
@@ -559,8 +560,8 @@ async function BlogPostPageImpl(props: Props) {
 
   if (process.env.NODE_ENV === "development") {
     console.log("[blog/[slug]] PARAM SLUG:", JSON.stringify(slug));
-    console.log("[blog/[slug]] SEARCH PARAMS:", JSON.stringify(sp));
-    console.log("[blog/[slug]] preview token:", previewTokenFromSearchParams(sp) ?? "(none)");
+    console.log("[blog/[slug]] SEARCH PARAMS:", JSON.stringify({ previewRequested: Boolean(previewTokenFromSearchParams(sp)) }));
+    console.log("[blog/[slug]] preview token:", Boolean(previewTokenFromSearchParams(sp)));
   }
 
   let indexPosts: Awaited<ReturnType<typeof getBlogIndexPostsCached>> = [];
@@ -585,6 +586,7 @@ async function BlogPostPageImpl(props: Props) {
   if (process.env.NODE_ENV === "development") {
     console.log("[blog/[slug]] POST BEFORE BRANCH (dbPost):", dbPost ? `hit id=${dbPost.id} status=${dbPost.dbStatus}` : "null");
   }
+  if (previewTokenFromSearchParams(sp) && !dbPost) notFound();
   if (dbPost) {
     try {
       if (process.env.NODE_ENV === "development") {
@@ -727,10 +729,7 @@ async function BlogPostPageImpl(props: Props) {
                 className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-medium text-amber-950"
                 role="status"
               >
-                Unpublished preview — not indexed until published. Dev:{" "}
-                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">?preview=true</code> · Prod:{" "}
-                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">?preview=…</code> using{" "}
-                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">BLOG_DRAFT_PREVIEW_TOKEN</code>.
+                Preview — hidden from search engines. This preview link expires after 10 minutes. Reload the editor to renew it.
               </div>
             ) : null}
 

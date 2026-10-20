@@ -44,12 +44,15 @@ function redirectPreservingSearch(request: NextRequest, destinationPath: string,
  * Legacy `/cleaning-services/*` is not listed in `next.config.ts` redirects (avoids double `-cleaning-services` suffix).
  */
 export async function proxy(request: NextRequest) {
-  try {
-    return await runProxy(request);
-  } catch (err) {
-    console.error("[proxy] fatal — passthrough", err);
-    return NextResponse.next();
+  let response: NextResponse;
+  try { response = await runProxy(request); }
+  catch (err) { console.error("[proxy] fatal — passthrough", err); response = NextResponse.next(); }
+  if (request.nextUrl.pathname.startsWith("/blog/") && request.nextUrl.searchParams.has("preview")) {
+    response.headers.set("Cache-Control", "private, no-store, max-age=0");
+    response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    response.headers.set("Referrer-Policy", "no-referrer");
   }
+  return response;
 }
 
 async function runProxy(request: NextRequest) {
