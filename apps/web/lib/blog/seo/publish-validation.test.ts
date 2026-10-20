@@ -56,3 +56,18 @@ describe("validateBlogPublish governance warnings", () => {
     expect(r.warnings.some((w) => w.code === WARN_BOOKING_CONFIDENCE_PRICING_HUB)).toBe(true);
   });
 });
+
+
+describe("publication readiness requirements", () => {
+  it.each(["<h2></h2>", "<h2><br></h2>", "<h2>&nbsp; &#160; &#xa0;</h2>"])("does not count an empty rich text heading: %s", html => {
+    expect(validateBlogPublish(content([{ type: "rich_text", html }])).hasH2Section).toBe(false);
+  });
+  it("counts a formatted heading with actual text", () => {
+    expect(validateBlogPublish(content([{ type: "rich_text", html: "<h2><strong>Cleaning scope</strong></h2>" }])).hasH2Section).toBe(true);
+  });
+  it("keeps incomplete FAQ entries in the blocking checklist", () => {
+    const result = validateBlogPublish(content([{ type: "faq", items: [{ question: "What is included?", answer: "" }] }]));
+    expect(result.hasFaq).toBe(false);
+    expect(result.issues.some(issue => issue.code === "faq")).toBe(true);
+  });
+});
