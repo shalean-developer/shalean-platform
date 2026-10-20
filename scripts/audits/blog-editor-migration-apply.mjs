@@ -7,6 +7,7 @@ export const migrations = [
   '20261020155213_blog_atomic_editor_save',
   '20261020155854_blog_schedule_publication',
   '20261020162025_blog_editor_security_advisor_followup',
+  '20261020190530_blog_scheduler_isolated_vault_target',
 ];
 export function buildApplySql(id, sql) {
   if (!migrations.includes(id) || sql.includes('$blog_editor_source$')) throw new Error('Unreviewed migration');
