@@ -216,7 +216,6 @@ async function repairBooking(admin: SupabaseClient, bookingId: (typeof BOOKING_I
       expectedTotalCents: expectedAmount,
       label,
     });
-    await settleQueue(admin, tx, queueId, paid.paymentId);
     await upsertInvoiceSyncMetadata(admin, {
       entityType: "booking",
       entityId: bookingId,
@@ -387,7 +386,6 @@ async function repairMonthlyInvoice(admin: SupabaseClient) {
     beforePayment.balanceCents === 0
   ) {
     if (tx.sync_status === "synced" && tx.external_accounting_id) {
-      await settleQueue(admin, tx, queueId, paid.paymentId);
       await upsertInvoiceSyncMetadata(admin, {
         entityType: "monthly_invoice",
         entityId: data.id,
@@ -487,7 +485,6 @@ async function repairSalesDocument(admin: SupabaseClient) {
     beforePayment.balanceCents === 0
   ) {
     if (tx.sync_status === "synced" && tx.external_accounting_id) {
-      await settleQueue(admin, tx, queueId, paid.paymentId);
       await upsertInvoiceSyncMetadata(admin, {
         entityType: "sales_document",
         entityId: SALES_DOCUMENT_ID,
