@@ -29,7 +29,7 @@ function createAdmin(rows: Invoice[], failWrites = false) {
             async range(start: number, end: number) {
               return { data: rows
                 .filter(r => r.sync_status !== "ignored" && r.zoho_invoice_id)
-                .sort((a,b) => (a.last_synced_at ?? "").localeCompare(b.last_synced_at ?? "") || a.id.localeCompare(b.id))
+                .sort((a,b) => a.id.localeCompare(b.id))
                 .slice(start,end+1), error: null };
             },
           };
