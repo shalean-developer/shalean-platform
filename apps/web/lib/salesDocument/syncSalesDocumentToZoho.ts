@@ -250,5 +250,19 @@ export async function syncSalesDocumentToZoho(
     }
   }
 
+  // Enroll any newly created or recovered sales invoice for bounded status polling.
+  // Do not overwrite existing status/payment metadata: only create the missing link.
+  if (invoiceId) {
+    const { error: enrollmentError } = await admin
+      .from("accounting_invoice_sync")
+      .upsert({
+        entity_type: "sales_document",
+        entity_id: documentId,
+        zoho_invoice_id: invoiceId,
+        sync_status: "pending",
+      }, { onConflict: "entity_type,entity_id", ignoreDuplicates: true });
+    if (enrollmentError) return { ok: false, error: `zoho_invoice_status_enrollment_failed:${enrollmentError.message}` };
+  }
+
   return { ok: true };
 }
