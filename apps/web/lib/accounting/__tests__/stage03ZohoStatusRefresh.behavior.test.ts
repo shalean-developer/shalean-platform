@@ -22,8 +22,16 @@ function createAdmin(rows: Invoice[], failingWrites = false) {
             or() { return query; },
             not() { return query; },
             order() { return query; },
-            async limit(n: number) { return {data: rows.filter(r => r.sync_status !== "ignored").slice(0,n),error:null}; },
-            async gt(_field:string,id:string) { return {data: rows.filter(r => r.sync_status !== "ignored" && r.id > id).slice(0,5),error:null}; },
+            limit(n: number) {
+              return {
+                async gt(_field:string,id:string) {
+                  return {data: rows.filter(r => r.sync_status !== "ignored" && r.id > id).slice(0,n),error:null};
+                },
+                then(resolve:(value:{data:Invoice[];error:null})=>unknown) {
+                  return Promise.resolve({data:rows.filter(r=>r.sync_status !== "ignored").slice(0,n),error:null}).then(resolve);
+                },
+              };
+            },
           };
           return query;
         },
