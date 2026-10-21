@@ -181,7 +181,6 @@ async function repairBooking(
         if (!tx.external_accounting_id || tx.sync_status !== "synced") {
           throw new Error("invoice_already_paid_but_payment_accounting_id_missing");
         }
-        await settleQueue(admin, tx, queueId, paid.paymentId);
         await upsertInvoiceSyncMetadata(admin, {
           entityType: "booking",
           entityId: bookingId,
