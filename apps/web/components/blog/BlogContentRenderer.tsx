@@ -186,17 +186,17 @@ function Block({
         <section
           id={block.id ?? defaultBlogBlockAnchorId(block, gi)}
           className={cn(
-            "scroll-mt-28 space-y-4",
+            "blog-article-typography scroll-mt-28",
             gi === 0 ? "pt-1" : "mt-6 border-t border-zinc-100 pt-8 sm:mt-8 sm:pt-9",
           )}
         >
           <SectionHeading
             level={level}
-            className="not-prose text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl"
+            className="not-prose"
           >
             {safeBlockText(block.title)}
           </SectionHeading>
-          <p className="max-w-prose text-base leading-relaxed text-zinc-600 whitespace-pre-line">
+          <p className="whitespace-pre-line">
             {safeBlockText(block.content)}
           </p>
         </section>
@@ -373,17 +373,7 @@ function Block({
         <div className="not-prose" data-block-type="rich_text-wrap">
           <div
             id={block.id}
-            className={cn(
-              "blog-rich-text prose prose-lg prose-zinc max-w-none text-zinc-700",
-              "prose-headings:scroll-mt-28 prose-headings:font-bold prose-headings:text-zinc-900",
-              "prose-h2:mt-10 prose-h2:mb-4 sm:prose-h2:text-3xl",
-              "prose-h3:mt-8 prose-h3:mb-3 sm:prose-h3:text-2xl",
-              "prose-h4:mt-6 prose-h4:mb-2 prose-h4:font-semibold prose-h4:text-zinc-800",
-              "prose-a:font-medium prose-a:text-blue-600 prose-a:underline prose-a:underline-offset-4 prose-a:hover:text-blue-700",
-              "prose-ul:marker:text-blue-600 prose-ol:marker:text-blue-600",
-              "prose-img:rounded-lg prose-img:shadow-sm prose-img:my-8",
-              "prose-blockquote:border-l-blue-500 prose-blockquote:bg-blue-50/50 prose-blockquote:py-1 prose-blockquote:px-4",
-            )}
+            className="blog-rich-text blog-article-typography max-w-none"
             data-block-type="rich_text"
             dangerouslySetInnerHTML={{ __html: richHtml }}
           />
@@ -607,13 +597,13 @@ export function BlogContentRenderer({ content, autoLinkSlug, blockIndexOffset = 
 
   return (
     <div
-      className="blog-body mx-auto w-full max-w-[65ch] space-y-8 sm:space-y-10 lg:space-y-12"
+      className="blog-body mx-auto w-full max-w-[720px] space-y-8"
       data-blog-content-root
       data-has-faq={hasFaq ? "true" : "false"}
     >
       {blocks.map((block, i) => (
         <Block
-          key={block.id ?? `${block.type}-${i + blockIndexOffset}`}
+          key={`${block.id ?? block.type}-${i + blockIndexOffset}`}
           block={block}
           index={i}
           blockIndexOffset={blockIndexOffset}

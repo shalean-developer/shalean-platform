@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { BlogContextualServiceLinks } from "@/components/blog/BlogContextualServiceLinks";
 import { BlogServiceLinks } from "@/components/blog/BlogServiceLinks";
-import { BlogConversionMidBanner } from "@/components/blog/engine/BlogConversionMidBanner";
 import { BlogClusterRelatedGuides } from "@/components/blog/BlogClusterRelatedGuides";
+import { prepareBlogArticleContent } from "@/lib/blog/prepare-blog-article-content";
 import { BlogDbArticleBody } from "@/components/blog/BlogDbArticleBody";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
 import { HighConversionBlogTemplate } from "@/components/blog/HighConversionBlogTemplate";
@@ -13,8 +13,6 @@ import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { marketingWhatsAppFloatMainPadding } from "@/lib/marketing/marketingMobileLayout";
-import { injectLocationHubSeoImages } from "@/lib/blog/injectLocationHubSeoImages";
-import { stripFirstDuplicateFeaturedImage } from "@/lib/blog/stripDuplicateFeaturedImage";
 import { AirbnbHostGuideBlogTemplate } from "@/components/blog/AirbnbHostGuideBlogTemplate";
 import { BlogPostLayout } from "@/components/blog/BlogPostLayout";
 import { extractTocFromBlogBlocks, shouldShowBlogTableOfContents, type BlogTocEntry } from "@/lib/blog/extract-blog-toc";
@@ -94,7 +92,7 @@ function safeJsonLdStringify(value: unknown, ctx: { kind: string; slug: string }
 }
 
 /** Publisher logo in JSON-LD (distinct from per-post hero art). */
-const ORGANIZATION_LOGO_ABSOLUTE = `${SITE}/images/marketing/cape-town-house-cleaning-kitchen.webp`;
+const ORGANIZATION_LOGO_ABSOLUTE = `${SITE}/images/shalean-logo.png`;
 
 /** CMS-backed posts must not be SSG-only — new `blog_posts` rows appear without rebuild. */
 export const dynamic = "force-dynamic";
@@ -161,12 +159,13 @@ async function buildBlogMetadataInner(props: Props): Promise<Metadata | null> {
   }
 
   if (process.env.NODE_ENV === "development") {
-    console.log("[blog/[slug] generateMetadata] slug:", JSON.stringify(slug), "preview:", previewTokenFromSearchParams(sp) ?? "(none)");
+    console.log("[blog/[slug] generateMetadata] slug:", JSON.stringify(slug), "preview:", Boolean(previewTokenFromSearchParams(sp)));
   }
 
   blogRouteTrace("generateMetadata_pre_fetch", { slug });
   const dbPost = await getPostBySlug(slug, getPostOptsFromSearchParams(sp));
   blogRouteTrace("generateMetadata_post_fetch", { slug, dbHit: Boolean(dbPost), id: dbPost?.id });
+  if (previewTokenFromSearchParams(sp) && !dbPost) notFound();
   if (dbPost) {
     try {
       // Always self-reference the rendered `/blog/{slug}` URL. Do not inherit homepage
@@ -559,8 +558,8 @@ async function BlogPostPageImpl(props: Props) {
 
   if (process.env.NODE_ENV === "development") {
     console.log("[blog/[slug]] PARAM SLUG:", JSON.stringify(slug));
-    console.log("[blog/[slug]] SEARCH PARAMS:", JSON.stringify(sp));
-    console.log("[blog/[slug]] preview token:", previewTokenFromSearchParams(sp) ?? "(none)");
+    console.log("[blog/[slug]] SEARCH PARAMS:", JSON.stringify({ previewRequested: Boolean(previewTokenFromSearchParams(sp)) }));
+    console.log("[blog/[slug]] preview token:", Boolean(previewTokenFromSearchParams(sp)));
   }
 
   let indexPosts: Awaited<ReturnType<typeof getBlogIndexPostsCached>> = [];
@@ -585,6 +584,7 @@ async function BlogPostPageImpl(props: Props) {
   if (process.env.NODE_ENV === "development") {
     console.log("[blog/[slug]] POST BEFORE BRANCH (dbPost):", dbPost ? `hit id=${dbPost.id} status=${dbPost.dbStatus}` : "null");
   }
+  if (previewTokenFromSearchParams(sp) && !dbPost) notFound();
   if (dbPost) {
     try {
       if (process.env.NODE_ENV === "development") {
@@ -660,22 +660,7 @@ async function BlogPostPageImpl(props: Props) {
         alt: (dbPost.featuredImageAlt ?? "").trim() || dbPost.h1,
       };
 
-      let injectedBlocks = safeBlocks;
-      try {
-        injectedBlocks = injectLocationHubSeoImages(dbPost.slug, safeBlocks);
-      } catch (err) {
-        console.error("[blog] injectLocationHubSeoImages failed", { slug: dbPost.slug, err });
-      }
-
-      let contentForRender = { ...contentSafe, blocks: injectedBlocks };
-      try {
-        contentForRender = stripFirstDuplicateFeaturedImage(contentForRender, hero.src);
-      } catch (stripErr) {
-        console.error("[blog] stripFirstDuplicateFeaturedImage failed — using unstripped blocks", {
-          slug: dbPost.slug,
-          stripErr,
-        });
-      }
+      const contentForRender = prepareBlogArticleContent(contentSafe, dbPost.slug, hero.src);
 
       let relatedGrid = indexPostsToRelatedGrid(pickTrendingSidebarPosts(indexPosts, dbPost.slug, 6));
       try {
@@ -727,15 +712,13 @@ async function BlogPostPageImpl(props: Props) {
                 className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-medium text-amber-950"
                 role="status"
               >
-                Unpublished preview — not indexed until published. Dev:{" "}
-                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">?preview=true</code> · Prod:{" "}
-                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">?preview=…</code> using{" "}
-                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">BLOG_DRAFT_PREVIEW_TOKEN</code>.
+                Preview — hidden from search engines. This saved-version link expires after 10 minutes. Return to the editor to open a fresh preview.
               </div>
             ) : null}
 
             <BlogPostLayout
               breadcrumbCurrentLabel={dbPost.title}
+              isPreview={dbPost.dbStatus !== "published"}
               h1={dbPost.h1}
               lede={dbPost.excerpt}
               publishedAtIso={dbPost.publishedAt}
@@ -755,17 +738,7 @@ async function BlogPostPageImpl(props: Props) {
               <BlogDbArticleBody
                 content={contentForRender}
                 autoLinkSlug={dbPost.slug}
-                midArticleSlot={
-                  <section
-                    className="not-prose space-y-8 border-t border-zinc-200/80 pt-8 sm:space-y-9 sm:pt-9"
-                    aria-label="Services, areas, and booking"
-                  >
-                    <BlogConversionMidBanner trackingSlug={dbPost.slug} />
-                    <BlogContextualServiceLinks embedded />
-                    <BlogServiceLinks trackingSlug={dbPost.slug} service={getBlogServiceType(dbPost.slug)} dense />
-                    <RelatedLinks placement="blog" emphasizeLocalBooking />
-                  </section>
-                }
+
               />
             </BlogPostLayout>
           </main>

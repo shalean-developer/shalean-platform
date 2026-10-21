@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdminRequest } from "@/lib/api/admin-auth-request";
+import { requireBlogRead } from "@/lib/blog/admin-blog-auth";
 import { fetchPublishedClusterPeersUnified } from "@/lib/blog/seo/fetch-cluster-peer-posts";
 import {
   resolveSemanticClusterKey,
@@ -15,8 +15,8 @@ export const dynamic = "force-dynamic";
  * Used by the admin editor for semantic-overlap preview (warn-only).
  */
 export async function GET(request: Request) {
-  const auth = await requireAdminRequest(request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const auth = await requireBlogRead(request);
+  if (!auth.ok) return auth.response;
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 

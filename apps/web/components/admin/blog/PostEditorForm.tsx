@@ -1,10 +1,12 @@
 "use client";
+import { isAllowedAuthoringBlogImageSrc } from "@/lib/blog/blog-image-validation";
 
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, Circle } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { slugifyTitle } from "@/lib/blog/slugify-title";
 import { BLOG_CONTENT_JSON_SCHEMA_VERSION, type BlogContentBlock, type BlogContentJson } from "@/lib/blog/content-json";
@@ -15,7 +17,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import type { ClusterPeerPost } from "@/lib/blog/seo/blog-cluster-collision";
 import { validateBlogPublish, type PublishValidationResult } from "@/lib/blog/seo/publish-validation";
@@ -25,14 +26,14 @@ import {
   BLOG_TEMPLATE_OPTIONS,
   type BlogTemplateId,
 } from "@/lib/blog/templates";
-import { legacyParagraphToRichHtml } from "@/lib/blog/legacy-paragraph-to-rich-html";
-import {
-  mergeDocumentModeToBlocks,
-  splitBlocksForDocumentMode,
-} from "@/lib/blog/blogDocumentMode";
+import { assignStableBlogBlockIds } from "@/lib/blog/assign-stable-block-ids";
+import { preserveOrderedBlogBlocks } from "@/lib/blog/blogDocumentMode";
 import { blogPostViewLabel, buildBlogPostViewPath } from "@/lib/blog/build-blog-post-view-url";
 import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
-import { DocumentBodySection } from "./DocumentBodySection";
+import { BlogPublishReadiness } from "./BlogPublishReadiness";
+import { InternalLinksEditor } from "./InternalLinksEditor";
+import { BlogArticlePreview } from "./BlogArticlePreview";
+import { ArticleDocumentEditor } from "./ArticleDocumentEditor";
 import { WordPressPostEditorLayout, WpLabeledField, WpTextareaField } from "./WordPressPostEditorLayout";
 import { WpMetabox } from "./WpMetabox";
 import { BlogFeaturedImageField } from "./BlogFeaturedImageField";
@@ -67,18 +68,6 @@ function newBlockId(): string {
 function withBlockId<B extends BlogContentBlock>(block: B): B {
   if (block.id && block.id.trim()) return block;
   return { ...block, id: newBlockId() };
-}
-
-/** Loads legacy `paragraph` blocks into the TipTap-powered `rich_text` shape. */
-function normalizeBlockForEditor(b: BlogContentBlock): BlogContentBlock {
-  if (b.type === "paragraph") {
-    return {
-      id: b.id,
-      type: "rich_text",
-      html: legacyParagraphToRichHtml(b.content),
-    };
-  }
-  return b;
 }
 
 function newBlock(type: AddableType): BlogContentBlock {
@@ -128,13 +117,12 @@ function toDatetimeLocalValue(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  return new Date(d.getTime() + 2 * 60 * 60 * 1000).toISOString().slice(0,16);
 }
 
 function fromDatetimeLocalValue(v: string): string | null {
   if (!v.trim()) return null;
-  const d = new Date(v);
+  const d = new Date(`${v}:00+02:00`);
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
 }
@@ -196,6 +184,7 @@ function PublishSidebarPanel({
   clusterPeerCount,
   postsListPath,
   compact = false,
+  canSchedule = false,
   viewPostUrl,
   viewPostLabel,
 }: {
@@ -217,17 +206,18 @@ function PublishSidebarPanel({
   clusterPeerCount: number;
   postsListPath: string;
   compact?: boolean;
+  canSchedule?: boolean;
   viewPostUrl?: string | null;
   viewPostLabel?: string;
 }) {
   const fieldId = useId();
   const statusVariant =
     status === "published" ? "success" : status === "scheduled" ? ("warning" as const) : ("outline" as const);
-  const readingMins = Math.max(1, Math.round(preview.wordCount / 220));
   const sourceLabel = source.replace(/_/g, " ");
 
   return (
     <div className="space-y-5">
+      <BlogPublishReadiness preview={preview} />
       {!compact ? (
         <div className="space-y-2">
           <Button type="button" className="w-full" size="lg" onClick={onSave} disabled={saving}>
@@ -244,12 +234,6 @@ function PublishSidebarPanel({
             <Link href={postsListPath}>Back to posts</Link>
           </Button>
         </div>
-      ) : viewPostUrl ? (
-        <Button type="button" variant="outline" className="w-full" asChild>
-          <Link href={viewPostUrl} target="_blank" rel="noopener noreferrer">
-            {viewPostLabel ?? "View post"}
-          </Link>
-        </Button>
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
@@ -269,7 +253,7 @@ function PublishSidebarPanel({
         >
           <option value="draft">Draft</option>
           <option value="published">Published</option>
-          <option value="scheduled">Scheduled</option>
+          <option value="scheduled" disabled={!canSchedule}>Scheduled{canSchedule ? "" : " (paused)"}</option>
         </select>
       </div>
       <div className="space-y-2">
@@ -294,120 +278,55 @@ function PublishSidebarPanel({
           </Label>
           <Input
             id={`${fieldId}-pub`}
+            aria-label="Publish date and time (Africa/Johannesburg, SAST)"
             type="datetime-local"
             value={publishedAtLocal}
             onChange={(e) => onPublishedAtLocalChange(e.target.value)}
             className="rounded-lg"
           />
-          <p className="text-[11px] leading-relaxed text-zinc-500">
-            Empty uses &quot;now&quot; when publishing. Drafts clear the schedule.
+          <p className="text-xs leading-relaxed text-zinc-500">
+            All times use Africa/Johannesburg (SAST, UTC+02:00). Empty uses &quot;now&quot; when publishing. Drafts clear the schedule.
           </p>
         </div>
       )}
 
-      <Separator className="bg-zinc-200/80 dark:bg-zinc-800" />
-
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">SEO snapshot</p>
-        <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50">
-          {preview.seoScore}
-          <span className="text-sm font-medium text-zinc-400">/100</span>
-        </p>
-        <p className="mt-1 text-xs text-zinc-500">
-          {preview.wordCount.toLocaleString()} words · ~{readingMins} min read
-        </p>
-      </div>
-
-      <div className="rounded-xl border border-zinc-200/90 bg-white/80 p-3 text-xs dark:border-zinc-700 dark:bg-zinc-950/60">
-        <p className="font-medium text-zinc-700 dark:text-zinc-200">URL & canonical</p>
-        <p className="mt-1.5 break-all font-mono text-[11px] text-zinc-600 dark:text-zinc-400" title={slug}>
-          /blog/{slug.trim() || "…"}
-        </p>
-        {canonicalUrl.trim() ? (
-          <p className="mt-1 break-all font-mono text-[11px] text-zinc-500" title={canonicalUrl}>
-            {canonicalUrl}
-          </p>
-        ) : (
-          <p className="mt-1 text-[11px] text-zinc-400">Canonical inherits from slug unless set.</p>
-        )}
-      </div>
-
-      <div className="rounded-xl border border-zinc-200/90 bg-white/80 p-3 text-xs dark:border-zinc-700 dark:bg-zinc-950/60">
-        <p className="font-medium text-zinc-700 dark:text-zinc-200">Cluster</p>
-        <p className="mt-1 text-zinc-600 dark:text-zinc-300">
-          {semanticCluster.trim() ? (
-            <span className="font-mono text-[11px]">{semanticCluster.trim()}</span>
-          ) : (
-            <span className="text-zinc-400">Unset — inferred from tags when applicable</span>
-          )}
-        </p>
-        {resolvedClusterKey ? (
-          <p className="mt-1.5 text-[11px] text-zinc-500">
-            Resolved for checks: <span className="font-mono text-zinc-600 dark:text-zinc-400">{resolvedClusterKey}</span>
-          </p>
-        ) : null}
-        <p className="mt-1 text-[11px] text-zinc-400">{clusterPeerCount} peer posts loaded for overlap hints</p>
-      </div>
-
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Publishing checklist</p>
-        <ul className="mt-2 space-y-1.5 text-xs text-zinc-600 dark:text-zinc-300">
-          {[
-            ["FAQ block", preview.hasFaq],
-            ["CTA block", preview.hasCta],
-            ["Internal links", preview.hasInternalLinks],
-            ["Booking link", preview.hasBookingLink],
-            ["H2 section", preview.hasH2Section],
-          ].map(([label, ok]) => (
-            <li key={String(label)} className="flex items-center gap-2">
-              {ok ? (
-                <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
-              ) : (
-                <Circle className="h-3.5 w-3.5 shrink-0 text-zinc-300 dark:text-zinc-600" aria-hidden />
-              )}
-              <span className={ok ? "" : "text-zinc-400"}>{label}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
-          Live publish still runs full validation (e.g. ≥800 words).
-        </p>
-      </div>
-
-      {(metaTitle.trim() || metaDescription.trim()) && (
-        <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
-          <p className="text-[11px] font-medium text-zinc-500">Meta in use</p>
-          <p className="mt-1 line-clamp-2 text-xs font-medium text-zinc-800 dark:text-zinc-100">{metaTitle || "—"}</p>
-          <p className="mt-1 line-clamp-3 text-[11px] text-zinc-600 dark:text-zinc-400">{metaDescription || "—"}</p>
+      <details className="rounded-lg border border-zinc-200 p-3 text-xs dark:border-zinc-800">
+        <summary className="cursor-pointer font-medium text-zinc-700 dark:text-zinc-200">URL, metadata and cluster details</summary>
+        <div className="mt-3 space-y-3 text-zinc-600 dark:text-zinc-400">
+          <p className="break-all">URL: /blog/{slug.trim() || "…"}</p>
+          <p className="break-all">Canonical: {canonicalUrl.trim() || "Uses this post’s own URL"}</p>
+          <p>Cluster: {resolvedClusterKey || semanticCluster.trim() || "Inferred from tags when available"}</p>
+          <p>{clusterPeerCount} peer posts checked for overlap</p>
+          {metaTitle.trim() ? <p>Meta title: {metaTitle}</p> : null}
+          {metaDescription.trim() ? <p>Meta description: {metaDescription}</p> : null}
         </div>
-      )}
+      </details>
 
       {preview.warnings.length > 0 ? (
         <div className="rounded-xl border border-amber-200/70 bg-amber-50/40 p-3 dark:border-amber-900/40 dark:bg-amber-950/20">
           <p className="text-xs font-medium text-amber-950 dark:text-amber-100">
             {preview.warnings.length} advisory note{preview.warnings.length > 1 ? "s" : ""}
           </p>
-          <p className="mt-1 text-[11px] leading-relaxed text-amber-900/80 dark:text-amber-100/80">
+          <p className="mt-1 text-xs leading-relaxed text-amber-900/80 dark:text-amber-100/80">
             Cluster overlap and intent hints — optional to resolve before publish.
           </p>
           <details className="group mt-2">
-            <summary className="flex cursor-pointer list-none items-center gap-1 text-[11px] font-medium text-amber-900 underline-offset-2 hover:underline dark:text-amber-100">
-              <ChevronDown className="h-3.5 w-3.5 shrink-0 transition group-open:rotate-180" aria-hidden />
+            <summary className="flex cursor-pointer list-none items-center gap-1 text-xs font-medium text-amber-900 underline-offset-2 hover:underline dark:text-amber-100">
               View details
             </summary>
             <ul className="mt-2 space-y-3 border-t border-amber-200/50 pt-2 dark:border-amber-800/40">
               {preview.warnings.map((w) => (
-                <li key={`${w.code}-${w.relatedSlug ?? ""}-${w.message.slice(0, 40)}`} className="text-[11px] leading-relaxed text-amber-950/90 dark:text-amber-50/90">
+                <li key={`${w.code}-${w.relatedSlug ?? ""}-${w.message.slice(0, 40)}`} className="text-xs leading-relaxed text-amber-950/90 dark:text-amber-50/90">
                   <span className="font-medium">{w.message}</span>
                   {(w.confidence || w.code) && (
-                    <span className="mt-0.5 block text-[10px] text-amber-800/80 dark:text-amber-200/70">
+                    <span className="mt-0.5 block text-xs text-amber-800/80 dark:text-amber-200/70">
                       {w.code}
                       {w.confidence ? ` · confidence ${w.confidence}` : ""}
                       {w.relatedSlug ? ` · ${w.relatedSlug}` : ""}
                     </span>
                   )}
                   {w.matchedSignals && w.matchedSignals.length > 0 ? (
-                    <span className="mt-1 block text-[10px] text-amber-800/75 dark:text-amber-200/65">
+                    <span className="mt-1 block text-xs text-amber-800/75 dark:text-amber-200/65">
                       Signals: {w.matchedSignals.join(", ")}
                     </span>
                   ) : null}
@@ -417,7 +336,7 @@ function PublishSidebarPanel({
           </details>
         </div>
       ) : (
-        <p className="text-[11px] text-zinc-400">No cluster overlap flags for this draft.</p>
+        <p className="text-xs text-zinc-600">No cluster overlap flags for this draft.</p>
       )}
     </div>
   );
@@ -450,8 +369,19 @@ export function PostEditorForm({
   const [featuredAlt, setFeaturedAlt] = useState("");
   const [noindex, setNoindex] = useState(false);
   const [blocks, setBlocks] = useState<BlogContentBlock[]>([]);
-  const [documentHtml, setDocumentHtml] = useState("<p></p>");
-  const [advancedBlocks, setAdvancedBlocks] = useState<BlogContentBlock[]>([]);
+  const originalPublishDate = useRef<string | null>(null);
+  const [revisionConflict, setRevisionConflict] = useState(false);
+  const [revision, setRevision] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState("");
+  const [recovery, setRecovery] = useState<Record<string, unknown> | null>(null);
+  const [recoveryBackup, setRecoveryBackup] = useState<Record<string, unknown> | null>(null);
+  const [retired, setRetired] = useState(false);
+  const [loaded, setLoaded] = useState(mode === "create");
+  const baseline = useRef<string | null>(null);
+  const [baselineSnapshot, setBaselineSnapshot] = useState<string | null>(null);
+  const saved = useRef(false);
+  const retry = useRef<{ fingerprint: string; requestId: string } | null>(null);
+  const [templateBackup, setTemplateBackup] = useState<BlogContentBlock[] | null>(null);
   const [addType, setAddType] = useState<AddableType>("rich_text");
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<string[]>([]);
@@ -474,6 +404,7 @@ export function PostEditorForm({
   const [tplA, setTplA] = useState("Regular cleaning");
   const [tplB, setTplB] = useState("Deep cleaning");
   const [tplTopic, setTplTopic] = useState("home cleaning");
+  const [canSchedule, setCanSchedule] = useState(false);
   const [draftPreviewQuery, setDraftPreviewQuery] = useState<string | null>(null);
 
   const viewPostUrl = useMemo(
@@ -482,13 +413,7 @@ export function PostEditorForm({
   );
   const viewPostLabelText = blogPostViewLabel(status);
 
-  const effectiveBlocks = useMemo(
-    () =>
-      layout === "document"
-        ? mergeDocumentModeToBlocks(documentHtml, advancedBlocks)
-        : blocks,
-    [layout, documentHtml, advancedBlocks, blocks],
-  );
+  const effectiveBlocks = blocks;
 
   const contentJson: BlogContentJson = useMemo(
     () => ({ schema_version: BLOG_CONTENT_JSON_SCHEMA_VERSION, blocks: effectiveBlocks }),
@@ -525,92 +450,7 @@ export function PostEditorForm({
     [contentJson, selectedTagSlugs, resolvedSemanticClusterKey, clusterPeers, slug, title, primaryKeyword],
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    const handle = setTimeout(() => {
-      if (cancelled) return;
-      if (!slug.trim() || !resolvedSemanticClusterKey) {
-        setClusterPeers([]);
-        return;
-      }
-      void (async () => {
-        const token = await getToken();
-        if (cancelled || !token) return;
-        const qp = new URLSearchParams();
-        qp.set("exclude_slug", slug.trim());
-        qp.set("tag_slugs", selectedTagSlugs.join(","));
-        if (semanticCluster.trim()) qp.set("semantic_cluster", semanticCluster.trim());
-        const res = await fetch(`/api/admin/blog/cluster-peers?${qp.toString()}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const json = (await res.json().catch(() => ({}))) as { peers?: ClusterPeerPost[] };
-        if (cancelled || !res.ok) return;
-        setClusterPeers(Array.isArray(json.peers) ? json.peers : []);
-      })();
-    }, 450);
-    return () => {
-      cancelled = true;
-      clearTimeout(handle);
-    };
-  }, [slug, selectedTagSlugs, semanticCluster, resolvedSemanticClusterKey]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const token = await getToken();
-      if (!token) return;
-      const res = await fetch("/api/admin/blog/taxonomy", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = (await res.json().catch(() => ({}))) as {
-        categories?: { id: string; slug: string; name: string }[];
-        tags?: { id: string; slug: string; name: string }[];
-        draft_preview_query?: string | null;
-      };
-      if (cancelled || !res.ok) return;
-      setCategories(json.categories ?? []);
-      setTags(json.tags ?? []);
-      if (json.draft_preview_query) {
-        setDraftPreviewQuery((prev) => prev ?? json.draft_preview_query ?? null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (mode !== "edit" || !postId) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setLoadError(null);
-      const token = await getToken();
-      if (!token) {
-        setLoadError("Not signed in.");
-        setLoading(false);
-        return;
-      }
-      const res = await fetch(`/api/admin/blog/posts/${postId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = (await res.json().catch(() => ({}))) as {
-        post?: Record<string, unknown>;
-        error?: string;
-        draft_preview_query?: string | null;
-      };
-      if (cancelled) return;
-      if (!res.ok) {
-        setLoadError(json.error ?? "Failed to load post.");
-        setLoading(false);
-        return;
-      }
-      const p = json.post;
-      if (!p) {
-        setLoadError("Post not found.");
-        setLoading(false);
-        return;
-      }
+  function hydratePost(p: Record<string, unknown>) {
       setTitle(String(p.title ?? ""));
       setSlug(String(p.slug ?? ""));
       setSlugAuto(false);
@@ -618,7 +458,8 @@ export function PostEditorForm({
       setExcerpt(p.excerpt == null ? "" : String(p.excerpt));
       setStatus((p.status as typeof status) ?? "draft");
       setSource((p.source as typeof source) ?? "editorial");
-      setPublishedAtLocal(toDatetimeLocalValue(p.published_at == null ? null : String(p.published_at)));
+      originalPublishDate.current = p.published_at == null ? null : String(p.published_at);
+      setPublishedAtLocal(toDatetimeLocalValue(originalPublishDate.current));
       setMetaTitle(p.meta_title == null ? "" : String(p.meta_title));
       setMetaDescription(p.meta_description == null ? "" : String(p.meta_description));
       setCanonicalUrl(p.canonical_url == null ? "" : String(p.canonical_url));
@@ -649,21 +490,111 @@ export function PostEditorForm({
       setRelatedGuideOverrideText(Array.isArray(rg) ? rg.join("\n") : "");
       const tids = (p as { tag_ids?: string[] }).tag_ids;
       setTagIds(Array.isArray(tids) ? tids : []);
-      setDraftPreviewQuery(json.draft_preview_query ?? null);
+
       const raw = p.content_json;
       const parsed = safeParseBlogContentJson(raw);
-      const parsedBlocks = parsed.success
-        ? parsed.data.blocks.map((b) => normalizeBlockForEditor(withBlockId(b)))
-        : [];
-      if (layout === "document") {
-        const split = splitBlocksForDocumentMode(parsedBlocks);
-        setDocumentHtml(split.documentHtml);
-        setAdvancedBlocks(split.advancedBlocks);
-      } else {
-        setBlocks(parsedBlocks);
+      setBlocks(parsed.success ? preserveOrderedBlogBlocks(assignStableBlogBlockIds(parsed.data).blocks) : []);
+      setRevision(p.updated_at == null ? null : String(p.updated_at));
+      setRetired(Boolean(p.retired));
+      if (p.last_schedule_error) setFormError(`Scheduled publication is held: ${String(p.last_schedule_error)}`);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      if (cancelled) return;
+      if (!slug.trim() || !resolvedSemanticClusterKey) {
+        setClusterPeers([]);
+        return;
       }
+      void (async () => {
+        const token = await getToken();
+        if (cancelled || !token) return;
+        const qp = new URLSearchParams();
+        qp.set("exclude_slug", slug.trim());
+        qp.set("tag_slugs", selectedTagSlugs.join(","));
+        if (semanticCluster.trim()) qp.set("semantic_cluster", semanticCluster.trim());
+        const res = await fetch(`/api/admin/blog/cluster-peers?${qp.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(30_000),
+        });
+        const json = (await res.json().catch(() => ({}))) as { peers?: ClusterPeerPost[] };
+        if (cancelled || !res.ok) return;
+        setClusterPeers(Array.isArray(json.peers) ? json.peers : []);
+      })().catch(() => { if (!cancelled) setClusterPeers([]); });
+    }, 450);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [slug, selectedTagSlugs, semanticCluster, resolvedSemanticClusterKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const token = await getToken();
+      if (!token) return;
+      const res = await fetch("/api/admin/blog/taxonomy", {
+        headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(30_000),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        scheduling_enabled?: boolean;
+        categories?: { id: string; slug: string; name: string }[];
+        tags?: { id: string; slug: string; name: string }[];
+        draft_preview_query?: string | null;
+      };
+      if (cancelled || !res.ok) return;
+      setCanSchedule(Boolean(json.scheduling_enabled));
+      setCategories(json.categories ?? []);
+      setTags(json.tags ?? []);
+      if (json.draft_preview_query) {
+        setDraftPreviewQuery((prev) => prev ?? json.draft_preview_query ?? null);
+      }
+    })().catch(() => { if (!cancelled) setFormError("Could not load taxonomy. Check your connection and reload before publishing."); });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (mode !== "edit" || !postId) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setLoadError(null);
+      const token = await getToken();
+      if (!token) {
+        setLoadError("Not signed in.");
+        setLoading(false);
+        return;
+      }
+      const res = await fetch(`/api/admin/blog/posts/${postId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(30_000),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        post?: Record<string, unknown>;
+        error?: string;
+        draft_preview_query?: string | null;
+      };
+      if (cancelled) return;
+      if (!res.ok) {
+        setLoadError(json.error ?? "Failed to load post.");
+        setLoading(false);
+        return;
+      }
+      const p = json.post;
+      if (!p) {
+        setLoadError("Post not found.");
+        setLoading(false);
+        return;
+      }
+      hydratePost(p);
+      setDraftPreviewQuery(json.draft_preview_query ?? null);
+      setLoaded(true);
       setLoading(false);
-    })();
+    })().catch(() => { if (!cancelled) { setLoadError("Could not load the post. Check your connection and retry."); setLoading(false); } });
     return () => {
       cancelled = true;
     };
@@ -675,6 +606,104 @@ export function PostEditorForm({
     if (mode === "edit") return;
     setSlug(slugifyTitle(title));
   }, [title, slugAuto, mode]);
+
+  const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
+  useEffect(() => {
+    void getSupabaseBrowser()?.auth.getUser().then(({ data }) => {
+      if (data.user) setRecoveryKey(`shalean.blog.recovery.v1:${data.user.id}:${postId ?? "new"}`);
+    }).catch(() => setFormError("Session check failed. Your edits stay in this page."));
+  }, [postId]);
+  const resolvedPublishDate = publishedAtLocal === toDatetimeLocalValue(originalPublishDate.current) ? originalPublishDate.current : fromDatetimeLocalValue(publishedAtLocal);
+  const snapshot = JSON.stringify({ title, slug, h1, excerpt, status, source, published_at: resolvedPublishDate,
+    meta_title: metaTitle, meta_description: metaDescription, canonical_url: canonicalUrl,
+    featured_image_url: featuredUrl, featured_image_alt: featuredAlt, noindex, content_json: contentJson,
+    primary_keyword: primaryKeyword, secondary_keywords: secondaryKwText.split(/[\n,]+/).filter(Boolean), search_intent: searchIntent,
+    category_id: categoryId, semantic_cluster: semanticCluster, related_guide_override_slugs: relatedGuideOverrideText.split(/[\n,]+/).filter(Boolean),
+    tag_ids: tagIds, updated_at: revision, seoGenSlug, seoApplySuggestions });
+  // Capture the server baseline independently of the asynchronous recovery identity lookup.
+  // Otherwise an early edit could become the baseline while auth.getUser() is pending.
+  useEffect(() => {
+    if (loaded && baseline.current === null) {
+      baseline.current = snapshot;
+      setBaselineSnapshot(snapshot);
+    }
+  }, [loaded, snapshot]);
+  const recoveryReadKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (!loaded || !recoveryKey) return;
+    if (recoveryReadKey.current !== recoveryKey) {
+      recoveryReadKey.current = recoveryKey;
+      try {
+        const backup = localStorage.getItem(`${recoveryKey}:before-restore`);
+        if (backup) {
+          const item = JSON.parse(backup);
+          if (item.snapshot && Date.now() - item.savedAt < 7 * 86400000) setRecoveryBackup(item.snapshot);
+        }
+      } catch { setFormError("An older browser copy could not be read. Your current recovery copy will still be checked."); }
+      try {
+        const raw = localStorage.getItem(recoveryKey);
+        if (raw) {
+          const item = JSON.parse(raw);
+          if (item.snapshot && Date.now() - item.savedAt < 7 * 86400000 && JSON.stringify(item.snapshot) !== baseline.current) { setRecovery(item.snapshot); return; }
+        }
+      } catch { setFormError("Browser draft recovery is unavailable. Keep this page open until your save succeeds."); return; }
+    }
+    const dirty = snapshot !== baseline.current;
+    const persist = () => {
+      if (saved.current || recovery) return;
+      try {
+        if (dirty) localStorage.setItem(recoveryKey, JSON.stringify({ savedAt: Date.now(), snapshot: JSON.parse(snapshot) }));
+        else localStorage.removeItem(recoveryKey);
+      }
+      catch { setFormError("Browser draft recovery is unavailable. Keep this page open until your save succeeds."); }
+    };
+    const beforeUnload = (event: BeforeUnloadEvent) => { if (dirty && !saved.current) { persist(); event.preventDefault(); } };
+    const navigate = (event: MouseEvent) => {
+      const link = (event.target as Element)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (dirty && !saved.current && link && link.target !== "_blank" && link.href !== location.href && !window.confirm("Leave this page? Unsaved edits are kept in browser recovery.")) { event.preventDefault(); event.stopPropagation(); }
+      else if (link) persist();
+    };
+    // Synchronous write closes the auth-redirect window; snapshots contain no credentials.
+    persist();
+    window.addEventListener("beforeunload", beforeUnload);
+    document.addEventListener("click", navigate, true);
+    return () => { window.removeEventListener("beforeunload", beforeUnload); document.removeEventListener("click", navigate, true); };
+  }, [snapshot, loaded, recoveryKey, recovery]);
+
+  function restoreBrowserCopy(next: Record<string, unknown>) {
+    if (recovery && recovery !== next && snapshot !== baseline.current) {
+      setFormError("Keep your current edits or restore the recovered copy before switching to the other browser copy.");
+      return;
+    }
+    // Keep both browser copies before replacing any current work, including edits
+    // made while the asynchronous recovery lookup was still pending.
+    const other = recovery && recovery !== next ? recovery : snapshot !== baseline.current ? JSON.parse(snapshot) as Record<string, unknown> : null;
+    try {
+      if (!recoveryKey) throw new Error("Recovery identity is unavailable.");
+      if (other && JSON.stringify(other) !== JSON.stringify(next)) {
+        localStorage.setItem(`${recoveryKey}:before-restore`, JSON.stringify({ savedAt: Date.now(), snapshot: other }));
+        setRecoveryBackup(other);
+      }
+      localStorage.setItem(recoveryKey, JSON.stringify({ savedAt: Date.now(), snapshot: next }));
+    } catch {
+      setFormError("Could not preserve both browser copies. Your current writing has been kept. Free browser storage and retry.");
+      return;
+    }
+    hydratePost({ ...next, retired });
+    setSeoGenSlug(Boolean(next.seoGenSlug));
+    setSeoApplySuggestions(Boolean(next.seoApplySuggestions));
+    setRecovery(null);
+  }
+  const recoveryNotice = revisionConflict || receipt || retired || recovery || recoveryBackup || templateBackup ? <div className="blog-editor-notices space-y-2" aria-live="polite">
+    {revisionConflict && postId ? <Link href={`${postsListPath}/${postId}`} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-700 underline">Open the latest editor in a new tab to reconcile this conflict</Link> : null}
+    {receipt ? <p role="status" className="text-sm text-green-700">{receipt}</p> : null}
+    {retired ? <p role="status">This retired slug redirects to its canonical destination. This record is read-only.</p> : null}
+    {recovery ? <div className="rounded border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">Review your recovered writing</p><p>Unsaved work was recovered from this browser. Choose a copy before editing or saving. Your current copy is kept when you restore.</p>
+      <div className="mt-3 flex flex-wrap gap-2"><Button type="button" disabled={retired} onClick={() => restoreBrowserCopy(recovery)}>Restore recovered work</Button>
+      <Button type="button" variant="outline" onClick={() => { try { if (recoveryKey) localStorage.removeItem(recoveryKey); setRecovery(null); } catch { setFormError("Could not clear browser recovery. Your current writing has been kept."); } }}>{snapshot === baselineSnapshot ? "Keep server version" : "Keep current edits"}</Button></div></div> : null}
+    {recoveryBackup ? <div className="flex flex-wrap items-center gap-2 text-sm"><p>Your other browser copy is available until you save.</p><Button type="button" variant="outline" disabled={retired || Boolean(recovery && snapshot !== baselineSnapshot)} onClick={() => restoreBrowserCopy(recoveryBackup)}>Restore other browser copy</Button></div> : null}
+    {templateBackup ? <Button type="button" variant="outline" onClick={() => { setBlocks(templateBackup); setTemplateBackup(null); }}>Undo template replacement</Button> : null}
+  </div> : null;
 
   const updateBlock = useCallback((index: number, next: BlogContentBlock) => {
     setBlocks((prev) => {
@@ -703,6 +732,7 @@ export function PostEditorForm({
   const validateClient = (): boolean => {
     setFieldErrors([]);
     const errs: string[] = [];
+    if (featuredUrl.trim() && !isAllowedAuthoringBlogImageSrc(featuredUrl)) errs.push("Unsupported image URL. Upload the image or use an approved image host.");
     if (status === "scheduled" && !publishedAtLocal.trim()) {
       errs.push("Scheduled posts need a publish date/time.");
     }
@@ -727,20 +757,22 @@ export function PostEditorForm({
 
   const save = async () => {
     setFormError(null);
-    if (!validateClient()) return;
+    if (recovery) { setFormError("Choose which recovered copy to keep before saving."); return; }
+    if (retired || saving || !validateClient()) return;
     setSaving(true);
+    try {
     const token = await getToken();
     if (!token) {
-      setFormError("Not signed in.");
+      setFormError("Your session expired. Sign in again in another tab, then retry. Your edits are retained.");
       setSaving(false);
       return;
     }
-    const published_at =
-      status === "draft"
-        ? null
-        : fromDatetimeLocalValue(publishedAtLocal) ??
-          (status === "published" ? new Date().toISOString() : null);
+    // The server supplies "now"; client clock skew cannot turn Publish into a schedule.
+    const published_at = status === "draft" ? null : resolvedPublishDate;
+    if (retry.current?.fingerprint !== snapshot) retry.current = { fingerprint: snapshot, requestId: crypto.randomUUID() };
     const body = {
+      request_id: retry.current.requestId,
+      ...(mode === "edit" ? { expected_updated_at: revision } : {}),
       ...(mode === "edit" && postId ? { id: postId } : {}),
       title: title.trim(),
       slug: slug.trim(),
@@ -751,7 +783,7 @@ export function PostEditorForm({
       published_at,
       meta_title: metaTitle.trim() || null,
       meta_description: metaDescription.trim() || null,
-      canonical_url: canonicalUrl.trim() || null,
+      canonical_url: null,
       featured_image_url: featuredUrl.trim() || null,
       featured_image_alt: featuredAlt.trim() || null,
       noindex,
@@ -777,16 +809,21 @@ export function PostEditorForm({
       method: mode === "edit" ? "PUT" : "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
     });
     const json = (await res.json().catch(() => ({}))) as {
       error?: string;
       code?: string;
       broken?: { fieldPath: string; brokenHref: string; issueType: string; recommendedFix: string }[];
-      post?: { id: string };
+      post?: Record<string, unknown> & { id: string };
+      receipt?: { saved_at: string };
+      governance_warnings?: { message: string }[];
+      draft_preview_query?: string | null;
       validation?: { issues?: { code: string; message: string }[] };
     };
     setSaving(false);
     if (!res.ok) {
+      if (json.code === "revision_conflict") setRevisionConflict(true);
       const pubIssues = json.validation?.issues?.map((i) => i.message).filter(Boolean) ?? [];
       setFieldErrors(pubIssues);
       if (json.code === "cms_link_validation" && json.broken?.length) {
@@ -796,10 +833,23 @@ export function PostEditorForm({
           .join("\n");
         setFormError(`${json.error ?? "CMS internal blog link validation failed."}\n${detail}`);
       } else {
-        setFormError(json.error ?? "Save failed.");
+        setFormError(res.status === 401 || res.status === 403 ? `${json.error ?? "Session verification required."} Sign in again in another tab and retry; your edits are retained.` : json.error ?? "Save failed.");
       }
       return;
     }
+    if (!json.post?.updated_at || !json.receipt) throw new Error("No save receipt returned. Retry safely.");
+    saved.current = true;
+    setRevisionConflict(false);
+    if (recoveryKey) { try { localStorage.removeItem(recoveryKey); localStorage.removeItem(`${recoveryKey}:before-restore`); } catch { /* Server receipt remains authoritative. */ } }
+    setRecoveryBackup(null);
+    hydratePost(json.post);
+    setDraftPreviewQuery(json.draft_preview_query ?? null);
+    setSeoGenSlug(false); setSeoApplySuggestions(false);
+    retry.current = null;
+    setReceipt(`Saved ${new Date(json.receipt.saved_at).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg" })} SAST. ${json.governance_warnings?.map((w) => w.message).join(" ") ?? ""}`);
+    // Establish the normalized server response as baseline on the next render.
+    baseline.current = null;
+    setTimeout(() => { saved.current = false; }, 0);
     setFieldErrors([]);
     if (mode === "create" && json.post?.id) {
       router.push(`${postsListPath}/${json.post.id}`);
@@ -807,10 +857,14 @@ export function PostEditorForm({
       return;
     }
     router.refresh();
+    } catch (error) { setFormError(error instanceof Error && error.name === "TimeoutError" ? "Save timed out. Your edits are retained; retry safely." : error instanceof Error ? error.message : "Network error. Your edits are retained; retry when connected."); }
+    finally { setSaving(false); }
   };
 
   const applyTemplate = () => {
     if (!templateChoice) return;
+    if (blocks.length && !window.confirm("Replace the current article body with this template? You can undo the replacement.")) return;
+    setTemplateBackup(structuredClone(blocks));
     let json: BlogContentJson;
     if (templateChoice === "location") {
       json = buildBlogTemplateContent({
@@ -829,13 +883,7 @@ export function PostEditorForm({
       });
     }
     const mapped = json.blocks.map((b) => withBlockId(b));
-    if (layout === "document") {
-      const split = splitBlocksForDocumentMode(mapped);
-      setDocumentHtml(split.documentHtml);
-      setAdvancedBlocks(split.advancedBlocks);
-    } else {
-      setBlocks(mapped);
-    }
+    setBlocks(mapped);
   };
 
   if (loading) {
@@ -853,6 +901,7 @@ export function PostEditorForm({
   }
 
   const publishSidebarProps = {
+    canSchedule,
     saving,
     onSave: save,
     status,
@@ -862,7 +911,7 @@ export function PostEditorForm({
     publishedAtLocal,
     onPublishedAtLocalChange: setPublishedAtLocal,
     slug,
-    canonicalUrl,
+    canonicalUrl: `https://shalean.co.za/blog/${slug}`,
     metaTitle,
     metaDescription,
     semanticCluster,
@@ -881,7 +930,7 @@ export function PostEditorForm({
           <PublishSidebarPanel {...publishSidebarProps} compact />
         </WpMetabox>
 
-        <WpMetabox title="Excerpt">
+        <WpMetabox title="Excerpt" defaultOpen={false}>
           <WpTextareaField
             label="Excerpt"
             id="wp-excerpt"
@@ -902,7 +951,7 @@ export function PostEditorForm({
           />
         </WpMetabox>
 
-        <WpMetabox title="Categories">
+        <WpMetabox title="Categories" defaultOpen={false}>
           <WpLabeledField label="Category" htmlFor="wp-cat">
             <select
               id="wp-cat"
@@ -920,7 +969,8 @@ export function PostEditorForm({
           </WpLabeledField>
         </WpMetabox>
 
-        <WpMetabox title="Tags">
+        <WpMetabox title="Tags" defaultOpen={false}>
+          {tags.length === 0 ? <p className="text-xs text-zinc-600 dark:text-zinc-400">No tags are available yet.</p> : null}
           <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
             {tags.map((t) => {
               const on = tagIds.includes(t.id);
@@ -960,8 +1010,8 @@ export function PostEditorForm({
               <Input
                 id="wp-can"
                 className="font-mono text-xs"
-                value={canonicalUrl}
-                onChange={(e) => setCanonicalUrl(e.target.value)}
+                value={`https://shalean.co.za/blog/${slug}`}
+                readOnly
                 placeholder="/blog/slug"
               />
             </WpLabeledField>
@@ -1085,6 +1135,9 @@ export function PostEditorForm({
         mode={mode}
         postsListPath={postsListPath}
         saving={saving}
+        saveState={recovery ? "Recovery needs review" : saving ? "Saving…" : mode === "create" ? "Unsaved changes" : baselineSnapshot === null ? "Checking saved state…" : snapshot !== baselineSnapshot ? "Unsaved changes" : "Saved"}
+        disabled={retired || Boolean(recovery)}
+        status={status}
         onSave={save}
         formError={formError}
         fieldErrors={fieldErrors}
@@ -1100,20 +1153,16 @@ export function PostEditorForm({
         permalinkPreview={`/blog/${slug.trim() || "your-slug"}`}
         viewPostUrl={viewPostUrl}
         viewPostLabel={viewPostLabelText}
+        preview={<BlogArticlePreview title={h1.trim() || title} excerpt={excerpt} slug={slug} featuredUrl={featuredUrl} featuredAlt={featuredAlt} content={contentJson} wordCount={publishPreview.wordCount} />}
+        headlineNotice={h1.trim() && h1.trim() !== title.trim() ? <div className="mx-4 mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-950"><p>Public headline: <strong>{h1}</strong></p><Button type="button" variant="ghost" size="sm" onClick={() => setH1("")}>Use article title as headline</Button></div> : null}
+        notice={recoveryNotice}
         sidebar={documentSidebar}
         createExtras={createTemplateExtras}
         body={
-          <DocumentBodySection
-            variant="wordpress"
-            documentHtml={documentHtml}
-            onDocumentHtmlChange={setDocumentHtml}
-            advancedBlocks={advancedBlocks}
-            onAdvancedBlocksChange={setAdvancedBlocks}
-            renderAdvancedBlock={(block, _index, onChange) => (
-              <BlockFields block={block} onChange={onChange} uploadSlug={slug} />
-            )}
-            newAdvancedBlock={(type) => newBlock(type)}
-            uploadSlug={slug}
+          <ArticleDocumentEditor
+            blocks={blocks} onBlocksChange={setBlocks} uploadSlug={slug} disabled={saving || retired || Boolean(recovery)} wordCount={publishPreview.wordCount}
+            renderBlock={(block, _index, onChange) => <BlockFields block={block} onChange={onChange} uploadSlug={slug} document />}
+            newBlock={newBlock}
           />
         }
       />
@@ -1122,8 +1171,9 @@ export function PostEditorForm({
 
   return (
     <div className="w-full min-w-0 pb-28 md:pb-16">
+      {recoveryNotice}
       {(formError || fieldErrors.length > 0) && (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100">
+        <div role="alert" tabIndex={-1} className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100">
           {formError ? <p className="font-medium">{formError}</p> : null}
           {fieldErrors.length > 0 ? (
             <ul className={cn("list-disc pl-5", formError ? "mt-2" : "")}>
@@ -1135,6 +1185,7 @@ export function PostEditorForm({
         </div>
       )}
 
+      <fieldset disabled={saving || retired || Boolean(recovery)} className="min-w-0 border-0 p-0">
       <header className="mb-8 flex flex-col gap-4 border-b border-zinc-200/90 pb-8 sm:flex-row sm:items-end sm:justify-between dark:border-zinc-800/90">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Blog</p>
@@ -1349,12 +1400,12 @@ export function PostEditorForm({
                 />
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="can">Canonical URL (optional)</Label>
+                <Label htmlFor="can">Canonical URL (derived from slug)</Label>
                 <Input
                   id="can"
                   className="rounded-lg font-mono text-sm"
-                  value={canonicalUrl}
-                  onChange={(e) => setCanonicalUrl(e.target.value)}
+                  value={`https://shalean.co.za/blog/${slug}`}
+                  readOnly
                   placeholder="/blog/slug"
                 />
               </div>
@@ -1516,7 +1567,6 @@ export function PostEditorForm({
                     <option value="rich_text">rich_text (WordPress-style)</option>
                     <option value="image">image</option>
                     <option value="faq">faq</option>
-                    <option value="cta">cta</option>
                     <option value="internal_links">internal_links</option>
                   </optgroup>
                   <optgroup label="Layouts">
@@ -1591,6 +1641,7 @@ export function PostEditorForm({
           </div>
         </aside>
       </div>
+      </fieldset>
     </div>
   );
 }
@@ -1599,10 +1650,12 @@ function BlockFields({
   block,
   onChange,
   uploadSlug,
+  document = false,
 }: {
   block: BlogContentBlock;
   onChange: (b: BlogContentBlock) => void;
   uploadSlug?: string;
+  document?: boolean;
 }) {
   const lab = "text-xs font-medium text-zinc-600 dark:text-zinc-400";
   const inp = "mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950";
@@ -1619,13 +1672,14 @@ function BlockFields({
       return (
         <div className="space-y-2">
           <div>
-            <label className={lab}>Title</label>
-            <Input className={inp} value={block.title} onChange={(e) => onChange({ ...block, title: e.target.value })} />
+            <label className={lab}>Title
+            <Input className={inp} value={block.title} onChange={(e) => onChange({ ...block, title: e.target.value })} /></label>
           </div>
           <div>
             <label className={lab}>Heading level</label>
             <select
               className={inp}
+              aria-label="Section heading level"
               value={String(block.heading_level ?? 2)}
               onChange={(e) =>
                 onChange({ ...block, heading_level: Number(e.target.value) as 2 | 3 | 4 })
@@ -1638,7 +1692,7 @@ function BlockFields({
           </div>
           <div>
             <label className={lab}>Content</label>
-            <Textarea className={cn(inp, "min-h-[100px]")} value={block.content} onChange={(e) => onChange({ ...block, content: e.target.value })} />
+            <Textarea aria-label="Section content" className={cn(inp, "min-h-[100px]")} value={block.content} onChange={(e) => onChange({ ...block, content: e.target.value })} />
           </div>
         </div>
       );
@@ -1791,6 +1845,7 @@ function BlockFields({
                   className={cn(
                     "mt-2 border-0 border-b border-zinc-200/80 bg-transparent px-0 pb-2 text-base font-semibold leading-snug tracking-tight text-zinc-900 shadow-none placeholder:text-zinc-400 focus-visible:border-zinc-400 focus-visible:ring-0 dark:border-zinc-600 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus-visible:border-zinc-500",
                   )}
+                  aria-label={`FAQ question ${j + 1}`}
                   value={item.question}
                   placeholder="Question shown as a heading on the site"
                   onChange={(e) => {
@@ -1804,6 +1859,7 @@ function BlockFields({
                 <label className={lab}>Answer</label>
                 <Textarea
                   className={cn(inp, "mt-1 min-h-[88px] rounded-lg")}
+                  aria-label={`FAQ answer ${j + 1}`}
                   value={item.answer}
                   onChange={(e) => {
                     const items = [...block.items];
@@ -1834,76 +1890,9 @@ function BlockFields({
         </div>
       );
     case "cta":
-      return (
-        <div className="grid gap-2 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className={lab}>Title</label>
-            <Input className={inp} value={block.title} onChange={(e) => onChange({ ...block, title: e.target.value })} />
-          </div>
-          <div className="sm:col-span-2">
-            <label className={lab}>Description (optional)</label>
-            <Textarea className={inp} value={block.description ?? ""} onChange={(e) => onChange({ ...block, description: e.target.value || undefined })} />
-          </div>
-          <div>
-            <label className={lab}>Button</label>
-            <Input className={inp} value={block.button_text} onChange={(e) => onChange({ ...block, button_text: e.target.value })} />
-          </div>
-          <div>
-            <label className={lab}>Link</label>
-            <Input className={inp} value={block.link} onChange={(e) => onChange({ ...block, link: e.target.value })} />
-          </div>
-          <div>
-            <label className={lab}>Variant</label>
-            <select
-              className={inp}
-              value={block.variant ?? "primary"}
-              onChange={(e) => onChange({ ...block, variant: e.target.value as "primary" | "secondary" })}
-            >
-              <option value="primary">primary</option>
-              <option value="secondary">secondary</option>
-            </select>
-          </div>
-        </div>
-      );
+      return <p className="text-sm text-zinc-600">Public articles use the shared booking section. This legacy CTA is retained for reference; its custom title and button are not displayed.</p>;
     case "internal_links":
-      return (
-        <div className="space-y-2">
-          <div>
-            <label className={lab}>Title (optional)</label>
-            <Input className={inp} value={block.title ?? ""} onChange={(e) => onChange({ ...block, title: e.target.value || undefined })} />
-          </div>
-          {block.links.map((l, j) => (
-            <div key={j} className="flex flex-wrap gap-2 sm:flex-nowrap">
-              <Input
-                className={cn(inp, "sm:flex-1")}
-                placeholder="Label"
-                value={l.label}
-                onChange={(e) => {
-                  const links = [...block.links];
-                  links[j] = { ...links[j], label: e.target.value };
-                  onChange({ ...block, links });
-                }}
-              />
-              <Input
-                className={cn(inp, "sm:flex-1")}
-                placeholder="/path"
-                value={l.url}
-                onChange={(e) => {
-                  const links = [...block.links];
-                  links[j] = { ...links[j], url: e.target.value };
-                  onChange({ ...block, links });
-                }}
-              />
-              <Button type="button" variant="outline" size="sm" onClick={() => onChange({ ...block, links: block.links.filter((_, k) => k !== j) })}>
-                ×
-              </Button>
-            </div>
-          ))}
-          <Button type="button" size="sm" variant="secondary" onClick={() => onChange({ ...block, links: [...block.links, { label: "", url: "/" }] })}>
-            Add link
-          </Button>
-        </div>
-      );
+      return <InternalLinksEditor block={block} onChange={onChange} />;
     case "quick_answer":
       return (
         <div>
@@ -1914,8 +1903,8 @@ function BlockFields({
     case "rich_text":
       return (
         <div className="space-y-2">
-          <label className={lab}>Rich content</label>
           <RichTextBlockEditor
+            variant={document ? "document" : "default"}
             html={block.html}
             onChange={(html) => onChange({ ...block, html })}
             uploadSlug={uploadSlug}
@@ -1961,15 +1950,15 @@ function BlockFields({
         <div className="space-y-2">
           <div>
             <label className={lab}>URL</label>
-            <Input className={inp} value={block.url} onChange={(e) => onChange({ ...block, url: e.target.value })} />
+            <Input aria-label="Image URL" className={inp} value={block.url} onChange={(e) => onChange({ ...block, url: e.target.value })} />
           </div>
           <div>
             <label className={lab}>Alt</label>
-            <Input className={inp} value={block.alt} onChange={(e) => onChange({ ...block, alt: e.target.value })} />
+            <Input aria-label="Image alt text" className={inp} value={block.alt} onChange={(e) => onChange({ ...block, alt: e.target.value })} />
           </div>
           <div>
             <label className={lab}>Caption (optional)</label>
-            <Input className={inp} value={block.caption ?? ""} onChange={(e) => onChange({ ...block, caption: e.target.value || undefined })} />
+            <Input aria-label="Image caption" className={inp} value={block.caption ?? ""} onChange={(e) => onChange({ ...block, caption: e.target.value || undefined })} />
           </div>
         </div>
       );
@@ -2050,6 +2039,7 @@ function BlockFields({
               <Input
                 key={j}
                 className={cn(inp, "w-32")}
+                aria-label={`Column ${j + 1} heading`}
                 placeholder={`Col ${j + 1}`}
                 value={c}
                 onChange={(e) => {
@@ -2102,6 +2092,7 @@ function BlockFields({
                 <Input
                   key={ci}
                   className={cn(inp, "w-28 sm:w-36")}
+                  aria-label={`Row ${ri + 1}, column ${ci + 1}`}
                   value={cell}
                   onChange={(e) => {
                     const rows = [...block.rows];

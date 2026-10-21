@@ -1,11 +1,13 @@
 "use client";
 
-import { useId, useRef } from "react";
+import { useId, useRef, useState } from "react";
 import Image from "next/image";
+import { isAllowedAuthoringBlogImageSrc } from "@/lib/blog/blog-image-validation";
 import { ImagePlus, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WpLabeledField } from "./WordPressPostEditorLayout";
+import { resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
 import { useBlogMediaUpload } from "./useBlogMediaUpload";
 
 type Props = {
@@ -20,6 +22,15 @@ function isRemoteSrc(src: string) {
   return src.startsWith("http://") || src.startsWith("https://");
 }
 
+function FeaturedImagePreview({ src, alt, automatic }: { src: string; alt: string; automatic: boolean }) {
+  const [state, setState] = useState<"loading" | "loaded" | "placeholder" | "error">(src === "/images/default-cleaning.jpg" ? "placeholder" : "loading");
+  return <div className="relative flex aspect-[16/9] items-center justify-center overflow-hidden rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 text-center dark:border-zinc-700 dark:bg-zinc-900">
+    {state === "loading" || state === "loaded" ? <Image src={src} alt={alt || "Featured image preview"} fill className={state === "loaded" ? "object-cover" : "object-cover opacity-0"} sizes="300px" unoptimized={isRemoteSrc(src)} onLoad={event => setState(event.currentTarget.naturalWidth <= 1 || event.currentTarget.naturalHeight <= 1 ? "placeholder" : "loaded")} onError={() => setState("error")} /> : null}
+    {state !== "loaded" ? <div role="status" className="space-y-2 text-sm text-zinc-600 dark:text-zinc-300"><ImagePlus className="mx-auto h-7 w-7" aria-hidden /><p>{state === "loading" ? "Loading image preview…" : state === "error" ? "Image preview could not load. Check the URL or upload an image." : "Placeholder image. Choose a featured image for this article."}</p></div> : null}
+    {state === "loaded" && automatic ? <span className="absolute bottom-2 left-2 rounded bg-white/95 px-2 py-1 text-xs text-zinc-700">Automatic image</span> : null}
+  </div>;
+}
+
 export function BlogFeaturedImageField({
   imageUrl,
   altText,
@@ -31,6 +42,7 @@ export function BlogFeaturedImageField({
   const fileRef = useRef<HTMLInputElement>(null);
   const { uploadFile, uploading, error, clearError } = useBlogMediaUpload();
   const previewSrc = imageUrl.trim();
+  const resolvedSrc = resolveBlogFeaturedSrc(slug ?? "", previewSrc || null);
   const folder = slug?.trim() ? `featured/${slug.trim().slice(0, 48)}` : "featured";
 
   const onPickFile = async (file: File | null) => {
@@ -47,28 +59,13 @@ export function BlogFeaturedImageField({
 
   return (
     <div className="space-y-3">
-      {previewSrc ? (
-        <div className="relative aspect-[16/9] overflow-hidden rounded-md border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
-          <Image
-            src={previewSrc}
-            alt={altText.trim() || "Featured image preview"}
-            fill
-            className="object-cover"
-            sizes="280px"
-            unoptimized={isRemoteSrc(previewSrc)}
-          />
-        </div>
-      ) : (
-        <div className="flex aspect-[16/9] flex-col items-center justify-center gap-2 rounded-md border border-dashed border-zinc-300 bg-zinc-50/80 px-3 text-center dark:border-zinc-600 dark:bg-zinc-900/50">
-          <ImagePlus className="h-8 w-8 text-zinc-400" aria-hidden />
-          <p className="text-xs text-zinc-500">No featured image yet</p>
-        </div>
-      )}
+      {isAllowedAuthoringBlogImageSrc(resolvedSrc) ? <FeaturedImagePreview key={resolvedSrc} src={resolvedSrc} alt={altText.trim()} automatic={!previewSrc} /> : <p role="status" className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-600">Choose an image to see a preview.</p>}
 
       <input
         ref={fileRef}
         id={inputId}
         type="file"
+        aria-label="Featured image file"
         accept="image/jpeg,image/png,image/webp,image/gif"
         className="sr-only"
         onChange={(e) => {
@@ -91,24 +88,25 @@ export function BlogFeaturedImageField({
         </Button>
         {previewSrc ? (
           <Button type="button" size="sm" variant="ghost" onClick={() => onImageUrlChange("")}>
-            Remove
+            Use automatic image
           </Button>
         ) : null}
       </div>
 
+      {previewSrc && !isAllowedAuthoringBlogImageSrc(previewSrc) ? <p role="alert" className="text-xs text-red-600">Unsupported image URL. Upload the image or use an approved image host.</p> : null}
       {error ? <p className="text-xs text-red-600 dark:text-red-400">{error}</p> : null}
 
-      <WpLabeledField label="Image URL" htmlFor="wp-feat">
+      <WpLabeledField label="Image URL" htmlFor={`${inputId}-url`}>
         <Input
-          id="wp-feat"
+          id={`${inputId}-url`}
           className="font-mono text-xs"
           value={imageUrl}
           onChange={(e) => onImageUrlChange(e.target.value)}
-          placeholder="https://… or /images/…"
+          placeholder="https://… or /images/… (blank uses automatic image)"
         />
       </WpLabeledField>
-      <WpLabeledField label="Alt text" htmlFor="wp-feata">
-        <Input id="wp-feata" value={altText} onChange={(e) => onAltTextChange(e.target.value)} />
+      <WpLabeledField label="Alt text" htmlFor={`${inputId}-alt`}>
+        <Input id={`${inputId}-alt`} value={altText} onChange={(e) => onAltTextChange(e.target.value)} />
       </WpLabeledField>
     </div>
   );

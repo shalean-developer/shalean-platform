@@ -8,6 +8,7 @@ import { buildInjectInternalLinksContext } from "@/lib/blog/seo/build-internal-l
 import { parseSeoInternalLinkContext } from "@/lib/blog/seo/seo-internal-link-context-schema";
 import { normalizeSemanticClusterInput } from "@/lib/seo/blogGovernance";
 import { normalizeManualRelatedGuideSlugs } from "@/lib/blog/fetch-cluster-related-guides";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { emptyBlogContentJson, type BlogContentJson } from "./content-json";
 import { safeParseBlogContentJson } from "./content-json-schema";
@@ -164,19 +165,21 @@ async function loadPostBySlug(
     console.log("🔍 FETCHING SLUG:", trimmed);
   }
 
-  const supabase = getSupabaseServer();
+  const allowPreview = await isBlogDraftPreviewAllowed(opts?.previewToken, trimmed);
+  if (opts?.previewToken && !allowPreview) return null;
+  const supabase = allowPreview ? getSupabaseAdmin() : getSupabaseServer();
   if (!supabase) {
     console.error("❌ getPostBySlug: Supabase server client is NULL — set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY");
     return null;
   }
 
   const nowIso = new Date().toISOString();
-  const allowPreview = isBlogDraftPreviewAllowed(opts?.previewToken ?? null);
+
 
   if (process.env.NODE_ENV === "development") {
     console.log("[blog] getPostBySlug query", {
       slug: trimmed,
-      previewToken: opts?.previewToken ?? null,
+      previewRequested: Boolean(opts?.previewToken),
       allowPreview,
       filter: allowPreview ? "status IN draft|published|scheduled" : "status=published AND published_at<=now",
     });
@@ -291,7 +294,7 @@ async function loadPostBySlug(
     displayPublishedAt,
   );
   const indexedForSearch =
-    dbStatus === "published" &&
+    !allowPreview && dbStatus === "published" &&
     Boolean(publishedAtRaw) &&
     new Date(publishedAtRaw!) <= new Date() &&
     !Boolean(row.noindex);
@@ -359,7 +362,7 @@ async function loadPostBySlug(
     updatedAt: updatedAtNormalized,
     dbStatus,
     indexedForSearch,
-    noindex: Boolean(row.noindex),
+    noindex: allowPreview || Boolean(row.noindex),
     primaryKeyword,
     secondaryKeywords,
     searchIntent,

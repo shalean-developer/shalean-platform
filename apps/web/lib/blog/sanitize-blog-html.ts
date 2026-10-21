@@ -1,6 +1,6 @@
 import sanitizeHtml from "sanitize-html";
 
-import { isBlogMediaPublicUrl } from "@/lib/blog/blog-media-storage";
+import { isAllowedAuthoringBlogImageSrc } from "@/lib/blog/blog-image-validation";
 
 const ALLOWED_TAGS = [
   "p",
@@ -30,23 +30,6 @@ const ALLOWED_TAGS = [
   "td",
 ];
 
-function isAllowedBlogImageSrc(src: string): boolean {
-  const t = src.trim();
-  if (!t) return false;
-  if (t.startsWith("/images/") || t.startsWith("/marketing/")) return true;
-  if (isBlogMediaPublicUrl(t)) return true;
-  try {
-    const u = new URL(t);
-    if (u.protocol !== "https:" && u.protocol !== "http:") return false;
-    const host = u.hostname.toLowerCase();
-    if (host === "images.unsplash.com") return true;
-    const strip = host.replace(/^www\./, "");
-    return strip === "shalean.co.za" || strip === "shalean.com";
-  } catch {
-    return false;
-  }
-}
-
 const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   allowedTags: ALLOWED_TAGS,
   allowedAttributes: {
@@ -62,9 +45,10 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   allowedSchemes: ["http", "https", "mailto", "tel"],
   allowProtocolRelative: false,
   transformTags: {
+    h1: "h2",
     img: (_tagName, attribs) => {
       const src = typeof attribs.src === "string" ? attribs.src : "";
-      if (!isAllowedBlogImageSrc(src)) {
+      if (!isAllowedAuthoringBlogImageSrc(src)) {
         return { tagName: "span", attribs: { class: "hidden" }, text: "" };
       }
       return {

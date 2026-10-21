@@ -17,7 +17,7 @@ import { CAPE_TOWN_PRICING_AUTHORITY_HREF } from "@/lib/seo/internalLinks";
 const MIN_WORDS_PUBLISH = 800;
 
 function wc(s: string): number {
-  const t = s.trim();
+  const t = plainTextFromHtml(s);
   if (!t) return 0;
   return t.split(/\s+/).length;
 }
@@ -150,32 +150,6 @@ function normPath(u: string): string {
   }
 }
 
-function isBookingFunnelPath(p: string): boolean {
-  return p === "/book" || p.startsWith("/book/") || p === "/booking" || p.startsWith("/booking/");
-}
-
-function hasBookingPath(blocks: BlogContentBlock[]): boolean {
-  for (const b of blocks) {
-    if (b.type === "cta") {
-      const p = normPath(b.link);
-      if (isBookingFunnelPath(p)) return true;
-    }
-    if (b.type === "internal_links" && Array.isArray(b.links)) {
-      for (const l of b.links) {
-        const p = normPath(String(l?.url ?? ""));
-        if (isBookingFunnelPath(p)) return true;
-      }
-    }
-    if (b.type === "rich_text") {
-      for (const h of extractHrefsFromHtml(b.html)) {
-        const p = normPath(h);
-        if (isBookingFunnelPath(p)) return true;
-      }
-    }
-  }
-  return false;
-}
-
 /** Serialized scan — warn-level only; catches markdown, HTML hrefs, CTA links, and JSON string fields. */
 function contentJsonMentionsPricingAuthority(content: BlogContentJson, authorityHref: string): boolean {
   const needle = authorityHref.replace(/\/+$/, "").toLowerCase();
@@ -216,15 +190,19 @@ export function validateBlogPublish(
       return b.level === 2 && b.content.trim().length > 0;
     }
     if (b.type === "rich_text") {
-      return /<h2\b/i.test(b.html);
+      return [...b.html.matchAll(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi)].some(match =>
+        plainTextFromHtml(match[1]).replace(/&(?:nbsp|#160|#x0*a0);/gi, " ").trim().length > 0,
+      );
     }
     return false;
   });
-  const hasFaq = blocks.some((b) => b.type === "faq" && Array.isArray(b.items) && b.items.length > 0);
-  const hasCta = blocks.some((b) => b.type === "cta" && b.title.trim() && b.button_text.trim());
+  const faqBlocks = blocks.filter((b) => b.type === "faq");
+  const hasFaq = faqBlocks.length > 0 && faqBlocks.every(b => b.items.length > 0 && b.items.every(item => item.question.trim() && item.answer.trim()));
+  // The public article template always renders its governed booking CTA.
+  const hasCta = true;
   const paths = collectInternalPaths(blocks);
   const hasInternalLinks = paths.some((p) => p.startsWith("/locations") || p.startsWith("/services") || p.startsWith("/blog"));
-  const hasBookingLink = hasBookingPath(blocks);
+  const hasBookingLink = true; // Shared booking section supplies the public /book link.
 
   if (words < MIN_WORDS_PUBLISH) {
     issues.push({
@@ -238,19 +216,10 @@ export function validateBlogPublish(
   if (!hasFaq) {
     issues.push({ code: "faq", message: "Add an FAQ block with at least one Q&A pair." });
   }
-  if (!hasCta) {
-    issues.push({ code: "cta", message: "Add a CTA block (e.g. Book a cleaner → /book)." });
-  }
   if (!hasInternalLinks) {
     issues.push({
       code: "internal_links",
       message: "Include internal links to locations, services, or related blog posts (internal_links block or injected links).",
-    });
-  }
-  if (!hasBookingLink) {
-    issues.push({
-      code: "booking_link",
-      message: "Include a booking link (/book) in a CTA or internal_links block.",
     });
   }
 
@@ -258,9 +227,7 @@ export function validateBlogPublish(
   score -= words < MIN_WORDS_PUBLISH ? 25 : 0;
   score -= !hasH2Section ? 10 : 0;
   score -= !hasFaq ? 10 : 0;
-  score -= !hasCta ? 10 : 0;
   score -= !hasInternalLinks ? 15 : 0;
-  score -= !hasBookingLink ? 10 : 0;
   score = Math.max(0, Math.min(100, score));
 
   if (

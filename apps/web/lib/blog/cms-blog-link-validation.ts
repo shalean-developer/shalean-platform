@@ -3,7 +3,6 @@ import type { BlogContentJson } from "@/lib/blog/content-json";
 import {
   blogSlugFromPathname,
   getCanonicalBlogSlug,
-  getCanonicalBlogRoute,
   isRedirectAliasBlogSlug,
   isRoutableBlogSlug,
   normalizeBlogHref,
@@ -151,9 +150,6 @@ export function parseInternalBlogHref(rawHref: string): ParsedInternalBlogHref {
     if (raw.startsWith("http://") || raw.startsWith("https://")) {
       const u = new URL(raw);
       if (!isShaleanMarketingHostname(u.hostname)) {
-        if (u.pathname.includes("/blog/")) {
-          return { kind: "external_host", host: u.hostname };
-        }
         return { kind: "not_blog_internal" };
       }
       const path = u.pathname.split(/[?#]/)[0] ?? u.pathname;
@@ -236,7 +232,7 @@ function validateBlogHrefOccurrence(
 
   const initialSlug = parsed.initialSlug;
   if (initialSlug && isRedirectAliasBlogSlug(initialSlug)) {
-    const canon = getCanonicalBlogRoute(initialSlug);
+    const canon = normalizeBlogHref(`/blog/${initialSlug}`);
     return {
       sourcePostSlug,
       brokenHref: occ.rawHref,
@@ -270,7 +266,7 @@ function validateBlogHrefOccurrence(
 
   const fix =
     check.issueType === "redirect-alias"
-      ? `Use ${getCanonicalBlogRoute(finalSlug)}`
+      ? `Use ${normalizeBlogHref(`/blog/${finalSlug}`)}`
       : `Publish a post at /blog/${finalSlug}, add it to routed templates, or link to a live service/location URL instead.`;
 
   return {
@@ -292,7 +288,8 @@ export async function fetchPublishedBlogSlugSet(admin: SupabaseClient): Promise<
     .lte("published_at", nowIso)
     .not("content_json", "is", null);
 
-  if (error || !data) return new Set();
+  if (error) throw new Error("Published link targets could not be verified. Retry before publishing.");
+  if (!data) return new Set();
   const set = new Set<string>();
   for (const row of data as { slug?: string }[]) {
     const s = String(row.slug ?? "").trim().toLowerCase();
@@ -305,7 +302,8 @@ export async function fetchPublishedBlogSlugSet(admin: SupabaseClient): Promise<
 export async function fetchAllCmsBlogSlugSet(admin: SupabaseClient): Promise<Set<string>> {
   const { data, error } = await admin.from("blog_posts").select("slug").not("content_json", "is", null);
 
-  if (error || !data) return new Set();
+  if (error) throw new Error("Published link targets could not be verified. Retry before publishing.");
+  if (!data) return new Set();
   const set = new Set<string>();
   for (const row of data as { slug?: string }[]) {
     const s = String(row.slug ?? "").trim().toLowerCase();
@@ -322,81 +320,11 @@ export function validateCanonicalUrlField(
   const raw = canonicalUrl == null ? "" : String(canonicalUrl).trim();
   if (!raw) return null;
 
-  try {
-    if (raw.startsWith("http://") || raw.startsWith("https://")) {
-      const u = new URL(raw);
-      if (!isShaleanMarketingHostname(u.hostname)) {
-        return {
-          sourcePostSlug,
-          brokenHref: raw,
-          normalizedSlug: "",
-          fieldPath: "canonical_url",
-          issueType: "bad-canonical",
-          recommendedFix: "Use https://shalean.co.za/... or a relative /blog/... path on the apex host.",
-        };
-      }
-      const path = u.pathname.split(/[?#]/)[0] ?? u.pathname;
-      if (!path.startsWith("/blog/")) return null;
-      const slug = blogSlugFromPathname(path);
-      if (!slug) {
-        return {
-          sourcePostSlug,
-          brokenHref: raw,
-          normalizedSlug: "",
-          fieldPath: "canonical_url",
-          issueType: "bad-canonical",
-          recommendedFix: "Set canonical_url to a valid /blog/{slug} path.",
-        };
-      }
-      const v = validateInternalBlogLinkTarget(slug, ctx);
-      if (v.ok) return null;
-      return {
-        sourcePostSlug,
-        brokenHref: raw,
-        normalizedSlug: slug,
-        fieldPath: "canonical_url",
-        issueType: v.issueType === "redirect-alias" ? "redirect-alias" : "bad-canonical",
-        recommendedFix:
-          v.issueType === "redirect-alias"
-            ? `Use ${getCanonicalBlogRoute(slug)}`
-            : "Point canonical_url at this post's live URL or another published /blog slug.",
-      };
-    }
-    const path = raw.split(/[?#]/)[0] ?? raw;
-    const withSlash = path.startsWith("/") ? path : `/${path}`;
-    if (!withSlash.startsWith("/blog/")) return null;
-    const slug = blogSlugFromPathname(withSlash);
-    if (!slug) {
-      return {
-        sourcePostSlug,
-        brokenHref: raw,
-        normalizedSlug: "",
-        fieldPath: "canonical_url",
-        issueType: "bad-canonical",
-        recommendedFix: "Use /blog/{slug} with a valid slug.",
-      };
-    }
-    const v = validateInternalBlogLinkTarget(slug, ctx);
-    if (v.ok) return null;
-    return {
-      sourcePostSlug,
-      brokenHref: raw,
-      normalizedSlug: slug,
-      fieldPath: "canonical_url",
-      issueType: v.issueType === "redirect-alias" ? "redirect-alias" : "bad-canonical",
-      recommendedFix:
-        v.issueType === "redirect-alias" ? `Use ${getCanonicalBlogRoute(slug)}` : "Fix canonical_url to a routable blog slug.",
-    };
-  } catch {
-    return {
-      sourcePostSlug,
-      brokenHref: raw,
-      normalizedSlug: "",
-      fieldPath: "canonical_url",
-      issueType: "malformed-url",
-      recommendedFix: "canonical_url must be a valid absolute URL or path.",
-    };
-  }
+  const expected = `/blog/${sourcePostSlug}`;
+  if (raw === expected || raw === `https://shalean.co.za${expected}`) return null;
+  return { sourcePostSlug, brokenHref: raw, normalizedSlug: sourcePostSlug, fieldPath: "canonical_url", issueType: "bad-canonical",
+    recommendedFix: `Use https://shalean.co.za${expected}; blog articles are self-canonical.` };
+
 }
 
 export function validateRelatedGuideOverrideSlugs(
@@ -416,7 +344,7 @@ export function validateRelatedGuideOverrideSlugs(
         normalizedSlug: getCanonicalBlogSlug(s),
         fieldPath: `related_guide_override_slugs[${i}]`,
         issueType: "redirect-alias",
-        recommendedFix: `Use canonical slug ${getCanonicalBlogSlug(s)} (not redirect-only alias).`,
+        recommendedFix: normalizeBlogHref(`/blog/${s}`).startsWith("/blog/") ? `Use canonical slug ${getCanonicalBlogSlug(s)} (not redirect-only alias).` : `Remove this override: ${normalizeBlogHref(`/blog/${s}`)} is a service or location page. Overrides require a published blog slug.`,
       });
       return;
     }
@@ -497,7 +425,7 @@ export async function validateCmsBlogLinksForAdminSave(
   input: CmsBlogDocumentInput & { status: CmsBlogSaveStatus },
 ): Promise<BrokenCmsBlogLink[]> {
   if (input.status === "draft") return [];
-  const base = await fetchAllCmsBlogSlugSet(admin);
+  const base = await fetchPublishedBlogSlugSet(admin);
   const set = buildPublishedSlugSetForCmsValidation(base, input.slug);
   return validateCmsBlogDocument(input, set);
 }

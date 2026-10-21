@@ -91,6 +91,10 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/booking/__tests__/officeBookingPaymentDisplay.test.ts
 
+      - name: Blog editor permissions and publication regressions
+        if: steps.filter.outputs.run_suite == 'true'
+        run: npm run test:blog
+
       - name: Critical tests (payments + referrals)
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test:critical

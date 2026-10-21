@@ -1,18 +1,20 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Settings2, Eye, Pencil, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import "./blog-editor-shell.css";
 
 type Props = {
   mode: "create" | "edit";
   postsListPath: string;
   saving: boolean;
+  saveState?: string;
+  disabled?: boolean;
+  status: "draft" | "published" | "scheduled";
   onSave: () => void;
   formError: string | null;
   fieldErrors: string[];
@@ -25,145 +27,97 @@ type Props = {
   permalinkPreview: string;
   viewPostUrl?: string | null;
   viewPostLabel?: string;
+  preview?: ReactNode;
+  headlineNotice?: ReactNode;
+  notice?: ReactNode;
   body: ReactNode;
   sidebar: ReactNode;
   createExtras?: ReactNode;
 };
 
-export function WordPressPostEditorLayout({
-  mode,
-  postsListPath,
-  saving,
-  onSave,
-  formError,
-  fieldErrors,
-  title,
-  onTitleChange,
-  slug,
-  onSlugChange,
-  slugAuto,
-  onSlugAutoChange,
-  permalinkPreview,
-  viewPostUrl,
-  viewPostLabel = "View post",
-  body,
-  sidebar,
-  createExtras,
-}: Props) {
-  return (
-    <div className="w-full min-w-0 pb-28 md:pb-8">
-      {(formError || fieldErrors.length > 0) && (
-        <div className="mb-4 rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100">
-          {formError ? <p className="font-medium">{formError}</p> : null}
-          {fieldErrors.length > 0 ? (
-            <ul className={cn("list-disc pl-5", formError ? "mt-2" : "")}>
-              {fieldErrors.map((e, idx) => (
-                <li key={`${idx}-${e}`}>{e}</li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      )}
-
-      <div className="sticky top-0 z-20 -mx-1 mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-300 bg-zinc-100/95 px-1 py-2.5 backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-900/95">
-        <div className="flex min-w-0 flex-wrap items-center gap-3">
-          <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 px-2" asChild>
-            <Link href={postsListPath}>← Posts</Link>
-          </Button>
-          <h1 className="truncate text-base font-normal text-zinc-800 dark:text-zinc-100">
-            {mode === "create" ? "Add New Post" : "Edit Post"}
-          </h1>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {viewPostUrl ? (
-            <Button type="button" size="sm" variant="outline" asChild>
-              <Link href={viewPostUrl} target="_blank" rel="noopener noreferrer">
-                {viewPostLabel}
-              </Link>
-            </Button>
-          ) : null}
-          <Button type="button" size="sm" onClick={onSave} disabled={saving}>
-            {saving ? "Saving…" : mode === "create" ? "Save draft" : "Update"}
-          </Button>
-        </div>
-      </div>
-
-      <div className="mb-5 lg:hidden">
-        <details className="group overflow-hidden rounded-sm border border-zinc-300 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-950">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-50 px-3 py-2.5 text-[13px] font-semibold dark:border-zinc-700 dark:bg-zinc-900 [&::-webkit-details-marker]:hidden">
-            <span>Post settings</span>
-            <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500 transition group-open:rotate-180" aria-hidden />
-          </summary>
-          <div className="space-y-3 p-3">{sidebar}</div>
-        </details>
-      </div>
-
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        <main className="min-w-0 flex-1">
-          <div className="rounded-sm border border-zinc-300 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-950">
-            <label htmlFor="wp-post-title" className="sr-only">
-              Title
-            </label>
-            <Input
-              id="wp-post-title"
-              value={title}
-              onChange={(e) => onTitleChange(e.target.value)}
-              placeholder="Add title"
-              className="h-auto rounded-none border-0 border-b border-transparent bg-transparent px-4 py-4 text-2xl font-semibold shadow-none placeholder:text-zinc-400 focus-visible:border-zinc-200 focus-visible:ring-0 sm:text-3xl dark:focus-visible:border-zinc-700"
-            />
-
-            <div className="border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-800">
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Permalink:{" "}
-                {viewPostUrl ? (
-                  <Link
-                    href={viewPostUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-mono text-blue-600 hover:underline dark:text-blue-400"
-                  >
-                    {permalinkPreview}
-                  </Link>
-                ) : (
-                  <span className="font-mono text-blue-600 dark:text-blue-400">{permalinkPreview}</span>
-                )}
-              </p>
-              <details className="mt-2">
-                <summary className="cursor-pointer text-xs text-blue-600 hover:underline dark:text-blue-400">
-                  Edit permalink
-                </summary>
-                <div className="mt-2 space-y-2">
-                  <Input
-                    value={slug}
-                    onChange={(e) => onSlugChange(e.target.value)}
-                    className="h-9 font-mono text-sm"
-                    placeholder="url-slug"
-                    aria-label="Slug"
-                  />
-                  {mode === "create" ? (
-                    <label className="flex items-center gap-2 text-xs text-zinc-500">
-                      <input
-                        type="checkbox"
-                        checked={slugAuto}
-                        onChange={(e) => onSlugAutoChange(e.target.checked)}
-                      />
-                      Auto-generate from title
-                    </label>
-                  ) : null}
-                </div>
-              </details>
-            </div>
-
-            <div className="wp-post-content-area">{body}</div>
-          </div>
-
-          {createExtras ? <div className="mt-4">{createExtras}</div> : null}
-        </main>
-
-        <aside className="hidden w-full shrink-0 space-y-3 lg:block lg:w-[280px]">{sidebar}</aside>
+export function WordPressPostEditorLayout({ mode, postsListPath, saving, saveState = "Unsaved", disabled = false, status, onSave, formError, fieldErrors, title, onTitleChange, slug, onSlugChange, slugAuto, onSlugAutoChange, permalinkPreview, viewPostUrl, body, preview, headlineNotice, notice, sidebar, createExtras }: Props) {
+  const [actionHeight, setActionHeight] = useState(60);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const actionRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState<"write" | "preview">("write");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsDocked, setSettingsDocked] = useState(false);
+  const settingsId = useId();
+  const settingsHeadingId = useId();
+  const permalinkId = useId();
+  const settingsButton = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+  const closeSettings = () => { setSettingsOpen(false); settingsButton.current?.focus(); };
+  function showPreview() { setSettingsOpen(false); setView("preview"); }
+  useEffect(() => {
+    const action = actionRef.current;
+    const shell = shellRef.current;
+    if (!action || !shell || typeof ResizeObserver === "undefined") return;
+    const update = () => { setActionHeight(action.getBoundingClientRect().height); setSettingsDocked(shell.getBoundingClientRect().width >= 1120); };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(action); observer.observe(shell);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    const resizeTitle = () => { const element = titleRef.current; if (element) { element.style.height = "auto"; element.style.height = `${element.scrollHeight}px`; } };
+    resizeTitle();
+    window.addEventListener("resize", resizeTitle);
+    return () => window.removeEventListener("resize", resizeTitle);
+  }, [title, settingsOpen, settingsDocked, view]);
+  useEffect(() => { if (settingsOpen) closeButton.current?.focus(); }, [settingsOpen]);
+  useEffect(() => { if (formError || fieldErrors.length) errorRef.current?.focus(); }, [formError, fieldErrors]);
+  const modalOpen = settingsOpen && !settingsDocked;
+  return <div ref={shellRef} style={{ "--blog-editor-toolbar-top": `${64 + actionHeight}px` } as CSSProperties} className="blog-editor-shell">
+    <div ref={actionRef} className="blog-editor-topbar">
+      <div className="blog-editor-topbar-start"><Link className="blog-editor-back" href={postsListPath}>← Posts</Link><h1>{mode === "create" ? "New post" : "Edit post"}</h1></div>
+      <div className="blog-editor-topbar-actions">
+        <span role="status" aria-live="polite" className="blog-editor-save-state">{saveState}</span>
+        {preview ? <div className="blog-editor-view-switch" aria-label="Editor view">
+          <button type="button" aria-pressed={view === "write"} onClick={() => setView("write")}><Pencil aria-hidden />Write</button>
+          <button type="button" aria-pressed={view === "preview"} onClick={showPreview}><Eye aria-hidden />Preview</button>
+        </div> : null}
+        <button ref={settingsButton} type="button" className="blog-editor-settings-toggle" aria-controls={settingsId} aria-expanded={settingsOpen} onClick={() => setSettingsOpen(!settingsOpen)}><Settings2 aria-hidden /><span>Settings</span></button>
+        <button type="button" className="blog-editor-save" onClick={onSave} disabled={saving || disabled}>{saving ? "Saving…" : status === "scheduled" ? "Schedule post" : status === "published" ? (mode === "create" ? "Publish post" : "Update published post") : "Save draft"}</button>
       </div>
     </div>
-  );
+    {(formError || fieldErrors.length > 0) ? <div ref={errorRef} role="alert" tabIndex={-1} className="blog-editor-error">{formError ? <p>{formError}</p> : null}{fieldErrors.length ? <ul>{fieldErrors.map((error, index) => <li key={`${index}-${error}`}>{error}</li>)}</ul> : null}</div> : null}
+    <div className={`blog-editor-workspace${settingsOpen && settingsDocked ? " has-settings" : ""}`}>
+      <div ref={bodyRef} className="blog-editor-paper" inert={modalOpen}>
+        {notice ? <div className="blog-editor-notice-area">{notice}</div> : null}
+        <fieldset disabled={saving || disabled} className="blog-editor-fieldset">
+          <div hidden={view !== "write"}>
+            <label htmlFor="wp-post-title" className="sr-only">Title</label>
+            <textarea ref={titleRef} id="wp-post-title" rows={1} value={title} onChange={event => onTitleChange(event.target.value.replace(/[\r\n]+/g, " "))} placeholder="Add title" className="blog-editor-title" aria-describedby={permalinkId} onKeyDown={event => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); bodyRef.current?.querySelector<HTMLElement>('[contenteditable="true"]')?.focus(); } }} />
+            {headlineNotice}
+            <details className="blog-editor-permalink"><summary id={permalinkId}>{permalinkPreview} <span>Edit URL</span></summary><div><label className="sr-only" htmlFor={`${permalinkId}-slug`}>Slug</label><Input id={`${permalinkId}-slug`} value={slug} onChange={event => onSlugChange(event.target.value)} aria-label="Slug" />{mode === "create" ? <label><input type="checkbox" checked={slugAuto} onChange={event => onSlugAutoChange(event.target.checked)} /> Auto-generate from title</label> : null}</div></details>
+            {body}
+            {createExtras ? <div className="blog-editor-template-options">{createExtras}</div> : null}
+          </div>
+        </fieldset>
+        {view === "preview" ? preview : null}
+      </div>
+      {modalOpen ? <button type="button" tabIndex={-1} className="blog-settings-backdrop" aria-label="Close post settings" onClick={closeSettings} /> : null}
+      <aside ref={panelRef} id={settingsId} hidden={!settingsOpen} role={settingsDocked ? undefined : "dialog"} aria-modal={modalOpen ? true : undefined} aria-label="Post settings" aria-labelledby={settingsHeadingId} className={`blog-settings-panel${settingsDocked ? " is-docked" : " is-modal"}`} onKeyDown={event => {
+        if (event.key === "Escape") { event.preventDefault(); closeSettings(); }
+        if (event.key === "Tab" && modalOpen) {
+          const items = Array.from(panelRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], summary, [tabindex="0"]') ?? []).filter(element => element.getClientRects().length > 0);
+          const first = items[0]; const last = items[items.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+        }
+      }}>
+        <div className="blog-settings-heading"><h2 id={settingsHeadingId}>Post settings</h2><button ref={closeButton} type="button" aria-label="Close settings" onClick={closeSettings}><X aria-hidden /></button></div>
+        <fieldset disabled={saving || disabled} className="blog-editor-fieldset blog-settings-fields">{sidebar}</fieldset>
+        {viewPostUrl ? <Link href={viewPostUrl} target="_blank" rel="noopener noreferrer" className="blog-editor-saved-link">Open saved version in new tab</Link> : null}
+        {preview ? <button type="button" className="blog-settings-preview" onClick={showPreview}>Preview article</button> : null}
+      </aside>
+    </div>
+  </div>;
 }
 
 export function WpLabeledField({
