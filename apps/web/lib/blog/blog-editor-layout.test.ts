@@ -15,7 +15,7 @@ afterEach(()=>vi.clearAllMocks());
 describe("blog editor rendered layout",()=>{
   it("shows thin content blockers with an honest structure-only indicator", () => {
     const preview = validateBlogPublish({ schema_version: 1, blocks: [{ type: "paragraph", content: "word ".repeat(37) }] });
-    const html = renderToStaticMarkup(createElement(BlogPublishReadiness, { preview }));
+    const html = renderToStaticMarkup(createElement(BlogPublishReadiness, { preview, readingTimeMinutes: 1 }));
     expect(html).toContain("Not ready to publish");
     expect(html).toContain("37 / 800 words");
     expect(html.indexOf("Not ready to publish")).toBeLessThan(html.indexOf("Structure checks only"));
