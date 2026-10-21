@@ -93,7 +93,7 @@ export async function syncInvoiceStatusesFromZoho(
   const { data, error } = await admin
     .from("accounting_invoice_sync")
     .select("entity_type, entity_id, zoho_invoice_id")
-    .neq("sync_status", "ignored")
+    .or("sync_status.is.null,sync_status.neq.ignored")
     .not("zoho_invoice_id", "is", null)
     .order("last_synced_at", { ascending: true, nullsFirst: true })
     .order("id", { ascending: true })
