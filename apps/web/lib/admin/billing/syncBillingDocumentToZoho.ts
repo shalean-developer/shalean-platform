@@ -169,6 +169,15 @@ async function syncMonthlyInvoiceRowToZoho(
   // Already linked: still apply local payment to Zoho when Shalean shows paid/partial
   // (e.g. admin marked paid before Zoho payment sync existed).
   if (existing) {
+    // Repair missing sync metadata before any payment-related action. This is
+    // insert-only: do not overwrite recorded invoice or settlement status.
+    const { error: enrollmentError } = await admin.from("accounting_invoice_sync").upsert({
+      entity_type: "monthly_invoice",
+      entity_id: invoiceId,
+      zoho_invoice_id: existing,
+      sync_status: "pending",
+    }, { onConflict: "entity_type,entity_id", ignoreDuplicates: true });
+    if (enrollmentError) return { ok: false, error: `zoho_invoice_status_enrollment_failed:${enrollmentError.message}` };
     const payErr = await applyLocalPaymentToZoho(existing);
     if (payErr) return payErr;
     return { ok: true, zoho_id: existing };
