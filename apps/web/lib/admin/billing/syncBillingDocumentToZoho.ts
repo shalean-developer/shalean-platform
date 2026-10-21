@@ -227,7 +227,20 @@ async function syncSalesDocumentRowToZoho(
   const existing = isQuote
     ? String(row.zoho_estimate_id ?? "").trim()
     : String(row.zoho_invoice_id ?? "").trim();
-  if (existing) return { ok: true, zoho_id: existing };
+  if (existing) {
+    // A previous Zoho link may have persisted even if metadata enrollment failed.
+    // Retry insert-only enrollment without reissuing a Zoho invoice or editing its status.
+    if (!isQuote) {
+      const { error: enrollmentError } = await admin.from("accounting_invoice_sync").upsert({
+        entity_type: "sales_document",
+        entity_id: documentId,
+        zoho_invoice_id: existing,
+        sync_status: "pending",
+      }, { onConflict: "entity_type,entity_id", ignoreDuplicates: true });
+      if (enrollmentError) return { ok: false, error: `zoho_invoice_status_enrollment_failed:${enrollmentError.message}` };
+    }
+    return { ok: true, zoho_id: existing };
+  }
 
   const sync = await syncSalesDocumentToZoho(admin, documentId);
   if (!sync.ok) return sync;
