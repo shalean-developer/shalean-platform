@@ -10,7 +10,7 @@ describe("Stage 03 bounded Zoho status refresh safety contract", () => {
     expect(source).toContain('.order("last_synced_at", { ascending: true, nullsFirst: true })');
     expect(source).toContain('.order("id", { ascending: true })');
     expect(source).toContain('.limit(Math.max(0, limit))');
-    expect(source).toContain('.neq("sync_status", "ignored")');
+    expect(source).toContain('.or("sync_status.is.null,sync_status.neq.ignored")');
   });
 
   it("does not swallow metadata upsert failures or count them as success", () => {
