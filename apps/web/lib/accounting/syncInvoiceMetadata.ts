@@ -88,30 +88,42 @@ export async function syncInvoiceStatusesFromZoho(
   admin: SupabaseClient,
   limit = 50,
 ): Promise<{ synced: number; failed: number }> {
-  // Rotate a bounded page over all linked records. This advances even if the
-  // earliest records repeatedly fail, without falsifying last_synced_at.
   const batchSize = Math.max(0, Math.floor(limit));
   if (batchSize === 0) return { synced: 0, failed: 0 };
-  const baseQuery = () => admin
+
+  // The caller holds the accounting cron lease. Persist position independently
+  // of cadence; a missed invocation must not skip or repeat a page forever.
+  const { data: cursor, error: cursorError } = await admin
+    .from("accounting_invoice_refresh_cursor")
+    .select("last_id")
+    .eq("name", "zoho_invoice_status")
+    .single();
+  if (cursorError || !cursor) throw new Error(`invoice_refresh_cursor_read_failed: ${cursorError?.message ?? "missing row"}`);
+
+  const candidates = () => admin
     .from("accounting_invoice_sync")
-    .select("entity_type, entity_id, zoho_invoice_id")
+    .select("id, entity_type, entity_id, zoho_invoice_id")
     .or("sync_status.is.null,sync_status.neq.ignored")
     .not("zoho_invoice_id", "is", null)
-    .order("id", { ascending: true });
-  const { count, error: countError } = await admin
-    .from("accounting_invoice_sync")
-    .select("id", { count: "exact", head: true })
-    .or("sync_status.is.null,sync_status.neq.ignored")
-    .not("zoho_invoice_id", "is", null);
-  if (countError) throw new Error(`invoice_status_count_failed: ${countError.message}`);
-  const total = count ?? 0;
-  if (total === 0) return { synced: 0, failed: 0 };
-  const pageCount = Math.ceil(total / batchSize);
-  // One page per 15-minute slot. A failed page cannot monopolize the next slot.
-  const page = Math.floor(Date.now() / 900000) % pageCount;
-  const offset = page * batchSize;
-  const { data, error } = await baseQuery().range(offset, offset + batchSize - 1);
-  if (error) throw new Error(`invoice_status_candidate_query_failed: ${error.message}`);
+    .order("id", { ascending: true })
+    .limit(batchSize);
+
+  let selected = await candidates().gt("id", cursor.last_id);
+  if (selected.error) throw new Error(`invoice_refresh_candidates_failed: ${selected.error.message}`);
+  if (!selected.data?.length) {
+    selected = await candidates();
+    if (selected.error) throw new Error(`invoice_refresh_wrap_failed: ${selected.error.message}`);
+  }
+  const data = selected.data ?? [];
+  // Advance even if Zoho is unavailable. The next cycle will revisit failures,
+  // while every other invoice remains reachable.
+  if (data.length) {
+    const { error: advanceError } = await admin
+      .from("accounting_invoice_refresh_cursor")
+      .update({ last_id: data[data.length - 1].id, updated_at: new Date().toISOString() })
+      .eq("name", "zoho_invoice_status");
+    if (advanceError) throw new Error(`invoice_refresh_cursor_advance_failed: ${advanceError.message}`);
+  }
 
   let synced = 0;
   let failed = 0;
