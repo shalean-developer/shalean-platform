@@ -181,6 +181,7 @@ async function repairBooking(
         if (!tx.external_accounting_id || tx.sync_status !== "synced") {
           throw new Error("invoice_already_paid_but_payment_accounting_id_missing");
         }
+        await settleQueue(admin, tx, queueId, paid.paymentId);
         await upsertInvoiceSyncMetadata(admin, {
           entityType: "booking",
           entityId: bookingId,
@@ -222,7 +223,6 @@ async function repairBooking(
         taxAmountCents: details.taxCents,
         outstandingBalanceCents: details.balanceCents,
       });
-      await settleQueue(admin, tx, queueId, paid.paymentId);
       return { kind: "booking", id: bookingId, ok: true, outcome: "resumed_paid_linked", invoice_number: details.invoiceNumber };
     }
 
@@ -264,6 +264,8 @@ async function repairBooking(
       .is("zoho_invoice_id", null);
     if (linkError) throw new Error(`link_failed:${linkError.message}`);
 
+    await settleQueue(admin, tx, queueId, paid.paymentId);
+
     await upsertInvoiceSyncMetadata(admin, {
       entityType: "booking",
       entityId: bookingId,
@@ -276,7 +278,6 @@ async function repairBooking(
       taxAmountCents: details.taxCents,
       outstandingBalanceCents: details.balanceCents,
     });
-    await settleQueue(admin, tx, queueId, paid.paymentId);
     return { kind: "booking", id: bookingId, ok: true, outcome: "created_paid_linked", invoice_number: created.invoiceNumber };
   } catch (err) {
     return { kind: "booking", id: bookingId, ok: false, outcome: "failed", error: err instanceof Error ? err.message : String(err) };
@@ -339,6 +340,7 @@ async function repairMonthly(admin: SupabaseClient): Promise<InvE2eRepairItemRes
     });
     if (!paid.ok) throw new Error(`mark_paid_failed:${paid.error}`);
     const details = await readAndValidateInvoice(zohoId, INV_E2E_01D_MONTHLY_AMOUNT_CENTS, true);
+    await settleQueue(admin, tx, queueId, paid.paymentId);
     await upsertInvoiceSyncMetadata(admin, {
       entityType: "monthly_invoice",
       entityId: id,
@@ -350,7 +352,6 @@ async function repairMonthly(admin: SupabaseClient): Promise<InvE2eRepairItemRes
       taxAmountCents: details.taxCents,
       outstandingBalanceCents: details.balanceCents,
     });
-    await settleQueue(admin, tx, queueId, paid.paymentId);
     return { kind: "monthly_invoice", id, ok: true, outcome: data.zoho_invoice_id ? "resumed_paid_linked" : "created_paid_linked", invoice_number: invoiceNumber ?? details.invoiceNumber };
   } catch (err) {
     return { kind: "monthly_invoice", id, ok: false, outcome: "failed", error: err instanceof Error ? err.message : String(err) };
@@ -436,6 +437,7 @@ async function repairSalesDocument(admin: SupabaseClient): Promise<InvE2eRepairI
     });
     if (!paid.ok) throw new Error(`mark_paid_failed:${paid.error}`);
     const details = await readAndValidateInvoice(zohoId, INV_E2E_01D_SALES_DOCUMENT_AMOUNT_CENTS, true);
+    await settleQueue(admin, tx, queueId, paid.paymentId);
     await upsertInvoiceSyncMetadata(admin, {
       entityType: "sales_document",
       entityId: id,
@@ -447,7 +449,6 @@ async function repairSalesDocument(admin: SupabaseClient): Promise<InvE2eRepairI
       taxAmountCents: details.taxCents,
       outstandingBalanceCents: details.balanceCents,
     });
-    await settleQueue(admin, tx, queueId, paid.paymentId);
     return { kind: "sales_document", id, ok: true, outcome: data.zoho_invoice_id ? "resumed_paid_linked" : "created_paid_linked", invoice_number: invoiceNumber ?? details.invoiceNumber };
   } catch (err) {
     return { kind: "sales_document", id, ok: false, outcome: "failed", error: err instanceof Error ? err.message : String(err) };
