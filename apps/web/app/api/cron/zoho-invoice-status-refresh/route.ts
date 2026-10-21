@@ -18,13 +18,13 @@ export async function POST(request: Request) {
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
   try {
-    const lock = await withCronLock(
+    const lockResult = await withCronLock(
       admin,
       { jobName: CRON_LOCK_KEYS.accountingSync, leaseSeconds: 600 },
       () => syncInvoiceStatusesFromZoho(admin, 5),
     );
-    if (lock.skipped) return NextResponse.json({ ok: true, skipped: true, reason: lock.reason });
-    const result = lock.ranIt;
+    if (lockResult.skipped) return NextResponse.json({ ok: true, skipped: true, reason: lockResult.reason });
+    const result = lockResult.ranIt;
     return NextResponse.json({ ok: result.failed === 0, ...result }, { status: result.failed ? 503 : 200 });
   } catch (error) {
     return NextResponse.json(
