@@ -210,6 +210,7 @@ async function repairBooking(
       });
       if (!paid.ok) throw new Error(`mark_paid_failed:${paid.error}`);
       const details = await readAndValidateInvoice(linked, expectedAmountCents, true);
+      await settleQueue(admin, tx, queueId, paid.paymentId);
       await upsertInvoiceSyncMetadata(admin, {
         entityType: "booking",
         entityId: bookingId,
