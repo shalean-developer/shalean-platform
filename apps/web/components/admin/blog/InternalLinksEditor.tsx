@@ -45,13 +45,13 @@ export function InternalLinksEditor({ block, onChange }: { block: BlogInternalLi
   }
   return <div className="space-y-3">
     <div className="space-y-1"><Label htmlFor={`${id}-title`}>Section title (optional)</Label><Input id={`${id}-title`} value={block.title ?? ""} onChange={e => onChange({ ...block, title: e.target.value || undefined })} /></div>
-    {block.links.map((link, index) => <div key={index} className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-900">
-      <div className="mb-2 flex items-center justify-between gap-2"><span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Link {index + 1}</span><Button type="button" size="sm" variant="ghost" onClick={() => { setPicker(null); onChange({ ...block, links: block.links.filter((_, i) => i !== index) }); }} aria-label={`Remove link ${index + 1}`}><X className="h-4 w-4" /></Button></div>
-      <div className="grid gap-2 xl:grid-cols-2">
+    {block.links.map((link, index) => <div key={index} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-b border-zinc-100 py-3">
+      <div className="col-span-2 flex items-center justify-between gap-2"><span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Link {index + 1}</span><Button type="button" size="sm" variant="ghost" onClick={() => { setPicker(null); onChange({ ...block, links: block.links.filter((_, i) => i !== index) }); }} aria-label={`Remove link ${index + 1}`}><X className="h-4 w-4" /></Button></div>
+      <div className="grid min-w-0 gap-2 sm:grid-cols-2">
         <div className="space-y-1"><Label htmlFor={`${id}-${index}-label`} className="text-xs">Link text</Label><Input id={`${id}-${index}-label`} value={link.label} placeholder="Describe the destination" onChange={e => onChange({ ...block, links: block.links.map((item, i) => i === index ? { ...item, label: e.target.value } : item) })} /></div>
         <div className="space-y-1"><Label htmlFor={`${id}-${index}-url`} className="text-xs">URL</Label><Input id={`${id}-${index}-url`} value={link.url} placeholder="/services/…" onChange={e => onChange({ ...block, links: block.links.map((item, i) => i === index ? { ...item, url: e.target.value } : item) })} /></div>
       </div>
-      <Button type="button" size="sm" variant="ghost" className="mt-1" onClick={() => { setQuery(""); setPicker(index); }}>Choose a live page</Button>
+      <Button type="button" size="sm" variant="ghost" className="self-end text-xs" onClick={() => { setQuery(""); setPicker(index); }}>Choose a live page</Button>
     </div>)}
     <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => { setQuery(""); setPicker("new"); }}><Search className="mr-2 h-4 w-4" />Find a live page</Button><Button type="button" size="sm" variant="ghost" onClick={() => onChange({ ...block, links: [...block.links, { label: "", url: "/" }] })}>Add URL manually</Button></div>
     {picker !== null ? <section aria-label="Choose a link destination" onKeyDown={e => { if (e.key === "Escape") setPicker(null); }} className="space-y-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-700">

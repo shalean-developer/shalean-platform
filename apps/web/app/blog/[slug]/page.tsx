@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { BlogContextualServiceLinks } from "@/components/blog/BlogContextualServiceLinks";
 import { BlogServiceLinks } from "@/components/blog/BlogServiceLinks";
-import { BlogConversionMidBanner } from "@/components/blog/engine/BlogConversionMidBanner";
 import { BlogClusterRelatedGuides } from "@/components/blog/BlogClusterRelatedGuides";
+import { prepareBlogArticleContent } from "@/lib/blog/prepare-blog-article-content";
 import { BlogDbArticleBody } from "@/components/blog/BlogDbArticleBody";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
 import { HighConversionBlogTemplate } from "@/components/blog/HighConversionBlogTemplate";
@@ -13,8 +13,6 @@ import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { marketingWhatsAppFloatMainPadding } from "@/lib/marketing/marketingMobileLayout";
-import { injectLocationHubSeoImages } from "@/lib/blog/injectLocationHubSeoImages";
-import { stripFirstDuplicateFeaturedImage } from "@/lib/blog/stripDuplicateFeaturedImage";
 import { AirbnbHostGuideBlogTemplate } from "@/components/blog/AirbnbHostGuideBlogTemplate";
 import { BlogPostLayout } from "@/components/blog/BlogPostLayout";
 import { extractTocFromBlogBlocks, shouldShowBlogTableOfContents, type BlogTocEntry } from "@/lib/blog/extract-blog-toc";
@@ -662,22 +660,7 @@ async function BlogPostPageImpl(props: Props) {
         alt: (dbPost.featuredImageAlt ?? "").trim() || dbPost.h1,
       };
 
-      let injectedBlocks = safeBlocks;
-      try {
-        injectedBlocks = injectLocationHubSeoImages(dbPost.slug, safeBlocks);
-      } catch (err) {
-        console.error("[blog] injectLocationHubSeoImages failed", { slug: dbPost.slug, err });
-      }
-
-      let contentForRender = { ...contentSafe, blocks: injectedBlocks };
-      try {
-        contentForRender = stripFirstDuplicateFeaturedImage(contentForRender, hero.src);
-      } catch (stripErr) {
-        console.error("[blog] stripFirstDuplicateFeaturedImage failed — using unstripped blocks", {
-          slug: dbPost.slug,
-          stripErr,
-        });
-      }
+      const contentForRender = prepareBlogArticleContent(contentSafe, dbPost.slug, hero.src);
 
       let relatedGrid = indexPostsToRelatedGrid(pickTrendingSidebarPosts(indexPosts, dbPost.slug, 6));
       try {
@@ -729,12 +712,13 @@ async function BlogPostPageImpl(props: Props) {
                 className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-medium text-amber-950"
                 role="status"
               >
-                Preview — hidden from search engines. This preview link expires after 10 minutes. Reload the editor to renew it.
+                Preview — hidden from search engines. This saved-version link expires after 10 minutes. Return to the editor to open a fresh preview.
               </div>
             ) : null}
 
             <BlogPostLayout
               breadcrumbCurrentLabel={dbPost.title}
+              isPreview={dbPost.dbStatus !== "published"}
               h1={dbPost.h1}
               lede={dbPost.excerpt}
               publishedAtIso={dbPost.publishedAt}
@@ -754,17 +738,7 @@ async function BlogPostPageImpl(props: Props) {
               <BlogDbArticleBody
                 content={contentForRender}
                 autoLinkSlug={dbPost.slug}
-                midArticleSlot={
-                  <section
-                    className="not-prose space-y-8 border-t border-zinc-200/80 pt-8 sm:space-y-9 sm:pt-9"
-                    aria-label="Services, areas, and booking"
-                  >
-                    <BlogConversionMidBanner trackingSlug={dbPost.slug} />
-                    <BlogContextualServiceLinks embedded />
-                    <BlogServiceLinks trackingSlug={dbPost.slug} service={getBlogServiceType(dbPost.slug)} dense />
-                    <RelatedLinks placement="blog" emphasizeLocalBooking />
-                  </section>
-                }
+
               />
             </BlogPostLayout>
           </main>

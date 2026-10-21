@@ -30,7 +30,7 @@ export function BlogRelatedPostsGrid({ posts, className }: Props) {
               key={post.slug}
               className="group flex flex-col overflow-hidden rounded-xl border border-zinc-200/90 bg-white shadow-sm ring-1 ring-zinc-950/[0.03] transition hover:border-blue-200/90 hover:shadow-md"
             >
-              <SafeInternalLink
+              {!/(?:^|\/)default-cleaning\.jpg(?:[?#]|$)/.test(post.image.src) ? <SafeInternalLink
                 href={`/blog/${post.slug}`}
                 className="relative aspect-[16/10] overflow-hidden bg-zinc-100"
                 linkContext="blog related grid"
@@ -44,7 +44,7 @@ export function BlogRelatedPostsGrid({ posts, className }: Props) {
                   loading="lazy"
                   unoptimized={remote}
                 />
-              </SafeInternalLink>
+              </SafeInternalLink> : null}
               <div className="flex flex-1 flex-col p-5">
                 <h3 className="text-base font-semibold leading-snug text-zinc-900">
                   <SafeInternalLink
