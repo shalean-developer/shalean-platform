@@ -46,7 +46,19 @@ async function syncBookingInvoiceToZoho(
   if (!row.payment_completed_at) return { ok: false, error: "booking_not_paid" };
 
   const existing = String(row.zoho_invoice_id ?? "").trim();
-  if (existing) return { ok: true, zoho_id: existing };
+  if (existing) {
+    // Enroll the Zoho link independently of payment allocation success.
+    // A linked invoice is not evidence that its payment has settled.
+    const { error: enrollmentError } = await admin.from("accounting_invoice_sync").upsert({
+      entity_type: "booking",
+      entity_id: bookingId,
+      booking_id: bookingId,
+      zoho_invoice_id: existing,
+      sync_status: "pending",
+    }, { onConflict: "entity_type,entity_id", ignoreDuplicates: true });
+    if (enrollmentError) return { ok: false, error: `zoho_invoice_status_enrollment_failed:${enrollmentError.message}` };
+    return { ok: true, zoho_id: existing };
+  }
 
   const amountCents = Math.max(
     0,
