@@ -64,14 +64,31 @@ export function WordPressPostEditorLayout({ mode, postsListPath, saving, saveSta
     return () => observer.disconnect();
   }, []);
   useEffect(() => {
-    const resizeTitle = () => { const element = titleRef.current; if (element) { element.style.height = "auto"; element.style.height = `${element.scrollHeight}px`; } };
+    const element = titleRef.current;
+    if (!element) return;
+    let active = true;
+    let observedWidth = -1;
+    const resizeTitle = () => {
+      if (!active) return;
+      element.style.height = "auto";
+      element.style.height = `${element.scrollHeight}px`;
+    };
     resizeTitle();
+    // Font swaps and Office sidebar changes can rewrap a title without a window resize.
+    void document.fonts?.ready.then(resizeTitle);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(entries => {
+      const width = entries[0]?.contentRect.width;
+      if (width != null && width !== observedWidth) { observedWidth = width; resizeTitle(); }
+    });
+    observer?.observe(element);
     window.addEventListener("resize", resizeTitle);
-    return () => window.removeEventListener("resize", resizeTitle);
+    return () => { active = false; observer?.disconnect(); window.removeEventListener("resize", resizeTitle); };
   }, [title, settingsOpen, settingsDocked, view]);
   useEffect(() => { if (settingsOpen) closeButton.current?.focus(); }, [settingsOpen]);
   useEffect(() => { if (formError || fieldErrors.length) errorRef.current?.focus(); }, [formError, fieldErrors]);
   const modalOpen = settingsOpen && !settingsDocked;
+  const saveLabel = saving ? "Saving…" : status === "scheduled" ? "Schedule post" : status === "published" ? (mode === "create" ? "Publish post" : "Update published post") : "Save draft";
+  const compactSaveLabel = saving ? "Saving…" : status === "scheduled" ? "Schedule" : status === "published" ? (mode === "create" ? "Publish" : "Update") : "Save draft";
   return <div ref={shellRef} style={{ "--blog-editor-toolbar-top": `${64 + actionHeight}px` } as CSSProperties} className="blog-editor-shell">
     <div ref={actionRef} className="blog-editor-topbar">
       <div className="blog-editor-topbar-start"><Link className="blog-editor-back" href={postsListPath}>← Posts</Link><h1>{mode === "create" ? "New post" : "Edit post"}</h1></div>
@@ -81,13 +98,15 @@ export function WordPressPostEditorLayout({ mode, postsListPath, saving, saveSta
           <button type="button" aria-pressed={view === "write"} onClick={() => setView("write")}><Pencil aria-hidden />Write</button>
           <button type="button" aria-pressed={view === "preview"} onClick={showPreview}><Eye aria-hidden />Preview</button>
         </div> : null}
-        <button ref={settingsButton} type="button" className="blog-editor-settings-toggle" aria-controls={settingsId} aria-expanded={settingsOpen} onClick={() => setSettingsOpen(!settingsOpen)}><Settings2 aria-hidden /><span>Settings</span></button>
-        <button type="button" className="blog-editor-save" onClick={onSave} disabled={saving || disabled}>{saving ? "Saving…" : status === "scheduled" ? "Schedule post" : status === "published" ? (mode === "create" ? "Publish post" : "Update published post") : "Save draft"}</button>
+        <button ref={settingsButton} type="button" className="blog-editor-settings-toggle" aria-label="Settings" aria-controls={settingsId} aria-expanded={settingsOpen} onClick={() => setSettingsOpen(!settingsOpen)}><Settings2 aria-hidden /><span>Settings</span></button>
+        <button type="button" className="blog-editor-save" aria-label={saveLabel} onClick={onSave} disabled={saving || disabled}>
+          {saveLabel === compactSaveLabel ? saveLabel : <><span className="blog-editor-save-label-full" aria-hidden>{saveLabel}</span><span className="blog-editor-save-label-compact" aria-hidden>{compactSaveLabel}</span></>}
+        </button>
       </div>
     </div>
     {(formError || fieldErrors.length > 0) ? <div ref={errorRef} role="alert" tabIndex={-1} className="blog-editor-error">{formError ? <p>{formError}</p> : null}{fieldErrors.length ? <ul>{fieldErrors.map((error, index) => <li key={`${index}-${error}`}>{error}</li>)}</ul> : null}</div> : null}
     <div className={`blog-editor-workspace${settingsOpen && settingsDocked ? " has-settings" : ""}`}>
-      <div ref={bodyRef} className="blog-editor-paper" inert={modalOpen}>
+      <div ref={bodyRef} className={`blog-editor-paper${view === "preview" ? " is-preview" : ""}`} inert={modalOpen}>
         {notice ? <div className="blog-editor-notice-area">{notice}</div> : null}
         <fieldset disabled={saving || disabled} className="blog-editor-fieldset">
           <div hidden={view !== "write"}>

@@ -1,7 +1,7 @@
 import { Check, Circle } from "lucide-react";
 import { MIN_WORDS_PUBLISH, type PublishValidationResult } from "@/lib/blog/seo/publish-validation";
 
-export function BlogPublishReadiness({ preview }: { preview: PublishValidationResult }) {
+export function BlogPublishReadiness({ preview, readingTimeMinutes }: { preview: PublishValidationResult; readingTimeMinutes: number | null }) {
   const checks = [
     [`${preview.wordCount.toLocaleString()} / ${MIN_WORDS_PUBLISH} words`, preview.wordCount >= MIN_WORDS_PUBLISH],
     ["H2 heading with text", preview.hasH2Section],
@@ -21,6 +21,6 @@ export function BlogPublishReadiness({ preview }: { preview: PublishValidationRe
     </ul>
 
     <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">Shared booking section and booking link appear once, after the article and FAQ.</p>
-    <p className="border-t border-zinc-200 pt-3 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">Structure checks only · {preview.wordCount > 0 ? `~${Math.ceil(preview.wordCount / 220)} min read` : "No article text yet"}</p>
+    <p className="border-t border-zinc-200 pt-3 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">Structure checks only · {preview.wordCount > 0 && readingTimeMinutes != null ? `~${readingTimeMinutes} min read` : "No article text yet"}</p>
   </section>;
 }
