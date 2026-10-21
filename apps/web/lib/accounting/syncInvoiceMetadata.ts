@@ -43,9 +43,10 @@ export async function upsertInvoiceSyncMetadata(
     updated_at: now,
   };
 
-  await admin.from("accounting_invoice_sync").upsert(row, {
+  const { error } = await admin.from("accounting_invoice_sync").upsert(row, {
     onConflict: "entity_type,entity_id",
   });
+  if (error) throw new Error(`invoice_sync_metadata_upsert_failed: ${error.message}`);
 }
 
 /**
@@ -60,7 +61,8 @@ export async function refreshInvoiceStatusFromZoho(
   const res = await getZohoInvoice(zohoInvoiceId);
   if (!res.ok) return { ok: false, error: res.error };
 
-  await upsertInvoiceSyncMetadata(admin, {
+  try {
+    await upsertInvoiceSyncMetadata(admin, {
     entityType,
     entityId,
     zohoInvoiceId: res.zohoInvoiceId,
@@ -71,7 +73,10 @@ export async function refreshInvoiceStatusFromZoho(
     taxAmountCents: res.taxCents,
     outstandingBalanceCents: res.balanceCents,
     syncStatus: "synced",
-  });
+    });
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 
   return { ok: true };
 }
@@ -83,69 +88,60 @@ export async function syncInvoiceStatusesFromZoho(
   admin: SupabaseClient,
   limit = 50,
 ): Promise<{ synced: number; failed: number }> {
-  const { data: ignoredRows } = await admin
+  const batchSize = Math.max(0, Math.floor(limit));
+  if (batchSize === 0) return { synced: 0, failed: 0 };
+
+  // The caller holds the accounting cron lease. Persist position independently
+  // of cadence; a missed invocation must not skip or repeat a page forever.
+  const { data: cursor, error: cursorError } = await admin
+    .from("accounting_invoice_refresh_cursor")
+    .select("last_id")
+    .eq("name", "zoho_invoice_status")
+    .single();
+  if (cursorError || !cursor) throw new Error(`invoice_refresh_cursor_read_failed: ${cursorError?.message ?? "missing row"}`);
+
+  const candidates = () => admin
     .from("accounting_invoice_sync")
-    .select("entity_type, entity_id")
-    .eq("sync_status", "ignored");
-
-  const ignored = new Set(
-    (ignoredRows ?? []).map((row) => `${row.entity_type}:${row.entity_id}`),
-  );
-
-  const { data: bookings } = await admin
-    .from("bookings")
-    .select("id, zoho_invoice_id")
+    .select("id, entity_type, entity_id, zoho_invoice_id")
+    .or("sync_status.is.null,sync_status.neq.ignored")
     .not("zoho_invoice_id", "is", null)
-    .limit(limit);
+    .order("id", { ascending: true })
+    .limit(batchSize);
+
+  let selected = await candidates().gt("id", cursor.last_id);
+  if (selected.error) throw new Error(`invoice_refresh_candidates_failed: ${selected.error.message}`);
+  if (!selected.data?.length) {
+    selected = await candidates();
+    if (selected.error) throw new Error(`invoice_refresh_wrap_failed: ${selected.error.message}`);
+  }
+  const data = selected.data ?? [];
+  // Advance even if Zoho is unavailable. The next cycle will revisit failures,
+  // while every other invoice remains reachable.
+  if (data.length) {
+    const { error: advanceError } = await admin
+      .from("accounting_invoice_refresh_cursor")
+      .update({ last_id: data[data.length - 1].id, updated_at: new Date().toISOString() })
+      .eq("name", "zoho_invoice_status");
+    if (advanceError) throw new Error(`invoice_refresh_cursor_advance_failed: ${advanceError.message}`);
+  }
 
   let synced = 0;
   let failed = 0;
-
-  for (const b of bookings ?? []) {
-    if (!b.zoho_invoice_id) continue;
-    if (ignored.has(`booking:${b.id}`)) continue;
-    const result = await refreshInvoiceStatusFromZoho(admin, "booking", b.id, b.zoho_invoice_id);
-    if (result.ok) synced++;
-    else failed++;
-  }
-
-  const { data: invoices } = await admin
-    .from("monthly_invoices")
-    .select("id, zoho_invoice_id")
-    .not("zoho_invoice_id", "is", null)
-    .limit(limit);
-
-  for (const inv of invoices ?? []) {
-    if (!inv.zoho_invoice_id) continue;
-    if (ignored.has(`monthly_invoice:${inv.id}`)) continue;
+  for (const row of data ?? []) {
+    if (
+      row.entity_type !== "booking" &&
+      row.entity_type !== "monthly_invoice" &&
+      row.entity_type !== "sales_document"
+    ) continue;
+    if (!row.entity_id || !row.zoho_invoice_id) continue;
     const result = await refreshInvoiceStatusFromZoho(
       admin,
-      "monthly_invoice",
-      inv.id,
-      inv.zoho_invoice_id,
+      row.entity_type,
+      row.entity_id,
+      row.zoho_invoice_id,
     );
     if (result.ok) synced++;
     else failed++;
   }
-
-  const { data: salesDocs } = await admin
-    .from("sales_documents")
-    .select("id, zoho_invoice_id")
-    .not("zoho_invoice_id", "is", null)
-    .limit(limit);
-
-  for (const sd of salesDocs ?? []) {
-    if (!sd.zoho_invoice_id) continue;
-    if (ignored.has(`sales_document:${sd.id}`)) continue;
-    const result = await refreshInvoiceStatusFromZoho(
-      admin,
-      "sales_document",
-      sd.id,
-      sd.zoho_invoice_id,
-    );
-    if (result.ok) synced++;
-    else failed++;
-  }
-
   return { synced, failed };
 }

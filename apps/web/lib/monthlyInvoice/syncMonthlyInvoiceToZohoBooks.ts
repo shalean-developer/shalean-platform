@@ -207,6 +207,7 @@ export async function syncMonthlyInvoiceToZohoBooks(
   const { upsertInvoiceSyncMetadata } = await import("@/lib/accounting/syncInvoiceMetadata");
   const { getZohoInvoice } = await import("@/lib/zoho/zohoBooksService");
   const details = await getZohoInvoice(zohoResult.zohoInvoiceId);
+  try {
   await upsertInvoiceSyncMetadata(admin, {
     entityType: "monthly_invoice",
     entityId: params.invoiceId,
@@ -218,6 +219,9 @@ export async function syncMonthlyInvoiceToZohoBooks(
     taxAmountCents: details.ok ? details.taxCents : null,
     outstandingBalanceCents: details.ok ? details.balanceCents : null,
   });
+  } catch (error) {
+    return { ok: false, error: `zoho_metadata_enrollment_failed:${error instanceof Error ? error.message : String(error)}` };
+  }
 
   return {
     ok: true,
