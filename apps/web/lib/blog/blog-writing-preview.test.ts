@@ -28,14 +28,16 @@ describe("writing to preview", () => {
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
     await act(async () => root!.render(createElement(PostEditorForm, { mode: "edit", postId: "fixture" })));
     const writingNode = container.querySelector(".ProseMirror");
-    const title = container.querySelector("#wp-post-title") as HTMLInputElement;
-    await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(title, "Current unsaved title"); title.dispatchEvent(new Event("input", { bubbles: true })); });
+    const title = container.querySelector("#wp-post-title") as HTMLTextAreaElement;
+    await act(async () => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(title, "Current unsaved title"); title.dispatchEvent(new Event("input", { bubbles: true })); });
     await act(async () => [...container!.querySelectorAll("button")].find(button => button.textContent === "Settings")!.click());
     const settings = container.querySelector('[aria-label="Post settings"]')!;
     expect(settings.hasAttribute("hidden")).toBe(false);
     await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(settings.hasAttribute("hidden")).toBe(true);
+    await act(async () => [...container!.querySelectorAll("button")].find(button => button.textContent === "Settings")!.click());
     await act(async () => [...container!.querySelectorAll("button")].find(button => button.textContent === "Preview")!.click());
+    expect(settings.hasAttribute("hidden")).toBe(true);
     const preview = container.querySelector('[aria-label="Article preview"]')!;
     expect(preview.querySelector("h1")?.textContent).toBe("Current unsaved title");
     expect(preview.textContent).toContain("Can I clean painted cabinets?");
@@ -43,7 +45,7 @@ describe("writing to preview", () => {
     expect(request.mock.calls.every(args => args.length === 1 || !(args[1] as RequestInit)?.method || (args[1] as RequestInit).method === "GET")).toBe(true);
     await act(async () => [...container!.querySelectorAll("button")].find(button => button.textContent === "Write")!.click());
     expect(container.querySelector(".ProseMirror")).toBe(writingNode);
-    expect((container.querySelector("#wp-post-title") as HTMLInputElement).value).toBe("Current unsaved title");
+    expect((container.querySelector("#wp-post-title") as HTMLTextAreaElement).value).toBe("Current unsaved title");
     expect(container.textContent).toContain("Unsaved changes");
   });
   it("keeps settings, saved-version access and preview available while editing is read-only", async () => {
@@ -81,4 +83,26 @@ describe("writing to preview", () => {
   it("omits the known placeholder instead of expanding it into a grey hero", () => {
     expect(renderToStaticMarkup(createElement(BlogHero, { src: "/images/default-cleaning.jpg", alt: "Placeholder" }))).toBe("");
   });
+  it("opens the toolbar inserter, edits a new image in place, undoes it, and closes on outside interaction", async () => {
+    // JSDOM has no Range layout; ProseMirror uses these only to scroll after Undo.
+    Object.defineProperty(Range.prototype, "getClientRects", { configurable: true, value: () => [] });
+    Object.defineProperty(Range.prototype, "getBoundingClientRect", { configurable: true, value: () => new DOMRect() });
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => new Response(JSON.stringify(url.endsWith("/taxonomy") ? { categories: [], tags: [] } : { post: { id: "fixture", slug: "fixture", title: "Saved title", status: "draft", content_json: content, updated_at: "2026-10-20T12:00:00Z" } }), { headers: { "Content-Type": "application/json" } })));
+    container = document.createElement("div"); document.body.append(container); root = createRoot(container);
+    await act(async () => root!.render(createElement(PostEditorForm, { mode: "edit", postId: "fixture" })));
+    const insert = container.querySelector('button[aria-label="Insert block"]') as HTMLButtonElement;
+    await act(async () => insert.click());
+    expect(container.querySelector('[role="dialog"][aria-label="Insert a block"]')).not.toBeNull();
+    await act(async () => (container!.querySelector('button[data-block-type="image"]') as HTMLButtonElement).click());
+    expect(container.querySelector('[role="dialog"][aria-label="Insert a block"]')).toBeNull();
+    expect(container.textContent).toContain("Done editing");
+    expect(container.textContent).toContain("Can I clean painted cabinets?");
+    await act(async () => (container!.querySelector('button[aria-label="Undo"]') as HTMLButtonElement).click());
+    expect(container.textContent).not.toContain("Done editing");
+    expect(container.textContent).toContain("Kitchen surfaces");
+    await act(async () => insert.click());
+    await act(async () => container!.querySelector("#wp-post-title")!.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })));
+    expect(container.querySelector('[role="dialog"][aria-label="Insert a block"]')).toBeNull();
+  });
+
 });
