@@ -26,11 +26,13 @@ No migration, data correction, bulk rewrite, publication, scheduler/configuratio
 
 Untouched blocks retain exact source objects, raw HTML, stable IDs, table markup, image captions and FAQ options. Metadata-only saves do not flatten content. Direct legacy-prose edits can convert only the edited block to existing schema-valid rich_text with its ID and semantic heading/content in HTML. Undo restores original source. Legacy table/attribution HTML stays preserved with a visual view and explicit advanced source editing; comparison tables retain their visual cell editor.
 
+Additional mixed-selection QA reproduced a real preservation defect in the first canvas implementation: applying a list across prose, an image and an FAQ could nest source wrappers and flatten structured content. Formatting now stays within one prose section, keyboard shortcuts use the same boundary, and a transaction filter rejects nested source wrappers. Structured editing selects its own node; image insertion beside a structured selection preserves that section. Eighteen regression cases cover mixed selections, keyboard commands, direct-command defense, ordinary formatting, stable IDs and Undo. This is distinct from the deliberately repeated acceptance-test prose.
+
 The unsaved preview covers the article, not global navigation/footer or dynamically selected related guides. It neither saves nor publishes, renews credentials nor reloads the editor.
 
 ## Verification register
 
-Blog/editor suite: 199 cases in 31 files after strict-schema coverage; repeat final revision before commit. Critical suite: 1,486 tests in 128 files PASS. Two initial static mobile-contract failures were due to the sparse local checkout; reading the unchanged HEAD help file resolved them. Typecheck PASS at prepared revisions; exact final-head CI Webpack build remains required. Enforced booking lint PASS with existing warnings. Focused changed-code lint has no errors; a refs-analysis warning concerns deferred TipTap parser/node-view callbacks, not ref reads during render.
+Initial reviewed source #995 merged as `0b0ace355d7ba2d6cac5e63b4c688cbf96f724c0` after exact-head CI passed, including the production Webpack build and route crawl. Final local verification of the preservation follow-up: blog suite 217 tests in 32 files PASS; critical suite 1,486 tests in 128 files PASS; typecheck PASS. Two initial static mobile-contract failures were due to the sparse local checkout; reading the unchanged HEAD help file resolved them. Exact follow-up head CI remains required. Enforced booking lint PASS with existing warnings. Focused changed-code lint has no errors; a refs-analysis warning concerns deferred TipTap parser/node-view callbacks, not ref reads during render.
 
 No local-browser visual PASS: the connected browser cannot reach executor localhost. Use deployed staging. Do not claim phone PASS unless a requested viewport actually applies or the owner checks a phone.
 
