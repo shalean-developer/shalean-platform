@@ -14,16 +14,23 @@ function createAdmin(rows: Invoice[], failWrites = false) {
     from(table: string) {
       if (table !== "accounting_invoice_sync") throw new Error("unexpected table");
       return {
-        select() {
+        select(_cols?: string, opts?: {count?: string;head?: boolean}) {
+          if (opts?.head) {
+            const query = {
+              or() { return query; },
+              async not() { return { count: rows.filter(r => r.sync_status !== "ignored" && r.zoho_invoice_id).length, error: null }; },
+            };
+            return query;
+          }
           const query = {
             or() { return query; },
             not() { return query; },
             order() { return query; },
-            async limit(n: number) {
+            async range(start: number, end: number) {
               return { data: rows
                 .filter(r => r.sync_status !== "ignored" && r.zoho_invoice_id)
                 .sort((a,b) => (a.last_synced_at ?? "").localeCompare(b.last_synced_at ?? "") || a.id.localeCompare(b.id))
-                .slice(0,n), error: null };
+                .slice(start,end+1), error: null };
             },
           };
           return query;
@@ -43,6 +50,7 @@ function createAdmin(rows: Invoice[], failWrites = false) {
 
 describe("Stage 03 Zoho status refresh behaviour", () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     getZohoInvoice.mockReset();
     getZohoInvoice.mockImplementation(async (id: string) => ({
       ok: true, zohoInvoiceId: id, invoiceNumber: id, customerId: "customer",
@@ -56,10 +64,14 @@ describe("Stage 03 Zoho status refresh behaviour", () => {
       zoho_invoice_id: "z"+i, sync_status: i === 0 ? null : "synced", last_synced_at: null,
     }));
     const {admin,writes} = createAdmin(rows);
+    const time = vi.spyOn(Date, "now");
+    time.mockReturnValue(0);
     expect(await syncInvoiceStatusesFromZoho(admin,5)).toEqual({synced:5,failed:0});
-    expect(await syncInvoiceStatusesFromZoho(admin,5)).toEqual({synced:5,failed:0});
+    time.mockReturnValue(900000);
+    expect(await syncInvoiceStatusesFromZoho(admin,5)).toEqual({synced:2,failed:0});
     expect(new Set(writes).size).toBe(7);
     expect(writes[0]).toBe("0");
+    time.mockRestore();
   });
 
   it("counts Zoho API errors without falsely acknowledging metadata writes", async () => {
