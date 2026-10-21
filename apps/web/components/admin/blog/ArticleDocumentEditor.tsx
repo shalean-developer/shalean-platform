@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { Extension, Node, type Editor } from "@tiptap/core";
 import { DOMParser, DOMSerializer, type Node as ProseNode } from "@tiptap/pm/model";
 import { closeHistory } from "@tiptap/pm/history";
-import { Plugin, Selection } from "@tiptap/pm/state";
+import { Plugin, NodeSelection, TextSelection } from "@tiptap/pm/state";
 import { EditorContent, NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer, useEditor, type NodeViewProps } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
-import { Bold, Italic, List, ListOrdered, Undo2, Redo2, Link2, ImageIcon, ArrowUp, ArrowDown, Trash2 } from "lucide-react";
+import { Bold, Italic, List, ListOrdered, Undo2, Redo2, Link2, ImageIcon, ArrowUp, ArrowDown, Trash2, Plus, X } from "lucide-react";
 import type { BlogContentBlock } from "@/lib/blog/content-json";
 import { sanitizeBlogRichHtml } from "@/lib/blog/sanitize-blog-html";
 import { legacyParagraphToRichHtml } from "@/lib/blog/legacy-paragraph-to-rich-html";
@@ -66,19 +66,25 @@ function moveNode(props: NodeViewProps, direction: -1 | 1) {
 function BlockActions(props: NodeViewProps) {
   const block = props.node.attrs.original as BlogContentBlock;
   return <div contentEditable={false} className="blog-node-controls mb-1 flex justify-end gap-1 text-xs" aria-label={`${names[block.type] ?? block.type} controls`}>
-    <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0" aria-label={`Move ${names[block.type] ?? block.type} up`} onClick={() => moveNode(props, -1)}><ArrowUp className="size-3.5" /></Button>
-    <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0" aria-label={`Move ${names[block.type] ?? block.type} down`} onClick={() => moveNode(props, 1)}><ArrowDown className="size-3.5" /></Button>
-    <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0" aria-label={`Remove ${names[block.type] ?? block.type}`} onClick={() => { const pos = props.getPos(); if (typeof pos === "number") props.editor.view.dispatch(closeHistory(props.editor.state.tr).delete(pos, pos + props.node.nodeSize)); }}><Trash2 className="size-3.5" /></Button>
+    <Button type="button" size="sm" variant="ghost" className="blog-node-action" aria-label={`Move ${names[block.type] ?? block.type} up`} onClick={() => moveNode(props, -1)}><ArrowUp className="size-3.5" /></Button>
+    <Button type="button" size="sm" variant="ghost" className="blog-node-action" aria-label={`Move ${names[block.type] ?? block.type} down`} onClick={() => moveNode(props, 1)}><ArrowDown className="size-3.5" /></Button>
+    <Button type="button" size="sm" variant="ghost" className="blog-node-action" aria-label={`Remove ${names[block.type] ?? block.type}`} onClick={() => { const pos = props.getPos(); if (typeof pos === "number") props.editor.view.dispatch(closeHistory(props.editor.state.tr).delete(pos, pos + props.node.nodeSize)); }}><Trash2 className="size-3.5" /></Button>
   </div>;
 }
 function TextBlockView(props: NodeViewProps) {
   return <NodeViewWrapper className="blog-text-node relative"><BlockActions {...props} /><NodeViewContent /></NodeViewWrapper>;
 }
 function StructuredBlockView(props: NodeViewProps) {
-  const [editing, setEditing] = useState(false);
   const block = props.node.attrs.original as BlogContentBlock;
+  const [editing, setEditing] = useState(() => {
+    if (block.type === "image") return !block.url;
+    if (block.type === "faq") return !block.items.some(item => item.question || item.answer);
+    if (block.type === "internal_links") return !block.links.some(link => link.label.trim());
+    if (block.type === "comparison_table") return block.rows.every(row => row.every(cell => !cell.trim()));
+    return false;
+  });
   const render = props.extension.options.renderBlock as Props["renderBlock"];
-  return <NodeViewWrapper contentEditable={false} className="my-6 border-y border-zinc-100 py-4">
+  return <NodeViewWrapper contentEditable={false} className="blog-structured-node">
     <BlockActions {...props} />
     <div className="mb-3 flex items-center justify-between gap-2"><span className="text-xs font-medium text-zinc-500">{names[block.type] ?? block.type.replaceAll("_", " ")}</span><Button type="button" size="sm" variant="outline" onClick={() => { const position = props.getPos(); if (typeof position === "number") props.editor.commands.setNodeSelection(position); setEditing(!editing); }}>{editing ? "Done editing" : `Edit ${names[block.type] ?? "section"}`}</Button></div>
     {editing ? render(block, 0, next => props.updateAttributes({ original: next })) : <BlogContentRenderer content={{ schema_version: 1, blocks: [block] }} />}
@@ -137,34 +143,104 @@ export function serializeBlogDocument(current: Editor, baseline: ReadonlyMap<str
 
 type StructuralFormat = "paragraph" | "bulletList" | "orderedList" | "blockquote" | 2 | 3 | 4;
 
-/** Formatting must stay inside a prose section; it must never coerce a structured node. */
-export function blogFormattingRange(editor: Editor): { from: number; to: number } | null {
+/** Apply formatting to prose ranges independently, leaving structured nodes intact. */
+export function blogFormattingTargets(editor: Editor): { from: number; to: number }[] {
   const { selection, doc } = editor.state;
-  let containsAtom = false;
-  doc.nodesBetween(selection.from, selection.to, node => {
-    if (node.type.name === "blogAtomic" || node.type.name === "image") { containsAtom = true; return false; }
-    return true;
+  const ranges: { from: number; to: number }[] = [];
+  doc.forEach((top, start) => {
+    if (top.type.name === "blogAtomic" || top.type.name === "image") return;
+    let group: { from: number; to: number } | null = null;
+    const visit = (node: ProseNode, position: number) => {
+      if (node.type.name === "image" || node.type.name === "blogAtomic") { group = null; return false; }
+      if (!node.isTextblock) return true;
+      const from = Math.max(selection.from, position + 1);
+      const to = Math.min(selection.to, position + node.nodeSize - 1);
+      if (from <= to) {
+        if (group) group.to = to;
+        else { group = { from, to }; ranges.push(group); }
+      }
+      return false;
+    };
+    if (top.isTextblock) visit(top, start);
+    else top.descendants((node, position) => visit(node, start + 1 + position));
   });
-  if (containsAtom) return null;
-  const fromParent = selection.$from.depth ? selection.$from.node(1) : null;
-  const toParent = selection.$to.depth ? selection.$to.node(1) : null;
-  if (fromParent?.type.name === "blogText" && fromParent === toParent) return { from: selection.from, to: selection.to };
-  if (doc.childCount === 1 && doc.firstChild?.type.name === "blogText") return { from: Selection.atStart(doc).from, to: Selection.atEnd(doc).to };
-  let crossesSource = false;
-  doc.nodesBetween(selection.from, selection.to, node => { if (node.type.name === "blogText") crossesSource = true; });
-  return crossesSource ? null : { from: selection.from, to: selection.to };
+  return ranges;
 }
 
 export function formatBlogSelection(editor: Editor, format: StructuralFormat): boolean {
-  const range = blogFormattingRange(editor);
-  if (!range) return false;
-  const chain = editor.chain().focus().setTextSelection(range);
-  if (format === "paragraph") return chain.setParagraph().run();
-  if (format === "bulletList") return chain.toggleBulletList().run();
-  if (format === "orderedList") return chain.toggleOrderedList().run();
-  if (format === "blockquote") return chain.toggleBlockquote().run();
-  return chain.setHeading({ level: format }).run();
+  const targets = blogFormattingTargets(editor);
+  if (!targets.length) return false;
+  const bookmark = editor.state.selection.getBookmark();
+  const chain = editor.chain().focus();
+  const listType = format === "bulletList" || format === "orderedList" || format === "blockquote" ? format : null;
+  const alreadyFormatted = targets.map(range => {
+    let all = Boolean(listType);
+    editor.state.doc.nodesBetween(range.from, range.to, (node, position) => {
+      if (!node.isTextblock) return true;
+      const point = editor.state.doc.resolve(position + 1);
+      let matching = false;
+      for (let depth = 1; depth <= point.depth; depth++) if (point.node(depth).type.name === listType) matching = true;
+      if (!matching) all = false;
+      return false;
+    });
+    return all;
+  });
+  const removeFormat = alreadyFormatted.every(Boolean);
+  // Work backwards so earlier document positions remain stable. One transaction
+  // makes the complete multi-section operation one Undo step.
+  for (let index = targets.length - 1; index >= 0; index--) {
+    const range = targets[index];
+    chain.setTextSelection(range);
+    if (listType && !removeFormat && alreadyFormatted[index]) continue;
+    if (format === "paragraph") chain.command(({ tr }) => {
+      // Generic clearNodes/setParagraph may lift our source wrapper as well as
+      // the heading. Change only the selected textblock types and keep IDs.
+      tr.doc.nodesBetween(range.from, range.to, (node, position) => {
+        if (node.isTextblock && node.type !== editor.schema.nodes.paragraph) tr.setNodeMarkup(position, editor.schema.nodes.paragraph, node.attrs, node.marks);
+      });
+      return true;
+    });
+    else if (format === "bulletList") chain.toggleBulletList();
+    else if (format === "orderedList") chain.toggleOrderedList();
+    else if (format === "blockquote") chain.toggleBlockquote();
+    else chain.setHeading({ level: format });
+  }
+  return chain.command(({ tr }) => { tr.setSelection(bookmark.map(tr.mapping).resolve(tr.doc)); return true; }).run();
 }
+
+/** Insert after the active paragraph/list, splitting its source wrapper safely. */
+export function insertBlogBlock(editor: Editor, block: BlogContentBlock): void {
+  const html = proseHtml(block);
+  const element = document.createElement("div");
+  element.innerHTML = html || "<p></p>";
+  const inserted = html === null ? editor.schema.nodes.blogAtomic.create({ original: block }) : editor.schema.nodes.blogText.create({ original: block }, DOMParser.fromSchema(editor.schema).parse(element).content);
+  const { selection, doc } = editor.state;
+  const end = selection.$to;
+  const transaction = closeHistory(editor.state.tr);
+  let position = selection.to;
+  if (end.depth >= 2 && end.node(1).type.name === "blogText") {
+    const source = end.node(1);
+    const start = end.before(1);
+    const cut = end.after(2) - start - 1;
+    const before = source.content.cut(0, cut);
+    const after = source.content.cut(cut);
+    const preceding = source.copy(before);
+    position = start + preceding.nodeSize;
+    if (after.size) {
+      const following = source.copy(after);
+      const original: BlogContentBlock = { id: crypto.randomUUID(), type: "rich_text", html: fragmentHtml(following, editor) };
+      transaction.replaceWith(start, start + source.nodeSize, [preceding, inserted, editor.schema.nodes.blogText.create({ original }, after)]);
+    } else transaction.insert(position, inserted);
+  } else {
+    if (end.depth) position = end.after(1);
+    position = Math.min(position, doc.content.size);
+    transaction.insert(position, inserted);
+  }
+  transaction.setSelection(inserted.type.name === "blogAtomic" ? NodeSelection.create(transaction.doc, position) : TextSelection.near(transaction.doc.resolve(position + 1)));
+  editor.view.dispatch(transaction.scrollIntoView());
+}
+
+export const BlogAnchors = Extension.create({ name: "blogAnchors", addGlobalAttributes() { return [{ types: ["heading", "paragraph", "blockquote"], attributes: { id: { default: null, parseHTML: element => element.getAttribute("id"), renderHTML: attrs => attrs.id ? { id: attrs.id } : {} } } }]; } });
 
 export const BlogDocumentBoundaries = Extension.create({
   name: "blogDocumentBoundaries",
@@ -198,7 +274,20 @@ export function ArticleDocumentEditor({ blocks, onBlocksChange, renderBlock, new
   const baseline = useRef(new Map<string, string>());
   const bareIds = useRef(new Map<number, string>());
   const input = useRef<HTMLInputElement>(null);
-  const [addType, setAddType] = useState<AddType>("rich_text");
+  const [inserterOpen, setInserterOpen] = useState(false);
+  const inserterId = useId();
+  const inserterButton = useRef<HTMLButtonElement>(null);
+  const inserterPanel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!inserterOpen) return;
+    inserterPanel.current?.querySelector<HTMLButtonElement>("button[data-block-type]")?.focus();
+    const outside = (event: PointerEvent) => {
+      const target = event.target as globalThis.Node;
+      if (!inserterPanel.current?.contains(target) && !inserterButton.current?.contains(target)) setInserterOpen(false);
+    };
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, [inserterOpen]);
   const { uploadFile, uploading, error } = useBlogMediaUpload();
   const [imageError, setImageError] = useState("");
   useEffect(() => { change.current = onBlocksChange; fields.current = renderBlock; }, [onBlocksChange, renderBlock]);
@@ -209,7 +298,7 @@ export function ArticleDocumentEditor({ blocks, onBlocksChange, renderBlock, new
     extensions: [
       BlogDocumentBoundaries,
       ...documentNodes,
-      Extension.create({ name: "blogAnchors", addGlobalAttributes() { return [{ types: ["heading", "paragraph", "blockquote"], attributes: { id: { default: null, parseHTML: element => element.getAttribute("id"), renderHTML: attrs => attrs.id ? { id: attrs.id } : {} } } }]; } }),
+      BlogAnchors,
       StarterKit.configure({ heading: { levels: [2, 3, 4] }, trailingNode: false, link: false, code: false, codeBlock: false }),
       Link.configure({ openOnClick: false }), Image.configure({ allowBase64: false }),
     ],
@@ -234,22 +323,17 @@ export function ArticleDocumentEditor({ blocks, onBlocksChange, renderBlock, new
   }, [blocks, blank, editor]);
   useEffect(() => { if (editor && editor.isEditable !== !disabled) editor.setEditable(!disabled, false); }, [disabled, editor]);
   const openUpload = () => input.current?.click();
-  function addSection() {
-    if (!editor) return;
-    const block = newBlock(addType);
-    const index = initial.current.length;
-    initial.current = [...initial.current, block];
-    const html = blogDocumentHtml([block]).replace(/data-blog-(text|atomic)="0"/, `data-blog-$1="${index}"`);
-    editor.chain().focus().insertContentAt(editor.state.doc.content.size, html).run();
+  function addSection(type: AddType) {
+    if (!editor || disabled) return;
+    insertBlogBlock(editor, newBlock(type));
+    setInserterOpen(false);
+    editor.commands.focus();
   }
   function insertBlogImage(src: string, alt: string) {
     if (!editor) return;
-    if (blogFormattingRange(editor)) editor.chain().focus().setImage({ src, alt }).run();
-    else {
-      const selection = editor.state.selection;
-      const position = selection.$from.depth ? selection.$from.after(1) : selection.to;
-      editor.chain().focus().insertContentAt(position, { type: "image", attrs: { src, alt } }).run();
-    }
+    const selection = editor.state.selection;
+    if (selection.empty && selection.$from.parent.isTextblock) editor.chain().focus().setImage({ src, alt }).run();
+    else insertBlogBlock(editor, { id: crypto.randomUUID(), type: "image", url: src, alt });
   }
   async function uploadImage(file: File) {
     const result = await uploadFile(file, { folder: uploadSlug ? `inline/${uploadSlug.slice(0, 48)}` : "inline" });
@@ -272,11 +356,16 @@ export function ArticleDocumentEditor({ blocks, onBlocksChange, renderBlock, new
     if (alt !== null) { insertBlogImage(src, alt); setImageError(""); }
   }
   if (!editor) return <p className="p-4 text-sm text-zinc-500">Opening writing canvas…</p>;
-  const canFormat = Boolean(blogFormattingRange(editor));
-  const button = (label: string, icon: ReactNode, action: () => void, pressed = false) => <Button key={label} type="button" size="sm" variant={pressed ? "secondary" : "ghost"} aria-label={label} title={label} aria-pressed={pressed} disabled={!canFormat && label !== "Undo" && label !== "Redo"} onMouseDown={event => event.preventDefault()} onClick={action} className="h-9 w-9 p-0">{icon}</Button>;
-  return <section aria-label="Article body" className="rich-text-editor-root mx-auto max-w-[720px] px-4 sm:px-0">
-    <div role="toolbar" aria-label="Rich text" className="sticky top-[var(--blog-editor-toolbar-top,116px)] z-20 flex flex-wrap items-center gap-1 rounded-lg border-y bg-white/95 py-2 backdrop-blur-sm dark:bg-zinc-950/95">
-      <select aria-label="Paragraph style" value={editor.isActive("heading", { level: 2 }) ? "2" : editor.isActive("heading", { level: 3 }) ? "3" : editor.isActive("heading", { level: 4 }) ? "4" : "paragraph"} className="h-9 rounded border bg-transparent px-2 text-sm" disabled={!canFormat} onChange={event => { const level = Number(event.target.value); formatBlogSelection(editor, level === 2 || level === 3 || level === 4 ? level : "paragraph"); }}><option value="paragraph">Paragraph</option><option value="2">Heading 2</option><option value="3">Heading 3</option><option value="4">Heading 4</option></select>
+  const canFormat = blogFormattingTargets(editor).length > 0;
+  const button = (label: string, icon: ReactNode, action: () => void, pressed = false) => <Button key={label} type="button" size="sm" variant={pressed ? "secondary" : "ghost"} aria-label={label} title={label} aria-pressed={pressed} disabled={disabled || (!canFormat && label !== "Undo" && label !== "Redo")} onMouseDown={event => event.preventDefault()} onClick={action} className="blog-editor-icon-button">{icon}</Button>;
+  return <section aria-label="Article body" className="rich-text-editor-root blog-writing-canvas">
+    <div role="toolbar" aria-label="Rich text" className="sticky top-[var(--blog-editor-toolbar-top,124px)] z-20 flex flex-wrap items-center gap-1 border-y bg-white py-2 dark:bg-zinc-950">
+      <button ref={inserterButton} type="button" className="blog-editor-icon-button" aria-label="Insert block" aria-expanded={inserterOpen} aria-controls={inserterId} disabled={disabled} onClick={() => setInserterOpen(!inserterOpen)}><Plus aria-hidden /></button>
+      {inserterOpen ? <div ref={inserterPanel} id={inserterId} role="dialog" aria-label="Insert a block" className="blog-block-inserter" onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); setInserterOpen(false); inserterButton.current?.focus(); } }}>
+        <div className="blog-block-inserter-heading"><strong>Insert a block</strong><button type="button" className="blog-inserter-close" aria-label="Close block inserter" onClick={() => { setInserterOpen(false); inserterButton.current?.focus(); }}><X className="size-4" aria-hidden /></button></div>
+        {(["rich_text", "image", "faq", "internal_links", "comparison_table", "section"] as const).map(type => <button key={type} type="button" data-block-type={type} onClick={() => addSection(type)}>{names[type]}</button>)}
+      </div> : null}
+      <select aria-label="Paragraph style" value={editor.isActive("heading", { level: 2 }) ? "2" : editor.isActive("heading", { level: 3 }) ? "3" : editor.isActive("heading", { level: 4 }) ? "4" : "paragraph"} className="h-9 rounded border bg-transparent px-2 text-sm" disabled={disabled || !canFormat} onChange={event => { const level = Number(event.target.value); formatBlogSelection(editor, level === 2 || level === 3 || level === 4 ? level : "paragraph"); }}><option value="paragraph">Paragraph</option><option value="2">Heading 2</option><option value="3">Heading 3</option><option value="4">Heading 4</option></select>
       {button("Undo", <Undo2 className="size-4" />, () => { editor.chain().focus().undo().run(); })}
       {button("Redo", <Redo2 className="size-4" />, () => { editor.chain().focus().redo().run(); })}
       {button("Bold", <Bold className="size-4" />, () => { editor.chain().focus().toggleBold().run(); }, editor.isActive("bold"))}
@@ -284,13 +373,13 @@ export function ArticleDocumentEditor({ blocks, onBlocksChange, renderBlock, new
       {button("Bullet list", <List className="size-4" />, () => { formatBlogSelection(editor, "bulletList"); }, editor.isActive("bulletList"))}
       {button("Numbered list", <ListOrdered className="size-4" />, () => { formatBlogSelection(editor, "orderedList"); }, editor.isActive("orderedList"))}
       {button("Link", <Link2 className="size-4" />, () => { void setLink(); }, editor.isActive("link"))}
-      <Button type="button" size="sm" variant="ghost" title="Upload image from computer" aria-label="Upload image from computer" onClick={openUpload} className="h-9 w-9 p-0"><ImageIcon className="size-4" /></Button>
-      <Button type="button" size="sm" variant="ghost" onClick={() => void insertImage()}>Image URL</Button>
+      <Button type="button" size="sm" variant="ghost" title="Upload image from computer" aria-label="Upload image from computer" disabled={disabled || uploading} onClick={openUpload} className="blog-editor-icon-button"><ImageIcon className="size-4" /></Button>
+      <Button type="button" size="sm" variant="ghost" disabled={disabled} onClick={() => void insertImage()}>Image URL</Button>
     </div>
-    <input ref={input} type="file" className="sr-only" accept="image/jpeg,image/png,image/webp,image/gif" aria-label="Inline image file" disabled={uploading} onChange={event => { const file = event.target.files?.[0]; if (file) void uploadImage(file); event.target.value = ""; }} />
+    <input ref={input} type="file" className="sr-only" accept="image/jpeg,image/png,image/webp,image/gif" aria-label="Inline image file" disabled={disabled || uploading} onChange={event => { const file = event.target.files?.[0]; if (file) void uploadImage(file); event.target.value = ""; }} />
     {error || imageError || uploading ? <p role="status" className="py-2 text-sm text-zinc-600">{uploading ? "Uploading image…" : error || imageError}</p> : null}
-    {!canFormat ? <p className="py-2 text-xs text-zinc-500">Select text within one section to format it. Images and FAQs keep their own controls.</p> : null}
+    {!canFormat ? <p className="py-2 text-xs text-zinc-500">Select article text to format it. Images and FAQs keep their own controls.</p> : null}
     <EditorContent editor={editor} />
-    <div className="mt-4 flex flex-wrap gap-2 border-t pt-4"><select aria-label="New block type" className="rounded border bg-transparent px-2 text-sm" value={addType} onChange={event => setAddType(event.target.value as AddType)}>{(["rich_text", "image", "faq", "internal_links", "comparison_table", "section"] as const).map(type => <option key={type} value={type}>{names[type]}</option>)}</select><Button type="button" size="sm" variant="outline" onClick={addSection}>Add section</Button><span className="ml-auto self-center text-xs text-zinc-500" aria-label="Word count">{wordCount.toLocaleString()} words</span></div>
+    <div className="blog-canvas-footer"><button type="button" onClick={() => { setInserterOpen(true); inserterButton.current?.focus(); }}>＋ Add block</button><span aria-label="Word count">{wordCount.toLocaleString()} words</span></div>
   </section>;
 }

@@ -65,6 +65,7 @@ export function BlogFeaturedImageField({
         ref={fileRef}
         id={inputId}
         type="file"
+        aria-label="Featured image file"
         accept="image/jpeg,image/png,image/webp,image/gif"
         className="sr-only"
         onChange={(e) => {

@@ -5,6 +5,7 @@ vi.mock("next/navigation",()=>({useRouter:()=>({push:vi.fn(),refresh:vi.fn()})})
 import { WordPressPostEditorLayout } from "@/components/admin/blog/WordPressPostEditorLayout";
 import { PostEditorForm } from "@/components/admin/blog/PostEditorForm";
 import { RichTextBlockEditor } from "@/components/admin/blog/RichTextBlockEditor";
+import { BlogFeaturedImageField } from "@/components/admin/blog/BlogFeaturedImageField";
 import { BlogPublishReadiness } from "@/components/admin/blog/BlogPublishReadiness";
 import { validateBlogPublish } from "@/lib/blog/seo/publish-validation";
 import { DocumentBodySection } from "@/components/admin/blog/DocumentBodySection";
@@ -45,4 +46,9 @@ describe("blog editor rendered layout",()=>{
     const html=renderToStaticMarkup(createElement(DocumentBodySection,{blocks,onBlocksChange:()=>{},renderBlock:b=>JSON.stringify(b),newBlock:()=>({type:"rich_text" as const,html:""})}));
     expect(html.indexOf("Before")).toBeLessThan(html.indexOf("Middle")); expect(html.indexOf("Middle")).toBeLessThan(html.indexOf("Claremont")); expect(html.indexOf("Claremont")).toBeLessThan(html.indexOf("After"));
   });
+  it("gives the featured-image file picker an accessible purpose", () => {
+    const html = renderToStaticMarkup(createElement(BlogFeaturedImageField, { imageUrl: "", altText: "", onImageUrlChange: () => {}, onAltTextChange: () => {} }));
+    expect(html).toMatch(/<input[^>]*type="file"[^>]*aria-label="Featured image file"/);
+  });
+
 });
