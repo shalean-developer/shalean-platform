@@ -374,6 +374,7 @@ export function PostEditorForm({
   const [revision, setRevision] = useState<string | null>(null);
   const [receipt, setReceipt] = useState("");
   const [recovery, setRecovery] = useState<Record<string, unknown> | null>(null);
+  const [recoveryBackup, setRecoveryBackup] = useState<Record<string, unknown> | null>(null);
   const [retired, setRetired] = useState(false);
   const [loaded, setLoaded] = useState(mode === "create");
   const baseline = useRef<string | null>(null);
@@ -633,12 +634,19 @@ export function PostEditorForm({
     if (recoveryReadKey.current !== recoveryKey) {
       recoveryReadKey.current = recoveryKey;
       try {
+        const backup = localStorage.getItem(`${recoveryKey}:before-restore`);
+        if (backup) {
+          const item = JSON.parse(backup);
+          if (item.snapshot && Date.now() - item.savedAt < 7 * 86400000) setRecoveryBackup(item.snapshot);
+        }
+      } catch { setFormError("An older browser copy could not be read. Your current recovery copy will still be checked."); }
+      try {
         const raw = localStorage.getItem(recoveryKey);
         if (raw) {
           const item = JSON.parse(raw);
           if (item.snapshot && Date.now() - item.savedAt < 7 * 86400000 && JSON.stringify(item.snapshot) !== baseline.current) { setRecovery(item.snapshot); return; }
         }
-      } catch { setFormError("Browser draft recovery is unavailable. Keep this page open until your save succeeds."); }
+      } catch { setFormError("Browser draft recovery is unavailable. Keep this page open until your save succeeds."); return; }
     }
     const dirty = snapshot !== baseline.current;
     const persist = () => {
@@ -662,15 +670,40 @@ export function PostEditorForm({
     return () => { window.removeEventListener("beforeunload", beforeUnload); document.removeEventListener("click", navigate, true); };
   }, [snapshot, loaded, recoveryKey, recovery]);
 
-  const recoveryNotice = <div className="space-y-2 px-4 py-3" aria-live="polite">
+  function restoreBrowserCopy(next: Record<string, unknown>) {
+    if (recovery && recovery !== next && snapshot !== baseline.current) {
+      setFormError("Keep your current edits or restore the recovered copy before switching to the other browser copy.");
+      return;
+    }
+    // Keep both browser copies before replacing any current work, including edits
+    // made while the asynchronous recovery lookup was still pending.
+    const other = recovery && recovery !== next ? recovery : snapshot !== baseline.current ? JSON.parse(snapshot) as Record<string, unknown> : null;
+    try {
+      if (!recoveryKey) throw new Error("Recovery identity is unavailable.");
+      if (other && JSON.stringify(other) !== JSON.stringify(next)) {
+        localStorage.setItem(`${recoveryKey}:before-restore`, JSON.stringify({ savedAt: Date.now(), snapshot: other }));
+        setRecoveryBackup(other);
+      }
+      localStorage.setItem(recoveryKey, JSON.stringify({ savedAt: Date.now(), snapshot: next }));
+    } catch {
+      setFormError("Could not preserve both browser copies. Your current writing has been kept. Free browser storage and retry.");
+      return;
+    }
+    hydratePost({ ...next, retired });
+    setSeoGenSlug(Boolean(next.seoGenSlug));
+    setSeoApplySuggestions(Boolean(next.seoApplySuggestions));
+    setRecovery(null);
+  }
+  const recoveryNotice = revisionConflict || receipt || retired || recovery || recoveryBackup || templateBackup ? <div className="blog-editor-notices space-y-2" aria-live="polite">
     {revisionConflict && postId ? <Link href={`${postsListPath}/${postId}`} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-700 underline">Open the latest editor in a new tab to reconcile this conflict</Link> : null}
     {receipt ? <p role="status" className="text-sm text-green-700">{receipt}</p> : null}
     {retired ? <p role="status">This retired slug redirects to its canonical destination. This record is read-only.</p> : null}
-    {recovery ? <div className="rounded border border-amber-300 p-3 text-sm"><p>Unsaved work was recovered from this browser. Restore it or keep the server version.</p>
-      <Button type="button" onClick={() => { hydratePost(recovery); setSeoGenSlug(Boolean(recovery.seoGenSlug)); setSeoApplySuggestions(Boolean(recovery.seoApplySuggestions)); setRecovery(null); }}>Restore recovered work</Button>
-      <Button type="button" variant="ghost" onClick={() => { setRecovery(null); if (recoveryKey) localStorage.removeItem(recoveryKey); }}>Keep server version</Button></div> : null}
+    {recovery ? <div className="rounded border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">Review your recovered writing</p><p>Unsaved work was recovered from this browser. Choose a copy before editing or saving. Your current copy is kept when you restore.</p>
+      <div className="mt-3 flex flex-wrap gap-2"><Button type="button" disabled={retired} onClick={() => restoreBrowserCopy(recovery)}>Restore recovered work</Button>
+      <Button type="button" variant="outline" onClick={() => { try { if (recoveryKey) localStorage.removeItem(recoveryKey); setRecovery(null); } catch { setFormError("Could not clear browser recovery. Your current writing has been kept."); } }}>{snapshot === baselineSnapshot ? "Keep server version" : "Keep current edits"}</Button></div></div> : null}
+    {recoveryBackup ? <div className="flex flex-wrap items-center gap-2 text-sm"><p>Your other browser copy is available until you save.</p><Button type="button" variant="outline" disabled={retired || Boolean(recovery && snapshot !== baselineSnapshot)} onClick={() => restoreBrowserCopy(recoveryBackup)}>Restore other browser copy</Button></div> : null}
     {templateBackup ? <Button type="button" variant="outline" onClick={() => { setBlocks(templateBackup); setTemplateBackup(null); }}>Undo template replacement</Button> : null}
-  </div>;
+  </div> : null;
 
   const updateBlock = useCallback((index: number, next: BlogContentBlock) => {
     setBlocks((prev) => {
@@ -724,7 +757,8 @@ export function PostEditorForm({
 
   const save = async () => {
     setFormError(null);
-    if (retired || saving || recovery || !validateClient()) return;
+    if (recovery) { setFormError("Choose which recovered copy to keep before saving."); return; }
+    if (retired || saving || !validateClient()) return;
     setSaving(true);
     try {
     const token = await getToken();
@@ -806,7 +840,8 @@ export function PostEditorForm({
     if (!json.post?.updated_at || !json.receipt) throw new Error("No save receipt returned. Retry safely.");
     saved.current = true;
     setRevisionConflict(false);
-    if (recoveryKey) { try { localStorage.removeItem(recoveryKey); } catch { /* Server receipt remains authoritative. */ } }
+    if (recoveryKey) { try { localStorage.removeItem(recoveryKey); localStorage.removeItem(`${recoveryKey}:before-restore`); } catch { /* Server receipt remains authoritative. */ } }
+    setRecoveryBackup(null);
     hydratePost(json.post);
     setDraftPreviewQuery(json.draft_preview_query ?? null);
     setSeoGenSlug(false); setSeoApplySuggestions(false);
@@ -1100,8 +1135,8 @@ export function PostEditorForm({
         mode={mode}
         postsListPath={postsListPath}
         saving={saving}
-        saveState={saving ? "Saving…" : mode === "create" ? "Unsaved changes" : baselineSnapshot === null ? "Checking saved state…" : snapshot !== baselineSnapshot ? "Unsaved changes" : "Saved"}
-        disabled={retired}
+        saveState={recovery ? "Recovery needs review" : saving ? "Saving…" : mode === "create" ? "Unsaved changes" : baselineSnapshot === null ? "Checking saved state…" : snapshot !== baselineSnapshot ? "Unsaved changes" : "Saved"}
+        disabled={retired || Boolean(recovery)}
         status={status}
         onSave={save}
         formError={formError}
@@ -1120,14 +1155,15 @@ export function PostEditorForm({
         viewPostLabel={viewPostLabelText}
         preview={<BlogArticlePreview title={h1.trim() || title} excerpt={excerpt} slug={slug} featuredUrl={featuredUrl} featuredAlt={featuredAlt} content={contentJson} wordCount={publishPreview.wordCount} />}
         headlineNotice={h1.trim() && h1.trim() !== title.trim() ? <div className="mx-4 mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-950"><p>Public headline: <strong>{h1}</strong></p><Button type="button" variant="ghost" size="sm" onClick={() => setH1("")}>Use article title as headline</Button></div> : null}
+        notice={recoveryNotice}
         sidebar={documentSidebar}
         createExtras={createTemplateExtras}
         body={
-          <><div>{recoveryNotice}</div><ArticleDocumentEditor
-            blocks={blocks} onBlocksChange={setBlocks} uploadSlug={slug} disabled={saving || retired} wordCount={publishPreview.wordCount}
+          <ArticleDocumentEditor
+            blocks={blocks} onBlocksChange={setBlocks} uploadSlug={slug} disabled={saving || retired || Boolean(recovery)} wordCount={publishPreview.wordCount}
             renderBlock={(block, _index, onChange) => <BlockFields block={block} onChange={onChange} uploadSlug={slug} document />}
             newBlock={newBlock}
-          /></>
+          />
         }
       />
     );
@@ -1149,6 +1185,7 @@ export function PostEditorForm({
         </div>
       )}
 
+      <fieldset disabled={saving || retired || Boolean(recovery)} className="min-w-0 border-0 p-0">
       <header className="mb-8 flex flex-col gap-4 border-b border-zinc-200/90 pb-8 sm:flex-row sm:items-end sm:justify-between dark:border-zinc-800/90">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Blog</p>
@@ -1604,6 +1641,7 @@ export function PostEditorForm({
           </div>
         </aside>
       </div>
+      </fieldset>
     </div>
   );
 }
