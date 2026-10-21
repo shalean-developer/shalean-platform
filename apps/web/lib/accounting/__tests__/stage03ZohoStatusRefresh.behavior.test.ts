@@ -3,86 +3,68 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 const getZohoInvoice = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/zoho/zohoBooksService", () => ({ getZohoInvoice }));
-
 import { syncInvoiceStatusesFromZoho } from "../syncInvoiceMetadata";
 
-type Invoice = { id: string; entity_type: "monthly_invoice"; entity_id: string; zoho_invoice_id: string; sync_status: string | null; last_synced_at: string | null };
-function createAdmin(rows: Invoice[], failWrites = false) {
-  let clock = 0;
+type Invoice = { id: string; entity_type: "monthly_invoice"; entity_id: string; zoho_invoice_id: string; sync_status: string | null };
+function createAdmin(rows: Invoice[], failingWrites = false) {
+  let lastId = "00000000-0000-0000-0000-000000000000";
   const writes: string[] = [];
   const admin = {
     from(table: string) {
-      if (table !== "accounting_invoice_sync") throw new Error("unexpected table");
+      if (table === "accounting_invoice_refresh_cursor") return {
+        select() { return { eq() { return { async single() { return { data: { last_id: lastId }, error: null }; } }; } }; },
+        update(values: {last_id:string}) { return { async eq() { lastId = values.last_id; return {error:null}; } }; },
+      };
+      if (table !== "accounting_invoice_sync") throw Error("unexpected table");
       return {
-        select(_cols?: string, opts?: {count?: string;head?: boolean}) {
-          if (opts?.head) {
-            const query = {
-              or() { return query; },
-              async not() { return { count: rows.filter(r => r.sync_status !== "ignored" && r.zoho_invoice_id).length, error: null }; },
-            };
-            return query;
-          }
+        select() {
           const query = {
             or() { return query; },
             not() { return query; },
             order() { return query; },
-            async range(start: number, end: number) {
-              return { data: rows
-                .filter(r => r.sync_status !== "ignored" && r.zoho_invoice_id)
-                .sort((a,b) => a.id.localeCompare(b.id))
-                .slice(start,end+1), error: null };
-            },
+            async limit(n: number) { return {data: rows.filter(r => r.sync_status !== "ignored").slice(0,n),error:null}; },
+            async gt(_field:string,id:string) { return {data: rows.filter(r => r.sync_status !== "ignored" && r.id > id).slice(0,5),error:null}; },
           };
           return query;
         },
-        async upsert(row: Record<string, unknown>) {
-          writes.push(String(row.entity_id));
-          if (failWrites) return { error: { message: "database unavailable" } };
-          const target = rows.find(r => r.entity_id === row.entity_id);
-          if (target) { target.last_synced_at = new Date(2026,9,21,0,0,clock++).toISOString(); target.sync_status = "synced"; }
-          return { error: null };
+        async upsert(value:Record<string,unknown>) {
+          writes.push(String(value.entity_id));
+          return {error: failingWrites ? {message:"DB failure"} : null};
         },
       };
     },
   };
-  return { admin: admin as never, writes };
+  return {admin:admin as never,writes,get cursor(){return lastId;}};
 }
+function inv(n:number):Invoice { return { id:String(n).padStart(4,"0"), entity_id:String(n),entity_type:"monthly_invoice",zoho_invoice_id:"z"+n,sync_status:n===1?null:"synced" }; }
 
-describe("Stage 03 Zoho status refresh behaviour", () => {
-  beforeEach(() => {
+describe("Stage 03 durable Zoho cursor",()=>{
+  beforeEach(()=>{
     vi.restoreAllMocks();
     getZohoInvoice.mockReset();
-    getZohoInvoice.mockImplementation(async (id: string) => ({
-      ok: true, zohoInvoiceId: id, invoiceNumber: id, customerId: "customer",
-      status: "paid", totalCents: 40000, taxCents: 0, balanceCents: 0,
+    getZohoInvoice.mockImplementation(async (id:string)=>({
+      ok:true,zohoInvoiceId:id,invoiceNumber:id,customerId:"c",status:"paid",totalCents:40000,taxCents:0,balanceCents:0,
     }));
   });
-
-  it("progresses across consecutive bounded batches, including null status", async () => {
-    const rows: Invoice[] = Array.from({length: 7},(_,i) => ({
-      id: String(i), entity_type: "monthly_invoice", entity_id: String(i),
-      zoho_invoice_id: "z"+i, sync_status: i === 0 ? null : "synced", last_synced_at: null,
-    }));
-    const {admin,writes} = createAdmin(rows);
-    const time = vi.spyOn(Date, "now");
-    time.mockReturnValue(0);
-    expect(await syncInvoiceStatusesFromZoho(admin,5)).toEqual({synced:5,failed:0});
-    time.mockReturnValue(900000);
-    expect(await syncInvoiceStatusesFromZoho(admin,5)).toEqual({synced:2,failed:0});
-    expect(new Set(writes).size).toBe(7);
-    expect(writes[0]).toBe("0");
-    time.mockRestore();
+  it("advances after missed schedules and wraps after the last ID",async()=>{
+    const mock=createAdmin(Array.from({length:7},(_,i)=>inv(i+1)));
+    expect(await syncInvoiceStatusesFromZoho(mock.admin,5)).toEqual({synced:5,failed:0});
+    expect(mock.cursor).toBe("0005");
+    // No dependence on Date.now or 15-minute cadence.
+    expect(await syncInvoiceStatusesFromZoho(mock.admin,5)).toEqual({synced:2,failed:0});
+    expect(mock.cursor).toBe("0007");
+    expect(await syncInvoiceStatusesFromZoho(mock.admin,5)).toEqual({synced:5,failed:0});
+    expect(new Set(mock.writes).size).toBe(7);
   });
-
-  it("counts Zoho API errors without falsely acknowledging metadata writes", async () => {
-    getZohoInvoice.mockResolvedValue({ok:false,error:"zoho unavailable"});
-    const {admin,writes} = createAdmin([{id:"1",entity_type:"monthly_invoice",entity_id:"1",zoho_invoice_id:"z1",sync_status:"synced",last_synced_at:null}]);
-    expect(await syncInvoiceStatusesFromZoho(admin,5)).toEqual({synced:0,failed:1});
-    expect(writes).toHaveLength(0);
+  it("advances even when Zoho returns errors, avoiding starvation",async()=>{
+    const mock=createAdmin([inv(1),inv(2),inv(3),inv(4),inv(5),inv(6)]);
+    getZohoInvoice.mockResolvedValue({ok:false,error:"Zoho unavailable"});
+    expect(await syncInvoiceStatusesFromZoho(mock.admin,5)).toEqual({synced:0,failed:5});
+    expect(mock.cursor).toBe("0005");
+    expect(await syncInvoiceStatusesFromZoho(mock.admin,5)).toEqual({synced:0,failed:1});
   });
-
-  it("returns a failed outcome if the database rejects an upsert", async () => {
-    const {admin} = createAdmin([{id:"1",entity_type:"monthly_invoice",entity_id:"1",zoho_invoice_id:"z1",sync_status:"synced",last_synced_at:null}],true);
-    expect(await syncInvoiceStatusesFromZoho(admin,5)).toEqual({synced:0,failed:1});
+  it("counts database-upsert failures, without claiming payment success",async()=>{
+    const mock=createAdmin([inv(1)],true);
+    expect(await syncInvoiceStatusesFromZoho(mock.admin,5)).toEqual({synced:0,failed:1});
   });
 });
