@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,8 @@ type Props = {
   permalinkPreview: string;
   viewPostUrl?: string | null;
   viewPostLabel?: string;
+  preview?: ReactNode;
+  headlineNotice?: ReactNode;
   body: ReactNode;
   sidebar: ReactNode;
   createExtras?: ReactNode;
@@ -50,15 +52,32 @@ export function WordPressPostEditorLayout({
   onSlugAutoChange,
   permalinkPreview,
   viewPostUrl,
-  viewPostLabel = "View post",
   body,
+  preview,
+  headlineNotice,
   sidebar,
   createExtras,
 }: Props) {
+  const [actionHeight, setActionHeight] = useState(52);
+  const actionRef = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState<"write" | "preview">("write");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  useEffect(() => {
+    const element = actionRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => setActionHeight(element.getBoundingClientRect().height));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const settingsId = useId();
+  const settingsButton = useRef<HTMLButtonElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (settingsOpen) closeButton.current?.focus(); }, [settingsOpen]);
+  const closeSettings = () => { setSettingsOpen(false); settingsButton.current?.focus(); };
   const errorRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (formError || fieldErrors.length) errorRef.current?.focus(); }, [formError, fieldErrors]);
   return (
-    <fieldset disabled={saving || disabled} className="w-full min-w-0 pb-28 md:pb-8">
+    <fieldset disabled={saving || disabled} style={{ "--blog-editor-toolbar-top": `${64 + actionHeight}px` } as CSSProperties} className="w-full min-w-0 pb-28 md:pb-8">
       {(formError || fieldErrors.length > 0) && (
         <div ref={errorRef} role="alert" tabIndex={-1} className="mb-4 rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100">
           {formError ? <p className="font-medium">{formError}</p> : null}
@@ -72,7 +91,7 @@ export function WordPressPostEditorLayout({
         </div>
       )}
 
-      <div className="sticky top-16 z-20 -mx-1 mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-white/95 px-1 py-2.5 backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-900/95">
+      <div ref={actionRef} className="sticky top-16 z-20 -mx-1 mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-white/95 px-1 py-2.5 backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-900/95">
         <div className="flex min-w-0 flex-wrap items-center gap-3">
           <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 px-2" asChild>
             <Link href={postsListPath}>← Posts</Link>
@@ -83,22 +102,20 @@ export function WordPressPostEditorLayout({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span role="status" aria-live="polite" className="mr-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">{saveState}</span>
-          {viewPostUrl ? (
-            <Button type="button" size="sm" variant="outline" asChild>
-              <Link href={viewPostUrl} target="_blank" rel="noopener noreferrer">
-                {viewPostLabel}
-              </Link>
-            </Button>
-          ) : null}
+          {preview ? <div className="flex items-center gap-1" aria-label="Editor view">
+            <Button type="button" size="sm" variant={view === "write" ? "secondary" : "ghost"} aria-pressed={view === "write"} onClick={() => setView("write")}>Write</Button>
+            <Button type="button" size="sm" variant={view === "preview" ? "secondary" : "ghost"} aria-pressed={view === "preview"} onClick={() => setView("preview")}>Preview</Button>
+          </div> : null}
+          <Button ref={settingsButton} type="button" size="sm" variant="outline" aria-controls={settingsId} aria-expanded={settingsOpen} onClick={() => setSettingsOpen(!settingsOpen)}>Settings</Button>
           <Button type="button" size="sm" onClick={onSave} disabled={saving || disabled}>
             {saving ? "Saving…" : status === "scheduled" ? "Schedule post" : status === "published" ? (mode === "create" ? "Publish post" : "Update published post") : "Save draft"}
           </Button>
         </div>
       </div>
 
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        <div className="min-w-0 flex-1">
-          <div className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-950">
+      <div className="mx-auto max-w-[800px]">
+        <div hidden={view !== "write"} className="min-w-0">
+          <div className="bg-white dark:bg-zinc-950">
             <label htmlFor="wp-post-title" className="sr-only">
               Title
             </label>
@@ -107,24 +124,14 @@ export function WordPressPostEditorLayout({
               value={title}
               onChange={(e) => onTitleChange(e.target.value)}
               placeholder="Add title"
-              className="h-auto rounded-none border-0 border-b border-transparent bg-transparent px-4 py-4 text-2xl font-semibold shadow-none placeholder:text-zinc-400 focus-visible:border-zinc-200 focus-visible:ring-0 sm:text-3xl dark:focus-visible:border-zinc-700"
+              className="mx-auto block h-auto max-w-[720px] rounded-none border-0 bg-transparent px-4 py-4 text-3xl font-bold shadow-none placeholder:text-zinc-400 focus-visible:ring-0 sm:px-0 sm:text-4xl"
             />
 
-            <div className="border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-800">
+            {headlineNotice}
+            <div className="mx-auto max-w-[720px] px-4 py-2.5 sm:px-0">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
                 Permalink:{" "}
-                {viewPostUrl ? (
-                  <Link
-                    href={viewPostUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-mono text-blue-600 hover:underline dark:text-blue-400"
-                  >
-                    {permalinkPreview}
-                  </Link>
-                ) : (
-                  <span className="font-mono text-blue-600 dark:text-blue-400">{permalinkPreview}</span>
-                )}
+                <span className="font-mono">{permalinkPreview}</span>
               </p>
               <details className="mt-2">
                 <summary className="cursor-pointer text-xs text-blue-600 hover:underline dark:text-blue-400">
@@ -155,10 +162,15 @@ export function WordPressPostEditorLayout({
             <div className="wp-post-content-area">{body}</div>
           </div>
 
-          {createExtras ? <div className="mt-4">{createExtras}</div> : null}
+          {createExtras ? <div className="mx-4 mt-8 border-t pt-6">{createExtras}</div> : null}
         </div>
 
-        <aside aria-label="Post settings" className="w-full shrink-0 space-y-3 lg:w-[300px]">{sidebar}</aside>
+        {view === "preview" ? preview : null}
+        <aside id={settingsId} hidden={!settingsOpen} aria-label="Post settings" onKeyDown={event => { if (event.key === "Escape") closeSettings(); }} className="fixed bottom-4 right-4 top-[var(--blog-editor-toolbar-top)] z-40 w-[min(360px,calc(100vw-2rem))] space-y-3 overflow-y-auto rounded-xl border bg-white p-4 shadow-xl dark:bg-zinc-950">
+          <div className="flex items-center justify-between"><h2 className="font-semibold">Post settings</h2><Button ref={closeButton} type="button" size="sm" variant="ghost" onClick={closeSettings}>Close settings</Button></div>
+          {sidebar}
+          {viewPostUrl ? <Link href={viewPostUrl} target="_blank" rel="noopener noreferrer" className="block pt-4 text-sm text-blue-700 underline">Open saved version in new tab</Link> : null}
+        </aside>
       </div>
     </fieldset>
   );

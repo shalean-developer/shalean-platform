@@ -16,7 +16,7 @@ export function BlogContent({ children, prose = false, className }: Props) {
   return (
     <div
       className={cn(
-        "mx-auto w-full max-w-[65ch]",
+        "mx-auto w-full max-w-[720px]",
         prose &&
           [
             "prose prose-lg prose-zinc leading-relaxed",

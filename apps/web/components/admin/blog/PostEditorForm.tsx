@@ -32,7 +32,8 @@ import { blogPostViewLabel, buildBlogPostViewPath } from "@/lib/blog/build-blog-
 import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
 import { BlogPublishReadiness } from "./BlogPublishReadiness";
 import { InternalLinksEditor } from "./InternalLinksEditor";
-import { DocumentBodySection } from "./DocumentBodySection";
+import { BlogArticlePreview } from "./BlogArticlePreview";
+import { ArticleDocumentEditor } from "./ArticleDocumentEditor";
 import { WordPressPostEditorLayout, WpLabeledField, WpTextareaField } from "./WordPressPostEditorLayout";
 import { WpMetabox } from "./WpMetabox";
 import { BlogFeaturedImageField } from "./BlogFeaturedImageField";
@@ -1117,12 +1118,14 @@ export function PostEditorForm({
         permalinkPreview={`/blog/${slug.trim() || "your-slug"}`}
         viewPostUrl={viewPostUrl}
         viewPostLabel={viewPostLabelText}
+        preview={<BlogArticlePreview title={h1.trim() || title} excerpt={excerpt} slug={slug} featuredUrl={featuredUrl} featuredAlt={featuredAlt} content={contentJson} wordCount={publishPreview.wordCount} />}
+        headlineNotice={h1.trim() && h1.trim() !== title.trim() ? <div className="mx-4 mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-950"><p>Public headline: <strong>{h1}</strong></p><Button type="button" variant="ghost" size="sm" onClick={() => setH1("")}>Use article title as headline</Button></div> : null}
         sidebar={documentSidebar}
         createExtras={createTemplateExtras}
         body={
-          <><div>{recoveryNotice}</div><DocumentBodySection
-            blocks={blocks} onBlocksChange={setBlocks}
-            renderBlock={(block, _index, onChange) => <BlockFields block={block} onChange={onChange} uploadSlug={slug} />}
+          <><div>{recoveryNotice}</div><ArticleDocumentEditor
+            blocks={blocks} onBlocksChange={setBlocks} uploadSlug={slug} disabled={saving || retired} wordCount={publishPreview.wordCount}
+            renderBlock={(block, _index, onChange) => <BlockFields block={block} onChange={onChange} uploadSlug={slug} document />}
             newBlock={newBlock}
           /></>
         }
@@ -1609,10 +1612,12 @@ function BlockFields({
   block,
   onChange,
   uploadSlug,
+  document = false,
 }: {
   block: BlogContentBlock;
   onChange: (b: BlogContentBlock) => void;
   uploadSlug?: string;
+  document?: boolean;
 }) {
   const lab = "text-xs font-medium text-zinc-600 dark:text-zinc-400";
   const inp = "mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950";
@@ -1629,13 +1634,14 @@ function BlockFields({
       return (
         <div className="space-y-2">
           <div>
-            <label className={lab}>Title</label>
-            <Input className={inp} value={block.title} onChange={(e) => onChange({ ...block, title: e.target.value })} />
+            <label className={lab}>Title
+            <Input className={inp} value={block.title} onChange={(e) => onChange({ ...block, title: e.target.value })} /></label>
           </div>
           <div>
             <label className={lab}>Heading level</label>
             <select
               className={inp}
+              aria-label="Section heading level"
               value={String(block.heading_level ?? 2)}
               onChange={(e) =>
                 onChange({ ...block, heading_level: Number(e.target.value) as 2 | 3 | 4 })
@@ -1648,7 +1654,7 @@ function BlockFields({
           </div>
           <div>
             <label className={lab}>Content</label>
-            <Textarea className={cn(inp, "min-h-[100px]")} value={block.content} onChange={(e) => onChange({ ...block, content: e.target.value })} />
+            <Textarea aria-label="Section content" className={cn(inp, "min-h-[100px]")} value={block.content} onChange={(e) => onChange({ ...block, content: e.target.value })} />
           </div>
         </div>
       );
@@ -1801,6 +1807,7 @@ function BlockFields({
                   className={cn(
                     "mt-2 border-0 border-b border-zinc-200/80 bg-transparent px-0 pb-2 text-base font-semibold leading-snug tracking-tight text-zinc-900 shadow-none placeholder:text-zinc-400 focus-visible:border-zinc-400 focus-visible:ring-0 dark:border-zinc-600 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus-visible:border-zinc-500",
                   )}
+                  aria-label={`FAQ question ${j + 1}`}
                   value={item.question}
                   placeholder="Question shown as a heading on the site"
                   onChange={(e) => {
@@ -1814,6 +1821,7 @@ function BlockFields({
                 <label className={lab}>Answer</label>
                 <Textarea
                   className={cn(inp, "mt-1 min-h-[88px] rounded-lg")}
+                  aria-label={`FAQ answer ${j + 1}`}
                   value={item.answer}
                   onChange={(e) => {
                     const items = [...block.items];
@@ -1857,8 +1865,8 @@ function BlockFields({
     case "rich_text":
       return (
         <div className="space-y-2">
-          <label className={lab}>Rich content</label>
           <RichTextBlockEditor
+            variant={document ? "document" : "default"}
             html={block.html}
             onChange={(html) => onChange({ ...block, html })}
             uploadSlug={uploadSlug}
@@ -1904,15 +1912,15 @@ function BlockFields({
         <div className="space-y-2">
           <div>
             <label className={lab}>URL</label>
-            <Input className={inp} value={block.url} onChange={(e) => onChange({ ...block, url: e.target.value })} />
+            <Input aria-label="Image URL" className={inp} value={block.url} onChange={(e) => onChange({ ...block, url: e.target.value })} />
           </div>
           <div>
             <label className={lab}>Alt</label>
-            <Input className={inp} value={block.alt} onChange={(e) => onChange({ ...block, alt: e.target.value })} />
+            <Input aria-label="Image alt text" className={inp} value={block.alt} onChange={(e) => onChange({ ...block, alt: e.target.value })} />
           </div>
           <div>
             <label className={lab}>Caption (optional)</label>
-            <Input className={inp} value={block.caption ?? ""} onChange={(e) => onChange({ ...block, caption: e.target.value || undefined })} />
+            <Input aria-label="Image caption" className={inp} value={block.caption ?? ""} onChange={(e) => onChange({ ...block, caption: e.target.value || undefined })} />
           </div>
         </div>
       );
@@ -1993,6 +2001,7 @@ function BlockFields({
               <Input
                 key={j}
                 className={cn(inp, "w-32")}
+                aria-label={`Column ${j + 1} heading`}
                 placeholder={`Col ${j + 1}`}
                 value={c}
                 onChange={(e) => {
@@ -2045,6 +2054,7 @@ function BlockFields({
                 <Input
                   key={ci}
                   className={cn(inp, "w-28 sm:w-36")}
+                  aria-label={`Row ${ri + 1}, column ${ci + 1}`}
                   value={cell}
                   onChange={(e) => {
                     const rows = [...block.rows];

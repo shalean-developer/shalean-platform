@@ -1,4 +1,7 @@
+"use client";
+
 import Image from "next/image";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 function isRemoteSrc(src: string) {
@@ -16,12 +19,15 @@ type Props = {
 };
 
 export function BlogHero({ src, alt, overlay = true, priority = true, className }: Props) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  // The legacy 1×1 asset is a placeholder, not article photography.
+  if (!src.trim() || /(?:^|\/)default-cleaning\.jpg(?:[?#]|$)/.test(src) || failedSrc === src) return null;
   const remote = isRemoteSrc(src);
 
   return (
     <div
       className={cn(
-        "relative aspect-[21/9] w-full min-h-[200px] overflow-hidden rounded-xl bg-zinc-100 shadow-md ring-1 ring-zinc-200/70 sm:aspect-[2/1] md:min-h-[280px]",
+        "relative aspect-[16/9] w-full overflow-hidden rounded-xl bg-zinc-100",
         className,
       )}
     >
@@ -32,6 +38,8 @@ export function BlogHero({ src, alt, overlay = true, priority = true, className 
         className="object-cover"
         sizes="(max-width: 1024px) 100vw, min(896px, 70vw)"
         priority={priority}
+        onError={() => setFailedSrc(src)}
+        onLoad={event => { if (event.currentTarget.naturalWidth < 320 || event.currentTarget.naturalHeight < 180) setFailedSrc(src); }}
         fetchPriority={priority ? "high" : "auto"}
         {...(remote ? { unoptimized: true } : {})}
       />
