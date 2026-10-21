@@ -4,12 +4,20 @@ import { describe, expect, it } from "vitest";
 
 describe("Stage 03 sales invoice enrollment safety", () => {
   const source = readFileSync(resolve(process.cwd(), "lib/salesDocument/syncSalesDocumentToZoho.ts"), "utf8");
+  const retrySource = readFileSync(resolve(process.cwd(), "lib/admin/billing/syncBillingDocumentToZoho.ts"), "utf8");
   const migration = readFileSync(resolve(process.cwd(), "../../supabase/migrations/20261021204500_enroll_sales_invoice_sync_metadata.sql"), "utf8");
   it("enrolls linked invoice metadata without overwriting earlier sync status", () => {
     expect(source).toContain('if (invoiceId)');
     expect(source).toContain('entity_type: "sales_document"');
     expect(source).toContain('ignoreDuplicates: true');
     expect(source).toContain('zoho_invoice_status_enrollment_failed');
+  });
+  it("retries enrollment for already linked invoices without recreating Zoho invoices", () => {
+    expect(retrySource).toContain('if (existing) {');
+    expect(retrySource).toContain('if (!isQuote) {');
+    expect(retrySource).toContain('entity_type: "sales_document"');
+    expect(retrySource).toContain('ignoreDuplicates: true');
+    expect(retrySource).toContain('zoho_invoice_status_enrollment_failed');
   });
   it("backfills only missing links, never money or existing sync rows", () => {
     expect(migration).toContain("where sd.document_type = 'invoice'");
