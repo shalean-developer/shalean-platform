@@ -17,8 +17,8 @@ const blocks: BlogContentBlock[] = [
 ];
 let editor: Editor | undefined;
 afterEach(() => { editor?.destroy(); editor = undefined; });
-function setup() {
-  editor = new Editor({ extensions: [...blogDocumentNodes(index => blocks[index], () => null), StarterKit.configure({ trailingNode: false }), Image], content: blogDocumentHtml(blocks) });
+function setup(source = blocks) {
+  editor = new Editor({ extensions: [...blogDocumentNodes(index => source[index], () => null), StarterKit.configure({ trailingNode: false }), Image], content: blogDocumentHtml(source) });
   return { editor, baseline: blogDocumentBaseline(editor) };
 }
 describe("continuous blog document preserves stored blocks", () => {
@@ -26,6 +26,18 @@ describe("continuous blog document preserves stored blocks", () => {
     const { editor, baseline } = setup();
     expect(serializeBlogDocument(editor, baseline)).toEqual(blocks);
     expect(editor.state.doc.childCount).toBe(5);
+  });
+  it("preserves distinct source blocks even when their stored IDs are duplicated", () => {
+    const source: BlogContentBlock[] = [
+      { id: "duplicate", type: "section", title: "First legacy section", content: "First source text.", heading_level: 2 },
+      { id: "duplicate", type: "section", title: "Second legacy section", content: "Second source text.", heading_level: 3 },
+      { id: "edit-me", type: "rich_text", html: "<p>Edit this paragraph.</p>" },
+    ];
+    const { editor, baseline } = setup(source);
+    expect(serializeBlogDocument(editor, baseline)).toEqual(source);
+    const position = editor.state.doc.child(0).nodeSize + editor.state.doc.child(1).nodeSize + 2;
+    editor.commands.insertContentAt(position, "Changed ");
+    expect(serializeBlogDocument(editor, baseline).slice(0, 2)).toEqual(source.slice(0, 2));
   });
   it("changes only the prose block being typed in", () => {
     const { editor, baseline } = setup();

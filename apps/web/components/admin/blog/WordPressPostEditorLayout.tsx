@@ -77,7 +77,7 @@ export function WordPressPostEditorLayout({
   const errorRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (formError || fieldErrors.length) errorRef.current?.focus(); }, [formError, fieldErrors]);
   return (
-    <fieldset disabled={saving || disabled} style={{ "--blog-editor-toolbar-top": `${64 + actionHeight}px` } as CSSProperties} className="w-full min-w-0 pb-28 md:pb-8">
+    <div style={{ "--blog-editor-toolbar-top": `${64 + actionHeight}px` } as CSSProperties} className="w-full min-w-0 pb-28 md:pb-8">
       {(formError || fieldErrors.length > 0) && (
         <div ref={errorRef} role="alert" tabIndex={-1} className="mb-4 rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100">
           {formError ? <p className="font-medium">{formError}</p> : null}
@@ -114,6 +114,7 @@ export function WordPressPostEditorLayout({
       </div>
 
       <div className="mx-auto max-w-[800px]">
+        <fieldset disabled={saving || disabled} className="min-w-0 border-0 p-0">
         <div hidden={view !== "write"} className="min-w-0">
           <div className="bg-white dark:bg-zinc-950">
             <label htmlFor="wp-post-title" className="sr-only">
@@ -165,14 +166,15 @@ export function WordPressPostEditorLayout({
           {createExtras ? <div className="mx-4 mt-8 border-t pt-6">{createExtras}</div> : null}
         </div>
 
+        </fieldset>
         {view === "preview" ? preview : null}
         <aside id={settingsId} hidden={!settingsOpen} aria-label="Post settings" onKeyDown={event => { if (event.key === "Escape") closeSettings(); }} className="fixed bottom-4 right-4 top-[var(--blog-editor-toolbar-top)] z-40 w-[min(360px,calc(100vw-2rem))] space-y-3 overflow-y-auto rounded-xl border bg-white p-4 shadow-xl dark:bg-zinc-950">
           <div className="flex items-center justify-between"><h2 className="font-semibold">Post settings</h2><Button ref={closeButton} type="button" size="sm" variant="ghost" onClick={closeSettings}>Close settings</Button></div>
-          {sidebar}
+          <fieldset disabled={saving || disabled} className="min-w-0 space-y-3 border-0 p-0">{sidebar}</fieldset>
           {viewPostUrl ? <Link href={viewPostUrl} target="_blank" rel="noopener noreferrer" className="block pt-4 text-sm text-blue-700 underline">Open saved version in new tab</Link> : null}
         </aside>
       </div>
-    </fieldset>
+    </div>
   );
 }
 

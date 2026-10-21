@@ -39,7 +39,7 @@ export function BlogHero({ src, alt, overlay = true, priority = true, className 
         sizes="(max-width: 1024px) 100vw, min(896px, 70vw)"
         priority={priority}
         onError={() => setFailedSrc(src)}
-        onLoad={event => { if (event.currentTarget.naturalWidth < 320 || event.currentTarget.naturalHeight < 180) setFailedSrc(src); }}
+        onLoad={event => { if (event.currentTarget.naturalWidth <= 1 || event.currentTarget.naturalHeight <= 1) setFailedSrc(src); }}
         fetchPriority={priority ? "high" : "auto"}
         {...(remote ? { unoptimized: true } : {})}
       />

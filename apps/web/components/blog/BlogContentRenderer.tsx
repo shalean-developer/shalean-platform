@@ -603,7 +603,7 @@ export function BlogContentRenderer({ content, autoLinkSlug, blockIndexOffset = 
     >
       {blocks.map((block, i) => (
         <Block
-          key={block.id ?? `${block.type}-${i + blockIndexOffset}`}
+          key={`${block.id ?? block.type}-${i + blockIndexOffset}`}
           block={block}
           index={i}
           blockIndexOffset={blockIndexOffset}

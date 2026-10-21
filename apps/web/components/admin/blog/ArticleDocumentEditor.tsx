@@ -106,7 +106,7 @@ export function blogDocumentNodes(source: ((index: number) => BlogContentBlock) 
 
 export function blogDocumentBaseline(editor: Editor): Map<string, string> {
   const baseline = new Map<string, string>();
-  editor.state.doc.forEach(node => { if (node.type.name === "blogText") baseline.set(node.attrs.original?.id ?? JSON.stringify(node.attrs.original), fragmentHtml(node, editor)); });
+  editor.state.doc.forEach(node => { if (node.type.name === "blogText") baseline.set(JSON.stringify(node.attrs.original), fragmentHtml(node, editor)); });
   return baseline;
 }
 
@@ -117,7 +117,7 @@ export function serializeBlogDocument(current: Editor, baseline: ReadonlyMap<str
     if (node.type.name === "blogAtomic" && original) { next.push(original); return; }
     if (node.type.name === "blogText" && original) {
       const html = fragmentHtml(node, current);
-      let originalHtml = baseline.get(original.id ?? JSON.stringify(original));
+      let originalHtml = baseline.get(JSON.stringify(original));
       if (originalHtml === undefined) {
         const element = document.createElement("div"); element.innerHTML = proseHtml(original) || "<p></p>";
         const parsed = DOMParser.fromSchema(current.schema).parse(element);

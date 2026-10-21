@@ -8,6 +8,7 @@ vi.stubGlobal("React", React);
 vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }), usePathname: () => "/office/blog/fixture" }));
 vi.mock("@/lib/supabase/browser", () => ({ getSupabaseBrowser: () => ({ auth: { getUser: async () => ({ data: { user: { id: "editor" } } }), getSession: async () => ({ data: { session: { access_token: "test-fixture" } } }) } }) }));
+import { WordPressPostEditorLayout } from "@/components/admin/blog/WordPressPostEditorLayout";
 import { PostEditorForm } from "@/components/admin/blog/PostEditorForm";
 import { BlogArticlePreview } from "@/components/admin/blog/BlogArticlePreview";
 import { BlogDbArticleBody } from "@/components/blog/BlogDbArticleBody";
@@ -44,6 +45,19 @@ describe("writing to preview", () => {
     expect(container.querySelector(".ProseMirror")).toBe(writingNode);
     expect((container.querySelector("#wp-post-title") as HTMLInputElement).value).toBe("Current unsaved title");
     expect(container.textContent).toContain("Unsaved changes");
+  });
+  it("keeps settings, saved-version access and preview available while editing is read-only", async () => {
+    container = document.createElement("div"); document.body.append(container); root = createRoot(container);
+    await act(async () => root!.render(createElement(WordPressPostEditorLayout, { mode: "edit", postsListPath: "/office/blog", saving: false, disabled: true, status: "draft", onSave: vi.fn(), formError: null, fieldErrors: [], title: "Read-only post", onTitleChange: vi.fn(), slug: "read-only", onSlugChange: vi.fn(), slugAuto: false, onSlugAutoChange: vi.fn(), permalinkPreview: "/blog/read-only", viewPostUrl: "/blog/read-only", body: createElement("textarea", { "aria-label": "Stored content" }), sidebar: createElement("input", { "aria-label": "Stored metadata", defaultValue: "Keep this" }), preview: createElement("p", null, "Read-only preview") })));
+    const settingsButton = [...container.querySelectorAll("button")].find(button => button.textContent === "Settings")!;
+    expect(settingsButton.matches(":disabled")).toBe(false);
+    await act(async () => settingsButton.click());
+    expect(container.querySelector('[aria-label="Post settings"]')?.hasAttribute("hidden")).toBe(false);
+    expect(container.querySelector('[aria-label="Stored metadata"]')?.matches(":disabled")).toBe(true);
+    expect(container.querySelector('a[target="_blank"]')?.textContent).toContain("Open saved version");
+    await act(async () => [...container!.querySelectorAll("button")].find(button => button.textContent === "Preview")!.click());
+    expect(container.textContent).toContain("Read-only preview");
+    expect([...container.querySelectorAll("button")].find(button => button.textContent === "Save draft")?.matches(":disabled")).toBe(true);
   });
   it("starts new posts with a writable empty canvas without adding saved content", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ categories: [], tags: [] }))));

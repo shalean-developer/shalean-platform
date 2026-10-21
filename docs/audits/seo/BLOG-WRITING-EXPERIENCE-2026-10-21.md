@@ -14,8 +14,8 @@ Read-only preflight: both staging posts remain drafts; owner article digest `bcb
 
 | Requirement | Change | Verification |
 | --- | --- | --- |
-| WR-01 Continuous writing | One TipTap document; immediately writable blank posts; ordered text and structured node views; shared history. | Mixed-tree round trips; individual prose edits; image move/Undo with caption; FAQ edit/Undo; exact original HTML after Undo; strict-schema legacy prose conversion; malformed pasted wrappers. |
-| WR-02 Compact settings | Fixed toggleable drawer independent of article width; Escape restores focus; measured header height supplies sticky-toolbar offset. | Unique settings/IDs; keyboard open/close retains unsaved title. Actual narrow-screen layout pending. |
+| WR-01 Continuous writing | One TipTap document; immediately writable blank posts; ordered text and structured node views; shared history. | Mixed-tree round trips; individual prose edits; image move/Undo with caption; FAQ edit/Undo; exact original HTML after Undo; strict-schema legacy prose conversion; malformed pasted wrappers and duplicate stored IDs. |
+| WR-02 Compact settings | Fixed toggleable drawer independent of article width; Escape restores focus; measured header height supplies sticky-toolbar offset. | Unique settings/IDs; keyboard open/close retains unsaved title; retired/read-only records retain Settings, saved-version and Preview access while editing stays disabled. Actual narrow-screen layout pending. |
 | WR-03 Current preview | In-place Write/Preview uses current unsaved state and shared public article frame, display preparation, sanitizer and body renderer. | Draft and published cases show latest title/content, keep editor DOM/session and make no save/publish request. |
 | WR-04 Simpler article | Headline/lede before restrained hero; shared typography and width; authored FAQ before one closing booking section; one related group and TOC sidebar. | Shared preview/public body comparison; FAQ/CTA order and single closing CTA assertions; actual staging layout pending. |
 | WR-05 Honest states | Known 1×1 placeholder omitted, failed/tiny hero collapses; related cards omit known placeholder. Structure checks do not imply editorial quality. Draft preview has no Published label. | Placeholder and empty-canvas tests; successful/failed image visual cases pending staging. |
@@ -30,7 +30,7 @@ The unsaved preview covers the article, not global navigation/footer or dynamica
 
 ## Verification register
 
-Blog/editor suite: 197 cases in 31 files after strict-schema coverage; repeat final revision before commit. Critical suite: 1,486 tests in 128 files PASS. Two initial static mobile-contract failures were due to the sparse local checkout; reading the unchanged HEAD help file resolved them. Typecheck PASS at prepared revisions; exact final-head CI Webpack build remains required. Enforced booking lint PASS with existing warnings. Focused changed-code lint has no errors; a refs-analysis warning concerns deferred TipTap parser/node-view callbacks, not ref reads during render.
+Blog/editor suite: 199 cases in 31 files after strict-schema coverage; repeat final revision before commit. Critical suite: 1,486 tests in 128 files PASS. Two initial static mobile-contract failures were due to the sparse local checkout; reading the unchanged HEAD help file resolved them. Typecheck PASS at prepared revisions; exact final-head CI Webpack build remains required. Enforced booking lint PASS with existing warnings. Focused changed-code lint has no errors; a refs-analysis warning concerns deferred TipTap parser/node-view callbacks, not ref reads during render.
 
 No local-browser visual PASS: the connected browser cannot reach executor localhost. Use deployed staging. Do not claim phone PASS unless a requested viewport actually applies or the owner checks a phone.
 
