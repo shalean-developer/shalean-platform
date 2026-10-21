@@ -6,10 +6,10 @@ describe("Stage 03 bounded Zoho status refresh safety contract", () => {
   const source = readFileSync(resolve(process.cwd(), "lib/accounting/syncInvoiceMetadata.ts"), "utf8");
   const route = readFileSync(resolve(process.cwd(), "app/api/cron/zoho-invoice-status-refresh/route.ts"), "utf8");
 
-  it("advances the polling window in oldest-first order", () => {
-    expect(source).toContain('.order("last_synced_at", { ascending: true, nullsFirst: true })');
+  it("rotates bounded pages without starving permanently failed records", () => {
+    expect(source).toContain('Math.floor(Date.now() / 900000) % pageCount');
     expect(source).toContain('.order("id", { ascending: true })');
-    expect(source).toContain('.limit(Math.max(0, limit))');
+    expect(source).toContain('.range(offset, offset + batchSize - 1)');
     expect(source).toContain('.or("sync_status.is.null,sync_status.neq.ignored")');
   });
 
