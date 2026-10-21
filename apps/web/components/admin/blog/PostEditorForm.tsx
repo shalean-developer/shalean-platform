@@ -31,6 +31,7 @@ import { preserveOrderedBlogBlocks } from "@/lib/blog/blogDocumentMode";
 import { blogPostViewLabel, buildBlogPostViewPath } from "@/lib/blog/build-blog-post-view-url";
 import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
 import { BlogPublishReadiness } from "./BlogPublishReadiness";
+import { computeReadingTimeMinutes } from "@/lib/blog/compute-reading-time";
 import { InternalLinksEditor } from "./InternalLinksEditor";
 import { BlogArticlePreview } from "./BlogArticlePreview";
 import { ArticleDocumentEditor } from "./ArticleDocumentEditor";
@@ -181,6 +182,7 @@ function PublishSidebarPanel({
   semanticCluster,
   resolvedClusterKey,
   preview,
+  readingTimeMinutes,
   clusterPeerCount,
   postsListPath,
   compact = false,
@@ -203,6 +205,7 @@ function PublishSidebarPanel({
   semanticCluster: string;
   resolvedClusterKey: string | null;
   preview: PublishValidationResult;
+  readingTimeMinutes: number | null;
   clusterPeerCount: number;
   postsListPath: string;
   compact?: boolean;
@@ -217,7 +220,7 @@ function PublishSidebarPanel({
 
   return (
     <div className="space-y-5">
-      <BlogPublishReadiness preview={preview} />
+      <BlogPublishReadiness preview={preview} readingTimeMinutes={readingTimeMinutes} />
       {!compact ? (
         <div className="space-y-2">
           <Button type="button" className="w-full" size="lg" onClick={onSave} disabled={saving}>
@@ -917,6 +920,7 @@ export function PostEditorForm({
     semanticCluster,
     resolvedClusterKey: resolvedSemanticClusterKey,
     preview: publishPreview,
+    readingTimeMinutes: publishPreview.wordCount > 0 ? computeReadingTimeMinutes(contentJson) : null,
     clusterPeerCount: clusterPeers.length,
     postsListPath,
     viewPostUrl,

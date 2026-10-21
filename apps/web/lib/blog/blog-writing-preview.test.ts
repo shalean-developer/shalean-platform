@@ -13,15 +13,61 @@ import { PostEditorForm } from "@/components/admin/blog/PostEditorForm";
 import { BlogArticlePreview } from "@/components/admin/blog/BlogArticlePreview";
 import { BlogDbArticleBody } from "@/components/blog/BlogDbArticleBody";
 import { BlogHero } from "@/components/blog/engine/BlogHero";
+import { BlogPublishReadiness } from "@/components/admin/blog/BlogPublishReadiness";
+import { validateBlogPublish } from "./seo/publish-validation";
+import { computeReadingTimeMinutes } from "./compute-reading-time";
 const content: BlogContentJson = { schema_version: 1, blocks: [
   { id: "body", type: "rich_text", html: '<h2>Kitchen surfaces</h2><p>Use a soft cloth. <strong>Test first.</strong></p>' },
   { id: "faq", type: "faq", items: [{ question: "Can I clean painted cabinets?", answer: "Test a small hidden area first." }] },
 ] };
 let root: Root | undefined;
 let container: HTMLDivElement | undefined;
-afterEach(async () => { if (root) await act(async () => root!.unmount()); container?.remove(); root = undefined; container = undefined; localStorage.clear(); vi.unstubAllGlobals(); vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); });
+afterEach(async () => { if (root) await act(async () => root!.unmount()); container?.remove(); root = undefined; container = undefined; localStorage.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); });
 
 describe("writing to preview", () => {
+  it("matches the saved-post reading estimate in preview and publication settings", () => {
+    // 888 words previously rendered as 5 in authoring while the save API stored 4.
+    const article: BlogContentJson = { schema_version: 1, blocks: [{ type: "paragraph", content: "clean ".repeat(888) }] };
+    const savedMinutes = computeReadingTimeMinutes(article);
+    expect(savedMinutes).toBe(4);
+    const preview = renderToStaticMarkup(createElement(BlogArticlePreview, { title: "Guide", excerpt: "", slug: "fixture", featuredUrl: "", featuredAlt: "", content: article, wordCount: 888 }));
+    const readiness = renderToStaticMarkup(createElement(BlogPublishReadiness, { preview: validateBlogPublish(article), readingTimeMinutes: savedMinutes }));
+    expect(preview).toContain("4 min read");
+    expect(preview).not.toContain("5 min read");
+    expect(readiness).toContain("~4 min read");
+  });
+  it("expands a long title after font loading and changes in canvas width", async () => {
+    const originalFonts = Object.getOwnPropertyDescriptor(document, "fonts");
+    let finishFonts!: () => void;
+    const ready = new Promise<void>(resolve => { finishFonts = resolve; });
+    Object.defineProperty(document, "fonts", { configurable: true, value: { ready } });
+    let titleHeight = 86;
+    vi.spyOn(HTMLTextAreaElement.prototype, "scrollHeight", "get").mockImplementation(() => titleHeight);
+    const observers: Array<{ callback: ResizeObserverCallback; targets: Set<Element> }> = [];
+    vi.stubGlobal("ResizeObserver", class {
+      targets = new Set<Element>();
+      constructor(public callback: ResizeObserverCallback) { observers.push(this); }
+      observe(target: Element) { this.targets.add(target); }
+      disconnect() { this.targets.clear(); }
+    });
+    try {
+      container = document.createElement("div"); document.body.append(container); root = createRoot(container);
+      await act(async () => root!.render(createElement(WordPressPostEditorLayout, { mode: "edit", postsListPath: "/office/blog", saving: false, status: "published", onSave: vi.fn(), formError: null, fieldErrors: [], title: "How to Remove Tough Kitchen Grease Without Damaging Your Surfaces", onTitleChange: vi.fn(), slug: "fixture", onSlugChange: vi.fn(), slugAuto: false, onSlugAutoChange: vi.fn(), permalinkPreview: "/blog/fixture", body: null, sidebar: null })));
+      const title = container.querySelector("#wp-post-title") as HTMLTextAreaElement;
+      expect(title.style.height).toBe("86px");
+      titleHeight = 200;
+      await act(async () => { finishFonts(); await ready; });
+      expect(title.style.height).toBe("200px");
+      titleHeight = 240;
+      const observer = observers.find(item => item.targets.has(title))!;
+      const entry: ResizeObserverEntry = { target: title, contentRect: new DOMRect(0, 0, 280, titleHeight), borderBoxSize: [], contentBoxSize: [], devicePixelContentBoxSize: [] };
+      await act(async () => observer.callback([entry], {} as ResizeObserver));
+      expect(title.style.height).toBe("240px");
+    } finally {
+      if (originalFonts) Object.defineProperty(document, "fonts", originalFonts);
+      else Reflect.deleteProperty(document, "fonts");
+    }
+  });
   it.each(["draft", "published"])("previews unsaved %s edits without saving or publishing and retains the writing session", async status => {
     const request = vi.fn(async (url: string, _init?: RequestInit) => new Response(JSON.stringify(url.endsWith("/taxonomy") ? { categories: [], tags: [] } : { post: { id: "fixture", slug: "fixture", title: "Saved title", status, content_json: content, updated_at: "2026-10-20T12:00:00Z" } }), { headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", request);
