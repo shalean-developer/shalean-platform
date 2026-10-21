@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, skipped: true, reason: lockResult.reason });
     }
     const result = lockResult.ranIt;
-    await logCronRun({ jobName: "zoho-invoice-status-refresh", status: result.failed ? "error" : "success", context: { checked: result.synced + result.failed, synced: result.synced, failed: result.failed } });
+    await logCronRun({ jobName: "zoho-invoice-status-refresh", status: result.failed ? "error" : "success", message: `checked=${result.synced + result.failed};synced=${result.synced};failed=${result.failed}`, context: { checked: result.synced + result.failed, synced: result.synced, failed: result.failed } });
     return NextResponse.json({ ok: result.failed === 0, ...result }, { status: result.failed ? 503 : 200 });
   } catch (error) {
     await logCronRun({ jobName: "zoho-invoice-status-refresh", status: "error", message: error instanceof Error ? error.message : "invoice_status_refresh_failed" });
