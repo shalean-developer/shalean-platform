@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } fr
 import { Extension, Node, type Editor } from "@tiptap/core";
 import { DOMParser, DOMSerializer, type Node as ProseNode } from "@tiptap/pm/model";
 import { closeHistory } from "@tiptap/pm/history";
+import { Plugin, Selection } from "@tiptap/pm/state";
 import { EditorContent, NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer, useEditor, type NodeViewProps } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -79,7 +80,7 @@ function StructuredBlockView(props: NodeViewProps) {
   const render = props.extension.options.renderBlock as Props["renderBlock"];
   return <NodeViewWrapper contentEditable={false} className="my-6 border-y border-zinc-100 py-4">
     <BlockActions {...props} />
-    <div className="mb-3 flex items-center justify-between gap-2"><span className="text-xs font-medium text-zinc-500">{names[block.type] ?? block.type.replaceAll("_", " ")}</span><Button type="button" size="sm" variant="outline" onClick={() => setEditing(!editing)}>{editing ? "Done editing" : `Edit ${names[block.type] ?? "section"}`}</Button></div>
+    <div className="mb-3 flex items-center justify-between gap-2"><span className="text-xs font-medium text-zinc-500">{names[block.type] ?? block.type.replaceAll("_", " ")}</span><Button type="button" size="sm" variant="outline" onClick={() => { const position = props.getPos(); if (typeof position === "number") props.editor.commands.setNodeSelection(position); setEditing(!editing); }}>{editing ? "Done editing" : `Edit ${names[block.type] ?? "section"}`}</Button></div>
     {editing ? render(block, 0, next => props.updateAttributes({ original: next })) : <BlogContentRenderer content={{ schema_version: 1, blocks: [block] }} />}
   </NodeViewWrapper>;
 }
@@ -134,6 +135,57 @@ export function serializeBlogDocument(current: Editor, baseline: ReadonlyMap<str
   return next;
 }
 
+type StructuralFormat = "paragraph" | "bulletList" | "orderedList" | "blockquote" | 2 | 3 | 4;
+
+/** Formatting must stay inside a prose section; it must never coerce a structured node. */
+export function blogFormattingRange(editor: Editor): { from: number; to: number } | null {
+  const { selection, doc } = editor.state;
+  let containsAtom = false;
+  doc.nodesBetween(selection.from, selection.to, node => {
+    if (node.type.name === "blogAtomic" || node.type.name === "image") { containsAtom = true; return false; }
+    return true;
+  });
+  if (containsAtom) return null;
+  const fromParent = selection.$from.depth ? selection.$from.node(1) : null;
+  const toParent = selection.$to.depth ? selection.$to.node(1) : null;
+  if (fromParent?.type.name === "blogText" && fromParent === toParent) return { from: selection.from, to: selection.to };
+  if (doc.childCount === 1 && doc.firstChild?.type.name === "blogText") return { from: Selection.atStart(doc).from, to: Selection.atEnd(doc).to };
+  let crossesSource = false;
+  doc.nodesBetween(selection.from, selection.to, node => { if (node.type.name === "blogText") crossesSource = true; });
+  return crossesSource ? null : { from: selection.from, to: selection.to };
+}
+
+export function formatBlogSelection(editor: Editor, format: StructuralFormat): boolean {
+  const range = blogFormattingRange(editor);
+  if (!range) return false;
+  const chain = editor.chain().focus().setTextSelection(range);
+  if (format === "paragraph") return chain.setParagraph().run();
+  if (format === "bulletList") return chain.toggleBulletList().run();
+  if (format === "orderedList") return chain.toggleOrderedList().run();
+  if (format === "blockquote") return chain.toggleBlockquote().run();
+  return chain.setHeading({ level: format }).run();
+}
+
+export const BlogDocumentBoundaries = Extension.create({
+  name: "blogDocumentBoundaries",
+  priority: 2000,
+  addKeyboardShortcuts() {
+    const apply = (format: StructuralFormat) => () => { formatBlogSelection(this.editor, format); return true; };
+    return { "Mod-Shift-8": apply("bulletList"), "Mod-Shift-7": apply("orderedList"), "Mod-Shift-b": apply("blockquote"), "Mod-Alt-0": apply("paragraph"), "Mod-Alt-2": apply(2), "Mod-Alt-3": apply(3), "Mod-Alt-4": apply(4) };
+  },
+  addProseMirrorPlugins() {
+    return [new Plugin({ filterTransaction(transaction) {
+      if (!transaction.docChanged) return true;
+      let valid = true;
+      transaction.doc.descendants((node, _position, parent) => {
+        if ((node.type.name === "blogText" || node.type.name === "blogAtomic") && parent?.type.name !== "doc") { valid = false; return false; }
+        return true;
+      });
+      return valid;
+    } })];
+  },
+});
+
 /** One editable document. Source objects are retained for every untouched block. */
 export function ArticleDocumentEditor({ blocks, onBlocksChange, renderBlock, newBlock, uploadSlug, disabled = false, wordCount = 0 }: Props) {
   const [blank] = useState(() => newBlock("rich_text"));
@@ -155,6 +207,7 @@ export function ArticleDocumentEditor({ blocks, onBlocksChange, renderBlock, new
     immediatelyRender: false,
     shouldRerenderOnTransaction: true,
     extensions: [
+      BlogDocumentBoundaries,
       ...documentNodes,
       Extension.create({ name: "blogAnchors", addGlobalAttributes() { return [{ types: ["heading", "paragraph", "blockquote"], attributes: { id: { default: null, parseHTML: element => element.getAttribute("id"), renderHTML: attrs => attrs.id ? { id: attrs.id } : {} } } }]; } }),
       StarterKit.configure({ heading: { levels: [2, 3, 4] }, trailingNode: false, link: false, code: false, codeBlock: false }),
@@ -189,11 +242,20 @@ export function ArticleDocumentEditor({ blocks, onBlocksChange, renderBlock, new
     const html = blogDocumentHtml([block]).replace(/data-blog-(text|atomic)="0"/, `data-blog-$1="${index}"`);
     editor.chain().focus().insertContentAt(editor.state.doc.content.size, html).run();
   }
+  function insertBlogImage(src: string, alt: string) {
+    if (!editor) return;
+    if (blogFormattingRange(editor)) editor.chain().focus().setImage({ src, alt }).run();
+    else {
+      const selection = editor.state.selection;
+      const position = selection.$from.depth ? selection.$from.after(1) : selection.to;
+      editor.chain().focus().insertContentAt(position, { type: "image", attrs: { src, alt } }).run();
+    }
+  }
   async function uploadImage(file: File) {
     const result = await uploadFile(file, { folder: uploadSlug ? `inline/${uploadSlug.slice(0, 48)}` : "inline" });
     if (!result || !editor) return;
     const alt = await prompt({ title: "Image alt text", defaultValue: file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ") });
-    if (alt !== null) editor.chain().focus().setImage({ src: result.url, alt }).run();
+    if (alt !== null) insertBlogImage(result.url, alt);
   }
   async function setLink() {
     if (!editor) return;
@@ -207,25 +269,27 @@ export function ArticleDocumentEditor({ blocks, onBlocksChange, renderBlock, new
     if (!src || !editor) return;
     if (!isAllowedAuthoringBlogImageSrc(src)) { setImageError("Upload this image or choose a supported image URL."); return; }
     const alt = await prompt({ title: "Image alt text", defaultValue: "" });
-    if (alt !== null) { editor.chain().focus().setImage({ src, alt }).run(); setImageError(""); }
+    if (alt !== null) { insertBlogImage(src, alt); setImageError(""); }
   }
   if (!editor) return <p className="p-4 text-sm text-zinc-500">Opening writing canvas…</p>;
-  const button = (label: string, icon: ReactNode, action: () => void, pressed = false) => <Button key={label} type="button" size="sm" variant={pressed ? "secondary" : "ghost"} aria-label={label} title={label} aria-pressed={pressed} onMouseDown={event => event.preventDefault()} onClick={action} className="h-9 w-9 p-0">{icon}</Button>;
+  const canFormat = Boolean(blogFormattingRange(editor));
+  const button = (label: string, icon: ReactNode, action: () => void, pressed = false) => <Button key={label} type="button" size="sm" variant={pressed ? "secondary" : "ghost"} aria-label={label} title={label} aria-pressed={pressed} disabled={!canFormat && label !== "Undo" && label !== "Redo"} onMouseDown={event => event.preventDefault()} onClick={action} className="h-9 w-9 p-0">{icon}</Button>;
   return <section aria-label="Article body" className="rich-text-editor-root mx-auto max-w-[720px] px-4 sm:px-0">
     <div role="toolbar" aria-label="Rich text" className="sticky top-[var(--blog-editor-toolbar-top,116px)] z-20 flex flex-wrap items-center gap-1 rounded-lg border-y bg-white/95 py-2 backdrop-blur-sm dark:bg-zinc-950/95">
-      <select aria-label="Paragraph style" value={editor.isActive("heading", { level: 2 }) ? "2" : editor.isActive("heading", { level: 3 }) ? "3" : editor.isActive("heading", { level: 4 }) ? "4" : "paragraph"} className="h-9 rounded border bg-transparent px-2 text-sm" onChange={event => { const level = Number(event.target.value); if (level === 2 || level === 3 || level === 4) editor.chain().focus().setHeading({ level }).run(); else editor.chain().focus().setParagraph().run(); }}><option value="paragraph">Paragraph</option><option value="2">Heading 2</option><option value="3">Heading 3</option><option value="4">Heading 4</option></select>
+      <select aria-label="Paragraph style" value={editor.isActive("heading", { level: 2 }) ? "2" : editor.isActive("heading", { level: 3 }) ? "3" : editor.isActive("heading", { level: 4 }) ? "4" : "paragraph"} className="h-9 rounded border bg-transparent px-2 text-sm" disabled={!canFormat} onChange={event => { const level = Number(event.target.value); formatBlogSelection(editor, level === 2 || level === 3 || level === 4 ? level : "paragraph"); }}><option value="paragraph">Paragraph</option><option value="2">Heading 2</option><option value="3">Heading 3</option><option value="4">Heading 4</option></select>
       {button("Undo", <Undo2 className="size-4" />, () => { editor.chain().focus().undo().run(); })}
       {button("Redo", <Redo2 className="size-4" />, () => { editor.chain().focus().redo().run(); })}
       {button("Bold", <Bold className="size-4" />, () => { editor.chain().focus().toggleBold().run(); }, editor.isActive("bold"))}
       {button("Italic", <Italic className="size-4" />, () => { editor.chain().focus().toggleItalic().run(); }, editor.isActive("italic"))}
-      {button("Bullet list", <List className="size-4" />, () => { editor.chain().focus().toggleBulletList().run(); }, editor.isActive("bulletList"))}
-      {button("Numbered list", <ListOrdered className="size-4" />, () => { editor.chain().focus().toggleOrderedList().run(); }, editor.isActive("orderedList"))}
+      {button("Bullet list", <List className="size-4" />, () => { formatBlogSelection(editor, "bulletList"); }, editor.isActive("bulletList"))}
+      {button("Numbered list", <ListOrdered className="size-4" />, () => { formatBlogSelection(editor, "orderedList"); }, editor.isActive("orderedList"))}
       {button("Link", <Link2 className="size-4" />, () => { void setLink(); }, editor.isActive("link"))}
       <Button type="button" size="sm" variant="ghost" title="Upload image from computer" aria-label="Upload image from computer" onClick={openUpload} className="h-9 w-9 p-0"><ImageIcon className="size-4" /></Button>
       <Button type="button" size="sm" variant="ghost" onClick={() => void insertImage()}>Image URL</Button>
     </div>
     <input ref={input} type="file" className="sr-only" accept="image/jpeg,image/png,image/webp,image/gif" aria-label="Inline image file" disabled={uploading} onChange={event => { const file = event.target.files?.[0]; if (file) void uploadImage(file); event.target.value = ""; }} />
     {error || imageError || uploading ? <p role="status" className="py-2 text-sm text-zinc-600">{uploading ? "Uploading image…" : error || imageError}</p> : null}
+    {!canFormat ? <p className="py-2 text-xs text-zinc-500">Select text within one section to format it. Images and FAQs keep their own controls.</p> : null}
     <EditorContent editor={editor} />
     <div className="mt-4 flex flex-wrap gap-2 border-t pt-4"><select aria-label="New block type" className="rounded border bg-transparent px-2 text-sm" value={addType} onChange={event => setAddType(event.target.value as AddType)}>{(["rich_text", "image", "faq", "internal_links", "comparison_table", "section"] as const).map(type => <option key={type} value={type}>{names[type]}</option>)}</select><Button type="button" size="sm" variant="outline" onClick={addSection}>Add section</Button><span className="ml-auto self-center text-xs text-zinc-500" aria-label="Word count">{wordCount.toLocaleString()} words</span></div>
   </section>;
