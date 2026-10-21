@@ -4,6 +4,7 @@ import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { syncInvoiceStatusesFromZoho } from "@/lib/accounting/syncInvoiceMetadata";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logCronRun } from "@/lib/logging/systemLog";
+import { loadZohoIntegrationSettings } from "@/lib/accounting/zohoIntegrationSettings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,11 @@ export async function POST(request: Request) {
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
   try {
+    const settings = await loadZohoIntegrationSettings(admin);
+    if (!settings.auto_sync_enabled) {
+      await logCronRun({ jobName: "zoho-invoice-status-refresh", status: "success", message: "skipped:automatic_sync_disabled" });
+      return NextResponse.json({ ok: true, skipped: true, reason: "automatic_sync_disabled" });
+    }
     const lockResult = await withCronLock(
       admin,
       { jobName: CRON_LOCK_KEYS.accountingSync, leaseSeconds: 600 },
