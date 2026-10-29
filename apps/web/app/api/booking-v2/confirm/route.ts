@@ -265,7 +265,7 @@ export async function POST(request: Request) {
 
   const parsed = bookingV2ConfirmSchema.safeParse(body);
   if (!parsed.success) {
-    const firstError = parsed.error.errors[0];
+    const firstError = parsed.error.issues[0];
     return NextResponse.json(
       { error: firstError?.message ?? "Invalid booking data." },
       { status: 422 },
