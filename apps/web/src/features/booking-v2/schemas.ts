@@ -57,7 +57,7 @@ function normalizeServiceDetails(value: unknown): Record<string, string | number
 }
 
 export const step1Schema = z.object({
-  serviceDetails: z.preprocess(normalizeServiceDetails, z.record(serviceDetailValueSchema)),
+  serviceDetails: z.preprocess(normalizeServiceDetails, z.record(z.string(), serviceDetailValueSchema)),
   address: z.string().min(5, "Enter your street address"),
   suburb: z.string().min(2, "Enter your suburb"),
   serviceAreaLocationId: z
@@ -182,7 +182,7 @@ export type SignUpData = z.infer<typeof signUpSchema>;
 
 export const bookingV2QuoteSchema = z.object({
   serviceSlug: z.enum(SERVICE_SLUGS),
-  serviceDetails: z.preprocess(normalizeServiceDetails, z.record(serviceDetailValueSchema)),
+  serviceDetails: z.preprocess(normalizeServiceDetails, z.record(z.string(), serviceDetailValueSchema)),
   selectedExtras: z.array(z.string()).default([]),
   equipmentRequired: z.preprocess(
     (value) => {
@@ -203,7 +203,7 @@ export const bookingV2QuoteSchema = z.object({
 
 export const bookingV2ConfirmSchema = z.object({
   serviceSlug: z.enum(SERVICE_SLUGS),
-  serviceDetails: z.preprocess(normalizeServiceDetails, z.record(serviceDetailValueSchema)),
+  serviceDetails: z.preprocess(normalizeServiceDetails, z.record(z.string(), serviceDetailValueSchema)),
   address: z.string().min(5),
   suburb: z.string().min(2),
   serviceAreaLocationId: z.string().optional().default(""),

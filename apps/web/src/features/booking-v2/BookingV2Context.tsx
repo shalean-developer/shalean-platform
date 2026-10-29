@@ -806,11 +806,11 @@ export function BookingV2Provider({
 
           const scheduleResult = buildStep2Schema(scheduling).safeParse(values);
           if (!scheduleResult.success) {
-            scheduleResult.error.errors.forEach((e) => {
+            scheduleResult.error.issues.forEach((e) => {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               form.setError(e.path.join(".") as any, { message: e.message });
             });
-            const paths = scheduleResult.error.errors.map((e) => e.path[0]);
+            const paths = scheduleResult.error.issues.map((e) => e.path[0]);
             const targetStage: RegularCleaningScheduleStage =
               paths.includes("bookingType") || paths.includes("recurringFrequency")
                 ? "booking_type"
@@ -915,11 +915,11 @@ export function BookingV2Provider({
 
           const scheduleResult = buildStep2Schema(scheduling).safeParse(values);
           if (!scheduleResult.success) {
-            scheduleResult.error.errors.forEach((e) => {
+            scheduleResult.error.issues.forEach((e) => {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               form.setError(e.path.join(".") as any, { message: e.message });
             });
-            const paths = scheduleResult.error.errors.map((e) => e.path[0]);
+            const paths = scheduleResult.error.issues.map((e) => e.path[0]);
             const targetStage: RegularCleaningScheduleStage =
               paths.includes("bookingType") || paths.includes("recurringFrequency")
                 ? "booking_type"
@@ -979,11 +979,11 @@ export function BookingV2Provider({
 
           const scheduleResult = buildStep2Schema(scheduling).safeParse(values);
           if (!scheduleResult.success) {
-            scheduleResult.error.errors.forEach((e) => {
+            scheduleResult.error.issues.forEach((e) => {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               form.setError(e.path.join(".") as any, { message: e.message });
             });
-            const paths = scheduleResult.error.errors.map((e) => e.path[0]);
+            const paths = scheduleResult.error.issues.map((e) => e.path[0]);
             const targetStage: RegularCleaningScheduleStage =
               paths.includes("date") || paths.includes("time") ? "date_time" : "cleaner";
             setScheduleSectionOverride(targetStage);
@@ -1044,11 +1044,11 @@ export function BookingV2Provider({
 
         const scheduleResult = buildStep2Schema(scheduling).safeParse(values);
         if (!scheduleResult.success) {
-          scheduleResult.error.errors.forEach((e) => {
+          scheduleResult.error.issues.forEach((e) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             form.setError(e.path.join(".") as any, { message: e.message });
           });
-          const paths = scheduleResult.error.errors.map((e) => e.path[0]);
+          const paths = scheduleResult.error.issues.map((e) => e.path[0]);
           const targetStage: RegularCleaningScheduleStage =
             paths.includes("date") || paths.includes("time") ? "date_time" : "cleaner";
           setScheduleSectionOverride(targetStage);
@@ -1107,7 +1107,7 @@ export function BookingV2Provider({
         const values = form.getValues();
         const result = step1Schema.safeParse(values);
         if (!result.success) {
-          result.error.errors.forEach((e) => {
+          result.error.issues.forEach((e) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             form.setError(e.path.join(".") as any, { message: e.message });
           });
@@ -1115,7 +1115,7 @@ export function BookingV2Provider({
             flow: "booking_v2",
             step,
             reason: "validation",
-            fields: result.error.errors.map((e) => e.path.join(".")),
+            fields: result.error.issues.map((e) => e.path.join(".")),
           });
           return false;
         }
@@ -1126,7 +1126,7 @@ export function BookingV2Provider({
         const values = form.getValues();
         const result = buildStep2Schema(scheduling).safeParse(values);
         if (!result.success) {
-          result.error.errors.forEach((e) => {
+          result.error.issues.forEach((e) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             form.setError(e.path.join(".") as any, { message: e.message });
           });
@@ -1134,7 +1134,7 @@ export function BookingV2Provider({
             flow: "booking_v2",
             step,
             reason: "validation",
-            fields: result.error.errors.map((e) => e.path.join(".")),
+            fields: result.error.issues.map((e) => e.path.join(".")),
           });
           return false;
         }

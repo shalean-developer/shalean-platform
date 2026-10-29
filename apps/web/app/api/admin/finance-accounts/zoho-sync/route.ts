@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const auth = await requireAdminPermissionFromRequest(request, "expense.manage");
-  return NextResponse.json({ can_manage: auth.ok });
+  if (!auth.ok) return auth.response;
+  return NextResponse.json({ can_manage: true });
 }
 
 export async function POST(request: Request) {
