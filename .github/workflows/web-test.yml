@@ -95,6 +95,10 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test:blog
 
+      - name: Cash-account authentication and cash-control regressions
+        if: steps.filter.outputs.run_suite == 'true'
+        run: npm run test -- lib/admin/expenses/__tests__/cashAccountBalanceEditor.test.ts app/api/admin/finance-accounts/zoho-sync/__tests__/route.test.ts lib/admin/expenses/__tests__/budgetCashClassification.test.ts
+
       - name: Critical tests (payments + referrals)
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test:critical

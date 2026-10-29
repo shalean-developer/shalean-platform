@@ -2,11 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
+import { getAdminToken } from "@/hooks/useAdminData";
 import type { CashSurvivalDashboardPayload } from "@/lib/admin/expenses/loadCashSurvivalDashboard";
 
 type EditableAccount = CashSurvivalDashboardPayload["accounts"][number];
 
 const AUTO_SYNC_AFTER_MS = 15 * 60 * 1000;
+
+async function balanceRequest(path: string, options: RequestInit = {}) {
+  const token = await getAdminToken();
+  if (!token) throw new Error("Your session is unavailable. Sign in again to manage bank balances.");
+  const headers = new Headers(options.headers);
+  headers.set("Authorization", `Bearer ${token}`);
+  return fetch(path, { ...options, headers, cache: "no-store" });
+}
 
 export function CashAccountBalanceEditor({
   accounts,
@@ -21,6 +30,7 @@ export function CashAccountBalanceEditor({
   const [savingId, setSavingId] = useState<string | null>(null);
   const [syncingZoho, setSyncingZoho] = useState(false);
   const [canManage, setCanManage] = useState<boolean | null>(null);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const autoSyncAttempted = useRef(false);
 
@@ -32,13 +42,19 @@ export function CashAccountBalanceEditor({
 
   useEffect(() => {
     let cancelled = false;
-    void fetch("/api/admin/finance-accounts/zoho-sync", { method: "GET" })
-      .then((response) => response.json())
-      .then((body) => {
-        if (!cancelled) setCanManage(body?.can_manage === true);
+    void balanceRequest("/api/admin/finance-accounts/zoho-sync", { method: "GET" })
+      .then(async (response) => {
+        const body = await response.json();
+        if (response.status === 403 && body?.requiredAnyPermission?.includes("expense.manage")) {
+          if (!cancelled) setCanManage(false);
+          return;
+        }
+        if (!response.ok) throw new Error(String(body?.error ?? "Could not check bank-balance permissions."));
+        if (typeof body?.can_manage !== "boolean") throw new Error("Could not check bank-balance permissions.");
+        if (!cancelled) setCanManage(body.can_manage);
       })
-      .catch(() => {
-        if (!cancelled) setCanManage(false);
+      .catch((error) => {
+        if (!cancelled) setPermissionError(error instanceof Error ? error.message : "Could not check bank-balance permissions.");
       });
     return () => {
       cancelled = true;
@@ -50,7 +66,7 @@ export function CashAccountBalanceEditor({
     setSyncingZoho(true);
     if (!automatic) setMessage(null);
     try {
-      const response = await fetch("/api/admin/finance-accounts/zoho-sync", { method: "POST" });
+      const response = await balanceRequest("/api/admin/finance-accounts/zoho-sync", { method: "POST" });
       const body = await response.json().catch(() => ({}));
       if (!response.ok || !body?.ok) throw new Error(String(body?.error ?? "Zoho bank sync failed."));
       const balance = Number(body.balance_cents ?? 0) / 100;
@@ -88,7 +104,7 @@ export function CashAccountBalanceEditor({
     setSavingId(account.id);
     setMessage(null);
     try {
-      const response = await fetch("/api/admin/finance-accounts/balance", {
+      const response = await balanceRequest("/api/admin/finance-accounts/balance", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ account_id: account.id, balance_cents: Math.round(zar * 100) }),
@@ -112,7 +128,11 @@ export function CashAccountBalanceEditor({
           <p className="text-xs text-slate-500">
             {canManage === true
               ? "Bank balance syncs automatically from the Zoho bank feed when older than 15 minutes. Manual entry remains available as fallback. Safe-to-spend stays unavailable when bank data is older than 48 hours."
-              : "Bank balances are read-only for your role. Safe-to-spend stays unavailable when bank data is older than 48 hours."}
+              : canManage === false
+                ? "Bank balances are read-only for your role. Safe-to-spend stays unavailable when bank data is older than 48 hours."
+                : permissionError
+                  ? "Bank-balance access could not be verified. Reload this page to try again."
+                  : "Checking bank-balance access…"}
           </p>
         </div>
         {bankAccounts.length && canManage === true ? (
@@ -168,6 +188,7 @@ export function CashAccountBalanceEditor({
           </div>
         ))}
       </div>
+      {permissionError ? <p role="alert" className="mt-3 text-xs text-red-600">{permissionError}</p> : null}
       {message ? <p className="mt-3 text-xs text-slate-600">{message}</p> : null}
     </div>
   );
