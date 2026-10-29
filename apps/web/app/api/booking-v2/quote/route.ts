@@ -16,7 +16,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const detailValue = z.union([z.string(), z.number(), z.boolean()]);
-export const quoteSchema = z.object({
+const quoteSchema = z.object({
   serviceSlug: z.enum(SERVICE_SLUGS),
   serviceDetails: z.record(z.string(), detailValue).default({}),
   selectedExtras: z.array(z.string()).default([]),
