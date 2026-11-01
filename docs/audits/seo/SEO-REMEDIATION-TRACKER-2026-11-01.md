@@ -12,9 +12,9 @@ Source baseline: main `c1585c0ffcefbe698371c1f309a3ceaf4ab508ae`. Fresh branch `
 
 | ID | Order | Finding / scope | Status | Closure evidence required |
 | --- | --- | --- | --- | --- |
-| SEO-META-01 | 1 | Repeated description padding: Newlands/Observatory standard cleaning and Constantia carpet cleaning live examples; shared `metaDescription.ts` | Local verified | HTML/OG/schema descriptions have no repeated generated padding; concise authored copy retained; staging and production verified |
-| SEO-META-02 | 1 | Blog titles/descriptions cut to literal ellipses; shared description clamp and blog title formatter | Local verified | Complete authored wording in HTML, OG/Twitter and schema; no newly generated ellipses; verify CMS and static examples |
-| SEO-META-03 | 1 | Blog formatter appends Cape Town/brand/year to already qualified headlines | Local verified | Location/brand not appended twice; existing dates retained; no automatic current-year freshness claim |
+| SEO-META-01 | 1 | Repeated description padding: Newlands/Observatory standard cleaning and Constantia carpet cleaning live examples; shared `metaDescription.ts` | CI verified | HTML/OG/schema descriptions have no repeated generated padding; concise authored copy retained; staging and production verified |
+| SEO-META-02 | 1 | Blog titles/descriptions cut to literal ellipses; shared description clamp and blog title formatter | CI verified | Complete authored wording in HTML, OG/Twitter and schema; no newly generated ellipses; verify CMS and static examples |
+| SEO-META-03 | 1 | Blog formatter appends Cape Town/brand/year to already qualified headlines | CI verified | Location/brand not appended twice; existing dates retained; no automatic current-year freshness claim |
 | SEO-META-04 | 1 | Location/service title formatter still uses `clipSerpTitle`; inventory actual affected outputs | Queued | Review complete copy and repair independently without changing ranking intent |
 | SEO-META-05 | 1 | Booking and cleaner-login canonical inherits homepage | Queued | Appropriate route canonical with intentional noindex preserved; invalid-route redirect intact |
 | SEO-META-06 | 1 | Booking social metadata inherits homepage | Queued | Page-specific title/description/URL; no funnel behavior change |
@@ -55,7 +55,7 @@ Validation:
 - Critical suite: 1,592 passed across 140 files after registering both metadata test files in `test:critical`. No existing test was removed.
 - Enforced booking lint: passed, four pre-existing unused-import warnings.
 - Typecheck: retry passed (first concurrent attempt was killed, exit 137). Scoped changed-file lint passed with zero errors/warnings.
-- CI: previous head passed migration governance and critical/security/database regressions; replacement head with metadata test registration must pass the complete checks. Staging: NOT RUN for this change. Production: NOT CHANGED. Closed defects: 0.
+- Final source CI PASS: web-test 41327394494 (including production build and exact-build crawl), migration-governance 41327394460 and Admin RBAC Priority 1 41327394461 on ed36b49b8a7cfb0abad3deec199c801b459cbf7c. PR #1011 merged to main as 249ba09949c079ea3ed6d0e784ab07cb820997f7. Automatic staging bundle run 41328221880 in progress. Staging verification pending. Production unchanged. Closed defects: 0.
 
 Additional baseline items discovered during regression (do not bundle into this metadata slice): SEO-BASELINE-01 sitemap count expectation, SEO-BASELINE-02 historic shalean.com redirect-map parity, SEO-BASELINE-03 supplies-policy copy assertion. Investigate expected behavior before changing source or tests.
 
@@ -71,3 +71,10 @@ Rollback: revert only the app-source metadata commit using the governed release 
 Owner instructed “Proceed”. Read-only environment checks found staging healthy at source baseline c1585c0, configured to the expected staging database with test Paystack keys and outbound messaging disabled. Production was healthy at fecca6e7a3bfaacb1d13a9d2b3885f2c0dd48e6a. Neither environment contained this fix at the check.
 
 Current workflows confirm `main` builds canonical `deploy/staging`, and `production` builds `deploy/production`; a main merge is not production activation. Preserve the current deployment path and perform the bounded production promotion only after staging verification. The existing PR-preview workflow publishes an isolated artifact and does not activate canonical staging.
+
+## Current progress record
+
+Progress-only branch: `audit/seo-remediation-20261101`; update this tracker after each verified gate without deploying documentation-only status changes. Application source remains governed through normal fix/release PRs.
+
+- Static metadata sweep: 67 routed static articles passed (no generated ellipses, repeated Cape Town suffixes or repeated padding).
+- Production candidate is based on fecca6e7a3bfaacb1d13a9d2b3885f2c0dd48e6a; existing metadata source/test files matched the main baseline before applying the exact bounded fix. Its package change only registers the two regression files, preserving the production critical suite. Isolated candidate critical suite: 1,505 passed across 132 files. Typecheck pending.
