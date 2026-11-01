@@ -1,0 +1,227 @@
+{
+  "approved_pr": 1013,
+  "approved_candidate_sha": "39f3e682d230c154acf040262edfd4f1b370d548",
+  "deployed_sha": "e285c89ba306ca87eec0a685773a430babbed133",
+  "production_bundle_run": 41330836013,
+  "pre_release": {
+    "gate": "NO-GO",
+    "before": {
+      "sha": "fecca6e7a3bfaacb1d13a9d2b3885f2c0dd48e6a",
+      "safe": true
+    },
+    "after": {
+      "sha": "fecca6e7a3bfaacb1d13a9d2b3885f2c0dd48e6a",
+      "safe": true
+    },
+    "rows": [
+      {
+        "path": "/blog/deep-cleaning-vs-regular-cleaning",
+        "status": 200,
+        "errors": [
+          "title missing or ellipsis",
+          "repeated location"
+        ],
+        "production_noindex_header": false,
+        "title": "Deep Cleaning vs Regular Cleaning | Cape Town Guide | Cape Town…",
+        "description": "Deep cleaning vs regular cleaning explained: compare tasks, timing and use cases, then choose the right Cape Town cleaning service.",
+        "cms_render_marker": true
+      },
+      {
+        "path": "/blog/standard-cleaning-newlands-cape-town",
+        "status": 200,
+        "errors": [
+          "title missing or ellipsis",
+          "repeated location",
+          "repeated padding"
+        ],
+        "production_noindex_header": false,
+        "title": "Standard Cleaning Services in Newlands, Cape Town | Cape Town…",
+        "description": "Standard home cleaning between canopy dust seasons and busy school calendars. Book trusted cleaners online today. Book trusted cleaners online today.",
+        "cms_render_marker": false
+      },
+      {
+        "path": "/blog/standard-cleaning-observatory-cape-town",
+        "status": 200,
+        "errors": [
+          "title missing or ellipsis",
+          "repeated location",
+          "repeated padding"
+        ],
+        "production_noindex_header": false,
+        "title": "Standard Cleaning Services in Observatory, Cape Town | Cape Town…",
+        "description": "Recurring standard cleaning for Observatory apartments and student-heavy layouts. Book trusted cleaners online today. Book trusted cleaners online today.",
+        "cms_render_marker": false
+      },
+      {
+        "path": "/blog/carpet-cleaning-constantia-cape-town",
+        "status": 200,
+        "errors": [
+          "title missing or ellipsis",
+          "repeated location",
+          "repeated padding"
+        ],
+        "production_noindex_header": false,
+        "title": "Carpet Cleaning Services in Constantia, Cape Town | Cape Town…",
+        "description": "Carpet cleaning in Constantia for high-traffic lanes and estate-sized living zones. Book trusted cleaners online today. Book trusted cleaners online today.",
+        "cms_render_marker": false
+      },
+      {
+        "path": "/blog/move-out-cleaning-checklist-cape-town",
+        "status": 200,
+        "errors": [
+          "title missing or ellipsis",
+          "description truncated"
+        ],
+        "production_noindex_header": false,
+        "title": "Complete Move-Out Cleaning Checklist (Cape Town Guide) (2026) |…",
+        "description": "Move-out cleaning checklist for South Africa: room-by-room tasks for deposit-ready handovers, common mistakes, time estimates, DIY vs professional, and how t...",
+        "cms_render_marker": false
+      },
+      {
+        "path": "/blog/deep-cleaning-vs-regular-cleaning-cape-town",
+        "status": 200,
+        "errors": [
+          "title missing or ellipsis",
+          "description truncated"
+        ],
+        "production_noindex_header": false,
+        "title": "Deep Cleaning vs Regular Cleaning: What's the Difference? (Cape…",
+        "description": "Deep cleaning vs regular cleaning explained: what each includes, standard cleaning vs deep cleaning on time and cost, which cleaning service you need, and ho...",
+        "cms_render_marker": false
+      }
+    ]
+  },
+  "post_release": {
+    "gate": "PASS",
+    "before": {
+      "sha": "e285c89ba306ca87eec0a685773a430babbed133",
+      "safe": true
+    },
+    "after": {
+      "sha": "e285c89ba306ca87eec0a685773a430babbed133",
+      "safe": true
+    },
+    "rows": [
+      {
+        "path": "/blog/deep-cleaning-vs-regular-cleaning",
+        "status": 200,
+        "errors": [],
+        "production_noindex_header": false,
+        "title": "Deep Cleaning vs Regular Cleaning | Cape Town Guide | Shalean",
+        "description": "Deep cleaning vs regular cleaning explained: compare tasks, timing and use cases, then choose the right Cape Town cleaning service.",
+        "cms_render_marker": true
+      },
+      {
+        "path": "/blog/standard-cleaning-newlands-cape-town",
+        "status": 200,
+        "errors": [],
+        "production_noindex_header": false,
+        "title": "Standard Cleaning Services in Newlands, Cape Town | Shalean",
+        "description": "Standard home cleaning between canopy dust seasons and busy school calendars.",
+        "cms_render_marker": false
+      },
+      {
+        "path": "/blog/standard-cleaning-observatory-cape-town",
+        "status": 200,
+        "errors": [],
+        "production_noindex_header": false,
+        "title": "Standard Cleaning Services in Observatory, Cape Town | Shalean",
+        "description": "Recurring standard cleaning for Observatory apartments and student-heavy layouts.",
+        "cms_render_marker": false
+      },
+      {
+        "path": "/blog/carpet-cleaning-constantia-cape-town",
+        "status": 200,
+        "errors": [],
+        "production_noindex_header": false,
+        "title": "Carpet Cleaning Services in Constantia, Cape Town | Shalean",
+        "description": "Carpet cleaning in Constantia for high-traffic lanes and estate-sized living zones.",
+        "cms_render_marker": false
+      },
+      {
+        "path": "/blog/move-out-cleaning-checklist-cape-town",
+        "status": 200,
+        "errors": [],
+        "production_noindex_header": false,
+        "title": "Complete Move-Out Cleaning Checklist (Cape Town Guide) | Shalean",
+        "description": "Move-out cleaning checklist for South Africa: room-by-room tasks for deposit-ready handovers, common mistakes, time estimates, DIY vs professional, and how to book end-of-lease cleaning in Cape Town.",
+        "cms_render_marker": false
+      },
+      {
+        "path": "/blog/deep-cleaning-vs-regular-cleaning-cape-town",
+        "status": 200,
+        "errors": [],
+        "production_noindex_header": false,
+        "title": "Deep Cleaning vs Regular Cleaning: What's the Difference? (Cape Town Guide)",
+        "description": "Deep cleaning vs regular cleaning explained: what each includes, standard cleaning vs deep cleaning on time and cost, which cleaning service you need, and how to book deep cleaning services in Cape Town with a clear quote.",
+        "cms_render_marker": false
+      }
+    ]
+  },
+  "controls": [
+    {
+      "check": "home",
+      "status": 200,
+      "x_robots_tag": null,
+      "robots": [
+        "<meta name=\"robots\" content=\"index, follow\"/>"
+      ],
+      "title": [
+        "Cleaning Services Cape Town from R250 | Shalean"
+      ],
+      "canonical": [
+        "<link rel=\"canonical\" href=\"https://shalean.co.za\"/>"
+      ]
+    },
+    {
+      "check": "deep_service",
+      "status": 200,
+      "x_robots_tag": null,
+      "robots": [
+        "<meta name=\"robots\" content=\"index, follow\"/>"
+      ],
+      "title": [
+        "Deep Cleaning Services in Cape Town | Shalean"
+      ],
+      "canonical": [
+        "<link rel=\"canonical\" href=\"https://shalean.co.za/services/deep-cleaning-cape-town\"/>"
+      ]
+    },
+    {
+      "check": "booking",
+      "status": 200,
+      "x_robots_tag": null,
+      "robots": [
+        "<meta name=\"robots\" content=\"noindex, nofollow\"/>"
+      ],
+      "title": [
+        "Book Regular Cleaning in Cape Town | Shalean"
+      ],
+      "canonical": [
+        "<link rel=\"canonical\" href=\"https://shalean.co.za\"/>"
+      ]
+    },
+    {
+      "check": "staging_article",
+      "status": 200,
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "robots": [
+        "<meta name=\"robots\" content=\"index, follow\"/>"
+      ],
+      "title": [
+        "Standard Cleaning Services in Newlands, Cape Town | Shalean | STAGING"
+      ],
+      "canonical": [
+        "<link rel=\"canonical\" href=\"https://pricing-test.shalean.co.za/blog/standard-cleaning-newlands-cape-town\"/>"
+      ]
+    }
+  ],
+  "before_flag_count": 15,
+  "after_flag_count": 0,
+  "closed_defects": [
+    "SEO-META-01",
+    "SEO-META-02",
+    "SEO-META-03",
+    "SEO-ENV-01"
+  ]
+}
