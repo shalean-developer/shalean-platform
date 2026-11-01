@@ -87,8 +87,18 @@ export async function syncZohoBankBalance(admin: SupabaseClient, actorUserId?: s
   if (financeBanks.length > 1) return { ok: false, configured: true, error: "Multiple Shalean bank finance accounts exist; mapping is required before automatic sync." };
 
   try {
-    const response = await zohoBooksClient.get<ZohoBankListResponse>("/bankaccounts?filter_by=Status.Active");
-    const zoho = selectZohoBankAccount(response.bankaccounts ?? []);
+    const response = await zohoBooksClient.getWithTokenRecovery<ZohoBankListResponse>("/bankaccounts?filter_by=Status.Active");
+    const selected = selectZohoBankAccount(response.bankaccounts ?? []);
+    const selectedId = String(selected.account_id ?? '');
+    if (!/^\d+$/.test(selectedId)) throw new Error("Zoho returned an invalid bank account identity.");
+    // The list endpoint omits feed activity and refresh metadata. Read the
+    // selected account detail before judging freshness or copying its balance.
+    const detail = await zohoBooksClient.getWithTokenRecovery<{ bankaccount?: ZohoBankAccount }>(`/bankaccounts/${selectedId}`);
+    const zoho = detail.bankaccount;
+    if (!zoho || String(zoho.account_id ?? '') !== selectedId || zoho.is_active === false ||
+        String(zoho.account_type ?? '').toLowerCase() !== 'bank' || !isZarOrUnspecified(zoho)) {
+      throw new Error("Zoho bank account detail did not match the selected active ZAR bank account.");
+    }
     const feedDate = zoho.feeds_last_refresh_date ?? null;
     if (zoho.is_feeds_active !== true) {
       throw new Error("Zoho bank feed is not active. Manual bank balance remains available as fallback.");
