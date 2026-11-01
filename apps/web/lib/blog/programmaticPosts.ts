@@ -1064,7 +1064,13 @@ function finalizeProgrammaticPostsForCanonicalPools(raw: ProgrammaticPost[]): Pr
 }
 
 /** Programmatic spine after redirect-alias canonicalization (unique slug → one row per canonical URL). */
-export const PROGRAMMATIC_POSTS: ProgrammaticPost[] = finalizeProgrammaticPostsForCanonicalPools(PROGRAMMATIC_POSTS_RAW);
+export const PROGRAMMATIC_POSTS: ProgrammaticPost[] = finalizeProgrammaticPostsForCanonicalPools(PROGRAMMATIC_POSTS_RAW).map(
+  (post) =>
+    post.service === "local-guide" &&
+    ["pricing", "cleaning_frequency", "deep_checklist"].includes(post.guideVariant ?? "")
+      ? { ...post, dateModified: "2026-11-01T10:00:00+02:00" }
+      : post,
+);
 
 const SLUG_SET = new Set(PROGRAMMATIC_POSTS.map((p) => p.slug));
 
@@ -1477,12 +1483,12 @@ function getLocalGuideFaqEntities(
     return [
       {
         question: `How much does cleaning cost in ${loc}?`,
-        answer: `Atlantic Seaboard scopes vary by apartment size and bathrooms; many standard visits trend from roughly R450 upward before add-ons, while deep resets scale with kitchen and bathroom time. ${pay}`,
+        answer: `For ${loc}, compare the rooms, bathrooms, service tier and extras included in each quote. The planning ranges in this guide are illustrative; your booking total depends on the scope you select. ${pay}`,
       },
       {
         question: `Why do ${loc} quotes differ between providers?`,
         answer:
-          "Lift access, parking, coastal dust load, and whether ovens or fridges are inside scope all change realistic crew time—compare itemised quotes, not vague hourly rates.",
+          "Property size, condition, access and selected extras can change the work required. Check whether ovens, fridges or other detail tasks are included when comparing itemised quotes.",
       },
       {
         question: `When is deep cleaning worth the premium in ${loc}?`,
@@ -1500,8 +1506,7 @@ function getLocalGuideFaqEntities(
     return [
       {
         question: `How often should I book cleaning in ${loc}?`,
-        answer:
-          "Busy kitchens and bathrooms on the Atlantic Seaboard usually benefit from biweekly standard cycles; lighter-use studios may stretch to monthly with tighter spot routines between visits.",
+        answer: `Choose a schedule for your ${loc} home based on how quickly kitchens, bathrooms and floors need attention. Household size, pets, daily use and the cleaning you do between visits matter more than the suburb name alone.`,
       },
       {
         question: `How often should Airbnb hosts clean in ${loc}?`,
@@ -1530,7 +1535,7 @@ function getLocalGuideFaqEntities(
       {
         question: `Why mention balconies for ${loc} deep cleans?`,
         answer:
-          "Coastal grit resets faster outdoors—if you want balconies mopped or rails wiped, include them so crew time matches scope.",
+          "Balconies and outdoor areas need their own agreed scope. If your property has them and you want them cleaned, describe the surfaces and access when booking rather than assuming they are included.",
       },
       {
         question: `How is deep cleaning priced differently from standard?`,
