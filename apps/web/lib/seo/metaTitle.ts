@@ -113,26 +113,27 @@ export function serviceTitleBaseForCtr(bookingLabel: string, slug: string): stri
   return raw;
 }
 
-const BLOG_TITLE_STRUCTURES: readonly ((h: string, year: number, brand: string) => string)[] = [
-  (h, year, brand) => `${h} | Cape Town (${year}) | ${brand}`,
-  (h, year, brand) => `${h} (${year}) | Cape Town | ${brand}`,
-];
-
 /**
- * Blog listing `<title>` — year + geo + deterministic secondary template from slug.
+ * Preserve the complete editorial headline. Geo and brand are optional suffixes,
+ * never a reason to publish an ellipsis or repeat an existing location/brand.
+ * The preferred display length is a soft budget, not a content validation rule.
  */
 export function generateBlogArticleTitle(input: {
   headline: string;
   slugKey: string;
+  /** Only add a year when explicitly requested; never imply a fresh review automatically. */
   year?: number;
   brand?: string;
 }): string {
-  const year = input.year ?? new Date().getFullYear();
-  const headlineRaw = typeof input.headline === "string" ? input.headline : String(input.headline ?? "");
-  const h = headlineRaw.trim() || "Cleaning guide";
-  const brand = typeof input.brand === "string" ? input.brand.trim() : String(input.brand ?? "Shalean Blog").trim();
-  const slugKeyRaw = typeof input.slugKey === "string" ? input.slugKey : String(input.slugKey ?? "");
-  const idx = stableTitleStructureIndex(slugKeyRaw.trim() || "blog", BLOG_TITLE_STRUCTURES.length);
-  const raw = BLOG_TITLE_STRUCTURES[idx](h, year, brand);
-  return clipSerpTitle(raw, BLOG_SERP_TITLE_MAX);
+  const raw = typeof input.headline === "string" ? input.headline : String(input.headline ?? "");
+  const h = raw.trim().replace(/\s+/g, " ") || "Cleaning guide";
+  const brand = typeof input.brand === "string" ? input.brand.trim() : "Shalean";
+  const hasBrand = /\bShalean(?: Blog| Cleaning Services)?\b/i.test(h) ||
+    Boolean(brand && h.toLowerCase().includes(brand.toLowerCase()));
+  const year = input.year !== undefined && !h.includes(String(input.year)) ? ` (${input.year})` : "";
+  const headline = `${h}${year}`;
+  const geo = /\bCape Town\b/i.test(h) ? "" : " | Cape Town";
+  const suffix = brand && !hasBrand ? ` | ${brand}` : "";
+  const candidates = [`${headline}${geo}${suffix}`, `${headline}${suffix}`, headline];
+  return candidates.find((candidate) => candidate.length <= BLOG_SERP_TITLE_MAX) ?? headline;
 }
