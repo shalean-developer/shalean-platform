@@ -25,14 +25,15 @@ describe("generateCtrTitle", () => {
     );
   });
 
-  it("respects max length", () => {
+  it("retains the complete service and long place name", () => {
     const s = generateCtrTitle({
       base: "Cleaning Services",
       place: "Very Long Suburb Name Here, Cape Town",
       fromPrice: "~R450",
       templateKey: "test-long-place",
     });
-    expect(s.length).toBeLessThanOrEqual(65);
+    expect(s).toContain("Very Long Suburb Name Here, Cape Town");
+    expect(s).not.toContain("…");
   });
 
   it("uses near-you language for location intent", () => {
@@ -114,8 +115,8 @@ describe("generateBlogArticleTitle", () => {
 });
 
 describe("clipSerpTitle", () => {
-  it("truncates long strings", () => {
-    expect(clipSerpTitle("a".repeat(80), 20).length).toBeLessThanOrEqual(20);
-    expect(clipSerpTitle("a".repeat(80), 20).endsWith("…")).toBe(true);
+  it("preserves complete title text even when it exceeds the display budget", () => {
+    expect(clipSerpTitle("a".repeat(80), 20)).toBe("a".repeat(80));
+    expect(clipSerpTitle("  Cleaning   Services  ")).toBe("Cleaning Services");
   });
 });
