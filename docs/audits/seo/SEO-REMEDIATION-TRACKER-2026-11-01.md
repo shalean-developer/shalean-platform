@@ -20,7 +20,8 @@ Source baseline: main `c1585c0ffcefbe698371c1f309a3ceaf4ab508ae`. Fresh branch `
 | SEO-META-06 | 1 | Booking social metadata inherits homepage | Queued | Page-specific title/description/URL; no funnel behavior change |
 | SEO-META-07 | 1 | Missing initial HTML H1 on booking routes; cleaner-login warning requires rendered check | Queued | Meaningful rendered heading and accessible page name; no duplicate H1 introduced |
 | SEO-COPY-01 | 1 | Customer-visible technical wording in navigation/location directory | Queued | Plain customer wording; navigation destinations unchanged |
-| SEO-ENV-01 | 1 | Plesk staging public article responses lack a noindex header and emit index/follow metadata | Staging verified | Deployed staging HTML and early redirects carry noindex; production ordinary pages stay indexable; exact-SHA verification |\n| SEO-INDEX-01 | 2 | Stored index inspection: 19 crawled not indexed, 3 discovered not indexed, 22 unknown, 4 historical 404 | Needs refreshed evidence | Fresh priority URL inspection, live status reconciliation and individually justified remediation; indexing is not guaranteed |
+| SEO-ENV-01 | 1 | Plesk staging public article responses lack a noindex header and emit index/follow metadata | Staging verified | Deployed staging HTML and early redirects carry noindex; production ordinary pages stay indexable; exact-SHA verification |
+| SEO-INDEX-01 | 2 | Stored index inspection: 19 crawled not indexed, 3 discovered not indexed, 22 unknown, 4 historical 404 | Needs refreshed evidence | Fresh priority URL inspection, live status reconciliation and individually justified remediation; indexing is not guaranteed |
 | SEO-CONTENT-01 | 2 | 173 pages flagged similar by crawler | Investigating | Compare main content and evidence; retain/differentiate/consolidate per URL; no bulk deletion or redirect based solely on score |
 | SEO-CONTENT-02 | 2 | Overlapping deep-versus-regular articles | Queued | Query/content comparison and approved URL disposition; no proven cannibalisation yet |
 | SEO-CONTENT-03 | 2 | Weak commercial service-page search visibility | Queued | Intent mapping, verified service details/proof and a dated search/lead baseline |
@@ -93,7 +94,7 @@ Guard local critical suite: 1,602 passed across 141 files. Changed proxy/test li
 
 SEO-ENV-01 source prepared in PR #1012, exact head 01774280501b58385c75a780cfdd2334ccb934e0. Final CI PASS (web-test 41329148456, migration-governance 41329148457, Admin RBAC Priority 1 41329148464). Merged as 77f77a314cebed28fa65284ad766915206ac94f8. Staging bundle run 41329992800 PASS. Live staging SHA 77f77a314cebed28fa65284ad766915206ac94f8 passed five article metadata/noindex checks plus two actual proxy redirects. Environment health/safety remained correct before and after.
 
-Production candidate PR #1013, head 39f3e682d230c154acf040262edfd4f1b370d548, remains draft/unmerged. All four workflows passed: web-test 41329469851, migration-governance 41329469807, RBAC 41329469845 and isolated preview 41329469847. Final local combined candidate: 1,515 critical tests across 133 files and TypeScript passed. No preview was manually activated over canonical staging. Final staging acceptance evidence PASS; production release remains held for owner release acceptance.
+Production candidate PR #1013, head 39f3e682d230c154acf040262edfd4f1b370d548, was owner-approved and merged to production as e285c89ba306ca87eec0a685773a430babbed133. All four candidate workflows passed: web-test 41329469851, migration-governance 41329469807, RBAC 41329469845 and isolated preview 41329469847. Final local combined candidate: 1,515 critical tests across 133 files and TypeScript passed. No preview was manually activated over canonical staging. Final staging acceptance evidence PASS; owner explicitly approved the bounded production release; deployment run 41330836013 is in progress.
 
 ## Final staging gate — PASS
 
@@ -101,4 +102,10 @@ Exact live staging SHA: 77f77a314cebed28fa65284ad766915206ac94f8. Expected stagi
 
 Evidence: `docs/audits/seo/evidence/SEO-META-STAGING-2026-11-01.json`. Framework-configured `/c/:slug` redirects run before the proxy and are outside this proxy-header scope; their destination HTML is protected. The unavailable staging CMS comparison article remains a disclosed coverage limitation and must be included in production reconciliation.
 
-Production control remained healthy at fecca6e7a3bfaacb1d13a9d2b3885f2c0dd48e6a, with ordinary article HTTP 200, robots index/follow and no noindex response header. Production unchanged. PR #1013 contains the bounded, locally tested candidate and all four final-head CI workflows passed. Owner production release acceptance is the next gate. Closed defects: 0; do not begin the next repair slice until this release is reconciled and closed.
+Production control remained healthy at fecca6e7a3bfaacb1d13a9d2b3885f2c0dd48e6a, with ordinary article HTTP 200, robots index/follow and no noindex response header. Production unchanged. PR #1013 contains the bounded, locally tested candidate and all four final-head CI workflows passed. Owner production release acceptance was explicitly granted; exact-SHA deployment and production reconciliation are the next gate. Closed defects: 0; do not begin the next repair slice until this release is reconciled and closed.
+
+## Production release authorized — deploying
+
+Owner explicitly replied “approved” to the bounded PR #1013 release summary. Reverified candidate head 39f3e682d230c154acf040262edfd4f1b370d548 and all four green workflows; no base/head drift. PR #1013 merged as e285c89ba306ca87eec0a685773a430babbed133. Automatic production bundle run 41330836013 is in progress. Rollback source remains fecca6e7a3bfaacb1d13a9d2b3885f2c0dd48e6a.
+
+Pre-release live baseline: fecca6e7 with correct production environment, live payment mode and healthy app. Six article checks reproduced 15 metadata flags (generated title ellipses/location repeats/padding and truncated descriptions), including the CMS-rendered comparison article. Post-release reconciliation is pending; no defect is Closed yet.
