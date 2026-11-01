@@ -22,10 +22,42 @@ beforeEach(() => {
   mocks.acquire.mockResolvedValue({ ok: true, jobName: 'test', holderId: 'test', leaseSeconds: 600 });
   mocks.get.mockImplementation(async (path: string) => path.startsWith('/chartofaccounts') ? {
     chartofaccounts: [{ account_id: '1', account_name: 'Fuel', account_type: 'expense' }], page_context: { page: 1, has_more_page: false },
-  } : { expenses: [{ expense_id: '101', account_id: '1', date: '2026-10-02', total: 100.01, currency_code: 'ZAR' }], page_context: { page: 1, has_more_page: false } });
+  } : { expenses: [{ expense_id: '101', is_personal: false, account_id: '1', date: '2026-10-02', total: 100.01, currency_code: 'ZAR' }], page_context: { page: 1, has_more_page: false } });
 });
 afterEach(() => vi.unstubAllEnvs());
 describe('safe expense snapshot refresh', () => {
+  it('scopes a fully paginated provider superset before personal-status detail reads', async () => {
+    mocks.get.mockImplementation(async (path: string) => {
+      if (path.startsWith('/chartofaccounts?')) return {chartofaccounts:[{account_id:'1',account_name:'Fuel',account_type:'expense'}],page_context:{page:1,has_more_page:false}};
+      const page = Number(new URL('https://example.com'+path).searchParams.get('page'));
+      return {expenses:page === 1 ? [{expense_id:'100',date:'2026-09-30'}, {expense_id:'101',date:'2026-10-01',account_id:'1',is_personal:false,total:100,currency_code:'ZAR'}] : [{expense_id:'102',date:'2026-11-01'}],page_context:{page,has_more_page:page===1}};
+    });
+    await syncExpenseMirror(db(), '2026-10-01', '2026-10-31');
+    expect((saved.records as {id:string}[]).map(r=>r.id)).toEqual(['101']);
+    expect(mocks.get.mock.calls.some(([path])=>path.includes('page=2'))).toBe(true);
+    expect(mocks.get.mock.calls.every(([path])=>!/^\/expenses\/\d+$/.test(path))).toBe(true);
+  });
+  it('retains the complete snapshot when a provider superset contains an invalid date', async () => {
+    mocks.get.mockImplementation(async (path: string) => path.startsWith('/chartofaccounts?') ? {chartofaccounts:[],page_context:{page:1,has_more_page:false}} : {expenses:[{expense_id:'100',date:'not-a-date'}],page_context:{page:1,has_more_page:false}});
+    await expect(syncExpenseMirror(db(), '2026-10-01', '2026-10-31')).rejects.toThrow();
+    expect(saved.records).toEqual([{id:'old'}]);
+  });
+  it('hydrates personal status omitted from the list and excludes personal expenses', async () => {
+    mocks.get.mockImplementation(async (path: string) => {
+      if (path.startsWith('/chartofaccounts?')) return { chartofaccounts: [{account_id:'1',account_name:'Fuel',account_type:'expense'}], page_context:{page:1,has_more_page:false} };
+      if (path === '/expenses/101') return { expense: {expense_id:'101',is_personal:true} };
+      return { expenses:[{expense_id:'101',account_id:'1',date:'2026-10-02',total:100,currency_code:'ZAR'}],page_context:{page:1,has_more_page:false} };
+    });
+    await syncExpenseMirror(db(), '2026-10-01', '2026-10-31');
+    expect((saved.records as {operating:boolean}[])[0].operating).toBe(false);
+    expect(mocks.get).toHaveBeenCalledWith('/expenses/101');
+  });
+  it('keeps the old snapshot if a detail response has the wrong identity', async () => {
+    mocks.get.mockImplementation(async (path: string) => path.startsWith('/chartofaccounts?') ? {chartofaccounts:[],page_context:{page:1,has_more_page:false}} : path === '/expenses/101' ? {expense:{expense_id:'999',is_personal:false}} : {expenses:[{expense_id:'101',date:'2026-10-02',total:100,currency_code:'ZAR'}],page_context:{page:1,has_more_page:false}});
+    await expect(syncExpenseMirror(db(), '2026-10-01', '2026-10-31')).rejects.toThrow();
+    expect(saved.records).toEqual([{id:'old'}]);
+  });
+
   it('replaces rather than appends, so repeat imports and changed amounts never duplicate', async () => {
     const admin = db(); await syncExpenseMirror(admin, '2026-10-01', '2026-10-31'); await syncExpenseMirror(admin, '2026-10-01', '2026-10-31');
     expect(saved.records).toHaveLength(1); expect((saved.records as {amount_cents:number}[])[0].amount_cents).toBe(10001);
@@ -59,6 +91,6 @@ describe('environment isolation', () => {
     expect(() => expenseMirrorOrganization({...env, SHALEAN_APP_ENV:'staging', NEXT_PUBLIC_SUPABASE_URL:'https://uwvnmluiqbczeduzjgse.supabase.co', ZOHO_EXPENSE_IMPORT_TEST_ORG_ID:'927500285'})).toThrow();
   });
   it('allows a separate explicitly configured staging test organisation', () => {
-    expect(expenseMirrorOrganization({...env, SHALEAN_APP_ENV:'staging', NEXT_PUBLIC_SUPABASE_URL:'https://uwvnmluiqbczeduzjgse.supabase.co', ZOHO_ORGANIZATION_ID:'123', ZOHO_EXPENSE_IMPORT_TEST_ORG_ID:'123'})).toBe('123');
+    expect(expenseMirrorOrganization({...env, SHALEAN_APP_ENV:'staging', SHALEAN_EXPECTED_SUPABASE_REF:'uwvnmluiqbczeduzjgse', NEXT_PUBLIC_SUPABASE_URL:'https://uwvnmluiqbczeduzjgse.supabase.co', ZOHO_ORGANIZATION_ID:'123', ZOHO_EXPENSE_IMPORT_TEST_ORG_ID:'123'})).toBe('123');
   });
 });
