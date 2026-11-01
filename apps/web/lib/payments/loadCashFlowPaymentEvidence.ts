@@ -10,9 +10,12 @@ export type CashFlowPaymentRow = {
   processing_fee_cents: number | null;
   fee_calculation_method: string | null;
   currency_code: string;
+  payment_channel: string | null;
 };
 
-export function summarizeCashFlowPaymentEvidence(rows: CashFlowPaymentRow[]) {
+export function summarizeCashFlowPaymentEvidence(input: CashFlowPaymentRow[]) {
+  // Refunds are outflows; they cannot establish receipt or fee completeness.
+  const rows = input.filter((row) => row.payment_channel !== "refund");
   let gross = 0;
   let fees = 0;
   let unverifiedPayments = 0;
@@ -59,7 +62,7 @@ export async function loadCashFlowPaymentEvidence(admin: SupabaseClient, from: s
   const end = new Date(Date.parse(`${to}T00:00:00+02:00`) + 86_400_000).toISOString();
   const rows = await fetchAllPayoutRows<CashFlowPaymentRow>((a, b) => admin
     .from("payment_transactions")
-    .select("id, gateway_reference, gateway_transaction_id, amount_cents, processing_fee_cents, fee_calculation_method, currency_code")
+    .select("id, gateway_reference, gateway_transaction_id, amount_cents, processing_fee_cents, fee_calculation_method, currency_code, payment_channel")
     .eq("gateway", "paystack")
     .gte("paid_at", start).lt("paid_at", end)
     .order("id").range(a, b));

@@ -3,11 +3,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadCashFlowPaymentEvidence, summarizeCashFlowPaymentEvidence, type CashFlowPaymentRow } from "../loadCashFlowPaymentEvidence";
 const payment = (patch: Partial<CashFlowPaymentRow> = {}): CashFlowPaymentRow => ({
   id:"one", gateway_reference:"charge-one", gateway_transaction_id:"123", amount_cents:75500,
-  processing_fee_cents:2207, fee_calculation_method:"paystack_reported", currency_code:"ZAR", ...patch,
+  processing_fee_cents:2207, fee_calculation_method:"paystack_reported", currency_code:"ZAR", payment_channel:null, ...patch,
 });
 describe("cash-flow payment evidence", () => {
   it("uses actual provider gross and fee cents without booking values", () => {
     expect(summarizeCashFlowPaymentEvidence([payment()])).toMatchObject({gross_cents:75500,reported_fee_cents:2207,fees_verified:true});
+  });
+  it("excludes refunds without suppressing provider-reported receipt fees", () => {
+    const receipt = payment();
+    const refund = payment({id:"refund",gateway_reference:"refund-one",gateway_transaction_id:null,payment_channel:"refund",processing_fee_cents:0});
+    expect(summarizeCashFlowPaymentEvidence([receipt,refund])).toMatchObject({transaction_count:1,gross_cents:75500,reported_fee_cents:2207,fees_verified:true,unverified_payment_count:0});
+    expect(summarizeCashFlowPaymentEvidence([refund])).toMatchObject({transaction_count:0,gross_cents:0,fees_verified:false});
   });
   it("does not call an empty local ledger fee-free", () => {
     expect(summarizeCashFlowPaymentEvidence([])).toMatchObject({gross_cents:0,fees_verified:false});
