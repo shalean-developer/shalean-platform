@@ -11,7 +11,7 @@ import {
   normalizeOfficePayoutPeriodRange,
 } from "@/lib/admin/payouts/officePayoutPeriodReport";
 import { computeProfitBreakdown } from "@/lib/admin/expenses/profitCalculations";
-import { loadPaymentTransactionMetrics } from "@/lib/payments/loadPaymentTransactionMetrics";
+import { loadCashFlowPaymentEvidence } from "@/lib/payments/loadCashFlowPaymentEvidence";
 import { loadSettlementCashSummary } from "@/lib/payments/loadSettlementCashSummary";
 
 export type CashFlowDashboardPayload = {
@@ -29,6 +29,7 @@ export type CashFlowDashboardPayload = {
     net_cash_flow_cents: number;
     cash_runway_days: number | null;
   };
+  payment_evidence: Awaited<ReturnType<typeof loadCashFlowPaymentEvidence>>;
   forecast: CashFlowForecast;
   daily_position: Array<{
     date: string;
@@ -69,7 +70,7 @@ export async function loadCashFlowDashboard(
   const [report, approvedExpenses, gatewayMetrics, settlementSummary] = await Promise.all([
     loadOfficePayoutPeriodReport(admin, from, to),
     sumApprovedExpensesInRange(admin, from, to),
-    loadPaymentTransactionMetrics(admin, from, to),
+    loadCashFlowPaymentEvidence(admin, from, to),
     loadSettlementCashSummary(admin, { from, to }),
   ]);
 
@@ -86,7 +87,7 @@ export async function loadCashFlowDashboard(
     else if (a.account_type === "bank") cashInBank += bal;
   }
 
-  const moneyReceived = report.totals.total_revenue_cents;
+  const moneyReceived = gatewayMetrics.gross_cents;
   const moneyReceivedNet = settlementSummary.settled_to_bank_cents;
   const moneyPaid = (report.totals.paid_cents ?? 0) + approvedExpenses;
 
@@ -176,7 +177,7 @@ export async function loadCashFlowDashboard(
     summary: {
       money_received_cents: moneyReceived,
       money_received_net_cents: moneyReceivedNet,
-      gateway_processing_fees_cents: gatewayMetrics.processing_fee_cents,
+      gateway_processing_fees_cents: gatewayMetrics.reported_fee_cents,
       money_paid_cents: moneyPaid,
       cash_in_bank_cents: cashInBank,
       petty_cash_cents: pettyCash,
@@ -186,6 +187,7 @@ export async function loadCashFlowDashboard(
       net_cash_flow_cents: netCashFlow,
       cash_runway_days: cashRunwayDays,
     },
+    payment_evidence: gatewayMetrics,
     forecast,
     daily_position: dailyPosition,
     weekly_position: [...weeklyMap.entries()]
