@@ -1,0 +1,290 @@
+{
+  "gate": "PASS",
+  "mode": "acceptance",
+  "before": {
+    "sha": "05f0f2f5b557f6b10e5cad2db810fb732c1bd371",
+    "safe": true
+  },
+  "after": {
+    "sha": "05f0f2f5b557f6b10e5cad2db810fb732c1bd371",
+    "safe": true
+  },
+  "pages": 15,
+  "home_reachability": [
+    {
+      "target": "/blog/how-often-deep-clean-home-cape-town",
+      "route": [
+        "/",
+        "/services/deep-cleaning-cape-town",
+        "/blog/how-often-deep-clean-home-cape-town"
+      ]
+    },
+    {
+      "target": "/blog/cleaning-mistakes-that-make-your-home-dirtier-cape-town",
+      "route": [
+        "/",
+        "/services/deep-cleaning-cape-town",
+        "/blog/cleaning-mistakes-that-make-your-home-dirtier-cape-town"
+      ]
+    },
+    {
+      "target": "/blog/weekly-cleaning-routine-busy-professionals-cape-town",
+      "route": [
+        "/",
+        "/services/standard-cleaning-cape-town",
+        "/blog/weekly-cleaning-routine-busy-professionals-cape-town"
+      ]
+    },
+    {
+      "target": "/blog/is-it-worth-hiring-cleaner-cape-town",
+      "route": [
+        "/",
+        "/services/standard-cleaning-cape-town",
+        "/blog/is-it-worth-hiring-cleaner-cape-town"
+      ]
+    },
+    {
+      "target": "/blog/apartment-cleaning-tips-sea-point-cape-town",
+      "route": [
+        "/",
+        "/locations/sea-point-cleaning-services",
+        "/blog/apartment-cleaning-tips-sea-point-cape-town"
+      ]
+    },
+    {
+      "target": "/blog/standard-cleaning-newlands-cape-town",
+      "route": [
+        "/",
+        "/services/standard-cleaning-cape-town",
+        "/locations/newlands-cleaning-services",
+        "/blog/standard-cleaning-newlands-cape-town"
+      ]
+    },
+    {
+      "target": "/blog/standard-cleaning-observatory-cape-town",
+      "route": [
+        "/",
+        "/services/standard-cleaning-cape-town",
+        "/locations/observatory-cleaning-services",
+        "/blog/standard-cleaning-observatory-cape-town"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "parent": "/services/deep-cleaning-cape-town",
+      "target": "/blog/how-often-deep-clean-home-cape-town",
+      "present": true
+    },
+    {
+      "parent": "/services/deep-cleaning-cape-town",
+      "target": "/blog/cleaning-mistakes-that-make-your-home-dirtier-cape-town",
+      "present": true
+    },
+    {
+      "parent": "/services/standard-cleaning-cape-town",
+      "target": "/blog/weekly-cleaning-routine-busy-professionals-cape-town",
+      "present": true
+    },
+    {
+      "parent": "/services/standard-cleaning-cape-town",
+      "target": "/blog/is-it-worth-hiring-cleaner-cape-town",
+      "present": true
+    },
+    {
+      "parent": "/locations/sea-point-cleaning-services",
+      "target": "/blog/apartment-cleaning-tips-sea-point-cape-town",
+      "present": true
+    },
+    {
+      "parent": "/locations/newlands-cleaning-services",
+      "target": "/blog/standard-cleaning-newlands-cape-town",
+      "present": true
+    },
+    {
+      "parent": "/locations/observatory-cleaning-services",
+      "target": "/blog/standard-cleaning-observatory-cape-town",
+      "present": true
+    }
+  ],
+  "rows": [
+    {
+      "path": "/",
+      "status": 200,
+      "canonical": [
+        "https://shalean.co.za"
+      ],
+      "h1": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "",
+      "errors": []
+    },
+    {
+      "path": "/blog/apartment-cleaning-tips-sea-point-cape-town",
+      "status": 200,
+      "canonical": [
+        "https://shalean.co.za/blog/apartment-cleaning-tips-sea-point-cape-town"
+      ],
+      "h1": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "",
+      "errors": []
+    },
+    {
+      "path": "/blog/cleaning-mistakes-that-make-your-home-dirtier-cape-town",
+      "status": 200,
+      "canonical": [
+        "https://shalean.co.za/blog/cleaning-mistakes-that-make-your-home-dirtier-cape-town"
+      ],
+      "h1": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "",
+      "errors": []
+    },
+    {
+      "path": "/blog/how-often-deep-clean-home-cape-town",
+      "status": 200,
+      "canonical": [
+        "https://shalean.co.za/blog/how-often-deep-clean-home-cape-town"
+      ],
+      "h1": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "",
+      "errors": []
+    },
+    {
+      "path": "/blog/is-it-worth-hiring-cleaner-cape-town",
+      "status": 200,
+      "canonical": [
+        "https://shalean.co.za/blog/is-it-worth-hiring-cleaner-cape-town"
+      ],
+      "h1": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "",
+      "errors": []
+    },
+    {
+      "path": "/blog/standard-cleaning-newlands-cape-town",
+      "status": 200,
+      "canonical": [
+        "https://shalean.co.za/blog/standard-cleaning-newlands-cape-town"
+      ],
+      "h1": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "",
+      "errors": []
+    },
+    {
+      "path": "/blog/standard-cleaning-observatory-cape-town",
+      "status": 200,
+      "canonical": [
+        "https://shalean.co.za/blog/standard-cleaning-observatory-cape-town"
+      ],
+      "h1": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "",
+      "errors": []
+    },
+    {
+      "path": "/blog/weekly-cleaning-routine-busy-professionals-cape-town",
+      "status": 200,
+      "canonical": [
+        "https://shalean.co.za/blog/weekly-cleaning-routine-busy-professionals-cape-town"
+      ],
+      "h1": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "",
+      "errors": []
+    },
+    {
+      "path": "/locations",
+      "status": 200,
+      "canonical": [
+        "https://shalean.co.za/locations"
+      ],
+      "h1": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "",
+      "errors": []
+    },
+    {
+      "path": "/locations/newlands-cleaning-services",
+      "status": 200,
+      "canonical": [
+        "https://shalean.co.za/locations/newlands-cleaning-services"
+      ],
+      "h1": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "",
+      "errors": []
+    },
+    {
+      "path": "/locations/observatory-cleaning-services",
+      "status": 200,
+      "canonical": [
+        "https://shalean.co.za/locations/observatory-cleaning-services"
+      ],
+      "h1": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "",
+      "errors": []
+    },
+    {
+      "path": "/locations/sea-point-cleaning-services",
+      "status": 200,
+      "canonical": [
+        "https://shalean.co.za/locations/sea-point-cleaning-services"
+      ],
+      "h1": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "",
+      "errors": []
+    },
+    {
+      "path": "/services",
+      "status": 200,
+      "canonical": [
+        "https://shalean.co.za/services"
+      ],
+      "h1": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "",
+      "errors": []
+    },
+    {
+      "path": "/services/deep-cleaning-cape-town",
+      "status": 200,
+      "canonical": [
+        "https://shalean.co.za/services/deep-cleaning-cape-town"
+      ],
+      "h1": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "",
+      "errors": []
+    },
+    {
+      "path": "/services/standard-cleaning-cape-town",
+      "status": 200,
+      "canonical": [
+        "https://shalean.co.za/services/standard-cleaning-cape-town"
+      ],
+      "h1": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "",
+      "errors": []
+    }
+  ],
+  "controls": {
+    "staging": {
+      "status": 200,
+      "x_robots_tag": "noindex, nofollow, noimageindex"
+    },
+    "booking": {
+      "status": 200,
+      "robots": "noindex, nofollow"
+    },
+    "pass": true
+  },
+  "deployment_run": 41342360452,
+  "artifact_sha": "05f0f2f5b557f6b10e5cad2db810fb732c1bd371"
+}

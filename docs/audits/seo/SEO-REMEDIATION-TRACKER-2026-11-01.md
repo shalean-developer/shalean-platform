@@ -26,7 +26,7 @@ Source baseline: main `c1585c0ffcefbe698371c1f309a3ceaf4ab508ae`. Fresh branch `
 | SEO-CONTENT-02 | 2 | Overlapping deep-versus-regular articles | Investigating | Query/content comparison and approved URL disposition; no proven cannibalisation yet |
 | SEO-CONTENT-04 | 2 | Misplaced coastal/blanket-price assumptions in 24 local pricing, frequency and checklist FAQs | Closed | Correct visible/schema FAQ copy, dates, CI, deployed staging and approved production reconciliation |
 | SEO-CONTENT-03 | 2 | Weak commercial service-page search visibility | Queued | Intent mapping, verified service details/proof and a dated search/lead baseline |
-| SEO-LINK-01 | 3 | Seven reported orphan articles | Staging verified | Confirm crawl reachability; relevant contextual links to retained pages; no redirects introduced |
+| SEO-LINK-01 | 3 | Seven reported orphan articles | Closed | Confirm crawl reachability; relevant contextual links to retained pages; no redirects introduced |
 | SEO-PERF-01 | 4 | 37 sub-90 scores among 48 measured URLs | Queued | Representative mobile/desktop lab diagnosis plus real-user LCP/INP/CLS evidence; avoid treating score alone as CWV failure |
 | SEO-LOCAL-01 | 5 | Local Business hours/entity facts, GBP and citations not fully verified | Queued | Verified business facts, schema parity and GBP/citation review |
 | SEO-AUTHORITY-01 | 5 | September snapshot: 224 broken backlinks / 3 destinations | Needs refreshed evidence | Fresh source/destination checks before any recovery redirects |
@@ -228,3 +228,14 @@ Evidence: docs/audits/seo/evidence/SEO-ORPHAN-LINKS-STAGING-2026-11-01.json, inc
 ## SEO-LINK-01 production release authorized — deploying
 
 Owner explicitly replied “Approved” to bounded production PR #1019 after staging acceptance. Rechecked unchanged candidate head 4abcb0a75a9388d1f2509daacab198684900ad89, base b8c4145903e3f938dffa89cfafe4bf181bcf2ef1 and all four final-head green workflows. PR #1019 merged as 05f0f2f5b557f6b10e5cad2db810fb732c1bd371. Automatic production deployment and read-only reconciliation pending. SEO-LINK-01 remains Staging verified; total Closed remains 10. No wider indexing/content closure claimed.
+
+
+## SEO-LINK-01 production reconciliation and closure — PASS
+
+Owner explicitly replied “Approved” to PR #1019. Production merged/deployed SHA: 05f0f2f5b557f6b10e5cad2db810fb732c1bd371. Production bundle 41342360452 PASS; artifact release-sha.txt and live health match. Correct production database identity, live payment mode, normal outbound configuration, exact SHA and healthy environment verified before and after the read-only crawl.
+
+All 15 checked URLs passed: HTTP 200, self-canonical after normal root-slash normalization, one H1 and public indexability. All seven contextual anchors are present in initial HTML, versus zero of the proposed edges at baseline. All seven previously orphaned targets have observed homepage-to-article crawl paths through the audited public pages. No assertion that every possible site URL is now free of orphaning is made. Booking remains noindex/nofollow; staging location page retains noindex/nofollow/noimageindex.
+
+Evidence: docs/audits/seo/evidence/SEO-ORPHAN-LINKS-PRODUCTION-2026-11-01.json, including all seven paths, 15 URL checks, environment proof and exclusion controls. No article bodies/dates, booking/pricing/auth, CMS/database/financial records, canonical/redirect/robots/sitemap, analytics or indexing submissions changed. Rollback: bounded app-source revert through the release path, preserving earlier repairs.
+
+Closed: SEO-LINK-01. Total Closed: 11. Wider indexing/content findings remain open, with no Google ranking/indexing improvement inferred from this immediate crawl. Next independently actionable order: performance, mobile rendering and accessibility; fresh Google inspection remains constrained by the inactive GSC Wizard subscription.
