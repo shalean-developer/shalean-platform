@@ -1,16 +1,16 @@
 # Expenses / Zoho audit — 1 November 2026
 
-Decision: **NO-GO for production / stage closure. Source remediation prepared; hosted staging and live range reconciliation remain outstanding.**
+Decision as of the 1 November production verification: **October Expenses reconciliation and repeated manual synchronization PASS. Overall audit remains OPEN for automatic bank-detail verification and separate staging Zoho test-organisation acceptance.**
 
 ## Scope and authority
 
-Farai's request on 1 November authorizes this bounded Expenses integration audit, source implementation, isolated testing and staging verification. It does not authorize a production merge, production migration, financial corrections or customer messages. Preserve PR #1000 (invoice metadata), historical evidence and unrelated stages.
+Farai initially authorized the bounded audit, isolated implementation and staging verification, then explicitly authorized source merge and subsequently instructed proceeding with the production release. The production cache migration, scoped releases and approved bank-account mapping were applied under that later instruction. Financial corrections, new accounting entries and customer messages remain outside scope. Preserve PR #1000, historical evidence and unrelated stages.
 
 Read AGENTS.md, Engineering Standard v1.1, release-control README, the bookkeeping operating policy and BK-02 ownership map. Current main inspected: `ed28c9827f19145fd85499552e77d629cef7ec76`; initially clean checkout. Dedicated branch: `fix/expenses-zoho-mirror`.
 
 Canonical E2E tracker successfully read through Drive: `SHALEAN-E2E-MASTER`, spreadsheet `1iMS7S5XX7i8v0gZjvb7UD_tfPD1jeYaVxDmPssWTxa8`, last modified 7 October 2026. It still records Stage 03 in progress and Stage 04 not started; its dashboard and rows contain stale October state. Do not infer later acceptance or reopen other stages from this read. The September convergence tracker was also inspected and is superseded for current audit status. This work is the explicitly requested bounded Expenses fix, not a general Stage 04 expansion. Neither tracker was modified or marked closed.
 
-## Verified current state
+## Verified baseline before remediation
 
 - Production `/api/health/environment`: release `f1b645f130e3aeefa28cd292db379d5688e4a13e`, production database `paqjwfulwywtsyyvdxrq`, `issues=[]`.
 - Relevant Expenses page/loader/outbound sync implementation is unchanged between that production commit and inspected main (additional unrelated test file on main retained).
@@ -19,6 +19,16 @@ Canonical E2E tracker successfully read through Drive: `SHALEAN-E2E-MASTER`, spr
 - Explicit comparison window: **1–31 October 2026 inclusive**, source accounting dates, ZAR. The local ledger was counted and totalled privately; those values are not a reconciled Zoho total and are excluded from the proposed public report.
 - Zoho UI organisation **927500285** directly inspected. Its Expenses list includes recent Fuel, Chemicals, Telephone, Transport and processing fees; it also includes Internal Transfers Clearing and Director Loan records. Listing an entry in Zoho's Expenses module is not proof it belongs in operating expenses.
 - Integration UI indicates configured OAuth and recent outbound queue activity. Unrelated invoice-payment work was left untouched.
+
+## Verified production follow-up — 1 November 2026
+
+- #1003 deployed at `355bb4b28828c1fc7a701b5963e11850c1332746`; additive cache migration verified with RLS enabled, no anon/authenticated read access and service-role-only access.
+- Live acceptance exposed provider records outside the requested date window. #1004 scopes valid list dates after complete pagination and retains the final projection date guard. Deployed at `ab7f43070996dc5e3d22a414b588baf1e19f6b0b`, production bundle run `41307729169` PASS, matching live health identity.
+- For **1–31 October 2026 inclusive**, independently read both Zoho Expenses UI pages, then compared every imported ID, date, category, reference, vendor, payment account and amount: no differences. Private counts, values and accounting references are excluded from this public report. Repeat refresh produced an identical complete snapshot and no duplicate IDs. Category/payment-account totals, ID search, excluded-record review and pagination verified in the live interface. Unauthenticated GET returns 401.
+- The approved operating bank mapping was configured. Existing manual fallback refreshed the bank snapshot from directly verified Zoho bank evidence; safe-to-spend protection remains enforced. No expense approval or Zoho accounting write was performed.
+- Bank sync incorrectly treated missing list-response feed metadata as inactive. Zoho documents that metadata on the selected bank-detail endpoint. #1005 reads and validates that detail without removing feed/freshness guards; its critical suite passed **1,454 tests across 127 files**, with TypeScript and GitHub checks passing. Production merged at `369f18adc8e655456b2886815f03a173930a9b13`; final hosted bank-sync verification remains pending at this report checkpoint.
+- Main/staging source parity is tracked in #1006. Staging health confirms its separate database and Paystack test mode. Its Expenses interface refuses production-org imports with an actionable separate-test-organisation error. Hosted staging add/update/delete acceptance requires a separately configured Zoho test organisation and remains a genuine blocker; synthetic regression coverage must not be described as that hosted acceptance.
+- No accounting adjustments, duplicate financial entries, invoice/receipt/bank-match changes, customer emails or unrelated stages were included. Existing current financial records were preserved.
 
 ## Root cause and defects
 
@@ -60,7 +70,7 @@ Mirror requests use existing server OAuth with an opt-in single 401 GET token re
 - Attachments/reconciliation details not supplied by the list API are accessible in Zoho, not fabricated locally. No generic imported-record writeback is introduced. Existing local outbound expense create behavior is preserved.
 - Cache snapshots are read models and never alter finance dashboards, local approval calculations or source accounting records.
 
-## Validation and outstanding gates
+## Initial isolated validation and original outstanding gates
 
 Local: 40 focused tests PASS (pagination, classification, amount/date validation, failures, repeat/changed/empty imports, SQL/RLS/ACL, environment isolation, token recovery, API denials, UI). Critical suite: 128 files / 1,486 tests PASS. TypeScript PASS. Enforced booking-core lint PASS with 4 pre-existing warnings; changed-source lint has no errors. Migration filename governance PASS (207 unique files). Webpack production build PASS without credentials; this proves compilation/static generation, not database-backed integration acceptance.
 
@@ -82,3 +92,11 @@ At source preparation, automatic approval review rejected publication to the pub
 ## Confirmed CI dependency blocker and correction
 
 GitHub web-test run 41298385715 failed at the production dependency audit, before tests. The blocking advisory was GHSA-mrwp-f3q8-3g9p in follow-redirects 1.16.1. The minimal lockfile-only update selects published patch 1.16.2; no audit policy or exception was weakened. Clean npm ci, installed dependency tree, production audit and the complete 1,526-test critical suite passed locally after the update. Existing nanoid acknowledgement remains unchanged and visible. GitHub final-head CI and staging verification remain separate gates.
+
+## Production candidate follow-up
+
+Production was verified still serving `f1b645f130e3aeefa28cd292db379d5688e4a13e`; merging #1002 into main did not promote production. The release candidate starts from that production commit and selects #1001 (bank-sync authenticated controls and its coupled Next/Zod security compatibility changes), #1002 and its dependency audit patch. Unrelated main booking and payout changes are excluded.
+
+Post-merge review corrections: when the Zoho expense list omits `is_personal`, read the matching expense detail before classifying it. Missing personal status remains excluded for review; a failed or mismatched detail response retains the previous complete snapshot. Clamp pagination when a refreshed snapshot shrinks.
+
+Production rollout remains pending. Apply the additive cache migration before enabling imports. Bank sync requires an explicitly verified operating account mapping when multiple Zoho bank accounts exist; never infer a live balance from a stale local zero or a staging fixture. No bank balance, accounting entry, financial adjustment or Zoho record was changed while preparing this candidate. Production reconciliation and live sync acceptance remain open.
