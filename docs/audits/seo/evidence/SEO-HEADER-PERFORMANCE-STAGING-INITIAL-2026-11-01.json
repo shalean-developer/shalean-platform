@@ -1,0 +1,46 @@
+{
+  "gate": "CONDITIONAL PASS",
+  "coverage_limits": [
+    "Staging blog has no published posts: deployed card loading and featured preload unavailable; component SSR regression passes with article fixtures."
+  ],
+  "before": {
+    "sha": "66ca83c95d7cebdc514ff5ea1fe4b484bd6fce32",
+    "safe": true
+  },
+  "after": {
+    "sha": "66ca83c95d7cebdc514ff5ea1fe4b484bd6fce32",
+    "safe": true
+  },
+  "rows": [
+    {
+      "path": "/",
+      "status": 200,
+      "h1": 1,
+      "canonical": [
+        "https://pricing-test.shalean.co.za"
+      ],
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "search_inputs": 2,
+      "search_disclosures": 1,
+      "image_policy": {},
+      "errors": []
+    },
+    {
+      "path": "/blog",
+      "status": 200,
+      "h1": 1,
+      "canonical": [
+        "https://pricing-test.shalean.co.za/blog"
+      ],
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "search_inputs": 2,
+      "search_disclosures": 1,
+      "image_policy": {
+        "cards": 0,
+        "non_lazy_cards": 0,
+        "featured_preload": false
+      },
+      "errors": []
+    }
+  ]
+}
