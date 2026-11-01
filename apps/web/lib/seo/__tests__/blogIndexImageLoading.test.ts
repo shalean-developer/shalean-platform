@@ -9,7 +9,7 @@ vi.mock("@/components/marketing-home/MarketingLayout", () => ({
 vi.mock("@/lib/blog/get-all-posts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/blog/get-all-posts")>();
   const slugs = [
-    "how-much-does-cleaning-cost-cape-town-2026", "deep-cleaning-vs-regular-cleaning-cape-town",
+    "how-much-does-cleaning-cost-cape-town-2026", "deep-cleaning-vs-regular-cleaning",
     "move-out-cleaning-checklist-cape-town", "airbnb-cleaning-checklist-cape-town",
     "how-often-book-home-cleaning-cape-town", "weekly-cleaning-routine-busy-professionals-cape-town",
     "is-it-worth-hiring-cleaner-cape-town", "cleaning-mistakes-that-make-your-home-dirtier-cape-town",

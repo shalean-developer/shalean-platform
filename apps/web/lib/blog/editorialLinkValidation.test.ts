@@ -11,6 +11,6 @@ describe("validateEditorialContentLinks", () => {
   it("auto-fix rewrites alias href when requested", () => {
     const html = `<a href="/blog/deep-vs-standard-cleaning-cape-town">x</a>`;
     const r = validateEditorialContentLinks({ html }, { autoFixLegacySlugs: true });
-    expect(r.fixedHtml).toContain("/blog/deep-cleaning-vs-regular-cleaning-cape-town");
+    expect(r.fixedHtml).toContain("/blog/deep-cleaning-vs-regular-cleaning");
   });
 });

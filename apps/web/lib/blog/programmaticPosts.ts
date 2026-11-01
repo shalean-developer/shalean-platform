@@ -1,3 +1,4 @@
+import { PROGRAMMATIC_SERVICE_INTENT } from "./programmaticServiceIntent";
 import { CAPE_TOWN_SERVICE_SEO, type CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
 import { hubSlugFromPlaceName } from "@/lib/seo/location-hub-from-blog";
 import { SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS } from "@/lib/seo/seoRebuildPhase1";
@@ -1065,11 +1066,7 @@ function finalizeProgrammaticPostsForCanonicalPools(raw: ProgrammaticPost[]): Pr
 
 /** Programmatic spine after redirect-alias canonicalization (unique slug → one row per canonical URL). */
 export const PROGRAMMATIC_POSTS: ProgrammaticPost[] = finalizeProgrammaticPostsForCanonicalPools(PROGRAMMATIC_POSTS_RAW).map(
-  (post) =>
-    post.service === "local-guide" &&
-    ["pricing", "cleaning_frequency", "deep_checklist"].includes(post.guideVariant ?? "")
-      ? { ...post, dateModified: "2026-11-01T10:00:00+02:00" }
-      : post,
+  (post) => ({ ...post, dateModified: "2026-11-01T23:00:00+02:00" }),
 );
 
 const SLUG_SET = new Set(PROGRAMMATIC_POSTS.map((p) => p.slug));
@@ -1463,7 +1460,7 @@ export function getProgrammaticTableOfContents(post: ProgrammaticPost): BlogTocE
       label: "Seasonal demand & inspection windows",
       level: 3,
     },
-    { id: PROGRAMMATIC_DOC_ANCHOR_IDS.whyPro, label: "Why hire professional cleaners in Cape Town", level: 2 },
+    { id: PROGRAMMATIC_DOC_ANCHOR_IDS.whyPro, label: PROGRAMMATIC_SERVICE_INTENT[post.service].planning, level: 2 },
     { id: PROGRAMMATIC_DOC_ANCHOR_IDS.sameDay, label: `Same-day cleaning availability in ${loc}`, level: 2 },
     { id: PROGRAMMATIC_DOC_ANCHOR_IDS.nearby, label: `Areas near ${loc} we also serve`, level: 2 },
     { id: PROGRAMMATIC_DOC_ANCHOR_IDS.faq, label: "Frequently asked questions", level: 2 },
@@ -1647,7 +1644,13 @@ export function getProgrammaticFaqEntities(
     {
       question: "Do you supply products and equipment?",
       answer:
-        "Yes—professional visits are supplied unless your booking states otherwise. Add estate rules or pet notes so crews arrive prepared.",
+        post.service === "standard"
+          ? "For regular cleaning, the customer provides suitable products and equipment by default. Select an available paid supplies option if you need Shalean to bring them, and check any delivery or area charge before checkout."
+          : post.service === "deep" || post.service === "move-out"
+            ? "Deep and move-out cleaning include Shalean-provided cleaning supplies. Mention surface-specific requirements before the visit."
+            : post.service === "airbnb"
+              ? "For Airbnb cleaning, customers provide the usual products and equipment unless a separate supplies arrangement has been agreed. Specify linen and guest-consumable arrangements separately."
+              : "Confirm products and equipment in your agreed booking scope before the visit.",
     },
     {
       question: `Is ${svc} right for a rental handover?`,

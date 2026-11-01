@@ -43,7 +43,7 @@ export const LOCATIONS_INDEX_BLOG_GUIDES: readonly { href: string; title: string
     subtitle: "Recurring, deep, and move-out cleans with online quotes",
   },
   {
-    href: "/blog/deep-cleaning-vs-regular-cleaning-cape-town",
+    href: "/blog/deep-cleaning-vs-regular-cleaning",
     title: "Deep vs standard cleaning",
     subtitle: "Pick the right tier before you book",
   },

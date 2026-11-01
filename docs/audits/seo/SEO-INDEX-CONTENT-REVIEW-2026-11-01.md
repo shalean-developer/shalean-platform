@@ -1,0 +1,30 @@
+# Indexing and content review — 1 November 2026
+
+Scope: SEO-INDEX-01 and SEO-CONTENT-01/02/03, continuing the owner's instruction to finish this audit phase. Fourteen earlier production closures remain protected. Main baseline ecdf2b8ec5e1e949a48bf5cb79350e3556842c59; production baseline 3e6659aa596959916df266895214a1429e327137.
+
+## Evidence and decisions
+
+- SiteGuru Search Console period: 30 September–29 October 2026, refreshed 1 November. Six primary service pages collectively have 463 impressions and zero clicks in this period; this is a baseline, not proof of a specific cause. The services index has one click/151 impressions. No ranking or lead gain is claimed.
+- Current SiteGuru similarity UI has 65 pair rows covering 83 distinct URLs (the count is not 65 unique affected pages). A read-only live crawl reviewed 109 URLs, all HTTP200 and indexable. Main-content five-word shingle analysis found 17 of the 65 pairs at or above0.6 overlap. Semantic similarity alone is not a redirect rule. Raw per-URL files were lost in a transient workspace reset; connected-source evidence and aggregate results were checkpointed in the progress branch. Detailed final validation must be regenerated.
+- Retain guides with distinct informational tasks, commercial pages with booking intent, and canonical location hubs with distinct coverage intent. Shared cleaning processes across covered suburbs are acknowledged; no unsupported local case studies or artificial uniqueness is added. Differentiate the shared service-article and commercial decision blocks. The pair-level disposition register is the acceptance record, rather than a target of zero automated similarity scores.
+- The two deep-versus-regular guides answer the same comparison question. Retain `/blog/deep-cleaning-vs-regular-cleaning`, which has an indexed report and44 impressions/zero clicks in the available30-day page data. Consolidate the Cape Town-suffixed guide into it; absence from the top-page result is not treated as zero traffic. Cannibalisation is not proven: SiteGuru found zero qualifying competing queries at its traffic threshold.
+- Google Search Console direct UI report (last updated23 October) shows147 indexed and46 not indexed submitted URLs:4 reported404s,23 crawled/not indexed,19 discovered/not indexed. These are not interchangeable with SiteGuru's206-page crawl subset. URL inspections still show May crawl404 records. Fresh Google live tests for Constantia, Durbanville and Green Point carpet articles succeed; Sea Point move-out-cost live test was started but its result could not be read when Browser stopped responding. Live accessibility is not index inclusion. No indexing request, sitemap submission or validation action has been performed.
+
+## Bounded implementation
+
+1. Move the in-repo comparison fallback to the retained generic slug, retain production CMS precedence, update canonical internal references and add one permanent redirect from the Cape Town-suffixed slug. Existing short alias goes directly to the same terminal. Update static registry/index/image fallbacks and seed-link text; no CMS record is edited.
+2. Service articles use five service-specific preparation profiles in place of generic coastal/household boilerplate. Correct the blanket supplied-products answer: regular cleaning uses customer products/equipment by default with an available paid option; Deep/Move-out include Shalean supplies; specialist scope is confirmed separately.
+3. Owner explicitly confirmed Airbnb customers provide supplies. State that in the reviewed Airbnb copy. Existing booking helper `serviceSuppliesPolicy('airbnb-cleaning')` says company-included; its live effect is unverified and requires a separate governed check. This SEO release does not alter booking, pricing or financial rules.
+4. Local guides show service names in prose instead of raw route paths, remove customer-facing generator wording and the unsupported blanket insurance claim. Keep topic-specific guidance and the earlier corrected FAQs. All50 programmatic pages use a revision timestamp for this shared-template change; publication dates remain unchanged.
+5. Seven city service pages receive distinct customer decision copy (six primary services plus the subordinate window guide), correct pricing-link labels and retain the booking/service-index/reviews paths. Window guidance uses the existing quote route. No new service or offer is introduced.
+
+## Acceptance and release
+
+Six regression cases cover direct alias terminals/query+hash preservation, code fallback availability, visible/schema supplies parity, five service-specific planning headings/TOC anchors, all33 local-guide prose outputs and seven commercial decisions. Preserve existing tests while updating intentional canonical/date expectations. Run critical tests, TypeScript, scoped ESLint, booking lint, blog-route governance and internal-alias audit; then exact-head CI/build/crawl, automatic staging, deployed redirect/content/schema/metadata checks and browser verification. Production requires separate explicit owner acceptance.
+
+Indexing disposition must distinguish: current HTTP/canonical/robots/sitemap/link readiness; Google's latest saved index state; fresh live fetch; and later indexing outcome. Never close Google inclusion solely from HTTP200 or a live test. Any proposed submission must list exact URLs and receive owner approval after preparation. Ranking/visibility monitoring remains separate from immediate code acceptance.
+
+Risks: redirect canonical consolidation can take time to be reflected by Google; shared local processes remain similar; fresh Google index inclusion and ranking gains are not guaranteed. Preserve intentional booking/utility/staging exclusions. Rollback is a bounded app-source revert through the normal release path, preserving fourteen earlier repairs; no database rollback is required.
+
+Tracker: https://github.com/shalean-developer/shalean-platform/blob/audit/seo-remediation-20261101/docs/audits/seo/SEO-REMEDIATION-TRACKER-2026-11-01.md
+Checkpoint: docs/audits/seo/evidence/SEO-INDEX-CONTENT-REVIEW-CHECKPOINT-2026-11-01.json on that progress branch.

@@ -4,7 +4,7 @@ import { sanitizeEditorialHref, sanitizeEditorialHtml, sanitizeEditorialMarkdown
 describe("editorialSanitize", () => {
   it("sanitizeEditorialHref resolves legacy deep-vs slug chain", () => {
     expect(sanitizeEditorialHref("/blog/deep-vs-standard-cleaning-cape-town")).toBe(
-      "/blog/deep-cleaning-vs-regular-cleaning-cape-town",
+      "/blog/deep-cleaning-vs-regular-cleaning",
     );
   });
 
@@ -15,12 +15,12 @@ describe("editorialSanitize", () => {
 
   it("sanitizeEditorialHtml rewrites anchor hrefs", () => {
     const html = `<p><a href="/blog/deep-vs-standard-cleaning-cape-town">x</a></p>`;
-    expect(sanitizeEditorialHtml(html)).toContain("/blog/deep-cleaning-vs-regular-cleaning-cape-town");
+    expect(sanitizeEditorialHtml(html)).toContain("/blog/deep-cleaning-vs-regular-cleaning");
   });
 
   it("sanitizeEditorialMarkdown rewrites markdown links", () => {
     const md = `See [compare](/blog/deep-vs-standard-cleaning-cape-town) for detail.`;
-    expect(sanitizeEditorialMarkdown(md)).toContain("/blog/deep-cleaning-vs-regular-cleaning-cape-town");
+    expect(sanitizeEditorialMarkdown(md)).toContain("/blog/deep-cleaning-vs-regular-cleaning");
   });
 
   it.each(["carpet-cleaning", "move-out-cleaning", "window-cleaning"])(
