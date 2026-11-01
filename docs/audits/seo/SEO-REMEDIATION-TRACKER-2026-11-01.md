@@ -26,7 +26,7 @@ Source baseline: main `c1585c0ffcefbe698371c1f309a3ceaf4ab508ae`. Fresh branch `
 | SEO-CONTENT-02 | 2 | Overlapping deep-versus-regular articles | Investigating | Query/content comparison and approved URL disposition; no proven cannibalisation yet |
 | SEO-CONTENT-04 | 2 | Misplaced coastal/blanket-price assumptions in 24 local pricing, frequency and checklist FAQs | Closed | Correct visible/schema FAQ copy, dates, CI, deployed staging and approved production reconciliation |
 | SEO-CONTENT-03 | 2 | Weak commercial service-page search visibility | Queued | Intent mapping, verified service details/proof and a dated search/lead baseline |
-| SEO-LINK-01 | 3 | Seven reported orphan articles | CI verified | Confirm crawl reachability; relevant contextual links to retained pages; no redirects introduced |
+| SEO-LINK-01 | 3 | Seven reported orphan articles | Staging verified | Confirm crawl reachability; relevant contextual links to retained pages; no redirects introduced |
 | SEO-PERF-01 | 4 | 37 sub-90 scores among 48 measured URLs | Queued | Representative mobile/desktop lab diagnosis plus real-user LCP/INP/CLS evidence; avoid treating score alone as CWV failure |
 | SEO-LOCAL-01 | 5 | Local Business hours/entity facts, GBP and citations not fully verified | Queued | Verified business facts, schema parity and GBP/citation review |
 | SEO-AUTHORITY-01 | 5 | September snapshot: 224 broken backlinks / 3 destinations | Needs refreshed evidence | Fresh source/destination checks before any recovery redirects |
@@ -216,3 +216,10 @@ Acceptance: all 12 affected URLs remain healthy/self-canonical/one H1, all seven
 
 
 Source CI gate PASS: web-test 41340773095 (build/exact-build internal crawl), migration 41340773106 and RBAC 41340773232. No base/head drift or outstanding review thread. PR #1018 merged to main as c609f9d3d8b93a754d3e062cddbd671886316cfb. Automatic staging build 41341517147 running. Production candidate's migration/RBAC/isolated preview passed; web-test pending. Staging acceptance will also check homepage reachability through service/location indexes, adding three crawl controls to the 12 affected pages. Production remains unchanged; ten prior defects Closed.
+
+
+## SEO-LINK-01 staging acceptance — PASS
+
+Exact main/staging SHA: c609f9d3d8b93a754d3e062cddbd671886316cfb. Automatic staging bundle 41341517147 PASS; artifact release-sha.txt and live health match. All 15 checked URLs passed (five parents, seven articles and homepage/services/locations controls): HTTP 200, self-canonical after normal root-slash normalization, one H1 and staging noindex. All seven contextual edges are present in initial HTML, versus zero on the production baseline. All seven targets have an observed homepage-to-article crawl path in the checked graph. Exact environment/test configuration, expected database identity, disabled outbound messaging and health verified before and after.
+
+Evidence: docs/audits/seo/evidence/SEO-ORPHAN-LINKS-STAGING-2026-11-01.json, including the seven crawl paths. All four production-candidate workflows passed on 4abcb0a75a9388d1f2509daacab198684900ad89: web-test 41340843970, migration 41340844066, RBAC 41340843972 and isolated preview 41340844032. No preview manually activated. Draft #1019 remains unmerged, based on production b8c4145903e3f938dffa89cfafe4bf181bcf2ef1, pending explicit owner production acceptance. No independent human reviewer is claimed. Production reconciliation must precede closure; total Closed remains 10. Wider indexing/content findings remain open and no Google indexing/ranking outcome is inferred.
