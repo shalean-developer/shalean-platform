@@ -27,6 +27,12 @@ function commercialCleaningServicesBlogToLocationRedirects(): {
 }
 
 const coreProgrammaticBlogCleanupRedirects = [
+  /** Same comparison intent: retain the established CMS guide, with an in-repo fallback. */
+  {
+    source: "/blog/deep-cleaning-vs-regular-cleaning-cape-town",
+    destination: "/blog/deep-cleaning-vs-regular-cleaning",
+    permanent: true,
+  },
   /** Retired draft-only slug → live pricing authority (one hop; never via retired hub). */
   {
     source: "/blog/cleaning-prices-cape-town-guide",
@@ -46,7 +52,7 @@ const coreProgrammaticBlogCleanupRedirects = [
   /** Legacy slug string used across TSX — router serves HC article under this pathname instead. */
   {
     source: "/blog/deep-vs-standard-cleaning-cape-town",
-    destination: "/blog/deep-cleaning-vs-regular-cleaning-cape-town",
+    destination: "/blog/deep-cleaning-vs-regular-cleaning",
     permanent: true,
   },
   /** Legacy HC prepare-home slug → governed CMS cluster-2 article (single canonical URL). */

@@ -1,3 +1,4 @@
+import { PROGRAMMATIC_SERVICE_INTENT } from "@/lib/blog/programmaticServiceIntent";
 import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import {
   buildProgrammaticWhatIsHeading,
@@ -42,6 +43,7 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
   const loc = post.location ?? "Cape Town";
   const svc = programmaticServiceLabel(post);
   const svcPath = servicePath(post.service);
+  const intent = PROGRAMMATIC_SERVICE_INTENT[post.service];
   const nearby = getNearbySuburbsForProgrammaticPost(post.location);
   const locationHubHref = locationHubHrefFromPlaceName(post.location);
 
@@ -71,9 +73,7 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
     <>
       <div className={articleStack}>
         <p className="lead text-lg leading-relaxed text-zinc-700">
-          {loc} sits in the middle of real Cape Town life—rentals, Airbnb turnover, school-week traffic, and homes that
-          pick up coastal dust fast. This page explains how professional {svc} works here, what is typically included,
-          and how to{" "}
+          {intent.intro} For {loc}, you can{" "}
           <GrowthCtaLink
             href="/book"
             source={`blog_programmatic_${post.slug}_intro`}
@@ -93,8 +93,8 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
         </p>
         {locationHubHref ? (
           <p>
-            Prefer suburb FAQs, pricing bands, and booking CTAs in one place? Open the{" "}
-            <SafeInternalLink href={locationHubHref}>cleaning services in {loc}</SafeInternalLink> hub—it links back to this guide and the wider
+            For local coverage and booking information, open{" "}
+            <SafeInternalLink href={locationHubHref}>cleaning services in {loc}</SafeInternalLink>—you can also compare the wider
             Cape Town service pages.
           </p>
         ) : null}
@@ -117,17 +117,15 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
         <h2 id={PROGRAMMATIC_DOC_ANCHOR_IDS.whatIs}>{buildProgrammaticWhatIsHeading(post)}</h2>
         <p>
           On a typical visit to {loc}, {svc} focuses on the outcomes you book online: {describeInclude(post.service)}.
-          Crews plan
-          time around Western Cape realities—wind-blown grit, compact apartments near the CBD, and family homes in the
-          Southern Suburbs that need predictable wet-area work.
+          The work depends on the condition and tasks you describe, rather than assumptions about the suburb.
         </p>
         <ul>
           <li>Scope is confirmed from bedrooms, bathrooms, and add-ons—not postcode alone.</li>
           <li>Access and parking notes for {loc} reduce delays so more minutes go to cleaning.</li>
           <li>
-            Bundling with <SafeInternalLink href={deep}>deep cleaning</SafeInternalLink>, <SafeInternalLink href={standard}>standard cleaning</SafeInternalLink>,{" "}
-            <SafeInternalLink href={carpet}>carpet cleaning</SafeInternalLink>, or <SafeInternalLink href={office}>office cleaning in Cape Town</SafeInternalLink> is
-            available when your home or workspace needs more than one focus in a single trip.
+            Compare <SafeInternalLink href={deep}>deep cleaning</SafeInternalLink>, <SafeInternalLink href={standard}>standard cleaning</SafeInternalLink>,{" "}
+            <SafeInternalLink href={carpet}>carpet cleaning</SafeInternalLink> and <SafeInternalLink href={office}>office cleaning</SafeInternalLink>
+            if you need a different scope. Confirm any combined services before booking.
           </li>
         </ul>
 
@@ -144,8 +142,8 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
           or inspection calendars—book early in peak season when slots tighten across Cape Town.
         </p>
 
-        <h2 id={PROGRAMMATIC_DOC_ANCHOR_IDS.whyPro}>Why hire professional cleaners in Cape Town</h2>
-        <p>{whyProBody(loc)}</p>
+        <h2 id={PROGRAMMATIC_DOC_ANCHOR_IDS.whyPro}>{intent.planning}</h2>
+        <ul>{intent.checklist.map((item) => <li key={item}>{item}</li>)}</ul>
         <p>
           Compare{" "}
           <SafeInternalLink href={deep}>deep cleaning services in Cape Town</SafeInternalLink> and{" "}
@@ -185,9 +183,8 @@ export function ProgrammaticBlogTemplate({ post }: { post: ProgrammaticPost }) {
 
         <h2 id={PROGRAMMATIC_DOC_ANCHOR_IDS.nearby}>Areas near {loc} we also serve</h2>
         <p>
-          Teams working in {loc} regularly support nearby suburbs including {nearby.join(", ")}, and wider Cape Town
-          routes when scheduling allows. Mention your exact complex or street notes during booking so arrival and loading
-          stay smooth.
+          You can also check coverage for {nearby.join(", ")}. Enter your exact address and access notes when booking;
+          availability is confirmed for the selected visit.
         </p>
         <p>
           Explore dedicated hubs when you need suburb-level context:{" "}
@@ -245,21 +242,17 @@ function whenBookBody(service: Exclude<ProgrammaticPost["service"], "local-guide
   const parts: Record<Exclude<ProgrammaticPost["service"], "local-guide">, string> = {
     deep: `Book deep cleaning in ${loc} when kitchens or bathrooms need more dwell time than a standard visit allows, before guests, or after a long gap without professional help.`,
     standard: `Book standard cleaning in ${loc} when you want dependable weekly or fortnightly upkeep without paying for full detail work every time.`,
-    airbnb: `Book Airbnb cleaning in ${loc} when turnovers must be guest-ready on a clock—especially same-day changeovers near the Atlantic Seaboard or CBD corridors.`,
+    airbnb: `Book Airbnb cleaning in ${loc} when turnovers must be guest-ready on a clock—with enough time for the agreed guest-ready tasks.`,
     "move-out": `Book move-out cleaning in ${loc} once furniture is out and you are aligning to agent or landlord inspection photos—usually 24–48 hours before handover.`,
     carpet: `Book carpet cleaning in ${loc} after high-traffic weeks, pet-heavy months, or alongside a deep visit when soft floors need their own time allocation.`,
   };
   return parts[service];
 }
 
-function whyProBody(loc: string): string {
-  return `Professional cleaners reduce rework: checklists match what ${loc} homes actually need, from rental sand to bathroom limescale, and teams arrive with the supplies to execute the scope you confirmed online.`;
-}
-
 function sameDayBody(service: Exclude<ProgrammaticPost["service"], "local-guide">, loc: string): string {
   const parts: Record<Exclude<ProgrammaticPost["service"], "local-guide">, string> = {
     deep: `Same-day deep cleaning in ${loc} is limited by job length—large homes or heavy add-ons may need a scheduled day with more crew time.`,
-    standard: `Same-day standard cleaning in ${loc} is often easier to place than deep or move-out work; still, book as early as you can on busy weekends.`,
+    standard: `For same-day standard cleaning in ${loc}, check the available slots for your address and confirm products, equipment and access before the visit.`,
     airbnb: `Same-day Airbnb cleaning in ${loc} hinges on checkout time, listing size, and cleaner availability—accurate bedroom and bathroom counts prevent rushed visits.`,
     "move-out": `Same-day move-out cleaning in ${loc} usually requires the unit to be empty and keys timing confirmed; agents often prefer photos from the cleaning day.`,
     carpet: `Same-day carpet cleaning in ${loc} depends on how many carpeted areas you select and whether the slot follows another long job that day.`,

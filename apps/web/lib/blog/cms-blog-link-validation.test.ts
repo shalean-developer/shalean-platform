@@ -27,9 +27,9 @@ describe("parseInternalBlogHref", () => {
   });
 
   it("parses apex and www shalean hosts", () => {
-    const r = parseInternalBlogHref("https://www.shalean.co.za/blog/deep-cleaning-vs-regular-cleaning-cape-town/");
+    const r = parseInternalBlogHref("https://www.shalean.co.za/blog/deep-cleaning-vs-regular-cleaning/");
     expect(r.kind).toBe("blog_path");
-    if (r.kind === "blog_path") expect(r.initialSlug).toBe("deep-cleaning-vs-regular-cleaning-cape-town");
+    if (r.kind === "blog_path") expect(r.initialSlug).toBe("deep-cleaning-vs-regular-cleaning");
   });
 });
 
@@ -38,7 +38,7 @@ describe("validateInternalBlogLinkTarget", () => {
   const published = new Set(["only-in-db"]);
 
   it("accepts static editorial slugs with empty DB set", () => {
-    const slug = "deep-cleaning-vs-regular-cleaning-cape-town";
+    const slug = "deep-cleaning-vs-regular-cleaning";
     expect(validateInternalBlogLinkTarget(slug, { publishedSlugSet: empty })).toEqual({ ok: true });
   });
 
@@ -88,7 +88,7 @@ describe("extractInternalBlogHrefsFromContentJson", () => {
     const content: BlogContentJson = {
       schema_version: BLOG_CONTENT_JSON_SCHEMA_VERSION,
       blocks: [
-        { type: "rich_text", html: '<p><a href="/blog/deep-cleaning-vs-regular-cleaning-cape-town">x</a></p>' },
+        { type: "rich_text", html: '<p><a href="/blog/deep-cleaning-vs-regular-cleaning">x</a></p>' },
         {
           type: "cta",
           title: "T",
@@ -108,7 +108,7 @@ describe("extractInternalBlogHrefsFromContentJson", () => {
     };
     const occ = extractInternalBlogHrefsFromContentJson(content);
     const hrefs = occ.map((o) => o.rawHref);
-    expect(hrefs).toContain("/blog/deep-cleaning-vs-regular-cleaning-cape-town");
+    expect(hrefs).toContain("/blog/deep-cleaning-vs-regular-cleaning");
     expect(hrefs).toContain("https://shalean.co.za/blog/only-in-db");
     expect(hrefs).toContain("/blog/zzz-no-such-blog-slug-zzz");
     expect(hrefs).toContain("/blog/move-out-cleaning-checklist-cape-town-renters");
@@ -218,7 +218,7 @@ describe("validateCmsBlogDocument", () => {
 
 describe("suggestNormalizedBlogHref", () => {
   it("rewrites www shalean absolute URL toward normalized path form", () => {
-    const s = suggestNormalizedBlogHref("https://www.shalean.co.za/blog/deep-cleaning-vs-regular-cleaning-cape-town/");
-    expect(s.startsWith("/blog/deep-cleaning-vs-regular-cleaning-cape-town")).toBe(true);
+    const s = suggestNormalizedBlogHref("https://www.shalean.co.za/blog/deep-cleaning-vs-regular-cleaning/");
+    expect(s.startsWith("/blog/deep-cleaning-vs-regular-cleaning")).toBe(true);
   });
 });

@@ -65,18 +65,18 @@ export function LocalGuideProgrammaticTemplate({ post }: { post: ProgrammaticPos
 
   const variantBody =
     variant === "pricing"
-      ? pricingCopy(loc, standard, deep, tone, pricingLocationRow)
+      ? pricingCopy(loc, "regular cleaning", "deep cleaning", tone, pricingLocationRow)
       : variant === "best_services"
-        ? bestServicesCopy(loc, standard, deep, airbnb, moveOut, tone)
+        ? bestServicesCopy(loc, "regular cleaning", "deep cleaning", "Airbnb cleaning", "move-out cleaning", tone)
         : variant === "apartment_tips"
-          ? apartmentTipsCopy(loc, standard, deep, airbnb, tone)
+          ? apartmentTipsCopy(loc, "regular cleaning", "deep cleaning", "Airbnb cleaning", tone)
           : variant === "cleaning_frequency"
-            ? cleaningFrequencyCopy(loc, standard, deep, airbnb, tone)
+            ? cleaningFrequencyCopy(loc, "regular cleaning", "deep cleaning", "Airbnb cleaning", tone)
             : variant === "deep_checklist"
-              ? deepChecklistCopy(loc, standard, deep, airbnb, tone)
+              ? deepChecklistCopy(loc, "regular cleaning", "deep cleaning", "Airbnb cleaning", tone)
               : variant === "move_out_cost"
-                ? moveOutCostCopy(loc, standard, deep, airbnb, moveOut, tone)
-                : apartmentTipsCopy(loc, standard, deep, airbnb, tone);
+                ? moveOutCostCopy(loc, "regular cleaning", "deep cleaning", "Airbnb cleaning", "move-out cleaning", tone)
+                : apartmentTipsCopy(loc, "regular cleaning", "deep cleaning", "Airbnb cleaning", tone);
 
   return (
     <>
@@ -85,7 +85,7 @@ export function LocalGuideProgrammaticTemplate({ post }: { post: ProgrammaticPos
 
         <p>
           Book{" "}
-          <SafeInternalLink href="/book">cleaning services in {loc}</SafeInternalLink> online—add your address at checkout for suburb FAQs, illustration pricing, and availability.
+          <SafeInternalLink href="/book">cleaning services in {loc}</SafeInternalLink> online—add your address at checkout for local availability and an itemised quote.
         </p>
 
         <h2 id={LOCAL_GUIDE_DOC_ANCHOR_IDS.overview}>{variantBody.overviewHeading}</h2>
@@ -120,7 +120,7 @@ export function LocalGuideProgrammaticTemplate({ post }: { post: ProgrammaticPos
             ))}
             . Compare scope on our{" "}
             <SafeInternalLink href={editorialCrossLinks.serviceHref}>{editorialCrossLinks.serviceLabel}</SafeInternalLink>, then{" "}
-            <SafeInternalLink href="/book">book online</SafeInternalLink> for illustration pricing and FAQs.
+            <SafeInternalLink href="/book">book online</SafeInternalLink> to see your selected scope and quote.
           </p>
         ) : null}
 
@@ -156,8 +156,8 @@ export function LocalGuideProgrammaticTemplate({ post }: { post: ProgrammaticPos
         <h2 id={LOCAL_GUIDE_DOC_ANCHOR_IDS.trust}>Trust signals &amp; red flags</h2>
         <p>{variantBody.trust}</p>
         <ul>
-          <li>Insured, vetted teams—not informal cash-only operators.</li>
-          <li>Quotes that itemise bedrooms, bathrooms, and add-ons—not mystery hourly maths.</li>
+          <li>Clear information about cleaner vetting and the service being offered.</li>
+          <li>Itemised quotes showing rooms, bathrooms and selected extras.</li>
           <li>Support when something verifiably misses the agreed checklist.</li>
         </ul>
         <p>

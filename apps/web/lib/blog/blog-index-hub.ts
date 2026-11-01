@@ -23,7 +23,7 @@ export const BLOG_FEATURED_SLUG_PREFERENCE = "how-much-does-cleaning-cost-cape-t
 export const BLOG_MOST_POPULAR_SLUGS: string[] = [
   ...new Set<string>([
     "how-much-does-cleaning-cost-cape-town-2026",
-    "deep-cleaning-vs-regular-cleaning-cape-town",
+    "deep-cleaning-vs-regular-cleaning",
     "move-out-cleaning-checklist-cape-town",
     "airbnb-cleaning-checklist-cape-town",
     "how-often-book-home-cleaning-cape-town",
@@ -34,7 +34,7 @@ export const BLOG_MOST_POPULAR_SLUGS: string[] = [
 /** Commercial intent ordering for /blog “all” grid (stable; unknown slugs sort after). */
 export const COMMERCIAL_BLOG_INDEX_PRIORITY_SLUGS: readonly string[] = [
   "how-much-does-cleaning-cost-cape-town-2026",
-  "deep-cleaning-vs-regular-cleaning-cape-town",
+  "deep-cleaning-vs-regular-cleaning",
   "move-out-cleaning-checklist-cape-town",
   "airbnb-cleaning-checklist-cape-town",
   "how-often-book-home-cleaning-cape-town",
@@ -129,7 +129,7 @@ const TOPIC_OVERRIDES: Partial<Record<string, BlogTopicFilterId[]>> = {
   "move-out-cleaning-guide": ["move-out"],
   "move-out-cleaning-checklist-cape-town": ["move-out"],
   "deep-vs-standard-cleaning-cape-town": ["deep-cleaning", "pricing"],
-  "deep-cleaning-vs-regular-cleaning-cape-town": ["deep-cleaning", "pricing"],
+  "deep-cleaning-vs-regular-cleaning": ["deep-cleaning", "pricing"],
   "how-much-does-cleaning-cost-cape-town-2026": ["pricing"],
 };
 
@@ -195,7 +195,7 @@ const BENEFIT_EXCERPT_BY_SLUG: Partial<Record<string, string>> = {
     "Protect your deposit: move-out scope aligned with inspections—kitchens, wet rooms, and final walk-throughs for Cape Town rentals.",
   "deep-vs-standard-cleaning-cape-town":
     "Pick the right service tier before you pay: where deep cleaning earns its minutes vs standard upkeep.",
-  "deep-cleaning-vs-regular-cleaning-cape-town":
+  "deep-cleaning-vs-regular-cleaning":
     "Pick the right service tier before you pay: where deep cleaning earns its minutes vs standard upkeep.",
   "how-much-does-cleaning-cost-cape-town-2026":
     "Why quotes vary: rooms, tier, condition, and scope—so you can read totals fairly. Live from-prices sit on the cleaning prices hub.",
