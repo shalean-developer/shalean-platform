@@ -1,5 +1,8 @@
 import "server-only";
 
+import { loadCashFlowForecast } from "./loadCashFlowForecast";
+import type { CashFlowForecast } from "./cashFlowForecast";
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sumApprovedExpensesInRange } from "@/lib/admin/expenses/loadExpenses";
 import {
@@ -26,6 +29,7 @@ export type CashFlowDashboardPayload = {
     net_cash_flow_cents: number;
     cash_runway_days: number | null;
   };
+  forecast: CashFlowForecast;
   daily_position: Array<{
     date: string;
     cash_in_cents: number;
@@ -94,28 +98,7 @@ export async function loadCashFlowDashboard(
     .gte("settlement_date", from)
     .lte("settlement_date", to);
 
-  const { data: pendingInvoices } = await admin
-    .from("monthly_invoices")
-    .select("balance_cents")
-    .in("status", ["sent", "partially_paid", "overdue"]);
-
-  const expectedIncome = (pendingInvoices ?? []).reduce((s, r) => s + (r.balance_cents ?? 0), 0);
-
-  const { data: pendingPayouts } = await admin
-    .from("cleaner_payouts")
-    .select("total_amount_cents")
-    .in("status", ["pending", "frozen", "approved"]);
-
-  const { data: pendingRecurring } = await admin
-    .from("recurring_expenses")
-    .select("amount_cents")
-    .eq("status", "active")
-    .gte("next_run_date", from)
-    .lte("next_run_date", to);
-
-  const expectedExpenses =
-    (pendingPayouts ?? []).reduce((s, r) => s + (r.total_amount_cents ?? 0), 0) +
-    (pendingRecurring ?? []).reduce((s, r) => s + (r.amount_cents ?? 0), 0);
+  const forecast = await loadCashFlowForecast(admin, from, to);
 
   // Net cash flow is actual settled bank inflow less actual/approved outflow. Pending
   // Paystack settlements are shown separately and are not treated as cash received.
@@ -198,11 +181,12 @@ export async function loadCashFlowDashboard(
       cash_in_bank_cents: cashInBank,
       petty_cash_cents: pettyCash,
       paystack_in_transit_cents: settlementSummary.in_transit_cents,
-      expected_income_cents: expectedIncome,
-      expected_expenses_cents: expectedExpenses,
+      expected_income_cents: forecast.income_cents,
+      expected_expenses_cents: forecast.expenses_cents,
       net_cash_flow_cents: netCashFlow,
       cash_runway_days: cashRunwayDays,
     },
+    forecast,
     daily_position: dailyPosition,
     weekly_position: [...weeklyMap.entries()]
       .sort(([a], [b]) => a.localeCompare(b))

@@ -1,4 +1,5 @@
 import "server-only";
+import { configuredMonthlyPayoutDay, expectedPayoutDate } from "@/lib/admin/expenses/cashFlowForecast";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { notifyFinanceUsers } from "@/lib/admin/expenses/financeNotifications";
@@ -18,18 +19,6 @@ function johannesburgYmd(now: Date): string {
   return now.toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" });
 }
 
-function configuredPayoutDay(): number {
-  const raw = Number(process.env.SHALEAN_MONTHLY_PAYOUT_DAY);
-  if (Number.isFinite(raw) && raw >= 1 && raw <= 28) return Math.floor(raw);
-  return 5;
-}
-
-function payoutDateAfterPeriod(periodEnd: string): string {
-  const d = new Date(`${periodEnd}T12:00:00Z`);
-  d.setUTCMonth(d.getUTCMonth() + 1, configuredPayoutDay());
-  return d.toISOString().slice(0, 10);
-}
-
 function diffDays(fromYmd: string, toYmd: string): number {
   const from = Date.parse(`${fromYmd}T12:00:00Z`);
   const to = Date.parse(`${toYmd}T12:00:00Z`);
@@ -45,7 +34,7 @@ export async function runPayoutFundingGapAlert(
   now: Date = new Date(),
 ): Promise<PayoutFundingAlertResult> {
   const period = defaultOfficePayoutPeriodRange(now);
-  const payoutDate = payoutDateAfterPeriod(period.to);
+  const payoutDate = expectedPayoutDate(period.to, configuredMonthlyPayoutDay());
   const today = johannesburgYmd(now);
   const days = diffDays(today, payoutDate);
   const threshold = [14, 7, 3].includes(days) ? days : null;
