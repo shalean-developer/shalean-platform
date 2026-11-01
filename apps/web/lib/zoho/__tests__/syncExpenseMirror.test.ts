@@ -26,6 +26,22 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 describe('safe expense snapshot refresh', () => {
+  it('scopes a fully paginated provider superset before personal-status detail reads', async () => {
+    mocks.get.mockImplementation(async (path: string) => {
+      if (path.startsWith('/chartofaccounts?')) return {chartofaccounts:[{account_id:'1',account_name:'Fuel',account_type:'expense'}],page_context:{page:1,has_more_page:false}};
+      const page = Number(new URL('https://example.com'+path).searchParams.get('page'));
+      return {expenses:page === 1 ? [{expense_id:'100',date:'2026-09-30'}, {expense_id:'101',date:'2026-10-01',account_id:'1',is_personal:false,total:100,currency_code:'ZAR'}] : [{expense_id:'102',date:'2026-11-01'}],page_context:{page,has_more_page:page===1}};
+    });
+    await syncExpenseMirror(db(), '2026-10-01', '2026-10-31');
+    expect((saved.records as {id:string}[]).map(r=>r.id)).toEqual(['101']);
+    expect(mocks.get.mock.calls.some(([path])=>path.includes('page=2'))).toBe(true);
+    expect(mocks.get.mock.calls.every(([path])=>!/^\/expenses\/\d+$/.test(path))).toBe(true);
+  });
+  it('retains the complete snapshot when a provider superset contains an invalid date', async () => {
+    mocks.get.mockImplementation(async (path: string) => path.startsWith('/chartofaccounts?') ? {chartofaccounts:[],page_context:{page:1,has_more_page:false}} : {expenses:[{expense_id:'100',date:'not-a-date'}],page_context:{page:1,has_more_page:false}});
+    await expect(syncExpenseMirror(db(), '2026-10-01', '2026-10-31')).rejects.toThrow();
+    expect(saved.records).toEqual([{id:'old'}]);
+  });
   it('hydrates personal status omitted from the list and excludes personal expenses', async () => {
     mocks.get.mockImplementation(async (path: string) => {
       if (path.startsWith('/chartofaccounts?')) return { chartofaccounts: [{account_id:'1',account_name:'Fuel',account_type:'expense'}], page_context:{page:1,has_more_page:false} };
