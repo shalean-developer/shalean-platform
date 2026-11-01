@@ -11,12 +11,13 @@ import { resolveLegacyMarketingExactRedirect } from "@/lib/seo/legacyMarketingRe
 import { isSeoRebuildGonePath } from "@/lib/seo/seoRebuildPhase1";
 import { CAPE_TOWN_LOCATIONS, locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
 import { updateSession } from "@/lib/supabase/supabaseMiddleware";
+import { isNonProductionDeployment } from "@/lib/env/deploymentEnvironment";
 
 /** Aligns HTML `meta name="robots"` on transactional pages; `noimageindex` avoids Google Images surfacing page assets. */
 const X_ROBOTS_BLOCK = "noindex, nofollow, noimageindex";
 
 function shouldNoIndexEntireDeployment(): boolean {
-  if (process.env.NODE_ENV !== "production") return true;
+  if (isNonProductionDeployment() || process.env.NODE_ENV !== "production") return true;
   const v = process.env.VERCEL_ENV;
   return v === "preview" || v === "development";
 }
@@ -47,6 +48,8 @@ export async function proxy(request: NextRequest) {
   let response: NextResponse;
   try { response = await runProxy(request); }
   catch (err) { console.error("[proxy] fatal — passthrough", err); response = NextResponse.next(); }
+  // Apply after every return path, including redirects and a failed session refresh.
+  if (shouldNoIndexEntireDeployment()) response.headers.set("X-Robots-Tag", X_ROBOTS_BLOCK);
   if (request.nextUrl.pathname.startsWith("/blog/") && request.nextUrl.searchParams.has("preview")) {
     response.headers.set("Cache-Control", "private, no-store, max-age=0");
     response.headers.set("X-Robots-Tag", "noindex, nofollow");
