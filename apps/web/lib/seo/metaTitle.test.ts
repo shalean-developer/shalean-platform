@@ -88,6 +88,29 @@ describe("generateBlogArticleTitle", () => {
     expect(s.toLowerCase()).toContain("cape town");
     expect(s.length).toBeLessThanOrEqual(68);
   });
+  it("does not repeat location or brand in editorial titles", () => {
+    const headline = "Deep Cleaning vs Regular Cleaning | Cape Town Guide | Shalean";
+    const result = generateBlogArticleTitle({ headline, slugKey: "comparison" });
+    expect(result.match(/Cape Town/g)).toHaveLength(1);
+    expect(result.match(/Shalean/g)).toHaveLength(1);
+    expect(result).not.toContain("…");
+  });
+  it("preserves long complete headlines instead of publishing ellipses", () => {
+    const headline = "Deep Cleaning vs Regular Cleaning: What Is Included and Which Service Should You Book in Cape Town?";
+    expect(generateBlogArticleTitle({ headline, slugKey: "comparison" })).toBe(headline);
+  });
+  it("does not add an unverified current year", () => {
+    const result = generateBlogArticleTitle({ headline: "Cleaning checklist", slugKey: "checklist" });
+    expect(result).not.toMatch(/\b20\d{2}\b/);
+    expect(result).toContain("Shalean");
+  });
+  it("keeps the authored year and is idempotent", () => {
+    const input = { headline: "Cleaning Costs Cape Town (2026) | Shalean", slugKey: "cost", year: 2026 };
+    const result = generateBlogArticleTitle(input);
+    expect(result.match(/2026/g)).toHaveLength(1);
+    expect(generateBlogArticleTitle({ ...input, headline: result })).toBe(result);
+  });
+
 });
 
 describe("clipSerpTitle", () => {

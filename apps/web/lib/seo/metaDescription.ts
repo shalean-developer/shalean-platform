@@ -1,7 +1,3 @@
-const MIN_LEN = 120;
-const MAX_LEN = 160;
-const SHORT_PAD = " Book trusted cleaners online today.";
-
 /**
  * CTR phrases when no explicit `variant` is passed. Rotated deterministically — never `Math.random()`.
  */
@@ -95,7 +91,7 @@ export type GenerateMetaDescriptionArgs = {
 };
 
 /**
- * Keyword-led meta copy with **deterministic structural variation**, optional geo boost, then **120–160** clamp.
+ * Keyword-led meta copy with **deterministic structural variation**, optional geo boost, then whitespace normalization.
  */
 export function generateMetaDescription({
   service,
@@ -150,20 +146,20 @@ export function normalizeSchemaDescription(text: string): string {
   return text.trim().replace(/\s+/g, " ");
 }
 
-/** Enforces 120–160 chars for meta name="description" and matching OG/Twitter copy. */
+/**
+ * Normalize authored metadata without padding or cutting sentences to meet an
+ * arbitrary character quota. Google can choose its own display snippet.
+ * Keep the historical export name for existing callers.
+ */
 export function clampMetaDescription(text: string): string {
-  let s = text.trim().replace(/\s+/g, " ");
-  if (!s) {
-    s = generateMetaDescription({});
+  const normalized = text.trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    return "Compare Shalean cleaning services in Cape Town and see your price before booking online.";
   }
-
-  while (s.length < MIN_LEN) {
-    s = `${s}${SHORT_PAD}`.trim();
-  }
-
-  if (s.length > MAX_LEN) {
-    s = `${s.slice(0, MAX_LEN - 3).trimEnd()}...`;
-  }
-
-  return s;
+  // Repair consecutive copies of the old generated padding without changing
+  // unrelated authored sentences. This also makes repeated normalization safe.
+  return normalized.replace(
+    /(Book trusted cleaners online today\.)(?:\s+Book trusted cleaners online today\.)+/gi,
+    "$1",
+  );
 }

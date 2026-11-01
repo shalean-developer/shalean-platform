@@ -7,33 +7,41 @@ import {
 } from "./metaDescription";
 
 describe("clampMetaDescription", () => {
-  it("pads short strings to at least 120 chars", () => {
-    const s = clampMetaDescription("Short.");
-    expect(s.length).toBeGreaterThanOrEqual(120);
-    expect(s.length).toBeLessThanOrEqual(160);
+  it("preserves concise authored descriptions without padding", () => {
+    const copy = "Standard home cleaning between canopy dust seasons and busy school calendars.";
+    expect(clampMetaDescription(copy)).toBe(copy);
   });
-
-  it("truncates long strings to at most 160 chars", () => {
-    const long = "word ".repeat(80).trim();
-    const s = clampMetaDescription(long);
-    expect(s.length).toBeLessThanOrEqual(160);
-    expect(s.endsWith("...")).toBe(true);
+  it("repairs repeated live padding and remains idempotent", () => {
+    const lead = "Standard home cleaning between canopy dust seasons and busy school calendars.";
+    const pad = " Book trusted cleaners online today.";
+    expect(clampMetaDescription(lead + pad + pad)).toBe(lead + pad);
+    expect(clampMetaDescription(clampMetaDescription(lead + pad + pad))).toBe(lead + pad);
   });
-
-  it("normalizes whitespace and stays within bounds", () => {
-    const mid =
-      "Cleaning services in Sea Point, Cape Town. Trusted cleaners, upfront pricing, and easy online booking. Book today. Extra detail so the base string clears the minimum length.";
-    const s = clampMetaDescription(`  ${mid.replace(/\./g, ". ")}  `);
-    expect(s.length).toBeGreaterThanOrEqual(120);
-    expect(s.length).toBeLessThanOrEqual(160);
+  it("preserves full sentences beyond the old 160 character limit", () => {
+    const copy = "Deep cleaning vs regular cleaning explained: what each includes, standard cleaning vs deep cleaning on time and cost, which cleaning service you need, and how to prepare your home.";
+    expect(copy.length).toBeGreaterThan(160);
+    expect(clampMetaDescription(copy)).toBe(copy);
+  });
+  it("normalizes whitespace without changing wording", () => {
+    expect(clampMetaDescription("  Cleaning\n services  in Cape Town. ")).toBe("Cleaning services in Cape Town.");
+  });
+  it("has a complete empty-input fallback", () => {
+    const result = clampMetaDescription(" ");
+    expect(result).toContain("Cape Town");
+    expect(result).toMatch(/\.$/);
+    expect(clampMetaDescription(result)).toBe(result);
+  });
+  it("does not deduplicate unrelated authored sentences", () => {
+    const copy = "Check access. Compare your service. Check access.";
+    expect(clampMetaDescription(copy)).toBe(copy);
   });
 });
 
 describe("generateMetaDescription", () => {
-  it("returns copy already within 120–160 chars", () => {
+  it("returns complete copy without a clipped ending", () => {
     const s = generateMetaDescription({});
-    expect(s.length).toBeGreaterThanOrEqual(120);
-    expect(s.length).toBeLessThanOrEqual(160);
+    expect(s).toContain("Cape Town");
+    expect(s).not.toMatch(/(?:\.\.\.|…)$/);
   });
 
   it("is deterministic for the same inputs (no random hooks)", () => {
@@ -81,14 +89,14 @@ describe("pickCtrHookPhrase", () => {
 });
 
 describe("resolveBlogDbMetaDescription", () => {
-  it("uses meta when present and clamps", () => {
+  it("preserves authored meta when present", () => {
     const s = resolveBlogDbMetaDescription({
       metaTitle: "Test",
       title: "Test",
       metaDescription: "A".repeat(200),
       excerpt: null,
     });
-    expect(s.length).toBeLessThanOrEqual(160);
+    expect(s).toBe("A".repeat(200));
   });
 
   it("falls back to generator when meta and excerpt empty", () => {
@@ -97,7 +105,7 @@ describe("resolveBlogDbMetaDescription", () => {
       metaDescription: "",
       excerpt: "",
     });
-    expect(s.length).toBeGreaterThanOrEqual(120);
-    expect(s.length).toBeLessThanOrEqual(160);
+    expect(s).toContain("Cape Town");
+    expect(s).not.toMatch(/(?:\.\.\.|…)$/);
   });
 });
