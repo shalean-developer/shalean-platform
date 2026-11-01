@@ -1,0 +1,155 @@
+{
+  "gate": "CONDITIONAL PASS — owner acceptance of staging blog-data coverage limit required before production",
+  "date": "2026-11-01",
+  "scope": [
+    "SEO-A11Y-01",
+    "SEO-A11Y-02",
+    "SEO-PERF-02"
+  ],
+  "staging": {
+    "sha": "ecdf2b8ec5e1e949a48bf5cb79350e3556842c59",
+    "workflow": 41348334764,
+    "workflowConclusion": "success",
+    "artifactReleaseShaMatches": true,
+    "http": {
+      "gate": "CONDITIONAL PASS",
+      "coverage_limits": [
+        "Staging blog has no published posts: deployed card loading and featured preload unavailable; component SSR regression passes with article fixtures."
+      ],
+      "before": {
+        "sha": "ecdf2b8ec5e1e949a48bf5cb79350e3556842c59",
+        "safe": true
+      },
+      "after": {
+        "sha": "ecdf2b8ec5e1e949a48bf5cb79350e3556842c59",
+        "safe": true
+      },
+      "rows": [
+        {
+          "path": "/",
+          "status": 200,
+          "h1": 1,
+          "canonical": [
+            "https://pricing-test.shalean.co.za"
+          ],
+          "x_robots_tag": "noindex, nofollow, noimageindex",
+          "search_inputs": 2,
+          "search_disclosures": 1,
+          "image_policy": {},
+          "errors": []
+        },
+        {
+          "path": "/blog",
+          "status": 200,
+          "h1": 1,
+          "canonical": [
+            "https://pricing-test.shalean.co.za/blog"
+          ],
+          "x_robots_tag": "noindex, nofollow, noimageindex",
+          "search_inputs": 2,
+          "search_disclosures": 1,
+          "image_policy": {
+            "cards": 0,
+            "non_lazy_cards": 0,
+            "featured_preload": false
+          },
+          "errors": []
+        }
+      ]
+    }
+  },
+  "browser": {
+    "desktop": {
+      "viewport": [
+        1440,
+        900
+      ],
+      "open": {
+        "expanded": true,
+        "ariaHidden": false,
+        "visibility": "visible"
+      },
+      "escape": {
+        "expanded": false,
+        "ariaHidden": true,
+        "visibility": "hidden",
+        "opacity": "0",
+        "pointerStillOverTrigger": true,
+        "focus": "Services",
+        "path": "/"
+      }
+    },
+    "mobile": {
+      "viewport": [
+        390,
+        844
+      ],
+      "query": "Deep",
+      "result": "Deep Cleaning",
+      "escape": {
+        "drawerVisibility": "hidden",
+        "expanded": false,
+        "focus": "Open menu",
+        "queryRetainedOnReopen": true
+      },
+      "enterDestination": "/services/deep-cleaning-cape-town",
+      "h1": 1,
+      "documentWidth": 375
+    },
+    "responsive": {
+      "finalHomeAndService390NoOverflow": true,
+      "initialSameJSHomeBlogServiceLocationsPricingGuide390NoOverflow": true,
+      "initialService320And768NoOverflow": true
+    },
+    "console": {
+      "newAppErrorsObserved": false,
+      "baselineReact412Recurred": false,
+      "existingExtensionListenerErrorBeforeActivation": true
+    },
+    "desktopSearch": "Hidden by existing marketing template CSS; native semantics verified in initial HTML and behavior covered in component regression. No forced visibility or sign-out.",
+    "actualHandsetOrAssistiveTechnologyVerified": false
+  },
+  "ci": {
+    "sourceCSS": {
+      "web": 41347530017,
+      "migration": 41347530047,
+      "all": "PASS"
+    },
+    "candidate": {
+      "sha": "9bf4f21cf4adb5d8e65554b7d661468a8492e8d2",
+      "web": 41347542840,
+      "migration": 41347542752,
+      "rbac": 41347542786,
+      "preview": 41347542797,
+      "all": "PASS"
+    },
+    "focusedRegression": {
+      "tests": 8,
+      "passed": true
+    },
+    "sourceCriticalLocal": {
+      "tests": 1667,
+      "files": 147,
+      "passed": true
+    },
+    "candidateCriticalLocal": {
+      "tests": 1580,
+      "files": 139,
+      "passed": true
+    }
+  },
+  "coverageLimits": [
+    "Staging blog has zero published posts: card loading and featured preload cannot be verified in deployed staging HTML. Real BlogIndexPage SSR fixture regression verifies lazy cards and featured preload; production HTML mandatory before closure.",
+    "No current field CWV or fresh lab performance score; no speed/latency/ranking improvement claim."
+  ],
+  "production": {
+    "pr": 1021,
+    "head": "9bf4f21cf4adb5d8e65554b7d661468a8492e8d2",
+    "base": "05f0f2f5b557f6b10e5cad2db810fb732c1bd371",
+    "draft": true,
+    "merged": false,
+    "approval": "pending"
+  },
+  "rollback": "Bounded app-source revert through existing release path; no DB rollback needed.",
+  "closedTotal": 11
+}
