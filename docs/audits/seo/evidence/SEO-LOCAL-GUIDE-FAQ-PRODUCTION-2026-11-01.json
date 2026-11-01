@@ -1,0 +1,291 @@
+{
+  "gate": "PASS",
+  "before": {
+    "sha": "b8c4145903e3f938dffa89cfafe4bf181bcf2ef1",
+    "safe": true
+  },
+  "after": {
+    "sha": "b8c4145903e3f938dffa89cfafe4bf181bcf2ef1",
+    "safe": true
+  },
+  "pages": 24,
+  "rows": [
+    {
+      "path": "/blog/cleaning-prices-claremont-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/cleaning-prices-claremont-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/cleaning-prices-durbanville-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/cleaning-prices-durbanville-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/cleaning-prices-gardens-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/cleaning-prices-gardens-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/cleaning-prices-green-point-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/cleaning-prices-green-point-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/cleaning-prices-newlands-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/cleaning-prices-newlands-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/cleaning-prices-observatory-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/cleaning-prices-observatory-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/cleaning-prices-rondebosch-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/cleaning-prices-rondebosch-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/cleaning-prices-sea-point-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/cleaning-prices-sea-point-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/deep-cleaning-checklist-claremont-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/deep-cleaning-checklist-claremont-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/deep-cleaning-checklist-durbanville-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/deep-cleaning-checklist-durbanville-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/deep-cleaning-checklist-gardens-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/deep-cleaning-checklist-gardens-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/deep-cleaning-checklist-green-point-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/deep-cleaning-checklist-green-point-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/deep-cleaning-checklist-newlands-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/deep-cleaning-checklist-newlands-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/deep-cleaning-checklist-observatory-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/deep-cleaning-checklist-observatory-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/deep-cleaning-checklist-rondebosch-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/deep-cleaning-checklist-rondebosch-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/deep-cleaning-checklist-sea-point-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/deep-cleaning-checklist-sea-point-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/home-cleaning-frequency-claremont-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/home-cleaning-frequency-claremont-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/home-cleaning-frequency-durbanville-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/home-cleaning-frequency-durbanville-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/home-cleaning-frequency-gardens-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/home-cleaning-frequency-gardens-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/home-cleaning-frequency-green-point-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/home-cleaning-frequency-green-point-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/home-cleaning-frequency-newlands-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/home-cleaning-frequency-newlands-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/home-cleaning-frequency-observatory-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/home-cleaning-frequency-observatory-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/home-cleaning-frequency-rondebosch-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/home-cleaning-frequency-rondebosch-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    },
+    {
+      "path": "/blog/home-cleaning-frequency-sea-point-cape-town",
+      "status": 200,
+      "errors": [],
+      "faq_count": 4,
+      "canonical": [
+        "https://shalean.co.za/blog/home-cleaning-frequency-sea-point-cape-town"
+      ],
+      "h1": 1,
+      "x_robots_tag": ""
+    }
+  ],
+  "controls": {
+    "staging": {
+      "status": 200,
+      "x_robots_tag": "noindex, nofollow, noimageindex"
+    },
+    "booking": {
+      "status": 200,
+      "robots": "noindex, nofollow"
+    },
+    "pass": true
+  },
+  "deployment_run": 41339332610,
+  "artifact_sha": "b8c4145903e3f938dffa89cfafe4bf181bcf2ef1"
+}

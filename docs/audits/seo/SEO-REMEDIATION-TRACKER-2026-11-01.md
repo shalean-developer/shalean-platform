@@ -24,7 +24,7 @@ Source baseline: main `c1585c0ffcefbe698371c1f309a3ceaf4ab508ae`. Fresh branch `
 | SEO-INDEX-01 | 2 | Stored index inspection: 19 crawled not indexed, 3 discovered not indexed, 22 unknown, 4 historical 404 | Needs refreshed evidence | Fresh priority URL inspection, live status reconciliation and individually justified remediation; indexing is not guaranteed |
 | SEO-CONTENT-01 | 2 | Earlier 173-page similarity warning; current SiteGuru to-do count 68; live template overlap confirmed | Investigating | Per-cluster editorial/intent evidence and justified retain/differentiate/consolidate decisions; no bulk redirects from scores |
 | SEO-CONTENT-02 | 2 | Overlapping deep-versus-regular articles | Investigating | Query/content comparison and approved URL disposition; no proven cannibalisation yet |
-| SEO-CONTENT-04 | 2 | Misplaced coastal/blanket-price assumptions in 24 local pricing, frequency and checklist FAQs | Staging verified | Correct visible/schema FAQ copy, dates, CI, deployed staging and approved production reconciliation |
+| SEO-CONTENT-04 | 2 | Misplaced coastal/blanket-price assumptions in 24 local pricing, frequency and checklist FAQs | Closed | Correct visible/schema FAQ copy, dates, CI, deployed staging and approved production reconciliation |
 | SEO-CONTENT-03 | 2 | Weak commercial service-page search visibility | Queued | Intent mapping, verified service details/proof and a dated search/lead baseline |
 | SEO-LINK-01 | 3 | Seven reported orphan articles | Investigating | Confirm crawl reachability; relevant contextual links to retained pages; no redirects introduced |
 | SEO-PERF-01 | 4 | 37 sub-90 scores among 48 measured URLs | Queued | Representative mobile/desktop lab diagnosis plus real-user LCP/INP/CLS evidence; avoid treating score alone as CWV failure |
@@ -193,3 +193,12 @@ Existing blog canonical metadata regressions: 9 passed. Production candidate #10
 ## SEO-CONTENT-04 production release authorized — deploying
 
 Owner replied “yes” to the bounded production PR #1017 approval request. Rechecked unchanged head b4c4764da75ef663270fb00a983beb2f7e5acea5, base 2db35d354b49bf9f4dddc08b6a406635b453f868 and all four green final-head workflows. PR #1017 merged as b8c4145903e3f938dffa89cfafe4bf181bcf2ef1. Automatic production deployment and all-24 read-only reconciliation pending. SEO-CONTENT-04 remains Staging verified; total Closed remains 9. Wider indexing/similarity findings remain open.
+
+
+## SEO-CONTENT-04 production reconciliation and closure — PASS
+
+Owner explicitly replied “yes” to the bounded PR #1017 production release request. PR merged/deployed as b8c4145903e3f938dffa89cfafe4bf181bcf2ef1. Production bundle run 41339332610 PASS; deploy/production/release-sha.txt and live health match. Correct production DB identity/live payments, normal outbound configuration and healthy exact-SHA environment verified before and after.
+
+All 24 affected guides returned HTTP 200 with the exact corrected visible FAQ answers, matching four-question FAQPage schema, correct modification date, self-canonical, one H1 and public indexability. Zero acceptance errors. Booking remains noindex/nofollow, and the staging guide still returns noindex/nofollow/noimageindex. Evidence: docs/audits/seo/evidence/SEO-LOCAL-GUIDE-FAQ-PRODUCTION-2026-11-01.json.
+
+Closed: SEO-CONTENT-04. Total Closed: 10. This closes the bounded regional/blanket-price FAQ defect, not the wider similarity or indexing findings. No price configuration, booking/auth, CMS/database, financial, analytics, redirect, canonical or indexing-submission changes were made. Rollback: revert only this app-source slice through the release path, preserving earlier repairs. Next independently verified repair: contextual internal links to the seven orphan articles. Fresh Google inspection remains blocked by the GSC Wizard inactive subscription; SEO-INDEX-01 still Needs refreshed evidence and SEO-CONTENT-01/02 remain Investigating.
