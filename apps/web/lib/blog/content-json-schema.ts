@@ -201,9 +201,6 @@ export function parseBlogContentJson(value: unknown): BlogContentJson {
 
 export function safeParseBlogContentJson(
   value: unknown
-): z.SafeParseReturnType<unknown, BlogContentJson> {
-  return blogContentJsonSchema.safeParse(value) as z.SafeParseReturnType<
-    unknown,
-    BlogContentJson
-  >;
+): z.ZodSafeParseResult<BlogContentJson> {
+  return blogContentJsonSchema.safeParse(value) as z.ZodSafeParseResult<BlogContentJson>;
 }
