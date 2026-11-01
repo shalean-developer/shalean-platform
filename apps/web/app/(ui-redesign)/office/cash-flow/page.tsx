@@ -20,6 +20,7 @@ import {
   OfficeZohoSecondaryButton,
 } from "@/components/admin/office/OfficeZohoChrome";
 import { FinanceKpiCard } from "@/components/admin/finance/FinanceKpiCard";
+import { CashFlowForecastBreakdown, formatForecastZar } from "@/components/admin/finance/CashFlowForecastBreakdown";
 import { CashAccountBalanceEditor } from "@/components/admin/finance/CashAccountBalanceEditor";
 import { useAdminData } from "@/hooks/useAdminData";
 import type { CashFlowDashboardPayload } from "@/lib/admin/expenses/loadCashFlowDashboard";
@@ -54,6 +55,7 @@ export default function CashFlowPage() {
   } = useAdminData<CashSurvivalDashboardPayload>("/api/admin/cash-survival", { params });
 
   const s = data?.summary;
+  const forecastCurrent = !loading && !error && data?.period.from === from && data?.period.to === to;
   const dailyChart = (data?.daily_position ?? []).map((d) => ({
     date: d.date.slice(5),
     In: d.cash_in_cents / 100,
@@ -154,8 +156,8 @@ export default function CashFlowPage() {
         <FinanceKpiCard icon={ArrowDownLeft} label="Money paid" value={formatZar(s?.money_paid_cents ?? 0)} loading={loading} status="negative" />
         <FinanceKpiCard icon={Banknote} label="Cash in bank" value={formatZar(s?.cash_in_bank_cents ?? 0)} loading={loading} />
         <FinanceKpiCard icon={PiggyBank} label="Petty cash" value={formatZar(s?.petty_cash_cents ?? 0)} loading={loading} />
-        <FinanceKpiCard icon={TrendingUp} label="Expected income" value={formatZar(s?.expected_income_cents ?? 0)} loading={loading} status="positive" />
-        <FinanceKpiCard icon={Wallet} label="Expected expenses" value={formatZar(s?.expected_expenses_cents ?? 0)} loading={loading} status="warning" />
+        <FinanceKpiCard icon={TrendingUp} label="Expected income · selected period" value={!forecastCurrent ? "Unavailable" : formatForecastZar(s?.expected_income_cents ?? 0)} loading={loading} status="positive" />
+        <FinanceKpiCard icon={Wallet} label="Expected expenses · selected period" value={!forecastCurrent ? "Unavailable" : formatForecastZar(s?.expected_expenses_cents ?? 0)} loading={loading} status="warning" />
         <FinanceKpiCard
           icon={TrendingUp}
           label="Net cash flow"
@@ -170,6 +172,8 @@ export default function CashFlowPage() {
           loading={loading}
         />
       </div>
+
+      {forecastCurrent && data?.forecast ? <CashFlowForecastBreakdown forecast={data.forecast} from={data.period.from} to={data.period.to} /> : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
