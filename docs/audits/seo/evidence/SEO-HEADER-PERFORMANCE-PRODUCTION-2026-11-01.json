@@ -1,0 +1,164 @@
+{
+  "gate": "PASS",
+  "date": "2026-11-01",
+  "authorization": {
+    "ownerReply": "Aprroved",
+    "pr": 1021,
+    "scope": [
+      "SEO-A11Y-01",
+      "SEO-A11Y-02",
+      "SEO-PERF-02"
+    ],
+    "stagingBlogCoverageGapAccepted": true
+  },
+  "release": {
+    "candidate": "9bf4f21cf4adb5d8e65554b7d661468a8492e8d2",
+    "mergedSha": "3e6659aa596959916df266895214a1429e327137",
+    "workflow": 41349191923,
+    "workflowConclusion": "success",
+    "artifactReleaseShaMatches": true
+  },
+  "http": {
+    "gate": "PASS",
+    "before": {
+      "sha": "3e6659aa596959916df266895214a1429e327137",
+      "safe": true
+    },
+    "after": {
+      "sha": "3e6659aa596959916df266895214a1429e327137",
+      "safe": true
+    },
+    "rows": [
+      {
+        "path": "/",
+        "status": 200,
+        "h1": 1,
+        "canonical": [
+          "https://shalean.co.za"
+        ],
+        "x_robots_tag": "",
+        "search_inputs": 2,
+        "search_disclosures": 1,
+        "image_policy": {},
+        "errors": []
+      },
+      {
+        "path": "/blog",
+        "status": 200,
+        "h1": 1,
+        "canonical": [
+          "https://shalean.co.za/blog"
+        ],
+        "x_robots_tag": "",
+        "search_inputs": 2,
+        "search_disclosures": 1,
+        "image_policy": {
+          "cards": 87,
+          "non_lazy_cards": 0,
+          "featured_preload": true
+        },
+        "errors": []
+      }
+    ]
+  },
+  "controls": {
+    "controls": [
+      {
+        "url": "https://shalean.co.za/book",
+        "status": 200,
+        "robots": "noindex, nofollow",
+        "x_robots_tag": "",
+        "pass": true
+      },
+      {
+        "url": "https://pricing-test.shalean.co.za/locations",
+        "status": 200,
+        "robots": "index, follow",
+        "x_robots_tag": "noindex, nofollow, noimageindex",
+        "pass": true
+      }
+    ],
+    "health_after_browser": {
+      "sha": "3e6659aa596959916df266895214a1429e327137",
+      "safe": true
+    },
+    "gate": "PASS"
+  },
+  "browser": {
+    "desktop": {
+      "viewport": [
+        1440,
+        900
+      ],
+      "servicesOpens": true,
+      "repeatOpenEscapeCyclePassed": true,
+      "escape": {
+        "expanded": false,
+        "ariaHidden": true,
+        "visibility": "hidden",
+        "opacity": "0",
+        "pointerStillOverTrigger": true,
+        "focus": "Services",
+        "path": "/"
+      },
+      "h1": 1,
+      "documentWidth": 1425
+    },
+    "mobile": {
+      "viewport": [
+        390,
+        844
+      ],
+      "deepFilterFoundCorrectService": true,
+      "escape": {
+        "drawerVisibility": "hidden",
+        "expanded": false,
+        "focus": "Open menu"
+      },
+      "queryRetainedOnReopen": "Deep",
+      "enterDestination": "/services/deep-cleaning-cape-town",
+      "homeH1": 1,
+      "homeWidth": 375,
+      "blogH1": 1,
+      "blogWidth": 375,
+      "blogCards": 87,
+      "nonLazyCards": 0
+    },
+    "consoleErrorsOrWarningsObserved": [],
+    "viewportReset": true,
+    "observation": "One initial Services click shortly after navigation produced no state change; one later direct retry and subsequent open/Escape cycle passed with no console errors. Cause not established; retain as observation under broader performance monitoring, no timing/hydration cause asserted.",
+    "desktopSearch": "Existing marketing CSS hides desktop widget; valid input/disclosure semantics verified in served HTML and behavior covered by seven component interaction tests; mobile behavior browser-verified."
+  },
+  "coverage": {
+    "stagingBlogDataGapResolvedByProductionHTMLAndDOM": true,
+    "blogCardImages": 87,
+    "nonLazyCardImages": 0,
+    "featuredPreloadRetained": true,
+    "baselineFiveOffscreenEagerCardsRemoved": true,
+    "actualHandsetOrAssistiveTechnologyVerified": false,
+    "currentFieldCWVOrFreshLabScoreAvailable": false
+  },
+  "validation": {
+    "finalCandidateWorkflows": [
+      41347542840,
+      41347542752,
+      41347542786,
+      41347542797
+    ],
+    "allPassed": true,
+    "focusedTests": 8,
+    "sourceCriticalLocal": 1667,
+    "candidateCriticalLocal": 1580,
+    "typecheckAndLintPassed": true
+  },
+  "closure": {
+    "closed": [
+      "SEO-A11Y-01",
+      "SEO-A11Y-02",
+      "SEO-PERF-02"
+    ],
+    "closedTotal": 14,
+    "broaderFindingsRemainOpen": true
+  },
+  "rollback": "Bounded app-source revert through existing production release path; no DB rollback required."
+}

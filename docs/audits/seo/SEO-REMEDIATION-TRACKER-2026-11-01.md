@@ -28,14 +28,14 @@ Source baseline: main `c1585c0ffcefbe698371c1f309a3ceaf4ab508ae`. Fresh branch `
 | SEO-CONTENT-03 | 2 | Weak commercial service-page search visibility | Queued | Intent mapping, verified service details/proof and a dated search/lead baseline |
 | SEO-LINK-01 | 3 | Seven reported orphan articles | Closed | Confirm crawl reachability; relevant contextual links to retained pages; no redirects introduced |
 | SEO-PERF-01 | 4 | Historical 37/48 sub-90 scores; current stored report 9/40 below 90, device/date absent | Investigating | Fresh controlled lab/field diagnosis; PSI daily quota and GSC Wizard inactive plan limit current measurement |
-| SEO-PERF-02 | 4 | Blog index eagerly loads five offscreen card images below its featured content | CI verified | Defer card loading while retaining featured preload, complete content/links and rendered layout; deployed verification |
+| SEO-PERF-02 | 4 | Blog index eagerly loads five offscreen card images below its featured content | Closed | Defer card loading while retaining featured preload, complete content/links and rendered layout; deployed verification |
 | SEO-LOCAL-01 | 5 | Local Business hours/entity facts, GBP and citations not fully verified | Queued | Verified business facts, schema parity and GBP/citation review |
 | SEO-AUTHORITY-01 | 5 | September snapshot: 224 broken backlinks / 3 destinations | Needs refreshed evidence | Fresh source/destination checks before any recovery redirects |
 | SEO-MEASURE-01 | 5 | GA sessions −85.7% while GSC clicks −0.5% | Queued | Tracking/channel/deployment/consent reconciliation; not assumed SEO collapse |
 | SEO-MEASURE-02 | 5 | Organic enquiry → booking → payment attribution unverified | Queued | Reconcile events and actual funnel evidence without creating financial entries |
 | SEO-SCHEMA-01 | 5 | Schema presence checked, full correctness/eligibility pending | Queued | Representative validation and visible-content parity; no unsupported review/FAQ benefit claims |
-| SEO-A11Y-01 | 4 | Existing SiteHeader search input reports aria-expanded unsupported for implicit textbox role | Staging verified | Verify intended search-widget semantics and keyboard behavior; correct ARIA without changing navigation |
-| SEO-A11Y-02 | 4 | Escape does not dismiss desktop Services/mobile drawer or restore panel focus | Staging verified | Escape closes disclosures, restores relevant focus, preserves outside focus/query and existing navigation; browser proof |
+| SEO-A11Y-01 | 4 | Existing SiteHeader search input reports aria-expanded unsupported for implicit textbox role | Closed | Verify intended search-widget semantics and keyboard behavior; correct ARIA without changing navigation |
+| SEO-A11Y-02 | 4 | Escape does not dismiss desktop Services/mobile drawer or restore panel focus | Closed | Escape closes disclosures, restores relevant focus, preserves outside focus/query and existing navigation; browser proof |
 | SEO-MOBILE-01 | 4 | Actual phone accessibility/rendering audit outstanding | Investigating | Real rendered mobile behavior, navigation, focus, headings and overflow evidence |
 
 ## Qualified or rejected automated warnings
@@ -290,3 +290,16 @@ Evidence: docs/audits/seo/evidence/SEO-HEADER-PERFORMANCE-STAGING-FINAL-2026-11-
 ## Header accessibility and blog loading — production authorized and deploying
 
 Owner replied “Aprroved” to the explicit PR #1021 production request, including the disclosed empty-staging-blog coverage gap. Rechecked all four candidate final-head workflows PASS, unchanged candidate9bf4f21cf4adb5d8e65554b7d661468a8492e8d2 and production base05f0f2f5b557f6b10e5cad2db810fb732c1bd371. PR #1021 marked ready and merged as3e6659aa596959916df266895214a1429e327137. Automatic production workflow41349191923 running. Verify exact artifact/live SHA, safe production environment, served blog card/preload policy and browser Escape/focus/hover before closing. Three findings remain open; total Closed11. No new scope or data writes authorized by this release.
+
+
+## Header accessibility and blog loading — production reconciliation and closure — PASS
+
+Owner replied “Aprroved” to PR #1021 including the disclosed staging blog-data coverage limit. Approved candidate9bf4f21cf4adb5d8e65554b7d661468a8492e8d2 merged/deployed as3e6659aa596959916df266895214a1429e327137. Automatic production workflow41349191923 PASS; deploy/production release-sha.txt and exact live SHA match. Correct production database identity, live payment modes, normal outbound configuration, no issues and healthy environment verified before/after HTTP checks and again after browser verification.
+
+Production / and /blog returned200 with one H1, appropriate self-canonical, public indexability and corrected native search/disclosure semantics. All87 blog card image instances are loading=lazy, zero non-lazy cards; featured image preload retained. Connected browser DOM independently confirms87/0. The staging empty-blog coverage gap is now resolved in production. This removes five verified offscreen eager cards from baseline; no current speed/latency/CWV/ranking improvement is inferred.
+
+Browser at1440x900: Services opens; Escape from Deep Cleaning returns focus to Services, expanded=false/aria-hidden=true, computed visibility=hidden/opacity=0 while pointer STILL over trigger; repeated open/Escape cycle passed. Public screenshot confirms. At390x844: Deep filter selects correct service; Escape hides drawer, returns focus to Open menu, preserves Deep on reopen; Enter navigates to /services/deep-cleaning-cape-town. Home/blog one H1, document375 within390. Console errors/warnings empty during observed session; viewport reset. One initial click soon after navigation had no state change, later direct retry and repeat cycle passed without errors; cause not established and observation retained for wider performance monitoring. Desktop field remains hidden by existing marketing CSS; semantics served-HTML verified and behavior component-tested. Actual phone/AT/CWV remain unverified.
+
+Exclusion controls: production /book200 retains meta noindex,nofollow; staging /locations200 retains X-Robots-Tag noindex,nofollow,noimageindex. Public production pages remain indexable. No content/prices, booking/auth logic, CMS/database/financial records, routes/canonical/robots/sitemap, analytics or indexing submissions changed. Rollback: bounded app-source revert through existing release path, preserving earlier repairs; no DB rollback required.
+
+Closed: SEO-A11Y-01, SEO-A11Y-02, SEO-PERF-02. Total Closed14. Broader SEO-PERF-01/MOBILE-01, indexing/content, local/authority/schema/measurement findings remain open. Evidence: docs/audits/seo/evidence/SEO-HEADER-PERFORMANCE-PRODUCTION-2026-11-01.json and SEO-HEADER-PERFORMANCE-PRODUCTION-2026-11-01.jpg. Earlier failed visual gate and baseline screenshot retained; no independent reviewer claimed.
