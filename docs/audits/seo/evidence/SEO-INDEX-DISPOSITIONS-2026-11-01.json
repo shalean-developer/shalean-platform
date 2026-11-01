@@ -1,0 +1,2822 @@
+{
+  "date": "2026-11-01",
+  "sources": "SiteGuru 206-row stored report + fresh 110 URL HTTP sample + live sitemap194; not a fresh Google inspection of every URL",
+  "rows": [
+    {
+      "url": "https://shalean.co.za/",
+      "title": "Cleaning Services Cape Town from R250 | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/services",
+      "title": "Compare Cleaning Services in Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/services/standard-cleaning-cape-town",
+      "title": "Regular Cleaning in Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/services/standard-cleaning-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/services/deep-cleaning-cape-town",
+      "title": "Deep Cleaning Services in Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/services/deep-cleaning-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/services/move-out-cleaning-cape-town",
+      "title": "Move-out cleaning service in Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/services/move-out-cleaning-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/services/office-cleaning-cape-town",
+      "title": "Office cleaning service in Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/services/office-cleaning-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/services/airbnb-cleaning-cape-town",
+      "title": "Airbnb turnover cleaning service in Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/services/airbnb-cleaning-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/services/carpet-cleaning-cape-town",
+      "title": "Carpet Cleaning Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/services/carpet-cleaning-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/cleaning-prices-cape-town",
+      "title": "Cleaning Prices Cape Town (2026) | House, Deep & Move-Out Costs",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/cleaning-prices-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/services/window-cleaning-cape-town",
+      "title": "Window cleaning service in Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/services/window-cleaning-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/contact",
+      "title": "Contact Shalean | Cape Town Cleaning Support",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/about",
+      "title": "About Shalean | Trusted Home Cleaning Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog",
+      "title": "Cleaning Guides | Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/faq",
+      "title": "Cleaning FAQs Cape Town | Pricing & Booking | Shalean",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/faq",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/reviews",
+      "title": "Customer Reviews | Shalean Cleaning Services Cape Town",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/reviews",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/quote",
+      "title": "Free Cleaning Quote Cape Town | Shalean Cleaning Services",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/privacy-policy",
+      "title": "Privacy Policy | Shalean Cleaning Services",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/terms-of-service",
+      "title": "Terms of Service | Shalean Cleaning Services",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/cleaner/apply",
+      "title": "Apply as a Cleaner | Shalean Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations",
+      "title": "Cleaning Services Across Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/claremont-cleaning-services",
+      "title": "Home Cleaning Services Near You in Claremont, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/wynberg-cleaning-services",
+      "title": "Home Cleaning Services in Wynberg, Cape Town | Near You | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/rondebosch-cleaning-services",
+      "title": "Home Cleaning Services Near You | Rondebosch, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/locations/rondebosch-cleaning-services",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/kenilworth-cleaning-services",
+      "title": "Home Cleaning Services Near You | Kenilworth, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/observatory-cleaning-services",
+      "title": "Home Cleaning Services in Observatory, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/newlands-cleaning-services",
+      "title": "Home Cleaning Services Near You | Newlands, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/rosebank-cleaning-services",
+      "title": "Home Cleaning Services Near You | Rosebank, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/sea-point-cleaning-services",
+      "title": "Cleaning Services Sea Point Cape Town | From R250 | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/green-point-cleaning-services",
+      "title": "Home Cleaning Services in Green Point, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/locations/green-point-cleaning-services",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/woodstock-cleaning-services",
+      "title": "Home Cleaning Services Near You in Woodstock, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/gardens-cleaning-services",
+      "title": "Home Cleaning Services in Gardens, Cape Town | Near You | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/plumstead-cleaning-services",
+      "title": "Home Cleaning Services Near You in Plumstead, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/bergvliet-cleaning-services",
+      "title": "Home Cleaning Services Near You | Bergvliet, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/fresnaye-cleaning-services",
+      "title": "Home Cleaning Services Near You in Fresnaye, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/bantry-bay-cleaning-services",
+      "title": "Home Cleaning Services Near You | Bantry Bay, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/locations/bantry-bay-cleaning-services",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/locations/camps-bay-cleaning-services",
+      "title": "Home Cleaning Services Near You | Camps Bay, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/tamboerskloof-cleaning-services",
+      "title": "Home Cleaning Services in Tamboerskloof, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/locations/tamboerskloof-cleaning-services",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/locations/vredehoek-cleaning-services",
+      "title": "Home Cleaning Services Near You in Vredehoek, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/locations/vredehoek-cleaning-services",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/locations/zonnebloem-cleaning-services",
+      "title": "Home Cleaning Services Near You | Zonnebloem, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/constantia-cleaning-services",
+      "title": "Home Cleaning Services Near You | Constantia, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/locations/constantia-cleaning-services",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/locations/table-view-cleaning-services",
+      "title": "Home Cleaning Services Near You | Table View, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/locations/table-view-cleaning-services",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/durbanville-cleaning-services",
+      "title": "Home Cleaning Services in Durbanville, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/bellville-cleaning-services",
+      "title": "Home Cleaning Services Near You | Bellville, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/locations/bellville-cleaning-services",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/locations/bishopscourt-cleaning-services",
+      "title": "Home Cleaning Services in Bishopscourt, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/locations/bishopscourt-cleaning-services",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/locations/diep-river-cleaning-services",
+      "title": "Home Cleaning Services Near You | Diep River, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/harfield-village-cleaning-services",
+      "title": "Home Cleaning Services in Harfield Village, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/meadowridge-cleaning-services",
+      "title": "Home Cleaning Services in Meadowridge, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/tokai-cleaning-services",
+      "title": "Home Cleaning Services Near You | Tokai, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/pinelands-cleaning-services",
+      "title": "Home Cleaning Services Near You | Pinelands, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/mowbray-cleaning-services",
+      "title": "Home Cleaning Services Near You | Mowbray, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/rondebosch-east-cleaning-services",
+      "title": "Home Cleaning Services in Rondebosch East, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/locations/rondebosch-east-cleaning-services",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/southfield-cleaning-services",
+      "title": "Home Cleaning Services Near You | Southfield, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/heathfield-cleaning-services",
+      "title": "Home Cleaning Services Near You | Heathfield, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/hout-bay-cleaning-services",
+      "title": "Home Cleaning Services Near You | Hout Bay, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/clifton-cleaning-services",
+      "title": "Home Cleaning Services Near You in Clifton, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/mouille-point-cleaning-services",
+      "title": "Home Cleaning Services in Mouille Point, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/three-anchor-bay-cleaning-services",
+      "title": "Home Cleaning Services in Three Anchor Bay, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/oranjezicht-cleaning-services",
+      "title": "Home Cleaning Services in Oranjezicht, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/de-waterkant-cleaning-services",
+      "title": "Home Cleaning Services in De Waterkant, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/century-city-cleaning-services",
+      "title": "Home Cleaning Services in Century City, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/milnerton-cleaning-services",
+      "title": "Home Cleaning Services Near You | Milnerton, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/bloubergstrand-cleaning-services",
+      "title": "Home Cleaning Services in Bloubergstrand, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/locations/bloubergstrand-cleaning-services",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/locations/goodwood-cleaning-services",
+      "title": "Home Cleaning Services Near You | Goodwood, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/bathroom-mould-tiles-grout",
+      "title": "Bathroom Mould on Tiles and Grout: Cleaning Guide | Shalean",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/bathroom-mould-tiles-grout",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/cleaning-mistakes-cape-town-homeowners",
+      "title": "10 Cleaning Mistakes Cape Town Homeowners Make | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/office-cleaning-cost-cape-town",
+      "title": "Office Cleaning Cost Cape Town: 2026 Guide | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/professional-carpet-cleaning-vs-rental-machine",
+      "title": "Professional Carpet Cleaning vs Rental Machine | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/spring-cleaning-checklist-cape-town",
+      "title": "Spring Cleaning Checklist for Cape Town Homes | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/window-cleaning-cost-cape-town",
+      "title": "Window Cleaning Cost Cape Town: Quote Factors | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/how-often-should-office-be-professionally-cleaned",
+      "title": "How Often Should an Office Be Cleaned? | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/professional-cleaning-landlords-between-tenants",
+      "title": "Between-Tenant Cleaning for Cape Town Landlords | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/how-often-professionally-clean-carpets",
+      "title": "How Often Should Carpets Be Professionally Cleaned? | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/one-cleaner-or-cleaning-team",
+      "title": "One Cleaner or a Cleaning Team? | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/cleaning-home-before-new-baby",
+      "title": "Cleaning Your Home Before a New Baby Arrives | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/apartment-cleaning-services-cape-town",
+      "title": "Apartment Cleaning Services Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/how-to-evaluate-cleaning-company-reviews-cape-town",
+      "title": "Cleaning Company Reviews Cape Town: How to Choose | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/types-of-window-cleaning-services-cape-town",
+      "title": "Window Cleaning Services Cape Town: Types & Scope | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/cleaner-jobs-cape-town-application-guide",
+      "title": "Cleaner Jobs Cape Town: Application Guide | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/speed-cleaning-routine",
+      "title": "Safe Speed-Cleaning Routine for Busy Homes | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/speed-cleaning-routine",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/floor-cleaning-care-guide",
+      "title": "Floor Cleaning and Care Guide | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/women-owned-cleaning-services-cape-town",
+      "title": "Women-Owned Cleaning Services in Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/women-owned-cleaning-services-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/deep-clean-kitchen-guide",
+      "title": "How to Deep Clean a Kitchen Safely | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/winter-cleaning-guide-cape-town",
+      "title": "Winter Cleaning Guide for Cape Town Homes | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/customised-cleaning-plan-guide",
+      "title": "Customised Cleaning Plans: Practical Guide | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/office-cleaning-guide-cape-town",
+      "title": "Office Cleaning Guide Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/family-cleaning-routine",
+      "title": "Practical Family Cleaning Routine | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/cleaning-services-for-pensioners-cape-town",
+      "title": "Cleaning Services for Pensioners Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-services-for-pensioners-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/sustainable-cleaning-practices-cape-town",
+      "title": "Sustainable Cleaning Practices Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/window-and-mirror-cleaning-tips",
+      "title": "Window and Mirror Cleaning Tips | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/window-and-mirror-cleaning-tips",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/weekly-house-cleaning-checklist",
+      "title": "Weekly House Cleaning Checklist | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/weekly-house-cleaning-checklist",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/maintain-home-between-professional-cleans",
+      "title": "Maintain Your Home Between Professional Cleans | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/deep-cleaning-appliances-guide",
+      "title": "Deep Cleaning Household Appliances Guide | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/cleaning-and-indoor-air-quality",
+      "title": "Cleaning and Indoor Air Quality Guide | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/mattress-cleaning-care-guide",
+      "title": "Mattress Cleaning and Care Guide | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/carpet-cleaning-step-by-step-guide",
+      "title": "Carpet Cleaning and Maintenance Guide | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/carpet-cleaning-step-by-step-guide",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/safe-kitchen-cleaning-hygiene",
+      "title": "Safe Kitchen Cleaning and Hygiene Guide | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/pet-friendly-cleaning-tips",
+      "title": "Pet-Friendly Cleaning Tips for Your Home | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/monthly-cleaning-checklist",
+      "title": "Monthly Home Cleaning Checklist | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/upholstery-cleaning-care-guide",
+      "title": "Upholstery Cleaning and Care Guide | Shalean | Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/pricing-guide-house-cleaning-cape-town",
+      "title": "Cleaning prices Cape Town | cost breakdown | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/pricing-guide-house-cleaning-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/how-much-house-cleaning-costs-cape-town",
+      "title": "How much does house cleaning cost Cape Town? | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/how-much-house-cleaning-costs-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/book-home-cleaning-online-cape-town-checklist",
+      "title": "Book home cleaning online Cape Town | checklist | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/book-home-cleaning-online-cape-town-checklist",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/deep-cleaning-vs-standard-cleaning-cape-town-choice",
+      "title": "Deep cleaning vs standard cleaning Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/what-affects-cleaning-quotes-cape-town",
+      "title": "What affects cleaning quotes Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/what-affects-cleaning-quotes-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/carpet-cleaning-cost-cape-town",
+      "title": "Carpet Cleaning Cost Cape Town: Pricing Factors | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/professional-deep-cleaning-cape-town",
+      "title": "Professional Deep Cleaning Services Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/professional-deep-cleaning-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/how-to-choose-cleaning-service-cape-town",
+      "title": "How to Choose a Cleaning Service in Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/what-is-deep-cleaning",
+      "title": "What Is Deep Cleaning? Cape Town Home Guide | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/what-is-deep-cleaning",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/deep-cleaning-vs-regular-cleaning",
+      "title": "Deep Cleaning vs Regular Cleaning | Cape Town Guide | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-vs-regular-cleaning",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/house-cleaning-cost-south-africa",
+      "title": "House Cleaning Cost South Africa: Pricing Guide | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/what-to-expect-professional-cleaning-service",
+      "title": "What to Expect from Professional Cleaning | Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/essential-cleaning-tools",
+      "title": "10 Essential Cleaning Tools for Every Home | Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/essential-cleaning-tools",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/best-natural-cleaning-products",
+      "title": "Best Natural Cleaning Products: Practical Safety Guide | Shalean",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/best-natural-cleaning-products",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/airbnb-host-vs-regular-cleaning-cape-town",
+      "title": "Airbnb cleaning vs regular cleaning Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/airbnb-host-vs-regular-cleaning-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/cleaning-services-cost-cape-town",
+      "title": "Cost of Cleaning Services in Cape Town: 2026 Price Guide | Shalean",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-services-cost-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/last-minute-cleaning-cape-town-rescue-plan",
+      "title": "Last minute cleaning Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/last-minute-cleaning-cape-town-rescue-plan",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/move-out-cleaning-checklist-tenants-cape-town",
+      "title": "Move out cleaning checklist Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-checklist-tenants-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/prepare-home-professional-cleaning-cape-town",
+      "title": "Prepare home for cleaner Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/prepare-home-professional-cleaning-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/how-often-book-home-cleaning-cape-town",
+      "title": "How often book home cleaning Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/how-often-book-home-cleaning-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/how-often-should-you-deep-clean-your-home-cape-town",
+      "title": "How Often to Deep Clean Your Home | Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/move-out-cleaning-checklist-cape-town-tenants",
+      "title": "Move-Out Cleaning Checklist | Cape Town Tenants | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/why-home-still-feels-dirty-after-cleaning-cape-town",
+      "title": "Still Feels Dirty After Cleaning? | Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/why-home-still-feels-dirty-after-cleaning-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/what-professional-cleaners-can-and-cannot-do-cape-town",
+      "title": "What Cleaners Can & Cannot Do | Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/how-to-prepare-home-before-cleaner-arrives-cape-town",
+      "title": "Prepare Your Home Before a Cleaner Arrives | Shalean Cape Town",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/once-off-vs-recurring-cleaning-cape-town",
+      "title": "Once-Off vs Recurring Cleaning Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/how-long-does-house-cleaning-take-cape-town",
+      "title": "How Long Does House Cleaning Take? Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/whats-included-in-deep-cleaning-cape-town",
+      "title": "What's Included in a Deep Clean? Cape Town Checklist | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/same-day-cleaning-cape-town",
+      "title": "Same-Day Cleaning Cape Town: How It Works | Shalean",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/same-day-cleaning-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/deep-vs-standard-cleaning-which-to-book-cape-town",
+      "title": "Deep vs Standard Cleaning Cape Town: Which to Book? | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/how-often-deep-clean-home-cape-town",
+      "title": "How Often Should You Deep Clean Your Home? (Cape Town Guide)",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/how-often-deep-clean-home-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/move-out-cleaning-checklist-cape-town",
+      "title": "Complete Move-Out Cleaning Checklist (Cape Town Guide) | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-checklist-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/weekly-cleaning-routine-busy-professionals-cape-town",
+      "title": "Weekly Cleaning Routine for Busy Professionals (Cape Town Guide)",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/cleaning-mistakes-that-make-your-home-dirtier-cape-town",
+      "title": "10 Cleaning Mistakes That Make Your Home Dirtier (And How to Fix Them)",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": null,
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/what-does-professional-cleaner-do-cape-town",
+      "title": "What Does a Professional Cleaner Actually Do? (Cape Town Guide)",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/what-does-professional-cleaner-do-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/how-much-does-cleaning-cost-cape-town-2026",
+      "title": "How Much Does Cleaning Cost in Cape Town? Why Quotes Vary (2026)",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/how-much-does-cleaning-cost-cape-town-2026",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/is-it-worth-hiring-cleaner-cape-town",
+      "title": "Is It Worth Hiring a Cleaner? (Cape Town Guide) | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/is-it-worth-hiring-cleaner-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/deep-cleaning-vs-regular-cleaning-cape-town",
+      "title": "Deep Cleaning vs Regular Cleaning: What's the Difference? (Cape Town Guide)",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-vs-regular-cleaning-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/airbnb-cleaning-constantia-cape-town",
+      "title": "Airbnb Cleaning Services in Constantia, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/airbnb-cleaning-constantia-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/airbnb-cleaning-newlands-cape-town",
+      "title": "Airbnb Cleaning Services in Newlands, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/airbnb-cleaning-newlands-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/airbnb-cleaning-observatory-cape-town",
+      "title": "Airbnb Cleaning Services in Observatory, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/airbnb-cleaning-observatory-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/apartment-cleaning-tips-sea-point-cape-town",
+      "title": "Apartment Cleaning Tips for Sea Point | Lift Access & Coastal Dust",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/apartment-cleaning-tips-sea-point-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/carpet-cleaning-constantia-cape-town",
+      "title": "Carpet Cleaning Services in Constantia, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "Not found (404)",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/carpet-cleaning-constantia-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/carpet-cleaning-durbanville-cape-town",
+      "title": "Carpet Cleaning Services in Durbanville, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "Not found (404)",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/carpet-cleaning-durbanville-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/carpet-cleaning-green-point-cape-town",
+      "title": "Carpet Cleaning Services in Green Point, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "Not found (404)",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/carpet-cleaning-green-point-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/cleaning-prices-claremont-cape-town",
+      "title": "Cleaning Prices in Claremont, Cape Town (~R400+) | Planning Guide",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-claremont-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/cleaning-prices-durbanville-cape-town",
+      "title": "Cleaning Prices in Durbanville, Cape Town (~R380+) | Northern Suburbs Guide",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-durbanville-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/cleaning-prices-gardens-cape-town",
+      "title": "Cleaning Prices in Gardens, Cape Town (~R380+) | City Bowl Guide",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-gardens-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/cleaning-prices-green-point-cape-town",
+      "title": "Cleaning Prices in Green Point, Cape Town (~R450+) | Seaboard Guide",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-green-point-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/cleaning-prices-newlands-cape-town",
+      "title": "Cleaning Prices in Newlands, Cape Town (~R400+) | Village Guide",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-newlands-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/cleaning-prices-observatory-cape-town",
+      "title": "Cleaning Prices in Observatory, Cape Town (~R400+) | Main Road Guide",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-observatory-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/cleaning-prices-rondebosch-cape-town",
+      "title": "Cleaning Prices in Rondebosch, Cape Town (~R400+) | Planning Guide",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-rondebosch-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/cleaning-prices-sea-point-cape-town",
+      "title": "Cleaning Prices in Sea Point, Cape Town (~R450+) | Same-Week Guide",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-sea-point-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/deep-cleaning-checklist-claremont-cape-town",
+      "title": "Deep Cleaning Checklist for Claremont Homes & Apartments | Shalean",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Discovered - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-claremont-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/deep-cleaning-checklist-durbanville-cape-town",
+      "title": "Deep Cleaning Checklist for Durbanville Houses | Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-durbanville-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/deep-cleaning-checklist-gardens-cape-town",
+      "title": "Deep Cleaning Checklist for Gardens Walk-Ups & Flats | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-gardens-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/deep-cleaning-checklist-green-point-cape-town",
+      "title": "Deep Cleaning Checklist for Green Point Apartments | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-green-point-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/deep-cleaning-checklist-newlands-cape-town",
+      "title": "Deep Cleaning Checklist for Newlands Homes | Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-newlands-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/deep-cleaning-checklist-observatory-cape-town",
+      "title": "Deep Cleaning Checklist for Observatory Flats | Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-observatory-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/deep-cleaning-checklist-rondebosch-cape-town",
+      "title": "Deep Cleaning Checklist for Rondebosch Homes & Student Flats",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-rondebosch-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/deep-cleaning-checklist-sea-point-cape-town",
+      "title": "Deep Cleaning Checklist for Sea Point Apartments & Homes | Shalean",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-sea-point-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/deep-cleaning-constantia-cape-town",
+      "title": "Deep Cleaning Services in Constantia, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-constantia-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/deep-cleaning-newlands-cape-town",
+      "title": "Deep Cleaning Services in Newlands, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-newlands-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/deep-cleaning-observatory-cape-town",
+      "title": "Deep Cleaning Services in Observatory, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-observatory-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/home-cleaning-frequency-claremont-cape-town",
+      "title": "How Often Should You Book Home Cleaning in Claremont? | Shalean",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-claremont-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/home-cleaning-frequency-durbanville-cape-town",
+      "title": "How Often Should You Book Home Cleaning in Durbanville? | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-durbanville-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/home-cleaning-frequency-gardens-cape-town",
+      "title": "How Often Should You Book Home Cleaning in Gardens? | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-gardens-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/home-cleaning-frequency-green-point-cape-town",
+      "title": "How Often Should You Book Home Cleaning in Green Point? | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-green-point-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/home-cleaning-frequency-newlands-cape-town",
+      "title": "How Often Should You Book Home Cleaning in Newlands? | Shalean",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Discovered - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-newlands-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/home-cleaning-frequency-observatory-cape-town",
+      "title": "How Often Should You Book Home Cleaning in Observatory? | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-observatory-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/home-cleaning-frequency-rondebosch-cape-town",
+      "title": "How Often Should You Book Home Cleaning in Rondebosch? | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-rondebosch-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/home-cleaning-frequency-sea-point-cape-town",
+      "title": "How Often Should You Book Home Cleaning in Sea Point? | Shalean",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-sea-point-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/move-out-cleaning-constantia-cape-town",
+      "title": "Move-Out Cleaning in Constantia, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-constantia-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/move-out-cleaning-cost-claremont-cape-town",
+      "title": "Move-Out Cleaning Cost in Claremont (~Guide) | Quote Before You Pay",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-claremont-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/move-out-cleaning-cost-durbanville-cape-town",
+      "title": "Move-Out Cleaning Cost in Durbanville (~Guide) | Quote Before You Pay",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-durbanville-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/move-out-cleaning-cost-gardens-cape-town",
+      "title": "Move-Out Cleaning Cost in Gardens (~Guide) | Quote Before You Pay",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-gardens-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/move-out-cleaning-cost-green-point-cape-town",
+      "title": "Move-Out Cleaning Cost in Green Point (~Guide) | Quote Before You Pay",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-green-point-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/move-out-cleaning-cost-newlands-cape-town",
+      "title": "Move-Out Cleaning Cost in Newlands (~Guide) | Quote Before You Pay",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-newlands-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/move-out-cleaning-cost-observatory-cape-town",
+      "title": "Move-Out Cleaning Cost in Observatory (~Guide) | Quote Before You Pay",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-observatory-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/move-out-cleaning-cost-rondebosch-cape-town",
+      "title": "Move-Out Cleaning Cost in Rondebosch (~Guide) | Quote Before You Pay",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-rondebosch-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/move-out-cleaning-cost-sea-point-cape-town",
+      "title": "Move-Out Cleaning Cost in Sea Point (~Guide) | Quote Before You Pay",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "Not found (404)",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-sea-point-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/move-out-cleaning-newlands-cape-town",
+      "title": "Move-Out Cleaning in Newlands, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-newlands-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/move-out-cleaning-observatory-cape-town",
+      "title": "Move-Out Cleaning in Observatory, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-observatory-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/standard-cleaning-constantia-cape-town",
+      "title": "Standard Cleaning Services in Constantia, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/standard-cleaning-constantia-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/standard-cleaning-durbanville-cape-town",
+      "title": "Standard Cleaning Services in Durbanville, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/standard-cleaning-durbanville-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/standard-cleaning-green-point-cape-town",
+      "title": "Standard Cleaning Services in Green Point, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/standard-cleaning-green-point-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/standard-cleaning-newlands-cape-town",
+      "title": "Standard Cleaning Services in Newlands, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/standard-cleaning-newlands-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/standard-cleaning-observatory-cape-town",
+      "title": "Standard Cleaning Services in Observatory, Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/standard-cleaning-observatory-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/airbnb-cleaning-checklist-cape-town",
+      "title": "Airbnb Cleaning Checklist for Hosts in Cape Town | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/airbnb-cleaning-checklist-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/airbnb-cleaning-cost-cape-town",
+      "title": "How Much Does Airbnb Cleaning Cost in Cape Town? | Shalean",
+      "status": "indexable",
+      "severity": "compliment",
+      "gsc_coverage_state": "Submitted and indexed",
+      "gsc_severity": "compliment",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/airbnb-cleaning-cost-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Retain; monitor indexed state"
+    },
+    {
+      "url": "https://shalean.co.za/blog/prepare-airbnb-for-cleaning",
+      "title": "How to Prepare Your Airbnb for Cleaning Between Guests | Shalean",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/prepare-airbnb-for-cleaning",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/best-airbnb-cleaning-tips-cape-town",
+      "title": "Best Airbnb Cleaning Tips for Cape Town Hosts | Shalean",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/best-airbnb-cleaning-tips-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/how-often-to-clean-airbnb-cape-town",
+      "title": "How Often Should You Clean an Airbnb in Cape Town? | Shalean",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/how-often-to-clean-airbnb-cape-town",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/blog/airbnb-cleaning-mistakes-hosts-make",
+      "title": "Airbnb Cleaning Mistakes Cape Town Hosts Make (And How to Avoid Them)",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Crawled - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/airbnb-cleaning-mistakes-hosts-make",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/book",
+      "title": "Book a Cleaning | Shalean",
+      "status": "noindex meta tag",
+      "severity": "warning",
+      "gsc_coverage_state": "Excluded by ‘noindex’ tag",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": false,
+      "currentHttp": null,
+      "disposition": "Preserve intentional exclusion unless independently justified"
+    },
+    {
+      "url": "https://shalean.co.za/refer",
+      "title": "Refer a Friend | Earn Cleaning Credit | Shalean",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": false,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/refer",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/book/regular-cleaning",
+      "title": "Book Regular Cleaning in Cape Town | Shalean",
+      "status": "noindex meta tag",
+      "severity": "warning",
+      "gsc_coverage_state": "Excluded by ‘noindex’ tag",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": false,
+      "currentHttp": null,
+      "disposition": "Preserve intentional exclusion unless independently justified"
+    },
+    {
+      "url": "https://shalean.co.za/book/deep-cleaning",
+      "title": "Book Deep Cleaning in Cape Town | Shalean",
+      "status": "noindex meta tag",
+      "severity": "warning",
+      "gsc_coverage_state": "Excluded by ‘noindex’ tag",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": false,
+      "currentHttp": null,
+      "disposition": "Preserve intentional exclusion unless independently justified"
+    },
+    {
+      "url": "https://shalean.co.za/book/moving-cleaning",
+      "title": "Book Moving Cleaning in Cape Town | Shalean",
+      "status": "noindex meta tag",
+      "severity": "warning",
+      "gsc_coverage_state": "Excluded by ‘noindex’ tag",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": false,
+      "currentHttp": null,
+      "disposition": "Preserve intentional exclusion unless independently justified"
+    },
+    {
+      "url": "https://shalean.co.za/book/office-cleaning",
+      "title": "Book Office Cleaning in Cape Town | Shalean",
+      "status": "noindex meta tag",
+      "severity": "warning",
+      "gsc_coverage_state": "Excluded by ‘noindex’ tag",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": false,
+      "currentHttp": null,
+      "disposition": "Preserve intentional exclusion unless independently justified"
+    },
+    {
+      "url": "https://shalean.co.za/book/carpet-cleaning",
+      "title": "Book Carpet Cleaning in Cape Town | Shalean",
+      "status": "noindex meta tag",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": false,
+      "currentHttp": null,
+      "disposition": "Preserve intentional exclusion unless independently justified"
+    },
+    {
+      "url": "https://shalean.co.za/book/airbnb-cleaning",
+      "title": "Book Airbnb Cleaning in Cape Town | Shalean",
+      "status": "noindex meta tag",
+      "severity": "warning",
+      "gsc_coverage_state": "Excluded by ‘noindex’ tag",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": false,
+      "currentHttp": null,
+      "disposition": "Preserve intentional exclusion unless independently justified"
+    },
+    {
+      "url": "https://shalean.co.za/data-deletion",
+      "title": "Data Deletion Request | Shalean Cleaning Services",
+      "status": "indexable",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": false,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/data-deletion",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    },
+    {
+      "url": "https://shalean.co.za/cleaner/apply/form",
+      "title": "Cleaner Application Form | Shalean",
+      "status": "blocked by robots.txt",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": false,
+      "currentHttp": null,
+      "disposition": "Preserve intentional exclusion unless independently justified"
+    },
+    {
+      "url": "https://shalean.co.za/cleaner/login",
+      "title": "Cleaner sign in — Shalean",
+      "status": "blocked by robots.txt",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": false,
+      "currentHttp": null,
+      "disposition": "Preserve intentional exclusion unless independently justified"
+    },
+    {
+      "url": "https://shalean.co.za/data-deletion/status",
+      "title": "Data Deletion Status | Shalean Cleaning Services",
+      "status": "noindex meta tag",
+      "severity": "warning",
+      "gsc_coverage_state": "URL is unknown to Google",
+      "gsc_severity": "warning",
+      "inCurrentSitemap": false,
+      "currentHttp": null,
+      "disposition": "Preserve intentional exclusion unless independently justified"
+    },
+    {
+      "url": "https://shalean.co.za/blog/remove-kitchen-grease-without-damaging-surfaces",
+      "title": "How to Remove Kitchen Grease Without Surface Damage | Shalean",
+      "status": "indexable",
+      "severity": "suggestion",
+      "gsc_coverage_state": "Discovered - currently not indexed",
+      "gsc_severity": "suggestion",
+      "inCurrentSitemap": true,
+      "currentHttp": {
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/remove-kitchen-grease-without-damaging-surfaces",
+        "robots": "index, follow",
+        "xRobots": null
+      },
+      "disposition": "Public candidate: verify current fetch, canonical, sitemap and internal links; Google outcome pending"
+    }
+  ]
+}
