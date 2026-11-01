@@ -107,6 +107,7 @@ async function request<T>(
   path: string,
   body?: unknown,
   attempt = 0,
+  recoverUnauthorized = false,
 ): Promise<T> {
   const token = await getAccessToken();
   const url = booksUrl(path);
@@ -126,6 +127,10 @@ async function request<T>(
   }
 
   const res = await fetch(url, init);
+  if (res.status === 401 && method === "GET" && recoverUnauthorized) {
+    _tokenCache = null;
+    return request<T>(method, path, body, attempt, false);
+  }
   const json = (await res.json()) as { code?: number; message?: string } & T;
 
   const rateLimited =
@@ -134,7 +139,7 @@ async function request<T>(
   if (rateLimited && attempt < ZOHO_RATE_LIMIT_MAX_ATTEMPTS) {
     const waitMs = Math.min(8_000, ZOHO_RATE_LIMIT_BASE_WAIT_MS * 2 ** attempt);
     await new Promise((resolve) => setTimeout(resolve, waitMs));
-    return request<T>(method, path, body, attempt + 1);
+    return request<T>(method, path, body, attempt + 1, recoverUnauthorized);
   }
 
   if (!res.ok || (typeof json.code === "number" && json.code !== 0)) {
@@ -170,6 +175,8 @@ async function requestBinary(path: string): Promise<ArrayBuffer> {
 }
 
 export const zohoBooksClient = {
+  // Opt-in for the expense mirror only; never replay a financial write.
+  getWithTokenRecovery: <T>(path: string) => request<T>("GET", path, undefined, 0, true),
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body: unknown) => request<T>("POST", path, body),
   put: <T>(path: string, body: unknown) => request<T>("PUT", path, body),
