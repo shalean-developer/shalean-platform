@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { projectZohoExpenses, readCompleteZohoPages, validateExpensePeriod } from '../expenseMirror';
 const account = (id: string, name: string, type: string) => ({ account_id: id, account_name: name, account_type: type });
 const accounts = [account('1', 'Fuel', 'expense'), account('2', 'Internal Transfers Clearing', 'other_current_asset'), account('3', 'Director Loan', 'other_current_liability')];
-const row = (id = '101', category = 'Fuel') => ({ expense_id: id, date: '2026-10-30', total: 456.13, currency_code: 'ZAR', account_name: category, paid_through_account_name: 'Paystack Clearing', reference_number: 'synthetic-ref' });
+const row = (id = '101', category = 'Fuel') => ({ expense_id: id, date: '2026-10-30', total: 456.13, currency_code: 'ZAR', is_personal: false, account_name: category, paid_through_account_name: 'Paystack Clearing', reference_number: 'synthetic-ref' });
 const project = (rows: Record<string, unknown>[]) => projectZohoExpenses(rows, accounts, '2026-10-01', '2026-10-31');
 describe('Zoho expense ownership and classification', () => {
   it('retains precise cents, payment account, reference and raw evidence', () => {
@@ -14,6 +14,9 @@ describe('Zoho expense ownership and classification', () => {
   });
   it('excludes personal and foreign currency values from ZAR operating total', () => {
     expect(project([{ ...row(), is_personal: true }, { ...row('102'), currency_code: 'USD' }]).every(r => !r.operating)).toBe(true);
+  });
+  it('excludes unknown personal status even for an expense account', () => {
+    expect(project([{ ...row(), is_personal: undefined }])[0]).toMatchObject({ operating: false, exclusion: 'Personal-expense status requires review' });
   });
   it('refuses ambiguous category names', () => {
     expect(projectZohoExpenses([row()], [...accounts, account('4', 'Fuel', 'other_current_asset')], '2026-10-01', '2026-10-31')[0].operating).toBe(false);

@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { zohoBooksClient } from '@/lib/zoho/zohoBooksClient';
 import { acquireCronLock, releaseCronLock } from '@/lib/cron/cronLock';
 import { expectedSupabaseRefForDeployment, resolveDeploymentEnvironment, SHALEAN_SUPABASE_REFS, supabaseRefFromUrl } from '@/lib/env/deploymentEnvironment';
-import { projectZohoExpenses, readCompleteZohoPages, validateExpensePeriod, type ProviderRow } from './expenseMirror';
+import { projectZohoExpenses, readCompleteZohoPages, validDate, validateExpensePeriod, type ProviderRow } from './expenseMirror';
 
 export function expenseMirrorOrganization(env: Record<string, string | undefined> = process.env) {
   const deployment = resolveDeploymentEnvironment(env);
@@ -38,7 +38,25 @@ export async function syncExpenseMirror(admin: SupabaseClient, from: string, to:
     };
     const accounts = await readCompleteZohoPages('chartofaccounts', {}, get);
     const expenses = await readCompleteZohoPages('expenses', { date_start: from, date_end: to, filter_by: 'Status.All', sort_column: 'created_time', sort_order: 'A' }, get);
-    const records = projectZohoExpenses(expenses, accounts, from, to);
+    // Provider filters can return a superset. Complete pagination first, then
+    // enforce our date window before detail reads and financial classification.
+    const scopedExpenses = expenses.filter(expense => {
+      const date = String(expense.date ?? '');
+      if (!validDate(date)) throw new Error('Zoho returned an invalid expense date. Retry the sync.');
+      return date >= from && date <= to;
+    });
+    const detailed: ProviderRow[] = [];
+    for (const expense of scopedExpenses) {
+      if (typeof expense.is_personal === 'boolean') { detailed.push(expense); continue; }
+      // Zoho's list shape may omit personal status. Verify it before counting cash.
+      const response = await get(`/expenses/${String(expense.expense_id)}`);
+      const detail = response.expense;
+      if (!detail || typeof detail !== 'object' || Array.isArray(detail) ||
+          String((detail as ProviderRow).expense_id) !== String(expense.expense_id))
+        throw new Error('Invalid Zoho expense detail. Retry the sync.');
+      detailed.push({ ...expense, ...(detail as ProviderRow) });
+    }
+    const records = projectZohoExpenses(detailed, accounts, from, to);
     const { error } = await admin.from('zoho_expense_period_mirror').update({ records,
       last_success_at: new Date().toISOString(), last_error: null }).match(key);
     if (error) throw error;

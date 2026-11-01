@@ -25,6 +25,7 @@ export function ZohoExpenseMirror() {
     (!category || r.category === category) && (!account || r.paid_through === account) &&
     [r.description, r.reference, r.vendor, r.id].join(' ').toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id)), [records, showExcluded, category, account, search]);
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(filtered.length / 25)));
   const total = filtered.filter(r => r.operating).reduce((sum, r) => sum + r.amount_cents, 0);
   async function sync() {
     setSyncing(true); setSyncError(null);
@@ -59,9 +60,9 @@ export function ZohoExpenseMirror() {
     <p className="font-semibold">Operating total for {period.from} to {period.to}{search || category || account ? ' (filtered)' : ''}: {loading || error || !snapshot?.last_success_at ? '—' : money(total)}</p>
     {loading ? <p role="status">Loading saved Zoho expenses…</p> : !error && snapshot?.last_success_at && <>
       <div className="overflow-x-auto rounded border bg-white"><table className="w-full text-sm"><thead><tr>{['Date', 'Category', 'Description / reference', 'Vendor', 'Paid through', 'Amount', 'Zoho record'].map(h => <th key={h} className="p-3 text-left">{h}</th>)}</tr></thead>
-        <tbody>{filtered.slice((page - 1) * 25, page * 25).map(r => <tr key={r.id} className="border-t"><td className="p-3 whitespace-nowrap">{r.date}</td><td className="p-3">{r.category}{r.exclusion && <p className="text-xs text-amber-800">{r.exclusion}</p>}</td><td className="p-3">{r.description}<p className="text-xs text-slate-500">{r.reference}</p></td><td className="p-3">{r.vendor || '—'}</td><td className="p-3">{r.paid_through || 'Not supplied by Zoho list API'}</td><td className="p-3 whitespace-nowrap">{money(r.amount_cents, r.currency)}</td><td className="p-3"><a className="text-sky-700 underline" target="_blank" rel="noopener noreferrer" href={`https://books.zoho.com/app/${data?.organization_id}#/expenses/${r.id}`}>View in Zoho</a><p className="text-xs">{r.status}</p></td></tr>)}</tbody></table></div>
+        <tbody>{filtered.slice((currentPage - 1) * 25, currentPage * 25).map(r => <tr key={r.id} className="border-t"><td className="p-3 whitespace-nowrap">{r.date}</td><td className="p-3">{r.category}{r.exclusion && <p className="text-xs text-amber-800">{r.exclusion}</p>}</td><td className="p-3">{r.description}<p className="text-xs text-slate-500">{r.reference}</p></td><td className="p-3">{r.vendor || '—'}</td><td className="p-3">{r.paid_through || 'Not supplied by Zoho list API'}</td><td className="p-3 whitespace-nowrap">{money(r.amount_cents, r.currency)}</td><td className="p-3"><a className="text-sky-700 underline" target="_blank" rel="noopener noreferrer" href={`https://books.zoho.com/app/${data?.organization_id}#/expenses/${r.id}`}>View in Zoho</a><p className="text-xs">{r.status}</p></td></tr>)}</tbody></table></div>
       {!filtered.length && <p>No matching Zoho expenses in this successfully imported date range.</p>}
-      <div className="flex items-center gap-3 text-sm"><span>{filtered.length} records</span><button type="button" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</button><span>Page {page} of {Math.max(1, Math.ceil(filtered.length / 25))}</span><button type="button" disabled={page * 25 >= filtered.length} onClick={() => setPage(p => p + 1)}>Next</button></div>
+      <div className="flex items-center gap-3 text-sm"><span>{filtered.length} records</span><button type="button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage} of {Math.max(1, Math.ceil(filtered.length / 25))}</span><button type="button" disabled={currentPage * 25 >= filtered.length} onClick={() => setPage(currentPage + 1)}>Next</button></div>
     </>}
   </section>;
 }

@@ -36,3 +36,13 @@ it('surfaces an actionable sync failure and retains the displayed complete resul
  expect(container.textContent).toContain('456,13');expect(mock.refetch).toHaveBeenCalledOnce();
  expect(mock.adminFetch.mock.calls[0][1].method).toBe('POST');
 });
+
+it('clamps the current page after a snapshot shrinks',async()=>{
+ const snapshot=mock.response.snapshot as {records:Record<string,unknown>[]};
+ const original=snapshot.records[0];snapshot.records=Array.from({length:26},(_,i)=>({...original,id:String(100+i),description:'Row '+i}));
+ await act(async()=>root.render(createElement(ZohoExpenseMirror)));
+ await act(async()=>[...container.querySelectorAll('button')].find(b=>b.textContent==='Next')!.click());
+ expect(container.textContent).toContain('Page 2 of 2');
+ snapshot.records=[original];await act(async()=>root.render(createElement(ZohoExpenseMirror)));
+ expect(container.textContent).toContain('Page 1 of 1');expect(container.textContent).toContain('Synthetic fuel');
+});

@@ -62,7 +62,8 @@ export function projectZohoExpenses(rows: ProviderRow[], accounts: ProviderRow[]
     if ((typeof total !== 'number' && typeof total !== 'string') || total === '' ||
         !Number.isFinite(Number(total)) || Number(total) < 0 || !Number.isSafeInteger(Math.round(Number(total) * 100)))
       throw new Error('Zoho returned an invalid expense total.');
-    const operating = ['expense', 'cost_of_goods_sold', 'other_expense'].includes(type) && raw.is_personal !== true;
+    const personalVerified = typeof raw.is_personal === 'boolean';
+    const operating = ['expense', 'cost_of_goods_sold', 'other_expense'].includes(type) && raw.is_personal === false;
     return {
       id: String(raw.expense_id), date, account_id: String(account?.account_id ?? raw.account_id ?? ''),
       category: String(raw.account_name ?? ''), account_type: type,
@@ -71,7 +72,7 @@ export function projectZohoExpenses(rows: ProviderRow[], accounts: ProviderRow[]
       description: String(raw.description ?? ''), reference: String(raw.reference_number ?? ''),
       status: String(raw.status ?? ''), currency, amount_cents: Math.round(Number(total) * 100),
       operating: operating && currency === 'ZAR',
-      exclusion: currency !== 'ZAR' ? 'Non-ZAR — excluded from ZAR total' : operating ? null :
+      exclusion: currency !== 'ZAR' ? 'Non-ZAR — excluded from ZAR total' : !personalVerified ? 'Personal-expense status requires review' : operating ? null :
         type === 'unknown' ? 'Account classification requires review' : 'Non-operating account or personal expense', raw,
     };
   });
