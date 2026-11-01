@@ -52,10 +52,10 @@ Validation:
 
 - Focused metadata regressions: 25 passed.
 - Complete SEO/blog suite: 481 passed, 4 failed across 3 files. The same four failures reproduced on unchanged baseline source: core sitemap count mismatch (12 vs 11), two historic shalean.com redirect-map assertions, and Standard/Regular supplies-policy copy assertion. No tests or guards suppressed.
-- Critical suite: 1,567 passed across 138 files.
+- Critical suite: 1,592 passed across 140 files after registering both metadata test files in `test:critical`. No existing test was removed.
 - Enforced booking lint: passed, four pre-existing unused-import warnings.
 - Typecheck: retry passed (first concurrent attempt was killed, exit 137). Scoped changed-file lint passed with zero errors/warnings.
-- CI: pending. Staging: NOT RUN. Production: NOT CHANGED. Closed defects: 0.
+- CI: previous head passed migration governance and critical/security/database regressions; replacement head with metadata test registration must pass the complete checks. Staging: NOT RUN for this change. Production: NOT CHANGED. Closed defects: 0.
 
 Additional baseline items discovered during regression (do not bundle into this metadata slice): SEO-BASELINE-01 sitemap count expectation, SEO-BASELINE-02 historic shalean.com redirect-map parity, SEO-BASELINE-03 supplies-policy copy assertion. Investigate expected behavior before changing source or tests.
 
@@ -64,3 +64,10 @@ Risk: existing metadata can now exceed the old arbitrary 160/68-character limits
 Staging acceptance: inspect the three audited local-service articles, both deep-versus-regular guides, a CMS article, and unchanged service/home controls. Check HTML title/description, OG/Twitter, schema description, canonical, robots, H1 and HTTP status. Capture exact deployment SHA. Confirm no article body, publication state or financial record changed.
 
 Rollback: revert only the app-source metadata commit using the governed release path; retain tracker/history. No database migration or data rollback required.
+
+
+## Continuation evidence
+
+Owner instructed “Proceed”. Read-only environment checks found staging healthy at source baseline c1585c0, configured to the expected staging database with test Paystack keys and outbound messaging disabled. Production was healthy at fecca6e7a3bfaacb1d13a9d2b3885f2c0dd48e6a. Neither environment contained this fix at the check.
+
+Current workflows confirm `main` builds canonical `deploy/staging`, and `production` builds `deploy/production`; a main merge is not production activation. Preserve the current deployment path and perform the bounded production promotion only after staging verification. The existing PR-preview workflow publishes an isolated artifact and does not activate canonical staging.
