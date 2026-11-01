@@ -1,6 +1,6 @@
 import { REGULAR_CLEANING_PUBLIC_NAME } from "@/lib/services/publicServiceNames";
 
-/** SERP title cap — balances pixel width vs keeping primary keywords + brand visible. */
+/** Preferred title display budget; complete service and place names take priority. */
 export const DEFAULT_SERP_TITLE_MAX = 65;
 /** Blog posts / taxonomy titles often carry a longer headline before geo + brand. */
 export const BLOG_SERP_TITLE_MAX = 68;
@@ -20,23 +20,9 @@ export function stableTitleStructureIndex(key: string, len: number): number {
   return fnv1a32(`${key}|title`) % len;
 }
 
-/**
- * Hard-cap length; trims on a space when possible so truncation is less abrupt than mid-token cuts.
- */
-export function clipSerpTitle(raw: string, maxLen = DEFAULT_SERP_TITLE_MAX): string {
-  const t = raw.trim();
-  if (t.length <= maxLen) return t;
-  const ellipsis = "…";
-  const budget = Math.max(1, maxLen - ellipsis.length);
-  let cut = t.slice(0, budget).trimEnd();
-  const lastSpace = cut.lastIndexOf(" ");
-  if (lastSpace >= Math.floor(budget * 0.45)) {
-    cut = cut.slice(0, lastSpace).trimEnd();
-  }
-  if (!cut) {
-    return `${t.slice(0, budget)}${ellipsis}`;
-  }
-  return `${cut}${ellipsis}`;
+/** Preserve complete title text; the display budget is advisory, not a slicing rule. */
+export function clipSerpTitle(raw: string, _maxLen = DEFAULT_SERP_TITLE_MAX): string {
+  return raw.trim().replace(/\s+/g, " ");
 }
 
 export type GenerateCtrTitleArgs = {
@@ -49,6 +35,7 @@ export type GenerateCtrTitleArgs = {
   brandSuffix?: string;
   /** Location hubs use proximity language; service & hub pages use standard CTR rotation. */
   pageIntent?: TitlePageIntent;
+  /** Preferred display budget; never a hard cut through essential title text. */
   maxLen?: number;
 };
 
@@ -56,7 +43,7 @@ const DEFAULT_FROM_PRICE = "~R380";
 
 /**
  * Deterministic CTR `<title>` templates (location + service hubs). Same stability rules as meta descriptions.
- * Templates stay compact (`|` separators, minimal modifiers); `clipSerpTitle` enforces `maxLen`.
+ * Try complete compact alternatives within `maxLen`; never cut the service or place name.
  */
 export function generateCtrTitle({
   base,
@@ -90,7 +77,12 @@ export function generateCtrTitle({
 
   const templates = pageIntent === "location" ? locationTemplates : serviceOrHubTemplates;
   const idx = stableTitleStructureIndex(templateKey, templates.length);
-  return clipSerpTitle(templates[idx]({ b, p, fp, brand }), maxLen);
+  const preferred = templates[idx]({ b, p, fp, brand });
+  const core = `${b} in ${p}`;
+  const near = pageIntent === "location" ? `${b} Near You | ${p}${brand}` : "";
+  const candidates = [preferred, near, `${core}${brand}`, core].filter(Boolean);
+  return clipSerpTitle(candidates.find((title) => title.length <= maxLen) ?? `${core}${brand}`);
+
 }
 
 /** Matches service meta description base phrase (booking funnel labels → title case + "service"). */
