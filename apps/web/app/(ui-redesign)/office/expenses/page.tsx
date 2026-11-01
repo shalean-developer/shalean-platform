@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ZohoExpenseMirror } from "@/components/admin/expenses/ZohoExpenseMirror";
 import { useMemo, useState } from "react";
 import {
   CheckCircle2,
@@ -58,10 +59,11 @@ const STATUS_CLS: Record<string, string> = {
 };
 
 function formatZar(cents: number): string {
-  return `R ${Math.round(cents / 100).toLocaleString("en-ZA")}`;
+  return new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(cents / 100);
 }
 
 export default function ExpensesPage() {
+  const [source, setSource] = useState<"zoho" | "local">("zoho");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -93,7 +95,7 @@ export default function ExpensesPage() {
     return p;
   }, [search, statusFilter, categoryFilter, branchFilter, paymentFilter, fromDate, toDate, page]);
 
-  const { data, loading, error, refetch } = useAdminData<ExpensesResponse>("/api/admin/expenses", { params });
+  const { data, loading, error, refetch } = useAdminData<ExpensesResponse>("/api/admin/expenses", { params, enabled: source === "local" });
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
@@ -158,7 +160,7 @@ export default function ExpensesPage() {
     <div className="space-y-6 p-4 md:p-6">
       <OfficeZohoPageHeader
         title="Expenses"
-        subtitle="Track operating expenses, approvals, and receipts"
+        subtitle="Zoho expenses, synchronization, and local approvals"
         actions={
           <>
             <Link href="/office/expense-vendors">
@@ -166,7 +168,7 @@ export default function ExpensesPage() {
             </Link>
             <OfficeZohoSecondaryButton onClick={() => refetch()}>
               <RefreshCw className="h-4 w-4" />
-              Refresh
+              Refresh local ledger
             </OfficeZohoSecondaryButton>
             <OfficeZohoPrimaryButton
               onClick={() => {
@@ -175,12 +177,18 @@ export default function ExpensesPage() {
               }}
             >
               <Plus className="h-4 w-4" />
-              New expense
+              New local expense
             </OfficeZohoPrimaryButton>
           </>
         }
       />
 
+      <div className="flex gap-3" role="group" aria-label="Expense source">
+        <button type="button" aria-pressed={source === "zoho"} onClick={() => setSource("zoho")} className="rounded border px-4 py-2">Zoho Books expenses</button>
+        <button type="button" aria-pressed={source === "local"} onClick={() => setSource("local")} className="rounded border px-4 py-2">Local submissions and approvals</button>
+      </div>
+      {source === "zoho" ? <ZohoExpenseMirror /> : <>
+      <p className="text-sm text-slate-600">Local approval ledger. Totals here do not represent a reconciled Zoho expense total.</p>
       <OfficeZohoMetricsRow>
         <OfficeZohoMetricCard icon={Wallet} label="Total expenses" value={loading ? "—" : formatZar(summary?.total_expenses_cents ?? 0)} />
         <OfficeZohoMetricCard icon={Calendar} label="Today" value={loading ? "—" : formatZar(summary?.today_expenses_cents ?? 0)} />
@@ -338,6 +346,7 @@ export default function ExpensesPage() {
         </div>
       </OfficeZohoTableShell>
 
+      </>}
       <ExpenseFormPanel open={formOpen} onClose={() => { setFormOpen(false); setEditItem(null); }} onSaved={refetch} editItem={editItem} />
       <ReceiptPreviewModal expenseId={receiptId ?? ""} open={Boolean(receiptId)} onClose={() => setReceiptId(null)} />
     </div>

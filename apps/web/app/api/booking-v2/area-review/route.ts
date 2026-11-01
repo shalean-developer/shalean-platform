@@ -30,7 +30,7 @@ const areaReviewSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   time: z.string().min(4),
   contactPhone: z.string().optional().default(""),
-  serviceDetails: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
+  serviceDetails: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
   notes: z.string().optional().default(""),
 });
 

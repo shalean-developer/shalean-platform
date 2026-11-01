@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
-    const first = parsed.error.errors[0];
+    const first = parsed.error.issues[0];
     return NextResponse.json({ error: first?.message ?? "Invalid address." }, { status: 422 });
   }
 

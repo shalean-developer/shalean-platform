@@ -16,16 +16,16 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const detailValue = z.union([z.string(), z.number(), z.boolean()]);
-export const quoteSchema = z.object({
+const quoteSchema = z.object({
   serviceSlug: z.enum(SERVICE_SLUGS),
-  serviceDetails: z.record(detailValue).default({}),
+  serviceDetails: z.record(z.string(), detailValue).default({}),
   selectedExtras: z.array(z.string()).default([]),
   cleanerMode: z.enum(["team", "individual_cleaners"]),
   cleanerCount: z.number().int().min(1).max(3).default(1),
   bookingType: z.enum(["once_off", "recurring"]),
   recurringFrequency: z.enum(["weekly", "fortnightly", "monthly", "custom", ""]).default(""),
   equipmentRequired: z.enum(["yes", "no", ""]).default("no"),
-  equipmentQuote: z.record(z.unknown()).nullable().default(null),
+  equipmentQuote: z.record(z.string(), z.unknown()).nullable().default(null),
   vipTier: z.string().nullable().default(null),
 }).superRefine((data, ctx) => {
   if (data.serviceSlug === "carpet-cleaning") {

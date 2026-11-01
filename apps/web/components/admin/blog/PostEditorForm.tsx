@@ -750,7 +750,7 @@ export function PostEditorForm({
     const c = safeParseBlogContentJson(contentJson);
     if (!c.success) {
       errs.push("Content blocks failed validation — check required fields per block.");
-      c.error.errors.slice(0, 8).forEach((e) => errs.push(`${e.path.join(".")}: ${e.message}`));
+      c.error.issues.slice(0, 8).forEach((e) => errs.push(`${e.path.join(".")}: ${e.message}`));
     }
     if (!title.trim()) errs.push("Title is required.");
     if (!slug.trim()) errs.push("Slug is required.");

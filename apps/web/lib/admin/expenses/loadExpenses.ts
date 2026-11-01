@@ -150,8 +150,9 @@ export async function loadExpenseList(
   if (sortBy === "amount_cents") query = query.order("amount_cents", { ascending });
   else if (sortBy === "status") query = query.order("status", { ascending });
   else if (sortBy === "category") query = query.order("category_id", { ascending });
-  else query = query.order("expense_date", { ascending: !ascending }).order("created_at", { ascending: !ascending });
+  else query = query.order("expense_date", { ascending }).order("created_at", { ascending });
 
+  query = query.order("id", { ascending: true });
   const from = (page - 1) * pageSize;
   query = query.range(from, from + pageSize - 1);
 
