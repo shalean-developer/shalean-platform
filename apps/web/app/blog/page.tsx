@@ -232,8 +232,8 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
 
           {popular.length > 0 ? (
             <div className="mt-10 grid grid-cols-1 gap-8 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4 lg:gap-6">
-              {popular.map((post, i) => (
-                <BlogCard key={post.slug} post={post} priority={i < 2} />
+              {popular.map((post) => (
+                <BlogCard key={post.slug} post={post} />
               ))}
             </div>
           ) : null}
@@ -288,7 +288,7 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
             </p>
           ) : (
             <div className="mt-10">
-              <BlogGridWithQuoteCta posts={visible} eagerFirstRow={3} />
+              <BlogGridWithQuoteCta posts={visible} eagerFirstRow={0} />
             </div>
           )}
         </section>
