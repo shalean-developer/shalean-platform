@@ -27,14 +27,16 @@ Source baseline: main `c1585c0ffcefbe698371c1f309a3ceaf4ab508ae`. Fresh branch `
 | SEO-CONTENT-04 | 2 | Misplaced coastal/blanket-price assumptions in 24 local pricing, frequency and checklist FAQs | Closed | Correct visible/schema FAQ copy, dates, CI, deployed staging and approved production reconciliation |
 | SEO-CONTENT-03 | 2 | Weak commercial service-page search visibility | Queued | Intent mapping, verified service details/proof and a dated search/lead baseline |
 | SEO-LINK-01 | 3 | Seven reported orphan articles | Closed | Confirm crawl reachability; relevant contextual links to retained pages; no redirects introduced |
-| SEO-PERF-01 | 4 | 37 sub-90 scores among 48 measured URLs | Queued | Representative mobile/desktop lab diagnosis plus real-user LCP/INP/CLS evidence; avoid treating score alone as CWV failure |
+| SEO-PERF-01 | 4 | Historical 37/48 sub-90 scores; current stored report 9/40 below 90, device/date absent | Investigating | Fresh controlled lab/field diagnosis; PSI daily quota and GSC Wizard inactive plan limit current measurement |
+| SEO-PERF-02 | 4 | Blog index eagerly loads five offscreen card images below its featured content | Local verified | Defer card loading while retaining featured preload, complete content/links and rendered layout; deployed verification |
 | SEO-LOCAL-01 | 5 | Local Business hours/entity facts, GBP and citations not fully verified | Queued | Verified business facts, schema parity and GBP/citation review |
 | SEO-AUTHORITY-01 | 5 | September snapshot: 224 broken backlinks / 3 destinations | Needs refreshed evidence | Fresh source/destination checks before any recovery redirects |
 | SEO-MEASURE-01 | 5 | GA sessions −85.7% while GSC clicks −0.5% | Queued | Tracking/channel/deployment/consent reconciliation; not assumed SEO collapse |
 | SEO-MEASURE-02 | 5 | Organic enquiry → booking → payment attribution unverified | Queued | Reconcile events and actual funnel evidence without creating financial entries |
 | SEO-SCHEMA-01 | 5 | Schema presence checked, full correctness/eligibility pending | Queued | Representative validation and visible-content parity; no unsupported review/FAQ benefit claims |
-| SEO-A11Y-01 | 4 | Existing SiteHeader search input reports aria-expanded unsupported for implicit textbox role | Queued | Verify intended search-widget semantics and keyboard behavior; correct ARIA without changing navigation |
-| SEO-MOBILE-01 | 4 | Actual phone accessibility/rendering audit outstanding | Queued | Real rendered mobile behavior, navigation, focus, headings and overflow evidence |
+| SEO-A11Y-01 | 4 | Existing SiteHeader search input reports aria-expanded unsupported for implicit textbox role | Local verified | Verify intended search-widget semantics and keyboard behavior; correct ARIA without changing navigation |
+| SEO-A11Y-02 | 4 | Escape does not dismiss desktop Services/mobile drawer or restore panel focus | Local verified | Escape closes disclosures, restores relevant focus, preserves outside focus/query and existing navigation; browser proof |
+| SEO-MOBILE-01 | 4 | Actual phone accessibility/rendering audit outstanding | Investigating | Real rendered mobile behavior, navigation, focus, headings and overflow evidence |
 
 ## Qualified or rejected automated warnings
 
@@ -239,3 +241,16 @@ All 15 checked URLs passed: HTTP 200, self-canonical after normal root-slash nor
 Evidence: docs/audits/seo/evidence/SEO-ORPHAN-LINKS-PRODUCTION-2026-11-01.json, including all seven paths, 15 URL checks, environment proof and exclusion controls. No article bodies/dates, booking/pricing/auth, CMS/database/financial records, canonical/redirect/robots/sitemap, analytics or indexing submissions changed. Rollback: bounded app-source revert through the release path, preserving earlier repairs.
 
 Closed: SEO-LINK-01. Total Closed: 11. Wider indexing/content findings remain open, with no Google ranking/indexing improvement inferred from this immediate crawl. Next independently actionable order: performance, mobile rendering and accessibility; fresh Google inspection remains constrained by the inactive GSC Wizard subscription.
+
+
+## Header accessibility and blog loading — source prepared
+
+Owner instructed “Proceed” after eleven production-verified closures. Baselines: main c609f9d3d8b93a754d3e062cddbd671886316cfb, production 05f0f2f5b557f6b10e5cad2db810fb732c1bd371. SiteGuru stored report now contains 40 measured URLs, nine below 90 (historical tracker was 48/37); device/date missing and no attribution to earlier repairs is supported. A new mobile blog PageSpeed API request returned HTTP 429 daily quota exceeded; field data remains unavailable through the previously verified inactive GSC Wizard plan. No current CWV/latency/score improvement claim.
+
+Browser baseline (connected desktop Chrome): width-390 homepage/blog/move-out service/location directory/pricing guide have one H1 and no horizontal overflow. This is viewport emulation, not handset/AT certification. Mobile and desktop Services remain open on Escape. Search input has unsupported aria-expanded without a supporting role; signed-in browser hides the search widget, so active search behavior is covered in component tests. Blog has five eager card images at top positions 2299–5451, all below the 844-high viewport. One initial unchanged staging navigation showed React 412 and recovered after one reload; no recurring cause established. Monitor deployed rendering separately.
+
+Prepared source PR #1020, head d1934bdd9b0c444746af3ecffe3a9473f994314e. Scope: SEO-A11Y-01/02 and SEO-PERF-02 only. Use a real search disclosure button/labelled result region while retaining native search semantics and filtering/Enter behavior. Escape closes header disclosures with contained focus return, query retention and no outside-focus theft. Defer below-featured blog card images and retain featured priority/preload. No content/pricing/booking/auth logic, route/canonical/robots/sitemap, CMS/database/financial, analytics or indexing-submission changes.
+
+Eight focused tests passed. Source critical suite 1,667 across 147 files, TypeScript and scoped lint passed; prior header ARIA warning removed. Booking lint passed with four existing warnings. React review: new key listener exists only while a disclosure is open and is cleaned up; no new requests/dependencies. Production draft #1021, head e065ada7f6dea3dcf618be175b8658a586d8c26b, is independently based on production after original-file parity checks. Candidate critical suite 1,580 across 139 files and TypeScript passed; production test list preserved with two new paths. CI and deployed verification pending; total Closed remains 11.
+
+Acceptance: final-head CI, exact-SHA healthy staging/test environment, valid image/ARIA HTML and desktop/mobile browser Escape/focus/filter/navigation/viewport checks, public UI screenshot. Then explicit owner production acceptance and production reconciliation before closure. Broader SEO-PERF-01/MOBILE-01 remain open. Rollback: bounded source revert preserving earlier repairs. Details: docs/audits/seo/SEO-HEADER-PERFORMANCE-2026-11-01.md. Baseline: docs/audits/seo/evidence/SEO-HEADER-PERFORMANCE-BASELINE-2026-11-01.json.

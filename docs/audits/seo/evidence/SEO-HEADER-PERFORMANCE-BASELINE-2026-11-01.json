@@ -1,0 +1,361 @@
+{
+  "session_date": "2026-11-01",
+  "production_sha": "05f0f2f5b557f6b10e5cad2db810fb732c1bd371",
+  "staging_sha": "c609f9d3d8b93a754d3e062cddbd671886316cfb",
+  "siteguru": {
+    "site": "https://shalean.co.za",
+    "report": "page speed",
+    "mode": "all",
+    "severity": "medium",
+    "criteria": {
+      "good_score": 90,
+      "slow_below": 50,
+      "unit": "pagespeed score (0-100)"
+    },
+    "report_url": "https://app.siteguru.co/sites/pagespeed_report/555593",
+    "total": 40,
+    "limit": 200,
+    "offset": 0,
+    "returned": 40,
+    "has_more": false,
+    "items": [
+      {
+        "url": "https://shalean.co.za/services",
+        "title": "Compare Cleaning Services in Cape Town | Shalean",
+        "page_speed_score": 91,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/services/standard-cleaning-cape-town",
+        "title": "Regular Cleaning in Cape Town | Shalean",
+        "page_speed_score": 93,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/services/deep-cleaning-cape-town",
+        "title": "Deep Cleaning Services in Cape Town | Shalean",
+        "page_speed_score": 94,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/services/move-out-cleaning-cape-town",
+        "title": "Move-out cleaning service in Cape Town | Shalean",
+        "page_speed_score": 84,
+        "status": "slow"
+      },
+      {
+        "url": "https://shalean.co.za/services/office-cleaning-cape-town",
+        "title": "Office cleaning service in Cape Town | Shalean",
+        "page_speed_score": 98,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/services/airbnb-cleaning-cape-town",
+        "title": "Airbnb turnover cleaning service in Cape Town | Shalean",
+        "page_speed_score": 92,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/services/carpet-cleaning-cape-town",
+        "title": "Carpet Cleaning Cape Town | Shalean",
+        "page_speed_score": 94,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/cleaning-prices-cape-town",
+        "title": "Cleaning Prices Cape Town (2026) | House, Deep & Move-Out Costs",
+        "page_speed_score": 93,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/services/window-cleaning-cape-town",
+        "title": "Window cleaning service in Cape Town | Shalean",
+        "page_speed_score": 73,
+        "status": "slow"
+      },
+      {
+        "url": "https://shalean.co.za/contact",
+        "title": "Contact Shalean | Cape Town Cleaning Support",
+        "page_speed_score": 92,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/about",
+        "title": "About Shalean | Trusted Home Cleaning Cape Town",
+        "page_speed_score": 86,
+        "status": "slow"
+      },
+      {
+        "url": "https://shalean.co.za/blog",
+        "title": "Cleaning Guides | Cape Town | Shalean",
+        "page_speed_score": 76,
+        "status": "slow"
+      },
+      {
+        "url": "https://shalean.co.za/faq",
+        "title": "Cleaning FAQs Cape Town | Pricing & Booking | Shalean",
+        "page_speed_score": 93,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/reviews",
+        "title": "Customer Reviews | Shalean Cleaning Services Cape Town",
+        "page_speed_score": 97,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/quote",
+        "title": "Free Cleaning Quote Cape Town | Shalean Cleaning Services",
+        "page_speed_score": 91,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/privacy-policy",
+        "title": "Privacy Policy | Shalean Cleaning Services",
+        "page_speed_score": 98,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/cleaner/apply",
+        "title": "Apply as a Cleaner | Shalean Cape Town",
+        "page_speed_score": 94,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/locations",
+        "title": "Cleaning Services Across Cape Town | Suburb Hubs | Shalean",
+        "page_speed_score": 87,
+        "status": "slow"
+      },
+      {
+        "url": "https://shalean.co.za/locations/wynberg-cleaning-services",
+        "title": "Home Cleaning Services in Wynberg, Cape Town | Near You | Shalean",
+        "page_speed_score": 97,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/locations/kenilworth-cleaning-services",
+        "title": "Home Cleaning Services Near You in Kenilworth, Cape Town |…",
+        "page_speed_score": 93,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/locations/observatory-cleaning-services",
+        "title": "Home Cleaning Services in Observatory, Cape Town | Near You |…",
+        "page_speed_score": 92,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/locations/sea-point-cleaning-services",
+        "title": "Cleaning Services Sea Point Cape Town | From R250 | Shalean",
+        "page_speed_score": 93,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/locations/gardens-cleaning-services",
+        "title": "Home Cleaning Services in Gardens, Cape Town | Near You | Shalean",
+        "page_speed_score": 98,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/locations/plumstead-cleaning-services",
+        "title": "Home Cleaning Services Near You in Plumstead, Cape Town | Shalean",
+        "page_speed_score": 98,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/locations/durbanville-cleaning-services",
+        "title": "Home Cleaning Services Near You | Durbanville, Cape Town |…",
+        "page_speed_score": 92,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/locations/goodwood-cleaning-services",
+        "title": "Home Cleaning Services in Goodwood, Cape Town | Near You |…",
+        "page_speed_score": 95,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/blog/bathroom-mould-tiles-grout",
+        "title": "Bathroom Mould on Tiles and Grout: Cleaning Guide | Shalean",
+        "page_speed_score": 88,
+        "status": "slow"
+      },
+      {
+        "url": "https://shalean.co.za/blog/speed-cleaning-routine",
+        "title": "Safe Speed-Cleaning Routine for Busy Homes | Shalean | Cape Town",
+        "page_speed_score": 91,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/blog/maintain-home-between-professional-cleans",
+        "title": "Maintain Your Home Between Professional Cleans | Shalean | Cape Town",
+        "page_speed_score": 90,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/blog/cleaning-services-cost-cape-town",
+        "title": "Cost of Cleaning Services in Cape Town: 2026 Price Guide | Shalean",
+        "page_speed_score": 97,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/blog/how-long-does-house-cleaning-take-cape-town",
+        "title": "How Long Does House Cleaning Take? Cape Town | Shalean",
+        "page_speed_score": 90,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/blog/move-out-cleaning-checklist-cape-town",
+        "title": "Complete Move-Out Cleaning Checklist (Cape Town Guide) | Shalean",
+        "page_speed_score": 95,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/blog/how-much-does-cleaning-cost-cape-town-2026",
+        "title": "How Much Does Cleaning Cost in Cape Town? Why Quotes Vary (2026)",
+        "page_speed_score": 68,
+        "status": "slow"
+      },
+      {
+        "url": "https://shalean.co.za/blog/deep-cleaning-vs-regular-cleaning-cape-town",
+        "title": "Deep Cleaning vs Regular Cleaning: What's the Difference? (Cape Town Guide)",
+        "page_speed_score": 94,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/blog/airbnb-cleaning-checklist-cape-town",
+        "title": "Airbnb Cleaning Checklist for Hosts in Cape Town | Shalean",
+        "page_speed_score": 93,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/blog/airbnb-cleaning-cost-cape-town",
+        "title": "How Much Does Airbnb Cleaning Cost in Cape Town? | Shalean",
+        "page_speed_score": 97,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/book",
+        "title": "Book a Cleaning | Shalean",
+        "page_speed_score": 96,
+        "status": "ok"
+      },
+      {
+        "url": "https://shalean.co.za/refer",
+        "title": "Refer a Friend | Earn Cleaning Credit | Shalean",
+        "page_speed_score": 74,
+        "status": "slow"
+      },
+      {
+        "url": "https://shalean.co.za/book/regular-cleaning",
+        "title": "Book Regular Cleaning in Cape Town | Shalean",
+        "page_speed_score": 56,
+        "status": "slow"
+      },
+      {
+        "url": "https://shalean.co.za/blog/remove-kitchen-grease-without-damaging-surfaces",
+        "title": "How to Remove Kitchen Grease Without Surface Damage | Shalean",
+        "page_speed_score": 92,
+        "status": "ok"
+      }
+    ]
+  },
+  "derived_sub90_count": 9,
+  "psi": {
+    "url": "https://shalean.co.za/blog",
+    "strategy": "mobile",
+    "status": 429,
+    "reason": "daily API query quota exhausted",
+    "result_available": false
+  },
+  "field_cwv": {
+    "available": false,
+    "reason": "GSC Wizard inactive plan previously verified; no fresh field-CWV conclusion"
+  },
+  "browser": {
+    "device": "connected desktop Chrome, explicit viewport override; signed-in header variant",
+    "mobile_viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "home": {
+      "documentWidth": 375,
+      "h1_count": 1
+    },
+    "blog": {
+      "documentWidth": 375,
+      "h1_count": 1,
+      "eager_cards": [
+        {
+          "top": 2298.58349609375,
+          "loading": "eager",
+          "below_viewport": true
+        },
+        {
+          "top": 2758.166748046875,
+          "loading": "eager",
+          "below_viewport": true
+        },
+        {
+          "top": 4532,
+          "loading": "eager",
+          "below_viewport": true
+        },
+        {
+          "top": 4991.58349609375,
+          "loading": "eager",
+          "below_viewport": true
+        },
+        {
+          "top": 5451.1669921875,
+          "loading": "eager",
+          "below_viewport": true
+        }
+      ]
+    },
+    "other_mobile": [
+      [
+        {
+          "documentWidth": 375,
+          "h1": [
+            "Move Out & End of Tenancy Cleaning Services in Cape Town"
+          ],
+          "path": "/services/move-out-cleaning-cape-town",
+          "width": 390
+        },
+        {
+          "documentWidth": 375,
+          "h1": [
+            "Cleaning Services Across Cape Town"
+          ],
+          "path": "/locations",
+          "width": 390
+        },
+        {
+          "documentWidth": 375,
+          "h1": [
+            "How Much Does Cleaning Cost in Cape Town? Why Quotes Vary (2026)"
+          ],
+          "path": "/blog/how-much-does-cleaning-cost-cape-town-2026",
+          "width": 390
+        }
+      ]
+    ],
+    "escape": {
+      "mobile_remained_open": true,
+      "desktop_services_remained_expanded": true
+    },
+    "search": {
+      "expanded_on_search_input": true,
+      "explicit_role": null,
+      "visible_in_signed_in_context": false
+    },
+    "staging_observation": "One initial navigation showed React 412 on baseline; one reload recovered. Recurrence/root cause unconfirmed; monitor after deployment."
+  },
+  "scope_limits": [
+    "No current PSI/CWV score or latency reduction measured",
+    "No actual handset or assistive-technology certification",
+    "No general performance/mobile closure"
+  ]
+}
