@@ -285,3 +285,8 @@ SEO-A11Y-01/02 are Staging verified, not Closed. SEO-PERF-02 is CI verified: sta
 Final production candidate #1021 head9bf4f21cf4adb5d8e65554b7d661468a8492e8d2, production base05f0f2f5b557f6b10e5cad2db810fb732c1bd371. All four final-head workflows PASS: web41347542840, migration41347542752, RBAC41347542786, isolated preview41347542797. Seven bounded files, eight focused tests; source critical1667/147files, candidate1580/139files plus TypeScript/lint evidence retained. Draft/unmerged, no independent reviewer claimed, owner production acceptance pending. Rollback: bounded app-source revert preserving eleven closed repairs. Wider performance/mobile/indexing/content/local/authority/measurement findings remain open.
 
 Evidence: docs/audits/seo/evidence/SEO-HEADER-PERFORMANCE-STAGING-FINAL-2026-11-01.json and SEO-HEADER-PERFORMANCE-STAGING-FINAL-2026-11-01.jpg. Total Closed remains11; no score/latency/ranking/indexing outcome inferred.
+
+
+## Header accessibility and blog loading — production authorized and deploying
+
+Owner replied “Aprroved” to the explicit PR #1021 production request, including the disclosed empty-staging-blog coverage gap. Rechecked all four candidate final-head workflows PASS, unchanged candidate9bf4f21cf4adb5d8e65554b7d661468a8492e8d2 and production base05f0f2f5b557f6b10e5cad2db810fb732c1bd371. PR #1021 marked ready and merged as3e6659aa596959916df266895214a1429e327137. Automatic production workflow41349191923 running. Verify exact artifact/live SHA, safe production environment, served blog card/preload policy and browser Escape/focus/hover before closing. Three findings remain open; total Closed11. No new scope or data writes authorized by this release.
