@@ -1,4 +1,5 @@
 import { SafeInternalLink } from "@/components/links/SafeInternalLink";
+import { ContextualArticleLinks, getContextualArticleLinks } from "@/components/blog/ContextualArticleLinks";
 import type { HubBlogCard } from "@/lib/blog/get-all-posts";
 import { ArrowUpRight } from "lucide-react";
 import { linkEmphasisClassName } from "@/lib/ui/linkClassNames";
@@ -11,7 +12,7 @@ type Props = {
 };
 
 export function LocationHubBlogSection({ locationName, locationSlug, cards }: Props) {
-  if (cards.length === 0) return null;
+  if (cards.length === 0 && getContextualArticleLinks(`/locations/${locationSlug}`).length === 0) return null;
 
   return (
     <section className="border-b border-zinc-100 py-16" aria-labelledby="location-blog-guides-heading">
@@ -40,7 +41,8 @@ export function LocationHubBlogSection({ locationName, locationSlug, cards }: Pr
             View all articles
           </SafeInternalLink>
         </div>
-        <ul className="mt-8 grid gap-4 sm:grid-cols-2">
+        <ContextualArticleLinks parentPath={`/locations/${locationSlug}`} />
+        {cards.length > 0 ? <ul className="mt-8 grid gap-4 sm:grid-cols-2">
           {cards.map((post) => (
             <li key={post.slug}>
               <SafeInternalLink
@@ -56,7 +58,7 @@ export function LocationHubBlogSection({ locationName, locationSlug, cards }: Pr
               </SafeInternalLink>
             </li>
           ))}
-        </ul>
+        </ul> : null}
       </div>
     </section>
   );
