@@ -15,11 +15,11 @@ Source baseline: main `c1585c0ffcefbe698371c1f309a3ceaf4ab508ae`. Fresh branch `
 | SEO-META-01 | 1 | Repeated description padding: Newlands/Observatory standard cleaning and Constantia carpet cleaning live examples; shared `metaDescription.ts` | Closed | HTML/OG/schema descriptions have no repeated generated padding; concise authored copy retained; staging and production verified |
 | SEO-META-02 | 1 | Blog titles/descriptions cut to literal ellipses; shared description clamp and blog title formatter | Closed | Complete authored wording in HTML, OG/Twitter and schema; no newly generated ellipses; verify CMS and static examples |
 | SEO-META-03 | 1 | Blog formatter appends Cape Town/brand/year to already qualified headlines | Closed | Location/brand not appended twice; existing dates retained; no automatic current-year freshness claim |
-| SEO-META-04 | 1 | Location/service title formatter still uses `clipSerpTitle`; inventory actual affected outputs | Staging verified | Review complete copy and repair independently without changing ranking intent |
-| SEO-META-05 | 1 | Booking and cleaner-login canonical inherits homepage | Staging verified | Appropriate route canonical with intentional noindex preserved; invalid-route redirect intact |
-| SEO-META-06 | 1 | Booking social metadata inherits homepage | Staging verified | Page-specific title/description/URL; no funnel behavior change |
-| SEO-META-07 | 1 | Missing initial HTML H1 on booking routes; cleaner-login warning requires rendered check | Staging verified | Meaningful rendered heading and accessible page name; no duplicate H1 introduced |
-| SEO-COPY-01 | 1 | Customer-visible technical wording in navigation/location directory | Staging verified | Plain customer wording; navigation destinations unchanged |
+| SEO-META-04 | 1 | Location/service title formatter still uses `clipSerpTitle`; inventory actual affected outputs | Closed | Review complete copy and repair independently without changing ranking intent |
+| SEO-META-05 | 1 | Booking and cleaner-login canonical inherits homepage | Closed | Appropriate route canonical with intentional noindex preserved; invalid-route redirect intact |
+| SEO-META-06 | 1 | Booking social metadata inherits homepage | Closed | Page-specific title/description/URL; no funnel behavior change |
+| SEO-META-07 | 1 | Missing initial HTML H1 on booking routes; cleaner-login warning requires rendered check | Closed | Meaningful rendered heading and accessible page name; no duplicate H1 introduced |
+| SEO-COPY-01 | 1 | Customer-visible technical wording in navigation/location directory | Closed | Plain customer wording; navigation destinations unchanged |
 | SEO-ENV-01 | 1 | Plesk staging public article responses lack a noindex header and emit index/follow metadata | Closed | Deployed staging HTML and early redirects carry noindex; production ordinary pages stay indexable; exact-SHA verification |
 | SEO-INDEX-01 | 2 | Stored index inspection: 19 crawled not indexed, 3 discovered not indexed, 22 unknown, 4 historical 404 | Needs refreshed evidence | Fresh priority URL inspection, live status reconciliation and individually justified remediation; indexing is not guaranteed |
 | SEO-CONTENT-01 | 2 | 173 pages flagged similar by crawler | Investigating | Compare main content and evidence; retain/differentiate/consolidate per URL; no bulk deletion or redirect based solely on score |
@@ -153,3 +153,14 @@ Evidence: docs/audits/seo/evidence/SEO-META-SLICE2-STAGING-2026-11-01.json. This
 ## Slice 2 production release authorized — deploying
 
 Owner explicitly replied “Approved” to production PR #1015 after the 59-page staging acceptance. Rechecked unchanged candidate head 125e4183fbccd858ef914ca15739f390660f6516 and production base e285c89ba306ca87eec0a685773a430babbed133; all five candidate workflows passed, with no review threads outstanding. PR #1015 merged as 2db35d354b49bf9f4dddc08b6a406635b453f868. Automatic production deployment and read-only reconciliation are pending. The five slice-2 defects remain Staging verified until production proof; four earlier defects remain Closed.
+
+
+## Slice 2 production reconciliation and closure — PASS
+
+Owner approval: explicit “Approved” for PR #1015. Exact merged/live production SHA: 2db35d354b49bf9f4dddc08b6a406635b453f868. Production bundle run 41334799510 PASS; deploy/production/release-sha.txt and live health both match. Expected production DB identity, live payment mode, normal outbound configuration and healthy environment verified before and after the complete read-only inventory.
+
+All 59 target pages returned HTTP 200 with zero targeted flags, reducing the same inventory's 119 baseline page-level flags to zero. Complete service/location titles, self-canonicals, matching social metadata, one initial H1, customer wording, public indexability and private noindex all passed. Additional live checks confirm all eight private-route Twitter title/description pairs match OG, and staging /locations still returns noindex/nofollow/noimageindex. No booking submission, CMS/database edit, financial record, pricing/auth change, indexing request or analytics configuration change occurred.
+
+Evidence: docs/audits/seo/evidence/SEO-META-SLICE2-PRODUCTION-2026-11-01.json. Candidate checks were green before merge; no independent human reviewer is claimed. Rollback is a bounded source revert through the existing release path, preserving the first batch and staging guard.
+
+Closed after production reconciliation: SEO-META-04, SEO-META-05, SEO-META-06, SEO-META-07 and SEO-COPY-01. Total Closed: 9 (including the first four). Broader SEO audit remains open. Next in the recorded order: fresh indexing evidence and content similarity/overlap diagnosis; no bulk redirects, deletions or indexing submissions are authorized or claimed by this release. No immediate search-ranking outcome is inferred from deployed metadata checks.
