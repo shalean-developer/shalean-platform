@@ -78,7 +78,7 @@ export function LocationsIndexView() {
               <Link href={CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF} className={linkEmphasisClassName}>
                 Check cleaning prices in Cape Town
               </Link>{" "}
-              for your area, then open your suburb hub below.
+              for your area, then choose your suburb below.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <GrowthCtaLink
@@ -98,7 +98,7 @@ export function LocationsIndexView() {
             <p className="mt-6 text-sm text-zinc-600">
               Prefer the city overview?{" "}
               <Link href="/services" className={`font-semibold ${linkEmphasisClassName}`}>
-                Cape Town cleaning hub
+                Cape Town cleaning services
               </Link>
             </p>
           </div>
@@ -110,7 +110,7 @@ export function LocationsIndexView() {
             Find your suburb
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-600 sm:text-base">
-            Search the full list or jump to a popular Atlantic Seaboard or Southern Suburbs hub.
+            Search the full list or choose a popular Atlantic Seaboard or Southern Suburbs area.
           </p>
           <div className="mt-8 space-y-6">
             <LocationSearch items={searchItems} />
@@ -141,7 +141,7 @@ export function LocationsIndexView() {
                   Featured areas
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm text-zinc-600 sm:text-base">
-                  High-demand hubs with local context, pricing bands, and the same locked-quote booking flow everywhere.
+                  Explore popular service areas, compare cleaning options and see your price before booking.
                 </p>
               </div>
             </div>
@@ -194,7 +194,7 @@ export function LocationsIndexView() {
               {
                 step: "1",
                 title: "Enter your location",
-                body: "Pick your suburb hub for local routes and realistic scope—then add rooms and bathrooms online.",
+                body: "Choose your suburb, then add your rooms, bathrooms and cleaning preferences.",
                 Icon: MapPinned,
               },
               {
@@ -231,8 +231,7 @@ export function LocationsIndexView() {
               All areas by region
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-zinc-600 sm:text-base">
-              Every link opens a dedicated hub at{" "}
-              <span className="whitespace-nowrap font-mono text-xs text-zinc-500 sm:text-sm">/locations/…-cleaning-services</span>.
+              Choose your suburb to view local cleaning services and booking information.
             </p>
             <div className="mt-12 space-y-14">
               {regionKeys.map((region) => (
@@ -248,7 +247,7 @@ export function LocationsIndexView() {
             <h2 id="guides-heading" className="text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">
               Popular cleaning guides
             </h2>
-            <p className="mt-2 text-sm text-zinc-600 sm:text-base">Editorial hubs that pair well with suburb pages and booking.</p>
+            <p className="mt-2 text-sm text-zinc-600 sm:text-base">Practical guides to help you choose and prepare for your clean.</p>
             <ul className="mt-8 grid gap-4 md:grid-cols-3">
               {LOCATIONS_INDEX_BLOG_GUIDES.map((g) => (
                 <li key={g.href}>
@@ -273,7 +272,7 @@ export function LocationsIndexView() {
               Ready to book in your area?
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-emerald-100/90 sm:text-base">
-              Lock scope online for any Cape Town hub—your total is clear before we dispatch.
+              Choose your cleaning service and review your total before confirming your booking.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <GrowthCtaLink

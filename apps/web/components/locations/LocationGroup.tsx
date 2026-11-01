@@ -31,7 +31,7 @@ export function LocationGroup({ regionTitle, locations, className }: Props) {
               className="flex min-h-[3.25rem] items-center rounded-xl border border-zinc-200 bg-zinc-50/80 px-4 py-3 text-sm font-semibold text-zinc-900 shadow-sm transition hover:border-emerald-300 hover:bg-white hover:text-emerald-950"
             >
               {loc.name}
-              <span className="ml-auto text-xs font-medium text-emerald-700">Hub →</span>
+              <span className="ml-auto text-xs font-medium text-emerald-700">View services →</span>
             </Link>
           </li>
         ))}
