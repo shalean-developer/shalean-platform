@@ -72,6 +72,10 @@ export function SiteHeader({
   const [serviceSearchQuery, setServiceSearchQuery] = useState("");
   const servicesRef = useRef<HTMLDivElement>(null);
   const serviceSearchRef = useRef<HTMLDivElement>(null);
+  const servicesButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileNavRef = useRef<HTMLDivElement>(null);
+  const serviceSearchInputRef = useRef<HTMLInputElement>(null);
   const authMode = actionMode === "auth";
   const dribbbleMode = visualMode === "dribbble";
 
@@ -119,6 +123,31 @@ export function SiteHeader({
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [servicesOpen, serviceSearchOpen]);
+
+  useEffect(() => {
+    if (!mobileOpen && !servicesOpen && !serviceSearchOpen) return;
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      const target = event.target instanceof Node ? event.target : null;
+      if (target && (mobileNavRef.current?.contains(target) || servicesRef.current?.contains(target) ||
+        serviceSearchRef.current?.contains(target) || mobileMenuButtonRef.current?.contains(target))) {
+        event.preventDefault();
+      }
+      if (mobileOpen && target && mobileNavRef.current?.contains(target)) {
+        mobileMenuButtonRef.current?.focus();
+      } else if (servicesOpen && target && servicesRef.current?.contains(target)) {
+        servicesButtonRef.current?.focus();
+      } else if (serviceSearchOpen && target && serviceSearchRef.current?.contains(target)) {
+        serviceSearchInputRef.current?.focus();
+      }
+      // Close after restoring focus: focusing the search field also runs its onFocus handler.
+      setMobileOpen(false);
+      setServicesOpen(false);
+      setServiceSearchOpen(false);
+    }
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [mobileOpen, servicesOpen, serviceSearchOpen]);
 
   function openService(href: string) {
     setServiceSearchOpen(false);
@@ -172,6 +201,7 @@ export function SiteHeader({
                         navLinkClass,
                         servicesOpen && (dribbbleMode ? "bg-[#EEF3FF] text-[#00164E]" : "bg-accent text-accent-foreground"),
                       )}
+                      ref={servicesButtonRef}
                       onClick={() => setServicesOpen((value) => !value)}
                       aria-expanded={servicesOpen}
                       suppressHydrationWarning
@@ -317,6 +347,7 @@ export function SiteHeader({
               <Search className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
               <input
                 type="search"
+                ref={serviceSearchInputRef}
                 value={serviceSearchQuery}
                 onChange={(event) => {
                   setServiceSearchQuery(event.target.value);
@@ -324,7 +355,6 @@ export function SiteHeader({
                 }}
                 onFocus={() => setServiceSearchOpen(true)}
                 onKeyDown={(event) => {
-                  if (event.key === "Escape") setServiceSearchOpen(false);
                   if (event.key === "Enter" && filteredServices[0]) {
                     event.preventDefault();
                     openService(filteredServices[0][1]);
@@ -333,16 +363,24 @@ export function SiteHeader({
                 placeholder="Search cleaning services"
                 className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
                 aria-label="Search Shalean cleaning services"
-                aria-expanded={serviceSearchOpen}
                 aria-controls="shalean-header-service-search-results"
               />
-              <span className="shrink-0 rounded-full bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-sm ring-1 ring-border">
+              <button
+                type="button"
+                className="shrink-0 rounded-full bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-sm ring-1 ring-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={serviceSearchOpen ? "Hide service search results" : "Show service search results"}
+                aria-expanded={serviceSearchOpen}
+                aria-controls="shalean-header-service-search-results"
+                onClick={() => setServiceSearchOpen((open) => !open)}
+              >
                 Services
-              </span>
+              </button>
             </div>
 
             <div
               id="shalean-header-service-search-results"
+              role="region"
+              aria-label="Matching cleaning services"
               className={cn(
                 "absolute left-0 right-0 top-full z-50 mt-2 rounded-2xl border border-border bg-popover p-2 shadow-[var(--ui-shadow-lg)] transition-[opacity,visibility] duration-150",
                 serviceSearchOpen ? "visible opacity-100" : "invisible pointer-events-none opacity-0",
@@ -373,6 +411,7 @@ export function SiteHeader({
             <button
               type="button"
               className={cn(marketingMobileMenuButtonClass, dribbbleMode && "rounded-full", "lg:hidden")}
+              ref={mobileMenuButtonRef}
               onClick={() => setMobileOpen((value) => !value)}
               aria-expanded={mobileOpen}
               aria-controls={mobileNavId}
@@ -406,6 +445,7 @@ export function SiteHeader({
               <button
                 type="button"
                 className={marketingMobileMenuButtonClass}
+                ref={mobileMenuButtonRef}
                 onClick={() => setMobileOpen((value) => !value)}
                 aria-expanded={mobileOpen}
                 aria-controls={mobileNavId}
@@ -421,6 +461,7 @@ export function SiteHeader({
 
       <div
         id={mobileNavId}
+        ref={mobileNavRef}
         className={cn(
           "border-t border-border bg-background lg:hidden",
           dribbbleMode ? "mt-3 rounded-2xl shadow-[var(--ui-shadow-lg)]" : "shadow-[var(--ui-shadow-md)]",
