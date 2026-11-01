@@ -78,3 +78,7 @@ Recovery: revert candidate app to prior approved artifact; leave additive servic
 ## Publication status
 
 At source preparation, automatic approval review rejected publication to the public repository because the original audit document contained private financial details. Those details were removed from the proposed public document. The unpublished commits were consolidated so the proposed branch history does not include the original private report. Farai subsequently explicitly approved publishing the sanitized branch and opening a draft PR on 1 November 2026. This approval does not authorize production merge, migration or deployment. Current publication and CI evidence is recorded on the draft PR.
+
+## Confirmed CI dependency blocker and correction
+
+GitHub web-test run 41298385715 failed at the production dependency audit, before tests. The blocking advisory was GHSA-mrwp-f3q8-3g9p in follow-redirects 1.16.1. The minimal lockfile-only update selects published patch 1.16.2; no audit policy or exception was weakened. Clean npm ci, installed dependency tree, production audit and the complete 1,526-test critical suite passed locally after the update. Existing nanoid acknowledgement remains unchanged and visible. GitHub final-head CI and staging verification remain separate gates.
