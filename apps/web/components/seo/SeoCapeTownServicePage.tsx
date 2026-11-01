@@ -1,4 +1,5 @@
 import { SafeInternalLink } from "@/components/links/SafeInternalLink";
+import { ContextualArticleLinks } from "@/components/blog/ContextualArticleLinks";
 import { CheckCircle2, MapPin, Sparkles } from "lucide-react";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
@@ -185,6 +186,7 @@ export function SeoCapeTownServicePage({ slug, heroVariant = "legacy", extension
             {data.explanation.map((p, i) => (
               <p key={i}>{p}</p>
             ))}
+            <ContextualArticleLinks parentPath={data.path} />
             <p>
               <SafeInternalLink
                 href={CAPE_TOWN_PRICING_AUTHORITY_HREF}
