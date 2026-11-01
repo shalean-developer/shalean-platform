@@ -28,3 +28,10 @@ https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/examples/disclosure-navigati
 https://nextjs.org/docs/app/api-reference/components/image
 
 Canonical tracker: https://github.com/shalean-developer/shalean-platform/blob/audit/seo-remediation-20261101/docs/audits/seo/SEO-REMEDIATION-TRACKER-2026-11-01.md
+
+
+## Staging visual correction
+
+Exact-SHA staging 66ca83c95d7cebdc514ff5ea1fe4b484bd6fce32 exposed a CSS override: marketing header `div:hover > div` forced a closed (aria-hidden=true) Services panel visible under the pointer. Escape state/focus assertions alone did not catch this. Restrict the hover visual rule to aria-hidden=false panels so the controlled disclosure remains authoritative; the Services button still opens it. Eight focused component/SSR cases passed again. Browser acceptance must verify computed visibility/opacity plus screenshot while pointer remains over the trigger. This is part of SEO-A11Y-02, not a new redesign.
+
+Staging blog has no published posts. Deployed blog-card loading/featured preload cannot be observed there; fixture SSR regression covers policy, and exact production HTML remains mandatory before closing SEO-PERF-02. Desktop search is hidden by the existing marketing CSS at >=80rem, independently of sign-in; test at visible desktop breakpoint plus mobile. No CMS fixtures were created.
