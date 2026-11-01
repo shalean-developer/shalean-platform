@@ -28,7 +28,7 @@ import type { CashSurvivalDashboardPayload } from "@/lib/admin/expenses/loadCash
 import { defaultOfficePayoutPeriodRange } from "@/lib/admin/payouts/officePayoutPeriodReport";
 
 function formatZar(cents: number): string {
-  return `R ${Math.round(cents / 100).toLocaleString("en-ZA")}`;
+  return formatForecastZar(cents);
 }
 
 function survivalTone(status: CashSurvivalDashboardPayload["status"]): string {
@@ -150,9 +150,9 @@ export default function CashFlowPage() {
       </section>
 
       <div className="flex flex-wrap gap-3">
-        <FinanceKpiCard icon={ArrowUpRight} label="Money received (gross)" value={formatZar(s?.money_received_cents ?? 0)} loading={loading} status="positive" />
-        <FinanceKpiCard icon={ArrowUpRight} label="Net received" value={formatZar(s?.money_received_net_cents ?? 0)} loading={loading} status="positive" />
-        <FinanceKpiCard icon={ArrowDownLeft} label="Gateway fees" value={formatZar(s?.gateway_processing_fees_cents ?? 0)} loading={loading} status="warning" />
+        <FinanceKpiCard icon={ArrowUpRight} label="Recorded Paystack receipts · gross" value={!forecastCurrent ? "Unavailable" : data?.payment_evidence.verified_transaction_count ? formatZar(s?.money_received_cents ?? 0) : "Unverified"} loading={loading} status="positive" />
+        <FinanceKpiCard icon={ArrowUpRight} label="Paystack settled to bank" value={!forecastCurrent ? "Unavailable" : formatZar(s?.money_received_net_cents ?? 0)} loading={loading} status="positive" />
+        <FinanceKpiCard icon={ArrowDownLeft} label="Paystack fees · reported" value={!forecastCurrent ? "Unavailable" : data?.payment_evidence.fees_verified ? formatZar(s?.gateway_processing_fees_cents ?? 0) : "Unverified"} loading={loading} status="warning" />
         <FinanceKpiCard icon={ArrowDownLeft} label="Money paid" value={formatZar(s?.money_paid_cents ?? 0)} loading={loading} status="negative" />
         <FinanceKpiCard icon={Banknote} label="Cash in bank" value={formatZar(s?.cash_in_bank_cents ?? 0)} loading={loading} />
         <FinanceKpiCard icon={PiggyBank} label="Petty cash" value={formatZar(s?.petty_cash_cents ?? 0)} loading={loading} />
@@ -172,6 +172,16 @@ export default function CashFlowPage() {
           loading={loading}
         />
       </div>
+
+      {forecastCurrent && data?.payment_evidence ? (
+        <section aria-label="Payment evidence" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-slate-800">
+          <p>Paystack receipts and reported fees use payment dates in South African time for {from} to {to}. Booking values and service dates are excluded. EFT, cash and other payment methods are outside these Paystack cards.</p>
+          <p className="mt-2">Recorded transactions: {data.payment_evidence.transaction_count}. Unverified payments: {data.payment_evidence.unverified_payment_count}. Payments without provider-reported fees: {data.payment_evidence.unverified_fee_count}.</p>
+          {!data.payment_evidence.fees_verified ? <p className="mt-2 font-medium">Fees are unverified, not zero. Missing or estimated payment evidence must be reconciled with Paystack.</p> : null}
+          <p className="mt-2">These are recorded subtotals, not confirmation that every Paystack payment has been imported. Settled-to-bank cash is separate from gross receipts and is never inferred by subtracting fees.</p>
+          <Link href="/office/payment-reconciliation" className="mt-2 inline-block text-blue-700 underline">Review payment reconciliation</Link>
+        </section>
+      ) : null}
 
       {forecastCurrent && data?.forecast ? <CashFlowForecastBreakdown forecast={data.forecast} from={data.period.from} to={data.period.to} /> : null}
 
