@@ -54,7 +54,7 @@ Validation:
 - Complete SEO/blog suite: 481 passed, 4 failed across 3 files. The same four failures reproduced on unchanged baseline source: core sitemap count mismatch (12 vs 11), two historic shalean.com redirect-map assertions, and Standard/Regular supplies-policy copy assertion. No tests or guards suppressed.
 - Critical suite: 1,567 passed across 138 files.
 - Enforced booking lint: passed, four pre-existing unused-import warnings.
-- Typecheck: first attempt killed (exit 137); retry pending. Scoped changed-file lint pending.
+- Typecheck: retry passed (first concurrent attempt was killed, exit 137). Scoped changed-file lint passed with zero errors/warnings.
 - CI: pending. Staging: NOT RUN. Production: NOT CHANGED. Closed defects: 0.
 
 Additional baseline items discovered during regression (do not bundle into this metadata slice): SEO-BASELINE-01 sitemap count expectation, SEO-BASELINE-02 historic shalean.com redirect-map parity, SEO-BASELINE-03 supplies-policy copy assertion. Investigate expected behavior before changing source or tests.
