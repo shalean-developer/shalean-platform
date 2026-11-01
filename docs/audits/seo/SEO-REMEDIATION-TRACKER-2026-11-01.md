@@ -12,15 +12,15 @@ Source baseline: main `c1585c0ffcefbe698371c1f309a3ceaf4ab508ae`. Fresh branch `
 
 | ID | Order | Finding / scope | Status | Closure evidence required |
 | --- | --- | --- | --- | --- |
-| SEO-META-01 | 1 | Repeated description padding: Newlands/Observatory standard cleaning and Constantia carpet cleaning live examples; shared `metaDescription.ts` | Local verified | HTML/OG/schema descriptions have no repeated generated padding; concise authored copy retained; staging and production verified |
-| SEO-META-02 | 1 | Blog titles/descriptions cut to literal ellipses; shared description clamp and blog title formatter | Local verified | Complete authored wording in HTML, OG/Twitter and schema; no newly generated ellipses; verify CMS and static examples |
-| SEO-META-03 | 1 | Blog formatter appends Cape Town/brand/year to already qualified headlines | Local verified | Location/brand not appended twice; existing dates retained; no automatic current-year freshness claim |
+| SEO-META-01 | 1 | Repeated description padding: Newlands/Observatory standard cleaning and Constantia carpet cleaning live examples; shared `metaDescription.ts` | Staging verified (metadata) | HTML/OG/schema descriptions have no repeated generated padding; concise authored copy retained; staging and production verified |
+| SEO-META-02 | 1 | Blog titles/descriptions cut to literal ellipses; shared description clamp and blog title formatter | Staging verified (metadata) | Complete authored wording in HTML, OG/Twitter and schema; no newly generated ellipses; verify CMS and static examples |
+| SEO-META-03 | 1 | Blog formatter appends Cape Town/brand/year to already qualified headlines | Staging verified (metadata) | Location/brand not appended twice; existing dates retained; no automatic current-year freshness claim |
 | SEO-META-04 | 1 | Location/service title formatter still uses `clipSerpTitle`; inventory actual affected outputs | Queued | Review complete copy and repair independently without changing ranking intent |
 | SEO-META-05 | 1 | Booking and cleaner-login canonical inherits homepage | Queued | Appropriate route canonical with intentional noindex preserved; invalid-route redirect intact |
 | SEO-META-06 | 1 | Booking social metadata inherits homepage | Queued | Page-specific title/description/URL; no funnel behavior change |
 | SEO-META-07 | 1 | Missing initial HTML H1 on booking routes; cleaner-login warning requires rendered check | Queued | Meaningful rendered heading and accessible page name; no duplicate H1 introduced |
 | SEO-COPY-01 | 1 | Customer-visible technical wording in navigation/location directory | Queued | Plain customer wording; navigation destinations unchanged |
-| SEO-INDEX-01 | 2 | Stored index inspection: 19 crawled not indexed, 3 discovered not indexed, 22 unknown, 4 historical 404 | Needs refreshed evidence | Fresh priority URL inspection, live status reconciliation and individually justified remediation; indexing is not guaranteed |
+| SEO-ENV-01 | 1 | Plesk staging public article responses lack a noindex header and emit index/follow metadata | Local verified; deployment pending | Deployed staging HTML and early redirects carry noindex; production ordinary pages stay indexable; exact-SHA verification |\n| SEO-INDEX-01 | 2 | Stored index inspection: 19 crawled not indexed, 3 discovered not indexed, 22 unknown, 4 historical 404 | Needs refreshed evidence | Fresh priority URL inspection, live status reconciliation and individually justified remediation; indexing is not guaranteed |
 | SEO-CONTENT-01 | 2 | 173 pages flagged similar by crawler | Investigating | Compare main content and evidence; retain/differentiate/consolidate per URL; no bulk deletion or redirect based solely on score |
 | SEO-CONTENT-02 | 2 | Overlapping deep-versus-regular articles | Queued | Query/content comparison and approved URL disposition; no proven cannibalisation yet |
 | SEO-CONTENT-03 | 2 | Weak commercial service-page search visibility | Queued | Intent mapping, verified service details/proof and a dated search/lead baseline |
@@ -55,7 +55,7 @@ Validation:
 - Critical suite: 1,592 passed across 140 files after registering both metadata test files in `test:critical`. No existing test was removed.
 - Enforced booking lint: passed, four pre-existing unused-import warnings.
 - Typecheck: retry passed (first concurrent attempt was killed, exit 137). Scoped changed-file lint passed with zero errors/warnings.
-- CI: previous head passed migration governance and critical/security/database regressions; replacement head with metadata test registration must pass the complete checks. Staging: NOT RUN for this change. Production: NOT CHANGED. Closed defects: 0.
+- Final source CI PASS: web-test 41327394494 (including production build and exact-build crawl), migration-governance 41327394460 and Admin RBAC Priority 1 41327394461 on ed36b49b8a7cfb0abad3deec199c801b459cbf7c. PR #1011 merged to main as 249ba09949c079ea3ed6d0e784ab07cb820997f7. Automatic staging bundle run 41328221880 PASS. Live staging SHA 249ba09949c079ea3ed6d0e784ab07cb820997f7 verified with expected staging DB, test payments and disabled messaging. Five article metadata checks passed; overall release gate held for SEO-ENV-01. Production unchanged. Closed defects: 0.
 
 Additional baseline items discovered during regression (do not bundle into this metadata slice): SEO-BASELINE-01 sitemap count expectation, SEO-BASELINE-02 historic shalean.com redirect-map parity, SEO-BASELINE-03 supplies-policy copy assertion. Investigate expected behavior before changing source or tests.
 
@@ -71,3 +71,22 @@ Rollback: revert only the app-source metadata commit using the governed release 
 Owner instructed “Proceed”. Read-only environment checks found staging healthy at source baseline c1585c0, configured to the expected staging database with test Paystack keys and outbound messaging disabled. Production was healthy at fecca6e7a3bfaacb1d13a9d2b3885f2c0dd48e6a. Neither environment contained this fix at the check.
 
 Current workflows confirm `main` builds canonical `deploy/staging`, and `production` builds `deploy/production`; a main merge is not production activation. Preserve the current deployment path and perform the bounded production promotion only after staging verification. The existing PR-preview workflow publishes an isolated artifact and does not activate canonical staging.
+
+## Current progress record
+
+Progress-only branch: `audit/seo-remediation-20261101`; update this tracker after each verified gate without deploying documentation-only status changes. Application source remains governed through normal fix/release PRs.
+
+- Static metadata sweep: 67 routed static articles passed (no generated ellipses, repeated Cape Town suffixes or repeated padding).
+- Production candidate is based on fecca6e7a3bfaacb1d13a9d2b3885f2c0dd48e6a; existing metadata source/test files matched the main baseline before applying the exact bounded fix. Its package change only registers the two regression files, preserving the production critical suite. Isolated candidate critical suite: 1,505 passed across 132 files. Typecheck passed.
+
+## SEO-ENV-01 — staging safety prerequisite
+
+Live evidence on metadata SHA 249ba09949c079ea3ed6d0e784ab07cb820997f7: all five sampled public article responses had meta robots `index, follow` and no X-Robots-Tag. The existing proxy guard checked NODE_ENV and VERCEL_ENV, overlooking SHALEAN_APP_ENV=staging on Plesk production builds. Root metadata exclusions are overridden by page-specific marketing metadata. This is pre-existing code, unchanged in #1011.
+
+Bounded repair reuses the existing authoritative `isNonProductionDeployment` resolver and applies the header after the proxy wrapper, covering early redirects and session-error passthrough. Existing production transactional and preview-token exclusions remain intact. Ten actual proxy-response tests passed, including production indexability, Plesk staging/development/preview/local, Vercel conflict, redirects, and error handling. Registered in the critical suite. No robots.txt, canonical, page content or remote environment configuration changes.
+
+Metadata runtime checks: Newlands standard, Observatory standard, Constantia carpet, move-out checklist and deep-versus-regular Cape Town guide all returned 200 with complete title/description, matching OG/Twitter/schema descriptions, canonical path and one H1. Staging's intentional `| STAGING` title suffix is expected. Missing `/blog/deep-cleaning-vs-regular-cleaning` is a staging content-availability limitation; production has that CMS-backed route. No staging CMS fixture or production content was changed. CMS-specific deployed verification remains limited to available content; helper regressions cover metadata precedence.
+
+Rollback: revert only the environment-guard commit through the existing app release path; keep staging excluded by a separately verified platform rule if that repair is ever rolled back. Do not add noindex to production.
+
+Guard local critical suite: 1,602 passed across 141 files. Changed proxy/test lint passed with zero errors/warnings. Typecheck pending at this record.
