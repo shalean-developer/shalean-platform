@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { buildTransactionalPageMetadata } from "@/lib/seo/transactionalPageMetadata";
 import {
   isValidServiceSlug,
   SERVICE_CONFIG,
@@ -16,14 +17,14 @@ type Props = {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { serviceSlug } = await params;
   if (!isValidServiceSlug(serviceSlug)) {
-    return { title: "Book a Cleaning | Shalean" };
+    return buildTransactionalPageMetadata({ path: "/book", title: "Book a Cleaning | Shalean", description: "Choose a Shalean cleaning service and see your price before booking." });
   }
   const config = SERVICE_CONFIG[serviceSlug];
-  return {
+  return buildTransactionalPageMetadata({
+    path: `/book/${serviceSlug}`,
     title: `Book ${config.label} in Cape Town | Shalean`,
     description: config.description,
-    robots: { index: false, follow: false },
-  };
+  });
 }
 
 export default async function ServiceBookingPage({ params, searchParams }: Props) {
@@ -42,5 +43,10 @@ export default async function ServiceBookingPage({ params, searchParams }: Props
     redirect(`/book/${requestedServiceSlug}${qs ? `?${qs}` : ""}`);
   }
 
-  return <BookingV2Shell serviceSlug={serviceSlug} />;
+  return (
+    <>
+      <h1 className="sr-only">Book {SERVICE_CONFIG[serviceSlug].label} in Cape Town</h1>
+      <BookingV2Shell serviceSlug={serviceSlug} />
+    </>
+  );
 }

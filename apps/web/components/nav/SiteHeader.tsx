@@ -209,7 +209,7 @@ export function SiteHeader({
                             <div className="mt-4 space-y-2 text-sm text-[#00164E]">
                               <p>See the right service faster</p>
                               <p>Understand each cleaning type</p>
-                              <p>Continue to canonical service pages</p>
+                              <p>Explore service details</p>
                             </div>
 
                             {allServicesLink ? (

@@ -12,15 +12,16 @@ Source baseline: main `c1585c0ffcefbe698371c1f309a3ceaf4ab508ae`. Fresh branch `
 
 | ID | Order | Finding / scope | Status | Closure evidence required |
 | --- | --- | --- | --- | --- |
-| SEO-META-01 | 1 | Repeated description padding: Newlands/Observatory standard cleaning and Constantia carpet cleaning live examples; shared `metaDescription.ts` | Staging verified (metadata) | HTML/OG/schema descriptions have no repeated generated padding; concise authored copy retained; staging and production verified |
-| SEO-META-02 | 1 | Blog titles/descriptions cut to literal ellipses; shared description clamp and blog title formatter | Staging verified (metadata) | Complete authored wording in HTML, OG/Twitter and schema; no newly generated ellipses; verify CMS and static examples |
-| SEO-META-03 | 1 | Blog formatter appends Cape Town/brand/year to already qualified headlines | Staging verified (metadata) | Location/brand not appended twice; existing dates retained; no automatic current-year freshness claim |
-| SEO-META-04 | 1 | Location/service title formatter still uses `clipSerpTitle`; inventory actual affected outputs | Queued | Review complete copy and repair independently without changing ranking intent |
-| SEO-META-05 | 1 | Booking and cleaner-login canonical inherits homepage | Queued | Appropriate route canonical with intentional noindex preserved; invalid-route redirect intact |
-| SEO-META-06 | 1 | Booking social metadata inherits homepage | Queued | Page-specific title/description/URL; no funnel behavior change |
-| SEO-META-07 | 1 | Missing initial HTML H1 on booking routes; cleaner-login warning requires rendered check | Queued | Meaningful rendered heading and accessible page name; no duplicate H1 introduced |
-| SEO-COPY-01 | 1 | Customer-visible technical wording in navigation/location directory | Queued | Plain customer wording; navigation destinations unchanged |
-| SEO-ENV-01 | 1 | Plesk staging public article responses lack a noindex header and emit index/follow metadata | Local verified; deployment pending | Deployed staging HTML and early redirects carry noindex; production ordinary pages stay indexable; exact-SHA verification |\n| SEO-INDEX-01 | 2 | Stored index inspection: 19 crawled not indexed, 3 discovered not indexed, 22 unknown, 4 historical 404 | Needs refreshed evidence | Fresh priority URL inspection, live status reconciliation and individually justified remediation; indexing is not guaranteed |
+| SEO-META-01 | 1 | Repeated description padding: Newlands/Observatory standard cleaning and Constantia carpet cleaning live examples; shared `metaDescription.ts` | Closed | HTML/OG/schema descriptions have no repeated generated padding; concise authored copy retained; staging and production verified |
+| SEO-META-02 | 1 | Blog titles/descriptions cut to literal ellipses; shared description clamp and blog title formatter | Closed | Complete authored wording in HTML, OG/Twitter and schema; no newly generated ellipses; verify CMS and static examples |
+| SEO-META-03 | 1 | Blog formatter appends Cape Town/brand/year to already qualified headlines | Closed | Location/brand not appended twice; existing dates retained; no automatic current-year freshness claim |
+| SEO-META-04 | 1 | Location/service title formatter still uses `clipSerpTitle`; inventory actual affected outputs | Local verified | Review complete copy and repair independently without changing ranking intent |
+| SEO-META-05 | 1 | Booking and cleaner-login canonical inherits homepage | Local verified | Appropriate route canonical with intentional noindex preserved; invalid-route redirect intact |
+| SEO-META-06 | 1 | Booking social metadata inherits homepage | Local verified | Page-specific title/description/URL; no funnel behavior change |
+| SEO-META-07 | 1 | Missing initial HTML H1 on booking routes; cleaner-login warning requires rendered check | Local verified | Meaningful rendered heading and accessible page name; no duplicate H1 introduced |
+| SEO-COPY-01 | 1 | Customer-visible technical wording in navigation/location directory | Local verified | Plain customer wording; navigation destinations unchanged |
+| SEO-ENV-01 | 1 | Plesk staging public article responses lack a noindex header and emit index/follow metadata | Closed | Deployed staging HTML and early redirects carry noindex; production ordinary pages stay indexable; exact-SHA verification |
+| SEO-INDEX-01 | 2 | Stored index inspection: 19 crawled not indexed, 3 discovered not indexed, 22 unknown, 4 historical 404 | Needs refreshed evidence | Fresh priority URL inspection, live status reconciliation and individually justified remediation; indexing is not guaranteed |
 | SEO-CONTENT-01 | 2 | 173 pages flagged similar by crawler | Investigating | Compare main content and evidence; retain/differentiate/consolidate per URL; no bulk deletion or redirect based solely on score |
 | SEO-CONTENT-02 | 2 | Overlapping deep-versus-regular articles | Queued | Query/content comparison and approved URL disposition; no proven cannibalisation yet |
 | SEO-CONTENT-03 | 2 | Weak commercial service-page search visibility | Queued | Intent mapping, verified service details/proof and a dated search/lead baseline |
@@ -55,7 +56,7 @@ Validation:
 - Critical suite: 1,592 passed across 140 files after registering both metadata test files in `test:critical`. No existing test was removed.
 - Enforced booking lint: passed, four pre-existing unused-import warnings.
 - Typecheck: retry passed (first concurrent attempt was killed, exit 137). Scoped changed-file lint passed with zero errors/warnings.
-- Final source CI PASS: web-test 41327394494 (including production build and exact-build crawl), migration-governance 41327394460 and Admin RBAC Priority 1 41327394461 on ed36b49b8a7cfb0abad3deec199c801b459cbf7c. PR #1011 merged to main as 249ba09949c079ea3ed6d0e784ab07cb820997f7. Automatic staging bundle run 41328221880 PASS. Live staging SHA 249ba09949c079ea3ed6d0e784ab07cb820997f7 verified with expected staging DB, test payments and disabled messaging. Five article metadata checks passed; overall release gate held for SEO-ENV-01. Production unchanged. Closed defects: 0.
+- Final source CI PASS: web-test 41327394494 (including production build and exact-build crawl), migration-governance 41327394460 and Admin RBAC Priority 1 41327394461 on ed36b49b8a7cfb0abad3deec199c801b459cbf7c. PR #1011 merged to main as 249ba09949c079ea3ed6d0e784ab07cb820997f7. Automatic staging bundle run 41328221880 PASS. Live staging SHA 249ba09949c079ea3ed6d0e784ab07cb820997f7 verified with expected staging DB, test payments and disabled messaging. Five article metadata checks passed; initial gate held for SEO-ENV-01; final staging gate subsequently passed on 77f77a314cebed28fa65284ad766915206ac94f8. Production unchanged. Closed defects: 0.
 
 Additional baseline items discovered during regression (do not bundle into this metadata slice): SEO-BASELINE-01 sitemap count expectation, SEO-BASELINE-02 historic shalean.com redirect-map parity, SEO-BASELINE-03 supplies-policy copy assertion. Investigate expected behavior before changing source or tests.
 
@@ -89,4 +90,48 @@ Metadata runtime checks: Newlands standard, Observatory standard, Constantia car
 
 Rollback: revert only the environment-guard commit through the existing app release path; keep staging excluded by a separately verified platform rule if that repair is ever rolled back. Do not add noindex to production.
 
-Guard local critical suite: 1,602 passed across 141 files. Changed proxy/test lint passed with zero errors/warnings. Typecheck pending at this record.
+Guard local critical suite: 1,602 passed across 141 files. Changed proxy/test lint passed with zero errors/warnings. Typecheck passed.
+
+SEO-ENV-01 source prepared in PR #1012, exact head 01774280501b58385c75a780cfdd2334ccb934e0. Final CI PASS (web-test 41329148456, migration-governance 41329148457, Admin RBAC Priority 1 41329148464). Merged as 77f77a314cebed28fa65284ad766915206ac94f8. Staging bundle run 41329992800 PASS. Live staging SHA 77f77a314cebed28fa65284ad766915206ac94f8 passed five article metadata/noindex checks plus two actual proxy redirects. Environment health/safety remained correct before and after.
+
+Production candidate PR #1013, head 39f3e682d230c154acf040262edfd4f1b370d548, was owner-approved and merged to production as e285c89ba306ca87eec0a685773a430babbed133. All four candidate workflows passed: web-test 41329469851, migration-governance 41329469807, RBAC 41329469845 and isolated preview 41329469847. Final local combined candidate: 1,515 critical tests across 133 files and TypeScript passed. No preview was manually activated over canonical staging. Final staging acceptance evidence PASS; owner explicitly approved the bounded production release; deployment run 41330836013 completed and production reconciliation passed below.
+
+## Final staging gate — PASS
+
+Exact live staging SHA: 77f77a314cebed28fa65284ad766915206ac94f8. Expected staging database identity, test payments, disabled outbound messaging and healthy environment verified before and after the five article checks. All five returned 200, one H1, complete title/description, correct canonical, matching OG/Twitter/schema descriptions and X-Robots-Tag noindex. The intentional staging title suffix remained. Actual proxy redirects `/location/cape-town/sea-point` and `/cleaning-services/sea-point` returned 308 to the expected hub with noindex/nofollow/noimageindex.
+
+Evidence: `docs/audits/seo/evidence/SEO-META-STAGING-2026-11-01.json`. Framework-configured `/c/:slug` redirects run before the proxy and are outside this proxy-header scope; their destination HTML is protected. The unavailable staging CMS comparison article remains a disclosed coverage limitation and must be included in production reconciliation.
+
+Production control remained healthy at fecca6e7a3bfaacb1d13a9d2b3885f2c0dd48e6a, with ordinary article HTTP 200, robots index/follow and no noindex response header. Production unchanged. PR #1013 contains the bounded, locally tested candidate and all four final-head CI workflows passed. Owner production release acceptance was explicitly granted; exact-SHA deployment and production reconciliation are now completed below. Closed defects: 0; do not begin the next repair slice until this release is reconciled and closed.
+
+## Production release authorized — deploying
+
+Owner explicitly replied “approved” to the bounded PR #1013 release summary. Reverified candidate head 39f3e682d230c154acf040262edfd4f1b370d548 and all four green workflows; no base/head drift. PR #1013 merged as e285c89ba306ca87eec0a685773a430babbed133. Automatic production bundle run 41330836013 completed successfully. Rollback source remains fecca6e7a3bfaacb1d13a9d2b3885f2c0dd48e6a.
+
+Pre-release live baseline: fecca6e7 with correct production environment, live payment mode and healthy app. Six article checks reproduced 15 metadata flags (generated title ellipses/location repeats/padding and truncated descriptions), including the CMS-rendered comparison article. At that checkpoint post-release reconciliation was pending and no defect was Closed.
+
+## Production reconciliation and first-batch closure — PASS
+
+Owner approval: explicit “approved” after the bounded production release summary. PR #1013 merged/deployed as e285c89ba306ca87eec0a685773a430babbed133. Production bundle run 41330836013 PASS; deploy/production release-sha.txt and live environment SHA both match. Correct production database identity/live payment mode, normal outbound configuration and healthy app verified before and after the six article checks.
+
+All six affected articles returned 200 with one H1, complete title/description, matching OG/Twitter/schema descriptions, correct canonical path and production indexability. Fifteen pre-release metadata flags reduced to zero. The previously unavailable staging CMS comparison article rendered from CMS on production and passed, resolving that coverage gap for this release.
+
+Controls: homepage and deep-cleaning service remain HTTP 200 and index/follow without a noindex response header. Booking remains HTTP 200 and noindex/nofollow; its known homepage canonical remains queued as SEO-META-05. Staging article still sends noindex/nofollow/noimageindex. No CMS records, article bodies, financial records, indexing submissions or analytics configuration were edited by this work.
+
+Evidence: `docs/audits/seo/evidence/SEO-META-PRODUCTION-2026-11-01.json` contains before/after article observations, exact SHA, deployment run and controls.
+
+Closed after production reconciliation: SEO-META-01, SEO-META-02, SEO-META-03 and SEO-ENV-01. Current closed count: 4. The broader SEO audit remains open; no ranking/indexing improvement is claimed from immediate deployment. Next queued work is SEO-META-04 through SEO-META-07 and SEO-COPY-01, followed by the already recorded indexing/content, linking, performance and authority/measurement order. No next-slice implementation is included in this release.
+
+## Slice 2 — remaining titles, transactional metadata/headings and customer copy
+
+Owner instructed “proceed” after first-batch production closure. Scope is SEO-META-04/05/06/07 and SEO-COPY-01 only. Current source baseline main 77f77a314cebed28fa65284ad766915206ac94f8; production baseline e285c89ba306ca87eec0a685773a430babbed133. The first four closed defects remain closed.
+
+Changes: title generators select complete concise alternatives rather than publishing ellipses or partial place names. Legacy clipSerpTitle export normalizes whitespace without slicing. All eight booking/login routes receive a self-canonical and page-specific OG/Twitter title/description while retaining noindex/nofollow. Six service booking routes render a screen-reader heading outside the loading client shell; cleaner login loading fallback gets the same heading as the existing ready form, avoiding duplicate headings. Navigation/location-directory copy uses customer language; hrefs, booking controls, forms, pricing, authentication, data, redirects, and prior staging exclusion are unchanged.
+
+Validation: 30 focused tests passed, including every one of 43 configured locations across all three title variants (129 generated outputs), six service metadata/SSR heading cases, query privacy, invalid-service redirect and cleaner login loading/ready states. Full critical suite: 1,621 passed across 143 files. TypeScript passed. Scoped lint passed with one pre-existing SiteHeader search-field ARIA warning; enforced booking lint passed with the four existing unused-import warnings. Broader SEO/blog suite: 510 passed and the same four baseline failures (sitemap count, two historical shalean.com redirect-map checks, supplies-policy copy); no tests/guards suppressed. React checklist: no new hooks, effects, requests or dependencies; headings are accessible and client booking control flow is unchanged.
+
+Live before/after inventory: 59 URLs (43 locations, seven services, eight booking/login and the location directory). Production baseline captured successfully: all 59 URLs returned 200, with 119 targeted flags (29 clipped titles, 51 pages with shared technical customer copy, eight private canonical mismatches, nine OG-title mismatches, eight OG-URL mismatches, seven OG-description mismatches and seven missing initial H1s). Expected production identity/health remained correct before and after. Evidence: `docs/audits/seo/evidence/SEO-META-SLICE2-BASELINE-2026-11-01.json`. CI, deployed staging verification and production acceptance are pending. Do not close these five defects from local results.
+
+Acceptance: exact staging SHA/health and test environment; complete service/location titles without generated ellipses; correct private-route self-canonical and matching OG/Twitter metadata; one initial HTML H1; retained private noindex and staging-wide noindex headers; customer copy removed without changing navigation destinations. Compare production after explicit release acceptance, then close only the verified items. Existing manual location title overrides must remain authoritative; any stored clipped override is a separately evidenced data correction, never silently overwritten.
+
+Rollback: bounded revert of this app-only slice through the existing deployment path. No database migration, CMS edit, financial write, indexing submission or analytics change is included. Google may still truncate its displayed title links; the repair preserves meaningful HTML title text (official guidance: https://developers.google.com/search/docs/appearance/title-link).
