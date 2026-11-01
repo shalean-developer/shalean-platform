@@ -24,7 +24,7 @@ Source baseline: main `c1585c0ffcefbe698371c1f309a3ceaf4ab508ae`. Fresh branch `
 | SEO-INDEX-01 | 2 | Stored index inspection: 19 crawled not indexed, 3 discovered not indexed, 22 unknown, 4 historical 404 | Needs refreshed evidence | Fresh priority URL inspection, live status reconciliation and individually justified remediation; indexing is not guaranteed |
 | SEO-CONTENT-01 | 2 | Earlier 173-page similarity warning; current SiteGuru to-do count 68; live template overlap confirmed | Investigating | Per-cluster editorial/intent evidence and justified retain/differentiate/consolidate decisions; no bulk redirects from scores |
 | SEO-CONTENT-02 | 2 | Overlapping deep-versus-regular articles | Investigating | Query/content comparison and approved URL disposition; no proven cannibalisation yet |
-| SEO-CONTENT-04 | 2 | Misplaced coastal/blanket-price assumptions in 24 local pricing, frequency and checklist FAQs | CI verified | Correct visible/schema FAQ copy, dates, CI, deployed staging and approved production reconciliation |
+| SEO-CONTENT-04 | 2 | Misplaced coastal/blanket-price assumptions in 24 local pricing, frequency and checklist FAQs | Staging verified | Correct visible/schema FAQ copy, dates, CI, deployed staging and approved production reconciliation |
 | SEO-CONTENT-03 | 2 | Weak commercial service-page search visibility | Queued | Intent mapping, verified service details/proof and a dated search/lead baseline |
 | SEO-LINK-01 | 3 | Seven reported orphan articles | Investigating | Confirm crawl reachability; relevant contextual links to retained pages; no redirects introduced |
 | SEO-PERF-01 | 4 | 37 sub-90 scores among 48 measured URLs | Queued | Representative mobile/desktop lab diagnosis plus real-user LCP/INP/CLS evidence; avoid treating score alone as CWV failure |
@@ -181,3 +181,10 @@ Detailed report: docs/audits/seo/SEO-INDEX-CONTENT-REFRESH-2026-11-01.md. Eviden
 
 
 FAQ source gate: all three final-head workflows passed (web-test 41337636453 including production build/exact-build crawl, migration 41337636452 and RBAC 41337636310). No base/head drift or outstanding review thread; no independent human reviewer claimed. PR #1016 merged as 15daceeb178cb7a5aef111b28ff32d0d619925c1. Canonical staging deployment is building; no preview manually activated. Isolated production draft #1017, head b4c4764da75ef663270fb00a983beb2f7e5acea5, is based on 2db35d354b49bf9f4dddc08b6a406635b453f868. Candidate critical tests: 1,560 across 136 files; TypeScript passed. Candidate CI pending. Production unchanged. Fresh Google inspection checklist: docs/audits/seo/evidence/SEO-INDEX-PRIORITY-INSPECTIONS-2026-11-01.csv (ten URLs).
+
+
+## SEO-CONTENT-04 staging acceptance — PASS
+
+Main/staging SHA 15daceeb178cb7a5aef111b28ff32d0d619925c1; automatic staging bundle 41338265076 PASS, artifact release-sha.txt and live health match. All 24 affected guides returned HTTP 200 with the exact corrected visible FAQ text and matching four-question FAQPage entities, correct modification date, one H1, self-canonical and staging noindex. Expected staging database identity, test payments, disabled outbound messaging and healthy exact-SHA environment verified before and after. Evidence: docs/audits/seo/evidence/SEO-LOCAL-GUIDE-FAQ-STAGING-2026-11-01.json.
+
+Existing blog canonical metadata regressions: 9 passed. Production candidate #1017 remains draft/unmerged, base 2db35d354b49bf9f4dddc08b6a406635b453f868, head b4c4764da75ef663270fb00a983beb2f7e5acea5. All four final-head workflows passed: web-test 41337822449, migration 41337822459, RBAC 41337822457 and isolated preview 41337822467. No preview manually activated. Production release acceptance is pending for this bounded FAQ repair; production reconciliation must precede closure. Total Closed remains 9. SEO-INDEX-01 still needs fresh Google evidence; SEO-CONTENT-01/02 remain Investigating and seven orphan-link repairs remain queued in order.
