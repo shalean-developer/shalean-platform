@@ -129,7 +129,7 @@ export const DEFAULT_LIST_HERO = DEFAULT_BLOG_FEATURED_IMAGE;
  */
 export const CAPE_TOWN_HUB_BLOG_SLUGS = [
   "how-much-does-cleaning-cost-cape-town-2026",
-  "deep-cleaning-vs-regular-cleaning-cape-town",
+  "deep-cleaning-vs-regular-cleaning",
   "move-out-cleaning-checklist-cape-town",
   "airbnb-cleaning-checklist-cape-town",
 ] as const;

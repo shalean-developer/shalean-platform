@@ -151,7 +151,7 @@ export const BLOG_IMAGE_MAP_NEW_ADDITIONS: Record<string, string> = {
   "move-out-cleaning-checklist-cape-town": "/images/blog/cape-town-studio-move-in-clean.jpg",
   "prepare-home-before-cleaner-arrives-cape-town": "/images/marketing/shalean-cleaner-balcony-cape-town.webp",
   "apartment-cleaning-tips-sea-point-cape-town": "/images/blog/sea-point-living-room-residential-clean.jpg",
-  "deep-cleaning-vs-regular-cleaning-cape-town": "/images/blog/cape-town-bathroom-apartment-clean.jpg",
+  "deep-cleaning-vs-regular-cleaning": "/images/blog/cape-town-bathroom-apartment-clean.jpg",
   "cleaning-mistakes-that-make-your-home-dirtier-cape-town": "/images/blog/cape-town-bathroom-sanitized.jpg",
   "how-long-does-house-cleaning-take-cape-town": "/images/blog/cape-town-bedroom-residential-tidy.jpg",
   "how-often-deep-clean-home-cape-town": "/images/blog/cape-town-bedroom-home-office-clean.jpg",
