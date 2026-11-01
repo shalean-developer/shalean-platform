@@ -1,0 +1,85 @@
+{
+  "gate": "PASS",
+  "before": {
+    "sha": "77f77a314cebed28fa65284ad766915206ac94f8",
+    "safe": true
+  },
+  "after": {
+    "sha": "77f77a314cebed28fa65284ad766915206ac94f8",
+    "safe": true
+  },
+  "rows": [
+    {
+      "path": "/blog/standard-cleaning-newlands-cape-town",
+      "status": 200,
+      "errors": [],
+      "staging_noindex_header": true,
+      "title": "Standard Cleaning Services in Newlands, Cape Town | Shalean | STAGING",
+      "description": "Standard home cleaning between canopy dust seasons and busy school calendars.",
+      "cms_render_marker": false
+    },
+    {
+      "path": "/blog/standard-cleaning-observatory-cape-town",
+      "status": 200,
+      "errors": [],
+      "staging_noindex_header": true,
+      "title": "Standard Cleaning Services in Observatory, Cape Town | Shalean | STAGING",
+      "description": "Recurring standard cleaning for Observatory apartments and student-heavy layouts.",
+      "cms_render_marker": false
+    },
+    {
+      "path": "/blog/carpet-cleaning-constantia-cape-town",
+      "status": 200,
+      "errors": [],
+      "staging_noindex_header": true,
+      "title": "Carpet Cleaning Services in Constantia, Cape Town | Shalean | STAGING",
+      "description": "Carpet cleaning in Constantia for high-traffic lanes and estate-sized living zones.",
+      "cms_render_marker": false
+    },
+    {
+      "path": "/blog/move-out-cleaning-checklist-cape-town",
+      "status": 200,
+      "errors": [],
+      "staging_noindex_header": true,
+      "title": "Complete Move-Out Cleaning Checklist (Cape Town Guide) | Shalean | STAGING",
+      "description": "Move-out cleaning checklist for South Africa: room-by-room tasks for deposit-ready handovers, common mistakes, time estimates, DIY vs professional, and how to book end-of-lease cleaning in Cape Town.",
+      "cms_render_marker": false
+    },
+    {
+      "path": "/blog/deep-cleaning-vs-regular-cleaning-cape-town",
+      "status": 200,
+      "errors": [],
+      "staging_noindex_header": true,
+      "title": "Deep Cleaning vs Regular Cleaning: What's the Difference? (Cape Town Guide) | STAGING",
+      "description": "Deep cleaning vs regular cleaning explained: what each includes, standard cleaning vs deep cleaning on time and cost, which cleaning service you need, and how to book deep cleaning services in Cape Town with a clear quote.",
+      "cms_render_marker": false
+    }
+  ],
+  "proxy_redirect_checks": [
+    {
+      "path": "/cleaning-services/sea-point",
+      "status": 308,
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "location": "/locations/sea-point-cleaning-services"
+    },
+    {
+      "path": "/location/cape-town/sea-point",
+      "status": 308,
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "location": "/locations/sea-point-cleaning-services"
+    }
+  ],
+  "production_control": {
+    "sha": "fecca6e7a3bfaacb1d13a9d2b3885f2c0dd48e6a",
+    "environment": "production",
+    "healthy": true,
+    "article_status": 200,
+    "x_robots_tag": null,
+    "meta_robots": "index, follow",
+    "changed": false
+  },
+  "limitations": [
+    "The CMS-only /blog/deep-cleaning-vs-regular-cleaning page is absent from staging; production verification remains required.",
+    "The framework-configured /c/:slug redirect runs before the proxy and does not receive this proxy header; its destination HTML is protected. The two actual proxy redirects listed above were verified."
+  ]
+}
