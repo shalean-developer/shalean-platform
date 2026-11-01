@@ -1,0 +1,944 @@
+{
+  "gate": "PASS",
+  "before": {
+    "sha": "1e8e5629544983a49b58035e5576cab5e6160f4d",
+    "safe": true
+  },
+  "after": {
+    "sha": "1e8e5629544983a49b58035e5576cab5e6160f4d",
+    "safe": true
+  },
+  "pages": 59,
+  "error_count": 0,
+  "rows": [
+    {
+      "kind": "location",
+      "path": "/locations/bantry-bay-cleaning-services",
+      "name": "Bantry Bay",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Bantry Bay, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/bantry-bay-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Bantry Bay, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/bantry-bay-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/bergvliet-cleaning-services",
+      "name": "Bergvliet",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Bergvliet, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/bergvliet-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Bergvliet, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/bergvliet-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/camps-bay-cleaning-services",
+      "name": "Camps Bay",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Camps Bay, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/camps-bay-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Camps Bay, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/camps-bay-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/claremont-cleaning-services",
+      "name": "Claremont",
+      "status": 200,
+      "title": "Home Cleaning Services Near You in Claremont, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/claremont-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You in Claremont, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/claremont-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/fresnaye-cleaning-services",
+      "name": "Fresnaye",
+      "status": 200,
+      "title": "Home Cleaning Services Near You in Fresnaye, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/fresnaye-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You in Fresnaye, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/fresnaye-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/gardens-cleaning-services",
+      "name": "Gardens",
+      "status": 200,
+      "title": "Home Cleaning Services in Gardens, Cape Town | Near You | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/gardens-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services in Gardens, Cape Town | Near You | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/gardens-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/green-point-cleaning-services",
+      "name": "Green Point",
+      "status": 200,
+      "title": "Home Cleaning Services in Green Point, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/green-point-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services in Green Point, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/green-point-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/kenilworth-cleaning-services",
+      "name": "Kenilworth",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Kenilworth, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/kenilworth-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Kenilworth, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/kenilworth-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/newlands-cleaning-services",
+      "name": "Newlands",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Newlands, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/newlands-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Newlands, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/newlands-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/observatory-cleaning-services",
+      "name": "Observatory",
+      "status": 200,
+      "title": "Home Cleaning Services in Observatory, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/observatory-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services in Observatory, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/observatory-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/plumstead-cleaning-services",
+      "name": "Plumstead",
+      "status": 200,
+      "title": "Home Cleaning Services Near You in Plumstead, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/plumstead-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You in Plumstead, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/plumstead-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/rondebosch-cleaning-services",
+      "name": "Rondebosch",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Rondebosch, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/rondebosch-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Rondebosch, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/rondebosch-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/rosebank-cleaning-services",
+      "name": "Rosebank",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Rosebank, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/rosebank-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Rosebank, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/rosebank-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/sea-point-cleaning-services",
+      "name": "Sea Point",
+      "status": 200,
+      "title": "Cleaning Services Sea Point Cape Town | From R250 | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/sea-point-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Cleaning Services Sea Point Cape Town | From R250 | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/sea-point-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/tamboerskloof-cleaning-services",
+      "name": "Tamboerskloof",
+      "status": 200,
+      "title": "Home Cleaning Services in Tamboerskloof, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/tamboerskloof-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services in Tamboerskloof, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/tamboerskloof-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/vredehoek-cleaning-services",
+      "name": "Vredehoek",
+      "status": 200,
+      "title": "Home Cleaning Services Near You in Vredehoek, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/vredehoek-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You in Vredehoek, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/vredehoek-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/woodstock-cleaning-services",
+      "name": "Woodstock",
+      "status": 200,
+      "title": "Home Cleaning Services Near You in Woodstock, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/woodstock-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You in Woodstock, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/woodstock-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/wynberg-cleaning-services",
+      "name": "Wynberg",
+      "status": 200,
+      "title": "Home Cleaning Services in Wynberg, Cape Town | Near You | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/wynberg-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services in Wynberg, Cape Town | Near You | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/wynberg-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/zonnebloem-cleaning-services",
+      "name": "Zonnebloem",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Zonnebloem, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/zonnebloem-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Zonnebloem, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/zonnebloem-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/constantia-cleaning-services",
+      "name": "Constantia",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Constantia, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/constantia-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Constantia, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/constantia-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/table-view-cleaning-services",
+      "name": "Table View",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Table View, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/table-view-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Table View, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/table-view-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/durbanville-cleaning-services",
+      "name": "Durbanville",
+      "status": 200,
+      "title": "Home Cleaning Services in Durbanville, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/durbanville-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services in Durbanville, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/durbanville-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/bellville-cleaning-services",
+      "name": "Bellville",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Bellville, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/bellville-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Bellville, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/bellville-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/bishopscourt-cleaning-services",
+      "name": "Bishopscourt",
+      "status": 200,
+      "title": "Home Cleaning Services in Bishopscourt, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/bishopscourt-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services in Bishopscourt, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/bishopscourt-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/diep-river-cleaning-services",
+      "name": "Diep River",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Diep River, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/diep-river-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Diep River, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/diep-river-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/harfield-village-cleaning-services",
+      "name": "Harfield Village",
+      "status": 200,
+      "title": "Home Cleaning Services in Harfield Village, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/harfield-village-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services in Harfield Village, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/harfield-village-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/meadowridge-cleaning-services",
+      "name": "Meadowridge",
+      "status": 200,
+      "title": "Home Cleaning Services in Meadowridge, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/meadowridge-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services in Meadowridge, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/meadowridge-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/tokai-cleaning-services",
+      "name": "Tokai",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Tokai, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/tokai-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Tokai, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/tokai-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/pinelands-cleaning-services",
+      "name": "Pinelands",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Pinelands, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/pinelands-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Pinelands, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/pinelands-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/mowbray-cleaning-services",
+      "name": "Mowbray",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Mowbray, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/mowbray-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Mowbray, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/mowbray-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/rondebosch-east-cleaning-services",
+      "name": "Rondebosch East",
+      "status": 200,
+      "title": "Home Cleaning Services in Rondebosch East, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/rondebosch-east-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services in Rondebosch East, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/rondebosch-east-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/southfield-cleaning-services",
+      "name": "Southfield",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Southfield, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/southfield-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Southfield, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/southfield-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/heathfield-cleaning-services",
+      "name": "Heathfield",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Heathfield, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/heathfield-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Heathfield, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/heathfield-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/hout-bay-cleaning-services",
+      "name": "Hout Bay",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Hout Bay, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/hout-bay-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Hout Bay, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/hout-bay-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/clifton-cleaning-services",
+      "name": "Clifton",
+      "status": 200,
+      "title": "Home Cleaning Services Near You in Clifton, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/clifton-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You in Clifton, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/clifton-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/mouille-point-cleaning-services",
+      "name": "Mouille Point",
+      "status": 200,
+      "title": "Home Cleaning Services in Mouille Point, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/mouille-point-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services in Mouille Point, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/mouille-point-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/three-anchor-bay-cleaning-services",
+      "name": "Three Anchor Bay",
+      "status": 200,
+      "title": "Home Cleaning Services in Three Anchor Bay, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/three-anchor-bay-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services in Three Anchor Bay, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/three-anchor-bay-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/oranjezicht-cleaning-services",
+      "name": "Oranjezicht",
+      "status": 200,
+      "title": "Home Cleaning Services in Oranjezicht, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/oranjezicht-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services in Oranjezicht, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/oranjezicht-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/de-waterkant-cleaning-services",
+      "name": "De Waterkant",
+      "status": 200,
+      "title": "Home Cleaning Services in De Waterkant, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/de-waterkant-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services in De Waterkant, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/de-waterkant-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/century-city-cleaning-services",
+      "name": "Century City",
+      "status": 200,
+      "title": "Home Cleaning Services in Century City, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/century-city-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services in Century City, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/century-city-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/milnerton-cleaning-services",
+      "name": "Milnerton",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Milnerton, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/milnerton-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Milnerton, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/milnerton-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/bloubergstrand-cleaning-services",
+      "name": "Bloubergstrand",
+      "status": 200,
+      "title": "Home Cleaning Services in Bloubergstrand, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/bloubergstrand-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services in Bloubergstrand, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/bloubergstrand-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "location",
+      "path": "/locations/goodwood-cleaning-services",
+      "name": "Goodwood",
+      "status": 200,
+      "title": "Home Cleaning Services Near You | Goodwood, Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations/goodwood-cleaning-services"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Home Cleaning Services Near You | Goodwood, Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations/goodwood-cleaning-services",
+      "errors": []
+    },
+    {
+      "kind": "service",
+      "path": "/services/deep-cleaning-cape-town",
+      "status": 200,
+      "title": "Deep Cleaning Services in Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/services/deep-cleaning-cape-town"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Deep Cleaning Services in Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/services/deep-cleaning-cape-town",
+      "errors": []
+    },
+    {
+      "kind": "service",
+      "path": "/services/standard-cleaning-cape-town",
+      "status": 200,
+      "title": "Regular Cleaning in Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/services/standard-cleaning-cape-town"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Regular Cleaning in Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/services/standard-cleaning-cape-town",
+      "errors": []
+    },
+    {
+      "kind": "service",
+      "path": "/services/move-out-cleaning-cape-town",
+      "status": 200,
+      "title": "Move-out cleaning service in Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/services/move-out-cleaning-cape-town"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Move-out cleaning service in Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/services/move-out-cleaning-cape-town",
+      "errors": []
+    },
+    {
+      "kind": "service",
+      "path": "/services/office-cleaning-cape-town",
+      "status": 200,
+      "title": "Office cleaning service in Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/services/office-cleaning-cape-town"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Office cleaning service in Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/services/office-cleaning-cape-town",
+      "errors": []
+    },
+    {
+      "kind": "service",
+      "path": "/services/airbnb-cleaning-cape-town",
+      "status": 200,
+      "title": "Airbnb turnover cleaning service in Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/services/airbnb-cleaning-cape-town"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Airbnb turnover cleaning service in Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/services/airbnb-cleaning-cape-town",
+      "errors": []
+    },
+    {
+      "kind": "service",
+      "path": "/services/carpet-cleaning-cape-town",
+      "status": 200,
+      "title": "Carpet Cleaning Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/services/carpet-cleaning-cape-town"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Carpet Cleaning Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/services/carpet-cleaning-cape-town",
+      "errors": []
+    },
+    {
+      "kind": "service",
+      "path": "/services/window-cleaning-cape-town",
+      "status": 200,
+      "title": "Window cleaning service in Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/services/window-cleaning-cape-town"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Window cleaning service in Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/services/window-cleaning-cape-town",
+      "errors": []
+    },
+    {
+      "kind": "private",
+      "path": "/book",
+      "status": 200,
+      "title": "Book a Cleaning | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/book"
+      ],
+      "h1_count": 1,
+      "robots": "noindex, nofollow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Book a Cleaning | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/book",
+      "errors": []
+    },
+    {
+      "kind": "private",
+      "path": "/book/regular-cleaning",
+      "status": 200,
+      "title": "Book Regular Cleaning in Cape Town | Shalean",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/book/regular-cleaning"
+      ],
+      "h1_count": 1,
+      "robots": "noindex, nofollow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Book Regular Cleaning in Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/book/regular-cleaning",
+      "errors": []
+    },
+    {
+      "kind": "private",
+      "path": "/book/deep-cleaning",
+      "status": 200,
+      "title": "Book Deep Cleaning in Cape Town | Shalean",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/book/deep-cleaning"
+      ],
+      "h1_count": 1,
+      "robots": "noindex, nofollow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Book Deep Cleaning in Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/book/deep-cleaning",
+      "errors": []
+    },
+    {
+      "kind": "private",
+      "path": "/book/moving-cleaning",
+      "status": 200,
+      "title": "Book Moving Cleaning in Cape Town | Shalean",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/book/moving-cleaning"
+      ],
+      "h1_count": 1,
+      "robots": "noindex, nofollow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Book Moving Cleaning in Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/book/moving-cleaning",
+      "errors": []
+    },
+    {
+      "kind": "private",
+      "path": "/book/office-cleaning",
+      "status": 200,
+      "title": "Book Office Cleaning in Cape Town | Shalean",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/book/office-cleaning"
+      ],
+      "h1_count": 1,
+      "robots": "noindex, nofollow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Book Office Cleaning in Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/book/office-cleaning",
+      "errors": []
+    },
+    {
+      "kind": "private",
+      "path": "/book/carpet-cleaning",
+      "status": 200,
+      "title": "Book Carpet Cleaning in Cape Town | Shalean",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/book/carpet-cleaning"
+      ],
+      "h1_count": 1,
+      "robots": "noindex, nofollow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Book Carpet Cleaning in Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/book/carpet-cleaning",
+      "errors": []
+    },
+    {
+      "kind": "private",
+      "path": "/book/airbnb-cleaning",
+      "status": 200,
+      "title": "Book Airbnb Cleaning in Cape Town | Shalean",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/book/airbnb-cleaning"
+      ],
+      "h1_count": 1,
+      "robots": "noindex, nofollow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Book Airbnb Cleaning in Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/book/airbnb-cleaning",
+      "errors": []
+    },
+    {
+      "kind": "private",
+      "path": "/cleaner/login",
+      "status": 200,
+      "title": "Cleaner sign in — Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/cleaner/login"
+      ],
+      "h1_count": 1,
+      "robots": "noindex, nofollow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Cleaner sign in — Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/cleaner/login",
+      "errors": []
+    },
+    {
+      "kind": "directory",
+      "path": "/locations",
+      "status": 200,
+      "title": "Cleaning Services Across Cape Town | Shalean | STAGING",
+      "canonical": [
+        "https://pricing-test.shalean.co.za/locations"
+      ],
+      "h1_count": 1,
+      "robots": "index, follow",
+      "x_robots_tag": "noindex, nofollow, noimageindex",
+      "og_title": "Cleaning Services Across Cape Town | Shalean",
+      "og_url": "https://pricing-test.shalean.co.za/locations",
+      "errors": []
+    }
+  ],
+  "deployment_run": 41333577949
+}
