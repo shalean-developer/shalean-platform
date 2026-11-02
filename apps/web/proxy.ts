@@ -90,6 +90,11 @@ async function runProxy(request: NextRequest) {
     return redirectPreservingSearch(request, "/blog/how-to-prepare-home-before-cleaner-arrives-cape-town", 308);
   }
 
+  /** Historical kitchen-maintenance guide -> verified published hygiene guide. */
+  if (pathname === "/blog/keep-kitchen-hygienic-between-deep-cleans" || pathname === "/blog/keep-kitchen-hygienic-between-deep-cleans/") {
+    return redirectPreservingSearch(request, "/blog/safe-kitchen-cleaning-hygiene", 308);
+  }
+
   /** Short campaign links used in ads / captions. */
   const shortCampaign = pathname.match(/^\/c\/([^/]+)\/?$/);
   if (shortCampaign?.[1]) {
