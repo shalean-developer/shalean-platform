@@ -1708,7 +1708,7 @@ const HC_DEEP_VS_REGULAR_PUBLISHED = "2026-05-01T10:30:00+02:00";
 
 /** Deep cleaning vs regular (standard) — comparison + booking clarity. */
 export const DEEP_CLEANING_VS_REGULAR_CLEANING_CAPE_TOWN_ARTICLE = {
-  slug: "deep-cleaning-vs-regular-cleaning-cape-town",
+  slug: "deep-cleaning-vs-regular-cleaning",
   title: "Deep Cleaning vs Regular Cleaning: What's the Difference? (Cape Town Guide)",
   description:
     "Deep cleaning vs regular cleaning explained: what each includes, standard cleaning vs deep cleaning on time and cost, which cleaning service you need, and how to book deep cleaning services in Cape Town with a clear quote.",
@@ -1904,7 +1904,7 @@ for (const p of PROGRAMMATIC_POSTS) {
  */
 export const CORE_AUTHORITY_HIGH_CONVERSION_SLUGS: ReadonlySet<string> = new Set([
   "move-out-cleaning-checklist-cape-town",
-  "deep-cleaning-vs-regular-cleaning-cape-town",
+  "deep-cleaning-vs-regular-cleaning",
   "what-does-professional-cleaner-do-cape-town",
   "how-much-does-cleaning-cost-cape-town-2026",
 ]);
