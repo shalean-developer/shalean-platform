@@ -8,6 +8,10 @@ export type SalesDocumentRecoveryEvidence = {
   documentReference: string;
   paystackSuccessful: boolean;
   paystackAmountCents: number;
+  paystackTransactionId: string;
+  paystackFeeCents: number;
+  paystackNetCents: number;
+  paystackChannel: string;
   zohoInvoicePaid: boolean;
   zohoBalanceCents: number;
   documentStatus: string;
@@ -23,6 +27,11 @@ export function assessSalesDocumentRecovery(e: SalesDocumentRecoveryEvidence) {
   const reasons: string[] = [];
   if (!e.paymentReference || e.paymentReference !== e.documentReference) reasons.push("reference_mismatch");
   if (!e.paystackSuccessful) reasons.push("paystack_unverified");
+  if (!/^\\d+$/.test(e.paystackTransactionId.trim())) reasons.push("gateway_transaction_id_missing");
+  if (!Number.isSafeInteger(e.paystackFeeCents) || e.paystackFeeCents < 0 ||
+      !Number.isSafeInteger(e.paystackNetCents) ||
+      e.paystackNetCents !== e.paystackAmountCents - e.paystackFeeCents) reasons.push("gateway_net_mismatch");
+  if (!e.paystackChannel.trim()) reasons.push("gateway_channel_missing");
   if (!Number.isSafeInteger(e.paystackAmountCents) || e.paystackAmountCents <= 0 ||
       e.paystackAmountCents !== e.documentTotalCents) reasons.push("amount_mismatch");
   if (!e.zohoInvoicePaid || e.zohoBalanceCents !== 0) reasons.push("zoho_unsettled");
