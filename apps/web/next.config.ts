@@ -169,11 +169,6 @@ const nextConfig: NextConfig = {
         permanent: false,
       },
       {
-        source: "/c/:slug",
-        destination: "/campaigns/:slug",
-        permanent: false,
-      },
-      {
         source: "/services/standard-cleaning",
         destination: "/services/standard-cleaning-cape-town",
         permanent: true,
