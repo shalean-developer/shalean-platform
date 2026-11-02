@@ -27,6 +27,12 @@ function commercialCleaningServicesBlogToLocationRedirects(): {
 }
 
 const coreProgrammaticBlogCleanupRedirects = [
+  /** Published CMS replacement confirmed in production; do not duplicate the checklist. */
+  {
+    source: "/blog/spring-cleaning-checklist-south-africa",
+    destination: "/blog/spring-cleaning-checklist-cape-town",
+    permanent: true,
+  },
   /** Same comparison intent: retain the established CMS guide, with an in-repo fallback. */
   {
     source: "/blog/deep-cleaning-vs-regular-cleaning-cape-town",

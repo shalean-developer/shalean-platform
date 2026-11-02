@@ -168,6 +168,17 @@ const nextConfig: NextConfig = {
         destination: "/book",
         permanent: false,
       },
+      // Historical URLs with verified existing equivalents; no duplicate pages.
+      {
+        source: "/services/one-time-cleaning",
+        destination: "/services/standard-cleaning-cape-town",
+        permanent: true,
+      },
+      {
+        source: "/booking/quote",
+        destination: "/quote",
+        permanent: true,
+      },
       {
         source: "/services/standard-cleaning",
         destination: "/services/standard-cleaning-cape-town",
