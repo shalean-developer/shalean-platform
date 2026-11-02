@@ -85,6 +85,11 @@ async function runProxy(request: NextRequest) {
     return redirectPreservingSearch(request, "/blog/pet-friendly-cleaning-tips", 308);
   }
 
+  /** Historical preparation guide -> verified published CMS guide; protected staging redirect. */
+  if (pathname === "/blog/prepare-home-before-cleaner-arrives" || pathname === "/blog/prepare-home-before-cleaner-arrives/") {
+    return redirectPreservingSearch(request, "/blog/how-to-prepare-home-before-cleaner-arrives-cape-town", 308);
+  }
+
   /** Short campaign links used in ads / captions. */
   const shortCampaign = pathname.match(/^\/c\/([^/]+)\/?$/);
   if (shortCampaign?.[1]) {
