@@ -5,6 +5,7 @@ import { collectEnvironmentSafetyIssues } from "./lib/env/assertEnvironmentSafet
 import { HTML_LIMITED_BOTS } from "./lib/seo/htmlLimitedBots";
 import { loadLocationSeoFeedbackJsonForNextEnv } from "./lib/seo/load-location-seo-feedback-env";
 import { programmaticBlogCleanupRedirects } from "./lib/seo/programmaticBlogCleanupRedirects";
+import { isNonProductionDeployment } from "./lib/env/deploymentEnvironment";
 
 const appRoot = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(appRoot, "../..");
@@ -294,7 +295,14 @@ const nextConfig: NextConfig = {
     ];
   },
   async headers() {
+    // Config redirects run before proxy.ts. Protect those responses as well as HTML.
+    const blockIndexing = isNonProductionDeployment() || process.env.NODE_ENV !== "production" ||
+      process.env.VERCEL_ENV === "preview" || process.env.VERCEL_ENV === "development";
     return [
+      ...(blockIndexing ? [{
+        source: "/(.*)",
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, noimageindex" }],
+      }] : []),
       {
         source: "/(.*)",
         headers: [
