@@ -29,7 +29,7 @@ describe("SEO-ENV-01 non-production indexing guard", () => {
   });
   it("protects early redirect responses on staging", async () => {
     const response = await proxy(request("/c/example"));
-    expect(response.status).toBe(308);
+    expect(response.status).toBe(307);
     expect(response.headers.get("X-Robots-Tag")).toContain("noindex");
   });
   it.each([
