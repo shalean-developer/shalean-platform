@@ -179,6 +179,17 @@ const nextConfig: NextConfig = {
         destination: "/quote",
         permanent: true,
       },
+      // Two verified legacy aliases; reuse the canonical service pages.
+      {
+        source: "/services/regular-cleaning",
+        destination: "/services/standard-cleaning-cape-town",
+        permanent: true,
+      },
+      {
+        source: "/services/airbnb-cleaning",
+        destination: "/services/airbnb-cleaning-cape-town",
+        permanent: true,
+      },
       {
         source: "/services/standard-cleaning",
         destination: "/services/standard-cleaning-cape-town",
