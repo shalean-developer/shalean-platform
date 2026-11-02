@@ -102,40 +102,35 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  deploy-staging:
-    name: Protected Plesk staging activation (manual only)
+  publish-staging:
+    name: Protected PR artifact publication to existing Plesk Git branch
     needs: build-candidate
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.activate_staging == 'ACTIVATE-PR1032-STAGING' }}
     runs-on: ubuntu-latest
     environment: funnel-pr1032-staging
     permissions:
-      contents: read
+      contents: write
     steps:
-      - name: Verify exact requested commit and staging-only destination
+      - name: Verify exact approved source
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
-          STAGING_HOST: ${{ vars.FUNNEL_STAGING_SSH_HOST }}
-          STAGING_USER: ${{ vars.FUNNEL_STAGING_SSH_USER }}
-          STAGING_DIRECTORY: ${{ vars.FUNNEL_STAGING_DEPLOY_DIRECTORY }}
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = "refs/heads/fix/funnel-intelligence-integrity-20261102"
           test "$EXPECTED_SHA" = "$GITHUB_SHA"
           test "${#EXPECTED_SHA}" -eq 40
-          test "$STAGING_HOST" = "pricing-test.shalean.co.za"
-          test -n "$STAGING_USER"
-          test "$STAGING_DIRECTORY" = "/var/www/vhosts/shalean.co.za/funnel-pr1032-candidate"
-      - name: Check out approved activation script
+      - name: Check out PR source and approved activation script
         uses: actions/checkout@v4
         with:
-          persist-credentials: false
-      - name: Download exact artifact created by this run
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Download matching artifact from same run
         uses: actions/download-artifact@v4
         with:
           name: funnel-pr1032-staging-candidate-${{ github.sha }}
           path: candidate
-      - name: Validate candidate archive and SHA
+      - name: Validate staging package
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
         shell: bash
@@ -146,37 +141,33 @@ jobs:
           ACTUAL_DIGEST="$(sha256sum funnel-pr1032-staging-candidate.tar.gz | cut -d' ' -f1)"
           test -n "$EXPECTED_DIGEST"
           test "$EXPECTED_DIGEST" = "$ACTUAL_DIGEST"
-          test "$(tar -xOf funnel-pr1032-staging-candidate.tar.gz ./build-meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["artifact_sha"])')" = "$EXPECTED_SHA"
           tar -tzf funnel-pr1032-staging-candidate.tar.gz | grep -Fx './server.next.js'
-      - name: Transfer and activate on staging only, with existing rollback script
-        env:
-          SSH_KEY: ${{ secrets.FUNNEL_STAGING_SSH_PRIVATE_KEY }}
-          SSH_KNOWN_HOSTS: ${{ secrets.FUNNEL_STAGING_SSH_KNOWN_HOSTS }}
-          STAGING_HOST: ${{ vars.FUNNEL_STAGING_SSH_HOST }}
-          STAGING_USER: ${{ vars.FUNNEL_STAGING_SSH_USER }}
-          STAGING_DIRECTORY: ${{ vars.FUNNEL_STAGING_DEPLOY_DIRECTORY }}
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$SSH_KEY"
-          test -n "$SSH_KNOWN_HOSTS"
-          install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/id_ed25519"
-          chmod 600 "$HOME/.ssh/id_ed25519"
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/known_hosts"
-          SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes)
-          SCP=(scp -o BatchMode=yes -o StrictHostKeyChecking=yes)
-          "${SSH[@]}" "$STAGING_USER@$STAGING_HOST" "test -d '$STAGING_DIRECTORY' && test ! -L '$STAGING_DIRECTORY'"
-          "${SCP[@]}" candidate/funnel-pr1032-staging-candidate.tar.gz "$STAGING_USER@$STAGING_HOST:$STAGING_DIRECTORY/pricing-test-runtime.tar.gz"
-          "${SCP[@]}" scripts/plesk-activate-prebuilt-pricing-test.sh "$STAGING_USER@$STAGING_HOST:$STAGING_DIRECTORY/activate.sh"
-          "${SSH[@]}" "$STAGING_USER@$STAGING_HOST" "set -eu; cd '$STAGING_DIRECTORY'; test \"\$(tar -xOf pricing-test-runtime.tar.gz ./build-meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)[\"artifact_sha\"])')\" = '$EXPECTED_SHA'; bash ./activate.sh"
-      - name: Confirm staging release SHA and safe operating mode
+          tar -xOf funnel-pr1032-staging-candidate.tar.gz ./build-meta.json |
+            EXPECTED_SHA="$EXPECTED_SHA" python3 -c 'import json,os,sys; d=json.load(sys.stdin); assert d["artifact_sha"]==os.environ["EXPECTED_SHA"]; assert d["deployment_environment"]=="staging"; assert d["target_host"]=="pricing-test.shalean.co.za"; assert d["supabase_ref"]=="uwvnmluiqbczeduzjgse"; assert d["server_secrets_baked_in"] is False'
+      - name: Publish only to existing deploy/staging branch (never main)
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS --retry 5 --retry-delay 2 https://pricing-test.shalean.co.za/api/health/environment |
-            EXPECTED_SHA="$EXPECTED_SHA" python3 -c 'import json,os,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert d.get("deployment")=="staging"; assert d.get("releaseSha")==os.environ["EXPECTED_SHA"]; assert (d.get("supabase") or {}).get("configuredRef")=="uwvnmluiqbczeduzjgse"; assert (d.get("paystack") or {}).get("secretMode")=="test"; assert (d.get("paystack") or {}).get("publicMode")=="test"; assert (d.get("messaging") or {}).get("outboundDisabled") is True; assert not d.get("issues")'
+          cp scripts/plesk-activate-prebuilt-pricing-test.sh "$RUNNER_TEMP/activate.sh"
+          cp candidate/funnel-pr1032-staging-candidate.tar.gz "$RUNNER_TEMP/pricing-test-runtime.tar.gz"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch --no-tags origin refs/heads/deploy/staging
+          DEPLOY_BASE="$(git rev-parse FETCH_HEAD)"
+          git switch --detach "$DEPLOY_BASE"
+          git rm -rf --ignore-unmatch .
+          git clean -fdx
+          cp "$RUNNER_TEMP/activate.sh" ./activate.sh
+          cp "$RUNNER_TEMP/pricing-test-runtime.tar.gz" ./pricing-test-runtime.tar.gz
+          printf '%s\n' "$EXPECTED_SHA" > release-sha.txt
+          git add activate.sh pricing-test-runtime.tar.gz release-sha.txt
+          git commit -m "deploy: funnel PR 1032 staging $EXPECTED_SHA"
+          git push origin HEAD:refs/heads/deploy/staging
+      - name: Publication summary — activation requires independent confirmation
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          echo "Published staging artifact SHA: $EXPECTED_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Plesk must activate via its configured post-deployment action; publication is not runtime acceptance." >> "$GITHUB_STEP_SUMMARY"
