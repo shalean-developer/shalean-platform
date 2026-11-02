@@ -48,4 +48,23 @@ describe("SEO-ENV-01 non-production indexing guard", () => {
     expect(response.headers.get("X-Robots-Tag")).toContain("noindex");
     expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
   });
+  it("protects framework redirects before proxy execution only on the staging host", async () => {
+    // next.config redirects (/c/:slug, /home-cleaning, etc.) run before proxy.
+    const { default: config } = await import("../../../next.config");
+    const rules = await config.headers?.();
+    expect(rules).toBeDefined();
+    const stagingRule = rules?.find((rule) =>
+      rule.source === "/:path*" &&
+      rule.has?.some((condition) =>
+        condition.type === "host" && condition.value === "pricing-test.shalean.co.za"
+      )
+    );
+    expect(stagingRule?.headers).toContainEqual({
+      key: "X-Robots-Tag",
+      value: "noindex, nofollow, noimageindex",
+    });
+    expect(rules?.filter((rule) =>
+      rule.headers.some((header) => header.key.toLowerCase() === "x-robots-tag")
+    )).toEqual([stagingRule]);
+  });
 });
