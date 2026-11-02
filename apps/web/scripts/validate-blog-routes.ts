@@ -26,6 +26,11 @@ const DEFINED_SLUGS = new Set<string>([
   ...Object.keys(GOVERNED_SEED_SLUG_SEMANTIC_CLUSTER),
 ]);
 
+/** Production CMS publication confirmed 2026-11-02, read-only; one named exception. */
+const VERIFIED_PUBLISHED_CMS_TERMINALS = new Set<string>([
+  "spring-cleaning-checklist-cape-town",
+]);
+
 const ALLOWED_LOCATION_PATHS = new Set(CAPE_TOWN_LOCATIONS.map((l) => `/locations/${l.slug}`));
 const ALLOWED_SERVICE_PATHS = new Set(Object.values(CAPE_TOWN_SERVICE_SEO).map((b) => b.path));
 const ALLOWED_STATIC_COMMERCIAL_PATHS = new Set<string>([
@@ -39,7 +44,7 @@ function assertBlogTerminalOk(path: string, ctx: string): void {
   if (!n.startsWith("/blog/")) return;
   const slug = blogSlugFromPathname(n);
   if (!slug) throw new Error(`${ctx}: empty blog slug`);
-  if (!DEFINED_SLUGS.has(slug)) {
+  if (!DEFINED_SLUGS.has(slug) && !VERIFIED_PUBLISHED_CMS_TERMINALS.has(slug)) {
     throw new Error(
       `${ctx}: redirect terminal /blog/${slug} has no in-repo article definition — publish in CMS with this slug or add to PROGRAMMATIC/AIRBNB/HC pools.`,
     );
