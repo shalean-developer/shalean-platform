@@ -4,6 +4,7 @@ import { assessSalesDocumentRecovery, type SalesDocumentRecoveryEvidence } from 
 const valid: SalesDocumentRecoveryEvidence = {
   paymentReference: "sd_inv_test", documentReference: "sd_inv_test",
   paystackSuccessful: true, paystackAmountCents: 36000,
+  paystackTransactionId: "6626862426", paystackFeeCents: 828, paystackNetCents: 35172, paystackChannel: "capitec_pay",
   zohoInvoicePaid: true, zohoBalanceCents: 0,
   documentStatus: "sent", documentPaidCents: 0, documentTotalCents: 36000,
   linkedBookingPaidCents: 0, linkedBookingStatus: "pending_monthly", ledgerReferenceExists: false, dedupReferenceExists: false,
@@ -19,6 +20,9 @@ describe("historical sales-document recovery preflight (no writes)", () => {
     ["unverified payment", { paystackSuccessful: false }],
     ["reference mismatch", { documentReference: "other" }],
     ["amount mismatch", { paystackAmountCents: 35999 }],
+    ["missing gateway id", { paystackTransactionId: "" }],
+    ["net mismatch", { paystackNetCents: 36000 }],
+    ["missing channel", { paystackChannel: "" }],
     ["unpaid Zoho", { zohoInvoicePaid: false }],
     ["Zoho balance", { zohoBalanceCents: 36000 }],
     ["existing document payment", { documentPaidCents: 36000 }],
