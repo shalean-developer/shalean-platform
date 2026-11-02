@@ -1,218 +1,80 @@
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
-import { remapAdminPathToOffice } from "@/lib/admin/remapAdminPathToOffice";
-import { getLocation } from "@/lib/locations";
-import {
-  resolveLegacyGrowthLocal,
-  resolveLegacySingularLocation,
-  resolveLegacyStage19IntentPath,
-} from "@/lib/seo/legacyPhase1EdgeRedirects";
-import { resolveLegacyMarketingExactRedirect } from "@/lib/seo/legacyMarketingRedirectMatrix";
-import { isSeoRebuildGonePath } from "@/lib/seo/seoRebuildPhase1";
-import { CAPE_TOWN_LOCATIONS, locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest, NextResponse } from "next/server";
+
+vi.mock("@/lib/supabase/supabaseMiddleware", () => ({ updateSession: vi.fn() }));
 import { updateSession } from "@/lib/supabase/supabaseMiddleware";
-import { isNonProductionDeployment } from "@/lib/env/deploymentEnvironment";
+import { proxy } from "@/proxy";
 
-/** Aligns HTML `meta name="robots"` on transactional pages; `noimageindex` avoids Google Images surfacing page assets. */
-const X_ROBOTS_BLOCK = "noindex, nofollow, noimageindex";
+const session = vi.mocked(updateSession);
+const request = (path = "/blog/example") => new NextRequest(`https://pricing-test.shalean.co.za${path}`);
 
-function shouldNoIndexEntireDeployment(): boolean {
-  if (isNonProductionDeployment() || process.env.NODE_ENV !== "production") return true;
-  const v = process.env.VERCEL_ENV;
-  return v === "preview" || v === "development";
-}
+describe("SEO-ENV-01 non-production indexing guard", () => {
+  beforeEach(() => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERCEL_ENV", "");
+    vi.stubEnv("VERCEL_GIT_COMMIT_REF", "");
+    vi.stubEnv("SHALEAN_APP_ENV", "staging");
+    session.mockReset().mockResolvedValue(NextResponse.next());
+  });
+  afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
-function redirectPreservingSearch(request: NextRequest, destinationPath: string, status: 301 | 308) {
-  const url = request.nextUrl.clone();
-  if (destinationPath.startsWith("/#")) {
-    url.pathname = "/";
-    url.hash = destinationPath.slice(2);
-  } else {
-    const hashIdx = destinationPath.indexOf("#");
-    if (hashIdx >= 0) {
-      url.pathname = destinationPath.slice(0, hashIdx) || "/";
-      url.hash = destinationPath.slice(hashIdx + 1);
-    } else {
-      url.pathname = destinationPath;
-      url.hash = "";
-    }
-  }
-  return NextResponse.redirect(url, status);
-}
-
-/**
- * Next.js 16+ request proxy (formerly `middleware.ts`): legacy SEO redirects + Supabase session refresh.
- * Legacy `/cleaning-services/*` is not listed in `next.config.ts` redirects (avoids double `-cleaning-services` suffix).
- */
-export async function proxy(request: NextRequest) {
-  let response: NextResponse;
-  try { response = await runProxy(request); }
-  catch (err) { console.error("[proxy] fatal — passthrough", err); response = NextResponse.next(); }
-  // Apply after every return path, including redirects and a failed session refresh.
-  if (shouldNoIndexEntireDeployment()) response.headers.set("X-Robots-Tag", X_ROBOTS_BLOCK);
-  if (request.nextUrl.pathname.startsWith("/blog/") && request.nextUrl.searchParams.has("preview")) {
-    response.headers.set("Cache-Control", "private, no-store, max-age=0");
-    response.headers.set("X-Robots-Tag", "noindex, nofollow");
-    response.headers.set("Referrer-Policy", "no-referrer");
-  }
-  return response;
-}
-
-async function runProxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const host = request.headers.get("host")?.split(":")[0]?.toLowerCase() ?? "";
-
-  /** Apex .com / www — force canonical .co.za when this app receives the request. */
-  if (host === "shalean.com" || host === "www.shalean.com") {
-    const url = request.nextUrl.clone();
-    url.protocol = "https:";
-    url.host = "shalean.co.za";
-    url.port = "";
-    return NextResponse.redirect(url, 308);
-  }
-
-  /** Framework-level redirects run before proxy and bypass staging noindex headers.
-   * Serve these legacy aliases here so the outer proxy guard protects the 3xx itself. */
-  if (pathname === "/home-cleaning" || pathname === "/home-cleaning/") {
-    return redirectPreservingSearch(request, "/services/standard-cleaning-cape-town", 308);
-  }
-  if (pathname === "/help" || pathname === "/help/") {
-    return redirectPreservingSearch(request, "/faq", 308);
-  }
-
-  /** Short campaign links used in ads / captions. */
-  const shortCampaign = pathname.match(/^\/c\/([^/]+)\/?$/);
-  if (shortCampaign?.[1]) {
-    const url = request.nextUrl.clone();
-    url.pathname = `/campaigns/${shortCampaign[1]}`;
-    return NextResponse.redirect(url, 307);
-  }
-
-  /** Cron uses header auth only; skip Supabase session cloning work (and avoid any edge header quirks). */
-  if (pathname.startsWith("/api/cron")) {
-    return NextResponse.next();
-  }
-
-  /** Exact-path legacy marketing migrations (one hop, permanent). */
-  const marketing = resolveLegacyMarketingExactRedirect(pathname);
-  if (marketing) {
-    return redirectPreservingSearch(request, marketing.destination, marketing.status);
-  }
-
-  /** `/location/{city}/{suburb}` (singular) — hub or 410. */
-  const legacySingularLocation = pathname.match(/^\/location\/([^/]+)\/([^/]+)\/?$/);
-  if (legacySingularLocation) {
-    const city = legacySingularLocation[1] ?? "";
-    const suburb = legacySingularLocation[2] ?? "";
-    const resolved = resolveLegacySingularLocation(city, suburb);
-    if (resolved.type === "gone") {
-      return new NextResponse(null, { status: 410 });
-    }
-    return redirectPreservingSearch(request, resolved.pathname, 308);
-  }
-
-  /** `/growth/local/*` — hub/service or 410. */
-  const growthLocal = resolveLegacyGrowthLocal(pathname);
-  if (growthLocal !== null) {
-    if (growthLocal.type === "gone") {
-      return new NextResponse(null, { status: 410 });
-    }
-    return redirectPreservingSearch(request, growthLocal.pathname, 308);
-  }
-
-  /** Stage-19 `/{intent}/{suburb}` — hub/service (never leave as competing landings). */
-  const stage19 = resolveLegacyStage19IntentPath(pathname);
-  if (stage19 !== null) {
-    if (stage19.type === "gone") {
-      return new NextResponse(null, { status: 410 });
-    }
-    return redirectPreservingSearch(request, stage19.pathname, 308);
-  }
-
-  const legacy = pathname.match(/^\/cape-town\/cleaning-services\/([^/]+)\/?$/);
-  if (legacy) {
-    const segment = legacy[1] ?? "";
-    const svc = getLocation(segment);
-    if (svc?.citySlug === "cape-town" && segment === "cape-town") {
-      return redirectPreservingSearch(request, "/services/standard-cleaning-cape-town", 308);
-    }
-    return redirectPreservingSearch(request, locationHubPathFromAreaInput(segment), 308);
-  }
-
-  const flatCleaning = pathname.match(/^\/cleaning-services\/([^/]+)\/?$/);
-  if (flatCleaning) {
-    const segment = flatCleaning[1] ?? "";
-    const svc = getLocation(segment);
-    if (svc?.citySlug === "cape-town" && segment === "cape-town") {
-      return redirectPreservingSearch(request, "/services/standard-cleaning-cape-town", 308);
-    }
-    return redirectPreservingSearch(request, locationHubPathFromAreaInput(segment), 308);
-  }
-
-  /**
-   * Short `/locations/{slug}` that is not an exact catalogue hub slug (e.g. DB suburb
-   * `beacon-hill`) — permanently redirect to the hub path or `/locations` overview.
-   */
-  const locationsSegment = pathname.match(/^\/locations\/([^/]+)\/?$/);
-  if (locationsSegment?.[1]) {
-    const segment = decodeURIComponent(locationsSegment[1]).trim().toLowerCase();
-    const isExactHub = CAPE_TOWN_LOCATIONS.some((l) => l.slug === segment);
-    if (!isExactHub) {
-      const dest = locationHubPathFromAreaInput(segment);
-      if (dest !== pathname.replace(/\/+$/, "") && dest !== `/locations/${segment}`) {
-        return redirectPreservingSearch(request, dest, 308);
-      }
-    }
-  }
-
-  /** Thin “best cleaners in {area}” clones — permanently removed (410). */
-  const bestCleaningBlog = pathname.match(/^\/blog\/best-cleaning-services-(.+)-cape-town\/?$/);
-  if (bestCleaningBlog?.[1]) {
-    return new NextResponse(null, { status: 410 });
-  }
-
-  if (isSeoRebuildGonePath(pathname)) {
-    return new NextResponse(null, { status: 410 });
-  }
-
-  /** Admin console cutover — all `/admin/*` pages live under `/office/*`. */
-  if (pathname === "/admin" || pathname === "/admin/" || pathname.startsWith("/admin/")) {
-    if (pathname === "/admin/login" || pathname.startsWith("/admin/login/")) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      url.searchParams.set("role", "admin");
-      const redirectTo = url.searchParams.get("redirect");
-      if (!redirectTo || !redirectTo.startsWith("/") || redirectTo.startsWith("//")) {
-        url.searchParams.set("redirect", "/office");
-      } else {
-        const [pathPart, ...queryParts] = redirectTo.split("?");
-        const remappedPath = remapAdminPathToOffice(pathPart ?? redirectTo);
-        const query = queryParts.length > 0 ? `?${queryParts.join("?")}` : "";
-        url.searchParams.set("redirect", `${remappedPath}${query}`);
-      }
-      return NextResponse.redirect(url, 308);
-    }
-
-    const url = request.nextUrl.clone();
-    url.pathname = remapAdminPathToOffice(pathname);
-    if (pathname === "/admin/payout-runs" || pathname.startsWith("/admin/payout-runs/")) {
-      url.searchParams.set("tab", "disbursements");
-    }
-    return NextResponse.redirect(url, 308);
-  }
-
-  const res = await updateSession(request);
-  if (shouldNoIndexEntireDeployment()) {
-    res.headers.set("X-Robots-Tag", X_ROBOTS_BLOCK);
-  } else {
-    const pathNorm = pathname.replace(/\/+$/, "") || "/";
-    if (pathNorm === "/account/success" || pathNorm === "/booking/success" || pathNorm === "/payment/success") {
-      res.headers.set("X-Robots-Tag", X_ROBOTS_BLOCK);
-    }
-  }
-  return res;
-}
-
-export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
-};
+  it.each(["staging", "stage", "development", "preview", "local"])("blocks a production build identified as %s", async (env) => {
+    vi.stubEnv("SHALEAN_APP_ENV", env);
+    expect((await proxy(request())).headers.get("X-Robots-Tag")).toContain("noindex");
+  });
+  it("preserves indexability for declared Plesk production", async () => {
+    vi.stubEnv("SHALEAN_APP_ENV", "production");
+    const response = await proxy(new NextRequest("https://shalean.co.za/blog/example"));
+    expect(response.headers.get("X-Robots-Tag")).toBeNull();
+  });
+  it("protects early redirect responses on staging", async () => {
+    const response = await proxy(request("/c/example"));
+    expect(response.status).toBe(308);
+    expect(response.headers.get("X-Robots-Tag")).toContain("noindex");
+  });
+  it.each([
+    ["/home-cleaning", "/services/standard-cleaning-cape-town", 308],
+    ["/help", "/faq", 308],
+    ["/c/example", "/campaigns/example", 307],
+  ])("protects legacy redirect %s on staging", async (path, destination, status) => {
+    const response = await proxy(request(path));
+    expect(response.status).toBe(status);
+    expect(new URL(response.headers.get("location")!).pathname).toBe(destination);
+    expect(response.headers.get("X-Robots-Tag")).toContain("noindex");
+  });
+  it("protects the passthrough response after session failure", async () => {
+    session.mockRejectedValueOnce(new Error("session unavailable"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect((await proxy(request())).headers.get("X-Robots-Tag")).toContain("noindex");
+  });
+  it("retains Vercel preview protection even with an explicit production setting", async () => {
+    vi.stubEnv("SHALEAN_APP_ENV", "production");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    expect((await proxy(request())).headers.get("X-Robots-Tag")).toContain("noindex");
+  });
+  it("retains the production preview-token exclusion", async () => {
+    vi.stubEnv("SHALEAN_APP_ENV", "production");
+    const response = await proxy(request("/blog/example?preview=test-token"));
+    expect(response.headers.get("X-Robots-Tag")).toContain("noindex");
+    expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
+  });
+  it("protects framework redirects before proxy execution only on the staging host", async () => {
+    // next.config redirects (/c/:slug, /home-cleaning, etc.) run before proxy.
+    const { default: config } = await import("../../../next.config");
+    const rules = await config.headers?.();
+    expect(rules).toBeDefined();
+    const stagingRule = rules?.find((rule) =>
+      rule.source === "/:path*" &&
+      rule.has?.some((condition) =>
+        condition.type === "host" && condition.value === "pricing-test.shalean.co.za"
+      )
+    );
+    expect(stagingRule?.headers).toContainEqual({
+      key: "X-Robots-Tag",
+      value: "noindex, nofollow, noimageindex",
+    });
+    expect(rules?.filter((rule) =>
+      rule.headers.some((header) => header.key.toLowerCase() === "x-robots-tag")
+    )).toEqual([stagingRule]);
+  });
+});
