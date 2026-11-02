@@ -2,14 +2,9 @@ import { describe, expect, it } from "vitest";
 import config from "../../../next.config";
 
 describe("legacy pet guide URL consolidation", () => {
-  it("maps the old pet-owner slug to exactly one existing CMS guide", async () => {
+  it("does not intercept the pet-owner slug before the protected proxy", async () => {
     const redirects = await config.redirects?.();
-    const matches = redirects?.filter((r) => r.source === "/blog/home-cleaning-tips-for-pet-owners") ?? [];
-    expect(matches).toHaveLength(1);
-    expect(matches[0]).toMatchObject({
-      destination: "/blog/pet-friendly-cleaning-tips",
-      permanent: true,
-    });
+    expect(redirects?.some((r) => r.source === "/blog/home-cleaning-tips-for-pet-owners")).toBe(false);
   });
   it("does not add speculative preparation or kitchen redirects", async () => {
     const redirects = await config.redirects?.();
