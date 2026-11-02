@@ -32,6 +32,7 @@ const DEFINED_SLUGS = new Set<string>([
  */
 const VERIFIED_PUBLISHED_CMS_TERMINALS = new Set<string>([
   "spring-cleaning-checklist-cape-town",
+  "pet-friendly-cleaning-tips",
 ]);
 
 const ALLOWED_LOCATION_PATHS = new Set(CAPE_TOWN_LOCATIONS.map((l) => `/locations/${l.slug}`));
