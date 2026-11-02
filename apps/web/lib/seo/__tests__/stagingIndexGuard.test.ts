@@ -29,7 +29,17 @@ describe("SEO-ENV-01 non-production indexing guard", () => {
   });
   it("protects early redirect responses on staging", async () => {
     const response = await proxy(request("/c/example"));
-    expect(response.status).toBe(308);
+    expect(response.status).toBe(307);
+    expect(response.headers.get("X-Robots-Tag")).toContain("noindex");
+  });
+  it.each([
+    ["/home-cleaning", "/services/standard-cleaning-cape-town", 308],
+    ["/help", "/faq", 308],
+    ["/c/example", "/campaigns/example", 307],
+  ])("protects legacy redirect %s on staging", async (path, destination, status) => {
+    const response = await proxy(request(path));
+    expect(response.status).toBe(status);
+    expect(new URL(response.headers.get("location")!).pathname).toBe(destination);
     expect(response.headers.get("X-Robots-Tag")).toContain("noindex");
   });
   it("protects the passthrough response after session failure", async () => {

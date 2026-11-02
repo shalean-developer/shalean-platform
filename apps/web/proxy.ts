@@ -71,12 +71,21 @@ async function runProxy(request: NextRequest) {
     return NextResponse.redirect(url, 308);
   }
 
+  /** Framework-level redirects run before proxy and bypass staging noindex headers.
+   * Serve these legacy aliases here so the outer proxy guard protects the 3xx itself. */
+  if (pathname === "/home-cleaning" || pathname === "/home-cleaning/") {
+    return redirectPreservingSearch(request, "/services/standard-cleaning-cape-town", 308);
+  }
+  if (pathname === "/help" || pathname === "/help/") {
+    return redirectPreservingSearch(request, "/faq", 308);
+  }
+
   /** Short campaign links used in ads / captions. */
   const shortCampaign = pathname.match(/^\/c\/([^/]+)\/?$/);
   if (shortCampaign?.[1]) {
     const url = request.nextUrl.clone();
     url.pathname = `/campaigns/${shortCampaign[1]}`;
-    return NextResponse.redirect(url, 308);
+    return NextResponse.redirect(url, 307);
   }
 
   /** Cron uses header auth only; skip Supabase session cloning work (and avoid any edge header quirks). */
