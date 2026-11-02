@@ -15,10 +15,10 @@ describe("SEO historical 404 dispositions", () => {
     }
   });
 
-  it("does not invent a destination for the unverified legacy CMS article", async () => {
+  it("maps the retired spring checklist to its existing published CMS counterpart", async () => {
     const redirects = await config.redirects?.();
-    expect(redirects?.some((route) =>
-      route.source === "/blog/spring-cleaning-checklist-south-africa"
-    )).toBe(false);
+    const matches = redirects?.filter((rule) => rule.source === "/blog/spring-cleaning-checklist-south-africa") ?? [];
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({ destination: "/blog/spring-cleaning-checklist-cape-town", permanent: true });
   });
 });
