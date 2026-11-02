@@ -160,7 +160,7 @@ export default function CashFlowPage() {
         <FinanceKpiCard icon={Wallet} label="Expected expenses · selected period" value={!forecastCurrent ? "Unavailable" : formatForecastZar(s?.expected_expenses_cents ?? 0)} loading={loading} status="warning" />
         <FinanceKpiCard
           icon={TrendingUp}
-          label="Net cash flow"
+          label="Recorded net · settlements less payouts/approved expenses"
           value={formatZar(s?.net_cash_flow_cents ?? 0)}
           loading={loading}
           status={(s?.net_cash_flow_cents ?? 0) >= 0 ? "positive" : "negative"}
@@ -172,6 +172,8 @@ export default function CashFlowPage() {
           loading={loading}
         />
       </div>
+
+      <p className="text-xs text-slate-600" role="note">Recorded net uses Paystack bank-settlement amounts less recorded cleaner payouts and approved expenses for the selected dates. Expected income and expected expenses are a separate, incomplete forecast; they are not used in this recorded-net figure. Recorded net is not a reconciled all-bank cash movement total.</p>
 
       {forecastCurrent && data?.payment_evidence ? (
         <section aria-label="Payment evidence" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-slate-800">
