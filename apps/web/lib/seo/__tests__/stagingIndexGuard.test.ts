@@ -49,6 +49,16 @@ describe("SEO-ENV-01 non-production indexing guard", () => {
       expect(redirects?.some((rule) => rule.source === path)).toBe(false);
     }
   });
+  it("protects legacy pet-owner redirect while leaving production indexability intact", async () => {
+    const staging = await proxy(request("/blog/home-cleaning-tips-for-pet-owners"));
+    expect(staging.status).toBe(308);
+    expect(new URL(staging.headers.get("location")!).pathname).toBe("/blog/pet-friendly-cleaning-tips");
+    expect(staging.headers.get("X-Robots-Tag")).toContain("noindex");
+    vi.stubEnv("SHALEAN_APP_ENV", "production");
+    const production = await proxy(new NextRequest("https://shalean.co.za/blog/home-cleaning-tips-for-pet-owners"));
+    expect(production.status).toBe(308);
+    expect(production.headers.get("X-Robots-Tag")).toBeNull();
+  });
   it("protects the passthrough response after session failure", async () => {
     session.mockRejectedValueOnce(new Error("session unavailable"));
     vi.spyOn(console, "error").mockImplementation(() => {});
