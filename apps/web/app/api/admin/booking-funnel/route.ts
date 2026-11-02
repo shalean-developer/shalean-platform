@@ -529,7 +529,9 @@ export async function GET(request: Request) {
     .sort((a, b) => a - b);
   const avgTimeToCompleteSeconds =
     durations.length > 0 ? Math.round(durations.reduce((sum, n) => sum + n, 0) / durations.length) : null;
-  const medianTimeToCompleteSeconds = durations.length > 0 ? durations[Math.floor(durations.length / 2)]! : null;
+  const medianTimeToCompleteSeconds = durations.length === 0 ? null : durations.length % 2 === 1
+    ? durations[Math.floor(durations.length / 2)]!
+    : Math.round((durations[durations.length / 2 - 1]! + durations[durations.length / 2]!) / 2);
 
   const paidBookings = bookings.filter(isFunnelPaidBooking);
   const paidBookingsInWindow = paidBookings.filter((booking) => {
