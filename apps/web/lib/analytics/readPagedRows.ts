@@ -5,10 +5,10 @@
  * boundary fails closed rather than silently returning partial analytics.
  */
 export async function readPagedRows<T>(
-  buildQuery: () => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }> },
+  buildQuery: () => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string; code?: string } | null }> },
   pageSize = 1_000,
   maxRows = 50_000,
-): Promise<{ data: T[]; error: { message: string } | null }> {
+): Promise<{ data: T[]; error: { message: string; code?: string } | null }> {
   if (!Number.isSafeInteger(pageSize) || pageSize <= 0 ||
       !Number.isSafeInteger(maxRows) || maxRows <= 0 || maxRows % pageSize !== 0) {
     return { data: [], error: { message: "Invalid pagination bounds." } };
