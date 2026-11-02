@@ -6,7 +6,7 @@ const valid: SalesDocumentRecoveryEvidence = {
   paystackSuccessful: true, paystackAmountCents: 36000,
   zohoInvoicePaid: true, zohoBalanceCents: 0,
   documentStatus: "sent", documentPaidCents: 0, documentTotalCents: 36000,
-  linkedBookingPaidCents: 0, ledgerReferenceExists: false, dedupReferenceExists: false,
+  linkedBookingPaidCents: 0, linkedBookingStatus: "pending_monthly", ledgerReferenceExists: false, dedupReferenceExists: false,
 };
 
 describe("historical sales-document recovery preflight (no writes)", () => {
@@ -23,6 +23,7 @@ describe("historical sales-document recovery preflight (no writes)", () => {
     ["Zoho balance", { zohoBalanceCents: 36000 }],
     ["existing document payment", { documentPaidCents: 36000 }],
     ["existing booking payment", { linkedBookingPaidCents: 36000 }],
+    ["different booking status", { linkedBookingStatus: "pending_payment" }],
     ["existing ledger", { ledgerReferenceExists: true }],
     ["existing dedup", { dedupReferenceExists: true }],
     ["unexpected state", { documentStatus: "paid" }],
