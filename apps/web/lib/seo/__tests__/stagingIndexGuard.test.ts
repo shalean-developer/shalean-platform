@@ -58,6 +58,11 @@ describe("SEO-ENV-01 non-production indexing guard", () => {
     expect(response.headers.get("X-Robots-Tag")).toContain("noindex");
     expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
   });
+  it("does not configure /c/:slug as a pre-proxy framework redirect", async () => {
+    const { default: config } = await import("../../../next.config");
+    const redirects = await config.redirects?.();
+    expect(redirects?.some((rule) => rule.source === "/c/:slug")).toBe(false);
+  });
   it("protects framework redirects before proxy execution only on the staging host", async () => {
     // next.config redirects (/c/:slug, /home-cleaning, etc.) run before proxy.
     const { default: config } = await import("../../../next.config");
