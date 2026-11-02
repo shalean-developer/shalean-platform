@@ -351,7 +351,7 @@ export function buildOfficeFunnelAnomalies(data: BookingFunnelApiPayload): Offic
     title: row.message,
     description:
       row.observed != null
-        ? `${row.metric} · observed ${row.observed}${row.baseline != null ? ` vs baseline ${row.baseline}` : ""}`
+        ? `${row.metric} · observed ${row.observed}${row.baseline != null ? ` vs ${row.id === "completion_rate_drop" ? "historical comparison" : "configured reference threshold"} ${row.baseline}` : ""}`
         : row.metric,
     category: "Anomaly",
     kind: "anomaly" as const,
