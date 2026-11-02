@@ -24,3 +24,8 @@
 - Staging schema inspected. Temporary table fixture established completed/ cancelled/ two-link expectations, followed by ROLLBACK.
 - This test does not validate a real Zoho void, actual-table correction, or production write.
 - PR stays Draft; production NO-GO.
+
+## Actual-schema staging verification (2026-11-02)
+- `monthly_invoices.balance_cents` is a GENERATED ALWAYS column (`total_amount_cents - amount_paid_cents`). **Never write it directly.** Preserve historical total 36000 and paid 0, hence stored balance remains 36000; `void` + `is_closed=true` must cause customer-facing and financial reporting to treat effective collectible balance as **zero**.
+- Isolated real-table staging test: temporarily extended status constraint to include `void`, inserted a synthetic invoice using a staging customer foreign-key fixture, then executed void+closed update with an `invoice_voided` event. Second execution was a no-op; exactly one event. Transaction ended `ROLLBACK`; follow-up check found 0 synthetic invoices.
+- This does not validate the hardcoded customer-specific candidate (not present on staging) or all reporting consumers. Production schema migration and application reporting coverage remain separate gates.
