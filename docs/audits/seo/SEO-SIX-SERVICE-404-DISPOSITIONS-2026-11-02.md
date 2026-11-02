@@ -16,3 +16,12 @@ Do not automatically redirect unsupported geographic URLs to Cape Town service p
 
 ## Next gate
 For each remaining URL: historical original content/analytics/backlink or search intent evidence, known service area, current 404 or 410 decision, whether an exact valid 200 equivalent exists, and documented redirect/retirement justification. Only confirmed recovery decisions enter a new isolated implementation PR. SEO-INDEX-01 and the remaining 404 cohort remain open pending Google recrawl.
+
+## Follow-up source verification — 2 November
+
+- `lib/site/publicBusinessIdentity.ts` declares Cape Town, Western Cape as public LocalBusiness serviceArea; this is a public-marketing statement, **not** a complete live cleaner-coverage authorization list.
+- `lib/booking/assessBookingFulfillment.ts` determines actual delivery using eligible/assignable cleaners and area review; consequently historical suburb names alone are insufficient to assert active coverage.
+- `lib/pricing/cleaningDurationWorkload.ts` has a distinct Airbnb turnover service basis, while public move-out cleaning describes rental handover. The historic `move-turnover` slug has no verified original offer; retain 404, do not conflate.
+- Production CMS read-only search found published related guides for preparing homes and carpet cleaning, but similarity of title is not sufficient proof for 301/308. Content comparison remains a separate SEO-INDEX-01 editorial gate.
+
+These checks **do not close** the six URL investigations and do not authorize any redirect or 410 conversion.
