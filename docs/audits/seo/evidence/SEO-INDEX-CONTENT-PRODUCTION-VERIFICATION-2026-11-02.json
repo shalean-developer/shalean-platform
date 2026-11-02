@@ -1,0 +1,646 @@
+{
+  "date": "2026-11-02",
+  "approval": "Owner Approved exact PR1024/head94c4b43 deployment",
+  "pr": 1024,
+  "approvedHead": "94c4b43bda51694054caa95d25e72a325960d2c1",
+  "merge": "65e9dedea23452dd5175e3910533936505eace72",
+  "build": {
+    "id": 41390772355,
+    "conclusion": "success",
+    "sourceShaVerified": true
+  },
+  "safety": [
+    {
+      "host": "https://shalean.co.za",
+      "http": 200,
+      "status": "ok",
+      "releaseSha": "65e9dedea23452dd5175e3910533936505eace72",
+      "deployment": "production",
+      "db": "paqjwfulwywtsyyvdxrq",
+      "expectedDb": "paqjwfulwywtsyyvdxrq",
+      "payment": {
+        "publicMode": "live",
+        "secretMode": "live"
+      },
+      "outboundDisabled": false,
+      "issues": [],
+      "alias": {
+        "status": 308,
+        "location": "/blog/deep-cleaning-vs-regular-cleaning",
+        "xRobots": null
+      }
+    },
+    {
+      "host": "https://pricing-test.shalean.co.za",
+      "http": 200,
+      "status": "ok",
+      "releaseSha": "6b17a242b10cff3bef00c12f9120a23cc0891d97",
+      "deployment": "staging",
+      "db": "uwvnmluiqbczeduzjgse",
+      "expectedDb": "uwvnmluiqbczeduzjgse",
+      "payment": {
+        "publicMode": "test",
+        "secretMode": "test"
+      },
+      "outboundDisabled": true,
+      "issues": [],
+      "alias": {
+        "status": 308,
+        "location": "/blog/deep-cleaning-vs-regular-cleaning",
+        "xRobots": null
+      }
+    }
+  ],
+  "matrix": {
+    "host": "https://shalean.co.za",
+    "rows": [
+      {
+        "path": "/blog/airbnb-cleaning-observatory-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/airbnb-cleaning-observatory-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Airbnb Cleaning in Observatory, Cape Town",
+        "bodySha256": "7b88bbe80e893b374752fb0884a58644ec8d1bdea8b102a580adf7f939364aeb"
+      },
+      {
+        "path": "/blog/apartment-cleaning-tips-sea-point-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/apartment-cleaning-tips-sea-point-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Apartment cleaning tips for Sea Point, Cape Town",
+        "bodySha256": "df386a1805ded42d92f1cae1f88d4a1bb0a8eca04df73b4459a909bbaf3d0f1f"
+      },
+      {
+        "path": "/blog/airbnb-cleaning-newlands-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/airbnb-cleaning-newlands-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Airbnb Cleaning in Newlands, Cape Town",
+        "bodySha256": "b7b775a7037d065d4808bb1a084decd595d998c7c24bff9068704f9a943cda3e"
+      },
+      {
+        "path": "/blog/airbnb-cleaning-constantia-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/airbnb-cleaning-constantia-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Airbnb Cleaning in Constantia, Cape Town",
+        "bodySha256": "3ee1c1d246e1b3567e22943e77778a0658f854c3c934aca861ef7e4a17cdb5ab"
+      },
+      {
+        "path": "/blog/carpet-cleaning-constantia-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/carpet-cleaning-constantia-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Carpet Cleaning in Constantia, Cape Town",
+        "bodySha256": "f5fa9a019a86ff675a45adc3ed67e8ddd5a0c7899b9f2bfb847076417a4a3004"
+      },
+      {
+        "path": "/blog/carpet-cleaning-durbanville-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/carpet-cleaning-durbanville-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Carpet Cleaning in Durbanville, Cape Town",
+        "bodySha256": "4593253a524abec1c83c6ec163b03ac8b659e00864a3cd3e9f1bc6d49ff8ecf4"
+      },
+      {
+        "path": "/blog/carpet-cleaning-green-point-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/carpet-cleaning-green-point-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Carpet Cleaning in Green Point, Cape Town",
+        "bodySha256": "bbdb60f6289d5eaa266f8286790d6809e8344b95943154dd16b52f9715d8ada2"
+      },
+      {
+        "path": "/blog/cleaning-prices-claremont-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-claremont-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Cleaning prices in Claremont, Cape Town",
+        "bodySha256": "7283f2cd770679cc2524e16b5db6049ffbb63dcc9b98f5e32b8e099a07785d7c"
+      },
+      {
+        "path": "/blog/cleaning-prices-durbanville-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-durbanville-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Cleaning prices in Durbanville, Cape Town",
+        "bodySha256": "23c6b62a3e7e48e2bb60dc85e4ced3732ea94cdd5fe0c1c0736135e94f49d115"
+      },
+      {
+        "path": "/blog/cleaning-prices-gardens-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-gardens-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Cleaning prices in Gardens, Cape Town",
+        "bodySha256": "faeca35f0d3db58ba143c5fe824e9f60d45650aaac1b5de0afa04f0f189998a4"
+      },
+      {
+        "path": "/blog/cleaning-prices-green-point-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-green-point-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Cleaning prices in Green Point, Cape Town",
+        "bodySha256": "c3bf5c4980d1ed7d1b69c79d843d6bab5cf177ac5e2ba534f1ed2854ed3808ce"
+      },
+      {
+        "path": "/blog/cleaning-prices-newlands-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-newlands-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Cleaning prices in Newlands, Cape Town",
+        "bodySha256": "f76bb7d018f5697b47c9642e066f43c5a2398304bec0568442acb9ac563b09b3"
+      },
+      {
+        "path": "/blog/cleaning-prices-observatory-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-observatory-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Cleaning prices in Observatory, Cape Town",
+        "bodySha256": "397d9b4a9f27b77ee1445ab9b3ed8a963e71413f0aa0700fa43d715379ee86f6"
+      },
+      {
+        "path": "/blog/cleaning-prices-rondebosch-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-rondebosch-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Cleaning prices in Rondebosch, Cape Town",
+        "bodySha256": "cc45503d531b2772f5de69dbf4b2a00c53fe08c3066fe7a6ff91e096bcd18010"
+      },
+      {
+        "path": "/blog/cleaning-prices-sea-point-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-sea-point-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Cleaning prices in Sea Point, Cape Town",
+        "bodySha256": "f35863e99a15b3e2d3ae79b202615099f221a8d726ed9cba26ad0df7d7442a66"
+      },
+      {
+        "path": "/blog/deep-cleaning-checklist-claremont-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-claremont-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Deep cleaning checklist for Claremont, Cape Town",
+        "bodySha256": "67ed0e2336ed6142f1df1f77e8155e2cd84fbbf94431f5ee139602902feb55bf"
+      },
+      {
+        "path": "/blog/deep-cleaning-checklist-durbanville-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-durbanville-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Deep cleaning checklist for Durbanville, Cape Town",
+        "bodySha256": "df41fe605509f8d0fee11238c6fa1ee17faef3d0fd24c8d65c1fc02827c6fbe0"
+      },
+      {
+        "path": "/blog/deep-cleaning-checklist-green-point-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-green-point-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Deep cleaning checklist for Green Point, Cape Town",
+        "bodySha256": "8a353d2e9263072f850364d4e8cf9aa5aa660c6d652b3fc1ae0077eebb2d3820"
+      },
+      {
+        "path": "/blog/deep-cleaning-checklist-gardens-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-gardens-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Deep cleaning checklist for Gardens, Cape Town",
+        "bodySha256": "acfa253cfe1fc80bb37d8ae7b5846aa75a25c944466c8259a872356e10afaa98"
+      },
+      {
+        "path": "/blog/deep-cleaning-checklist-newlands-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-newlands-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Deep cleaning checklist for Newlands, Cape Town",
+        "bodySha256": "349c02a1ecab1efb2b1b4fbfeacfbec71871653d12235042f62fb0e352a36785"
+      },
+      {
+        "path": "/blog/deep-cleaning-checklist-observatory-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-observatory-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Deep cleaning checklist for Observatory, Cape Town",
+        "bodySha256": "8274aa7c8bd050badf46f3037186406f9c45af400361e5cb0e3fec2b2d8e1db6"
+      },
+      {
+        "path": "/blog/deep-cleaning-checklist-rondebosch-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-rondebosch-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Deep cleaning checklist for Rondebosch, Cape Town",
+        "bodySha256": "70bd021a5dac7734dc978f55d8737d36fa6d96f3f52b85367fa0cd65384e90da"
+      },
+      {
+        "path": "/blog/deep-cleaning-checklist-sea-point-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-sea-point-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Deep cleaning checklist for Sea Point, Cape Town",
+        "bodySha256": "35bb0971b13ae3b0f9787332c4d46e9f70a00adb254fcf10124718e9a2d5d356"
+      },
+      {
+        "path": "/blog/deep-cleaning-constantia-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-constantia-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Deep Cleaning in Constantia, Cape Town",
+        "bodySha256": "af1d9eba36e6f00958a9ca54a0bcb1335562d1a20f3782fe1b3bdd036ef925da"
+      },
+      {
+        "path": "/blog/deep-cleaning-observatory-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-observatory-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Deep Cleaning in Observatory, Cape Town",
+        "bodySha256": "55e4933bf833046fa1cd3b9a976e1758b078e79c0d944e4c4ac8d43f20a9874c"
+      },
+      {
+        "path": "/blog/deep-cleaning-newlands-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-newlands-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Deep Cleaning in Newlands, Cape Town",
+        "bodySha256": "51d17350d4cbc0eb4344dfb03608a0c4e20f1dc63ba34f51e4873d7d7b617b77"
+      },
+      {
+        "path": "/blog/home-cleaning-frequency-claremont-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-claremont-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Home cleaning frequency in Claremont, Cape Town",
+        "bodySha256": "1064b47328143f4d07cebdfa5331e90175684f74e46c5f3c61b96fa9ddc7779a"
+      },
+      {
+        "path": "/blog/home-cleaning-frequency-gardens-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-gardens-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Home cleaning frequency in Gardens, Cape Town",
+        "bodySha256": "e63cda7390efbe83e066b659865172d2a7218ab3706128cd8e9c6f001981b836"
+      },
+      {
+        "path": "/blog/home-cleaning-frequency-durbanville-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-durbanville-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Home cleaning frequency in Durbanville, Cape Town",
+        "bodySha256": "8233679ffe0bdf10cc1b8f30909ff6bd28171445f1a4362bb47608c805f6b7bb"
+      },
+      {
+        "path": "/blog/home-cleaning-frequency-green-point-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-green-point-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Home cleaning frequency in Green Point, Cape Town",
+        "bodySha256": "04ca88a6dfea2943b1f5cdf002e2354632a8e4076c03fdadea943ac252772f71"
+      },
+      {
+        "path": "/blog/home-cleaning-frequency-newlands-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-newlands-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Home cleaning frequency in Newlands, Cape Town",
+        "bodySha256": "cdb14532e189f6f0fcdc59927b30ff3c56a78ad742fb5af6312155c031765827"
+      },
+      {
+        "path": "/blog/home-cleaning-frequency-observatory-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-observatory-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Home cleaning frequency in Observatory, Cape Town",
+        "bodySha256": "2f0ebc3e2a7c90a1a53112d6c39c0f7be47575ce14fe0eb328261d197b419756"
+      },
+      {
+        "path": "/blog/home-cleaning-frequency-rondebosch-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-rondebosch-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Home cleaning frequency in Rondebosch, Cape Town",
+        "bodySha256": "3a5fb2689e202e7abbb5038b8fa4948368f49cfa1bb7c71a8a4647b9499e9104"
+      },
+      {
+        "path": "/blog/home-cleaning-frequency-sea-point-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-sea-point-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Home cleaning frequency in Sea Point, Cape Town",
+        "bodySha256": "f71256aec6c984fdd27e5e8158878b275b2d8e326f68f2a3045e7682f2ca6346"
+      },
+      {
+        "path": "/blog/move-out-cleaning-constantia-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-constantia-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Move-Out Cleaning in Constantia, Cape Town",
+        "bodySha256": "af2a5b2fef793e625076d20cd95f9497bffb9df1c9cfbebd928bc534b3a9dc5e"
+      },
+      {
+        "path": "/blog/move-out-cleaning-cost-claremont-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-claremont-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Move-out cleaning cost in Claremont, Cape Town",
+        "bodySha256": "14a0a1d92821fa145bb906b4b665e5dfedbb2a9d694086ad65c97ea686910b3d"
+      },
+      {
+        "path": "/blog/move-out-cleaning-cost-durbanville-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-durbanville-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Move-out cleaning cost in Durbanville, Cape Town",
+        "bodySha256": "ce8d5aa7b038487baca0d0ce97dcd76c26cb13515658ffa36d224d6e0c0a9d25"
+      },
+      {
+        "path": "/blog/move-out-cleaning-cost-gardens-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-gardens-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Move-out cleaning cost in Gardens, Cape Town",
+        "bodySha256": "8174572a45c7fb1936804d9f0540c72a44d4565e294545e313b128a2f0884b46"
+      },
+      {
+        "path": "/blog/move-out-cleaning-cost-green-point-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-green-point-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Move-out cleaning cost in Green Point, Cape Town",
+        "bodySha256": "682045cd6e44203edd1f033dd2e3c31e9a33c8dfc88556c8a6dcff5d02d7e33a"
+      },
+      {
+        "path": "/blog/move-out-cleaning-cost-newlands-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-newlands-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Move-out cleaning cost in Newlands, Cape Town",
+        "bodySha256": "75528c9e6e96e61c034dc475081cddc2e3ae72468b5a452a8444bfbe70129192"
+      },
+      {
+        "path": "/blog/move-out-cleaning-cost-observatory-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-observatory-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Move-out cleaning cost in Observatory, Cape Town",
+        "bodySha256": "668da9fb44cf0acc45194f2ab04855aeab3ed2fa86020b8f4cdb0a15ecd12e68"
+      },
+      {
+        "path": "/blog/move-out-cleaning-cost-rondebosch-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-rondebosch-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Move-out cleaning cost in Rondebosch, Cape Town",
+        "bodySha256": "c96722a558bcf0e4c69ff639dc130e6c501bbb94fb18acc9735a4cca777774e4"
+      },
+      {
+        "path": "/blog/move-out-cleaning-cost-sea-point-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-sea-point-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Move-out cleaning cost in Sea Point, Cape Town",
+        "bodySha256": "7fbed2c9f0eabd129d033c48ac6e5d35e3c4a0f131c6d16972a4ff144ca97b41"
+      },
+      {
+        "path": "/blog/move-out-cleaning-newlands-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-newlands-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Move-Out Cleaning in Newlands, Cape Town",
+        "bodySha256": "303cf75d292d9efbb2fb08d076fc3e7a8778c8e8b7db269efec91e9b6921f343"
+      },
+      {
+        "path": "/blog/move-out-cleaning-observatory-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-observatory-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Move-Out Cleaning in Observatory, Cape Town",
+        "bodySha256": "fe813d35490eddf4bc98b2d080741e7581c6a64ff373b9e63bd689af4c574c11"
+      },
+      {
+        "path": "/blog/standard-cleaning-constantia-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/standard-cleaning-constantia-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Standard Cleaning in Constantia, Cape Town",
+        "bodySha256": "96128115428642d94ba13856229a0db23b9eed9b0f6a269a7c657cbc4f702703"
+      },
+      {
+        "path": "/blog/standard-cleaning-durbanville-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/standard-cleaning-durbanville-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Standard Cleaning in Durbanville, Cape Town",
+        "bodySha256": "847c31d63b3a2a01e00dc0106b2790dc540e5dfa9a3ec69909fee368e7c69724"
+      },
+      {
+        "path": "/services/standard-cleaning-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/services/standard-cleaning-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Regular home cleaning services in Cape Town",
+        "bodySha256": "88d4e7891e17e965165c55c92d0db3822034fede2216e562d4423bfcba9bf58f"
+      },
+      {
+        "path": "/blog/standard-cleaning-green-point-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/standard-cleaning-green-point-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Standard Cleaning in Green Point, Cape Town",
+        "bodySha256": "a6f42aa40b57e2efb32ca8987d265723d21f15b514ef9e79d96712341e8d89f5"
+      },
+      {
+        "path": "/blog/standard-cleaning-newlands-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/standard-cleaning-newlands-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Standard Cleaning in Newlands, Cape Town",
+        "bodySha256": "3d964958e23540f110251a89e6fcfacef9e5118a7158a9fae143ccec0f74ae3a"
+      },
+      {
+        "path": "/services/deep-cleaning-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/services/deep-cleaning-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Deep cleaning services in Cape Town for homes that need a real reset",
+        "bodySha256": "dc67caa5a549e6d23afd3b679f57fa3916ead67570f1b2778ce3e93baf07f3ee"
+      },
+      {
+        "path": "/services/move-out-cleaning-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/services/move-out-cleaning-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Move Out & End of Tenancy Cleaning Services in Cape Town",
+        "bodySha256": "d99246a59ffa52c7a8ad64beab493567aedbfe5f2dbc5bf1a5b8066e9c894f34"
+      },
+      {
+        "path": "/services/office-cleaning-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/services/office-cleaning-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Office cleaning services in Cape Town for productive, presentable workspaces",
+        "bodySha256": "d73efeac0f8ceeb59191e2c14513ebe4618cb55f0453a1abf15ef86a9aa6a52d"
+      },
+      {
+        "path": "/blog/standard-cleaning-observatory-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/standard-cleaning-observatory-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Standard Cleaning in Observatory, Cape Town",
+        "bodySha256": "c2450b2e283dcce09bfbe4a1c3095b95c4355f0fa48c8a6454379b98760f297b"
+      },
+      {
+        "path": "/services/airbnb-cleaning-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/services/airbnb-cleaning-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Airbnb Cleaning & Turnover Services in Cape Town",
+        "bodySha256": "59e2c401a9868d5e3743f220c465427835ed715cc50294a16de9f6bed4bd19a9"
+      },
+      {
+        "path": "/services/window-cleaning-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/services/window-cleaning-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Window Cleaning Services in Cape Town",
+        "bodySha256": "da3612554a2e7fb805f10d29b24fdce4624cfa3d2c824bcfd074c1e66ef14965"
+      },
+      {
+        "path": "/services/carpet-cleaning-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/services/carpet-cleaning-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Carpet cleaning services in Cape Town for fresher rugs, carpets, and high-traffic rooms",
+        "bodySha256": "6bb70f97117a2a7286488d3ec81c4d52ed0c20b1548b9274c7d225a5309c13c2"
+      },
+      {
+        "path": "/services",
+        "status": 200,
+        "canonical": "https://shalean.co.za/services",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "ProfessionalCleaning Servicesin Cape Town",
+        "bodySha256": "8c502ab43cb3a2967d2b1f0d469c2ef270872b42cf5eb8b29bd798a8c4682651"
+      },
+      {
+        "path": "/cleaning-prices-cape-town",
+        "status": 200,
+        "canonical": "https://shalean.co.za/cleaning-prices-cape-town",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Cleaning Prices in Cape Town",
+        "bodySha256": "b6281252ca881b33716917a8e2dda6d74cedcefb8681f6a7ff64c9d40b850a58"
+      },
+      {
+        "path": "/blog/deep-cleaning-vs-regular-cleaning",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-vs-regular-cleaning",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Deep Cleaning vs Regular Cleaning: What Is the Difference?",
+        "bodySha256": "7e9196f52158b83a2aa78f95fb8b731142b5a2c27e01819a56fb2bae51dbdf9d"
+      },
+      {
+        "path": "/blog",
+        "status": 200,
+        "canonical": "https://shalean.co.za/blog",
+        "robots": "index, follow ",
+        "errors": [],
+        "h1": "Cleaning Guides & Prices in Cape Town",
+        "bodySha256": "06f84f777c490a5d093c5c143cacdf55418c11be713d1d96e568df3381c9709c"
+      },
+      {
+        "path": "/blog/deep-cleaning-vs-regular-cleaning-cape-town",
+        "status": 308,
+        "location": "/blog/deep-cleaning-vs-regular-cleaning?from=seo-review",
+        "errors": []
+      },
+      {
+        "path": "/blog/deep-vs-standard-cleaning-cape-town",
+        "status": 308,
+        "location": "/blog/deep-cleaning-vs-regular-cleaning?from=seo-review",
+        "errors": []
+      }
+    ]
+  },
+  "sitemap": {
+    "http": 200,
+    "count": 193,
+    "aliasPresent": false,
+    "terminalPresent": true
+  },
+  "retainedCms": {
+    "bodySha256": "7e9196f52158b83a2aa78f95fb8b731142b5a2c27e01819a56fb2bae51dbdf9d",
+    "matchesBaseline": true
+  },
+  "closures": [
+    "SEO-CONTENT-01",
+    "SEO-CONTENT-02"
+  ],
+  "monitoring": [
+    "SEO-INDEX-01",
+    "SEO-CONTENT-03"
+  ],
+  "reopened": {
+    "id": "SEO-ENV-01",
+    "severity": "Low",
+    "finding": "Staging Next.config early comparison redirects lack X-Robots-Tag; terminal HTML is protected; proxy wrapper cannot cover earlier Next.config returns",
+    "correction": "Earlier broad early-redirect coverage claim exceeded checks. Separate bounded staging header fix/regression required; production redirects correctly have no noindex header."
+  },
+  "noGoogleSubmission": true,
+  "gate": "Production content release PASS; wider audit remains OPEN"
+}
