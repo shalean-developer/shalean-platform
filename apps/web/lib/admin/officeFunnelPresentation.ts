@@ -309,7 +309,7 @@ export function buildOfficeFunnelKpis(data: BookingFunnelApiPayload): OfficeFunn
     {
       label: "Checkout → paid",
       value: pctLabel(checkoutPaid),
-      sub: `${paid} of ${checkout} reached checkout`,
+      sub: `${paid} paid of ${checkout} checkout sessions`,
       tone: "blue",
     },
     {
@@ -321,7 +321,7 @@ export function buildOfficeFunnelKpis(data: BookingFunnelApiPayload): OfficeFunn
     {
       label: "Paystack drop-off",
       value: pctLabel(paystack?.abandonmentPct),
-      sub: `${paystack?.completed ?? 0}/${paystack?.opened ?? 0} Paystack sessions · ${zarLabel(revenue?.totalZar)} revenue`,
+      sub: `${paystack?.completed ?? 0}/${paystack?.opened ?? 0} Paystack sessions · ${zarLabel(revenue?.totalZar)} booking DB revenue (unreconciled)`,
       tone: "orange",
     },
   ];
