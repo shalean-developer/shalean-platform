@@ -20,7 +20,7 @@ jobs:
       NEXT_PUBLIC_SITE_URL: https://pricing-test.shalean.co.za
       NEXT_PUBLIC_APP_URL: https://pricing-test.shalean.co.za
       NEXT_PUBLIC_SUPABASE_URL: https://uwvnmluiqbczeduzjgse.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.PLESK_STAGING_SUPABASE_PUBLISHABLE_KEY }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ vars.PLESK_STAGING_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_Jl3ESJbVyt2gnuiVslYvHg_gy-LaG_1' }}"
       NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: ${{ vars.PLESK_TEST_PAYSTACK_PUBLIC_KEY }}
     steps:
       - name: Check out exact branch commit
