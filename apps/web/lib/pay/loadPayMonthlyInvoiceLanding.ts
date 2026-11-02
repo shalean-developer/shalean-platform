@@ -1,3 +1,4 @@
+import { isMonthlyInvoiceCollectible } from "@/lib/monthlyInvoice/isMonthlyInvoiceCollectible";
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -104,7 +105,7 @@ export async function loadPayMonthlyInvoiceLanding(
   if (status === "paid") {
     return { ok: false, httpStatus: 410, error: "This invoice has already been paid." };
   }
-  if (!["draft", "sent", "partially_paid", "overdue"].includes(status)) {
+  if (!isMonthlyInvoiceCollectible({ status, is_closed: r.is_closed === true, balance_cents: Number(r.balance_cents ?? 0) })) {
     return { ok: false, httpStatus: 410, error: "This invoice is not open for payment." };
   }
 
