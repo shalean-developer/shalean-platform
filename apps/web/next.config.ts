@@ -123,11 +123,6 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       {
-        source: "/home-cleaning",
-        destination: "/services/standard-cleaning-cape-town",
-        permanent: true,
-      },
-      {
         source: "/deep-cleaning",
         destination: "/services/deep-cleaning-cape-town",
         permanent: true,
@@ -136,11 +131,6 @@ const nextConfig: NextConfig = {
       {
         source: "/careers",
         destination: "/cleaner/apply",
-        permanent: true,
-      },
-      {
-        source: "/help",
-        destination: "/faq",
         permanent: true,
       },
       {
@@ -176,11 +166,6 @@ const nextConfig: NextConfig = {
       {
         source: "/campaigns",
         destination: "/book",
-        permanent: false,
-      },
-      {
-        source: "/c/:slug",
-        destination: "/campaigns/:slug",
         permanent: false,
       },
       {
