@@ -71,7 +71,15 @@ jobs:
           rm -rf "$STAGE/public" "$STAGE/.next/static"
           cp -a apps/web/public "$STAGE/public"
           cp -a apps/web/.next/static "$STAGE/.next/static"
-          printf '{"artifact_sha":"%s","artifact_branch":"%s","deployment_environment":"staging","target_host":"pricing-test.shalean.co.za","supabase_ref":"uwvnmluiqbczeduzjgse","activated":false}\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" > "$STAGE/build-meta.json"
+          printf '{"artifact_sha":"%s","artifact_branch":"%s","deployment_environment":"staging","target_host":"pricing-test.shalean.co.za","supabase_ref":"uwvnmluiqbczeduzjgse","activated":false,"server_secrets_baked_in":false}\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" > "$STAGE/build-meta.json"
+          mv "$STAGE/server.js" "$STAGE/server.next.js"
+          cat > "$STAGE/server.js" <<'NODE'
+          'use strict';
+          process.env.SHALEAN_RELEASE_SHA = process.env.SHALEAN_RELEASE_SHA || require('./build-meta.json').artifact_sha;
+          require('./server.next.js');
+          NODE
+          test -f "$STAGE/server.next.js"
+          test -f "$STAGE/server.js"
           tar -czf "$RUNNER_TEMP/funnel-pr1032-staging-candidate.tar.gz" -C "$STAGE" .
           sha256sum "$RUNNER_TEMP/funnel-pr1032-staging-candidate.tar.gz" > "$RUNNER_TEMP/funnel-pr1032-staging-candidate.sha256"
       - name: Upload candidate for separately authorized staging activation
