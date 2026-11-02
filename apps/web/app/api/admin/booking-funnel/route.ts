@@ -352,9 +352,9 @@ export async function GET(request: Request) {
     sessionsAny.add(sessionId);
     const payload = safePayload(event);
     const t = traitFor(sessionId);
-    t.device = stringValue(payload.device_type) ?? t.device;
-    t.service = stringValue(payload.service_type) ?? t.service;
-    t.suburb = stringValue(payload.suburb) ?? t.suburb;
+    t.device ??= stringValue(payload.device_type) ?? undefined;
+    t.service ??= stringValue(payload.service_type) ?? undefined;
+    t.suburb ??= stringValue(payload.suburb) ?? undefined;
     if (typeof payload.estimated_price === "number" && Number.isFinite(payload.estimated_price)) {
       t.estimatedPrice = payload.estimated_price;
     }
