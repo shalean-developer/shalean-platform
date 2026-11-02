@@ -67,6 +67,24 @@ BEGIN
      fee_calculation_method,settlement_status,payment_channel,paid_at,sync_status)
   VALUES ('paystack',v_ref,'6626862426','sales_document',v_doc,36000,'ZAR',
           828,35172,'paystack_reported','pending','capitec_pay',v_paid_at,'ignored');
+  -- Abort the whole transaction if a trigger or concurrent change has
+  -- altered expected state. This is not a substitute for full trigger tests.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.sales_documents
+    WHERE id=v_doc AND status='paid' AND amount_paid_cents=36000 AND balance_cents=0
+  ) OR NOT EXISTS (
+    SELECT 1 FROM public.bookings
+    WHERE id=b.id AND status='pending_monthly'
+      AND payment_status='success' AND amount_paid_cents=36000
+      AND total_paid_cents=36000 AND payment_completed_at=v_paid_at
+  ) OR (SELECT count(*) FROM public.payment_transactions
+        WHERE gateway='paystack' AND gateway_reference=v_ref
+          AND gateway_transaction_id='6626862426' AND amount_cents=36000)<>1
+    OR (SELECT count(*) FROM public.sales_document_paystack_charge_dedup
+        WHERE charge_reference=v_ref AND document_id=v_doc AND amount_cents=36000)<>1
+  THEN
+    RAISE EXCEPTION 'historical_reconciliation_postcondition_failed';
+  END IF;
 END
 $repair$;
 -- Postconditions must be independently inspected in the *same transaction*.
