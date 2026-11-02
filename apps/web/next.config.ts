@@ -295,6 +295,13 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      // Next.js config redirects execute before proxy.ts. Protect their 3xx
+      // responses on canonical staging without making production URLs noindex.
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "pricing-test.shalean.co.za" }],
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, noimageindex" }],
+      },
       {
         source: "/(.*)",
         headers: [
