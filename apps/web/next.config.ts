@@ -179,6 +179,17 @@ const nextConfig: NextConfig = {
         destination: "/quote",
         permanent: true,
       },
+      // Historic service names share these existing canonical services; no new pages.
+      {
+        source: "/services/regular-cleaning",
+        destination: "/services/standard-cleaning-cape-town",
+        permanent: true,
+      },
+      {
+        source: "/services/airbnb-cleaning",
+        destination: "/services/airbnb-cleaning-cape-town",
+        permanent: true,
+      },
       {
         source: "/services/standard-cleaning",
         destination: "/services/standard-cleaning-cape-town",

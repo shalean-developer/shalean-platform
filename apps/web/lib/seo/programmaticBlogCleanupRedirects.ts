@@ -27,6 +27,12 @@ function commercialCleaningServicesBlogToLocationRedirects(): {
 }
 
 const coreProgrammaticBlogCleanupRedirects = [
+  /** Legacy pet-owner cleaning tips are incorporated in the published pet-friendly guide. */
+  {
+    source: "/blog/home-cleaning-tips-for-pet-owners",
+    destination: "/blog/pet-friendly-cleaning-tips",
+    permanent: true,
+  },
   /** Published CMS replacement confirmed in production; do not duplicate the checklist. */
   {
     source: "/blog/spring-cleaning-checklist-south-africa",
