@@ -49,7 +49,9 @@ BEGIN
      OR d.amount_paid_cents<>0 OR d.paystack_reference IS DISTINCT FROM v_ref
      OR d.zoho_invoice_id IS DISTINCT FROM '253016000001724014'
      OR b.status<>'pending_monthly' OR b.amount_paid_cents<>0
-     OR b.payment_status='success'
+     OR b.payment_status IS DISTINCT FROM 'pending_monthly'
+     OR b.monthly_invoice_id IS NOT NULL
+     OR b.payment_completed_at IS NOT NULL
   THEN RAISE EXCEPTION 'unexpected_historical_state'; END IF;
   -- Atomic local accounting state only. Preserve b.status and historical dates.
   INSERT INTO public.sales_document_paystack_charge_dedup(charge_reference,document_id,amount_cents)
