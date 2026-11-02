@@ -1,0 +1,455 @@
+{
+  "date": "2026-11-02",
+  "scope": [
+    "SEO-INDEX-01",
+    "SEO-CONTENT-01",
+    "SEO-CONTENT-02",
+    "SEO-CONTENT-03"
+  ],
+  "google": {
+    "reportUpdated": "2026-10-23",
+    "submittedIndexed": 147,
+    "submittedExcluded": 46,
+    "crawled": [
+      "https://shalean.co.za/blog/pricing-guide-house-cleaning-cape-town",
+      "https://shalean.co.za/locations/woodstock-cleaning-services",
+      "https://shalean.co.za/blog/bathroom-mould-tiles-grout",
+      "https://shalean.co.za/blog/cleaning-services-for-pensioners-cape-town",
+      "https://shalean.co.za/blog/cleaning-services-cost-cape-town",
+      "https://shalean.co.za/blog/women-owned-cleaning-services-cape-town",
+      "https://shalean.co.za/blog/last-minute-cleaning-cape-town-rescue-plan",
+      "https://shalean.co.za/blog/weekly-house-cleaning-checklist",
+      "https://shalean.co.za/blog/best-natural-cleaning-products",
+      "https://shalean.co.za/blog/same-day-cleaning-cape-town",
+      "https://shalean.co.za/blog/carpet-cleaning-step-by-step-guide",
+      "https://shalean.co.za/blog/pet-friendly-cleaning-tips",
+      "https://shalean.co.za/blog/airbnb-cleaning-mistakes-hosts-make",
+      "https://shalean.co.za/blog/window-and-mirror-cleaning-tips",
+      "https://shalean.co.za/blog/speed-cleaning-routine",
+      "https://shalean.co.za/blog/what-to-expect-professional-cleaning-service",
+      "https://shalean.co.za/blog/what-does-professional-cleaner-do-cape-town",
+      "https://shalean.co.za/locations",
+      "https://shalean.co.za/locations/constantia-cleaning-services",
+      "https://shalean.co.za/blog/deep-cleaning-vs-regular-cleaning-cape-town",
+      "https://shalean.co.za/blog/why-home-still-feels-dirty-after-cleaning-cape-town",
+      "https://shalean.co.za/blog/best-airbnb-cleaning-tips-cape-town",
+      "https://shalean.co.za/locations/bantry-bay-cleaning-services"
+    ],
+    "discovered": [
+      "https://shalean.co.za/blog/cleaning-prices-claremont-cape-town",
+      "https://shalean.co.za/blog/cleaning-prices-sea-point-cape-town",
+      "https://shalean.co.za/blog/deep-cleaning-checklist-claremont-cape-town",
+      "https://shalean.co.za/blog/deep-cleaning-checklist-newlands-cape-town",
+      "https://shalean.co.za/blog/deep-cleaning-checklist-rondebosch-cape-town",
+      "https://shalean.co.za/blog/deep-cleaning-checklist-sea-point-cape-town",
+      "https://shalean.co.za/blog/home-cleaning-frequency-claremont-cape-town",
+      "https://shalean.co.za/blog/home-cleaning-frequency-newlands-cape-town",
+      "https://shalean.co.za/blog/home-cleaning-frequency-sea-point-cape-town",
+      "https://shalean.co.za/blog/how-often-to-clean-airbnb-cape-town",
+      "https://shalean.co.za/blog/move-out-cleaning-cost-claremont-cape-town",
+      "https://shalean.co.za/blog/move-out-cleaning-newlands-cape-town",
+      "https://shalean.co.za/blog/prepare-airbnb-for-cleaning",
+      "https://shalean.co.za/faq",
+      "https://shalean.co.za/locations/bellville-cleaning-services",
+      "https://shalean.co.za/locations/vredehoek-cleaning-services",
+      "https://shalean.co.za/reviews",
+      "https://shalean.co.za/services/move-out-cleaning-cape-town",
+      "https://shalean.co.za/services/window-cleaning-cape-town"
+    ],
+    "currentReadiness": [
+      {
+        "url": "https://shalean.co.za/locations/woodstock-cleaning-services",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/locations/woodstock-cleaning-services",
+        "canonical": "https://shalean.co.za/locations/woodstock-cleaning-services",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/pricing-guide-house-cleaning-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/pricing-guide-house-cleaning-cape-town",
+        "canonical": "https://shalean.co.za/blog/pricing-guide-house-cleaning-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/bathroom-mould-tiles-grout",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/bathroom-mould-tiles-grout",
+        "canonical": "https://shalean.co.za/blog/bathroom-mould-tiles-grout",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/cleaning-services-cost-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/cleaning-services-cost-cape-town",
+        "canonical": "https://shalean.co.za/blog/cleaning-services-cost-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/women-owned-cleaning-services-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/women-owned-cleaning-services-cape-town",
+        "canonical": "https://shalean.co.za/blog/women-owned-cleaning-services-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/cleaning-services-for-pensioners-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/cleaning-services-for-pensioners-cape-town",
+        "canonical": "https://shalean.co.za/blog/cleaning-services-for-pensioners-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/last-minute-cleaning-cape-town-rescue-plan",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/last-minute-cleaning-cape-town-rescue-plan",
+        "canonical": "https://shalean.co.za/blog/last-minute-cleaning-cape-town-rescue-plan",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/best-natural-cleaning-products",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/best-natural-cleaning-products",
+        "canonical": "https://shalean.co.za/blog/best-natural-cleaning-products",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/weekly-house-cleaning-checklist",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/weekly-house-cleaning-checklist",
+        "canonical": "https://shalean.co.za/blog/weekly-house-cleaning-checklist",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/carpet-cleaning-step-by-step-guide",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/carpet-cleaning-step-by-step-guide",
+        "canonical": "https://shalean.co.za/blog/carpet-cleaning-step-by-step-guide",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/pet-friendly-cleaning-tips",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/pet-friendly-cleaning-tips",
+        "canonical": "https://shalean.co.za/blog/pet-friendly-cleaning-tips",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/same-day-cleaning-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/same-day-cleaning-cape-town",
+        "canonical": "https://shalean.co.za/blog/same-day-cleaning-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/airbnb-cleaning-mistakes-hosts-make",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/airbnb-cleaning-mistakes-hosts-make",
+        "canonical": "https://shalean.co.za/blog/airbnb-cleaning-mistakes-hosts-make",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/window-and-mirror-cleaning-tips",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/window-and-mirror-cleaning-tips",
+        "canonical": "https://shalean.co.za/blog/window-and-mirror-cleaning-tips",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/speed-cleaning-routine",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/speed-cleaning-routine",
+        "canonical": "https://shalean.co.za/blog/speed-cleaning-routine",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/locations",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/locations",
+        "canonical": "https://shalean.co.za/locations",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/locations/constantia-cleaning-services",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/locations/constantia-cleaning-services",
+        "canonical": "https://shalean.co.za/locations/constantia-cleaning-services",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/what-does-professional-cleaner-do-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/what-does-professional-cleaner-do-cape-town",
+        "canonical": "https://shalean.co.za/blog/what-does-professional-cleaner-do-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/what-to-expect-professional-cleaning-service",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/what-to-expect-professional-cleaning-service",
+        "canonical": "https://shalean.co.za/blog/what-to-expect-professional-cleaning-service",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/locations/bantry-bay-cleaning-services",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/locations/bantry-bay-cleaning-services",
+        "canonical": "https://shalean.co.za/locations/bantry-bay-cleaning-services",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/deep-cleaning-vs-regular-cleaning-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/deep-cleaning-vs-regular-cleaning-cape-town",
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-vs-regular-cleaning-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/best-airbnb-cleaning-tips-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/best-airbnb-cleaning-tips-cape-town",
+        "canonical": "https://shalean.co.za/blog/best-airbnb-cleaning-tips-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/cleaning-prices-claremont-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/cleaning-prices-claremont-cape-town",
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-claremont-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/cleaning-prices-sea-point-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/cleaning-prices-sea-point-cape-town",
+        "canonical": "https://shalean.co.za/blog/cleaning-prices-sea-point-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/why-home-still-feels-dirty-after-cleaning-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/why-home-still-feels-dirty-after-cleaning-cape-town",
+        "canonical": "https://shalean.co.za/blog/why-home-still-feels-dirty-after-cleaning-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/deep-cleaning-checklist-claremont-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/deep-cleaning-checklist-claremont-cape-town",
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-claremont-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/deep-cleaning-checklist-newlands-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/deep-cleaning-checklist-newlands-cape-town",
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-newlands-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/deep-cleaning-checklist-rondebosch-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/deep-cleaning-checklist-rondebosch-cape-town",
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-rondebosch-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/deep-cleaning-checklist-sea-point-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/deep-cleaning-checklist-sea-point-cape-town",
+        "canonical": "https://shalean.co.za/blog/deep-cleaning-checklist-sea-point-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/home-cleaning-frequency-claremont-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/home-cleaning-frequency-claremont-cape-town",
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-claremont-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/home-cleaning-frequency-newlands-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/home-cleaning-frequency-newlands-cape-town",
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-newlands-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/home-cleaning-frequency-sea-point-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/home-cleaning-frequency-sea-point-cape-town",
+        "canonical": "https://shalean.co.za/blog/home-cleaning-frequency-sea-point-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/how-often-to-clean-airbnb-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/how-often-to-clean-airbnb-cape-town",
+        "canonical": "https://shalean.co.za/blog/how-often-to-clean-airbnb-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/move-out-cleaning-cost-claremont-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/move-out-cleaning-cost-claremont-cape-town",
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-claremont-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/faq",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/faq",
+        "canonical": "https://shalean.co.za/faq",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/move-out-cleaning-newlands-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/move-out-cleaning-newlands-cape-town",
+        "canonical": "https://shalean.co.za/blog/move-out-cleaning-newlands-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/locations/bellville-cleaning-services",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/locations/bellville-cleaning-services",
+        "canonical": "https://shalean.co.za/locations/bellville-cleaning-services",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/services/move-out-cleaning-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/services/move-out-cleaning-cape-town",
+        "canonical": "https://shalean.co.za/services/move-out-cleaning-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/reviews",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/reviews",
+        "canonical": "https://shalean.co.za/reviews",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/locations/vredehoek-cleaning-services",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/locations/vredehoek-cleaning-services",
+        "canonical": "https://shalean.co.za/locations/vredehoek-cleaning-services",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/services/window-cleaning-cape-town",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/services/window-cleaning-cape-town",
+        "canonical": "https://shalean.co.za/services/window-cleaning-cape-town",
+        "robots": "index, follow ",
+        "errors": []
+      },
+      {
+        "url": "https://shalean.co.za/blog/prepare-airbnb-for-cleaning",
+        "status": 200,
+        "finalUrl": "https://shalean.co.za/blog/prepare-airbnb-for-cleaning",
+        "canonical": "https://shalean.co.za/blog/prepare-airbnb-for-cleaning",
+        "robots": "index, follow ",
+        "errors": []
+      }
+    ],
+    "historical404Fourth": {
+      "url": "https://shalean.co.za/blog/move-out-cleaning-cost-sea-point-cape-town",
+      "liveTestTime": "2026-11-01T23:29:03+02:00",
+      "observed": "2026-11-02",
+      "fetch": "Successful",
+      "crawlAllowed": true,
+      "indexingAllowed": true,
+      "canonical": "https://shalean.co.za/blog/move-out-cleaning-cost-sea-point-cape-town",
+      "indexInclusionClaim": false
+    },
+    "retainedComparison": {
+      "url": "https://shalean.co.za/blog/deep-cleaning-vs-regular-cleaning",
+      "savedStatus": "URL is on Google; Page is indexed",
+      "lastCrawl": "2026-10-25T16:29:05+02:00",
+      "declaredCanonical": "https://shalean.co.za/blog/deep-cleaning-vs-regular-cleaning",
+      "googleCanonical": "Inspected URL",
+      "sitemap": "https://shalean.co.za/sitemap.xml"
+    },
+    "sitemaps": "Add a new sitemap\nEnter sitemap URL\nSUBMIT\nSubmitted sitemaps\n\nSitemap\n\tType\n\tSubmitted\n\tLast read\n\tStatus\n\t\nDiscovered pages\t\nDiscovered videos\t\nhttps://shalean.co.za/sitemap.xml\tSitemap\t1 Aug 2026\t24 Oct 2026\tSuccess\t194\t0\t\nRows per page:\n5\n10\n25\n50\n100\n250\n500\n1-1 of 1\n",
+    "noSubmissionMade": true,
+    "noValidationRequested": true
+  },
+  "visual": {
+    "desktop": {
+      "url": "https://pricing-test.shalean.co.za/services/airbnb-cleaning-cape-town",
+      "result": "PASS: readable service-specific scope and owner-confirmed customer-supplied products/equipment; contextual pricing/service/book links"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "pages": [
+        "/blog/standard-cleaning-newlands-cape-town",
+        "/blog/cleaning-prices-claremont-cape-town",
+        "/blog/deep-cleaning-vs-regular-cleaning"
+      ],
+      "result": "PASS: readable wrapping, no page-level horizontal overflow; local-guide service labels and comparison fallback rendered"
+    },
+    "viewportReset": true
+  },
+  "release": {
+    "pr": 1024,
+    "head": "94c4b43bda51694054caa95d25e72a325960d2c1",
+    "base": "3e6659aa596959916df266895214a1429e327137",
+    "draft": true,
+    "merged": false,
+    "allFourCI": "success",
+    "stagingSha": "6b17a242b10cff3bef00c12f9120a23cc0891d97",
+    "productionSha": "3e6659aa596959916df266895214a1429e327137",
+    "safetyIssues": [],
+    "deployedStagingChecks": 63,
+    "gate": "CONDITIONAL PASS — owner production release approval required; Google inclusion/ranking outcomes pending"
+  },
+  "limits": [
+    "Live availability does not establish index inclusion.",
+    "Saved Google aggregate report still dated23October, not2November.",
+    "Shared local cleaning process overlap remains; zero similarity not claimed.",
+    "Airbnb booking helper conflict remains separate unverified dependency; no booking-policy change."
+  ]
+}
