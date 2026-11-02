@@ -80,6 +80,11 @@ async function runProxy(request: NextRequest) {
     return redirectPreservingSearch(request, "/faq", 308);
   }
 
+  /** Retired pet-owner guide must pass through staging header guard before redirect. */
+  if (pathname === "/blog/home-cleaning-tips-for-pet-owners" || pathname === "/blog/home-cleaning-tips-for-pet-owners/") {
+    return redirectPreservingSearch(request, "/blog/pet-friendly-cleaning-tips", 308);
+  }
+
   /** Short campaign links used in ads / captions. */
   const shortCampaign = pathname.match(/^\/c\/([^/]+)\/?$/);
   if (shortCampaign?.[1]) {

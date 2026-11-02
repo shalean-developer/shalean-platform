@@ -42,6 +42,12 @@ describe("SEO-ENV-01 non-production indexing guard", () => {
     expect(new URL(response.headers.get("location")!).pathname).toBe(destination);
     expect(response.headers.get("X-Robots-Tag")).toContain("noindex");
   });
+  it("protects the pet-owner blog redirect with staging noindex", async () => {
+    const response = await proxy(request("/blog/home-cleaning-tips-for-pet-owners"));
+    expect(response.status).toBe(308);
+    expect(new URL(response.headers.get("location")!).pathname).toBe("/blog/pet-friendly-cleaning-tips");
+    expect(response.headers.get("X-Robots-Tag")).toContain("noindex");
+  });
   it("protects the passthrough response after session failure", async () => {
     session.mockRejectedValueOnce(new Error("session unavailable"));
     vi.spyOn(console, "error").mockImplementation(() => {});
