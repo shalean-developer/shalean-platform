@@ -95,7 +95,7 @@ describe("buildOfficeFunnelSteps", () => {
 });
 
 describe("paymentCompletedCount", () => {
-  it("prefers unified count and falls back to paid bookings when analytics is zero", () => {
+  it("prefers unified count and never treats uncorrelated booking rows as completed browser sessions", () => {
     expect(paymentCompletedCount(SAMPLE)).toBe(48);
     expect(
       paymentCompletedCount({
@@ -108,7 +108,15 @@ describe("paymentCompletedCount", () => {
           revenue: { paidBookings: 38 },
         },
       }),
-    ).toBe(38);
+    ).toBe(0);
+  });
+});
+
+describe("service view consistency", () => {
+  it("keeps the main Service count aligned with observed Product Flow views", () => {
+    const example = { ...SAMPLE, funnelStartSessions: 184 };
+    expect(buildOfficeFunnelSteps(example)[1]?.value).toBe(180);
+    expect(buildOfficeProductFlowSteps(example)[1]?.views).toBe(180);
   });
 });
 

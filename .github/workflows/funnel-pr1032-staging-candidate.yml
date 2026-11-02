@@ -1,0 +1,173 @@
+name: Funnel PR isolated staging candidate (no activation)
+
+on:
+  push:
+    branches:
+      - fix/funnel-intelligence-integrity-20261102
+  workflow_dispatch:
+    inputs:
+      activate_staging:
+        description: "Type ACTIVATE-PR1032-STAGING to allow staging activation"
+        required: true
+        type: string
+      expected_sha:
+        description: "Full exact commit SHA"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SHALEAN_APP_ENV: staging
+      SHALEAN_ENFORCE_ENV_SAFETY: "true"
+      SHALEAN_EXPECTED_SUPABASE_REF: uwvnmluiqbczeduzjgse
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_SITE_URL: https://pricing-test.shalean.co.za
+      NEXT_PUBLIC_APP_URL: https://pricing-test.shalean.co.za
+      NEXT_PUBLIC_SUPABASE_URL: https://uwvnmluiqbczeduzjgse.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ vars.PLESK_STAGING_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_Jl3ESJbVyt2gnuiVslYvHg_gy-LaG_1' }}"
+      NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: ${{ vars.PLESK_TEST_PAYSTACK_PUBLIC_KEY }}
+    steps:
+      - name: Check out exact branch commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Assert environment and source isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/fix/funnel-intelligence-integrity-20261102"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$SHALEAN_APP_ENV" = staging
+          test "$NEXT_PUBLIC_SUPABASE_URL" = "https://uwvnmluiqbczeduzjgse.supabase.co"
+          test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -n "$NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY"
+          case "$NEXT_PUBLIC_SUPABASE_ANON_KEY" in sb_publishable_*|eyJ*) ;; *) exit 1 ;; esac
+          case "$NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY" in pk_test_*) ;; *) exit 1 ;; esac
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install pinned dependencies
+        working-directory: apps/web
+        run: npm ci
+      - name: Targeted funnel regression
+        working-directory: apps/web
+        run: npx vitest run lib/admin/__tests__/officeFunnelPresentation.test.ts
+      - name: Typecheck
+        working-directory: apps/web
+        run: npm run typecheck
+      - name: Build prebuilt Next.js staging candidate
+        working-directory: apps/web
+        env:
+          FACEBOOK_APP_ID: build-only-placeholder
+          FACEBOOK_APP_SECRET: build-only-placeholder
+        run: |
+          node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build --webpack
+          test -f .next/standalone/apps/web/server.js
+      - name: Package without staging or production publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/funnel-pr1032"
+          mkdir -p "$STAGE/.next"
+          cp -a apps/web/.next/standalone/apps/web/. "$STAGE/"
+          rm -rf "$STAGE/public" "$STAGE/.next/static"
+          cp -a apps/web/public "$STAGE/public"
+          cp -a apps/web/.next/static "$STAGE/.next/static"
+          printf '{"artifact_sha":"%s","artifact_branch":"%s","deployment_environment":"staging","target_host":"pricing-test.shalean.co.za","supabase_ref":"uwvnmluiqbczeduzjgse","activated":false,"server_secrets_baked_in":false}\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" > "$STAGE/build-meta.json"
+          mv "$STAGE/server.js" "$STAGE/server.next.js"
+          cat > "$STAGE/server.js" <<'NODE'
+          'use strict';
+          process.env.SHALEAN_RELEASE_SHA = process.env.SHALEAN_RELEASE_SHA || require('./build-meta.json').artifact_sha;
+          require('./server.next.js');
+          NODE
+          test -f "$STAGE/server.next.js"
+          test -f "$STAGE/server.js"
+          tar -czf "$RUNNER_TEMP/funnel-pr1032-staging-candidate.tar.gz" -C "$STAGE" .
+          sha256sum "$RUNNER_TEMP/funnel-pr1032-staging-candidate.tar.gz" > "$RUNNER_TEMP/funnel-pr1032-staging-candidate.sha256"
+      - name: Upload candidate for separately authorized staging activation
+        uses: actions/upload-artifact@v4
+        with:
+          name: funnel-pr1032-staging-candidate-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/funnel-pr1032-staging-candidate.tar.gz
+            ${{ runner.temp }}/funnel-pr1032-staging-candidate.sha256
+          retention-days: 7
+          if-no-files-found: error
+
+  publish-staging:
+    name: Protected PR artifact publication to existing Plesk Git branch
+    needs: build-candidate
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.activate_staging == 'ACTIVATE-PR1032-STAGING' }}
+    runs-on: ubuntu-latest
+    environment: funnel-pr1032-staging
+    permissions:
+      contents: write
+    steps:
+      - name: Verify exact approved source
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/fix/funnel-intelligence-integrity-20261102"
+          test "$EXPECTED_SHA" = "$GITHUB_SHA"
+          test "${#EXPECTED_SHA}" -eq 40
+      - name: Check out PR source and approved activation script
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Download matching artifact from same run
+        uses: actions/download-artifact@v4
+        with:
+          name: funnel-pr1032-staging-candidate-${{ github.sha }}
+          path: candidate
+      - name: Validate staging package
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd candidate
+          EXPECTED_DIGEST="$(awk 'NR==1 {print $1}' funnel-pr1032-staging-candidate.sha256)"
+          ACTUAL_DIGEST="$(sha256sum funnel-pr1032-staging-candidate.tar.gz | cut -d' ' -f1)"
+          test -n "$EXPECTED_DIGEST"
+          test "$EXPECTED_DIGEST" = "$ACTUAL_DIGEST"
+          tar -tzf funnel-pr1032-staging-candidate.tar.gz | grep -Fx './server.next.js'
+          tar -xOf funnel-pr1032-staging-candidate.tar.gz ./build-meta.json |
+            EXPECTED_SHA="$EXPECTED_SHA" python3 -c 'import json,os,sys; d=json.load(sys.stdin); assert d["artifact_sha"]==os.environ["EXPECTED_SHA"]; assert d["deployment_environment"]=="staging"; assert d["target_host"]=="pricing-test.shalean.co.za"; assert d["supabase_ref"]=="uwvnmluiqbczeduzjgse"; assert d["server_secrets_baked_in"] is False'
+      - name: Publish only to existing deploy/staging branch (never main)
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp scripts/plesk-activate-prebuilt-pricing-test.sh "$RUNNER_TEMP/activate.sh"
+          cp candidate/funnel-pr1032-staging-candidate.tar.gz "$RUNNER_TEMP/pricing-test-runtime.tar.gz"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch --no-tags origin refs/heads/deploy/staging
+          DEPLOY_BASE="$(git rev-parse FETCH_HEAD)"
+          git switch --detach "$DEPLOY_BASE"
+          git rm -rf --ignore-unmatch .
+          git clean -fdx
+          cp "$RUNNER_TEMP/activate.sh" ./activate.sh
+          cp "$RUNNER_TEMP/pricing-test-runtime.tar.gz" ./pricing-test-runtime.tar.gz
+          printf '%s\n' "$EXPECTED_SHA" > release-sha.txt
+          git add activate.sh pricing-test-runtime.tar.gz release-sha.txt
+          git commit -m "deploy: funnel PR 1032 staging $EXPECTED_SHA"
+          git push origin HEAD:refs/heads/deploy/staging
+      - name: Publication summary — activation requires independent confirmation
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          echo "Published staging artifact SHA: $EXPECTED_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Plesk must activate via its configured post-deployment action; publication is not runtime acceptance." >> "$GITHUB_STEP_SUMMARY"
