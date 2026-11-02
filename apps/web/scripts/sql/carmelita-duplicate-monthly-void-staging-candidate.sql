@@ -1,4 +1,7 @@
 -- STAGING VALIDATION CANDIDATE. One-off duplicate receivable reversal.
+-- IMPORTANT: balance_cents is GENERATED ALWAYS AS total_amount_cents - amount_paid_cents;
+-- preserve historical R360 total and R0 paid. Void+closed excludes collection;
+-- effective collectible balance must be derived as 0 for void/closed invoices.
 -- Never execute against production absent separate approval; do not pay/ refund.
 BEGIN;
 DO $$
@@ -23,13 +26,13 @@ BEGIN
  OR v_cancelled.status<>'cancelled' OR v_cancelled.amount_paid_cents<>0 THEN
    RAISE EXCEPTION 'booking_history_changed';
  END IF;
- IF inv.status='void' AND inv.is_closed AND inv.balance_cents=0 AND inv.amount_paid_cents=0
+ IF inv.status='void' AND inv.is_closed AND inv.balance_cents=36000 AND inv.amount_paid_cents=0
  THEN RAISE NOTICE 'already void: no-op'; RETURN; END IF;
  IF inv.status NOT IN ('sent','overdue') OR inv.is_closed OR inv.balance_cents<>36000
  OR inv.total_amount_cents<>36000 OR inv.amount_paid_cents<>0
  OR inv.zoho_invoice_id IS DISTINCT FROM '253016000002396017'
  THEN RAISE EXCEPTION 'invoice_state_changed'; END IF;
- UPDATE public.monthly_invoices SET status='void',is_closed=true,balance_cents=0,
+ UPDATE public.monthly_invoices SET status='void',is_closed=true,
  payment_link=NULL,payment_arrangement_active=false,updated_at=now()
  WHERE id=inv.id;
  INSERT INTO public.monthly_invoice_events(invoice_id,kind,payload)
