@@ -218,28 +218,40 @@ export async function GET(request: Request) {
   since.setDate(since.getDate() - 30);
   const sinceIso = since.toISOString();
 
+  // PostgREST commonly caps returned rows (often 1,000), regardless of .limit().
+  // Page explicitly; never quietly report incomplete conversion or revenue totals.
+  const PAGE_SIZE = 1_000;
+  const MAX_ROWS_PER_SOURCE = 50_000;
+  async function readAll(buildQuery: () => any): Promise<{ data: any[]; error: any }> {
+    const collected: any[] = [];
+    for (let offset = 0; offset < MAX_ROWS_PER_SOURCE; offset += PAGE_SIZE) {
+      const result = await buildQuery().range(offset, offset + PAGE_SIZE - 1);
+      if (result.error) return { data: [], error: result.error };
+      const page = result.data ?? [];
+      collected.push(...page);
+      if (page.length < PAGE_SIZE) return { data: collected, error: null };
+    }
+    // Fail closed rather than silently undercount an unusually high-volume window.
+    return { data: [], error: { message: "Analytics row safety limit reached; exact totals unavailable." } };
+  }
+
   const [bookingEventsRes, userEventsRes, bookingsRes] = await Promise.all([
-    admin
-      .from("booking_events")
+    readAll(() => admin.from("booking_events")
       .select("session_id, analytics_session_id, step, event_type, created_at, metadata")
       .gte("created_at", sinceIso)
       .order("created_at", { ascending: false })
-      .limit(25_000),
-    admin
-      .from("user_events")
+      .order("id", { ascending: false })),
+    readAll(() => admin.from("user_events")
       .select("event_type, created_at, payload")
       .gte("created_at", sinceIso)
       .in("event_type", [...BOOKING_ANALYTICS_EVENTS])
       .order("created_at", { ascending: false })
-      .limit(50_000),
-    admin
-      .from("bookings")
-      .select(
-        "created_at, payment_completed_at, status, payment_status, total_paid_zar, amount_paid_cents, service, service_slug, location, date, time, city_id",
-      )
+      .order("id", { ascending: false })),
+    readAll(() => admin.from("bookings")
+      .select("created_at, payment_completed_at, status, payment_status, total_paid_zar, amount_paid_cents, service, service_slug, location, date, time, city_id")
       .or(`created_at.gte.${sinceIso},payment_completed_at.gte.${sinceIso}`)
       .order("created_at", { ascending: false })
-      .limit(15_000),
+      .order("id", { ascending: false })),
   ]);
 
   if (bookingEventsRes.error) {
