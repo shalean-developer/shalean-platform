@@ -142,7 +142,10 @@ jobs:
         run: |
           set -euo pipefail
           cd candidate
-          sha256sum -c funnel-pr1032-staging-candidate.sha256
+          EXPECTED_DIGEST="$(awk 'NR==1 {print $1}' funnel-pr1032-staging-candidate.sha256)"
+          ACTUAL_DIGEST="$(sha256sum funnel-pr1032-staging-candidate.tar.gz | cut -d' ' -f1)"
+          test -n "$EXPECTED_DIGEST"
+          test "$EXPECTED_DIGEST" = "$ACTUAL_DIGEST"
           test "$(tar -xOf funnel-pr1032-staging-candidate.tar.gz ./build-meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["artifact_sha"])')" = "$EXPECTED_SHA"
           tar -tzf funnel-pr1032-staging-candidate.tar.gz | grep -Fx './server.next.js'
       - name: Transfer and activate on staging only, with existing rollback script
