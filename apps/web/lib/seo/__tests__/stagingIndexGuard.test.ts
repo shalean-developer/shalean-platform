@@ -54,6 +54,12 @@ describe("SEO-ENV-01 non-production indexing guard", () => {
     expect(new URL(response.headers.get("location")!).pathname).toBe("/blog/how-to-prepare-home-before-cleaner-arrives-cape-town");
     expect(response.headers.get("X-Robots-Tag")).toContain("noindex");
   });
+  it("redirects the retired between-cleans kitchen guide with staging protection", async () => {
+    const response = await proxy(request("/blog/keep-kitchen-hygienic-between-deep-cleans"));
+    expect(response.status).toBe(308);
+    expect(new URL(response.headers.get("location")!).pathname).toBe("/blog/safe-kitchen-cleaning-hygiene");
+    expect(response.headers.get("X-Robots-Tag")).toContain("noindex");
+  });
   it("protects the passthrough response after session failure", async () => {
     session.mockRejectedValueOnce(new Error("session unavailable"));
     vi.spyOn(console, "error").mockImplementation(() => {});
