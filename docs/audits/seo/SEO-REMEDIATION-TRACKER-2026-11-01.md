@@ -135,3 +135,18 @@ Live before/after inventory: 59 URLs (43 locations, seven services, eight bookin
 Acceptance: exact staging SHA/health and test environment; complete service/location titles without generated ellipses; correct private-route self-canonical and matching OG/Twitter metadata; one initial HTML H1; retained private noindex and staging-wide noindex headers; customer copy removed without changing navigation destinations. Compare production after explicit release acceptance, then close only the verified items. Existing manual location title overrides must remain authoritative; any stored clipped override is a separately evidenced data correction, never silently overwritten.
 
 Rollback: bounded revert of this app-only slice through the existing deployment path. No database migration, CMS edit, financial write, indexing submission or analytics change is included. Google may still truncate its displayed title links; the repair preserves meaningful HTML title text (official guidance: https://developers.google.com/search/docs/appearance/title-link).
+
+
+## 2 November 2026 — three historical 404 URL repairs: production reconciled
+
+Production release: isolated PR #1034 merged as `055934868474a2415a9a6874a6ea8cae385bbbdb` (owner-supplied health response verified this exact active production release SHA, correct production Supabase and Paystack LIVE mode, `issues: []`). Final owner-supplied HTTP checks on `shalean.co.za`:
+
+| Historical URL | Result | Existing destination | Destination status |
+| --- | --- | --- | --- |
+| `/services/one-time-cleaning` | 308 | `/services/standard-cleaning-cape-town` | 200 |
+| `/blog/spring-cleaning-checklist-south-africa` | 308 | `/blog/spring-cleaning-checklist-cape-town` | 200 |
+| `/booking/quote` | 308 | `/quote` | 200 |
+
+No unexpected `X-Robots-Tag` response headers in the supplied production output. Prior to release, production CMS read-only inspection confirmed the existing spring-cleaning article was published, `noindex=false` and canonical set to its live URL. Owner's read-only PowerShell verified that the destination returned HTTP 200 and HTML `<link rel="canonical" href="https://shalean.co.za/blog/spring-cleaning-checklist-cape-town"/>`. Staging on `cdbdad5581634c45ab4734799f30eab9cd5308f8` confirmed all three 308 sources and 200 service/quote destinations; the CMS article destination was unavailable only in staging because its separate database has no article row. That limitation was disclosed and production destination checked independently before isolated promotion. CI gates passed on PRs #1031 and #1034. No duplicate content created and no CMS, customer, booking or financial writes made.
+
+**Disposition: these three historical 404 repairs Closed after production reconciliation.** They are a verified subset of the historical 170-URL 404 cohort, **not** closure of the complete 404 or SEO-INDEX-01 work. Google's page indexing report was last updated 2026-10-23, and Google recrawl/indexing results following this release are still pending. Do not claim Google's indexed/excluded URL counts have changed based solely on this deploy.
