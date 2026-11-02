@@ -85,7 +85,7 @@ async function runProxy(request: NextRequest) {
   if (shortCampaign?.[1]) {
     const url = request.nextUrl.clone();
     url.pathname = `/campaigns/${shortCampaign[1]}`;
-    return NextResponse.redirect(url, 308);
+    return NextResponse.redirect(url, 307);
   }
 
   /** Cron uses header auth only; skip Supabase session cloning work (and avoid any edge header quirks). */
