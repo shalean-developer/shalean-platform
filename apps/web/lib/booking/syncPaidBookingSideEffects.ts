@@ -498,6 +498,7 @@ export async function syncPaidBookingSideEffects(
             amountZar: totalZar,
             paymentDate: today,
             reference,
+            ...(paymentMethod === "paystack" ? { paymentSource: "paystack" as const } : {}),
             customerEmail: contact.email,
             customerName: contact.name,
           });
