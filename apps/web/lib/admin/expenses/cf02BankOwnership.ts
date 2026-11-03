@@ -22,7 +22,8 @@ export type Cf02BankSummary = {
   bokkieHeldCents: null;
   safeToSpendCents: null;
   accountCount: number;
-  complete: boolean;
+  bankBalancesVerified: boolean;
+  ownershipReady: false;
   problems: string[];
 };
 
@@ -69,7 +70,8 @@ export function summarizeCf02BankSnapshots(
     bokkieHeldCents: null,
     safeToSpendCents: null,
     accountCount: accounts.length,
-    complete: problems.length === 0,
+    bankBalancesVerified: !problems.some(p => p !== "Business ownership allocation is not reconciled."),
+    ownershipReady: false,
     problems: [...new Set(problems)],
   };
 }
