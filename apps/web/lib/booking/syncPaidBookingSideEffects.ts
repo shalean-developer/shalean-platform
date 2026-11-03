@@ -383,6 +383,7 @@ export async function syncPaidBookingSideEffects(
   let invoiceResult: SyncPaidBookingInvoiceResult;
 
   // ── 1. Zoho Books invoice sync / verification ────────────────────────────────
+  try {
   if (row.is_monthly_billing_booking === true) {
     invoiceResult = { kind: "skipped", reason: "monthly" };
   } else if (String(row.sales_document_id ?? "").trim()) {
@@ -534,6 +535,16 @@ export async function syncPaidBookingSideEffects(
       });
       invoiceResult = { kind: "failed", error: String(err) };
     }
+  }
+
+  } catch (err) {
+    await logSystemEvent({
+      level: "warn",
+      source: "booking/side_effects",
+      message: "zoho_sync_exception",
+      context: { bookingId, error: String(err) },
+    });
+    invoiceResult = { kind: "failed", error: String(err) };
   }
 
   // Settle any Cleaning Credit reservation only after the booking is durably paid.

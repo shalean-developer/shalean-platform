@@ -301,6 +301,7 @@ async function repairBooking(admin: SupabaseClient, bookingId: (typeof BOOKING_I
     .is("zoho_invoice_id", null);
   if (upErr) fail(`${label}: DB link failed: ${upErr.message}`);
 
+  await settleQueue(admin, tx, queueId, paid.paymentId);
   await upsertInvoiceSyncMetadata(admin, {
     entityType: "booking",
     entityId: bookingId,
@@ -313,7 +314,6 @@ async function repairBooking(admin: SupabaseClient, bookingId: (typeof BOOKING_I
     taxAmountCents: details.taxCents,
     outstandingBalanceCents: details.balanceCents,
   });
-  await settleQueue(admin, tx, queueId, paid.paymentId);
   console.log(`[applied] ${label} -> ${created.invoiceNumber} paid+linked`);
 }
 
@@ -422,6 +422,7 @@ async function repairMonthlyInvoice(admin: SupabaseClient) {
     label: "monthly invoice",
   });
 
+  await settleQueue(admin, tx, queueId, paid.paymentId);
   await upsertInvoiceSyncMetadata(admin, {
     entityType: "monthly_invoice",
     entityId: data.id,
@@ -433,7 +434,6 @@ async function repairMonthlyInvoice(admin: SupabaseClient) {
     taxAmountCents: details.taxCents,
     outstandingBalanceCents: details.balanceCents,
   });
-  await settleQueue(admin, tx, queueId, paid.paymentId);
   console.log(`[applied] monthly ${data.id.slice(0, 8)} -> ${details.invoiceNumber} paid+linked`);
 }
 
@@ -522,6 +522,7 @@ async function repairSalesDocument(admin: SupabaseClient) {
     label: "sales document",
   });
 
+  await settleQueue(admin, tx, queueId, paid.paymentId);
   await upsertInvoiceSyncMetadata(admin, {
     entityType: "sales_document",
     entityId: SALES_DOCUMENT_ID,
@@ -533,7 +534,6 @@ async function repairSalesDocument(admin: SupabaseClient) {
     taxAmountCents: details.taxCents,
     outstandingBalanceCents: details.balanceCents,
   });
-  await settleQueue(admin, tx, queueId, paid.paymentId);
   console.log(`[applied] sales document ${SALES_DOCUMENT_ID.slice(0, 8)} -> ${details.invoiceNumber} paid+linked`);
 }
 

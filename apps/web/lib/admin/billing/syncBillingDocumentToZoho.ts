@@ -46,7 +46,19 @@ async function syncBookingInvoiceToZoho(
   if (!row.payment_completed_at) return { ok: false, error: "booking_not_paid" };
 
   const existing = String(row.zoho_invoice_id ?? "").trim();
-  if (existing) return { ok: true, zoho_id: existing };
+  if (existing) {
+    // Enroll the Zoho link independently of payment allocation success.
+    // A linked invoice is not evidence that its payment has settled.
+    const { error: enrollmentError } = await admin.from("accounting_invoice_sync").upsert({
+      entity_type: "booking",
+      entity_id: bookingId,
+      booking_id: bookingId,
+      zoho_invoice_id: existing,
+      sync_status: "pending",
+    }, { onConflict: "entity_type,entity_id", ignoreDuplicates: true });
+    if (enrollmentError) return { ok: false, error: `zoho_invoice_status_enrollment_failed:${enrollmentError.message}` };
+    return { ok: true, zoho_id: existing };
+  }
 
   const amountCents = Math.max(
     0,
@@ -169,6 +181,15 @@ async function syncMonthlyInvoiceRowToZoho(
   // Already linked: still apply local payment to Zoho when Shalean shows paid/partial
   // (e.g. admin marked paid before Zoho payment sync existed).
   if (existing) {
+    // Repair missing sync metadata before any payment-related action. This is
+    // insert-only: do not overwrite recorded invoice or settlement status.
+    const { error: enrollmentError } = await admin.from("accounting_invoice_sync").upsert({
+      entity_type: "monthly_invoice",
+      entity_id: invoiceId,
+      zoho_invoice_id: existing,
+      sync_status: "pending",
+    }, { onConflict: "entity_type,entity_id", ignoreDuplicates: true });
+    if (enrollmentError) return { ok: false, error: `zoho_invoice_status_enrollment_failed:${enrollmentError.message}` };
     const payErr = await applyLocalPaymentToZoho(existing);
     if (payErr) return payErr;
     return { ok: true, zoho_id: existing };
@@ -227,7 +248,20 @@ async function syncSalesDocumentRowToZoho(
   const existing = isQuote
     ? String(row.zoho_estimate_id ?? "").trim()
     : String(row.zoho_invoice_id ?? "").trim();
-  if (existing) return { ok: true, zoho_id: existing };
+  if (existing) {
+    // A previous Zoho link may have persisted even if metadata enrollment failed.
+    // Retry insert-only enrollment without reissuing a Zoho invoice or editing its status.
+    if (!isQuote) {
+      const { error: enrollmentError } = await admin.from("accounting_invoice_sync").upsert({
+        entity_type: "sales_document",
+        entity_id: documentId,
+        zoho_invoice_id: existing,
+        sync_status: "pending",
+      }, { onConflict: "entity_type,entity_id", ignoreDuplicates: true });
+      if (enrollmentError) return { ok: false, error: `zoho_invoice_status_enrollment_failed:${enrollmentError.message}` };
+    }
+    return { ok: true, zoho_id: existing };
+  }
 
   const sync = await syncSalesDocumentToZoho(admin, documentId);
   if (!sync.ok) return sync;
