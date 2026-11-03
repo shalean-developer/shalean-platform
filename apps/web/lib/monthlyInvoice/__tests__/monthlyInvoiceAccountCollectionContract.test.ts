@@ -39,4 +39,33 @@ describe("monthly invoice statement collection contract", () => {
     expect(src).toContain("amount_applied");
     expect(src).toContain("zoho_customer_mismatch");
   });
+  it("sends Paystack statement receipts to Clearing without altering allocations", () => {
+    const src = source("lib/zoho/markZohoInvoiceCollectionPaid.ts");
+    expect(src).toContain("account_id: zohoPaystackClearingAccountId()");
+    expect(src).toContain("amount_applied: x.amountZar");
+  });
+
+  it("identifies confirmed Paystack receipts explicitly across payment paths", () => {
+    const zoho = source("lib/zoho/zohoBooksService.ts");
+    const sales = source("lib/salesDocument/applySalesDocumentPayment.ts");
+    const monthly = source("lib/monthlyInvoice/applyMonthlyInvoicePayment.ts");
+    const queue = source("lib/accounting/processAccountingSyncQueue.ts");
+    const booking = source("lib/booking/syncPaidBookingSideEffects.ts");
+    expect(zoho).toContain('paymentSource?: "paystack"');
+    expect(zoho).toContain('params.paymentSource === "paystack"');
+    expect(sales).toContain('paymentSource: "paystack"');
+    expect(monthly).toContain('paymentSource: "paystack"');
+    expect(queue).toContain('pt.gateway === "paystack"');
+    expect(booking).toContain('paymentMethod === "paystack"');
+  });
+
+  it("preserves the FNB fallback for direct payments and allows staging Clearing overrides", () => {
+    const src = source("lib/zoho/zohoWebsiteReceiptAccount.ts");
+    const client = source("lib/zoho/zohoBooksClient.ts");
+    expect(src).toContain("ZOHO_PAYSTACK_CLEARING_ACCOUNT_ID");
+    expect(src).toContain("253016000000482521");
+    expect(src).toContain("253016000000097002");
+    expect(client).toContain("if (explicit) return body");
+  });
+
 });
