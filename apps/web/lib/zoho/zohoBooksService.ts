@@ -1,5 +1,7 @@
 import "server-only";
 
+import { zohoPaystackClearingAccountId } from "@/lib/zoho/zohoWebsiteReceiptAccount";
+
 import { normalizeBillingEmail } from "@/lib/zoho/shaleanBillingContactEmail";
 import { zohoBooksClient } from "@/lib/zoho/zohoBooksClient";
 import { formatZohoOrderReference, type ZohoOrderKind } from "@/lib/zoho/zohoOrderReference";
@@ -680,6 +682,8 @@ export async function getZohoEstimatePdf(
 // ─── Payments ─────────────────────────────────────────────────────────────────
 
 export type MarkInvoicePaidParams = {
+  /** Explicitly verified Paystack charges must clear through Paystack, never the FNB default. */
+  paymentSource?: "paystack";
   zohoInvoiceId: string;
   /** Amount in ZAR (not cents) */
   amountZar: number;
@@ -720,6 +724,7 @@ export async function markZohoInvoicePaid(
     const res = await zohoBooksClient.post<ZohoPaymentCreateResponse>("/customerpayments", {
       customer_id: contactId,
       payment_mode: "bank_transfer",
+      ...(params.paymentSource === "paystack" ? { account_id: zohoPaystackClearingAccountId() } : {}),
       amount: params.amountZar,
       date: params.paymentDate,
       invoices: [
