@@ -16,3 +16,15 @@ export function zohoWebsiteReceiptAccountId(): string {
     "253016000000097002"
   );
 }
+
+/**
+ * Receivable for verified Paystack payments before actual net FNB settlement.
+ * A staging/test override must point to the corresponding Zoho test chart account.
+ * Never use this account for a customer-paid direct bank EFT.
+ */
+export function zohoPaystackClearingAccountId(): string {
+  return (
+    process.env.ZOHO_PAYSTACK_CLEARING_ACCOUNT_ID?.trim() ||
+    "253016000000482521"
+  );
+}
