@@ -30,3 +30,13 @@
 3. Confirm no incompatible pending migration applies before the new versioned `void` status migration.
 4. Apply through the established tracked staging migration pipeline, then inspect the actual constraint and application checkout/reminder/receivable behavior.
 5. Maintain PR #1049 Draft and production NO-GO until staging verified and owner approval obtained.
+
+## Canonical source reconciliation — bootstrap record discovered
+- **Authoritative historical audit**: `docs/audits/staging-branch-bootstrap-01-2026-10-05.md` states native Supabase branch creation reported `MIGRATIONS_FAILED` because the production ledger could not reconstruct the historical full schema on a new branch. Engineering then replayed the sanitized nonproduction baseline plus governed active migrations, with signature/policy comparisons and zero production customer rows copied.
+- This explains many `bootstrap_*` staging-only entries and why the branch can be usable while the native branch status remains `MIGRATIONS_FAILED`. The original native replay did not become an approved recovery path merely because subsequent controlled bootstrap populated the schema.
+- The observed SQLSTATE `42P01` log entries around 2026-10-05 06:16 UTC are consistent with missing tables in early bootstrap. The historical audit, rather than those isolated logs, establishes the root cause of the initial native replay failure.
+- The older `docs/runbooks/staging-reset-and-reseed.md` and July 2026 ENV-01 audit identify *different obsolete project references*. **Do not use their project IDs or reset commands** for the current `uwvnmluiqbczeduzjgse` branch.
+- For PR #1049, both production and current staging catalogs have the same old monthly-invoice status constraint. Rollback-only actual-table tests on staging proved the new `void` constraint and idempotent invoice event logic. A **tracked staging migration application** and deployed application checks remain unperformed.
+
+### Updated disposition
+Historical bootstrap failure is explained; current schema appears functional for targeted invoice tables. Avoid branch reset/rebase and migration-history edits. Next perform an approved tracked deployment of the exact versioned PR #1049 migration to staging, verify the new constraint/version with independent catalog and migration checks, then promote application changes to staging through its existing workflow. Do not apply an ad-hoc differently named migration, and do not merge to main solely to trigger deployment without satisfying the reviewed release gates.
