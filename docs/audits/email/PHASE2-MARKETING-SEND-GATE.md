@@ -1,25 +1,35 @@
-# Phase 2 — marketing consent and unsubscribe, DRAFT / DO NOT DEPLOY
+# Shalean Email Marketing Phase 2 — source-only review
 
-Source branch: audit/email-marketing-consent-phase2-20261104 | PR #1074
+Repository: shalean-developer/shalean-platform
+Branch: audit/email-marketing-consent-phase2-20261104
+PR: #1074 (Draft, DO NOT MERGE OR DEPLOY)
 
-## Source-only work prepared
-- Immutable append-only marketing-email consent ledger migration, with RLS and no public/authenticated table privileges.
-- Authenticated customer preferences POST using verified bearer identity and explicit opt-in; no historical consent backfill.
-- CRM-first opt-out: append withdrawal evidence, update legacy CRM unsubscribe timestamp, then attempt Resend PATCH. Provider failure never reverses the local opt-out.
-- Signed expiring HMAC unsubscribe URLs, GET confirmation without mutation, POST no-login unsubscribe and one-click headers on rebooking/referral marketing messages.
-- Resend contact.updated=true signed-webhook handling for CRM withdrawal; replay after post-insert failures remains processable.
-- Read-only Resend contact/suppression checks at marketing send time; unknown and provider outage deny.
-- Transactional emails do not automatically enroll customers in marketing audiences.
-- Native PostgreSQL security SQL and isolated negative-path tests added.
+## Scope prepared
+- Explicit affirmative consent event ledger; no historical opt-in is inferred.
+- Append-only, RLS-protected ledger; anon/authenticated grants revoked.
+- Authenticated customer account marketing preference API with explicit opt-in.
+- Signed HMAC 90-day one-click unsubscribe tokens; GET displays confirmation without mutation, POST withdraws.
+- Promotional referral/rebooking headers: List-Unsubscribe and List-Unsubscribe-Post.
+- Local CRM withdrawal recorded before Resend update; failed provider synchronisation does not undo opt-out.
+- Private durable unsubscribe-only reconciliation queue and unscheduled CRON_SECRET-protected retry route.
+- Signed Resend contact.updated (unsubscribed=true) events mirrored into local withdrawal evidence, with duplicate-event replay.
+- Promotional send gate uses local/Resend suppression and positive consent, denies on unknown/error.
+- Generic transactional delivery no longer automatically registers Resend marketing audience contacts.
+- Vitest negative-path tests in apps/web/lib/email/__tests__ and isolated PostgreSQL security assertions in supabase/tests.
 
-## DO NOT MERGE / release blockers
-1. Native SQL security test must execute on a real isolated PostgreSQL schema after source-only migration rehearsal; never production.
-2. Latest-head full CI, typecheck and marketing lifecycle/transactional/retry integration tests must pass. Tests present in source are not evidence they ran.
-3. Safe durable provider reconciliation queue and retry worker are not implemented: the authenticated opt-out endpoint can return providerSync=retry_required; the local opt-out nevertheless remains authoritative.
-4. Need explicit owner review of opt-in policy, legally suitable wording, email verification status, UI consent checkbox and no-login unsubscribe page content.
-5. Ensure marketing opt-in/resubscribe policies do not lift prior CRM/Resend suppression; no re-subscribe automation.
-6. Verify other marketing templates/senders, rate limits, provider 429/5xx, webhook replays/ordering, and HTTPS URL correctness before staging.
-7. Resend webhook remains disabled until separate approval and staging verification.
+## Release blockers and limits
+- **No migration executed:** SQL security tests prepared only; must run against an isolated PostgreSQL schema and verify native ownership/trigger policies.
+- **CI:** latest-head web-test/typecheck/security/migration checks must complete successfully; queued is not passed.
+- **Consent UI and verification:** authenticated API exists, but actual customer UI, email-confirmation and final marketing wording need owner/product review.
+- **Resubscription:** previously unsubscribed users are not automatically re-enabled. A verified re-subscribe flow remains out of scope.
+- **Provider webhook:** code prepared, but live Resend webhook remains disabled. Isolated signed event/replay tests are required.
+- **Reconciliation worker:** route exists only as unscheduled source and has not been invoked; test 429/5xx/rate limits/concurrency.
+- **Customer correctness:** test guest recipients, profile email mismatches, booking transactional pathways and review requests; audit any other promotional send paths.
+- **Privacy and security:** validate token origin/expiry, no side-effect on GET, signed POST, stale suppression, audit replay, and any missing RLS grants.
+- **Mail:** never send any real email or invoke Resend writes during CI.
 
-## Safety
-No live Supabase mutation, provider write, real email, webhook activation, deployment or merge was performed. PR remains Draft.
+## Non-actions
+No emails sent, live Supabase rows changed, Resend configuration updated, webhook activated, schema migrated, branch merged, or site deployed.
+
+## Acceptance sequence
+Latest head CI -> isolated native PostgreSQL security -> synthetic end-to-end negative cases -> staging-only authorised preview -> owner acceptance -> separate merge/deploy approval.
