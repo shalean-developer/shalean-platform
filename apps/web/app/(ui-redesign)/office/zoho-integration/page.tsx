@@ -92,6 +92,8 @@ export default function ZohoIntegrationPage() {
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [dryRunning, setDryRunning] = useState(false);
+  const [connectionChecking, setConnectionChecking] = useState(false);
+  const [connectionResult, setConnectionResult] = useState<string | null>(null);
   const [dryRun, setDryRun] = useState<RepairDryRunPayload | null>(null);
   const [applyingRepair, setApplyingRepair] = useState(false);
   const [applyResult, setApplyResult] = useState<RepairApplyPayload | null>(null);
@@ -163,6 +165,25 @@ export default function ZohoIntegrationPage() {
       setError(e instanceof Error ? e.message : "Sync failed");
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const checkZohoRead = async () => {
+    setConnectionChecking(true);
+    setConnectionResult(null);
+    try {
+      const res = await adminFetch<{ ok: boolean; organization_suffix?: string; invoices_readable?: boolean }>(
+        "/api/admin/zoho-read-check",
+      );
+      setConnectionResult(
+        res.ok && res.data?.ok && res.data.invoices_readable
+          ? `PASS — Zoho invoices readable (org ••••${res.data.organization_suffix ?? "????"})`
+          : "FAIL — Zoho invoice access not verified",
+      );
+    } catch {
+      setConnectionResult("FAIL — Zoho invoice access not verified");
+    } finally {
+      setConnectionChecking(false);
     }
   };
 
@@ -242,6 +263,10 @@ export default function ZohoIntegrationPage() {
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
               Refresh
             </OfficeZohoSecondaryButton>
+            <OfficeZohoSecondaryButton onClick={() => void checkZohoRead()} disabled={connectionChecking}>
+              <RefreshCw className={cn("h-4 w-4", connectionChecking && "animate-spin")} />
+              {connectionChecking ? "Checking Zoho read…" : "Test Zoho read-only"}
+            </OfficeZohoSecondaryButton>
             <OfficeZohoSecondaryButton onClick={() => void runRepairDryRun()} disabled={dryRunning}>
               <RefreshCw className={cn("h-4 w-4", dryRunning && "animate-spin")} />
               {dryRunning ? "Running dry run…" : "Run INV-E2E dry run"}
@@ -253,6 +278,12 @@ export default function ZohoIntegrationPage() {
           </div>
         }
       />
+
+      {connectionResult && (
+        <div role="status" className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800">
+          {connectionResult}
+        </div>
+      )}
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
