@@ -1,11 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { validateEmailRecipient } from "@/lib/email/recipientSafety";
 import { decideMarketingEligibility } from "@/lib/email/marketingEligibility";
+import { readResendMarketingState } from "@/lib/email/readResendMarketingState";
 
 type GateResult = { allowed: true } | { allowed: false; reason: string };
 /** Only call for promotional emails. No network writes, no send-side effects.
- * Provider sync must be explicitly verified and fresh before any promotion is eligible.
- * Without an activated local consent ledger and provider mirror, all marketing fails closed.
+ * Resend contact/suppression state is checked live and fails closed on outage.
+ * Until explicit consents are captured and migrated, marketing is denied.
  */
 export async function checkMarketingSendGate(
   admin: SupabaseClient, customerId: string | null, rawEmail: string,
@@ -25,16 +26,17 @@ export async function checkMarketingSendGate(
     const p = profile.data;
     const isCustomer = p?.role === "customer";
     const verifiedEmail = p?.billing_email?.trim().toLowerCase() === email;
-    // A provider mirror/reconciler is required for launch. Do not guess provider status.
+    // Provider state is fetched read-only. Outage or missing contact fails closed.
+    const provider = await readResendMarketingState(email, process.env.RESEND_API_KEY);
     return decideMarketingEligibility({
       recipientValid: true,
       customerIdentityVerified: Boolean(isCustomer && verifiedEmail),
       consent: consent.data?.decision === "granted" ? "granted" : consent.data?.decision === "withdrawn" ? "denied" : "unknown",
       crmUnsubscribed: p?.marketing_emails_unsubscribed_at == null ? false : true,
       locallySuppressed: Boolean(suppression.data),
-      providerStateFresh: false,
-      providerUnsubscribed: null,
-      providerSuppressed: null,
+      providerStateFresh: provider.verified,
+      providerUnsubscribed: provider.unsubscribed,
+      providerSuppressed: provider.suppressed,
     });
   } catch {
     return { allowed: false, reason: "eligibility_lookup_failed" };
