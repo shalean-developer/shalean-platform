@@ -100,4 +100,24 @@ describe("Gate 3 signed Resend webhook integration — synthetic, no provider ne
     const response=await POST(signedRequest());
     expect(response.status).toBe(500);
   });
+  it("signed account suppression.added records recipient suppression without an email send", async()=>{
+    const db=fakeAdmin();mocks.getClient.mockReturnValue(db.admin);
+    mocks.verify.mockReturnValue({type:"suppression.added",
+      data:{email:"synthetic@example.test",origin:"complaint"}});
+    const response=await POST(signedRequest());
+    expect(response.status).toBe(200);
+    expect(db.writes.find(x=>x.table==="email_suppressions")).toMatchObject({
+      kind:"upsert",payload:{email:"synthetic@example.test",reason:"suppressed"},
+    });
+    expect(db.writes.filter(x=>x.table==="email_outbound_messages")).toHaveLength(0);
+  });
+  it("suppression.removed never clears a historical CRM suppression automatically",async()=>{
+    const db=fakeAdmin();mocks.getClient.mockReturnValue(db.admin);
+    mocks.verify.mockReturnValue({type:"suppression.removed",
+      data:{email:"synthetic@example.test"}});
+    const response=await POST(signedRequest());
+    expect(response.status).toBe(200);
+    expect(db.writes.filter(x=>x.table==="email_suppressions")).toHaveLength(0);
+  });
+
 });
