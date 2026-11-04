@@ -26,9 +26,11 @@ import {
   buildOfficeFunnelAnomalies,
   buildOfficeFunnelInsights,
   buildOfficeFunnelKpis,
+  buildOfficeFunnelRevenueMetrics,
   buildOfficeFunnelSteps,
   buildOfficeFunnelSummaryLine,
   buildOfficeProductFlowSteps,
+  dailyTrendBarHeights,
   dailyTrendMax,
   funnelStepLabel,
   hasFunnelActivity,
@@ -93,6 +95,7 @@ export default function FunnelIntelligencePage() {
 
   const steps = useMemo(() => (data ? buildOfficeFunnelSteps(data) : []), [data]);
   const kpis = useMemo(() => (data ? buildOfficeFunnelKpis(data) : []), [data]);
+  const revenueMetrics = useMemo(() => (data ? buildOfficeFunnelRevenueMetrics(data) : null), [data]);
   const productFlow = useMemo(() => (data ? buildOfficeProductFlowSteps(data) : []), [data]);
   const insights = useMemo(() => (data ? buildOfficeFunnelInsights(data) : []), [data]);
   const anomalies = useMemo(() => (data ? buildOfficeFunnelAnomalies(data) : []), [data]);
@@ -142,6 +145,26 @@ export default function FunnelIntelligencePage() {
           ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-28 animate-pulse rounded-2xl bg-slate-100" />)
           : kpis.map((kpi) => <KpiCard key={kpi.label} kpi={kpi} />)}
       </div>
+
+      {revenueMetrics ? (
+        <section aria-labelledby="funnel-revenue-heading" className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <div className="mb-4">
+            <h2 id="funnel-revenue-heading" className="text-sm font-bold text-slate-800">Revenue reporting</h2>
+            <p className="mt-1 text-xs text-slate-500">Booking database amounts · not confirmed settled cash</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {revenueMetrics.map((metric) => (
+              <div key={metric.label} className="min-w-0 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                <p className="text-xs font-medium text-slate-600">{metric.label}</p>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">{metric.value}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs leading-relaxed text-slate-500">
+            Unreconciled booking database revenue. Excluded fixtures are synthetic test records; amounts are not verified provider settlements or bank receipts.
+          </p>
+        </section>
+      ) : null}
 
       {summaryLine ? (
         <div className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 to-indigo-50 p-5 shadow-sm">
@@ -400,10 +423,7 @@ function DailyTrendChart({ rows, max }: { rows: FunnelDailyTrendRow[]; max: numb
   return (
     <div className="flex h-44 items-end gap-1.5 overflow-x-auto pb-1">
       {rows.map((d) => {
-        const barBase = Math.max(d.starts, d.completed, 1);
-        const barHeight = Math.max(4, (barBase / max) * 120);
-        const completedHeight = Math.max(0, (d.completed / max) * 120);
-        const abandonsHeight = Math.max(0, (d.paystackAbandons / max) * 120);
+        const { barHeight, completedHeight, abandonsHeight } = dailyTrendBarHeights(d, max);
         return (
           <div
             key={d.date}
