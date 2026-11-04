@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "../route";
 
 const { getUser, requireAdminUser, getSupabaseAdmin, readPagedRows } = vi.hoisted(() => ({
