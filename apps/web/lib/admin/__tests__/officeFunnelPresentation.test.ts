@@ -4,6 +4,8 @@ import {
   buildOfficeFunnelRevenueMetrics,
   buildOfficeFunnelRecommendations,
   buildOfficeFunnelSteps,
+  buildOfficeFunnelSummaryLine,
+  buildOfficeFunnelAnomalies,
   buildOfficeProductFlowSteps,
   dailyTrendBarHeights,
   dailyTrendMax,
@@ -155,7 +157,7 @@ describe("buildOfficeFunnelKpis", () => {
       } },
     });
     expect(cards).toHaveLength(4);
-    expect(cards[3]?.sub).toBe("48/60 Paystack sessions");
+    expect(cards[3]?.sub).toBe("48/60 payment sessions");
     expect(cards[3]?.sub).not.toContain("3 685");
   });
 
@@ -167,9 +169,9 @@ describe("buildOfficeFunnelKpis", () => {
       } },
     });
     expect(metrics).toEqual([
-      { label: "Non-fixture booking revenue", value: zarLabel(3685) },
-      { label: "Excluded test fixtures", value: zarLabel(860) },
-      { label: "Historical recorded total", value: zarLabel(4545) },
+      { label: "Recorded booking revenue", value: zarLabel(3685) },
+      { label: "Excluded non-live records", value: zarLabel(860) },
+      { label: "Total before exclusions", value: zarLabel(4545) },
     ]);
   });
 
@@ -183,9 +185,9 @@ describe("buildOfficeFunnelKpis", () => {
       ...SAMPLE,
       intelligence: { ...SAMPLE.intelligence, revenue: { totalZar: 0 } },
     })).toEqual([
-      { label: "Non-fixture booking revenue", value: zarLabel(0) },
-      { label: "Excluded test fixtures", value: "—" },
-      { label: "Historical recorded total", value: "—" },
+      { label: "Recorded booking revenue", value: zarLabel(0) },
+      { label: "Excluded non-live records", value: "—" },
+      { label: "Total before exclusions", value: "—" },
     ]);
   });
 
@@ -196,8 +198,40 @@ describe("buildOfficeFunnelKpis", () => {
     expect(kpis[0]?.value).toBe("15.5%");
     expect(kpis[1]?.label).toBe("Checkout → paid");
     expect(kpis[1]?.value).toBe("66.7%");
-    expect(kpis[3]?.label).toBe("Paystack drop-off");
+    expect(kpis[3]?.label).toBe("Payment drop-off");
     expect(kpis[3]?.value).toBe("20.0%");
+  });
+});
+
+describe("production-facing copy", () => {
+  it("keeps a concise summary based on the same checkout and step figures", () => {
+    expect(buildOfficeFunnelSummaryLine(SAMPLE)).toBe(
+      "72 reached checkout · 48 paid (66.7%). Biggest drop-off: Service → Schedule (30.0%).",
+    );
+    expect(buildOfficeFunnelSummaryLine({})).toBeNull();
+  });
+
+  it("shows readable anomaly comparison instead of internal metric keys", () => {
+    const anomalies = buildOfficeFunnelAnomalies(SAMPLE);
+    expect(anomalies[0]?.description).toBe("Current 8 · Usual 14");
+    expect(anomalies[0]?.description).not.toContain("conversion_rate");
+  });
+
+  it("avoids development language in visible revenue and KPI labels", () => {
+    const revenue = buildOfficeFunnelRevenueMetrics({
+      ...SAMPLE,
+      intelligence: {
+        ...SAMPLE.intelligence,
+        revenue: { paidBookings: 7, totalZar: 3685, recordedTotalZar: 4545, excludedFixtureZar: 860 },
+      },
+    });
+    expect(revenue?.map((metric) => metric.label)).toEqual([
+      "Recorded booking revenue",
+      "Excluded non-live records",
+      "Total before exclusions",
+    ]);
+    expect(revenue?.map((metric) => metric.value)).toEqual([zarLabel(3685), zarLabel(860), zarLabel(4545)]);
+    expect(buildOfficeFunnelKpis(SAMPLE)[3]?.label).toBe("Payment drop-off");
   });
 });
 
