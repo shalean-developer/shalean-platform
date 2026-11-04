@@ -64,6 +64,21 @@ begin
     set attempt_count=1,last_error='synthetic_provider_503',
       next_attempt_at=now()+interval '5 minutes'
     where customer_id=u and status='pending';
+  update public.marketing_email_enrollment_jobs
+    set status='processing',claim_token='00000000-0000-4000-8000-000000000998',
+        lease_expires_at=now()+interval '5 minutes'
+    where customer_id=u and status='pending';
+  if (select status from public.marketing_email_enrollment_jobs where customer_id=u) <> 'processing' then
+    raise exception 'enrollment atomic claim failed';
+  end if;
+  update public.marketing_email_enrollment_jobs
+    set status='pending',claim_token=null,lease_expires_at=null
+    where customer_id=u and status='processing'
+      and claim_token='00000000-0000-4000-8000-000000000998';
+  if (select status from public.marketing_email_enrollment_jobs where customer_id=u) <> 'pending' then
+    raise exception 'enrollment token fencing failed';
+  end if;
+
   if (select attempt_count from public.marketing_email_enrollment_jobs where customer_id=u) <> 1 then
     raise exception 'enrollment queue retry update failed';
   end if;
