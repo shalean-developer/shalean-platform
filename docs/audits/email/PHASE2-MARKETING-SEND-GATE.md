@@ -1,21 +1,23 @@
-# Phase 2 marketing-only consent gate — DRAFT / DO NOT DEPLOY
+# Phase 2 marketing email remediation — DRAFT / DO NOT MERGE
 
-Branch: audit/email-marketing-consent-phase2-20261104
+Branch: `audit/email-marketing-consent-phase2-20261104` | PR #1074
 
-The branch introduces an append-only affirmative consent ledger, a pure decision function, and a marketing-only database guard.
+## Implemented in branch
+- Append-only-intended consent event ledger migration (source-only, NOT applied; migration governance pending).
+- Fail-closed marketing-only decision and database reads for positive consent, CRM unsubscribe, local suppression, verified customer identity.
+- Read-only per-send Resend contact and suppression GET checks. Provider failure/404 contact denies marketing. These checks do not send emails.
+- Marketing gates for referral campaign direct/cron sends, lifecycle rebook jobs and direct rebooking send functions, and tagged marketing retries through safeResendSend.
+- Decoupled transactional delivery from automatic Resend audience contact enrollment.
+- Unsubscribe-only Resend PATCH primitive (not wired to a public endpoint; no subscribe operation).
+- Isolated negative-path test files for eligibility, provider lookup, unsubscribe reconciliation.
 
-## Deliberate launch blocker
-Provider preferences and suppressions are not yet mirrored into a freshness-verifiable local table. MarketingSendGate therefore reports providerStateFresh=false and denies **every** marketing send. This is intentional and **must not be merged or deployed** until provider reconciling and full regression tests have passed. An absent consent table also denies sending safely.
+## Blocking work before merging/deploying
+1. Implement a verified opt-in/opt-out capture API with identity proof, CSRF protection and append-only audit; consent is NOT inferred from existing customers.
+2. Test and complete a durable CRM-first unsubscribe workflow that cannot allow mail during provider sync failures. Reconcile legacy Resend unsubscribes back to CRM.
+3. Verify migration naming/schema references and PostgreSQL security with native tests; no migration applied.
+4. Verify all other promotional templates/paths and retries; classify service review email content and admin test sends separately.
+5. Run full latest-head CI, TypeScript typecheck, source integration tests, and staging synthetic checks.
+6. Test failure behavior for provider 429/5xx, latency, stale data, unknown identity and idempotency; no provider writes during testing.
 
-## No scope expansion
-Do not gate transactional security codes, password resets, booking confirmations, payment notices, or service review requests with affirmative marketing consent. No consent data is inferred or backfilled from historical bookings.
-
-## Remaining work before approval
-- Establish verified customer-ID/email ownership for historical and guest recipients.
-- Create production-ready, authenticated consent capture and unsubscribe paths with append-only evidence and user-scope protections.
-- Implement bidirectional provider contact reconciliation using Resend's PATCH contact API, provider suppression reads, freshness and explicit conflict policy; ensure transactional sends do not auto-subscribe.
-- Replace the intentionally closed provider-state placeholder after tests.
-- Cover all marketing send and retry entry points; verify idempotency, no duplicate sends, no unexpected blocking of transactional emails.
-- Run repository test suite, CI, staging verification and owner release approval separately.
-
-No migration has been applied and no provider is contacted by this branch.
+## Safety
+No emails, Resend settings, Supabase rows, deployed services or production sites changed. PR is draft, unmerged, undeployed.
