@@ -13,6 +13,7 @@ import {
 import { computeProfitBreakdown } from "@/lib/admin/expenses/profitCalculations";
 import { loadCashFlowPaymentEvidence } from "@/lib/payments/loadCashFlowPaymentEvidence";
 import { loadSettlementCashSummary } from "@/lib/payments/loadSettlementCashSummary";
+import { loadRecordedSettlementsByDate } from "@/lib/payments/loadRecordedSettlementsByDate";
 
 export type CashFlowDashboardPayload = {
   period: { from: string; to: string };
@@ -88,16 +89,11 @@ export async function loadCashFlowDashboard(
   }
 
   const moneyReceived = gatewayMetrics.gross_cents;
-  const moneyReceivedNet = settlementSummary.settled_to_bank_cents;
+  // Bank-settlement totals use the settlement-date range (not the customer paid_at range).
+  // Share the exact same selected rows with the daily/weekly/monthly charts.
+  const recordedSettlements = await loadRecordedSettlementsByDate(admin, from, to);
+  const moneyReceivedNet = recordedSettlements.settled_to_bank_cents;
   const moneyPaid = (report.totals.paid_cents ?? 0) + approvedExpenses;
-
-  const { data: settledPaymentTxRows } = await admin
-    .from("payment_transactions")
-    .select("settlement_date, net_settlement_cents, amount_cents")
-    .eq("gateway", "paystack")
-    .eq("settlement_status", "settled")
-    .gte("settlement_date", from)
-    .lte("settlement_date", to);
 
   const forecast = await loadCashFlowForecast(admin, from, to);
 
@@ -124,11 +120,10 @@ export async function loadCashFlowDashboard(
 
   const dailyMap = new Map<string, { in: number; out: number }>();
 
-  for (const tx of settledPaymentTxRows ?? []) {
-    const d = tx.settlement_date ?? from;
-    const row = dailyMap.get(d) ?? { in: 0, out: 0 };
-    row.in += tx.net_settlement_cents ?? tx.amount_cents ?? 0;
-    dailyMap.set(d, row);
+  for (const tx of recordedSettlements.by_date) {
+    const row = dailyMap.get(tx.date) ?? { in: 0, out: 0 };
+    row.in += tx.cash_in_cents;
+    dailyMap.set(tx.date, row);
   }
 
   for (const e of expenseRows ?? []) {
