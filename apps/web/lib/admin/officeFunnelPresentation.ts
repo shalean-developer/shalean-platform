@@ -381,6 +381,20 @@ export function dailyTrendMax(rows: FunnelDailyTrendRow[]): number {
   return values.length ? Math.max(...values, 1) : 1;
 }
 
+/** Presentation-only chart geometry. Empty days must not render as activity. */
+export function dailyTrendBarHeights(
+  day: Pick<FunnelDailyTrendRow, "starts" | "completed" | "paystackAbandons">,
+  max: number,
+): { barHeight: number; completedHeight: number; abandonsHeight: number } {
+  const scale = Math.max(max, 1);
+  const activity = Math.max(day.starts, day.completed, day.paystackAbandons);
+  return {
+    barHeight: activity > 0 ? Math.max(4, (activity / scale) * 120) : 0,
+    completedHeight: Math.max(0, (day.completed / scale) * 120),
+    abandonsHeight: Math.max(0, (day.paystackAbandons / scale) * 120),
+  };
+}
+
 export function hasFunnelActivity(data: BookingFunnelApiPayload): boolean {
   return (
     funnelVisitorCount(data) > 0 ||
