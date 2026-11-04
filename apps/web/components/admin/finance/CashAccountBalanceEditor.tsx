@@ -30,6 +30,7 @@ export function CashAccountBalanceEditor({
   const [savingId, setSavingId] = useState<string | null>(null);
   const [syncingZoho, setSyncingZoho] = useState(false);
   const [canManage, setCanManage] = useState<boolean | null>(null);
+  const [canSyncZoho, setCanSyncZoho] = useState(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const autoSyncAttempted = useRef(false);
@@ -51,7 +52,10 @@ export function CashAccountBalanceEditor({
         }
         if (!response.ok) throw new Error(String(body?.error ?? "Could not check bank-balance permissions."));
         if (typeof body?.can_manage !== "boolean") throw new Error("Could not check bank-balance permissions.");
-        if (!cancelled) setCanManage(body.can_manage);
+        if (!cancelled) {
+          setCanManage(body.can_manage);
+          setCanSyncZoho(body.can_sync === true);
+        }
       })
       .catch((error) => {
         if (!cancelled) setPermissionError(error instanceof Error ? error.message : "Could not check bank-balance permissions.");
@@ -62,7 +66,7 @@ export function CashAccountBalanceEditor({
   }, []);
 
   async function syncFromZoho(automatic = false) {
-    if (canManage !== true) return;
+    if (canManage !== true || !canSyncZoho) return;
     setSyncingZoho(true);
     if (!automatic) setMessage(null);
     try {
@@ -82,7 +86,7 @@ export function CashAccountBalanceEditor({
   }
 
   useEffect(() => {
-    if (canManage !== true || autoSyncAttempted.current || !bankAccounts.length) return;
+    if (canManage !== true || !canSyncZoho || autoSyncAttempted.current || !bankAccounts.length) return;
     const shouldSync = bankAccounts.some((account) => {
       if (!account.updated_at) return true;
       const ms = Date.parse(account.updated_at);
@@ -91,7 +95,7 @@ export function CashAccountBalanceEditor({
     if (!shouldSync) return;
     autoSyncAttempted.current = true;
     void syncFromZoho(true);
-  }, [accounts, canManage]);
+  }, [accounts, canManage, canSyncZoho]);
 
   if (!editable.length) return null;
 
@@ -124,10 +128,13 @@ export function CashAccountBalanceEditor({
     <div className="mt-4 rounded-lg border border-slate-200 bg-white/80 p-4 text-slate-900">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold">Actual cash balances</h3>
+          <h3 className="text-sm font-semibold">{canManage === true && !canSyncZoho ? "Staging finance balances — not live bank cash" : "Actual cash balances"}</h3>
           <p className="text-xs text-slate-500">
             {canManage === true
-              ? "Bank balance syncs automatically from the Zoho bank feed when older than 15 minutes. Manual entry remains available as fallback. Safe-to-spend stays unavailable when bank data is older than 48 hours."
+              ? canSyncZoho
+                ? "Bank balance syncs automatically from the Zoho bank feed when older than 15 minutes. Manual entry remains available as fallback. Safe-to-spend stays unavailable when bank data is older than 48 hours."
+                : "Zoho bank synchronization is disabled in this non-production environment. Balances shown here are isolated staging data, not verified live Shalean funds. Do not use safe-to-spend for spending decisions."
+
               : canManage === false
                 ? "Bank balances are read-only for your role. Safe-to-spend stays unavailable when bank data is older than 48 hours."
                 : permissionError
@@ -135,7 +142,7 @@ export function CashAccountBalanceEditor({
                   : "Checking bank-balance access…"}
           </p>
         </div>
-        {bankAccounts.length && canManage === true ? (
+        {bankAccounts.length > 0 && canManage === true && canSyncZoho ? (
           <button
             type="button"
             onClick={() => void syncFromZoho(false)}

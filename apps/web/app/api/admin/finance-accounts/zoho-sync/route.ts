@@ -10,7 +10,10 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const auth = await requireAdminPermissionFromRequest(request, "expense.manage");
   if (!auth.ok) return auth.response;
-  return NextResponse.json({ can_manage: true });
+  return NextResponse.json({
+    can_manage: true,
+    can_sync: !isZohoBooksWriteBlocked(process.env.SHALEAN_APP_ENV),
+  });
 }
 
 export async function POST(request: Request) {
