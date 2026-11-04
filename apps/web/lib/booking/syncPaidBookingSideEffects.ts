@@ -356,7 +356,7 @@ async function verifyZohoInvoicePaidZeroBalance(
 
 export async function syncPaidBookingSideEffects(
   admin: SupabaseClient,
-  params: { bookingId: string; reference: string; amountCents: number },
+  params: { bookingId: string; reference: string; amountCents: number; paymentSource?: "paystack" },
 ): Promise<SyncPaidBookingSideEffectsResult> {
   const { bookingId, reference, amountCents } = params;
 
@@ -498,7 +498,7 @@ export async function syncPaidBookingSideEffects(
             amountZar: totalZar,
             paymentDate: today,
             reference,
-            ...(paymentMethod === "paystack" ? { paymentSource: "paystack" as const } : {}),
+            ...(params.paymentSource === "paystack" ? { paymentSource: "paystack" as const } : {}),
             customerEmail: contact.email,
             customerName: contact.name,
           });
