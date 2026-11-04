@@ -7,7 +7,8 @@ const read = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8")
 describe("CF-01 recorded versus projected cash-flow definitions", () => {
   it("keeps recorded net based on settlement inflows and recorded outflows", () => {
     const loader = read("lib/admin/expenses/loadCashFlowDashboard.ts");
-    expect(loader).toContain("const moneyReceivedNet = settlementSummary.settled_to_bank_cents;");
+    expect(loader).toContain("const moneyReceivedNet = recordedSettlements.settled_to_bank_cents;");
+    expect(loader).toContain("loadRecordedSettlementsByDate(admin, from, to)");
     expect(loader).toContain("const netCashFlow = moneyReceivedNet - moneyPaid;");
     expect(loader).toContain("const forecast = await loadCashFlowForecast(admin, from, to);");
     expect(loader).toContain("expected_income_cents: forecast.income_cents");
