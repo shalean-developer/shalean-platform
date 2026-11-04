@@ -40,8 +40,8 @@ jobs:
       NEXT_PUBLIC_SITE_URL: "https://pricing-test.shalean.co.za"
       NEXT_PUBLIC_APP_URL: "https://pricing-test.shalean.co.za"
       NEXT_PUBLIC_SUPABASE_URL: "https://uwvnmluiqbczeduzjgse.supabase.co"
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ vars.PLESK_TEST_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_IlDDZwioRpJRr2F6-B8WFA_uBrbZnkT' }}"
-      NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "${{ vars.PLESK_TEST_PAYSTACK_PUBLIC_KEY || 'pk_test_preview_disabled' }}"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ vars.PLESK_TEST_SUPABASE_PUBLISHABLE_KEY }}"
+      NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "${{ vars.PLESK_TEST_PAYSTACK_PUBLIC_KEY }}"
 
     steps:
       - name: Resolve preview ref
