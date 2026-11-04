@@ -38,6 +38,19 @@ begin
 
   insert into public.marketing_email_reconciliation_jobs(customer_id,email,action)
   values(u,'synthetic@example.test','unsubscribe');
+  insert into public.marketing_email_enrollment_jobs(customer_id,email,status)
+  values(u,'synthetic@example.test','pending');
+  if (select count(*) from public.marketing_email_enrollment_jobs where customer_id=u and status='pending') <> 1 then
+    raise exception 'enrollment retry job not durable';
+  end if;
+  update public.marketing_email_enrollment_jobs
+    set attempt_count=1,last_error='synthetic_provider_503',
+      next_attempt_at=now()+interval '5 minutes'
+    where customer_id=u and status='pending';
+  if (select attempt_count from public.marketing_email_enrollment_jobs where customer_id=u) <> 1 then
+    raise exception 'enrollment queue retry update failed';
+  end if;
+
 
   begin
     insert into public.marketing_email_reconciliation_jobs(customer_id,email,action)
@@ -56,6 +69,7 @@ do $verify$
 begin
   if (select count(*) from public.marketing_email_consent_events) <> 0
      or (select count(*) from public.marketing_email_reconciliation_jobs) <> 0
+     or (select count(*) from public.marketing_email_enrollment_jobs) <> 0
      or (select count(*) from public.user_profiles) <> 0 then
     raise exception 'synthetic fixture rollback failed';
   end if;
