@@ -57,7 +57,7 @@ export async function recordCustomerMarketingDecision(
     const { error: enrollmentQueueError } = await admin
       .from("marketing_email_enrollment_jobs").upsert({
         customer_id: input.customerId, email, status: "pending",
-        attempt_count: 0, last_error: null,
+        attempt_count: 0, last_error: null, claim_token: null, lease_expires_at: null,
         next_attempt_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       }, { onConflict: "customer_id,email" });
     if (enrollmentQueueError)
