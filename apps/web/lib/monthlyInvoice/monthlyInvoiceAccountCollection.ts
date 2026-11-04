@@ -46,7 +46,7 @@ export async function loadMonthlyInvoiceCollection(
   const { data: anchorRaw, error: anchorErr } = await admin
     .from("monthly_invoices")
     .select(
-      "id, customer_id, month, status, due_date, balance_cents, payment_arrangement_active, promised_payment_date, zoho_invoice_id",
+      "id, customer_id, month, status, is_closed, due_date, balance_cents, payment_arrangement_active, promised_payment_date, zoho_invoice_id",
     )
     .eq("id", anchorInvoiceId)
     .maybeSingle();
@@ -55,6 +55,7 @@ export async function loadMonthlyInvoiceCollection(
   if (!anchorRaw) return { ok: false, error: "invoice_not_found" };
 
   const anchor = anchorRaw as Record<string, unknown>;
+  if (anchor.is_closed === true) return { ok: false, error: "invoice_closed" };
   const anchorStatus = String(anchor.status ?? "").toLowerCase();
   if (!PAYABLE.has(anchorStatus)) return { ok: false, error: "invoice_not_payable" };
 

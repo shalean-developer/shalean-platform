@@ -94,7 +94,7 @@ export async function loadCashSurvivalDashboard(
         .eq("is_active", true),
       admin
         .from("monthly_invoices")
-        .select("status, balance_cents, due_date, month")
+        .select("status, is_closed, balance_cents, due_date, month")
         .gte("month", invoiceMonthFrom)
         .lte("month", invoiceMonthTo),
       admin
@@ -150,7 +150,8 @@ export async function loadCashSurvivalDashboard(
   let draftMonthly = 0;
   const todayYmd = now.toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" });
   for (const raw of invoices ?? []) {
-    const row = raw as { status?: string | null; balance_cents?: number | null; due_date?: string | null };
+    const row = raw as { status?: string | null; is_closed?: boolean | null; balance_cents?: number | null; due_date?: string | null };
+    if (row.is_closed === true) continue;
     const status = String(row.status ?? "").toLowerCase();
     if (status === "draft") {
       // Draft monthly invoices are unpaid by definition, so their outstanding balance

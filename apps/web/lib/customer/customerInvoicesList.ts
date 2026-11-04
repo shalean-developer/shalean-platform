@@ -93,7 +93,7 @@ export async function loadCustomerInvoicesList(
       dueDate: r.due_date != null ? String(r.due_date) : null,
       totalAmountCents: num(r.total_amount_cents),
       amountPaidCents: num(r.amount_paid_cents),
-      balanceCents: num(r.balance_cents),
+      balanceCents: r.is_closed === true || String(r.status ?? "").toLowerCase() === "void" ? 0 : num(r.balance_cents),
       isOverdue: r.is_overdue === true,
       isClosed: r.is_closed === true,
       paymentLink: typeof r.payment_link === "string" ? r.payment_link : null,

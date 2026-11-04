@@ -7,6 +7,11 @@ function source(path: string): string {
 }
 
 describe("monthly invoice statement collection contract", () => {
+  it("rejects closed anchor invoices before forming a payable collection", () => {
+    const src = source("lib/monthlyInvoice/monthlyInvoiceAccountCollection.ts");
+    expect(src).toContain("if (anchor.is_closed === true) return { ok: false, error: \"invoice_closed\" }");
+    expect(src).toContain("status, is_closed, due_date");
+  });
   it("keeps prior balances separate from current invoice accounting total", () => {
     const src = source("lib/monthlyInvoice/monthlyInvoiceAccountCollection.ts");
     expect(src).toContain("previous_balance_cents");

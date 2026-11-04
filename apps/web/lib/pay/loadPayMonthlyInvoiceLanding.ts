@@ -1,3 +1,4 @@
+import { isMonthlyInvoiceCollectible } from "@/lib/monthlyInvoice/isMonthlyInvoiceCollectible";
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -82,7 +83,7 @@ export async function loadPayMonthlyInvoiceLanding(
 
   const { data: row, error } = await admin
     .from("monthly_invoices")
-    .select("id, month, status, balance_cents, paystack_reference, payment_link, customer_id")
+    .select("id, month, status, is_closed, balance_cents, paystack_reference, payment_link, customer_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -96,11 +97,15 @@ export async function loadPayMonthlyInvoiceLanding(
     return { ok: false, httpStatus: 403, error: "Invalid payment reference." };
   }
 
+  if (r.is_closed === true) {
+    return { ok: false, httpStatus: 410, error: "This invoice is closed for payment." };
+  }
+
   const status = String(r.status ?? "").toLowerCase();
   if (status === "paid") {
     return { ok: false, httpStatus: 410, error: "This invoice has already been paid." };
   }
-  if (!["draft", "sent", "partially_paid", "overdue"].includes(status)) {
+  if (!isMonthlyInvoiceCollectible({ status, is_closed: r.is_closed === true, balance_cents: Number(r.balance_cents ?? 0) })) {
     return { ok: false, httpStatus: 410, error: "This invoice is not open for payment." };
   }
 
