@@ -52,8 +52,12 @@ begin
 end $marketing$;
 rollback;
 -- Proof synthetic fixture writes were rolled back.
-select case when
-  (select count(*) from public.marketing_email_consent_events)=0
-  and (select count(*) from public.marketing_email_reconciliation_jobs)=0
-  then 'PASS: isolated native PostgreSQL fixture immutability, replay, unsubscribe-only and rollback'
-  else (1/0)::text end as isolated_postgres_evidence;
+do $verify$
+begin
+  if (select count(*) from public.marketing_email_consent_events) <> 0
+     or (select count(*) from public.marketing_email_reconciliation_jobs) <> 0
+     or (select count(*) from public.user_profiles) <> 0 then
+    raise exception 'synthetic fixture rollback failed';
+  end if;
+end $verify$;
+select 'PASS: isolated native PostgreSQL fixture immutability, replay, unsubscribe-only and rollback' as isolated_postgres_evidence;
