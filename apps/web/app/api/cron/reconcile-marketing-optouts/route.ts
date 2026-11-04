@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { reconcilePendingMarketingOptOuts } from "@/lib/email/reconcilePendingMarketingOptOuts";
+import { reconcilePendingMarketingEnrollments } from "@/lib/email/reconcilePendingMarketingEnrollments";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,8 +25,14 @@ export async function POST(request: Request) {
   // fail open if its concurrency protection is unavailable.
   if (lockAcq.degraded) return NextResponse.json({ error: "Reconciliation lock unavailable" }, { status: 503 });
   try {
+    // Process unsubscribe first. Keep the enrollment branch unscheduled and
+    // disabled unless an approved target segment is explicitly configured.
     const result = await reconcilePendingMarketingOptOuts(admin, apiKey);
-    return NextResponse.json({ ok: true, ...result });
+    const segmentId=process.env.RESEND_AUDIENCE_SEGMENT_ID;
+    const enrollment=segmentId
+      ? await reconcilePendingMarketingEnrollments(admin,apiKey,segmentId)
+      : null;
+    return NextResponse.json({ ok: true, ...result, ...(enrollment ? { enrollment } : {}) });
   } catch {
     return NextResponse.json({ error: "Reconciliation failed" }, { status: 500 });
   } finally {
