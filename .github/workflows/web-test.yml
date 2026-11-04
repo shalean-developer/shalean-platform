@@ -236,6 +236,7 @@ jobs:
         run: >-
           npm run test --
           lib/email/__tests__/marketingEligibility.test.ts
+          lib/email/__tests__/marketingSendGate.synthetic.test.ts
           lib/email/__tests__/marketingConsentService.test.ts
           lib/email/__tests__/marketingUnsubscribeToken.test.ts
           lib/email/__tests__/readResendMarketingState.test.ts
