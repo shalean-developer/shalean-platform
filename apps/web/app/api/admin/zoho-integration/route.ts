@@ -8,6 +8,7 @@ import {
   type ExpenseCategoryMapping,
 } from "@/lib/accounting/zohoIntegrationSettings";
 import { processAccountingSyncQueue } from "@/lib/accounting/processAccountingSyncQueue";
+import { isZohoBooksWriteBlocked } from "@/lib/zoho/zohoWriteIsolation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -114,6 +115,11 @@ export async function PATCH(request: Request) {
 export async function POST(request: Request) {
   const auth = await requireFinanceApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
+  // Do not dispatch or update sync records from staging.
+  if (isZohoBooksWriteBlocked(process.env.SHALEAN_APP_ENV)) {
+    return NextResponse.json({ error: "zoho_accounting_sync_blocked_nonproduction" }, { status: 409 });
+  }
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
