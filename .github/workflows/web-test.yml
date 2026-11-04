@@ -103,6 +103,10 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test:critical
 
+      - name: Funnel analytics source fail-closed regression
+        if: steps.filter.outputs.run_suite == 'true'
+        run: npm run test -- app/api/admin/booking-funnel/__tests__/route.test.ts
+
       - name: Paired-ledger isolated PostgreSQL regression
         if: steps.filter.outputs.run_suite == 'true'
         working-directory: .
