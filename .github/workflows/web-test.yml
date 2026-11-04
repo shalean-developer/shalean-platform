@@ -241,6 +241,7 @@ jobs:
           lib/email/__tests__/readResendMarketingState.test.ts
           lib/email/__tests__/reconcileResendUnsubscribe.test.ts
           lib/email/__tests__/providerPreferenceWebhook.test.ts
+          app/api/marketing/unsubscribe/__tests__/route.test.ts
 
       - name: Blog route governance
         if: steps.filter.outputs.run_suite == 'true'
