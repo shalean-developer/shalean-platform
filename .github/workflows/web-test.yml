@@ -244,6 +244,7 @@ jobs:
           lib/email/__tests__/providerPreferenceWebhook.test.ts
           app/api/marketing/unsubscribe/__tests__/route.test.ts
           lib/email/__tests__/marketingAndTransactionalSend.integration.test.ts
+          lib/email/__tests__/reconcilePendingMarketingOptOuts.integration.test.ts
           lib/referrals/__tests__/referralConsentJourney.integration.test.ts
           app/api/cron/reconcile-marketing-optouts/__tests__/route.test.ts
           app/api/webhooks/resend/__tests__/marketingWebhook.integration.test.ts
