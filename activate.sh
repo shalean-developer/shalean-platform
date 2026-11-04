@@ -57,7 +57,7 @@ touch "$LIVE/tmp/restart.txt"
 ok=false
 for _ in $(seq 1 40); do
   body="$(curl -fsS --max-time 10 "$HEALTH_URL" 2>/dev/null || true)"
-  if printf '%s' "$body" | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("status")=="ok" and d.get("deployment")=="staging" and d.get("releaseSha")==sys.argv[1] and (d.get("supabase") or {}).get("configuredRef")==sys.argv[2] and (d.get("paystack") or {}).get("secretMode")=="test" and (d.get("paystack") or {}).get("publicMode")=="test" and (d.get("messaging") or {}).get("outboundDisabled") is True and not d.get("issues") else 1)' "$META_SHA" "$EXPECTED_REF"; then
+  if printf '%s' "$body" | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("status")=="ok" and d.get("deployment")=="staging" and d.get("releaseSha")==sys.argv[1] and (d.get("supabase") or {}).get("configuredRef")==sys.argv[2] and (d.get("paystack") or {}).get("secretMode")=="test" and (d.get("paystack") or {}).get("publicMode")=="test" and d.get("shaleanAppEnv")=="staging" and (d.get("zoho") or {}).get("writesBlocked") is True and (d.get("messaging") or {}).get("outboundDisabled") is True and not d.get("issues") else 1)' "$META_SHA" "$EXPECTED_REF"; then
     ok=true
     break
   fi
