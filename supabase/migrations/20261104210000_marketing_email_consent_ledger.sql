@@ -58,3 +58,22 @@ create index if not exists marketing_email_reconcile_due_idx
   where status = 'pending';
 alter table public.marketing_email_reconciliation_jobs enable row level security;
 revoke all on public.marketing_email_reconciliation_jobs from public, anon, authenticated;
+
+-- Private affirmative-consent-only enrollment reconciliation queue.
+-- Kept distinct from the unsubscribe-only queue. No trigger or schedule activates it.
+create table if not exists public.marketing_email_enrollment_jobs (
+  id uuid primary key default gen_random_uuid(),
+  customer_id uuid not null references public.user_profiles(id) on delete restrict,
+  email text not null check (email = lower(trim(email))),
+  status text not null default 'pending' check (status in ('pending','completed','blocked')),
+  attempt_count integer not null default 0 check (attempt_count >= 0),
+  last_error text,
+  next_attempt_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (customer_id, email)
+);
+create index if not exists marketing_email_enrollment_due_idx
+  on public.marketing_email_enrollment_jobs (next_attempt_at, id) where status = 'pending';
+alter table public.marketing_email_enrollment_jobs enable row level security;
+revoke all on public.marketing_email_enrollment_jobs from public, anon, authenticated;
