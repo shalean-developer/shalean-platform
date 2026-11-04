@@ -18,9 +18,13 @@ function fakeAdmin(opts:{duplicate?:boolean;eventFail?:boolean;suppressionFail?:
         writes.push({table,kind:"insert",payload:row});
         return {error:opts.eventFail?{code:"P0001"}:opts.duplicate?{code:"23505"}:null};
       },
-      update:(row:Record<string,unknown>)=>({
-        eq:async()=>{writes.push({table,kind:"update",payload:row});return {error:null};},
-      }),
+      update:(row:Record<string,unknown>)=>{
+        const chain={
+          eq:()=>chain, not:()=>chain,
+          then:(resolve:(value:unknown)=>void)=>{writes.push({table,kind:"update",payload:row});resolve({error:null});},
+        };
+        return chain;
+      },
       upsert:async(row:Record<string,unknown>)=>{
         writes.push({table,kind:"upsert",payload:row});
         return {error:opts.suppressionFail?{code:"P0001"}:null};
@@ -118,6 +122,17 @@ describe("Gate 3 signed Resend webhook integration — synthetic, no provider ne
     const response=await POST(signedRequest());
     expect(response.status).toBe(200);
     expect(db.writes.filter(x=>x.table==="email_suppressions")).toHaveLength(0);
+  });
+
+  it("late delivery_delayed event uses an atomic terminal-state exclusion",async()=>{
+    const db=fakeAdmin();mocks.getClient.mockReturnValue(db.admin);
+    mocks.verify.mockReturnValue({type:"email.delivery_delayed",
+      data:{email_id:"synthetic-provider-id",to:["synthetic@example.test"]}});
+    const response=await POST(signedRequest());
+    expect(response.status).toBe(200);
+    expect(db.writes.find(x=>x.table==="email_outbound_messages")?.payload).toMatchObject({
+      delivery_status:"delivery_delayed",retry_status:"queued",
+    });
   });
 
 });
