@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { detectFunnelAnomalies, generateAnalyticsInsights } from "@/lib/analytics/funnelIntelligence";
+import { isExplicitFunnelRevenueFixture } from "@/lib/analytics/funnelRevenueFixture";
 import { buildFunnelNarrativeSummary } from "@/lib/analytics/narrativeSummary";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
@@ -530,11 +531,7 @@ export async function GET(request: Request) {
   });
   // Exclude only explicit, evidence-backed synthetic fixtures from the displayed subtotal.
   // Preserve all paid booking rows and legitimate sales-document receipts.
-  const isExplicitFixture = (booking: BookingRow): boolean =>
-    booking.is_test === true ||
-    (booking.booking_source === "sales_document" &&
-      booking.customer_name?.trim().toUpperCase() === "STAGING R550 CONVERSION TEST");
-  const nonFixturePaidBookings = paidBookingsInWindow.filter((booking) => !isExplicitFixture(booking));
+  const nonFixturePaidBookings = paidBookingsInWindow.filter((booking) => !isExplicitFunnelRevenueFixture(booking));
   const recordedBookingRevenueZar = paidBookingsInWindow.reduce((sum, booking) => sum + safeRevenue(booking), 0);
   const nonFixtureRevenueZar = nonFixturePaidBookings.reduce((sum, booking) => sum + safeRevenue(booking), 0);
   const paidCompletedByDay = new Map<string, number>();
