@@ -1,0 +1,180 @@
+name: PR1049 isolated preview bundle (build-only)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/pr1049-preview-bundle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_SOURCE_SHA: '30fa54ce50b322273b0434e6ea35afc6148edaff'
+      SHALEAN_APP_ENV: staging
+      SHALEAN_ENFORCE_ENV_SAFETY: 'true'
+      SHALEAN_EXPECTED_SUPABASE_REF: uwvnmluiqbczeduzjgse
+      NEXT_PUBLIC_SUPABASE_URL: https://uwvnmluiqbczeduzjgse.supabase.co
+      SUPABASE_URL: https://uwvnmluiqbczeduzjgse.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ vars.PLESK_STAGING_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_Jl3ESJbVyt2gnuiVslYvHg_gy-LaG_1' }}"
+      NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: ${{ vars.PLESK_TEST_PAYSTACK_PUBLIC_KEY }}
+      NEXT_PUBLIC_SITE_URL: https://pr1049-test.shalean.co.za
+      NEXT_PUBLIC_APP_URL: https://pr1049-test.shalean.co.za
+      OUTBOUND_MESSAGING_DISABLED: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Checkout exact reviewed PR source
+        uses: actions/checkout@v4
+        with:
+          ref: 30fa54ce50b322273b0434e6ea35afc6148edaff
+          persist-credentials: false
+
+      - name: Assert bounded source and non-secret staging configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          test "$SHALEAN_APP_ENV" = staging
+          test "$SHALEAN_ENFORCE_ENV_SAFETY" = true
+          test "$SHALEAN_EXPECTED_SUPABASE_REF" = uwvnmluiqbczeduzjgse
+          test "$NEXT_PUBLIC_SUPABASE_URL" = https://uwvnmluiqbczeduzjgse.supabase.co
+          test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          case "$NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY" in pk_test_*) ;; *) echo "::error::Test Paystack public key required"; exit 1 ;; esac
+          case "$NEXT_PUBLIC_SUPABASE_ANON_KEY" in sb_publishable_*|eyJ*) ;; *) exit 1 ;; esac
+          test "$OUTBOUND_MESSAGING_DISABLED" = true
+          for name in SUPABASE_SERVICE_ROLE_KEY SUPABASE_SERVICE_KEY PAYSTACK_SECRET_KEY CRON_SECRET ZOHO_CLIENT_SECRET RESEND_API_KEY; do
+            test -z "${!name:-}" || { echo "::error::Forbidden credential configured: $name"; exit 1; }
+          done
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install locked Linux dependencies
+        working-directory: apps/web
+        run: npm ci --include=optional
+
+      - name: Build standalone with Webpack
+        working-directory: apps/web
+        env:
+          FACEBOOK_APP_ID: build-only-placeholder
+          FACEBOOK_APP_SECRET: build-only-placeholder
+        run: |
+          node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build --webpack
+          test -f .next/standalone/apps/web/server.js
+
+      - name: Assemble isolated preview archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/pr1049-release"
+          mkdir -p "$ROOT"
+          cp -a apps/web/.next/standalone/apps/web/. "$ROOT/"
+          rm -rf "$ROOT/public" "$ROOT/.next/static"
+          mkdir -p "$ROOT/.next/static" "$ROOT/public"
+          cp -a apps/web/.next/static/. "$ROOT/.next/static/"
+          cp -a apps/web/public/. "$ROOT/public/"
+          cat > "$ROOT/build-meta.json" <<EOF
+          {"artifact_sha":"$EXPECTED_SOURCE_SHA","target_host":"pr1049-test.shalean.co.za","deployment_environment":"staging","supabase_ref":"uwvnmluiqbczeduzjgse"}
+          EOF
+          test -f "$ROOT/server.js"
+          test -f "$ROOT/.next/BUILD_ID"
+          test -d "$ROOT/node_modules/@img/sharp-linux-x64"
+          test ! -e "$ROOT/public/public"
+          if find "$ROOT" -type f \( -name '.env' -o -name '.env.*' -o -name '.npmrc' -o -name '*.pem' -o -name '*.key' \) | grep -q .; then
+            echo '::error::Sensitive filename detected'
+            exit 1
+          fi
+          if grep -rIlE 'sk_(live|test)_[A-Za-z0-9]{10,}' "$ROOT/.next" | grep -q .; then
+            echo '::error::Potential embedded Paystack secret'
+            exit 1
+          fi
+          tar -czf "$RUNNER_TEMP/pr1049-preview.tar.gz" -C "$ROOT" .
+          sha256sum "$RUNNER_TEMP/pr1049-preview.tar.gz" | tee "$RUNNER_TEMP/pr1049-preview.sha256"
+          test -z "$(find "$ROOT" -type f -name '*.node' | grep -i win32 || true)"
+
+      - name: Upload review artifact only (no Plesk/branch deployment)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr1049-preview-build-only
+          path: |
+            ${{ runner.temp }}/pr1049-preview.tar.gz
+            ${{ runner.temp }}/pr1049-preview.sha256
+          retention-days: 7
+          if-no-files-found: error
+
+  publish-branch:
+    needs: build-only
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 1057 && github.event.pull_request.head.repo.full_name == 'shalean-developer/shalean-platform' && github.event.pull_request.head.ref == 'chore/pr1049-preview-packaging-20261104' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout publication controller (no app scripts executed)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+
+      - name: Download previously validated bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: pr1049-preview-build-only
+          path: ${{ runner.temp }}/pr1049-artifact
+
+      - name: Verify archive bytes, target metadata and branch isolation
+        shell: bash
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/pr1049-artifact
+        run: |
+          set -euo pipefail
+          test -f "$ARTIFACT_DIR/pr1049-preview.tar.gz"
+          test -f "$ARTIFACT_DIR/pr1049-preview.sha256"
+          expected_sha="$(awk 'NR==1 {print $1}' "$ARTIFACT_DIR/pr1049-preview.sha256")"
+          actual_sha="$(sha256sum "$ARTIFACT_DIR/pr1049-preview.tar.gz" | cut -d' ' -f1)"
+          test "$expected_sha" = "$actual_sha"
+          tar -tzf "$ARTIFACT_DIR/pr1049-preview.tar.gz" | grep -Fx './server.js'
+          tar -tzf "$ARTIFACT_DIR/pr1049-preview.tar.gz" | grep -Fx './.next/BUILD_ID'
+          tar -xOzf "$ARTIFACT_DIR/pr1049-preview.tar.gz" ./build-meta.json > "$ARTIFACT_DIR/build-meta.json"
+          python3 - "$ARTIFACT_DIR/build-meta.json" <<'PY'
+          import json, sys
+          data=json.load(open(sys.argv[1],encoding='utf-8'))
+          expected={
+            'artifact_sha':'30fa54ce50b322273b0434e6ea35afc6148edaff',
+            'target_host':'pr1049-test.shalean.co.za',
+            'deployment_environment':'staging',
+            'supabase_ref':'uwvnmluiqbczeduzjgse'
+          }
+          assert data==expected, 'Preview artifact metadata differs from approved exact source'
+          PY
+          if git ls-remote --exit-code --heads origin refs/heads/deploy/pr1049-preview >/dev/null 2>&1; then
+            echo '::error::Preview deployment branch already exists; refusing overwrite'
+            exit 1
+          fi
+
+      - name: Publish artifact-only Git branch (never deploy)
+        shell: bash
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/pr1049-artifact
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --orphan pr1049-preview-artifact
+          git rm -rf --ignore-unmatch .
+          git clean -fdx
+          cp "$ARTIFACT_DIR/pr1049-preview.tar.gz" pr1049-preview.tar.gz
+          cp "$ARTIFACT_DIR/pr1049-preview.sha256" pr1049-preview.sha256
+          cp "$ARTIFACT_DIR/build-meta.json" build-meta.json
+          printf '%s\n' '30fa54ce50b322273b0434e6ea35afc6148edaff' > release-sha.txt
+          printf '%s\n' 'PR #1049 isolated preview artifact; Plesk deployment and Node activation are NOT authorized by this branch publication.' 'Never target pricing-test.shalean.co.za or production. Validate hosted password protection and fail-closed routes before activation.' > README-DO-NOT-ACTIVATE.txt
+          git add pr1049-preview.tar.gz pr1049-preview.sha256 build-meta.json release-sha.txt README-DO-NOT-ACTIVATE.txt
+          git commit -m "deploy: prepare isolated PR1049 preview artifact"
+          git push origin HEAD:refs/heads/deploy/pr1049-preview
