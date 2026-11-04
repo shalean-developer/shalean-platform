@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { validateEmailRecipient } from "@/lib/email/recipientSafety";
 import { reconcileResendUnsubscribe } from "@/lib/email/reconcileResendUnsubscribe";
-import { syncConsentedMarketingContact } from "@/lib/email/syncConsentedMarketingContact";
 
 export const MARKETING_POLICY_VERSION = "marketing-email-2026-11-v1";
 type Outcome = { ok: true; providerSync?: "updated" | "not_found" | "retry_required" } | { ok: false; reason: string };
@@ -52,19 +51,18 @@ export async function recordCustomerMarketingDecision(
     return { ok: false, reason: "consent_write_failed" };
 
   if (input.decision === "granted") {
-    // Never clear prior CRM or Resend unsubscribes. Enrollment is guarded by
-    // the fresh consent ledger, suppression lists and provider contact status.
-    if (input.apiKey) {
-      const enrollment = await syncConsentedMarketingContact(admin, {
-        customerId: input.customerId, email, apiKey: input.apiKey,
-        segmentId: process.env.RESEND_AUDIENCE_SEGMENT_ID,
-      });
-      if (enrollment === "retry_required" || enrollment === "blocked") {
-        // Retain consent evidence, but do not claim the contact is subscribed.
-        return { ok: true };
-      }
-    }
-    return { ok: true };
+    // Do not send or enroll from the customer-facing request. Persist a job
+    // first; an independently authorised worker may later reconcile the
+    // consent to Resend. If this insert fails, never claim enrollment succeeded.
+    const { error: enrollmentQueueError } = await admin
+      .from("marketing_email_enrollment_jobs").upsert({
+        customer_id: input.customerId, email, status: "pending",
+        attempt_count: 0, last_error: null,
+        next_attempt_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      }, { onConflict: "customer_id,email" });
+    if (enrollmentQueueError)
+      return { ok: false, reason: "enrollment_queue_write_failed" };
+    return { ok: true, providerSync: "retry_required" };
   }
   const { error: profileUpdateError } = await admin.from("user_profiles")
     .update({ marketing_emails_unsubscribed_at: new Date().toISOString() })
