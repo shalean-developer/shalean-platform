@@ -37,3 +37,24 @@ drop trigger if exists marketing_email_consent_immutable on public.marketing_ema
 create trigger marketing_email_consent_immutable
 before update or delete on public.marketing_email_consent_events
 for each row execute function public.reject_marketing_email_consent_mutation();
+
+
+-- Durable, private, unsubscribe-only Resend reconciliation queue.
+create table if not exists public.marketing_email_reconciliation_jobs (
+  id uuid primary key default gen_random_uuid(),
+  customer_id uuid not null references public.user_profiles(id) on delete restrict,
+  email text not null check (email = lower(trim(email))),
+  action text not null default 'unsubscribe' check (action = 'unsubscribe'),
+  status text not null default 'pending' check (status in ('pending','completed')),
+  attempt_count integer not null default 0 check (attempt_count >= 0),
+  last_error text,
+  next_attempt_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (customer_id, email, action)
+);
+create index if not exists marketing_email_reconcile_due_idx
+  on public.marketing_email_reconciliation_jobs (next_attempt_at, id)
+  where status = 'pending';
+alter table public.marketing_email_reconciliation_jobs enable row level security;
+revoke all on public.marketing_email_reconciliation_jobs from public, anon, authenticated;
