@@ -49,6 +49,25 @@ describe("CF-02 Cash Flow approved expenses vs Paystack settlement fees", () => 
     expect(97000 - result.cash_out_cents).toBe(87000);
   });
 
+  it("accepts unambiguous joined relations in Supabase array form", () => {
+    const result = summarizeRecordedExpenseCash([
+      expense({
+        id: "linked-fee-arrays", amount_cents: 3000,
+        payment_transaction_id: "provider-transaction",
+        expense_categories: [{ name: "Paystack Fees" }],
+        payment_transactions: [{ gateway: "paystack" }],
+      }),
+      expense({
+        id: "ambiguous-fee", amount_cents: 200,
+        payment_transaction_id: "different-transaction",
+        expense_categories: [{ name: "Paystack Fees" }],
+        payment_transactions: [{ gateway: "paystack" }, { gateway: "other" }],
+      }),
+    ]);
+    expect(result.excluded_paystack_fees_cents).toBe(3000);
+    expect(result.cash_out_cents).toBe(200);
+  });
+
   it("retains unrelated bank-paid fees, unlinked fees and normal operating expenses", () => {
     const result = summarizeRecordedExpenseCash([
       expense(),
