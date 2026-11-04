@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildOfficeFunnelKpis,
+  buildOfficeFunnelRevenueMetrics,
   buildOfficeFunnelRecommendations,
   buildOfficeFunnelSteps,
   buildOfficeProductFlowSteps,
@@ -154,18 +155,46 @@ describe("funnelStepLabel", () => {
 });
 
 describe("buildOfficeFunnelKpis", () => {
-  it("labels the non-fixture subtotal and preserves disclosed recorded revenue without claiming provider verification", () => {
-    const payload = {
+  it("keeps Paystack KPI focused on payment sessions without burying revenue", () => {
+    const cards = buildOfficeFunnelKpis({
       ...SAMPLE,
       intelligence: { ...SAMPLE.intelligence, revenue: {
         paidBookings: 7, totalZar: 3685, recordedTotalZar: 4545, excludedFixtureZar: 860,
       } },
-    };
-    const cards = buildOfficeFunnelKpis(payload);
+    });
     expect(cards).toHaveLength(4);
-    expect(cards[3]?.sub).toContain(`${zarLabel(3685)} non-fixture booking DB revenue (unreconciled)`);
-    expect(cards[3]?.sub).toContain(`${zarLabel(860)} test fixtures excluded from ${zarLabel(4545)} recorded`);
-    expect(cards[0]?.value).toBe("15.5%");
+    expect(cards[3]?.sub).toBe("48/60 Paystack sessions");
+    expect(cards[3]?.sub).not.toContain("3 685");
+  });
+
+  it("shows the exact non-fixture, excluded and historical figures in a separate revenue model", () => {
+    const metrics = buildOfficeFunnelRevenueMetrics({
+      ...SAMPLE,
+      intelligence: { ...SAMPLE.intelligence, revenue: {
+        paidBookings: 7, totalZar: 3685, recordedTotalZar: 4545, excludedFixtureZar: 860,
+      } },
+    });
+    expect(metrics).toEqual([
+      { label: "Non-fixture booking revenue", value: zarLabel(3685) },
+      { label: "Excluded test fixtures", value: zarLabel(860) },
+      { label: "Historical recorded total", value: zarLabel(4545) },
+    ]);
+  });
+
+  it("does not fabricate revenue when the API has no revenue payload", () => {
+    expect(buildOfficeFunnelRevenueMetrics({ ...SAMPLE, intelligence: { ...SAMPLE.intelligence, revenue: undefined } })).toBeNull();
+    expect(buildOfficeFunnelRevenueMetrics({})).toBeNull();
+  });
+
+  it("shows unavailable amounts as dashes rather than pretending they are zero", () => {
+    expect(buildOfficeFunnelRevenueMetrics({
+      ...SAMPLE,
+      intelligence: { ...SAMPLE.intelligence, revenue: { totalZar: 0 } },
+    })).toEqual([
+      { label: "Non-fixture booking revenue", value: zarLabel(0) },
+      { label: "Excluded test fixtures", value: "—" },
+      { label: "Historical recorded total", value: "—" },
+    ]);
   });
 
   it("builds four KPI cards from intelligence payload", () => {
