@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { validateEmailRecipient } from "@/lib/email/recipientSafety";
+import { applyProviderPreferenceWithdrawal } from "@/lib/email/providerPreferenceWebhook";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  const firstRecipient = event.data?.to?.[0] ?? "";
+  const firstRecipient = event.data?.to?.[0] ?? (typeof event.data?.email === "string" ? event.data.email : "");
   const recipientResult = validateEmailRecipient(firstRecipient);
   const recipientEmail = recipientResult.allowed ? recipientResult.normalized : null;
   const tags = normalizeTags(event.data?.tags);
@@ -63,7 +64,19 @@ export async function POST(request: Request) {
     message_type: tags.message_type ?? null, campaign_id: tags.campaign_id ?? null, tags, payload: event,
   });
   if (eventError && eventError.code !== "23505") return NextResponse.json({ error: "Failed to record event" }, { status: 500 });
-  if (eventError?.code === "23505") return NextResponse.json({ ok: true, duplicate: true });
+  // A duplicate event might have failed during post-insert preference reconciliation.
+  // Do not acknowledge retries until the CRM withdrawal has been applied.
+  const duplicate = eventError?.code === "23505";
+  if (event.type === "contact.updated") {
+    const applied = await applyProviderPreferenceWithdrawal(admin, {
+      type: event.type,
+      email: typeof event.data?.email === "string" ? event.data.email : null,
+      unsubscribed: event.data?.unsubscribed === true,
+      svixId,
+    });
+    if (!applied.ok) return NextResponse.json({ error: applied.reason }, { status: 500 });
+  }
+  if (duplicate) return NextResponse.json({ ok: true, duplicate: true });
 
   if (resendEmailId) {
     const terminalSuccess = event.type === "email.delivered";
