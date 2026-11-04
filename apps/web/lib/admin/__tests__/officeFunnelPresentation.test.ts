@@ -4,6 +4,7 @@ import {
   buildOfficeFunnelRecommendations,
   buildOfficeFunnelSteps,
   buildOfficeProductFlowSteps,
+  dailyTrendBarHeights,
   dailyTrendMax,
   funnelStepLabel,
   funnelVisitorCount,
@@ -183,6 +184,45 @@ describe("sliceDailyTrends", () => {
   it("returns trailing slice of daily trends", () => {
     expect(sliceDailyTrends(SAMPLE, 1)).toHaveLength(1);
     expect(dailyTrendMax(sliceDailyTrends(SAMPLE))).toBe(8);
+  });
+});
+
+describe("dailyTrendBarHeights", () => {
+  it("renders zero-height bars on truly inactive days while leaving date rows available", () => {
+    expect(dailyTrendBarHeights({ starts: 0, completed: 0, paystackAbandons: 0 }, 1)).toEqual({
+      barHeight: 0,
+      completedHeight: 0,
+      abandonsHeight: 0,
+    });
+  });
+
+  it("retains positive blue bar height for days with starts", () => {
+    expect(dailyTrendBarHeights({ starts: 1, completed: 0, paystackAbandons: 0 }, 1)).toEqual({
+      barHeight: 120,
+      completedHeight: 0,
+      abandonsHeight: 0,
+    });
+  });
+
+  it("retains positive completion overlay without inventing starts", () => {
+    expect(dailyTrendBarHeights({ starts: 0, completed: 1, paystackAbandons: 0 }, 2)).toEqual({
+      barHeight: 60,
+      completedHeight: 60,
+      abandonsHeight: 0,
+    });
+  });
+
+  it("retains Paystack abandon overlays even if there were no starts or completions", () => {
+    expect(dailyTrendBarHeights({ starts: 0, completed: 0, paystackAbandons: 1 }, 2)).toEqual({
+      barHeight: 60,
+      completedHeight: 0,
+      abandonsHeight: 60,
+    });
+  });
+
+  it("uses the existing minimum visible height for low nonzero activity", () => {
+    expect(dailyTrendBarHeights({ starts: 1, completed: 0, paystackAbandons: 0 }, 100).barHeight).toBe(4);
+    expect(dailyTrendBarHeights({ starts: 0, completed: 0, paystackAbandons: 0 }, 100).barHeight).toBe(0);
   });
 });
 
