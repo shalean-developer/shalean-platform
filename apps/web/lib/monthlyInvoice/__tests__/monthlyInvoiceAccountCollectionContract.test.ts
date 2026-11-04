@@ -68,4 +68,20 @@ describe("monthly invoice statement collection contract", () => {
     expect(client).toContain("if (explicit) return body");
   });
 
+  it("routes only verified Paystack-linked fee expenses through Clearing", () => {
+    const src = source("lib/accounting/syncExpenseToZoho.ts");
+    const zoho = source("lib/zoho/zohoBooksService.ts");
+    expect(src).toContain("payment_transactions!expenses_payment_transaction_id_fkey ( gateway_reference, gateway )");
+    expect(src).toContain('categoryName === "Paystack Fees" && row.payment_transactions?.gateway === "paystack"');
+    expect(src).toContain("paidThroughAccountId: zohoPaystackClearingAccountId()");
+    expect(zoho).toContain("paid_through_account_id: params.paidThroughAccountId");
+  });
+
+  it("does not route manual sales document payments to Clearing", () => {
+    const manual = source("lib/salesDocument/markSalesDocumentPaidManual.ts");
+    const helper = source("lib/zoho/zohoBooksService.ts");
+    expect(manual).not.toContain("paymentSource:");
+    expect(helper).toContain('params.paymentSource === "paystack"');
+  });
+
 });
