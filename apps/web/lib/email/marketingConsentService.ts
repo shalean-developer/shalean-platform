@@ -61,9 +61,22 @@ export async function recordCustomerMarketingDecision(
     // The latest withdrawn event still blocks future marketing in the sending gate.
     return { ok: false, reason: "unsubscribe_profile_sync_failed" };
   }
-  // This is outbound provider state change, only for a customer-initiated opt-out.
-  // Failures do not undo CRM consent withdrawal. The operator must reconcile later.
+  // Durably queue provider reconciliation before attempting any provider write.
+  const { error: queueError } = await admin.from("marketing_email_reconciliation_jobs").upsert({
+    customer_id: input.customerId, email, action: "unsubscribe",
+    status: "pending", next_attempt_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(), last_error: null,
+  }, { onConflict: "customer_id,email,action" });
+  if (queueError) {
+    // The CRM withdrawal is already durable. Tell the caller reconciliation needs attention.
+    return { ok: true, providerSync: "retry_required" };
+  }
   if (!input.apiKey) return { ok: true, providerSync: "retry_required" };
   const providerSync = await reconcileResendUnsubscribe(email, { apiKey: input.apiKey });
+  if (providerSync === "updated" || providerSync === "not_found") {
+    await admin.from("marketing_email_reconciliation_jobs").update({
+      status: "completed", last_error: null, updated_at: new Date().toISOString(),
+    }).eq("customer_id", input.customerId).eq("email", email).eq("action", "unsubscribe");
+  }
   return { ok: true, providerSync };
 }
