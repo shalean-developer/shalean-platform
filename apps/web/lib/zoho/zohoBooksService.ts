@@ -798,6 +798,8 @@ export type CreateZohoExpenseParams = {
   accountId: string;
   date: string;
   amountZar: number;
+  /** Payment/source account; distinct from the expense category accountId. */
+  paidThroughAccountId?: string;
   vendorId?: string;
   description?: string;
   referenceNumber?: string;
@@ -812,6 +814,7 @@ export async function createZohoExpense(
       account_id: params.accountId,
       date: params.date,
       amount: params.amountZar,
+      ...(params.paidThroughAccountId ? { paid_through_account_id: params.paidThroughAccountId } : {}),
       ...(params.vendorId ? { vendor_id: params.vendorId } : {}),
       ...(params.description ? { description: params.description } : {}),
       ...(params.referenceNumber ? { reference_number: formatZohoReference(params.referenceNumber) } : {}),
