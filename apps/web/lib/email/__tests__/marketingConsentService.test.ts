@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { MARKETING_POLICY_VERSION, recordCustomerMarketingDecision } from "../marketingConsentService";
 
 type Row = { billing_email: string; role: string; id: string };
-function fakeClient(options: { profile?: Row; failRead?: boolean; failLedger?: boolean; failUpdate?: boolean } = {}) {
+function fakeClient(options: { profile?: Row; failRead?: boolean; failLedger?: boolean; failUpdate?: boolean; failQueue?: boolean } = {}) {
   const writes: { table: string; payload: Record<string, unknown> }[] = [];
   const admin = { from(table: string) {
     return {
@@ -14,6 +14,9 @@ function fakeClient(options: { profile?: Row; failRead?: boolean; failLedger?: b
       }) }; } }; },
       insert(payload: Record<string, unknown>) { writes.push({ table, payload }); return Promise.resolve({
         error: options.failLedger ? { message: "write blocked" } : null,
+      }); },
+      upsert(payload: Record<string, unknown>) { writes.push({ table, payload }); return Promise.resolve({
+        error: options.failQueue ? { message: "queue write blocked" } : null,
       }); },
       update(payload: Record<string, unknown>) { writes.push({ table, payload }); return {
         eq: async () => ({ error: options.failUpdate ? { message: "write blocked" } : null }),
@@ -58,7 +61,7 @@ test("withdrawal writes durable audit then CRM opt-out", async () => {
   const {admin,writes}=fakeClient();
   const result=await recordCustomerMarketingDecision(admin,{...base,decision:"withdrawn",explicitOptIn:false});
   assert.deepEqual(result,{ok:true,providerSync:"retry_required"});
-  assert.deepEqual(writes.map(x=>x.table),["marketing_email_consent_events","user_profiles"]);
+  assert.deepEqual(writes.map(x=>x.table),["marketing_email_consent_events","user_profiles","marketing_email_reconciliation_jobs"]);
   assert.equal(writes[0]?.payload.decision,"withdrawn");
   assert.ok(writes[1]?.payload.marketing_emails_unsubscribed_at);
 });
