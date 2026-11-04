@@ -246,6 +246,7 @@ jobs:
           lib/email/__tests__/marketingAndTransactionalSend.integration.test.ts
           lib/email/__tests__/syncConsentedMarketingContact.test.ts
           lib/email/__tests__/reconcilePendingMarketingOptOuts.integration.test.ts
+          lib/email/__tests__/reconcilePendingMarketingEnrollments.integration.test.ts
           lib/email/__tests__/MarketingEmailPreferences.ui.test.ts
           lib/referrals/__tests__/referralConsentJourney.integration.test.ts
           lib/booking/__tests__/processLifecycleJob.enterprise.test.ts
