@@ -21,6 +21,7 @@ import {
 import { syncMonthlyInvoiceToZohoBooks } from "@/lib/monthlyInvoice/syncMonthlyInvoiceToZohoBooks";
 import { getZohoInvoice, markZohoInvoicePaid } from "@/lib/zoho/zohoBooksService";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { isZohoBooksWriteBlocked } from "@/lib/zoho/zohoWriteIsolation";
 
 type SyncRecord = {
   id: string;
@@ -277,6 +278,10 @@ export async function processAccountingSyncQueue(
   limit = 50,
   invoiceStatusLimit = 5,
 ): Promise<ProcessAccountingSyncResult> {
+  // CF-02: refuse staging accounting processing before any Supabase or Zoho access.
+  if (isZohoBooksWriteBlocked(process.env.SHALEAN_APP_ENV)) {
+    return { processed: 0, succeeded: 0, failed: 0, invoice_status_sync: { synced: 0, failed: 0 } };
+  }
   if (!isZohoConfigured()) {
     return { processed: 0, succeeded: 0, failed: 0, invoice_status_sync: { synced: 0, failed: 0 } };
   }
@@ -340,6 +345,10 @@ export async function retryAccountingSync(
   admin: SupabaseClient,
   recordId: string,
 ): Promise<{ ok: boolean; error?: string }> {
+  // A retry must not update local statuses, retry counters or provider records in staging.
+  if (isZohoBooksWriteBlocked(process.env.SHALEAN_APP_ENV)) {
+    return { ok: false, error: "zoho_accounting_sync_blocked_nonproduction" };
+  }
   const { data: record } = await admin
     .from("accounting_sync_records")
     .select("id, entity_type, entity_id, retry_count, sync_status")
