@@ -2,6 +2,7 @@ import { getResend } from "@/lib/email/resendFrom";
 import { validateEmailRecipients } from "@/lib/email/recipientSafety";
 import { applyOutboundSubjectPrefix, decideOutboundEmail } from "@/lib/env/outboundMessagingSafety";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { checkMarketingSendGate } from "@/lib/email/marketingSendGate";
 
 type EmailContext = {
   bookingId?: string | null;
@@ -52,6 +53,15 @@ export async function safeResendSend(payload: SafeResendPayload): Promise<{
   if (!decision.allowed) return { data: null, error: { message: decision.reason, name: "outbound_blocked" } };
 
   const { context, tags = [], ...sendPayload } = payload;
+  const declaredType = context?.messageType ?? tags.find(tag => tag.name === "message_type")?.value ?? "";
+  if (declaredType === "referral_campaign" || declaredType === "rebook_email" || declaredType === "rebook_reminder_email") {
+    const admin = getSupabaseAdmin();
+    if (!admin) return { data: null, error: { name: "marketing_eligibility", message: "marketing_eligibility_lookup_failed" } };
+    const customerId = context?.customerId ?? null;
+    const recipient = firstRecipient(payload.to);
+    const eligibility = await checkMarketingSendGate(admin, customerId, recipient);
+    if (!eligibility.allowed) return { data: null, error: { name: "marketing_eligibility", message: `marketing_eligibility_${eligibility.reason}` } };
+  }
   const mergedTags = [...tags, ...contextTags(context)].filter((tag, index, all) =>
     all.findIndex((candidate) => candidate.name === tag.name) === index,
   );
