@@ -29,6 +29,7 @@ import {
   buildOfficeFunnelSteps,
   buildOfficeFunnelSummaryLine,
   buildOfficeProductFlowSteps,
+  dailyTrendBarHeights,
   dailyTrendMax,
   funnelStepLabel,
   hasFunnelActivity,
@@ -400,10 +401,7 @@ function DailyTrendChart({ rows, max }: { rows: FunnelDailyTrendRow[]; max: numb
   return (
     <div className="flex h-44 items-end gap-1.5 overflow-x-auto pb-1">
       {rows.map((d) => {
-        const barBase = Math.max(d.starts, d.completed, 1);
-        const barHeight = Math.max(4, (barBase / max) * 120);
-        const completedHeight = Math.max(0, (d.completed / max) * 120);
-        const abandonsHeight = Math.max(0, (d.paystackAbandons / max) * 120);
+        const { barHeight, completedHeight, abandonsHeight } = dailyTrendBarHeights(d, max);
         return (
           <div
             key={d.date}
