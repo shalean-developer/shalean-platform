@@ -56,7 +56,9 @@ describe("monthly invoice statement collection contract", () => {
     expect(sales).toContain('paymentSource: "paystack"');
     expect(monthly).toContain('paymentSource: "paystack"');
     expect(queue).toContain('pt.gateway === "paystack"');
-    expect(booking).toContain('paymentMethod === "paystack"');
+    expect(booking).toContain('params.paymentSource === "paystack"');
+    expect(source("lib/booking/runPaystackVerifyFinalizePipeline.ts")).toContain('paymentSource: "paystack"');
+    expect(source("app/api/paystack/webhook/route.ts")).toContain('paymentSource: "paystack"');
   });
 
   it("preserves the FNB fallback for direct payments and allows staging Clearing overrides", () => {
