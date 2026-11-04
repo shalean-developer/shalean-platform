@@ -21,6 +21,7 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: https://uwvnmluiqbczeduzjgse.supabase.co
       SUPABASE_URL: https://uwvnmluiqbczeduzjgse.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.PLESK_STAGING_SUPABASE_PUBLISHABLE_KEY }}
+      NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: ${{ vars.PLESK_TEST_PAYSTACK_PUBLIC_KEY }}
       NEXT_PUBLIC_SITE_URL: https://pr1049-test.shalean.co.za
       NEXT_PUBLIC_APP_URL: https://pr1049-test.shalean.co.za
       OUTBOUND_MESSAGING_DISABLED: 'true'
@@ -42,6 +43,7 @@ jobs:
           test "$SHALEAN_EXPECTED_SUPABASE_REF" = uwvnmluiqbczeduzjgse
           test "$NEXT_PUBLIC_SUPABASE_URL" = https://uwvnmluiqbczeduzjgse.supabase.co
           test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          case "$NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY" in pk_test_*) ;; *) echo "::error::Test Paystack public key required"; exit 1 ;; esac
           case "$NEXT_PUBLIC_SUPABASE_ANON_KEY" in sb_publishable_*|eyJ*) ;; *) exit 1 ;; esac
           test "$OUTBOUND_MESSAGING_DISABLED" = true
           for name in SUPABASE_SERVICE_ROLE_KEY SUPABASE_SERVICE_KEY PAYSTACK_SECRET_KEY CRON_SECRET ZOHO_CLIENT_SECRET RESEND_API_KEY; do
@@ -61,6 +63,9 @@ jobs:
 
       - name: Build standalone with Webpack
         working-directory: apps/web
+        env:
+          FACEBOOK_APP_ID: build-only-placeholder
+          FACEBOOK_APP_SECRET: build-only-placeholder
         run: |
           node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build --webpack
           test -f .next/standalone/apps/web/server.js
