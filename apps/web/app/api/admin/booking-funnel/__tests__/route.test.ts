@@ -55,6 +55,6 @@ describe("booking funnel API source reliability", () => {
     const body = await response.json();
     expect(body).not.toHaveProperty("error");
     expect(body.rows).toBe(0);
-    expect(body.viewsByStep).toEqual([]);
+    expect(body.viewsByStep).toEqual(["entry", "quote", "datetime", "details", "payment"].map((step) => ({ step, views: 0 })));
   });
 });
