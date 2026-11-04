@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { retryAccountingSync } from "@/lib/accounting/processAccountingSyncQueue";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { listZohoExpenseAccounts } from "@/lib/zoho/zohoBooksService";
+import { isZohoBooksWriteBlocked } from "@/lib/zoho/zohoWriteIsolation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +14,11 @@ export async function POST(request: Request) {
   if (!secret) return NextResponse.json({ error: "CRON_SECRET not configured." }, { status: 503 });
   if (request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
+  // Staging must not read live Zoho accounts or retry accounting records.
+  if (isZohoBooksWriteBlocked(process.env.SHALEAN_APP_ENV)) {
+    return NextResponse.json({ error: "zoho_account_audit_blocked_nonproduction" }, { status: 409 });
   }
 
   let body: { action?: string; record_ids?: string[] } = {};
