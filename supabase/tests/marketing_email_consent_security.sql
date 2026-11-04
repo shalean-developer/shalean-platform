@@ -37,4 +37,19 @@ begin
    raise exception 'unprivileged role can access provider reconciliation queue';
  end if;
 end $$;
+do $
+declare rel regclass := to_regclass('public.marketing_email_enrollment_jobs');
+begin
+  if rel is null then raise exception 'marketing enrollment queue missing'; end if;
+  if not (select relrowsecurity from pg_class where oid=rel) then
+    raise exception 'marketing enrollment queue RLS disabled';
+  end if;
+  if has_table_privilege('anon','public.marketing_email_enrollment_jobs','select')
+    or has_table_privilege('anon','public.marketing_email_enrollment_jobs','insert')
+    or has_table_privilege('authenticated','public.marketing_email_enrollment_jobs','select')
+    or has_table_privilege('authenticated','public.marketing_email_enrollment_jobs','insert')
+    or has_table_privilege('authenticated','public.marketing_email_enrollment_jobs','update') then
+    raise exception 'unprivileged role can access enrollment queue';
+  end if;
+end $;
 rollback;
