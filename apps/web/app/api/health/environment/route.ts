@@ -16,6 +16,7 @@ import {
   isFacebookOAuthConfigured,
 } from "@/lib/oauth/metaFacebookOAuth";
 import { getMarketingOAuthEncryptionHealth } from "@/lib/security/tokenEncryption";
+import { isZohoBooksWriteBlocked } from "@/lib/zoho/zohoWriteIsolation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,6 +59,10 @@ export function GET(): Response {
       publicMode: classifyPaystackPublicMode(),
       secretPrefix: maskPaystackKeyPrefix(process.env.PAYSTACK_SECRET_KEY),
       publicPrefix: maskPaystackKeyPrefix(process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY),
+    },
+    zoho: {
+      // Report the effective server-side write policy without exposing credentials or org IDs.
+      writesBlocked: isZohoBooksWriteBlocked(process.env.SHALEAN_APP_ENV),
     },
     messaging: {
       outboundDisabled: (process.env.OUTBOUND_MESSAGING_DISABLED ?? "").toLowerCase() === "true",
