@@ -237,6 +237,7 @@ export async function runPaystackVerifyFinalizePipeline(
           bookingId: result.bookingId,
           reference: ref,
           amountCents: amount,
+          paymentSource: "paystack",
         });
       }
     }
