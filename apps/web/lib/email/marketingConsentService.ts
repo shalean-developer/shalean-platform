@@ -47,7 +47,8 @@ export async function recordCustomerMarketingDecision(
     policy_version: MARKETING_POLICY_VERSION,
     evidence_reference: input.evidenceReference,
   });
-  if (eventError) return { ok: false, reason: "consent_write_failed" };
+  if (eventError && !(input.decision === "withdrawn" && input.source === "signed_one_click" && eventError.code === "23505"))
+    return { ok: false, reason: "consent_write_failed" };
 
   if (input.decision === "granted") {
     // Never clear a prior CRM/Resend unsubscribe just by adding a consent record.
