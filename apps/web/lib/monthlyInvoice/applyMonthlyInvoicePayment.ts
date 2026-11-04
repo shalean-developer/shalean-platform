@@ -265,6 +265,7 @@ export async function applyMonthlyInvoicePayment(
             amountZar: capPaid / 100,
             paymentDate: todayYmdJhb(),
             reference: ref,
+            paymentSource: "paystack",
             customerEmail: contactRes.contact.email,
             customerName: contactRes.contact.name,
           });
