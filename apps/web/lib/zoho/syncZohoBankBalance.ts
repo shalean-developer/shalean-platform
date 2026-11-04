@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { zohoBooksClient } from "@/lib/zoho/zohoBooksClient";
+import { isZohoBooksWriteBlocked } from "@/lib/zoho/zohoWriteIsolation";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 
 type ZohoBankAccount = {
@@ -75,6 +76,10 @@ function feedIsFresh(feedDate: string | undefined, now: Date): boolean {
 }
 
 export async function syncZohoBankBalance(admin: SupabaseClient, actorUserId?: string | null): Promise<ZohoBankSyncResult> {
+  // CF-02: never copy external Zoho bank balances into a nonproduction finance ledger.
+  if (isZohoBooksWriteBlocked(process.env.SHALEAN_APP_ENV)) {
+    return { ok: false, configured: false, error: "zoho_bank_sync_blocked_nonproduction" };
+  }
   if (!isConfigured()) return { ok: false, configured: false, error: "Zoho Books is not configured." };
 
   const { data: financeBanks, error: bankErr } = await admin

@@ -15,11 +15,21 @@ beforeEach(()=>{
   vi.resetAllMocks();
   for (const name of ['ZOHO_CLIENT_ID','ZOHO_CLIENT_SECRET','ZOHO_REFRESH_TOKEN','ZOHO_ORGANIZATION_ID']) vi.stubEnv(name,'synthetic');
   vi.stubEnv('ZOHO_BANK_ACCOUNT_ID','101');
+  vi.stubEnv('SHALEAN_APP_ENV','production');
   detail={...bank,is_feeds_active:true,feeds_last_refresh_date:new Date().toISOString(),bank_balance:123.45};
   mocks.get.mockImplementation(async(path:string)=>path.startsWith('/bankaccounts?')?{bankaccounts:[bank]}:{bankaccount:detail});
 });
 afterEach(()=>vi.unstubAllEnvs());
 describe('selected bank detail verification',()=>{
+  it('fails closed in staging before any provider or database access', async () => {
+    vi.stubEnv('SHALEAN_APP_ENV', 'staging');
+    const admin = { from: vi.fn(() => { throw new Error('Unexpected staging DB access'); }) };
+    const result = await syncZohoBankBalance(admin as never);
+    expect(result).toEqual({ ok: false, configured: false, error: 'zoho_bank_sync_blocked_nonproduction' });
+    expect(admin.from).not.toHaveBeenCalled();
+    expect(mocks.get).not.toHaveBeenCalled();
+    expect(mocks.log).not.toHaveBeenCalled();
+  });
   it('reads omitted feed metadata and current balance from the matching detail',async()=>{
     const result=await syncZohoBankBalance(db(),'synthetic-owner');
     expect(result.ok).toBe(true);expect(result.balance_cents).toBe(12345);
