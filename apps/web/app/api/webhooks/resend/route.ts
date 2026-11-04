@@ -89,7 +89,9 @@ export async function POST(request: Request) {
     await admin.from("email_outbound_messages").update(update).eq("resend_email_id", resendEmailId);
   }
 
-  const suppressionReason = event.type === "email.bounced" ? "bounced" : event.type === "email.complained" ? "complained" : event.type === "email.suppressed" ? "suppressed" : null;
+  // Account-level suppression events may arrive independently of a send.
+  // Never clear historical local opt-outs on suppression.removed: review is required.
+  const suppressionReason = event.type === "email.bounced" ? "bounced" : event.type === "email.complained" ? "complained" : event.type === "email.suppressed" || event.type === "suppression.added" ? "suppressed" : null;
   if (suppressionReason && recipientEmail) {
     const { error: suppressionError } = await admin.from("email_suppressions").upsert({
       email: recipientEmail, reason: suppressionReason, resend_email_id: resendEmailId,
