@@ -1,3 +1,4 @@
+import { readPagedRows } from "@/lib/analytics/readPagedRows";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { detectFunnelAnomalies, generateAnalyticsInsights } from "@/lib/analytics/funnelIntelligence";
@@ -223,42 +224,28 @@ export async function GET(request: Request) {
   const sinceIso = since.toISOString();
 
   const [bookingEventsRes, userEventsRes, bookingsRes] = await Promise.all([
-    admin
-      .from("booking_events")
+    readPagedRows(() => admin.from("booking_events")
       .select("session_id, analytics_session_id, step, event_type, created_at, metadata")
       .gte("created_at", sinceIso)
       .order("created_at", { ascending: false })
-      .limit(25_000),
-    admin
-      .from("user_events")
+      .order("id", { ascending: false })),
+    readPagedRows(() => admin.from("user_events")
       .select("event_type, created_at, payload")
       .gte("created_at", sinceIso)
       .in("event_type", [...BOOKING_ANALYTICS_EVENTS])
       .order("created_at", { ascending: false })
-      .limit(50_000),
-    admin
-      .from("bookings")
-      .select(
-        "created_at, payment_completed_at, status, payment_status, total_paid_zar, amount_paid_cents, is_test, booking_source, customer_name, service, service_slug, location, date, time, city_id",
-      )
+      .order("id", { ascending: false })),
+    readPagedRows(() => admin.from("bookings")
+      .select("created_at, payment_completed_at, status, payment_status, total_paid_zar, amount_paid_cents, is_test, booking_source, customer_name, service, service_slug, location, date, time, city_id")
       .or(`created_at.gte.${sinceIso},payment_completed_at.gte.${sinceIso}`)
       .order("created_at", { ascending: false })
-      .limit(15_000),
+      .order("id", { ascending: false })),
   ]);
 
   if (bookingEventsRes.error) {
     const error = bookingEventsRes.error;
     if (error.message.includes("does not exist") || error.code === "42P01") {
-      return NextResponse.json({
-        since: sinceIso,
-        rows: 0,
-        message: "Run migration `20260475_booking_events.sql` — table booking_events missing.",
-        dropOffByStep: [],
-        viewsByStep: [],
-        conversionRatePct: 0,
-        topExitSteps: [],
-        errorsByStep: [],
-      });
+      return NextResponse.json({ error: "Funnel analytics source unavailable." }, { status: 503 });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
