@@ -21,6 +21,8 @@ it('does not loop on persistent authentication errors', async () => {
   expect(fetch).toHaveBeenCalledTimes(4);
 });
 it('never retries financial POSTs on authentication errors', async () => {
+  // Mock the production-only request path to reach a synthetic 401 response.
+  vi.stubEnv('SHALEAN_APP_ENV', 'production');
   const fetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({access_token:'synthetic'}))).mockResolvedValueOnce(new Response(JSON.stringify({code:57}),{status:401}));
   vi.stubGlobal('fetch',fetch);
   const {zohoBooksClient} = await import('../zohoBooksClient');
