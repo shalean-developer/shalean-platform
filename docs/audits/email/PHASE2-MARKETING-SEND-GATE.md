@@ -1,23 +1,25 @@
-# Phase 2 marketing email remediation — DRAFT / DO NOT MERGE
+# Phase 2 — marketing consent and unsubscribe, DRAFT / DO NOT DEPLOY
 
-Branch: `audit/email-marketing-consent-phase2-20261104` | PR #1074
+Source branch: audit/email-marketing-consent-phase2-20261104 | PR #1074
 
-## Implemented in branch
-- Append-only-intended consent event ledger migration (source-only, NOT applied; migration governance pending).
-- Fail-closed marketing-only decision and database reads for positive consent, CRM unsubscribe, local suppression, verified customer identity.
-- Read-only per-send Resend contact and suppression GET checks. Provider failure/404 contact denies marketing. These checks do not send emails.
-- Marketing gates for referral campaign direct/cron sends, lifecycle rebook jobs and direct rebooking send functions, and tagged marketing retries through safeResendSend.
-- Decoupled transactional delivery from automatic Resend audience contact enrollment.
-- Unsubscribe-only Resend PATCH primitive (not wired to a public endpoint; no subscribe operation).
-- Isolated negative-path test files for eligibility, provider lookup, unsubscribe reconciliation.
+## Source-only work prepared
+- Immutable append-only marketing-email consent ledger migration, with RLS and no public/authenticated table privileges.
+- Authenticated customer preferences POST using verified bearer identity and explicit opt-in; no historical consent backfill.
+- CRM-first opt-out: append withdrawal evidence, update legacy CRM unsubscribe timestamp, then attempt Resend PATCH. Provider failure never reverses the local opt-out.
+- Signed expiring HMAC unsubscribe URLs, GET confirmation without mutation, POST no-login unsubscribe and one-click headers on rebooking/referral marketing messages.
+- Resend contact.updated=true signed-webhook handling for CRM withdrawal; replay after post-insert failures remains processable.
+- Read-only Resend contact/suppression checks at marketing send time; unknown and provider outage deny.
+- Transactional emails do not automatically enroll customers in marketing audiences.
+- Native PostgreSQL security SQL and isolated negative-path tests added.
 
-## Blocking work before merging/deploying
-1. Implement a verified opt-in/opt-out capture API with identity proof, CSRF protection and append-only audit; consent is NOT inferred from existing customers.
-2. Test and complete a durable CRM-first unsubscribe workflow that cannot allow mail during provider sync failures. Reconcile legacy Resend unsubscribes back to CRM.
-3. Verify migration naming/schema references and PostgreSQL security with native tests; no migration applied.
-4. Verify all other promotional templates/paths and retries; classify service review email content and admin test sends separately.
-5. Run full latest-head CI, TypeScript typecheck, source integration tests, and staging synthetic checks.
-6. Test failure behavior for provider 429/5xx, latency, stale data, unknown identity and idempotency; no provider writes during testing.
+## DO NOT MERGE / release blockers
+1. Native SQL security test must execute on a real isolated PostgreSQL schema after source-only migration rehearsal; never production.
+2. Latest-head full CI, typecheck and marketing lifecycle/transactional/retry integration tests must pass. Tests present in source are not evidence they ran.
+3. Safe durable provider reconciliation queue and retry worker are not implemented: the authenticated opt-out endpoint can return providerSync=retry_required; the local opt-out nevertheless remains authoritative.
+4. Need explicit owner review of opt-in policy, legally suitable wording, email verification status, UI consent checkbox and no-login unsubscribe page content.
+5. Ensure marketing opt-in/resubscribe policies do not lift prior CRM/Resend suppression; no re-subscribe automation.
+6. Verify other marketing templates/senders, rate limits, provider 429/5xx, webhook replays/ordering, and HTTPS URL correctness before staging.
+7. Resend webhook remains disabled until separate approval and staging verification.
 
 ## Safety
-No emails, Resend settings, Supabase rows, deployed services or production sites changed. PR is draft, unmerged, undeployed.
+No live Supabase mutation, provider write, real email, webhook activation, deployment or merge was performed. PR remains Draft.
