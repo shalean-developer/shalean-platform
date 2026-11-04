@@ -52,10 +52,12 @@ test("consent write failure returns error", async () => {
 test("grants do not silently clear previous unsubscribe", async () => {
   const {admin,writes}=fakeClient();
   const result=await recordCustomerMarketingDecision(admin,base);
-  assert.deepEqual(result,{ok:true});
-  assert.equal(writes.length,1);
+  assert.deepEqual(result,{ok:true,providerSync:"retry_required"});
+  assert.equal(writes.length,2);
   assert.equal(writes[0]?.table,"marketing_email_consent_events");
   assert.equal(writes[0]?.payload.decision,"granted");
+  assert.equal(writes[1]?.table,"marketing_email_enrollment_jobs");
+  assert.equal(writes[1]?.payload.status,"pending");
 });
 test("withdrawal writes durable audit then CRM opt-out", async () => {
   const {admin,writes}=fakeClient();
@@ -70,4 +72,12 @@ test("failed CRM update remains an audited withdrawal", async () => {
   const result=await recordCustomerMarketingDecision(admin,{...base,decision:"withdrawn",explicitOptIn:false});
   assert.deepEqual(result,{ok:false,reason:"unsubscribe_profile_sync_failed"});
   assert.equal(writes[0]?.payload.decision,"withdrawn");
+});
+
+test("enrollment queue failure is explicitly reported rather than silently claiming enrollment",async()=>{
+  const {admin,writes}=fakeClient({failQueue:true});
+  const result=await recordCustomerMarketingDecision(admin,base);
+  assert.deepEqual(result,{ok:false,reason:"enrollment_queue_write_failed"});
+  assert.equal(writes[0]?.table,"marketing_email_consent_events");
+  assert.equal(writes[1]?.table,"marketing_email_enrollment_jobs");
 });
