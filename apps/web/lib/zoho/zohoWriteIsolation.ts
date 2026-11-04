@@ -6,5 +6,6 @@
  * Only an explicit production identity can use Zoho Books write endpoints.
  */
 export function isZohoBooksWriteBlocked(appEnvironment: string | undefined): boolean {
-  return appEnvironment?.trim().toLowerCase() !== "production";
+  const identity = appEnvironment?.trim().toLowerCase();
+  return identity !== "production" && identity !== "prod";
 }
