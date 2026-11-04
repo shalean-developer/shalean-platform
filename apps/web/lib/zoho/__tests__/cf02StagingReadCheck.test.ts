@@ -27,4 +27,11 @@ describe("CF-02 staging Zoho Books connection read check", () => {
     expect(body).not.toContain('error.message');
     expect(body).toContain('error: "zoho_invoice_read_failed"');
   });
+  it("exposes a safe authenticated read-only test action in the integration UI", () => {
+    const page = readFileSync(join(process.cwd(), "app/(ui-redesign)/office/zoho-integration/page.tsx"), "utf8");
+    expect(page).toContain("Test Zoho read-only");
+    expect(page).toContain('"/api/admin/zoho-read-check"');
+    expect(page).toContain("invoices_readable");
+  });
+
 });
