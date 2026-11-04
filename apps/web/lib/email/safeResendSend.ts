@@ -1,6 +1,5 @@
 import { getResend } from "@/lib/email/resendFrom";
 import { validateEmailRecipients } from "@/lib/email/recipientSafety";
-import { syncResendAudienceContact } from "@/lib/email/syncResendAudienceContact";
 import { applyOutboundSubjectPrefix, decideOutboundEmail } from "@/lib/env/outboundMessagingSafety";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -59,18 +58,9 @@ export async function safeResendSend(payload: SafeResendPayload): Promise<{
   const subject = applyOutboundSubjectPrefix(payload.subject, decision.subjectPrefix);
   const result = await resend.emails.send({ ...sendPayload, subject, tags: mergedTags } as Parameters<typeof resend.emails.send>[0]);
 
+  // Transactional delivery never adds contacts to marketing audiences.
+  // Consent-verified audience reconciliation runs separately from sending.
   const recipientEmail = firstRecipient(payload.to);
-  if (result.data?.id && context?.customerId && recipientEmail) {
-    await syncResendAudienceContact({
-      email: recipientEmail,
-      customerId: context.customerId,
-    }).catch((error) => {
-      console.warn("Resend Audience sync raised an unexpected error", {
-        email: recipientEmail,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
-  }
 
   try {
     const admin = getSupabaseAdmin();
