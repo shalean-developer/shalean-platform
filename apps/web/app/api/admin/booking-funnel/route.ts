@@ -47,6 +47,9 @@ type BookingRow = {
   payment_status?: string | null;
   total_paid_zar?: number | null;
   amount_paid_cents?: number | null;
+  is_test?: boolean | null;
+  booking_source?: string | null;
+  customer_name?: string | null;
   service?: string | null;
   service_slug?: string | null;
   location?: string | null;
@@ -234,7 +237,7 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })),
     readPagedRows(() => admin.from("bookings")
-      .select("created_at, payment_completed_at, status, payment_status, total_paid_zar, amount_paid_cents, service, service_slug, location, date, time, city_id")
+      .select("created_at, payment_completed_at, status, payment_status, total_paid_zar, amount_paid_cents, is_test, booking_source, customer_name, service, service_slug, location, date, time, city_id")
       .or(`created_at.gte.${sinceIso},payment_completed_at.gte.${sinceIso}`)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })),
@@ -517,6 +520,15 @@ export async function GET(request: Request) {
     if (!paidAt) return false;
     return new Date(paidAt).getTime() >= since.getTime();
   });
+  // Only two evidence-backed fixture markers are excluded from the non-fixture subtotal.
+  // Other sales-document bookings remain eligible; no provider verification is inferred.
+  const isExplicitFixture = (booking: BookingRow): boolean =>
+    booking.is_test === true ||
+    (booking.booking_source === "sales_document" &&
+      booking.customer_name?.trim().toUpperCase() === "STAGING R550 CONVERSION TEST");
+  const nonFixturePaidBookings = paidBookingsInWindow.filter((booking) => !isExplicitFixture(booking));
+  const recordedBookingRevenueZar = paidBookingsInWindow.reduce((sum, booking) => sum + safeRevenue(booking), 0);
+  const nonFixtureRevenueZar = nonFixturePaidBookings.reduce((sum, booking) => sum + safeRevenue(booking), 0);
   const paidCompletedByDay = new Map<string, number>();
   for (const booking of paidBookingsInWindow) {
     const day = ymd(booking.payment_completed_at ?? booking.created_at);
@@ -917,7 +929,9 @@ export async function GET(request: Request) {
       cohortAnalysis,
       revenue: {
         paidBookings: paidBookingsInWindow.length,
-        totalZar: paidBookingsInWindow.reduce((sum, booking) => sum + safeRevenue(booking), 0),
+        totalZar: nonFixtureRevenueZar,
+        recordedTotalZar: recordedBookingRevenueZar,
+        excludedFixtureZar: recordedBookingRevenueZar - nonFixtureRevenueZar,
       },
       operational: {
         cleanerDemandForecast: {

@@ -48,6 +48,51 @@ describe("booking funnel API source reliability", () => {
     expect(readPagedRows).toHaveBeenCalledTimes(3);
   });
 
+  it("excludes only explicitly evidenced fixtures from displayed revenue, while preserving recorded totals and session counts", async () => {
+    const created_at = new Date().toISOString();
+    const paid = (total_paid_zar: number, extras: Record<string, unknown> = {}) => ({
+      created_at, payment_completed_at: created_at, status: "pending",
+      payment_status: "success", total_paid_zar, amount_paid_cents: total_paid_zar * 100, ...extras,
+    });
+    readPagedRows
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: [
+        paid(310, { is_test: true, booking_source: "audit_a02_03_fixture_repaired" }),
+        paid(550, { is_test: false, booking_source: "sales_document", customer_name: "STAGING R550 CONVERSION TEST" }),
+        paid(420, { is_test: false, booking_source: "website" }),
+        paid(460, { is_test: false, booking_source: "website" }),
+        paid(925, { is_test: false, booking_source: "website" }),
+        paid(955, { is_test: false, booking_source: "website" }),
+        paid(925, { is_test: false, booking_source: "website" }),
+      ], error: null });
+    const response = await GET(request());
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.intelligence.revenue).toEqual({
+      paidBookings: 7, totalZar: 3685, recordedTotalZar: 4545, excludedFixtureZar: 860,
+    });
+    expect(body.paidBookingsCount).toBe(7);
+    expect(body.completedPaymentSessions).toBe(0);
+    expect(body.viewsByStep).toHaveLength(5);
+  });
+
+  it("keeps legitimate non-test sales-document payments without provider verification claims", async () => {
+    const created_at = new Date().toISOString();
+    readPagedRows
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: [
+        { created_at, payment_completed_at: created_at, status: "pending", payment_status: "success",
+          total_paid_zar: 550, is_test: false, booking_source: "sales_document", customer_name: "Legitimate customer" },
+      ], error: null });
+    const response = await GET(request());
+    expect(response.status).toBe(200);
+    expect((await response.json()).intelligence.revenue).toEqual({
+      paidBookings: 1, totalZar: 550, recordedTotalZar: 550, excludedFixtureZar: 0,
+    });
+  });
+
   it("keeps an existing empty booking_events source as successful zero-activity reporting", async () => {
     readPagedRows.mockResolvedValue({ data: [], error: null });
     const response = await GET(request());
