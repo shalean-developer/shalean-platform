@@ -88,7 +88,7 @@ export type BookingFunnelApiPayload = {
     addOnAttachRatePct?: number;
     paystack?: { opened?: number; completed?: number; abandonmentPct?: number };
     dailyTrends?: FunnelDailyTrendRow[];
-    revenue?: { paidBookings?: number; totalZar?: number };
+    revenue?: { paidBookings?: number; totalZar?: number; recordedTotalZar?: number; excludedFixtureZar?: number };
   };
 };
 
@@ -296,7 +296,6 @@ export function buildOfficeFunnelKpis(data: BookingFunnelApiPayload): OfficeFunn
   const checkoutPaid = checkoutToPaidConversionPct(data);
   const paystack = data.intelligence?.paystack;
   const time = data.intelligence?.timeToComplete;
-  const revenue = data.intelligence?.revenue;
   const checkout = data.reachedPaymentSessions ?? 0;
   const paid = paymentCompletedCount(data);
 
@@ -322,9 +321,22 @@ export function buildOfficeFunnelKpis(data: BookingFunnelApiPayload): OfficeFunn
     {
       label: "Paystack drop-off",
       value: pctLabel(paystack?.abandonmentPct),
-      sub: `${paystack?.completed ?? 0}/${paystack?.opened ?? 0} Paystack sessions · ${zarLabel(revenue?.totalZar)} revenue`,
+      sub: `${paystack?.completed ?? 0}/${paystack?.opened ?? 0} Paystack sessions`,
       tone: "orange",
     },
+  ];
+}
+
+export type OfficeFunnelRevenueMetric = { label: string; value: string };
+
+/** Existing booking DB totals only; no settlement or provider verification is implied. */
+export function buildOfficeFunnelRevenueMetrics(data: BookingFunnelApiPayload): OfficeFunnelRevenueMetric[] | null {
+  const revenue = data.intelligence?.revenue;
+  if (!revenue) return null;
+  return [
+    { label: "Non-fixture booking revenue", value: zarLabel(revenue.totalZar) },
+    { label: "Excluded test fixtures", value: zarLabel(revenue.excludedFixtureZar) },
+    { label: "Historical recorded total", value: zarLabel(revenue.recordedTotalZar) },
   ];
 }
 
@@ -380,6 +392,20 @@ export function sliceDailyTrends(data: BookingFunnelApiPayload, days = 14): Funn
 export function dailyTrendMax(rows: FunnelDailyTrendRow[]): number {
   const values = rows.flatMap((d) => [d.starts, d.completed, d.paystackAbandons]);
   return values.length ? Math.max(...values, 1) : 1;
+}
+
+/** Chart geometry only. Zero-activity days must not render visible activity bars. */
+export function dailyTrendBarHeights(
+  day: Pick<FunnelDailyTrendRow, "starts" | "completed" | "paystackAbandons">,
+  max: number,
+): { barHeight: number; completedHeight: number; abandonsHeight: number } {
+  const scale = Math.max(max, 1);
+  const activity = Math.max(day.starts, day.completed, day.paystackAbandons);
+  return {
+    barHeight: activity > 0 ? Math.max(4, (activity / scale) * 120) : 0,
+    completedHeight: Math.max(0, (day.completed / scale) * 120),
+    abandonsHeight: Math.max(0, (day.paystackAbandons / scale) * 120),
+  };
 }
 
 export function hasFunnelActivity(data: BookingFunnelApiPayload): boolean {
