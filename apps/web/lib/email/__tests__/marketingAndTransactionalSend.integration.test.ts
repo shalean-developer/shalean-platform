@@ -92,4 +92,18 @@ describe("Gate 3 integration: send wrapper + synthetic provider, NO external ema
     expect(result.error?.message).toContain("503");
     expect(auditRows[0]).toMatchObject({ delivery_status:"send_failed",retry_status:"queued" });
   });
+  it.each(["password_reset","payment_receipt","booking_confirmation","security_code","booking_reminder"])(
+    "essential %s email ignores marketing opt-out",async(messageType)=>{
+      mock.eligibility.mockResolvedValue({allowed:false,reason:"unsubscribed"});
+      const outcome=await safeResendSend({
+        from:"Shalean <notices@shalean.co.za>",to,subject:"Synthetic essential notice",
+        html:"<p>synthetic</p>",context:{customerId,messageType},
+      });
+      expect(outcome.error).toBeNull();
+      expect(mock.eligibility).not.toHaveBeenCalled();
+      expect(mock.send).toHaveBeenCalledTimes(1);
+      expect(auditRows[0]?.message_type).toBe(messageType);
+    },
+  );
+
 });
