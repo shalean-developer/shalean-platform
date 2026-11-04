@@ -20,7 +20,7 @@ create index if not exists marketing_email_consent_latest_idx
   on public.marketing_email_consent_events (customer_id, email, purpose, occurred_at desc, created_at desc);
 create unique index if not exists marketing_email_consent_provider_event_unique
   on public.marketing_email_consent_events (customer_id, source, evidence_reference)
-  where source = 'resend_contact_webhook';
+  where source in ('resend_contact_webhook', 'signed_one_click');
 alter table public.marketing_email_consent_events enable row level security;
 revoke all on public.marketing_email_consent_events from public, anon, authenticated;
 -- Service-role owned server flows only. This schema does not expose public opt-in writes.
