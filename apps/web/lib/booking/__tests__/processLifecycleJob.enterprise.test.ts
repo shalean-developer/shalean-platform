@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => ({
 
   evaluateRebookEligibility: vi.fn(),
 
+  checkMarketingSendGate: vi.fn(),
+
 }));
 
 
@@ -89,6 +91,8 @@ vi.mock("@/lib/booking/lifecycleEmailGuards", async (importOriginal) => {
 });
 
 
+
+vi.mock("@/lib/email/marketingSendGate", () => ({ checkMarketingSendGate: mocks.checkMarketingSendGate }));
 
 import { processLifecycleJob } from "@/lib/booking/processLifecycleJob";
 
@@ -376,6 +380,8 @@ describe("processLifecycleJob enterprise scenarios", () => {
     });
 
     mocks.evaluateRebookEligibility.mockResolvedValue({ eligible: true });
+
+    mocks.checkMarketingSendGate.mockResolvedValue({allowed:true});
 
     mocks.evaluateCustomerFrequencyLimit.mockResolvedValue({ limited: false });
 
