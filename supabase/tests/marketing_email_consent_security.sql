@@ -21,7 +21,7 @@ begin
     where tgrelid = rel and tgname='marketing_email_consent_immutable' and not tgisinternal
   ) then raise exception 'immutable ledger trigger missing'; end if;
 end $$;
-do $
+do $$
 declare
  rel regclass := to_regclass('public.marketing_email_reconciliation_jobs');
 begin
