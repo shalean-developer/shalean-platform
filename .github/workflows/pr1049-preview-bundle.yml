@@ -109,3 +109,72 @@ jobs:
             ${{ runner.temp }}/pr1049-preview.sha256
           retention-days: 7
           if-no-files-found: error
+
+  publish-branch:
+    needs: build-only
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 1057 && github.event.pull_request.head.repo.full_name == 'shalean-developer/shalean-platform' && github.event.pull_request.head.ref == 'chore/pr1049-preview-packaging-20261104' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout publication controller (no app scripts executed)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+
+      - name: Download previously validated bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: pr1049-preview-build-only
+          path: ${{ runner.temp }}/pr1049-artifact
+
+      - name: Verify archive bytes, target metadata and branch isolation
+        shell: bash
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/pr1049-artifact
+        run: |
+          set -euo pipefail
+          test -f "$ARTIFACT_DIR/pr1049-preview.tar.gz"
+          test -f "$ARTIFACT_DIR/pr1049-preview.sha256"
+          expected_sha="$(awk 'NR==1 {print $1}' "$ARTIFACT_DIR/pr1049-preview.sha256")"
+          actual_sha="$(sha256sum "$ARTIFACT_DIR/pr1049-preview.tar.gz" | cut -d' ' -f1)"
+          test "$expected_sha" = "$actual_sha"
+          tar -tzf "$ARTIFACT_DIR/pr1049-preview.tar.gz" | grep -Fx './server.js'
+          tar -tzf "$ARTIFACT_DIR/pr1049-preview.tar.gz" | grep -Fx './.next/BUILD_ID'
+          tar -xOzf "$ARTIFACT_DIR/pr1049-preview.tar.gz" ./build-meta.json > "$ARTIFACT_DIR/build-meta.json"
+          python3 - "$ARTIFACT_DIR/build-meta.json" <<'PY'
+          import json, sys
+          data=json.load(open(sys.argv[1],encoding='utf-8'))
+          expected={
+            'artifact_sha':'30fa54ce50b322273b0434e6ea35afc6148edaff',
+            'target_host':'pr1049-test.shalean.co.za',
+            'deployment_environment':'staging',
+            'supabase_ref':'uwvnmluiqbczeduzjgse'
+          }
+          assert data==expected, 'Preview artifact metadata differs from approved exact source'
+          PY
+          if git ls-remote --exit-code --heads origin refs/heads/deploy/pr1049-preview >/dev/null 2>&1; then
+            echo '::error::Preview deployment branch already exists; refusing overwrite'
+            exit 1
+          fi
+
+      - name: Publish artifact-only Git branch (never deploy)
+        shell: bash
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/pr1049-artifact
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --orphan pr1049-preview-artifact
+          git rm -rf --ignore-unmatch .
+          git clean -fdx
+          cp "$ARTIFACT_DIR/pr1049-preview.tar.gz" pr1049-preview.tar.gz
+          cp "$ARTIFACT_DIR/pr1049-preview.sha256" pr1049-preview.sha256
+          cp "$ARTIFACT_DIR/build-meta.json" build-meta.json
+          printf '%s\n' '30fa54ce50b322273b0434e6ea35afc6148edaff' > release-sha.txt
+          printf '%s\n' 'PR #1049 isolated preview artifact; Plesk deployment and Node activation are NOT authorized by this branch publication.' 'Never target pricing-test.shalean.co.za or production. Validate hosted password protection and fail-closed routes before activation.' > README-DO-NOT-ACTIVATE.txt
+          git add pr1049-preview.tar.gz pr1049-preview.sha256 build-meta.json release-sha.txt README-DO-NOT-ACTIVATE.txt
+          git commit -m "deploy: prepare isolated PR1049 preview artifact"
+          git push origin HEAD:refs/heads/deploy/pr1049-preview
