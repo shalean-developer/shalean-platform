@@ -8,8 +8,8 @@ export type CashOutExpenseRow = {
   expense_date: string;
   amount_cents: number;
   payment_transaction_id: string | null;
-  expense_categories: { name: string } | null;
-  payment_transactions: { gateway: string } | null;
+  expense_categories: { name: string } | Array<{ name: string }> | null;
+  payment_transactions: { gateway: string } | Array<{ gateway: string }> | null;
 };
 
 /**
@@ -29,8 +29,16 @@ export function summarizeRecordedExpenseCash(rows: readonly CashOutExpenseRow[])
     seen.add(row.id);
     if (!Number.isSafeInteger(row.amount_cents) || row.amount_cents < 0)
       throw new Error("Invalid approved expense amount in Cash Flow.");
-    const category = row.expense_categories?.name?.trim().toLowerCase();
-    const gateway = row.payment_transactions?.gateway?.trim().toLowerCase();
+    // Supabase relation joins can arrive as objects or arrays depending on the
+    // generated relationship metadata. Require an unambiguous linked record.
+    const categoryLink = Array.isArray(row.expense_categories)
+      ? row.expense_categories.length === 1 ? row.expense_categories[0] : null
+      : row.expense_categories;
+    const paymentLink = Array.isArray(row.payment_transactions)
+      ? row.payment_transactions.length === 1 ? row.payment_transactions[0] : null
+      : row.payment_transactions;
+    const category = categoryLink?.name?.trim().toLowerCase();
+    const gateway = paymentLink?.gateway?.trim().toLowerCase();
     if (category === "paystack fees" && row.payment_transaction_id && gateway === "paystack") {
       excluded_paystack_fees_cents += row.amount_cents;
       continue;
