@@ -16,4 +16,14 @@ describe("CF-02 staging bank sync route safety", () => {
     expect(db).toBeLessThan(sync);
     expect(body).toContain("zoho_bank_sync_blocked_nonproduction");
   });
+  it("rejects staging account audit cron before list reads or retry database work", () => {
+    const route = readFileSync(join(process.cwd(), "app/api/cron/zoho-expense-accounts-audit/route.ts"), "utf8");
+    const post = route.slice(route.indexOf("export async function POST("));
+    const guard = post.indexOf("isZohoBooksWriteBlocked(process.env.SHALEAN_APP_ENV)");
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(post.indexOf("getSupabaseAdmin()"));
+    expect(guard).toBeLessThan(post.indexOf("listZohoExpenseAccounts()"));
+    expect(post).toContain("zoho_account_audit_blocked_nonproduction");
+  });
+
 });
