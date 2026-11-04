@@ -128,6 +128,7 @@ export async function sendReferralCampaignEmail(params: {
       to: email,
       subject,
       html,
+      context: { customerId: params.userId, messageType: "referral_campaign", campaignId },
       headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
       tags: [
         { name: "message_type", value: "referral_campaign" },
