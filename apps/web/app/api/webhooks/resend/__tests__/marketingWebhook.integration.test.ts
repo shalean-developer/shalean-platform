@@ -12,6 +12,7 @@ function signedRequest(headers=true) {
 }
 function fakeAdmin(opts:{duplicate?:boolean;eventFail?:boolean;suppressionFail?:boolean}={}){
   const writes:{table:string;kind:string;payload:Record<string,unknown>}[]=[];
+  const filters:{table:string,column:string,operator:string,value:string}[]=[];
   const admin={from(table:string){
     return {
       insert:async(row:Record<string,unknown>)=>{
@@ -20,7 +21,8 @@ function fakeAdmin(opts:{duplicate?:boolean;eventFail?:boolean;suppressionFail?:
       },
       update:(row:Record<string,unknown>)=>{
         const chain={
-          eq:()=>chain, not:()=>chain,
+          eq:()=>chain,
+          not:(column:string,operator:string,value:string)=>{filters.push({table,column,operator,value});return chain;},
           then:(resolve:(value:unknown)=>void)=>{writes.push({table,kind:"update",payload:row});resolve({error:null});},
         };
         return chain;
@@ -31,7 +33,7 @@ function fakeAdmin(opts:{duplicate?:boolean;eventFail?:boolean;suppressionFail?:
       },
     };
   }};
-  return {admin,writes};
+  return {admin,writes,filters};
 }
 describe("Gate 3 signed Resend webhook integration — synthetic, no provider network",()=>{
   beforeEach(()=>{
@@ -132,6 +134,20 @@ describe("Gate 3 signed Resend webhook integration — synthetic, no provider ne
     expect(response.status).toBe(200);
     expect(db.writes.find(x=>x.table==="email_outbound_messages")?.payload).toMatchObject({
       delivery_status:"delivery_delayed",retry_status:"queued",
+    });
+    expect(db.filters).toContainEqual({
+      table:"email_outbound_messages",column:"delivery_status",operator:"in",
+      value:"(delivered,bounced,complained,suppressed)",
+    });
+  });
+
+  it("late delivered event cannot override a permanent bounced/complained/suppressed state",async()=>{
+    const db=fakeAdmin();mocks.getClient.mockReturnValue(db.admin);
+    const response=await POST(signedRequest());
+    expect(response.status).toBe(200);
+    expect(db.filters).toContainEqual({
+      table:"email_outbound_messages",column:"delivery_status",operator:"in",
+      value:"(bounced,complained,suppressed)",
     });
   });
 
