@@ -23,8 +23,13 @@ export function zohoWebsiteReceiptAccountId(): string {
  * Never use this account for a customer-paid direct bank EFT.
  */
 export function zohoPaystackClearingAccountId(): string {
-  return (
-    process.env.ZOHO_PAYSTACK_CLEARING_ACCOUNT_ID?.trim() ||
-    "253016000000482521"
-  );
+  const configured = process.env.ZOHO_PAYSTACK_CLEARING_ACCOUNT_ID?.trim();
+  if (configured) return configured;
+
+  // Never accidentally use the production Zoho account ID in a staging/test organisation.
+  const appEnvironment = String(process.env.SHALEAN_APP_ENV ?? "").trim().toLowerCase();
+  if (appEnvironment === "staging" || appEnvironment === "development" || appEnvironment === "test") {
+    throw new Error("zoho_paystack_clearing_account_id_required_for_nonproduction");
+  }
+  return "253016000000482521";
 }
