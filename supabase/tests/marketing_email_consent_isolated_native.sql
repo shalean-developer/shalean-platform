@@ -38,6 +38,23 @@ begin
 
   insert into public.marketing_email_reconciliation_jobs(customer_id,email,action)
   values(u,'synthetic@example.test','unsubscribe');
+  -- Atomic status compare-and-claim and token-fenced completion.
+  update public.marketing_email_reconciliation_jobs
+    set status='processing',
+      claim_token='00000000-0000-4000-8000-000000000999',
+      lease_expires_at=now()+interval '5 minutes'
+    where customer_id=u and status='pending';
+  if (select status from public.marketing_email_reconciliation_jobs where customer_id=u) <> 'processing' then
+    raise exception 'unsubscribe queue atomic claim failed';
+  end if;
+  update public.marketing_email_reconciliation_jobs
+    set status='completed',claim_token=null,lease_expires_at=null
+    where customer_id=u and status='processing'
+      and claim_token='00000000-0000-4000-8000-000000000999';
+  if (select status from public.marketing_email_reconciliation_jobs where customer_id=u) <> 'completed' then
+    raise exception 'unsubscribe queue claim completion failed';
+  end if;
+
   insert into public.marketing_email_enrollment_jobs(customer_id,email,status)
   values(u,'synthetic@example.test','pending');
   if (select count(*) from public.marketing_email_enrollment_jobs where customer_id=u and status='pending') <> 1 then
