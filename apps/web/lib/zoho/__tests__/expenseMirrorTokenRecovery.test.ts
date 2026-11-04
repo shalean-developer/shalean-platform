@@ -21,6 +21,9 @@ it('does not loop on persistent authentication errors', async () => {
   expect(fetch).toHaveBeenCalledTimes(4);
 });
 it('never retries financial POSTs on authentication errors', async () => {
+  // Synthetic production identity allows the mocked POST to reach the mocked 401.
+  // Staging remains covered by the CF-02 write-isolation regression tests.
+  vi.stubEnv('SHALEAN_APP_ENV', 'production');
   const fetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({access_token:'synthetic'}))).mockResolvedValueOnce(new Response(JSON.stringify({code:57}),{status:401}));
   vi.stubGlobal('fetch',fetch);
   const {zohoBooksClient} = await import('../zohoBooksClient');
