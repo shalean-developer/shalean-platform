@@ -14,6 +14,7 @@ import { computeProfitBreakdown } from "@/lib/admin/expenses/profitCalculations"
 import { loadCashFlowPaymentEvidence } from "@/lib/payments/loadCashFlowPaymentEvidence";
 import { loadSettlementCashSummary } from "@/lib/payments/loadSettlementCashSummary";
 import { loadRecordedSettlementsByDate } from "@/lib/payments/loadRecordedSettlementsByDate";
+import { loadRecordedCleanerPayoutCash } from "@/lib/payments/loadRecordedCleanerPayoutCash";
 
 export type CashFlowDashboardPayload = {
   period: { from: string; to: string };
@@ -93,7 +94,10 @@ export async function loadCashFlowDashboard(
   // Share the exact same selected rows with the daily/weekly/monthly charts.
   const recordedSettlements = await loadRecordedSettlementsByDate(admin, from, to);
   const moneyReceivedNet = recordedSettlements.settled_to_bank_cents;
-  const moneyPaid = (report.totals.paid_cents ?? 0) + approvedExpenses;
+  // Paid booking allocations are earned by service date, not money leaving the bank.
+  // One paid batch is counted once on its actual payment date.
+  const paidCleanerCash = await loadRecordedCleanerPayoutCash(admin, from, to);
+  const moneyPaid = paidCleanerCash.paid_cents + approvedExpenses;
 
   const forecast = await loadCashFlowForecast(admin, from, to);
 
@@ -111,13 +115,6 @@ export async function loadCashFlowDashboard(
     .gte("expense_date", from)
     .lte("expense_date", to);
 
-  const { data: payoutRows } = await admin
-    .from("cleaner_payouts")
-    .select("paid_at, total_amount_cents")
-    .eq("status", "paid")
-    .gte("paid_at", `${from}T00:00:00`)
-    .lte("paid_at", `${to}T23:59:59`);
-
   const dailyMap = new Map<string, { in: number; out: number }>();
 
   for (const tx of recordedSettlements.by_date) {
@@ -131,11 +128,10 @@ export async function loadCashFlowDashboard(
     row.out += e.amount_cents ?? 0;
     dailyMap.set(e.expense_date, row);
   }
-  for (const p of payoutRows ?? []) {
-    const d = p.paid_at?.slice(0, 10) ?? from;
-    const row = dailyMap.get(d) ?? { in: 0, out: 0 };
-    row.out += p.total_amount_cents ?? 0;
-    dailyMap.set(d, row);
+  for (const p of paidCleanerCash.by_date) {
+    const row = dailyMap.get(p.date) ?? { in: 0, out: 0 };
+    row.out += p.cash_out_cents;
+    dailyMap.set(p.date, row);
   }
 
   const sortedDays = [...dailyMap.entries()].sort(([a], [b]) => a.localeCompare(b));
