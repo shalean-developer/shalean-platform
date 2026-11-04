@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const root = join(process.cwd(), "..", "..");
 const workflow = readFileSync(join(root, ".github/workflows/pr-preview-pricing-test.yml"), "utf8");
 const activator = readFileSync(join(root, "scripts/plesk-activate-prebuilt-pricing-test.sh"), "utf8");
+const environmentHealth = readFileSync(join(process.cwd(), "app/api/health/environment/route.ts"), "utf8");
 
 describe("pricing-test PR preview safety contract", () => {
   it("builds PR previews only with staging public configuration", () => {
@@ -23,6 +24,13 @@ describe("pricing-test PR preview safety contract", () => {
     expect(workflow).not.toContain("sb_publishable_IlDDZwioRpJRr2F6-B8WFA_uBrbZnkT");
   });
 
+  it("reports the shared client write guard without exposing Zoho organisation IDs", () => {
+    expect(environmentHealth).toContain("isZohoBooksWriteBlocked(process.env.SHALEAN_APP_ENV)");
+    expect(environmentHealth).toContain("writesBlocked:");
+    expect(environmentHealth).not.toContain("943440851");
+    expect(environmentHealth).not.toContain("927500285");
+  });
+
   it("publishes only the isolated preview artifact branch", () => {
     expect(workflow).toContain("refs/heads/deploy/pr-preview");
     expect(workflow).not.toContain("git push --force origin HEAD:refs/heads/deploy/staging");
@@ -37,6 +45,8 @@ describe("pricing-test PR preview safety contract", () => {
     expect(activator).toContain('d.get("deployment")=="staging"');
     expect(activator).toContain('d.get("paystack") or {}).get("secretMode")=="test"');
     expect(activator).toContain('d.get("messaging") or {}).get("outboundDisabled") is True');
+    expect(activator).toContain('d.get("shaleanAppEnv")=="staging"');
+    expect(activator).toContain('(d.get("zoho") or {}).get("writesBlocked") is True');
     expect(activator).not.toContain('HEALTH_URL="https://shalean.co.za/api/health/environment"');
     expect(activator).not.toContain("paqjwfulwywtsyyvdxrq");
   });
