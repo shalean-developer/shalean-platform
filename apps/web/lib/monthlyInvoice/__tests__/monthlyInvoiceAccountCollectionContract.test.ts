@@ -65,6 +65,7 @@ describe("monthly invoice statement collection contract", () => {
     const src = source("lib/zoho/zohoWebsiteReceiptAccount.ts");
     const client = source("lib/zoho/zohoBooksClient.ts");
     expect(src).toContain("ZOHO_PAYSTACK_CLEARING_ACCOUNT_ID");
+    expect(src).toContain("zoho_paystack_clearing_account_id_required_for_nonproduction");
     expect(src).toContain("253016000000482521");
     expect(src).toContain("253016000000097002");
     expect(client).toContain("if (explicit) return body");
