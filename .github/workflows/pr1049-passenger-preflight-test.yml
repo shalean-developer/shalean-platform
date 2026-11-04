@@ -1,0 +1,40 @@
+name: PR1049 Passenger preflight synthetic contract
+
+on:
+  pull_request:
+    paths:
+      - 'apps/web/scripts/pr1049-passenger-env-preflight.cjs'
+      - 'apps/web/scripts/pr1049-passenger-env-preflight.test.cjs'
+      - 'docs/audits/payments/PR1049-passenger-preflight-20261104.md'
+      - '.github/workflows/pr1049-passenger-preflight-test.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Run synthetic tests without credentials or app imports
+        run: node --test apps/web/scripts/pr1049-passenger-env-preflight.test.cjs
+      - name: Verify direct invocation fails closed with no config
+        shell: bash
+        run: |
+          set -euo pipefail
+          if env -i PATH="$PATH" node apps/web/scripts/pr1049-passenger-env-preflight.cjs > "$RUNNER_TEMP/pr1049-preflight-result.txt" 2>&1; then
+            echo "::error::Diagnostic unexpectedly passed without required variables"
+            exit 1
+          fi
+          grep -q '^PR1049_PREFLIGHT: FAIL$' "$RUNNER_TEMP/pr1049-preflight-result.txt"
+          grep -q '^forbidden_credentials_absent: PASS$' "$RUNNER_TEMP/pr1049-preflight-result.txt"
+          grep -q '^SHALEAN_APP_ENV: FAIL$' "$RUNNER_TEMP/pr1049-preflight-result.txt"
