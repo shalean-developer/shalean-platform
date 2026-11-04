@@ -9,6 +9,7 @@ import {
   funnelVisitorCount,
   overallFunnelConversionPct,
   paymentCompletedCount,
+  zarLabel,
   sliceDailyTrends,
   type BookingFunnelApiPayload,
 } from "@/lib/admin/officeFunnelPresentation";
@@ -161,8 +162,8 @@ describe("buildOfficeFunnelKpis", () => {
     };
     const cards = buildOfficeFunnelKpis(payload);
     expect(cards).toHaveLength(4);
-    expect(cards[3]?.sub).toContain("R 3,685 non-fixture booking DB revenue (unreconciled)");
-    expect(cards[3]?.sub).toContain("R 860 test fixtures excluded from R 4,545 recorded");
+    expect(cards[3]?.sub).toContain(`${zarLabel(3685)} non-fixture booking DB revenue (unreconciled)`);
+    expect(cards[3]?.sub).toContain(`${zarLabel(860)} test fixtures excluded from ${zarLabel(4545)} recorded`);
     expect(cards[0]?.value).toBe("15.5%");
   });
 
