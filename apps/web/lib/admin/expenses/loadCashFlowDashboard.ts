@@ -15,6 +15,7 @@ import { loadCashFlowPaymentEvidence } from "@/lib/payments/loadCashFlowPaymentE
 import { loadSettlementCashSummary } from "@/lib/payments/loadSettlementCashSummary";
 import { loadRecordedSettlementsByDate } from "@/lib/payments/loadRecordedSettlementsByDate";
 import { loadRecordedCleanerPayoutCash } from "@/lib/payments/loadRecordedCleanerPayoutCash";
+import { loadRecordedExpenseCash } from "@/lib/payments/loadRecordedExpenseCash";
 
 export type CashFlowDashboardPayload = {
   period: { from: string; to: string };
@@ -69,9 +70,9 @@ export async function loadCashFlowDashboard(
   toRaw?: string | null,
 ): Promise<CashFlowDashboardPayload> {
   const { from, to } = normalizeOfficePayoutPeriodRange(fromRaw, toRaw);
-  const [report, approvedExpenses, gatewayMetrics, settlementSummary] = await Promise.all([
+  const [report, recordedExpenses, gatewayMetrics, settlementSummary] = await Promise.all([
     loadOfficePayoutPeriodReport(admin, from, to),
-    sumApprovedExpensesInRange(admin, from, to),
+    loadRecordedExpenseCash(admin, from, to),
     loadCashFlowPaymentEvidence(admin, from, to),
     loadSettlementCashSummary(admin, { from, to }),
   ]);
@@ -97,7 +98,9 @@ export async function loadCashFlowDashboard(
   // Paid booking allocations are earned by service date, not money leaving the bank.
   // One paid batch is counted once on its actual payment date.
   const paidCleanerCash = await loadRecordedCleanerPayoutCash(admin, from, to);
-  const moneyPaid = paidCleanerCash.paid_cents + approvedExpenses;
+  // Paystack-linked fee expenses are retained in the expense ledger but not
+  // deducted again from bank inflows already net of Paystack processing fees.
+  const moneyPaid = paidCleanerCash.paid_cents + recordedExpenses.cash_out_cents;
 
   const forecast = await loadCashFlowForecast(admin, from, to);
 
@@ -108,13 +111,6 @@ export async function loadCashFlowDashboard(
   const cashRunwayDays =
     avgDailyBurn > 0 ? Math.round((cashInBank + pettyCash) / avgDailyBurn) : null;
 
-  const { data: expenseRows } = await admin
-    .from("expenses")
-    .select("expense_date, amount_cents")
-    .eq("status", "approved")
-    .gte("expense_date", from)
-    .lte("expense_date", to);
-
   const dailyMap = new Map<string, { in: number; out: number }>();
 
   for (const tx of recordedSettlements.by_date) {
@@ -123,10 +119,10 @@ export async function loadCashFlowDashboard(
     dailyMap.set(tx.date, row);
   }
 
-  for (const e of expenseRows ?? []) {
-    const row = dailyMap.get(e.expense_date) ?? { in: 0, out: 0 };
-    row.out += e.amount_cents ?? 0;
-    dailyMap.set(e.expense_date, row);
+  for (const e of recordedExpenses.by_date) {
+    const row = dailyMap.get(e.date) ?? { in: 0, out: 0 };
+    row.out += e.cash_out_cents;
+    dailyMap.set(e.date, row);
   }
   for (const p of paidCleanerCash.by_date) {
     const row = dailyMap.get(p.date) ?? { in: 0, out: 0 };
