@@ -20,7 +20,7 @@ begin
     select 1 from pg_trigger
     where tgrelid = rel and tgname='marketing_email_consent_immutable' and not tgisinternal
   ) then raise exception 'immutable ledger trigger missing'; end if;
-end $;
+end $$;
 do $
 declare
  rel regclass := to_regclass('public.marketing_email_reconciliation_jobs');
@@ -36,5 +36,5 @@ begin
     or has_table_privilege('authenticated', 'public.marketing_email_reconciliation_jobs', 'update') then
    raise exception 'unprivileged role can access provider reconciliation queue';
  end if;
-end $;
+end $$;
 rollback;
