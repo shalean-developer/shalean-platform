@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   buildOfficeFunnelKpis,
+  buildOfficeFunnelRevenueMetrics,
   buildOfficeFunnelRecommendations,
   buildOfficeFunnelSteps,
   buildOfficeProductFlowSteps,
+  dailyTrendBarHeights,
   dailyTrendMax,
   funnelStepLabel,
   funnelVisitorCount,
   overallFunnelConversionPct,
   paymentCompletedCount,
+  zarLabel,
   sliceDailyTrends,
   type BookingFunnelApiPayload,
 } from "@/lib/admin/officeFunnelPresentation";
@@ -144,6 +147,48 @@ describe("funnelStepLabel", () => {
 });
 
 describe("buildOfficeFunnelKpis", () => {
+  it("keeps Paystack KPI focused on payment sessions without burying revenue", () => {
+    const cards = buildOfficeFunnelKpis({
+      ...SAMPLE,
+      intelligence: { ...SAMPLE.intelligence, revenue: {
+        paidBookings: 7, totalZar: 3685, recordedTotalZar: 4545, excludedFixtureZar: 860,
+      } },
+    });
+    expect(cards).toHaveLength(4);
+    expect(cards[3]?.sub).toBe("48/60 Paystack sessions");
+    expect(cards[3]?.sub).not.toContain("3 685");
+  });
+
+  it("shows the exact non-fixture, excluded and historical figures in a separate revenue model", () => {
+    const metrics = buildOfficeFunnelRevenueMetrics({
+      ...SAMPLE,
+      intelligence: { ...SAMPLE.intelligence, revenue: {
+        paidBookings: 7, totalZar: 3685, recordedTotalZar: 4545, excludedFixtureZar: 860,
+      } },
+    });
+    expect(metrics).toEqual([
+      { label: "Non-fixture booking revenue", value: zarLabel(3685) },
+      { label: "Excluded test fixtures", value: zarLabel(860) },
+      { label: "Historical recorded total", value: zarLabel(4545) },
+    ]);
+  });
+
+  it("does not fabricate revenue when the API has no revenue payload", () => {
+    expect(buildOfficeFunnelRevenueMetrics({ ...SAMPLE, intelligence: { ...SAMPLE.intelligence, revenue: undefined } })).toBeNull();
+    expect(buildOfficeFunnelRevenueMetrics({})).toBeNull();
+  });
+
+  it("shows unavailable amounts as dashes rather than pretending they are zero", () => {
+    expect(buildOfficeFunnelRevenueMetrics({
+      ...SAMPLE,
+      intelligence: { ...SAMPLE.intelligence, revenue: { totalZar: 0 } },
+    })).toEqual([
+      { label: "Non-fixture booking revenue", value: zarLabel(0) },
+      { label: "Excluded test fixtures", value: "—" },
+      { label: "Historical recorded total", value: "—" },
+    ]);
+  });
+
   it("builds four KPI cards from intelligence payload", () => {
     const kpis = buildOfficeFunnelKpis(SAMPLE);
     expect(kpis).toHaveLength(4);
@@ -160,6 +205,45 @@ describe("sliceDailyTrends", () => {
   it("returns trailing slice of daily trends", () => {
     expect(sliceDailyTrends(SAMPLE, 1)).toHaveLength(1);
     expect(dailyTrendMax(sliceDailyTrends(SAMPLE))).toBe(8);
+  });
+});
+
+describe("dailyTrendBarHeights", () => {
+  it("renders zero-height bars on truly inactive days while leaving date rows available", () => {
+    expect(dailyTrendBarHeights({ starts: 0, completed: 0, paystackAbandons: 0 }, 1)).toEqual({
+      barHeight: 0,
+      completedHeight: 0,
+      abandonsHeight: 0,
+    });
+  });
+
+  it("retains positive blue bar height for days with starts", () => {
+    expect(dailyTrendBarHeights({ starts: 1, completed: 0, paystackAbandons: 0 }, 1)).toEqual({
+      barHeight: 120,
+      completedHeight: 0,
+      abandonsHeight: 0,
+    });
+  });
+
+  it("retains positive completion overlay without inventing starts", () => {
+    expect(dailyTrendBarHeights({ starts: 0, completed: 1, paystackAbandons: 0 }, 2)).toEqual({
+      barHeight: 60,
+      completedHeight: 60,
+      abandonsHeight: 0,
+    });
+  });
+
+  it("retains Paystack abandon overlays even if there were no starts or completions", () => {
+    expect(dailyTrendBarHeights({ starts: 0, completed: 0, paystackAbandons: 1 }, 2)).toEqual({
+      barHeight: 60,
+      completedHeight: 0,
+      abandonsHeight: 60,
+    });
+  });
+
+  it("uses the existing minimum visible height for low nonzero activity", () => {
+    expect(dailyTrendBarHeights({ starts: 1, completed: 0, paystackAbandons: 0 }, 100).barHeight).toBe(4);
+    expect(dailyTrendBarHeights({ starts: 0, completed: 0, paystackAbandons: 0 }, 100).barHeight).toBe(0);
   });
 });
 
