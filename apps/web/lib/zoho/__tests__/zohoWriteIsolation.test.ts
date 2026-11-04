@@ -11,6 +11,7 @@ describe("CF-02 Zoho Books write isolation", () => {
 
   it("permits the existing explicitly identified production environment only", () => {
     expect(isZohoBooksWriteBlocked("production")).toBe(false);
+    expect(isZohoBooksWriteBlocked("prod")).toBe(false);
   });
 
   it("checks the low-level shared client before any Zoho OAuth or Books request", () => {
