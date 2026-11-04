@@ -10,7 +10,8 @@ describe("CF-01 recorded versus projected cash-flow definitions", () => {
     expect(loader).toContain("const moneyReceivedNet = recordedSettlements.settled_to_bank_cents;");
     expect(loader).toContain("loadRecordedSettlementsByDate(admin, from, to)");
     expect(loader).toContain("loadRecordedCleanerPayoutCash(admin, from, to)");
-    expect(loader).toContain("const moneyPaid = paidCleanerCash.paid_cents + approvedExpenses;");
+    expect(loader).toContain("loadRecordedExpenseCash(admin, from, to)");
+    expect(loader).toContain("const moneyPaid = paidCleanerCash.paid_cents + recordedExpenses.cash_out_cents;");
     expect(loader).toContain("const netCashFlow = moneyReceivedNet - moneyPaid;");
     expect(loader).toContain("const forecast = await loadCashFlowForecast(admin, from, to);");
     expect(loader).toContain("expected_income_cents: forecast.income_cents");
