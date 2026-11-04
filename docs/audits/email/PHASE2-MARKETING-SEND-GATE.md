@@ -33,3 +33,10 @@ No emails sent, live Supabase rows changed, Resend configuration updated, webhoo
 
 ## Acceptance sequence
 Latest head CI -> isolated native PostgreSQL security -> synthetic end-to-end negative cases -> staging-only authorised preview -> owner acceptance -> separate merge/deploy approval.
+
+## Customer-facing interface added (latest pass)
+- Account Profile contains an unchecked opt-in checkbox and explicit subscribe/unsubscribe actions.
+- The account preferences endpoint has an authenticated no-cache GET to display current local consent state.
+- Customer-facing wording is a draft pending owner/compliance sign-off; an existing opt-out remains binding even if new consent evidence is recorded.
+- **Verification status:** newly added UI/API have not passed current-head CI or browser interaction tests. SQL fixture security checks have not been run against isolated PostgreSQL. No real emails or live record writes were performed.
+- **Further review:** verify Resend contact/suppression API payloads, customer billing email matching, referral retry handling and the promotional email header's one-click POST compatibility.
