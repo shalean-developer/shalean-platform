@@ -295,7 +295,6 @@ export function buildOfficeFunnelKpis(data: BookingFunnelApiPayload): OfficeFunn
   const checkoutPaid = checkoutToPaidConversionPct(data);
   const paystack = data.intelligence?.paystack;
   const time = data.intelligence?.timeToComplete;
-  const revenue = data.intelligence?.revenue;
   const checkout = data.reachedPaymentSessions ?? 0;
   const paid = paymentCompletedCount(data);
 
@@ -321,9 +320,23 @@ export function buildOfficeFunnelKpis(data: BookingFunnelApiPayload): OfficeFunn
     {
       label: "Paystack drop-off",
       value: pctLabel(paystack?.abandonmentPct),
-      sub: `${paystack?.completed ?? 0}/${paystack?.opened ?? 0} Paystack sessions · ${zarLabel(revenue?.totalZar)} non-fixture booking DB revenue (unreconciled)${(revenue?.excludedFixtureZar ?? 0) > 0 ? ` · ${zarLabel(revenue?.excludedFixtureZar)} test fixtures excluded from ${zarLabel(revenue?.recordedTotalZar)} recorded` : ""}`,
+      sub: `${paystack?.completed ?? 0}/${paystack?.opened ?? 0} Paystack sessions`,
       tone: "orange",
     },
+  ];
+}
+
+export type OfficeFunnelRevenueMetric = { label: string; value: string };
+
+/** Display existing API totals without implying settlement or Paystack verification. */
+export function buildOfficeFunnelRevenueMetrics(data: BookingFunnelApiPayload): OfficeFunnelRevenueMetric[] | null {
+  const revenue = data.intelligence?.revenue;
+  if (!revenue) return null;
+
+  return [
+    { label: "Non-fixture booking revenue", value: zarLabel(revenue.totalZar) },
+    { label: "Excluded test fixtures", value: zarLabel(revenue.excludedFixtureZar) },
+    { label: "Historical recorded total", value: zarLabel(revenue.recordedTotalZar) },
   ];
 }
 
