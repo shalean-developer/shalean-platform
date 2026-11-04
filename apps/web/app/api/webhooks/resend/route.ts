@@ -86,7 +86,17 @@ export async function POST(request: Request) {
     if (terminalSuccess) Object.assign(update, { retry_status: "recovered", next_retry_at: null, retry_locked_at: null, retry_lock_token: null, failure_reason: null });
     if (temporaryFailure) Object.assign(update, { retry_status: "queued", next_retry_at: new Date(Date.now() + 5 * 60_000).toISOString(), failure_reason: JSON.stringify(event.data ?? {}) });
     if (permanentFailure) Object.assign(update, { retry_status: "blocked", next_retry_at: null, failure_reason: JSON.stringify(event.data ?? {}) });
-    await admin.from("email_outbound_messages").update(update).eq("resend_email_id", resendEmailId);
+    // Provider events can arrive late. Do not allow a delayed/sent event to
+    // regress an already terminal delivery state. The filter is atomic in SQL.
+    let updateQuery = admin.from("email_outbound_messages")
+      .update(update).eq("resend_email_id", resendEmailId);
+    if (!terminalSuccess && !permanentFailure) {
+      updateQuery = updateQuery.not("delivery_status", "in", "(delivered,bounced,complained,suppressed)");
+    } else if (terminalSuccess) {
+      updateQuery = updateQuery.not("delivery_status", "in", "(bounced,complained,suppressed)");
+    }
+    const { error: statusError } = await updateQuery;
+    if (statusError) return NextResponse.json({ error: "Failed to update email delivery state" }, { status: 500 });
   }
 
   // Account-level suppression events may arrive independently of a send.
