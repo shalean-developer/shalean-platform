@@ -1,0 +1,135 @@
+import { afterEach,beforeEach,describe,expect,it,vi } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { recordCustomerMarketingDecision } from "../marketingConsentService";
+import { reconcilePendingMarketingEnrollments } from "../reconcilePendingMarketingEnrollments";
+
+// Fully in-memory synthetic customer, provider and PostgREST-style fixtures.
+// No credentials, network, production project or real recipients.
+type Row=Record<string,unknown>;
+const customerId="00000000-0000-4000-8000-000000000777";
+const email="synthetic@example.test";
+const segmentId="00000000-0000-4000-8000-000000000999";
+const old="2026-11-01T00:00:00.000Z";
+function fixture(){
+  const tables:Record<string,Row[]>={
+    user_profiles:[{id:customerId,role:"customer",billing_email:email,
+      marketing_emails_unsubscribed_at:null}],
+    marketing_email_consent_events:[],
+    marketing_email_enrollment_jobs:[],
+    marketing_email_reconciliation_jobs:[],
+    email_suppressions:[],
+  };
+  let sequence=0;
+  class Query{
+    private op:"select"|"update"="select";
+    private payload:Row={};
+    private predicates:((r:Row)=>boolean)[]=[];
+    private orders:{key:string,ascending:boolean}[]=[];
+    private max=Infinity;
+    constructor(private table:string){}
+    select(_cols?:string){if(this.op!=="update")this.op="select";return this;}
+    update(p:Row){this.op="update";this.payload=p;return this;}
+    eq(key:string,val:unknown){this.predicates.push(r=>r[key]===val);return this;}
+    lte(key:string,val:string){this.predicates.push(r=>String(r[key]??"")<=val);return this;}
+    order(key:string,opts?:{ascending?:boolean}){
+      this.orders.push({key,ascending:opts?.ascending!==false});return this;
+    }
+    limit(n:number){this.max=n;return this;}
+    private matching(){
+      const found=tables[this.table]!.filter(r=>this.predicates.every(fn=>fn(r)));
+      return found.sort((a,b)=>{
+        for(const order of this.orders){
+          const cmp=String(a[order.key]??"").localeCompare(String(b[order.key]??""));
+          if(cmp)return order.ascending?cmp:-cmp;
+        }
+        return 0;
+      }).slice(0,this.max);
+    }
+    private execute(){
+      const found=this.matching();
+      if(this.op==="update")for(const row of found)Object.assign(row,this.payload);
+      return {data:this.op==="select"?found.map(x=>({...x})):found.length?{id:found[0]!.id}:null,error:null};
+    }
+    async maybeSingle(){const out=this.execute();const data=Array.isArray(out.data)?out.data[0]??null:out.data;return {data,error:null};}
+    then(resolve:(value:unknown)=>void){resolve(this.execute());}
+    async insert(payload:Row){
+      const row={...payload,id:`synthetic-${++sequence}`,occurred_at:new Date(Date.now()+sequence*1000).toISOString(),
+        created_at:new Date(Date.now()+sequence*1000).toISOString()};
+      tables[this.table]!.push(row);return {data:row,error:null};
+    }
+    async upsert(payload:Row){
+      const list=tables[this.table]!;
+      let current=list.find(x=>x.customer_id===payload.customer_id&&x.email===payload.email
+        &&(payload.action===undefined||x.action===payload.action));
+      if(current)Object.assign(current,payload);
+      else {
+        current={id:`synthetic-job-${++sequence}`,...payload};
+        list.push(current);
+      }
+      return {data:current,error:null};
+    }
+  }
+  const db={from:(table:string)=>new Query(table)} as unknown as SupabaseClient;
+  const provider={fail:true,contact:false,member:false,posts:0,segmentPosts:0};
+  const response=(status:number,data?:unknown)=>({status,ok:status>=200&&status<300,
+    json:async()=>data}) as Response;
+  const fetchMock=vi.fn(async(url:string|URL|Request,init?:RequestInit)=>{
+    const path=String(url),method=init?.method??"GET";
+    if(path.includes("/suppressions/"))return response(404);
+    if(path.endsWith("/contacts")&&method==="POST"){
+      provider.posts++;
+      if(provider.fail)return response(503);
+      provider.contact=true;
+      return response(201,{id:"synthetic-contact"});
+    }
+    if(path.includes("/contacts/")&&path.endsWith("/segments")&&method==="GET")
+      return response(200,{data:provider.member?[{id:segmentId}]:[]});
+    if(path.includes("/segments/")&&method==="POST"){
+      provider.segmentPosts++;
+      provider.member=true;return response(200,{id:segmentId});
+    }
+    if(path.includes("/contacts/")&&method==="GET")
+      return provider.contact?response(200,{id:"synthetic-contact",unsubscribed:false}):response(404);
+    throw Error("Unexpected synthetic provider request");
+  });
+  vi.stubGlobal("fetch",fetchMock);
+  const grant=()=>recordCustomerMarketingDecision(db,{
+    customerId,authenticatedEmail:email,decision:"granted",explicitOptIn:true,
+    evidenceReference:"synthetic-grant",source:"authenticated_preferences",
+  });
+  const withdraw=()=>recordCustomerMarketingDecision(db,{
+    customerId,authenticatedEmail:email,decision:"withdrawn",explicitOptIn:false,
+    evidenceReference:"synthetic-withdraw",source:"authenticated_preferences",
+  });
+  const reconcile=()=>reconcilePendingMarketingEnrollments(db,"synthetic-api-key",segmentId);
+  const readyAgain=()=>{tables.marketing_email_enrollment_jobs[0]!.next_attempt_at=old;};
+  return {db,tables,provider,fetchMock,grant,withdraw,reconcile,readyAgain};
+}
+describe("Gate 3 full synthetic consent -> provider failure -> retry -> withdrawal",()=>{
+  beforeEach(()=>vi.clearAllMocks());
+  afterEach(()=>vi.unstubAllGlobals());
+  it("consent queues first, 503 defers, and a later successful retry reconciles segment membership",async()=>{
+    const f=fixture();
+    expect(await f.grant()).toMatchObject({ok:true,providerSync:"retry_required"});
+    expect(f.provider.posts).toBe(0); // consent request itself cannot contact provider
+    expect(f.tables.marketing_email_enrollment_jobs[0]).toMatchObject({status:"pending"});
+    expect(await f.reconcile()).toMatchObject({attempted:1,deferred:1,completed:0});
+    expect(f.tables.marketing_email_enrollment_jobs[0]).toMatchObject({status:"pending",attempt_count:1});
+    f.provider.fail=false;f.readyAgain();
+    expect(await f.reconcile()).toMatchObject({attempted:1,completed:1});
+    expect(f.provider.member).toBe(true);
+    expect(f.tables.marketing_email_enrollment_jobs[0]).toMatchObject({status:"completed",attempt_count:2});
+    expect(f.fetchMock.mock.calls.every(args=>String(args[0]).startsWith("https://api.resend.com/"))).toBe(true);
+  });
+  it("withdrawal after provider failure prevents enrollment on next retry",async()=>{
+    const f=fixture();await f.grant();
+    expect((await f.reconcile()).deferred).toBe(1);
+    const outboundBefore=f.provider.posts;
+    expect(await f.withdraw()).toMatchObject({ok:true,providerSync:"retry_required"});
+    f.provider.fail=false;f.readyAgain();
+    expect(await f.reconcile()).toMatchObject({attempted:1,blocked:1,completed:0});
+    expect(f.provider.posts).toBe(outboundBefore);
+    expect(f.provider.member).toBe(false);
+    expect(f.tables.marketing_email_enrollment_jobs[0]?.status).toBe("blocked");
+  });
+});
