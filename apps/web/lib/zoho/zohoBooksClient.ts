@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isZohoBooksWriteBlocked } from "@/lib/zoho/zohoWriteIsolation";
 import { zohoWebsiteReceiptAccountId } from "@/lib/zoho/zohoWebsiteReceiptAccount";
 
 /**
@@ -109,6 +110,12 @@ async function request<T>(
   attempt = 0,
   recoverUnauthorized = false,
 ): Promise<T> {
+  // CF-02: non-production Zoho writes are prohibited until dedicated isolation is approved.
+  // Check before OAuth refresh so blocked calls cannot reach either live or FaraiOS TEST Books.
+  if (method !== "GET" && isZohoBooksWriteBlocked(process.env.SHALEAN_APP_ENV)) {
+    throw new Error("zoho_books_write_blocked_nonproduction");
+  }
+
   const token = await getAccessToken();
   const url = booksUrl(path);
 
