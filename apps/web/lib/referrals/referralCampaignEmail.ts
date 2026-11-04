@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { safeResendSend } from "@/lib/email/safeResendSend";
+import { checkMarketingSendGate } from "@/lib/email/marketingSendGate";
 import { validateEmailRecipient } from "@/lib/email/recipientSafety";
 import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -58,6 +59,8 @@ export async function sendReferralCampaignEmail(params: {
   const recipient = validateEmailRecipient(params.email);
   if (!recipient.allowed) return { sent: false, error: recipient.reason };
   const email = recipient.normalized;
+  const marketingGate = await checkMarketingSendGate(params.admin, params.userId, email);
+  if (!marketingGate.allowed) return { sent: false, error: `marketing_eligibility_${marketingGate.reason}` };
 
   const { paused } = await isCustomerOutboundPaused();
   if (paused && !params.isTest) return { sent: false, error: "customer_outbound_paused" };
