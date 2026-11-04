@@ -32,14 +32,14 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
   getAdminToken.mockResolvedValue("synthetic-session");
   fetchMock.mockReset(); onSaved.mockReset();
-  fetchMock.mockResolvedValue(reply({ can_manage: true }));
+  fetchMock.mockResolvedValue(reply({ can_manage: true, can_sync: true }));
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
 describe("cash-account authenticated requests", () => {
   it("authenticates permission lookup and automatic stale-bank sync", async () => {
-    fetchMock.mockResolvedValueOnce(reply({ can_manage: true }))
+    fetchMock.mockResolvedValueOnce(reply({ can_manage: true, can_sync: true }))
       .mockResolvedValueOnce(reply({ ok: true, balance_cents: 23456 }));
     await render(true);
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -65,6 +65,17 @@ describe("cash-account authenticated requests", () => {
     expect(JSON.parse(options.body)).toEqual({ account_id: account.id, balance_cents: 12345 });
     expect(fetchMock.mock.calls[1][1].headers.get("Authorization")).toBe("Bearer renewed-session");
     expect(onSaved).toHaveBeenCalledTimes(2);
+  });
+  it("does not attempt staging bank sync when the server reports can_sync=false", async () => {
+    fetchMock.mockResolvedValueOnce(reply({ can_manage: true, can_sync: false }));
+    await render(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].method).toBe("GET");
+    expect(container.textContent).toContain("Staging finance balances");
+    expect(container.textContent).toContain("not verified live Shalean funds");
+    expect(container.textContent).not.toContain("zoho_bank_sync_blocked_nonproduction");
+    expect(container.textContent).not.toContain("Sync bank from Zoho");
+    expect(onSaved).not.toHaveBeenCalled();
   });
   it("keeps genuine permission denials read-only without syncing", async () => {
     fetchMock.mockResolvedValue(reply({ error: "Forbidden.", requiredAnyPermission: ["expense.manage"] }, 403));
