@@ -61,7 +61,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.preview.outputs.sha }}
-          fetch-depth: 0
+          # Exact commit only: full-history fetch can exceed the 45-minute job limit.
+          fetch-depth: 1
 
       - name: Verify exact checkout and staging configuration
         shell: bash
