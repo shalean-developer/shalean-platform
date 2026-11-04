@@ -36,6 +36,8 @@ describe("pricing-test PR preview safety contract", () => {
     expect(workflow).not.toContain("git push --force origin HEAD:refs/heads/deploy/staging");
     expect(workflow).not.toContain("refs/heads/deploy/production");
     expect(workflow).toContain("github.event.pull_request.head.sha");
+    expect(workflow).toContain("fetch-depth: 1");
+    expect(workflow).not.toContain("fetch-depth: 0");
   });
 
   it("activates only a staging bundle and fails closed on environment drift", () => {
