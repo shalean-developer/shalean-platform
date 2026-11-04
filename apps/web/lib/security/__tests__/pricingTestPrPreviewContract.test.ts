@@ -12,12 +12,15 @@ describe("pricing-test PR preview safety contract", () => {
     expect(workflow).toContain("https://uwvnmluiqbczeduzjgse.supabase.co");
     expect(workflow).toContain('SHALEAN_EXPECTED_SUPABASE_REF: "uwvnmluiqbczeduzjgse"');
     expect(workflow).toContain("PLESK_TEST_SUPABASE_PUBLISHABLE_KEY");
-    expect(workflow).toContain("sb_publishable_");
+    expect(workflow).toContain('NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ vars.PLESK_TEST_SUPABASE_PUBLISHABLE_KEY }}"');
+    expect(workflow).toContain('test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY"');
     expect(workflow).toContain("PLESK_TEST_PAYSTACK_PUBLIC_KEY");
-    expect(workflow).toContain("pk_test_preview_disabled");
+    expect(workflow).toContain('NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "${{ vars.PLESK_TEST_PAYSTACK_PUBLIC_KEY }}"');
+    expect(workflow).not.toContain("pk_test_preview_disabled");
     expect(workflow).toContain("pk_test_");
     expect(workflow).not.toContain("paqjwfulwywtsyyvdxrq");
     expect(workflow).not.toContain("PROD_PAYSTACK");
+    expect(workflow).not.toContain("sb_publishable_IlDDZwioRpJRr2F6-B8WFA_uBrbZnkT");
   });
 
   it("publishes only the isolated preview artifact branch", () => {
