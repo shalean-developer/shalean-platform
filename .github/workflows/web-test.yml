@@ -103,6 +103,10 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test:critical
 
+      - name: Production-candidate Funnel Intelligence regressions
+        if: steps.filter.outputs.run_suite == 'true'
+        run: npm run test -- lib/admin/__tests__/officeFunnelPresentation.test.ts lib/analytics/__tests__/funnelRevenueFixture.test.ts lib/analytics/__tests__/readPagedRows.test.ts app/api/admin/booking-funnel/__tests__/route.test.ts
+
       - name: Paired-ledger isolated PostgreSQL regression
         if: steps.filter.outputs.run_suite == 'true'
         working-directory: .

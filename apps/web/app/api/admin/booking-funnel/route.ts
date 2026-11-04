@@ -1,6 +1,8 @@
+import { readPagedRows } from "@/lib/analytics/readPagedRows";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { detectFunnelAnomalies, generateAnalyticsInsights } from "@/lib/analytics/funnelIntelligence";
+import { isExplicitFunnelRevenueFixture } from "@/lib/analytics/funnelRevenueFixture";
 import { buildFunnelNarrativeSummary } from "@/lib/analytics/narrativeSummary";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
@@ -46,6 +48,9 @@ type BookingRow = {
   payment_status?: string | null;
   total_paid_zar?: number | null;
   amount_paid_cents?: number | null;
+  is_test?: boolean | null;
+  booking_source?: string | null;
+  customer_name?: string | null;
   service?: string | null;
   service_slug?: string | null;
   location?: string | null;
@@ -219,42 +224,28 @@ export async function GET(request: Request) {
   const sinceIso = since.toISOString();
 
   const [bookingEventsRes, userEventsRes, bookingsRes] = await Promise.all([
-    admin
-      .from("booking_events")
+    readPagedRows(() => admin.from("booking_events")
       .select("session_id, analytics_session_id, step, event_type, created_at, metadata")
       .gte("created_at", sinceIso)
       .order("created_at", { ascending: false })
-      .limit(25_000),
-    admin
-      .from("user_events")
+      .order("id", { ascending: false })),
+    readPagedRows(() => admin.from("user_events")
       .select("event_type, created_at, payload")
       .gte("created_at", sinceIso)
       .in("event_type", [...BOOKING_ANALYTICS_EVENTS])
       .order("created_at", { ascending: false })
-      .limit(50_000),
-    admin
-      .from("bookings")
-      .select(
-        "created_at, payment_completed_at, status, payment_status, total_paid_zar, amount_paid_cents, service, service_slug, location, date, time, city_id",
-      )
+      .order("id", { ascending: false })),
+    readPagedRows(() => admin.from("bookings")
+      .select("created_at, payment_completed_at, status, payment_status, total_paid_zar, amount_paid_cents, is_test, booking_source, customer_name, service, service_slug, location, date, time, city_id")
       .or(`created_at.gte.${sinceIso},payment_completed_at.gte.${sinceIso}`)
       .order("created_at", { ascending: false })
-      .limit(15_000),
+      .order("id", { ascending: false })),
   ]);
 
   if (bookingEventsRes.error) {
     const error = bookingEventsRes.error;
     if (error.message.includes("does not exist") || error.code === "42P01") {
-      return NextResponse.json({
-        since: sinceIso,
-        rows: 0,
-        message: "Run migration `20260475_booking_events.sql` — table booking_events missing.",
-        dropOffByStep: [],
-        viewsByStep: [],
-        conversionRatePct: 0,
-        topExitSteps: [],
-        errorsByStep: [],
-      });
+      return NextResponse.json({ error: "Funnel analytics source unavailable." }, { status: 503 });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -525,6 +516,11 @@ export async function GET(request: Request) {
     if (!paidAt) return false;
     return new Date(paidAt).getTime() >= since.getTime();
   });
+  // Exclude only explicit, evidence-backed synthetic fixtures from the displayed subtotal.
+  // Preserve all paid booking rows and legitimate sales-document receipts.
+  const nonFixturePaidBookings = paidBookingsInWindow.filter((booking) => !isExplicitFunnelRevenueFixture(booking));
+  const recordedBookingRevenueZar = paidBookingsInWindow.reduce((sum, booking) => sum + safeRevenue(booking), 0);
+  const nonFixtureRevenueZar = nonFixturePaidBookings.reduce((sum, booking) => sum + safeRevenue(booking), 0);
   const paidCompletedByDay = new Map<string, number>();
   for (const booking of paidBookingsInWindow) {
     const day = ymd(booking.payment_completed_at ?? booking.created_at);
@@ -925,7 +921,9 @@ export async function GET(request: Request) {
       cohortAnalysis,
       revenue: {
         paidBookings: paidBookingsInWindow.length,
-        totalZar: paidBookingsInWindow.reduce((sum, booking) => sum + safeRevenue(booking), 0),
+        totalZar: nonFixtureRevenueZar,
+        recordedTotalZar: recordedBookingRevenueZar,
+        excludedFixtureZar: recordedBookingRevenueZar - nonFixtureRevenueZar,
       },
       operational: {
         cleanerDemandForecast: {
