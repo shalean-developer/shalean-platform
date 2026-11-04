@@ -6,7 +6,6 @@ import { notifyFinanceUsers } from "@/lib/admin/expenses/financeNotifications";
 import { persistBusinessHealthScore } from "@/lib/admin/expenses/businessHealthScore";
 import { backfillPaystackPaymentTransactions } from "@/lib/payments/backfillPaystackPaymentTransactions";
 import { processAccountingSyncQueue } from "@/lib/accounting/processAccountingSyncQueue";
-import { isZohoBooksWriteBlocked } from "@/lib/zoho/zohoWriteIsolation";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -17,11 +16,6 @@ export async function POST(request: Request) {
   if (!secret) return NextResponse.json({ error: "CRON_SECRET not configured." }, { status: 503 });
   if (request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
-
-  // Reject staging accounting jobs before acquiring a DB cron lock.
-  if (isZohoBooksWriteBlocked(process.env.SHALEAN_APP_ENV)) {
-    return NextResponse.json({ error: "zoho_accounting_sync_blocked_nonproduction" }, { status: 409 });
   }
 
   const admin = getSupabaseAdmin();
