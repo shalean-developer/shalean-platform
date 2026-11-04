@@ -153,14 +153,14 @@ export default function CashFlowPage() {
         <FinanceKpiCard icon={ArrowUpRight} label="Recorded Paystack receipts · gross" value={!forecastCurrent ? "Unavailable" : data?.payment_evidence.verified_transaction_count ? formatZar(s?.money_received_cents ?? 0) : "Unverified"} loading={loading} status="positive" />
         <FinanceKpiCard icon={ArrowUpRight} label="Paystack settled to bank" value={!forecastCurrent ? "Unavailable" : formatZar(s?.money_received_net_cents ?? 0)} loading={loading} status="positive" />
         <FinanceKpiCard icon={ArrowDownLeft} label="Paystack fees · reported" value={!forecastCurrent ? "Unavailable" : data?.payment_evidence.fees_verified ? formatZar(s?.gateway_processing_fees_cents ?? 0) : "Unverified"} loading={loading} status="warning" />
-        <FinanceKpiCard icon={ArrowDownLeft} label="Money paid" value={formatZar(s?.money_paid_cents ?? 0)} loading={loading} status="negative" />
+        <FinanceKpiCard icon={ArrowDownLeft} label="Paid cleaner batches + approved expenses" value={formatZar(s?.money_paid_cents ?? 0)} loading={loading} status="negative" />
         <FinanceKpiCard icon={Banknote} label="Cash in bank" value={formatZar(s?.cash_in_bank_cents ?? 0)} loading={loading} />
         <FinanceKpiCard icon={PiggyBank} label="Petty cash" value={formatZar(s?.petty_cash_cents ?? 0)} loading={loading} />
         <FinanceKpiCard icon={TrendingUp} label="Expected income · selected period" value={!forecastCurrent ? "Unavailable" : formatForecastZar(s?.expected_income_cents ?? 0)} loading={loading} status="positive" />
         <FinanceKpiCard icon={Wallet} label="Expected expenses · selected period" value={!forecastCurrent ? "Unavailable" : formatForecastZar(s?.expected_expenses_cents ?? 0)} loading={loading} status="warning" />
         <FinanceKpiCard
           icon={TrendingUp}
-          label="Recorded net · settlements less payouts/approved expenses"
+          label="Provisional net · settlements less payouts/approved expenses"
           value={formatZar(s?.net_cash_flow_cents ?? 0)}
           loading={loading}
           status={(s?.net_cash_flow_cents ?? 0) >= 0 ? "positive" : "negative"}
@@ -173,7 +173,7 @@ export default function CashFlowPage() {
         />
       </div>
 
-      <p className="text-xs text-slate-600" role="note">Recorded net uses Paystack bank-settlement amounts less recorded cleaner payouts and approved expenses for the selected dates. Expected income and expected expenses are a separate, incomplete forecast; they are not used in this recorded-net figure. Recorded net is not a reconciled all-bank cash movement total.</p>
+      <p className="text-xs text-slate-600" role="note">Provisional net uses recorded Paystack settlements less cleaner batches marked paid and locally approved expenses. Approved expenses are included by expense date; approval and a selected payment method do not verify a matched bank debit. Bank-verified expense cash outflow is not available from this source. Expected income and expected expenses are a separate, incomplete forecast; they are not used in this provisional-net figure. Provisional net is not a reconciled all-bank cash movement total.</p>
 
       {forecastCurrent && data?.payment_evidence ? (
         <section aria-label="Payment evidence" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-slate-800">
@@ -189,7 +189,7 @@ export default function CashFlowPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-4 text-sm font-semibold text-slate-800">Cash in vs cash out (monthly)</h2>
+          <h2 className="mb-4 text-sm font-semibold text-slate-800">Recorded inflows vs provisional outflows (monthly)</h2>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyChart}>
@@ -206,7 +206,7 @@ export default function CashFlowPage() {
         </section>
 
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-4 text-sm font-semibold text-slate-800">Daily net cash flow</h2>
+          <h2 className="mb-4 text-sm font-semibold text-slate-800">Daily provisional net cash flow</h2>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={dailyChart}>
