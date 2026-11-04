@@ -243,16 +243,8 @@ export async function GET(request: Request) {
   if (bookingEventsRes.error) {
     const error = bookingEventsRes.error;
     if (error.message.includes("does not exist") || error.code === "42P01") {
-      return NextResponse.json({
-        since: sinceIso,
-        rows: 0,
-        message: "Run migration `20260475_booking_events.sql` — table booking_events missing.",
-        dropOffByStep: [],
-        viewsByStep: [],
-        conversionRatePct: 0,
-        topExitSteps: [],
-        errorsByStep: [],
-      });
+      // Do not present missing source data as a valid zero-activity funnel.
+      return NextResponse.json({ error: "Funnel analytics source unavailable." }, { status: 503 });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
