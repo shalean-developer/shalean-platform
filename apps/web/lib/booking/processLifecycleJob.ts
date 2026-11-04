@@ -34,6 +34,7 @@ import {
 } from "@/lib/booking/lifecycleEmailGuards";
 
 import { LIFECYCLE_SKIP } from "@/lib/booking/lifecycleEmailSkipReasons";
+import { checkMarketingSendGate } from "@/lib/email/marketingSendGate";
 
 import { getEffectiveLifecycleEmailSettings } from "@/lib/booking/lifecycleEmailSettings";
 
@@ -509,6 +510,14 @@ export async function processLifecycleJob(
 
 
   if (isRebookLifecycleJobType(jobType)) {
+    // Promotional rebooking requires affirmative consent and verified suppressions.
+    // Transactional reminders and service review requests do not use this marketing gate.
+    const marketingGate = await checkMarketingSendGate(supabase, userId, to);
+    if (!marketingGate.allowed) {
+      await markSkipped(supabase, jobId, `marketing_eligibility_${marketingGate.reason}`, jobType);
+      return "skipped";
+    }
+
 
     const rebook = await evaluateRebookEligibility({
 
