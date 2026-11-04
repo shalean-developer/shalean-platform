@@ -88,7 +88,7 @@ export type BookingFunnelApiPayload = {
     addOnAttachRatePct?: number;
     paystack?: { opened?: number; completed?: number; abandonmentPct?: number };
     dailyTrends?: FunnelDailyTrendRow[];
-    revenue?: { paidBookings?: number; totalZar?: number };
+    revenue?: { paidBookings?: number; totalZar?: number; recordedTotalZar?: number; excludedFixtureZar?: number };
   };
 };
 
@@ -321,7 +321,7 @@ export function buildOfficeFunnelKpis(data: BookingFunnelApiPayload): OfficeFunn
     {
       label: "Paystack drop-off",
       value: pctLabel(paystack?.abandonmentPct),
-      sub: `${paystack?.completed ?? 0}/${paystack?.opened ?? 0} Paystack sessions · ${zarLabel(revenue?.totalZar)} booking DB revenue (unreconciled)`,
+      sub: `${paystack?.completed ?? 0}/${paystack?.opened ?? 0} Paystack sessions · ${zarLabel(revenue?.totalZar)} non-fixture booking DB revenue (unreconciled)${(revenue?.excludedFixtureZar ?? 0) > 0 ? ` · ${zarLabel(revenue?.excludedFixtureZar)} test fixtures excluded from ${zarLabel(revenue?.recordedTotalZar)} recorded` : ""}`,
       tone: "orange",
     },
   ];
