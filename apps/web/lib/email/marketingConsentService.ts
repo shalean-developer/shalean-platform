@@ -19,7 +19,7 @@ export async function recordCustomerMarketingDecision(
     decision: "granted" | "withdrawn";
     explicitOptIn: boolean;
     evidenceReference: string;
-    source: "authenticated_preferences";
+    source: "authenticated_preferences" | "signed_one_click";
     apiKey?: string;
   },
 ): Promise<Outcome> {
