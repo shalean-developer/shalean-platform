@@ -8,6 +8,8 @@ import { BookingV2Provider, useBookingV2 } from "@/src/features/booking-v2/Booki
 import { BookingV2Header } from "@/src/features/booking-v2/components/BookingV2Header";
 import { BookingV2SummaryPanel } from "@/src/features/booking-v2/components/BookingV2SummaryPanel";
 import { Step1Details } from "@/src/features/booking-v2/steps/Step1Details";
+import { RegularSimplifiedHome } from "@/src/features/booking-v2/steps/RegularSimplifiedHome";
+import { isRegularSimplifiedJourneyEnabled } from "@/src/features/booking-v2/regularSimplifiedJourneyContract";
 import { Step2Schedule } from "@/src/features/booking-v2/steps/Step2Schedule";
 import { Step3Review } from "@/src/features/booking-v2/steps/Step3Review";
 import { Step4Payment } from "@/src/features/booking-v2/steps/Step4Payment";
@@ -101,6 +103,13 @@ function BookingV2Inner() {
     paymentEditResetError,
   } = useBookingV2();
   const { watch } = useFormContext<BookingV2FormData>();
+  // Staging-only preview: production is hard-blocked, and C3 navigation is not yet authorized.
+  const simplifiedHomePreview = isRegularSimplifiedJourneyEnabled({
+    serviceSlug,
+    environment: process.env.NEXT_PUBLIC_SHALEAN_APP_ENV === "staging" ? "staging" :
+      process.env.NEXT_PUBLIC_SHALEAN_APP_ENV === "development" ? "development" : "production",
+    enabled: process.env.NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW === "true",
+  });
   const reviewTime = watch("time")?.trim() ?? "";
   const pendingBookingId = watch("pendingBookingId")?.trim() ?? "";
   const quoteRequest = useBookingV2Pricing();
@@ -118,7 +127,7 @@ function BookingV2Inner() {
     currentStep === 4 && !paymentEntryAllowed
       ? <PricingBlockedNotice availability={pricingAvailability} quoteError={quoteRequest.error} />
       : ({
-          1: <Step1Details />,
+          1: simplifiedHomePreview ? <RegularSimplifiedHome /> : <Step1Details />,
           2: <Step2Schedule />,
           3: <Step3Review />,
           4: <Step4Payment />,
@@ -129,7 +138,7 @@ function BookingV2Inner() {
   /** Steps 2–4 already use their own section cards — avoid duplicate outer card chrome. */
   const useOuterStepCard = currentStep === 1;
   const reviewTimeMissing = currentStep === 3 && !reviewTime;
-  const showShellNavigation = shouldShowBookingShellNavigation(currentStep, serviceSlug);
+  const showShellNavigation = !(simplifiedHomePreview && currentStep === 1) && shouldShowBookingShellNavigation(currentStep, serviceSlug);
   const paymentBlockMessage =
     pricingAvailability === "loading"
       ? BOOKING_PRICING_LOADING_MESSAGE
