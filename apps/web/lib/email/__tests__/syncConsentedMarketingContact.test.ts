@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncConsentedMarketingContact } from "../syncConsentedMarketingContact";
 
@@ -37,6 +37,20 @@ function provider(opts:{suppression?:number;contact?:number;unsubscribed?:boolea
 }
 const args={customerId:"00000000-0000-4000-8000-000000000777",email:"synthetic@example.test",apiKey:"synthetic-api-key",segmentId};
 describe("Gate 3 consent-only Resend contact + segment contract — no live provider",()=>{
+  beforeEach(()=>{vi.stubEnv("SHALEAN_APP_ENV","production");vi.stubEnv("RESEND_CONTACT_WRITES_DISABLED","false");});
+  afterEach(()=>vi.unstubAllEnvs());
+  it("staging cannot create contacts or segments, even when provider-write flag is explicitly enabled",async()=>{
+    vi.stubEnv("SHALEAN_APP_ENV","staging");
+    const p=provider();
+    expect(await syncConsentedMarketingContact(fakeDb(),{...args,fetchFn:p.fetchFn})).toBe("blocked");
+    expect(p.calls).toHaveLength(0);
+  });
+  it("missing provider-write opt-in blocks contact creation in production",async()=>{
+    vi.stubEnv("RESEND_CONTACT_WRITES_DISABLED","true");
+    const p=provider();
+    expect(await syncConsentedMarketingContact(fakeDb(),{...args,fetchFn:p.fetchFn})).toBe("blocked");
+    expect(p.calls).toHaveLength(0);
+  });
   it("new affirmative opt-in creates contact then separately adds it to configured segment",async()=>{
     const p=provider();
     expect(await syncConsentedMarketingContact(fakeDb(),{...args,fetchFn:p.fetchFn})).toBe("created");
