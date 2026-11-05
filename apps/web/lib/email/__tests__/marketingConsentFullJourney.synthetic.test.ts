@@ -106,8 +106,14 @@ function fixture(){
   return {db,tables,provider,fetchMock,grant,withdraw,reconcile,readyAgain};
 }
 describe("Gate 3 full synthetic consent -> provider failure -> retry -> withdrawal",()=>{
-  beforeEach(()=>vi.clearAllMocks());
-  afterEach(()=>vi.unstubAllGlobals());
+  // Exercise explicitly authorised provider behavior against mocked fetch only.
+  // Staging remains denied by the separate provider-boundary regression tests.
+  beforeEach(()=>{
+    vi.clearAllMocks();
+    vi.stubEnv("SHALEAN_APP_ENV","production");
+    vi.stubEnv("RESEND_CONTACT_WRITES_DISABLED","false");
+  });
+  afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
   it("consent queues first, 503 defers, and a later successful retry reconciles segment membership",async()=>{
     const f=fixture();
     expect(await f.grant()).toMatchObject({ok:true,providerSync:"retry_required"});
