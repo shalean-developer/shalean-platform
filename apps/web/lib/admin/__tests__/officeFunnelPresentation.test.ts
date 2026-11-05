@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildOfficeFunnelKpis,
+  countLabel,
   buildOfficeFunnelRevenueMetrics,
   buildOfficeFunnelRecommendations,
   buildOfficeFunnelSteps,
@@ -208,6 +209,19 @@ describe("buildOfficeFunnelKpis", () => {
     expect(kpis[1]?.value).toBe("66.7%");
     expect(kpis[3]?.label).toBe("Payment drop-off");
     expect(kpis[3]?.value).toBe("20.0%");
+  });
+});
+
+describe("countLabel", () => {
+  it("uses singular labels for one booking or session", () => {
+    expect(countLabel(1, "booking session")).toBe("1 booking session");
+    expect(countLabel(1, "completed booking")).toBe("1 completed booking");
+  });
+
+  it("uses plural labels for zero and multiple counts", () => {
+    expect(countLabel(0, "booking session")).toBe("0 booking sessions");
+    expect(countLabel(2, "booking session")).toBe("2 booking sessions");
+    expect(countLabel(2, "completed booking")).toBe("2 completed bookings");
   });
 });
 
