@@ -124,16 +124,13 @@ export default function FunnelIntelligencePage() {
         loading={loading}
         onRefresh={() => void refetch()}
         windowLabel={windowLabel}
-        sessions={data?.sessions ?? 0}
-        funnelEventRows={data?.rows ?? 0}
         funnelViews={data?.sessionsWithFunnelView ?? 0}
       />
 
       {error ? <ErrorBanner message={error} /> : null}
       {data && hasSparseFunnelTracking(data) ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Limited <code className="text-xs">booking_events</code> step views in this window — funnel steps are inferred from{" "}
-          <code className="text-xs">user_events</code> where possible. Drop-off precision improves as navigation telemetry accumulates.
+          Some booking steps are estimated because tracking data is limited.
         </div>
       ) : null}
       {data?.message ? (
@@ -150,7 +147,7 @@ export default function FunnelIntelligencePage() {
         <section aria-labelledby="funnel-revenue-heading" className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="mb-4">
             <h2 id="funnel-revenue-heading" className="text-sm font-bold text-slate-800">Revenue reporting</h2>
-            <p className="mt-1 text-xs text-slate-500">Booking database amounts · not confirmed settled cash</p>
+            <p className="mt-1 text-xs text-slate-500">Recorded bookings · not settled cash</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
             {revenueMetrics.map((metric) => (
@@ -161,7 +158,7 @@ export default function FunnelIntelligencePage() {
             ))}
           </div>
           <p className="mt-3 text-xs leading-relaxed text-slate-500">
-            Unreconciled booking database revenue. Excluded fixtures are synthetic test records; amounts are not verified provider settlements or bank receipts.
+            Exclusions are shown separately. Amounts are not reconciled with payment providers or bank receipts.
           </p>
         </section>
       ) : null}
@@ -173,7 +170,7 @@ export default function FunnelIntelligencePage() {
               <Activity className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Executive summary</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Overview</p>
               <p className="mt-1 text-sm leading-relaxed text-slate-800">{summaryLine}</p>
             </div>
           </div>
@@ -186,7 +183,7 @@ export default function FunnelIntelligencePage() {
             <div>
               <h3 className="text-sm font-bold text-slate-800">Conversion funnel</h3>
               <p className="text-xs text-slate-500">
-                Visitors through to paid booking (30 days)
+                Booking journey · last 30 days
                 {paidCount > 0 ? (
                   <span className="ml-1 text-emerald-600">· {paidCount} paid ({paymentSourceLabel})</span>
                 ) : null}
@@ -222,8 +219,8 @@ export default function FunnelIntelligencePage() {
         </div>
 
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-800">Product flow views</h3>
-          <p className="mb-4 text-xs text-slate-500">Sessions reaching each booking step (checkout tile shows paid count)</p>
+          <h3 className="text-sm font-bold text-slate-800">Booking steps</h3>
+          <p className="mb-4 text-xs text-slate-500">Sessions at each step</p>
           {loading && !data ? (
             <div className="grid grid-cols-2 gap-2">
               {Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />)}
@@ -245,8 +242,8 @@ export default function FunnelIntelligencePage() {
       <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h3 className="text-sm font-bold text-slate-800">Daily funnel trend</h3>
-            <p className="text-xs text-slate-500">Last 14 days — starts, completions, Paystack abandons</p>
+            <h3 className="text-sm font-bold text-slate-800">Daily activity</h3>
+            <p className="text-xs text-slate-500">Last 14 days</p>
           </div>
           <div className="flex flex-wrap gap-3 text-[11px] text-slate-500">
             <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-blue-500" />Starts</span>
@@ -277,8 +274,8 @@ export default function FunnelIntelligencePage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <InsightPanel title="Insight feed" icon={Lightbulb} rows={insights} loading={loading && !data} empty="No insights for this window." />
-        <InsightPanel title="Anomaly monitor" icon={AlertTriangle} rows={anomalies} loading={loading && !data} empty="No anomalies flagged." useSeverityBorder />
+        <InsightPanel title="Key insights" icon={Lightbulb} rows={insights} loading={loading && !data} empty="No insights for this window." />
+        <InsightPanel title="Alerts" icon={AlertTriangle} rows={anomalies} loading={loading && !data} empty="No anomalies flagged." useSeverityBorder />
       </div>
     </div>
   );
@@ -288,15 +285,11 @@ function PageHeader({
   loading,
   onRefresh,
   windowLabel,
-  sessions,
-  funnelEventRows,
   funnelViews,
 }: {
   loading: boolean;
   onRefresh: () => void;
   windowLabel: string | null;
-  sessions: number;
-  funnelEventRows: number;
   funnelViews: number;
 }) {
   return (
@@ -304,10 +297,10 @@ function PageHeader({
       <div className="min-w-0">
         <h1 className="text-2xl font-bold text-slate-900">Funnel Intelligence</h1>
         <p className="mt-0.5 text-sm text-slate-500">
-          Conversion funnel, drop-off analysis, and automated recommendations from live booking analytics.
+          Booking conversions and drop-offs.
           {windowLabel ? (
             <span className="ml-1 text-slate-400">
-              Since {windowLabel} · {sessions.toLocaleString("en-ZA")} correlated sessions · {funnelViews.toLocaleString("en-ZA")} with step views · {funnelEventRows.toLocaleString("en-ZA")} booking_events rows
+              Since {windowLabel} · {funnelViews.toLocaleString("en-ZA")} booking sessions
             </span>
           ) : null}
         </p>
@@ -359,8 +352,7 @@ function KpiCard({ kpi }: { kpi: OfficeFunnelKpi }) {
 function EmptyState() {
   return (
     <p className="py-8 text-center text-sm text-slate-500">
-      No funnel activity in the last 30 days. Events flow from <code className="text-xs">booking_events</code> and{" "}
-      <code className="text-xs">user_events</code>.
+      No booking activity in the last 30 days.
     </p>
   );
 }
@@ -458,7 +450,7 @@ function StepConversionPanel({ rows, loading }: { rows: FunnelStepConversionRow[
   return (
     <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
       <h3 className="text-sm font-bold text-slate-800">Step-to-step conversion</h3>
-      <p className="mb-4 text-xs text-slate-500">Session progression between steps, including checkout → paid</p>
+      <p className="mb-4 text-xs text-slate-500">Progress through booking</p>
       {loading ? (
         <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-10 animate-pulse rounded-lg bg-slate-100" />)}</div>
       ) : rows.length === 0 ? (
@@ -474,7 +466,7 @@ function StepConversionPanel({ rows, loading }: { rows: FunnelStepConversionRow[
                 <span className="text-sm font-bold text-emerald-700">{pctLabel(row.conversionPct)}</span>
               </div>
               <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
-                <span>{row.progressed}/{row.viewed} progressed</span>
+                <span>{row.progressed}/{row.viewed} continued</span>
                 <span className="text-red-600">{pctLabel(row.dropOffPct)} drop-off</span>
               </div>
               <div className="mt-2 h-1.5 rounded-full bg-slate-100">
@@ -613,7 +605,7 @@ function InsightPanel({
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-slate-800">{r.title}</p>
                   <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{r.description}</p>
-                  {r.category ? <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{r.category}</p> : null}
+
                 </div>
               </div>
             </div>
