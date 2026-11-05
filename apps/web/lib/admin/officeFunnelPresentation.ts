@@ -308,7 +308,7 @@ export function buildOfficeFunnelKpis(data: BookingFunnelApiPayload): OfficeFunn
     {
       label: "Booking → paid",
       value: overall != null ? `${overall}%` : "—",
-      sub: `${paid} paid · ${funnelVisitorCount(data)} booking sessions`,
+      sub: `${paid} paid · ${countLabel(funnelVisitorCount(data), "booking session")}`,
       tone: "emerald",
     },
     {
