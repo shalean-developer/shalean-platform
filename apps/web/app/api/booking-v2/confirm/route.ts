@@ -429,7 +429,7 @@ export async function POST(request: Request) {
     equipmentConfig && fcoEquipmentReceiptEnforced(data.serviceSlug)
       ? fcoEquipmentPricingRevision(equipmentConfig)
       : undefined;
-  const equipmentSession = readFcoEquipmentSession(request);
+  const equipmentSession = fcoEquipmentReceiptEnforced(data.serviceSlug) ? readFcoEquipmentSession(request) : null;
   const equipmentAuthority = authorizeFcoEquipmentQuote({
     sessionHash: equipmentSession ? hashFcoEquipmentSession(equipmentSession) : null,
     serviceSlug: data.serviceSlug,
