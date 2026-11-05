@@ -60,16 +60,16 @@ const KPI_ICONS: Record<OfficeFunnelKpi["tone"], LucideIcon> = {
 };
 
 const KPI_STYLES: Record<OfficeFunnelKpi["tone"], string> = {
-  emerald: "bg-emerald-50 text-emerald-600",
-  blue: "bg-blue-50 text-blue-600",
-  violet: "bg-violet-50 text-violet-600",
-  orange: "bg-orange-50 text-orange-600",
+  emerald: "bg-[#EEF3FF] text-[#0051FF]",
+  blue: "bg-[#DCE7FF] text-[#0033A1]",
+  violet: "bg-[#EEF3FF] text-[#0051FF]",
+  orange: "bg-[#F5F7FB] text-[#0033A1]",
 };
 
 const PRIORITY_MAP: Record<string, string> = {
   high: "bg-red-100 text-red-700",
   medium: "bg-orange-100 text-orange-700",
-  low: "bg-blue-100 text-blue-700",
+  low: "bg-blue-100 text-[#0033A1]",
 };
 
 const SEVERITY_STYLES: Record<string, string> = {
@@ -120,7 +120,7 @@ export default function FunnelIntelligencePage() {
   const cleanerRate = data?.intelligence?.cleanerSelectionRatePct;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6 rounded-lg bg-[#F5F7FB]/60 p-3 sm:p-5">
       <PageHeader
         loading={loading}
         onRefresh={() => void refetch()}
@@ -145,16 +145,16 @@ export default function FunnelIntelligencePage() {
       </div>
 
       {revenueMetrics ? (
-        <section aria-labelledby="funnel-revenue-heading" className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+        <section aria-labelledby="funnel-revenue-heading" className="rounded-lg border border-[#DCE7FF] bg-white p-5 shadow-[var(--ui-shadow-sm)]">
           <div className="mb-4">
-            <h2 id="funnel-revenue-heading" className="text-sm font-bold text-slate-800">Revenue reporting</h2>
+            <h2 id="funnel-revenue-heading" className="text-sm font-bold text-[#00164E]">Revenue reporting</h2>
             <p className="mt-1 text-xs text-slate-500">Recorded bookings · not settled cash</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
             {revenueMetrics.map((metric) => (
-              <div key={metric.label} className="min-w-0 rounded-xl border border-slate-100 bg-slate-50 p-4">
+              <div key={metric.label} className="min-w-0 rounded-lg border border-[#DCE7FF] bg-[#F5F7FB] p-4">
                 <p className="text-xs font-medium text-slate-600">{metric.label}</p>
-                <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">{metric.value}</p>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-[#00164E]">{metric.value}</p>
               </div>
             ))}
           </div>
@@ -165,24 +165,24 @@ export default function FunnelIntelligencePage() {
       ) : null}
 
       {summaryLine ? (
-        <div className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 to-indigo-50 p-5 shadow-sm">
+        <div className="rounded-lg border border-[#C7D8FF] bg-[#EEF3FF] p-5 shadow-[var(--ui-shadow-sm)]">
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0051FF] text-white">
               <Activity className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Overview</p>
-              <p className="mt-1 text-sm leading-relaxed text-slate-800">{summaryLine}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#0033A1]">Overview</p>
+              <p className="mt-1 text-sm leading-relaxed text-[#00164E]">{summaryLine}</p>
             </div>
           </div>
         </div>
       ) : null}
 
       <div className="grid gap-4 xl:grid-cols-3">
-        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm xl:col-span-2">
+        <div className="rounded-lg border border-[#DCE7FF] bg-white p-5 shadow-[var(--ui-shadow-sm)] xl:col-span-2">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h3 className="text-sm font-bold text-slate-800">Conversion funnel</h3>
+              <h3 className="text-sm font-bold text-[#00164E]">Conversion funnel</h3>
               <p className="text-xs text-slate-500">
                 Booking journey · last 30 days
                 {paidCount > 0 ? (
@@ -219,8 +219,8 @@ export default function FunnelIntelligencePage() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-800">Booking steps</h3>
+        <div className="rounded-lg border border-[#DCE7FF] bg-white p-5 shadow-[var(--ui-shadow-sm)]">
+          <h3 className="text-sm font-bold text-[#00164E]">Booking steps</h3>
           <p className="mb-4 text-xs text-slate-500">Sessions at each step</p>
           {loading && !data ? (
             <div className="grid grid-cols-2 gap-2">
@@ -229,8 +229,8 @@ export default function FunnelIntelligencePage() {
           ) : (
             <div className="grid grid-cols-2 gap-2">
               {productFlow.map((step) => (
-                <div key={step.key} className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-3 text-center">
-                  <p className="text-lg font-bold text-slate-900">{step.views.toLocaleString("en-ZA")}</p>
+                <div key={step.key} className="rounded-lg border border-[#DCE7FF] bg-[#F5F7FB] px-3 py-3 text-center">
+                  <p className="text-lg font-bold text-[#00164E]">{step.views.toLocaleString("en-ZA")}</p>
                   <p className="mt-0.5 text-[11px] font-medium text-slate-500">{step.label}</p>
                   {step.sub ? <p className="mt-0.5 text-[10px] font-semibold text-emerald-700">{step.sub}</p> : null}
                 </div>
@@ -240,14 +240,14 @@ export default function FunnelIntelligencePage() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="rounded-lg border border-[#DCE7FF] bg-white p-5 shadow-[var(--ui-shadow-sm)]">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h3 className="text-sm font-bold text-slate-800">Daily activity</h3>
+            <h3 className="text-sm font-bold text-[#00164E]">Daily activity</h3>
             <p className="text-xs text-slate-500">Last 14 days</p>
           </div>
           <div className="flex flex-wrap gap-3 text-[11px] text-slate-500">
-            <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-blue-500" />Starts</span>
+            <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-[#0051FF]" />Starts</span>
             <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500" />Completed</span>
             <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-rose-400" />Abandons</span>
           </div>
@@ -296,7 +296,8 @@ function PageHeader({
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="text-2xl font-bold text-slate-900">Funnel Intelligence</h1>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#0051FF]">Booking analytics</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-[#00164E]">Funnel Intelligence</h1>
         <p className="mt-0.5 text-sm text-slate-500">
           Booking conversions and drop-offs.
           {windowLabel ? (
@@ -310,7 +311,7 @@ function PageHeader({
         type="button"
         onClick={onRefresh}
         disabled={loading}
-        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
+        className="inline-flex min-h-11 items-center gap-2 rounded-md bg-[#0051FF] px-5 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-[var(--ui-shadow-sm)] transition hover:bg-[#0033A1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0051FF] focus-visible:ring-offset-2 disabled:opacity-50"
       >
         {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
         Refresh
@@ -335,14 +336,14 @@ function KpiCard({ kpi }: { kpi: OfficeFunnelKpi }) {
   const Icon = KPI_ICONS[kpi.tone];
   const [bg, color] = KPI_STYLES[kpi.tone].split(" ");
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+    <div className="rounded-lg border border-[#DCE7FF] bg-white p-5 shadow-[var(--ui-shadow-sm)]">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{kpi.label}</p>
-          <p className="mt-1.5 text-2xl font-bold text-slate-900">{kpi.value}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{kpi.label}</p>
+          <p className="mt-1.5 text-2xl font-bold text-[#00164E]">{kpi.value}</p>
           <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{kpi.sub}</p>
         </div>
-        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", bg)}>
+        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full", bg)}>
           <Icon className={cn("h-5 w-5", color)} />
         </div>
       </div>
@@ -378,7 +379,7 @@ function FunnelStepRow({
         <div className="flex-1">
           <div className="mb-1 flex items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-semibold text-slate-800">{step.label}</span>
+              <span className="text-sm font-semibold text-[#00164E]">{step.label}</span>
               <span className="text-sm font-bold text-slate-600">{step.value.toLocaleString("en-ZA")}</span>
               <span className="text-xs text-slate-400">({step.pct}%)</span>
             </div>
@@ -424,7 +425,7 @@ function DailyTrendChart({ rows, max }: { rows: FunnelDailyTrendRow[]; max: numb
             title={`${d.date}: ${d.starts} starts, ${d.completed} completed, ${d.paystackAbandons} Paystack abandons`}
           >
             <div className="relative flex w-full max-w-[14px] flex-col items-center justify-end" style={{ height: `${barHeight}px` }}>
-              <div className="absolute inset-x-0 bottom-0 rounded-t bg-blue-300" style={{ height: `${barHeight}px` }} />
+              <div className="absolute inset-x-0 bottom-0 rounded-t bg-[#AAC4FF]" style={{ height: `${barHeight}px` }} />
               <div
                 className="absolute inset-x-0 bottom-0 rounded-t bg-emerald-500"
                 style={{ height: `${Math.min(completedHeight, barHeight)}px` }}
@@ -449,8 +450,8 @@ function DailyTrendChart({ rows, max }: { rows: FunnelDailyTrendRow[]; max: numb
 
 function StepConversionPanel({ rows, loading }: { rows: FunnelStepConversionRow[]; loading: boolean }) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-      <h3 className="text-sm font-bold text-slate-800">Step-to-step conversion</h3>
+    <div className="rounded-lg border border-[#DCE7FF] bg-white p-5 shadow-[var(--ui-shadow-sm)]">
+      <h3 className="text-sm font-bold text-[#00164E]">Step-to-step conversion</h3>
       <p className="mb-4 text-xs text-slate-500">Progress through booking</p>
       {loading ? (
         <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-10 animate-pulse rounded-lg bg-slate-100" />)}</div>
@@ -459,9 +460,9 @@ function StepConversionPanel({ rows, loading }: { rows: FunnelStepConversionRow[
       ) : (
         <div className="space-y-2">
           {rows.map((row) => (
-            <div key={`${row.from}-${row.to}`} className="rounded-xl border border-slate-100 px-3 py-2.5">
+            <div key={`${row.from}-${row.to}`} className="rounded-lg border border-[#DCE7FF] px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-slate-800">
+                <span className="text-sm font-medium text-[#00164E]">
                   {funnelStepLabel(row.from)} → {funnelStepLabel(row.to)}
                 </span>
                 <span className="text-sm font-bold text-emerald-700">{pctLabel(row.conversionPct)}</span>
@@ -495,8 +496,8 @@ function RankedListCard({
   tone?: "default" | "danger";
 }) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-      <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+    <div className="rounded-lg border border-[#DCE7FF] bg-white p-5 shadow-[var(--ui-shadow-sm)]">
+      <h3 className="text-sm font-bold text-[#00164E]">{title}</h3>
       {loading ? (
         <div className="mt-3 space-y-2">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-8 animate-pulse rounded-lg bg-slate-100" />)}</div>
       ) : rows.length === 0 ? (
@@ -506,7 +507,7 @@ function RankedListCard({
           {rows.map((row) => (
             <li key={row.label} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm">
               <span className="font-medium text-slate-700">{row.label}</span>
-              <span className={cn("font-bold tabular-nums", tone === "danger" ? "text-red-600" : "text-slate-800")}>{row.value}</span>
+              <span className={cn("font-bold tabular-nums", tone === "danger" ? "text-red-600" : "text-[#00164E]")}>{row.value}</span>
             </li>
           ))}
         </ul>
@@ -527,10 +528,10 @@ function SegmentTable({
   loading: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+    <div className="rounded-lg border border-[#DCE7FF] bg-white p-5 shadow-[var(--ui-shadow-sm)]">
       <div className="mb-4 flex items-center gap-2">
         <Icon className="h-4 w-4 text-slate-500" />
-        <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+        <h3 className="text-sm font-bold text-[#00164E]">{title}</h3>
       </div>
       {loading ? (
         <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-10 animate-pulse rounded-lg bg-slate-100" />)}</div>
@@ -550,7 +551,7 @@ function SegmentTable({
             <tbody>
               {rows.map((row) => (
                 <tr key={row.label} className="border-b border-slate-50 last:border-0">
-                  <td className="py-2.5 pr-3 font-medium text-slate-800">{row.label}</td>
+                  <td className="py-2.5 pr-3 font-medium text-[#00164E]">{row.label}</td>
                   <td className="py-2.5 pr-3 tabular-nums text-slate-600">{row.starts}</td>
                   <td className="py-2.5 pr-3 tabular-nums text-slate-600">{row.completed}</td>
                   <td className="py-2.5 tabular-nums font-semibold text-emerald-700">{pctLabel(row.conversionPct)}</td>
@@ -580,10 +581,10 @@ function InsightPanel({
   useSeverityBorder?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+    <div className="rounded-lg border border-[#DCE7FF] bg-white p-5 shadow-[var(--ui-shadow-sm)]">
       <div className="mb-4 flex items-center gap-2">
         <Icon className="h-5 w-5 text-orange-500" />
-        <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+        <h3 className="text-sm font-bold text-[#00164E]">{title}</h3>
       </div>
       {loading ? (
         <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />)}</div>
@@ -604,7 +605,7 @@ function InsightPanel({
                   {r.priority}
                 </span>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-800">{r.title}</p>
+                  <p className="text-sm font-semibold text-[#00164E]">{r.title}</p>
                   <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{r.description}</p>
 
                 </div>
