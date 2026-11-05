@@ -9,6 +9,7 @@ import { SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
 import { authorizeFcoEquipmentQuote, fcoEquipmentReceiptEnforced, fcoEquipmentPricingRevision } from "@/lib/booking-v2/fcoEquipmentServerGuard";
 import { loadEquipmentPricingConfig } from "@/lib/booking-v2/loadEquipmentPricingConfig";
+import { readFcoEquipmentSession, hashFcoEquipmentSession } from "@/lib/booking-v2/fcoEquipmentSession";
 import {
   canonicalBookingCount,
   canonicalCarpetCount,
@@ -114,7 +115,9 @@ export async function POST(request: Request) {
       fcoEquipmentReceiptEnforced(parsed.data.serviceSlug) && parsed.data.equipmentRequired === "yes"
         ? fcoEquipmentPricingRevision(await loadEquipmentPricingConfig())
         : undefined;
+    const equipmentSession = readFcoEquipmentSession(request);
     const equipment = authorizeFcoEquipmentQuote({
+      sessionHash: equipmentSession ? hashFcoEquipmentSession(equipmentSession) : null,
       serviceSlug: parsed.data.serviceSlug,
       equipmentRequired: parsed.data.equipmentRequired,
       suppliedQuote: parsed.data.equipmentQuote as EquipmentQuoteResult | null,
