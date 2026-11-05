@@ -1,6 +1,28 @@
-import { test } from "vitest";
+import { afterEach, beforeEach, test, vi } from "vitest";
 import { strict as assert } from "node:assert";
 import { reconcileResendUnsubscribe } from "../reconcileResendUnsubscribe";
+
+beforeEach(()=>{vi.stubEnv("SHALEAN_APP_ENV","production");vi.stubEnv("RESEND_CONTACT_WRITES_DISABLED","false");});
+afterEach(()=>vi.unstubAllEnvs());
+
+test("staging never PATCHes a provider contact, even with an API key and write flag", async () => {
+  vi.stubEnv("SHALEAN_APP_ENV","staging");
+  let calls=0;
+  const result=await reconcileResendUnsubscribe("synthetic@example.test",{
+    apiKey:"synthetic-api-key",fetchFn:(async()=>{calls++;throw Error("must not call provider");}) as typeof fetch,
+  });
+  assert.equal(result,"retry_required");
+  assert.equal(calls,0);
+});
+test("missing provider-write opt-in never PATCHes even in production", async () => {
+  vi.stubEnv("RESEND_CONTACT_WRITES_DISABLED","true");
+  let calls=0;
+  const result=await reconcileResendUnsubscribe("synthetic@example.test",{
+    apiKey:"synthetic-api-key",fetchFn:(async()=>{calls++;throw Error("must not call provider");}) as typeof fetch,
+  });
+  assert.equal(result,"retry_required");
+  assert.equal(calls,0);
+});
 
 test("updates an existing contact using PATCH and unsubscribed true", async () => {
   let calls = 0;
