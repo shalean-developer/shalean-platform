@@ -55,7 +55,9 @@ describe("FCO-01 C4 server-only equipment receipt contract", () => {
     expect(verify(token, { feeZar: 612 })).toEqual({ ok: false, reason: "fee_mismatch" });
     expect(verify(token, { secret: "another-test-secret-that-is-long-enough" }))
       .toEqual({ ok: false, reason: "invalid" });
-    expect(verify(token.slice(0, -1) + (token.endsWith("A") ? "B" : "A")).ok).toBe(false);
+    const [payload, signature] = token.split(".");
+    const corruptedSignature = (signature.startsWith("A") ? "B" : "A") + signature.slice(1);
+    expect(verify(`${payload}.${corruptedSignature}`).ok).toBe(false);
     expect(verify("bad")).toEqual({ ok: false, reason: "invalid" });
     expect(verify("", {})).toEqual({ ok: false, reason: "missing" });
   });
