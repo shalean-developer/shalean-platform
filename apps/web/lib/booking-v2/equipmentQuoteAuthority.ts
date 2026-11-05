@@ -3,8 +3,8 @@ import "server-only";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 /**
- * FCO-01 design primitive only: not wired to the customer quote or confirmation
- * routes. The authoritative issuer MUST use server-recomputed equipment charges.
+ * FCO-01 receipt primitive. The authoritative issuer MUST use
+ * server-recomputed equipment charges, never client amounts.
  *
  * A receipt binds an equipment fee to exact delivery details, scope and expiry.
  * Never sign client-supplied fee values without server recomputation.
@@ -18,6 +18,8 @@ export type EquipmentQuoteReceiptPayload = {
   baseFeeZar: number;
   distanceChargeZar: number;
   logisticsFeeZar: number;
+  pricePerKmZar: number;
+  baseLocation: string;
   pricingConfigRevision: string;
   issuedAtMs: number;
   expiresAtMs: number;
@@ -72,6 +74,7 @@ function validPayload(value: unknown): value is EquipmentQuoteReceiptPayload {
     typeof p.pricingConfigRevision === "string" && p.pricingConfigRevision.trim().length > 0 &&
     typeof p.distanceKm === "number" && Number.isFinite(p.distanceKm) && p.distanceKm >= 0 &&
     validMoney(p.baseFeeZar) && validMoney(p.distanceChargeZar) && validMoney(p.logisticsFeeZar) &&
+    validMoney(p.pricePerKmZar) && typeof p.baseLocation === "string" && p.baseLocation.trim().length > 0 &&
     p.baseFeeZar + p.distanceChargeZar === p.logisticsFeeZar &&
     typeof p.issuedAtMs === "number" && Number.isSafeInteger(p.issuedAtMs) &&
     typeof p.expiresAtMs === "number" && Number.isSafeInteger(p.expiresAtMs) &&
@@ -89,6 +92,8 @@ export function issueEquipmentQuoteReceipt(input: {
   baseFeeZar: number;
   distanceChargeZar: number;
   logisticsFeeZar: number;
+  pricePerKmZar: number;
+  baseLocation: string;
   pricingConfigRevision: string;
   manualQuoteRequired: boolean;
   geocodeError?: boolean;
@@ -107,6 +112,8 @@ export function issueEquipmentQuoteReceipt(input: {
     baseFeeZar: input.baseFeeZar,
     distanceChargeZar: input.distanceChargeZar,
     logisticsFeeZar: input.logisticsFeeZar,
+    pricePerKmZar: input.pricePerKmZar,
+    baseLocation: input.baseLocation,
     pricingConfigRevision: input.pricingConfigRevision,
     issuedAtMs: input.issuedAtMs,
     expiresAtMs: input.expiresAtMs,
@@ -159,4 +166,20 @@ export function verifyEquipmentQuoteReceipt(input: {
     return { ok: false, reason: "fee_mismatch" };
   }
   return { ok: true, quote: decoded };
+}
+
+/** Convert verified signed fields into the only equipment breakdown that can
+ * enter a booking quote. Do not spread or trust caller-provided quote fields.
+ */
+export function receiptToEquipmentQuote(payload: EquipmentQuoteReceiptPayload) {
+  return {
+    distance_km: payload.distanceKm,
+    base_fee: payload.baseFeeZar,
+    price_per_km: payload.pricePerKmZar,
+    distance_charge: payload.distanceChargeZar,
+    logistics_fee: payload.logisticsFeeZar,
+    base_location: payload.baseLocation,
+    manual_quote_required: false,
+    manual_quote_message: "",
+  };
 }
