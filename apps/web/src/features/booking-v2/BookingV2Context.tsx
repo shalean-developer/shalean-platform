@@ -758,7 +758,7 @@ export function BookingV2Provider({
   const canGoNext = useCallback(
     async (step: BookingStep): Promise<boolean> => {
       if (step === 3) {
-        if (simplifiedRegularJourney) {
+        if (simplifiedRegularJourney && !form.getValues("pendingBookingId")?.trim()) {
           const values = form.getValues();
           const fullDetails = step1Schema.safeParse(values);
           if (!fullDetails.success) {
@@ -1351,7 +1351,7 @@ export function BookingV2Provider({
       void goToStep(2);
       return;
     }
-    if (currentStep === 4 &&
+    if (currentStep === 4 && !values.pendingBookingId?.trim() &&
       (!step1Schema.safeParse(values).success || !regularEquipmentQuoteReady(values))) {
       void goToStep(3);
     }
