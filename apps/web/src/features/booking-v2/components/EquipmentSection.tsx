@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { Loader2 } from "lucide-react";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
@@ -31,34 +31,32 @@ export function EquipmentSection() {
 
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
 
   const canQuote = addressReady(address, suburb);
   const addressBlocked = equipmentRequired === "yes" && !canQuote;
 
   useEffect(() => {
-    if (!showEquipmentQuestion) return;
+    // Each address/equipment scope owns its own request. Invalidate the old fee
+    // immediately, not after the debounce, so payment can never use a prior fee.
+    const controller = new AbortController();
+    let active = true;
+    const clearQuote = () => setValue("equipmentQuote", null, { shouldDirty: true });
 
-    if (equipmentRequired !== "yes") {
-      setValue("equipmentQuote", null, { shouldDirty: true });
+    if (!showEquipmentQuestion || equipmentRequired !== "yes" || !canQuote) {
+      clearQuote();
       setFetchError(null);
       setLoading(false);
-      abortRef.current?.abort();
-      return;
+      return () => {
+        active = false;
+        controller.abort();
+      };
     }
 
-    if (!canQuote) {
-      setValue("equipmentQuote", null, { shouldDirty: true });
-      return;
-    }
+    clearQuote();
+    setFetchError(null);
+    setLoading(true);
 
     const timer = window.setTimeout(async () => {
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-      setLoading(true);
-      setFetchError(null);
-
       try {
         const res = await fetch("/api/booking-v2/equipment-quote", {
           method: "POST",
@@ -72,30 +70,30 @@ export function EquipmentSection() {
           }),
           signal: controller.signal,
         });
-
         const json = (await res.json()) as {
           quote?: EquipmentQuoteResult | null;
           error?: string;
         };
-
+        if (!active || controller.signal.aborted) return;
         if (!res.ok) {
           setFetchError(json.error ?? "Could not calculate equipment fee.");
-          setValue("equipmentQuote", null, { shouldDirty: true });
+          clearQuote();
           return;
         }
-
         setValue("equipmentQuote", json.quote ?? null, { shouldDirty: true });
-      } catch (e) {
-        if (e instanceof DOMException && e.name === "AbortError") return;
+      } catch (error) {
+        if (!active || controller.signal.aborted) return;
         setFetchError("Could not calculate equipment fee.");
-        setValue("equipmentQuote", null, { shouldDirty: true });
+        clearQuote();
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (active && !controller.signal.aborted) setLoading(false);
       }
     }, 400);
 
     return () => {
+      active = false;
       window.clearTimeout(timer);
+      controller.abort();
     };
   }, [
     showEquipmentQuestion,
