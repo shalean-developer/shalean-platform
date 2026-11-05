@@ -86,3 +86,18 @@ export function regularEquipmentQuoteReady(input: {
     Number.isFinite(quote.logistics_fee) &&
     quote.logistics_fee >= 0;
 }
+
+/**
+ * Shared browser-build flag. No production deployment can opt in: the production
+ * environment is always denied even if the preview variable is accidentally set.
+ */
+export function regularSimplifiedPreviewEnabled(serviceSlug: ServiceSlug): boolean {
+  const environment: FcoEnvironment =
+    process.env.NEXT_PUBLIC_SHALEAN_APP_ENV === "staging" ? "staging" :
+    process.env.NEXT_PUBLIC_SHALEAN_APP_ENV === "development" ? "development" : "production";
+  return isRegularSimplifiedJourneyEnabled({
+    serviceSlug,
+    environment,
+    enabled: process.env.NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW === "true",
+  });
+}
