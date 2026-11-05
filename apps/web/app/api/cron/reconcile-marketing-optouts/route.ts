@@ -4,6 +4,7 @@ import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { reconcilePendingMarketingOptOuts } from "@/lib/email/reconcilePendingMarketingOptOuts";
 import { reconcilePendingMarketingEnrollments } from "@/lib/email/reconcilePendingMarketingEnrollments";
+import { isNonProductionDeployment } from "@/lib/env/deploymentEnvironment";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +14,11 @@ export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Never permit live contact writes from the shared staging runtime even if
+  // a Resend API key was accidentally configured there.
+  if (isNonProductionDeployment() ||
+      process.env.RESEND_CONTACT_WRITES_DISABLED !== "false")
+    return NextResponse.json({ error: "Provider reconciliation disabled" }, { status: 503 });
   const apiKey = process.env.RESEND_API_KEY;
   const admin = getSupabaseAdmin();
   if (!apiKey || !admin) return NextResponse.json({ error: "Not configured" }, { status: 503 });
