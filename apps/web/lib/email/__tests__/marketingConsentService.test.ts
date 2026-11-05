@@ -1,4 +1,4 @@
-import { test } from "vitest";
+import { afterEach, test, vi } from "vitest";
 import { strict as assert } from "node:assert";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MARKETING_POLICY_VERSION, recordCustomerMarketingDecision } from "../marketingConsentService";
@@ -80,4 +80,18 @@ test("enrollment queue failure is explicitly reported rather than silently claim
   assert.deepEqual(result,{ok:false,reason:"enrollment_queue_write_failed"});
   assert.equal(writes[0]?.table,"marketing_email_consent_events");
   assert.equal(writes[1]?.table,"marketing_email_enrollment_jobs");
+});
+
+afterEach(()=>vi.unstubAllEnvs());
+test("staging records opt-out without making Resend contact writes even when key is configured",async()=>{
+  vi.stubEnv("SHALEAN_APP_ENV","staging");
+  vi.stubEnv("RESEND_CONTACT_WRITES_DISABLED","false");
+  const {admin,writes}=fakeClient();
+  const result=await recordCustomerMarketingDecision(admin,{
+    ...base,decision:"withdrawn",explicitOptIn:false,apiKey:"synthetic-key",
+  });
+  assert.deepEqual(result,{ok:true,providerSync:"retry_required"});
+  assert.deepEqual(writes.map(x=>x.table),[
+    "marketing_email_consent_events","user_profiles","marketing_email_reconciliation_jobs",
+  ]);
 });
