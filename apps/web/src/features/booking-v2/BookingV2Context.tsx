@@ -39,6 +39,7 @@ import {
 import { setReferralCapture } from "@/lib/referrals/client";
 import { consumeBookingV2CompletedReset } from "@/lib/booking-v2/bookingV2PaymentRedirect";
 import { buildStep2Schema, step1Schema } from "@/src/features/booking-v2/schemas";
+import { regularSimplifiedPreviewEnabled, regularHomeAnswersComplete, regularEquipmentQuoteReady } from "@/src/features/booking-v2/regularSimplifiedJourneyContract";
 import { dashboardFetchJson } from "@/lib/dashboard/dashboardFetch";
 import type { BookingRow } from "@/lib/dashboard/types";
 import { bookingServiceSlugFromBookingRow } from "@/lib/booking-v2/bookingV2ServiceSlug";
@@ -289,7 +290,11 @@ export function BookingV2Provider({
   const cleanerMode = liveConfig?.cleanerMode ?? config.cleanerMode;
 
   // Always start from pure defaults so SSR and the first client render match.
+  const simplifiedRegularJourney = regularSimplifiedPreviewEnabled(serviceSlug);
   const defaults = defaultBookingFormData(serviceSlug, cleanerMode);
+  // New simplified drafts require an explicit equipment choice. Do not alter
+  // production or other services' legacy defaults.
+  if (simplifiedRegularJourney) defaults.equipmentRequired = "";
 
   const form = useForm<BookingV2FormData>({
     defaultValues: defaults,
@@ -753,6 +758,24 @@ export function BookingV2Provider({
   const canGoNext = useCallback(
     async (step: BookingStep): Promise<boolean> => {
       if (step === 3) {
+        if (simplifiedRegularJourney) {
+          const values = form.getValues();
+          const fullDetails = step1Schema.safeParse(values);
+          if (!fullDetails.success) {
+            fullDetails.error.issues.forEach((issue) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              form.setError(issue.path.join(".") as any, { message: issue.message });
+            });
+            return false;
+          }
+          if (!regularHomeAnswersComplete(values)) return false;
+          if (!regularEquipmentQuoteReady(values)) {
+            form.setError("equipmentRequired", {
+              message: "Equipment logistics must be confirmed before payment. A manual quote may be required.",
+            });
+            return false;
+          }
+        }
         const hasPendingBooking = Boolean(form.getValues("pendingBookingId")?.trim());
         if (!canEnterBookingPayment(pricingAvailability, hasPendingBooking)) {
           trackBookingFunnelEvent(bookingV2StepToFunnelStep(step), BOOKING_FUNNEL_ROW.ERROR, {
@@ -795,7 +818,7 @@ export function BookingV2Provider({
                 questions,
               ),
           );
-          if (firstInvalidStage) {
+          if (firstInvalidStage && !simplifiedRegularJourney) {
             setDetailsSectionOverride(firstInvalidStage);
             const params = new URLSearchParams(window.location.search);
             params.set("step", "details");
@@ -1105,6 +1128,17 @@ export function BookingV2Provider({
       }
       if (step === 1) {
         const values = form.getValues();
+        if (simplifiedRegularJourney) {
+          if (!regularHomeAnswersComplete(values)) {
+            trackBookingFunnelEvent(bookingV2StepToFunnelStep(step), BOOKING_FUNNEL_ROW.ERROR, {
+              flow: "booking_v2",
+              step,
+              reason: "home_incomplete",
+            });
+            return false;
+          }
+          return true;
+        }
         const result = step1Schema.safeParse(values);
         if (!result.success) {
           result.error.issues.forEach((e) => {
@@ -1146,6 +1180,7 @@ export function BookingV2Provider({
       form,
       scheduling,
       pricingAvailability,
+      simplifiedRegularJourney,
       serviceSlug,
       liveConfig,
       config.step1Questions,
@@ -1236,6 +1271,11 @@ export function BookingV2Provider({
         const released = await abandonPendingPaymentBeforeEdit();
         if (!released) return;
       }
+      if (simplifiedRegularJourney && step > currentStep) {
+        // Prevent header/deep-link forward navigation from bypassing stage gates.
+        if (step !== (currentStep + 1)) return;
+        if (!(await canGoNext(currentStep))) return;
+      }
       if (step === 4) {
         const hasPendingBooking = Boolean(form.getValues("pendingBookingId")?.trim());
         if (!canEnterBookingPayment(pricingAvailability, hasPendingBooking)) return;
@@ -1254,8 +1294,10 @@ export function BookingV2Provider({
     },
     [
       abandonPendingPaymentBeforeEdit,
+      canGoNext,
       currentStep,
       detailsSectionOverride,
+      simplifiedRegularJourney,
       form,
       pendingBookingIdForEditReset,
       pricingAvailability,
@@ -1302,7 +1344,9 @@ export function BookingV2Provider({
   const clearBooking = useCallback(() => {
     setPaymentEditResetError(null);
     clearStorage();
-    form.reset(defaultBookingFormData(serviceSlug, cleanerMode));
+    const fresh = defaultBookingFormData(serviceSlug, cleanerMode);
+    if (simplifiedRegularJourney) fresh.equipmentRequired = "";
+    form.reset(fresh);
     setDetailsSectionOverride(
       isProgressiveBookingDetailsService(serviceSlug) ? "address" : null,
     );
@@ -1313,7 +1357,7 @@ export function BookingV2Provider({
           : "booking_type"
         : null,
     );
-  }, [form, serviceSlug, cleanerMode]);
+  }, [form, serviceSlug, cleanerMode, simplifiedRegularJourney]);
 
   const resetCompletedBooking = useCallback(() => {
     if (!consumeBookingV2CompletedReset()) return;
