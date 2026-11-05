@@ -130,17 +130,17 @@ export default function FunnelIntelligencePage() {
 
       {error ? <ErrorBanner message={error} /> : null}
       {data && hasSparseFunnelTracking(data) ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           Some booking steps are estimated because tracking data is limited.
         </div>
       ) : null}
       {data?.message ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{data.message}</div>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{data.message}</div>
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {loading && !data
-          ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-28 animate-pulse rounded-2xl bg-slate-100" />)
+          ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-28 animate-pulse rounded-lg bg-slate-100" />)
           : kpis.map((kpi) => <KpiCard key={kpi.label} kpi={kpi} />)}
       </div>
 
@@ -207,7 +207,7 @@ export default function FunnelIntelligencePage() {
           </div>
 
           {loading && !data ? (
-            <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-slate-100" />)}</div>
+            <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-14 animate-pulse rounded-lg bg-slate-100" />)}</div>
           ) : !data || !hasFunnelActivity(data) ? (
             <EmptyState />
           ) : (
@@ -224,7 +224,7 @@ export default function FunnelIntelligencePage() {
           <p className="mb-4 text-xs text-slate-500">Sessions at each step</p>
           {loading && !data ? (
             <div className="grid grid-cols-2 gap-2">
-              {Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />)}
+              {Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-16 animate-pulse rounded-lg bg-slate-100" />)}
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
@@ -253,7 +253,7 @@ export default function FunnelIntelligencePage() {
           </div>
         </div>
         {loading && !data ? (
-          <div className="h-40 animate-pulse rounded-xl bg-slate-100" />
+          <div className="h-40 animate-pulse rounded-lg bg-slate-100" />
         ) : dailyTrends.length === 0 ? (
           <p className="py-8 text-center text-sm text-slate-500">No daily trend data yet.</p>
         ) : (
@@ -322,7 +322,7 @@ function PageHeader({
 
 function ErrorBanner({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+    <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
       <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
       <div>
         <p className="font-semibold">Could not load funnel intelligence</p>
@@ -373,7 +373,7 @@ function FunnelStepRow({
   return (
     <div>
       <div className="flex items-center gap-4">
-        <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white", step.color)}>
+        <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white", step.color)}>
           <Icon className="h-4 w-4" />
         </div>
         <div className="flex-1">
@@ -541,7 +541,7 @@ function SegmentTable({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400">
+              <tr className="border-b border-[#DCE7FF] text-[11px] uppercase tracking-wide text-slate-400">
                 <th className="pb-2 pr-3 font-semibold">Segment</th>
                 <th className="pb-2 pr-3 font-semibold">Starts</th>
                 <th className="pb-2 pr-3 font-semibold">Paid</th>
@@ -587,7 +587,7 @@ function InsightPanel({
         <h3 className="text-sm font-bold text-[#00164E]">{title}</h3>
       </div>
       {loading ? (
-        <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />)}</div>
+        <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-16 animate-pulse rounded-lg bg-slate-100" />)}</div>
       ) : rows.length === 0 ? (
         <p className="py-6 text-center text-sm text-slate-500">{empty}</p>
       ) : (
@@ -596,8 +596,8 @@ function InsightPanel({
             <div
               key={r.id}
               className={cn(
-                "rounded-xl border px-4 py-3",
-                useSeverityBorder ? SEVERITY_STYLES[r.priority === "high" ? "critical" : r.priority === "medium" ? "warning" : "info"] : "border-slate-100",
+                "rounded-lg border px-4 py-3",
+                useSeverityBorder ? SEVERITY_STYLES[r.priority === "high" ? "critical" : r.priority === "medium" ? "warning" : "info"] : "border-[#DCE7FF]",
               )}
             >
               <div className="flex items-start gap-3">
