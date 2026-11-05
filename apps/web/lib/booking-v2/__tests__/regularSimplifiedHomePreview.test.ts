@@ -9,11 +9,11 @@ const contract = readFileSync(join(root, "src/features/booking-v2/regularSimplif
 
 describe("FCO-01-C2 isolated home preview contract", () => {
   it("only replaces Regular Cleaning Step 1 behind the fail-closed flag", () => {
-    expect(shell).toContain("isRegularSimplifiedJourneyEnabled");
-    expect(shell).toContain("NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW");
+    expect(shell).toContain("regularSimplifiedPreviewEnabled");
+    expect(contract).toContain("NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW");
     expect(shell).toContain('1: simplifiedHomePreview ? <RegularSimplifiedHome /> : <Step1Details />');
     expect(contract).toContain('input.environment !== "production"');
-    expect(shell).toContain("!(simplifiedHomePreview && currentStep === 1)");
+    expect(shell).toContain("shouldShowBookingShellNavigation");
   });
 
   it("does not alter step 2, review, or payment components", () => {
