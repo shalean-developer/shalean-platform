@@ -59,6 +59,9 @@ vi.mock("@/lib/booking-v2/loadEquipmentPricingConfig", () => ({
 }));
 
 import { POST as postConfirm } from "@/app/api/booking-v2/confirm/route";
+import { issueEquipmentQuoteReceipt } from "@/lib/booking-v2/equipmentQuoteAuthority";
+import { hashFcoEquipmentSession } from "@/lib/booking-v2/fcoEquipmentSession";
+import { fcoEquipmentPricingRevision } from "@/lib/booking-v2/fcoEquipmentServerGuard";
 
 const address = {
   address: "21 Main Road, Unit 4", suburb: "Claremont", city: "Cape Town", postalCode: "7708",
@@ -78,10 +81,10 @@ function defaultPayload() {
     },
   };
 }
-async function confirm(patch: Record<string, unknown>) {
+async function confirm(patch: Record<string, unknown>, cookie = "") {
   mocks.payload = { ...defaultPayload(), ...patch };
   const response = await postConfirm(new Request("http://localhost/api/booking-v2/confirm", {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST", headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
     body: JSON.stringify(mocks.payload),
   }));
   return { status: response.status, body: await response.json() as { code?: string } };
@@ -118,6 +121,34 @@ describe("FCO-01 isolated confirmation HTTP failure boundary", () => {
     });
     expect(result.status).toBe(409);
     expect(result.body.code).toContain("EQUIPMENT_RECEIPT_");
+    expect(mocks.quoteBuilder).not.toHaveBeenCalled();
+  });
+
+  it("rejects a valid equipment receipt stolen from another browser session", async () => {
+    const secret = "fco-http-confirm-secret-2026-long-enough";
+    const correctSession = "c".repeat(64);
+    const revision = fcoEquipmentPricingRevision({
+      is_active: true, base_fee_zar: 450, price_per_km_zar: 25,
+      max_auto_distance_km: 20, base_address: "Equipment base",
+      base_latitude: -33.9768, base_longitude: 18.4686,
+      manual_quote_message: "Manual quote",
+    });
+    const now = Date.now();
+    const authorityReceipt = issueEquipmentQuoteReceipt({
+      address, sessionHash: hashFcoEquipmentSession(correctSession),
+      distanceKm: 6, baseFeeZar: 450, distanceChargeZar: 150,
+      logisticsFeeZar: 600, pricePerKmZar: 25, baseLocation: "Equipment base",
+      pricingConfigRevision: revision, manualQuoteRequired: false,
+      issuedAtMs: now, expiresAtMs: now + 600_000, secret,
+    });
+    const equipmentQuote = {
+      distance_km: 6, base_fee: 450, price_per_km: 25, distance_charge: 150,
+      logistics_fee: 600, base_location: "Equipment base",
+      manual_quote_required: false, manual_quote_message: "", authorityReceipt,
+    };
+    const result = await confirm({ equipmentQuote }, "fco01_equipment_session=" + "e".repeat(64));
+    expect(result.status).toBe(409);
+    expect(result.body.code).toBe("EQUIPMENT_RECEIPT_SESSION_MISMATCH");
     expect(mocks.quoteBuilder).not.toHaveBeenCalled();
   });
 
