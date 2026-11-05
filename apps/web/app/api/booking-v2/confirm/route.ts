@@ -18,6 +18,7 @@ import {
 } from "@/lib/booking-v2/equipmentPricing";
 import { loadEquipmentPricingConfig } from "@/lib/booking-v2/loadEquipmentPricingConfig";
 import { authorizeFcoEquipmentQuote, fcoEquipmentReceiptEnforced, fcoEquipmentPricingRevision } from "@/lib/booking-v2/fcoEquipmentServerGuard";
+import { readFcoEquipmentSession, hashFcoEquipmentSession } from "@/lib/booking-v2/fcoEquipmentSession";
 import { serviceShowsEquipmentQuestion } from "@/src/features/booking-v2/config/serviceConfig";
 import { resolveCustomerPhoneFromAuthAdmin, trimCustomerPhone } from "@/lib/admin/adminBookingCustomerContact";
 import { bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
@@ -428,7 +429,9 @@ export async function POST(request: Request) {
     equipmentConfig && fcoEquipmentReceiptEnforced(data.serviceSlug)
       ? fcoEquipmentPricingRevision(equipmentConfig)
       : undefined;
+  const equipmentSession = readFcoEquipmentSession(request);
   const equipmentAuthority = authorizeFcoEquipmentQuote({
+    sessionHash: equipmentSession ? hashFcoEquipmentSession(equipmentSession) : null,
     serviceSlug: data.serviceSlug,
     equipmentRequired: data.equipmentRequired,
     suppliedQuote: (data.equipmentQuote as EquipmentQuoteResult | null) ?? null,
