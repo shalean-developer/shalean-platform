@@ -186,7 +186,7 @@ export default function FunnelIntelligencePage() {
               <p className="text-xs text-slate-500">
                 Booking journey · last 30 days
                 {paidCount > 0 ? (
-                  {" "}<span className="text-emerald-600">· {paidCount} paid ({paymentSourceLabel})</span>
+                  <span className="ml-1 text-emerald-600">{" "}· {paidCount} paid ({paymentSourceLabel})</span>
                 ) : null}
               </p>
             </div>
