@@ -28,6 +28,8 @@ describe("FCO-01-C3 guarded Regular Cleaning journey", () => {
     expect(context).toContain("regularEquipmentQuoteReady(values)");
     expect(context).toContain("if (firstInvalidStage && !simplifiedRegularJourney)");
     expect(context).toContain("await canGoNext(currentStep)");
+    expect(context).toContain("if (!simplifiedRegularJourney || currentStep <= 1) return;");
+    expect(context).toContain("void goToStep(3)");
   });
 
   it("preserves slot verification and payment protections", () => {
@@ -41,7 +43,11 @@ describe("FCO-01-C3 guarded Regular Cleaning journey", () => {
   it("collects full address and equipment fee before payment", () => {
     expect(details).toContain("<PropertyAddressSection />");
     expect(details).toContain("<EquipmentSection />");
-    expect(details).toContain('setValue("equipmentQuote", null');
+    expect(details).toContain("EquipmentSection owns address-scoped quote invalidation");
+    const equipment = read("src/features/booking-v2/components/EquipmentSection.tsx");
+    expect(equipment).toContain('setValue("equipmentQuote", null');
+    expect(equipment).toContain("controller.abort()");
+    expect(equipment).toContain("!active || controller.signal.aborted");
     expect(details).toContain("equipmentReady");
     expect(shell).toContain("<RegularSimplifiedDetailsReview />");
   });
