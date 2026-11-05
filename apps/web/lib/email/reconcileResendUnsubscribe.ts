@@ -1,3 +1,5 @@
+import { isNonProductionDeployment } from "@/lib/env/deploymentEnvironment";
+
 /**
  * Marketing-only provider reconciliation primitive. No send, no auto-enrolment,
  * and never performs a subscribe/re-subscribe operation.
@@ -7,6 +9,9 @@ export async function reconcileResendUnsubscribe(
   email: string,
   options: { apiKey: string; fetchFn?: typeof fetch },
 ): Promise<"updated" | "not_found" | "retry_required"> {
+  // Defense in depth: this primitive must not PATCH real contacts from staging.
+  if (isNonProductionDeployment() || process.env.RESEND_CONTACT_WRITES_DISABLED !== "false")
+    return "retry_required";
   const normalized = email.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) || !options.apiKey)
     return "retry_required";
