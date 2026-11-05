@@ -1,6 +1,6 @@
 # FCO-01-C4-BLOCK-01 — Server-authoritative equipment quote design
 
-Status: DESIGN + PURE REGRESSION CONTRACT IMPLEMENTED; BACKEND ENFORCEMENT NOT IMPLEMENTED
+Status: STAGING/DEVELOPMENT-GATED BACKEND INTEGRATION COMMITTED; CI AND ISOLATED BROWSER ACCEPTANCE PENDING
 Scope: isolated draft PR #1083, no merge, activation, provider requests or database writes.
 Owner boundary: Software Engineering owns implementation, Finance approves pricing authority and edge cases, Marketing Engineering owns conversion requirements.
 
@@ -36,18 +36,26 @@ There is **no schema migration** in this design. If backend wiring requires pers
 - C4 UI quote lifecycle fixes: abort stale equipment requests, clear stale quote immediately, ensure no wrapper double reset.
 - C4 deep-link guard: incomplete Home, Schedule, or Your Details sends the user to the earliest required stage.
 
-## Integration work still required
+## Gated backend implementation now committed
 
-- Define quote receipt transport and schema, including server-only config version semantics and binding to a booking/session scope to prevent cross-session replay.
-- Issue receipt only from a server-computed quote, not arbitrary request-supplied fee or distance.
-- Wire mandatory verification into both quote and confirm routes, preserving original behavior outside the explicitly approved rollout boundary.
-- Ensure server checks also cover a fee of zero, unavailable equipment, a manual quote, changed postal code, house number and unit number.
-- Validate equipment fee against active policy/revision and the existing locked quote; do not silently reprice accepted pending payments.
-- Add route-level negative tests for missing, swapped, expired, tampered, stale and replayed receipts, plus quote/confirm integration and payment idempotency tests.
-- Run isolated desktop/mobile booking smoke with POST/mutation interception. Do not contact live Paystack or write a booking.
+- `/api/booking-v2/equipment-quote` signs the server-calculated fee for Regular Cleaning when the non-production FCO flag is enabled; returns the opaque `authorityReceipt` alongside the equipment breakdown. It rejects manual, geocode-failed, or disabled equipment delivery.
+- `useBookingV2Pricing` sends the current address, suburb, city and postcode to quote; the final equipment quote carries the receipt. Home and Schedule may display indicative pricing before the address is collected, but this is never payment-ready.
+- `/api/booking-v2/quote` checks receipt authenticity, expiry, address and amount before signing an equipment-inclusive quote. The fee is reconstructed from the signed payload, not client-supplied components.
+- `/api/booking-v2/confirm` verifies the same receipt against the final submitted address before using the existing pricing snapshot and payment preparation logic.
+- The gate applies only to Regular Cleaning with `SHALEAN_APP_ENV=staging|development` **and** explicit `NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW=true`; production remains on the existing journey.
+- Signature verification uses a domain-separated key from the protected `FCO_01_EQUIPMENT_RECEIPT_SECRET` or existing `BOOKING_LOCK_HMAC_SECRET`; no public or insecure fallback.
+- Regression source covers altered addresses/fees, missing receipts, expired receipts, manual quote rejection, existing production flag isolation and both route integration seams.
+
+## Remaining acceptance blockers
+
+1. Complete exact-head CI and confirm new tests execute in `web-test`, not merely source existence.
+2. Run isolated route-level end-to-end tests exercising the HTTP quote and confirm endpoints (mocked storage/providers, no booking creation or Paystack requests).
+3. Run desktop/mobile 320–1440px browser journey with no real mutations.
+4. Independently review replay/session binding, quote-lock-expiry interaction, config revision change behavior, and edits to full address after the receipt is issued.
+5. Validate that staging environment settings agree across client and server; neither flag is authorized for production.
+6. Maintain backward compatibility for existing pending-payment bookings and preserve financial approval of the logistics-fee policy.
 
 ## Acceptance decision
 
-**BLOCKED** until backend issuance and both route checks are integrated, C4 financial regression tests pass, and the isolated browser flows are verified. Passing pure receipt tests is not evidence that the production quote/confirm routes enforce them.
-
-Do not merge PR #1083, enable the flag in production or activate any staging/preview bundle under this design-only approval.
+**C4-BLOCK-01 remains OPEN pending CI, route integration tests, security review and isolated browser acceptance.**
+The integration is committed but unmerged and not activated. No production release is authorized.
