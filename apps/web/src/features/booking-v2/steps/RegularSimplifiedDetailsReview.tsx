@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { useFormContext } from "react-hook-form";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import { PropertyAddressSection } from "@/src/features/booking-v2/components/PropertyAddressSection";
@@ -13,26 +12,11 @@ import { regularEquipmentQuoteReady } from "@/src/features/booking-v2/regularSim
  * scheduling; existing Step3Review, quote and cleaner/slot checks are retained.
  */
 export function RegularSimplifiedDetailsReview() {
-  const { watch, setValue } = useFormContext<BookingV2FormData>();
-  const address = watch("address") ?? "";
-  const suburb = watch("suburb") ?? "";
-  const city = watch("city") ?? "";
-  const postalCode = watch("postalCode") ?? "";
+  const { watch } = useFormContext<BookingV2FormData>();
+  // EquipmentSection owns address-scoped quote invalidation, including request
+  // cancellation. Do not clear a freshly returned quote from this wrapper.
   const equipmentRequired = watch("equipmentRequired");
   const equipmentQuote = watch("equipmentQuote");
-  const previousLogisticsScope = useRef<string | null>(null);
-  const logisticsScope = JSON.stringify([address.trim(), suburb.trim(), city.trim(), postalCode.trim(), equipmentRequired]);
-
-  // A previous address's delivery quote must never remain eligible for payment.
-  useEffect(() => {
-    if (previousLogisticsScope.current !== logisticsScope) {
-      previousLogisticsScope.current = logisticsScope;
-      if (equipmentRequired === "yes") {
-        setValue("equipmentQuote", null, { shouldDirty: true, shouldValidate: true });
-      }
-    }
-  }, [logisticsScope, equipmentRequired, setValue]);
-
   const equipmentReady = regularEquipmentQuoteReady({ equipmentRequired, equipmentQuote });
 
   return (
