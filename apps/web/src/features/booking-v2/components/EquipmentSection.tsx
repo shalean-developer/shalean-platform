@@ -67,6 +67,7 @@ export function EquipmentSection() {
             city: city.trim() || "Cape Town",
             postalCode: postalCode.trim(),
             equipmentRequired: true,
+            serviceSlug,
           }),
           signal: controller.signal,
         });
@@ -97,6 +98,7 @@ export function EquipmentSection() {
     };
   }, [
     showEquipmentQuestion,
+    serviceSlug,
     equipmentRequired,
     address,
     suburb,
