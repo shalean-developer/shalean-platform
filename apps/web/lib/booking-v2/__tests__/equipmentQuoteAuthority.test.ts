@@ -7,9 +7,10 @@ import {
 } from "@/lib/booking-v2/equipmentQuoteAuthority";
 
 const secret = "fco-01-testing-secret-with-at-least-32-characters";
+const sessionHash = "a".repeat(64);
 const address = { address: "21 Main Road, Unit 4", suburb: "Claremont", city: "Cape Town", postalCode: "7708" };
 const base = {
-  address,
+  address, sessionHash,
   distanceKm: 6.5,
   baseFeeZar: 450,
   distanceChargeZar: 163,
@@ -25,7 +26,7 @@ const base = {
 
 function verify(receipt: string, overrides: Partial<Parameters<typeof verifyEquipmentQuoteReceipt>[0]> = {}) {
   return verifyEquipmentQuoteReceipt({
-    receipt, address, feeZar: 613, secret, nowMs: base.issuedAtMs + 1000, ...overrides,
+    receipt, address, feeZar: 613, sessionHash, secret, nowMs: base.issuedAtMs + 1000, ...overrides,
   });
 }
 
@@ -40,6 +41,14 @@ describe("FCO-01 C4 server-only equipment receipt contract", () => {
       .toEqual({ ok: false, reason: "address_mismatch" });
     expect(verify(token, { address: { ...address, suburb: "Rondebosch" } }))
       .toEqual({ ok: false, reason: "address_mismatch" });
+  });
+
+  it("blocks a copied receipt in a different browser session", () => {
+    const token = issueEquipmentQuoteReceipt(base);
+    expect(verify(token, { sessionHash: "b".repeat(64) }))
+      .toEqual({ ok: false, reason: "session_mismatch" });
+    expect(verify(token, { sessionHash: null }))
+      .toEqual({ ok: false, reason: "session_mismatch" });
   });
 
   it("normalizes harmless case and whitespace but keeps apartment numbers", () => {
