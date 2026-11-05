@@ -13,6 +13,8 @@ export type EquipmentPricingConfig = {
 };
 
 export type EquipmentQuoteResult = {
+  /** Opaque server-issued logistics receipt (FCO-01 gated journey only). */
+  authorityReceipt?: string;
   distance_km: number;
   base_fee: number;
   price_per_km: number;
