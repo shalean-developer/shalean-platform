@@ -115,7 +115,7 @@ export async function POST(request: Request) {
       fcoEquipmentReceiptEnforced(parsed.data.serviceSlug) && parsed.data.equipmentRequired === "yes"
         ? fcoEquipmentPricingRevision(await loadEquipmentPricingConfig())
         : undefined;
-    const equipmentSession = readFcoEquipmentSession(request);
+    const equipmentSession = fcoEquipmentReceiptEnforced(parsed.data.serviceSlug) ? readFcoEquipmentSession(request) : null;
     const equipment = authorizeFcoEquipmentQuote({
       sessionHash: equipmentSession ? hashFcoEquipmentSession(equipmentSession) : null,
       serviceSlug: parsed.data.serviceSlug,
