@@ -39,6 +39,7 @@ const authorize = (
   delivery: address,
   allowProvisionalWithoutAddress: false,
   nowMs: issuedAtMs + 1000,
+  expectedPricingConfigRevision: "revision-v1",
   ...overrides,
 });
 
@@ -62,6 +63,12 @@ describe("FCO equipment receipt server enforcement", () => {
       expect(result.quote.distance_charge).toBe(150);
       expect(result.quote.logistics_fee).toBe(600);
     }
+  });
+
+  it("rejects receipts signed under a different equipment pricing revision", () => {
+    enable();
+    expect(authorize({ expectedPricingConfigRevision: "revision-v2" }))
+      .toEqual({ kind: "rejected", code: "EQUIPMENT_PRICING_REVISION_CHANGED" });
   });
 
   it("rejects absent, swapped, expired, and altered equipment quotes", () => {
