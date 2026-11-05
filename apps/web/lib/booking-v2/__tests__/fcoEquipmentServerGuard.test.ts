@@ -74,6 +74,13 @@ describe("FCO equipment receipt server enforcement", () => {
     expect(authorize({ equipmentRequired: "no" }).kind).toBe("not_required");
   });
 
+  it("fails closed if no protected receipt secret is configured", () => {
+    enable();
+    vi.stubEnv("FCO_01_EQUIPMENT_RECEIPT_SECRET", "");
+    vi.stubEnv("BOOKING_LOCK_HMAC_SECRET", "");
+    expect(authorize().kind).toBe("rejected");
+  });
+
   it("allows only provisional quote before address, never at confirmation", () => {
     enable();
     expect(authorize({ delivery: { ...address, address: "" }, suppliedQuote: null, allowProvisionalWithoutAddress: true }).kind).toBe("provisional");
