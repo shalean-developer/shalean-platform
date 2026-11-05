@@ -60,7 +60,7 @@ vi.mock("@/lib/booking-v2/loadEquipmentPricingConfig", () => ({
 
 import { POST as postConfirm } from "@/app/api/booking-v2/confirm/route";
 import { issueEquipmentQuoteReceipt } from "@/lib/booking-v2/equipmentQuoteAuthority";
-import { hashFcoEquipmentSession } from "@/lib/booking-v2/fcoEquipmentSession";
+import { hashFcoEquipmentSession, issueFcoEquipmentSession } from "@/lib/booking-v2/fcoEquipmentSession";
 import { fcoEquipmentPricingRevision } from "@/lib/booking-v2/fcoEquipmentServerGuard";
 
 const address = {
@@ -126,7 +126,7 @@ describe("FCO-01 isolated confirmation HTTP failure boundary", () => {
 
   it("rejects a valid equipment receipt stolen from another browser session", async () => {
     const secret = "fco-http-confirm-secret-2026-long-enough";
-    const correctSession = "c".repeat(64);
+    const correctSession = issueFcoEquipmentSession(new Request("http://localhost/"));
     const revision = fcoEquipmentPricingRevision({
       is_active: true, base_fee_zar: 450, price_per_km_zar: 25,
       max_auto_distance_km: 20, base_address: "Equipment base",
