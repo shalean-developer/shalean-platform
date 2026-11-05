@@ -49,9 +49,10 @@ const expectedQuote = {
   manual_quote_required: false, manual_quote_message: "",
 };
 
-function request(path: string, body: Record<string, unknown>) {
+let sessionCookie = "";
+function request(path: string, body: Record<string, unknown>, cookie = "") {
   return new Request("http://localhost/api/booking-v2/" + path, {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST", headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
     body: JSON.stringify(body),
   });
 }
@@ -59,20 +60,25 @@ async function issue(overrides: Record<string, unknown> = {}) {
   const res = await postEquipment(request("equipment-quote", {
     ...address, serviceSlug: "regular-cleaning", equipmentRequired: true, ...overrides,
   }));
+  const setCookie = res.headers.get("set-cookie");
+  if (setCookie) sessionCookie = setCookie.split(";")[0];
   return { status: res.status, body: await res.json() as { quote?: typeof expectedQuote & {authorityReceipt?: string}; code?: string } };
 }
 async function quote(equipmentQuote: Record<string, unknown> | null, overrides: Record<string, unknown> = {}) {
+  const cookie = typeof overrides.__cookie === "string" ? overrides.__cookie : sessionCookie;
+  const { __cookie: _ignoredCookie, ...actualOverrides } = overrides;
   const response = await postQuote(request("quote", {
     serviceSlug: "regular-cleaning",
     serviceDetails: { propertyType: "house", bedrooms: "2", bathrooms: "1", extraRooms: "0", hasPets: "no" },
     selectedExtras: [], cleanerMode: "individual_cleaners", cleanerCount: 1,
     bookingType: "once_off", equipmentRequired: "yes",
-    equipmentQuote, ...address, ...overrides,
-  }));
+    equipmentQuote, ...address, ...actualOverrides,
+  }, cookie));
   return { status: response.status, body: await response.json() as { code?: string; quoteLock?: object } };
 }
 
 beforeEach(() => {
+  sessionCookie = "";
   vi.stubEnv("SHALEAN_APP_ENV", "staging");
   vi.stubEnv("NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW", "true");
   vi.stubEnv("FCO_01_EQUIPMENT_RECEIPT_SECRET", secret);
@@ -112,6 +118,17 @@ describe("FCO-01 HTTP quote boundaries without real provider/database writes", (
       expect(rejected.body.quoteLock).toBeUndefined();
       expect(mocks.signedCustomerQuote).not.toHaveBeenCalled();
     }
+  });
+
+  it("rejects a copied receipt in a second session at the same address", async () => {
+    const issued = await issue();
+    const accepted = await quote(issued.body.quote!);
+    expect(accepted.status).toBe(200);
+    const rejected = await quote(issued.body.quote!, { __cookie: "fco01_equipment_session=" + "f".repeat(64) });
+    expect(rejected.status).toBe(409);
+    expect(rejected.body.code).toBe("EQUIPMENT_RECEIPT_SESSION_MISMATCH");
+    const missing = await quote(issued.body.quote!, { __cookie: "" });
+    expect(missing.status).toBe(409);
   });
 
   it("refuses manual equipment quotes before receipt issuance", async () => {
