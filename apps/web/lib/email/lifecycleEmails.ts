@@ -2,6 +2,8 @@ import { Resend } from "resend";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
 import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { checkMarketingSendGate } from "@/lib/email/marketingSendGate";
 import {
   customerRebookLandingUrl,
   customerRebookTokenSubjectForBooking,
@@ -9,6 +11,7 @@ import {
   signCustomerRebookToken,
 } from "@/lib/customer/customerRebookLinkToken";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import { createMarketingUnsubscribeUrl } from "@/lib/email/marketingUnsubscribeToken";
 import {
   buildReengagementEmailHtml,
   buildReengagementEmailSubject,
@@ -70,6 +73,7 @@ async function sendLifecycle(
   html: string,
   to: string,
   bookingId: string,
+  customerId?: string | null,
 ): Promise<{ sent: boolean; error?: string }> {
   const { paused } = await isCustomerOutboundPaused();
   if (paused) return { sent: false, error: "customer_outbound_paused" };
@@ -79,8 +83,19 @@ async function sendLifecycle(
     return { sent: false, error: "Email not configured" };
   }
   const from = getDefaultFromAddress();
+  const marketing = source === "rebook_email" || source === "rebook_reminder_email";
+  const unsubscribeUrl = marketing && customerId
+    ? createMarketingUnsubscribeUrl(getPublicAppUrlBase(), customerId, process.env.MARKETING_UNSUBSCRIBE_SECRET)
+    : null;
+  if (marketing && !unsubscribeUrl) return { sent: false, error: "marketing_unsubscribe_not_configured" };
   try {
-    const { error } = await resend.emails.send({ from, to, subject, html });
+    const { error } = await resend.emails.send({
+      from, to, subject, html,
+      ...(unsubscribeUrl ? { headers: {
+        "List-Unsubscribe": `<${unsubscribeUrl}>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      } } : {}),
+    });
     if (error) {
       await reportOperationalIssue("error", source, error.message, { bookingId, email: to });
       return { sent: false, error: error.message };
@@ -286,12 +301,17 @@ function buildRebookHtml(ctx: LifecycleEmailBookingContext): string {
 
 /** ~24h after appointment */
 export async function sendRebookEmail(ctx: LifecycleEmailBookingContext): Promise<{ sent: boolean; error?: string }> {
+  const admin = getSupabaseAdmin();
+  if (!admin) return { sent: false, error: "marketing_eligibility_lookup_failed" };
+  const eligibility = await checkMarketingSendGate(admin, ctx.userId ?? null, ctx.to);
+  if (!eligibility.allowed) return { sent: false, error: `marketing_eligibility_${eligibility.reason}` };
   return sendLifecycle(
     "rebook_email",
     buildReengagementEmailSubject(ctx.firstName),
     buildRebookHtml(ctx),
     ctx.to,
     ctx.bookingId,
+    ctx.userId,
   );
 }
 
@@ -303,12 +323,17 @@ function buildRebookReminderHtml(ctx: LifecycleEmailBookingContext): string {
 export async function sendRebookReminderEmail(
   ctx: LifecycleEmailBookingContext,
 ): Promise<{ sent: boolean; error?: string }> {
+  const admin = getSupabaseAdmin();
+  if (!admin) return { sent: false, error: "marketing_eligibility_lookup_failed" };
+  const eligibility = await checkMarketingSendGate(admin, ctx.userId ?? null, ctx.to);
+  if (!eligibility.allowed) return { sent: false, error: `marketing_eligibility_${eligibility.reason}` };
   return sendLifecycle(
     "rebook_reminder_email",
     buildReengagementEmailSubject(ctx.firstName),
     buildRebookReminderHtml(ctx),
     ctx.to,
     ctx.bookingId,
+    ctx.userId,
   );
 }
 

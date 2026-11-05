@@ -46,6 +46,7 @@ export const CRON_LOCK_KEYS = {
   seoCompetitors: "cron:seo-competitors",
   seoIndexing: "cron:seo-indexing",
   publishBlogPosts: "cron:publish-blog-posts",
+  reconcileMarketingOptOuts: "cron:reconcile-marketing-optouts",
 } as const;
 
 export type CronLockKey = (typeof CRON_LOCK_KEYS)[keyof typeof CRON_LOCK_KEYS];

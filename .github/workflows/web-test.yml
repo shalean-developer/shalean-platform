@@ -119,6 +119,11 @@ jobs:
           AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node scripts/audits/homepage-reviews-isolated.mjs
           AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node scripts/audits/seo-cms-link-migration.test.mjs
 
+      - name: Marketing email isolated PostgreSQL security regression
+        if: steps.filter.outputs.run_suite == 'true'
+        working-directory: .
+        run: AUDIT_PGLITE_MODULE="file://$RUNNER_TEMP/paired-ledger/node_modules/@electric-sql/pglite/dist/index.js" node scripts/audits/marketing-email-consent-isolated.mjs
+
       - name: October fixed-policy isolated PostgreSQL regression
         if: steps.filter.outputs.run_suite == 'true'
         working-directory: .
@@ -226,6 +231,29 @@ jobs:
           lib/oauth/__tests__/metaFacebookOAuth.test.ts
           lib/promotions/providers/__tests__/registry.test.ts
 
+      - name: Shalean marketing consent and unsubscribe synthetic no-send regressions
+        if: steps.filter.outputs.run_suite == 'true'
+        run: >-
+          npm run test --
+          lib/email/__tests__/marketingEligibility.test.ts
+          lib/email/__tests__/marketingSendGate.synthetic.test.ts
+          lib/email/__tests__/marketingConsentService.test.ts
+          lib/email/__tests__/marketingUnsubscribeToken.test.ts
+          lib/email/__tests__/readResendMarketingState.test.ts
+          lib/email/__tests__/reconcileResendUnsubscribe.test.ts
+          lib/email/__tests__/providerPreferenceWebhook.test.ts
+          app/api/marketing/unsubscribe/__tests__/route.test.ts
+          lib/email/__tests__/marketingAndTransactionalSend.integration.test.ts
+          lib/email/__tests__/syncConsentedMarketingContact.test.ts
+          lib/email/__tests__/reconcilePendingMarketingOptOuts.integration.test.ts
+          lib/email/__tests__/reconcilePendingMarketingEnrollments.integration.test.ts
+          lib/email/__tests__/marketingConsentFullJourney.synthetic.test.ts
+          lib/email/__tests__/MarketingEmailPreferences.ui.test.ts
+          lib/referrals/__tests__/referralConsentJourney.integration.test.ts
+          lib/booking/__tests__/processLifecycleJob.enterprise.test.ts
+          app/api/cron/reconcile-marketing-optouts/__tests__/route.test.ts
+          app/api/webhooks/resend/__tests__/marketingWebhook.integration.test.ts
+
       - name: Blog route governance
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run validate:blog-routes && npm run audit:internal-links && npm run validate:cms-blog-links
@@ -320,3 +348,54 @@ jobs:
         if: always() && github.event_name == 'pull_request' && steps.filter.outputs.run_suite == 'true'
         run: |
           if [ -f /tmp/next.pid ]; then kill "$(cat /tmp/next.pid)" || true; fi
+
+  marketing-email-native-postgres:
+    name: Marketing email native PostgreSQL 17 security
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    services:
+      isolated-postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: isolated-test-only
+          POSTGRES_DB: marketing_isolated_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d marketing_isolated_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      PGPASSWORD: isolated-test-only
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGDATABASE: marketing_isolated_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Confirm exact PR head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - name: Ensure local PostgreSQL CLI is available
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y postgresql-client
+          fi
+      - name: Create disposable synthetic identity table and roles
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          create role anon;
+          create role authenticated;
+          create table public.user_profiles(id uuid primary key);
+          SQL
+      - name: Apply consent migration to isolated database only
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261104210000_marketing_email_consent_ledger.sql
+      - name: Assert RLS, grants and append-only triggers
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_email_consent_security.sql
+      - name: Synthetic consent, replay and rollback regression
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_email_consent_isolated_native.sql

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { validateEmailRecipient } from "@/lib/email/recipientSafety";
+import { applyProviderPreferenceWithdrawal } from "@/lib/email/providerPreferenceWebhook";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  const firstRecipient = event.data?.to?.[0] ?? "";
+  const firstRecipient = event.data?.to?.[0] ?? (typeof event.data?.email === "string" ? event.data.email : "");
   const recipientResult = validateEmailRecipient(firstRecipient);
   const recipientEmail = recipientResult.allowed ? recipientResult.normalized : null;
   const tags = normalizeTags(event.data?.tags);
@@ -63,7 +64,19 @@ export async function POST(request: Request) {
     message_type: tags.message_type ?? null, campaign_id: tags.campaign_id ?? null, tags, payload: event,
   });
   if (eventError && eventError.code !== "23505") return NextResponse.json({ error: "Failed to record event" }, { status: 500 });
-  if (eventError?.code === "23505") return NextResponse.json({ ok: true, duplicate: true });
+  // A duplicate event might have failed during post-insert preference reconciliation.
+  // Do not acknowledge retries until the CRM withdrawal has been applied.
+  const duplicate = eventError?.code === "23505";
+  if (event.type === "contact.updated") {
+    const applied = await applyProviderPreferenceWithdrawal(admin, {
+      type: event.type,
+      email: typeof event.data?.email === "string" ? event.data.email : null,
+      unsubscribed: event.data?.unsubscribed === true,
+      svixId,
+    });
+    if (!applied.ok) return NextResponse.json({ error: applied.reason }, { status: 500 });
+  }
+  if (duplicate) return NextResponse.json({ ok: true, duplicate: true });
 
   if (resendEmailId) {
     const terminalSuccess = event.type === "email.delivered";
@@ -73,10 +86,22 @@ export async function POST(request: Request) {
     if (terminalSuccess) Object.assign(update, { retry_status: "recovered", next_retry_at: null, retry_locked_at: null, retry_lock_token: null, failure_reason: null });
     if (temporaryFailure) Object.assign(update, { retry_status: "queued", next_retry_at: new Date(Date.now() + 5 * 60_000).toISOString(), failure_reason: JSON.stringify(event.data ?? {}) });
     if (permanentFailure) Object.assign(update, { retry_status: "blocked", next_retry_at: null, failure_reason: JSON.stringify(event.data ?? {}) });
-    await admin.from("email_outbound_messages").update(update).eq("resend_email_id", resendEmailId);
+    // Provider events can arrive late. Do not allow a delayed/sent event to
+    // regress an already terminal delivery state. The filter is atomic in SQL.
+    let updateQuery = admin.from("email_outbound_messages")
+      .update(update).eq("resend_email_id", resendEmailId);
+    if (!terminalSuccess && !permanentFailure) {
+      updateQuery = updateQuery.not("delivery_status", "in", "(delivered,bounced,complained,suppressed)");
+    } else if (terminalSuccess) {
+      updateQuery = updateQuery.not("delivery_status", "in", "(bounced,complained,suppressed)");
+    }
+    const { error: statusError } = await updateQuery;
+    if (statusError) return NextResponse.json({ error: "Failed to update email delivery state" }, { status: 500 });
   }
 
-  const suppressionReason = event.type === "email.bounced" ? "bounced" : event.type === "email.complained" ? "complained" : event.type === "email.suppressed" ? "suppressed" : null;
+  // Account-level suppression events may arrive independently of a send.
+  // Never clear historical local opt-outs on suppression.removed: review is required.
+  const suppressionReason = event.type === "email.bounced" ? "bounced" : event.type === "email.complained" ? "complained" : event.type === "email.suppressed" || event.type === "suppression.added" ? "suppressed" : null;
   if (suppressionReason && recipientEmail) {
     const { error: suppressionError } = await admin.from("email_suppressions").upsert({
       email: recipientEmail, reason: suppressionReason, resend_email_id: resendEmailId,

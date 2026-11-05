@@ -29,6 +29,7 @@ import { useAddresses } from "@/hooks/useAddresses";
 import { useReviews } from "@/hooks/useReviews";
 import { useReferralSummary } from "@/hooks/useReferralSummary";
 import { HelpCard } from "@/components/account/HelpCard";
+import { MarketingEmailPreferences } from "@/components/account/MarketingEmailPreferences";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -477,6 +478,8 @@ export default function AccountProfilePage() {
           {busy ? "Saving…" : "Save changes"}
         </Button>
       </form>
+
+      <MarketingEmailPreferences />
 
       <HelpCard />
     </div>

@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { safeResendSend } from "@/lib/email/safeResendSend";
+import { checkMarketingSendGate } from "@/lib/email/marketingSendGate";
+import { createMarketingUnsubscribeUrl } from "@/lib/email/marketingUnsubscribeToken";
 import { validateEmailRecipient } from "@/lib/email/recipientSafety";
 import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -58,9 +60,14 @@ export async function sendReferralCampaignEmail(params: {
   const recipient = validateEmailRecipient(params.email);
   if (!recipient.allowed) return { sent: false, error: recipient.reason };
   const email = recipient.normalized;
+  const marketingGate = await checkMarketingSendGate(params.admin, params.userId, email);
+  if (!marketingGate.allowed) return { sent: false, error: `marketing_eligibility_${marketingGate.reason}` };
 
   const { paused } = await isCustomerOutboundPaused();
   if (paused && !params.isTest) return { sent: false, error: "customer_outbound_paused" };
+
+  const unsubscribeUrl = createMarketingUnsubscribeUrl(getPublicAppUrlBase(), params.userId, process.env.MARKETING_UNSUBSCRIBE_SECRET);
+  if (!unsubscribeUrl) return { sent: false, error: "marketing_unsubscribe_not_configured" };
 
   const campaignId = params.campaignId ?? REFERRAL_CAMPAIGN_ID;
   const campaign = await loadReferralEmailCampaign(params.admin);
@@ -125,7 +132,12 @@ export async function sendReferralCampaignEmail(params: {
       to: email,
       subject,
       html,
-      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+      context: { customerId: params.userId, messageType: "referral_campaign", campaignId },
+      headers: {
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+        "List-Unsubscribe": `<${unsubscribeUrl}>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
       tags: [
         { name: "message_type", value: "referral_campaign" },
         { name: "campaign_id", value: campaignId },

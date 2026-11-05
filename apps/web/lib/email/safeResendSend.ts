@@ -1,8 +1,8 @@
 import { getResend } from "@/lib/email/resendFrom";
 import { validateEmailRecipients } from "@/lib/email/recipientSafety";
-import { syncResendAudienceContact } from "@/lib/email/syncResendAudienceContact";
 import { applyOutboundSubjectPrefix, decideOutboundEmail } from "@/lib/env/outboundMessagingSafety";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { checkMarketingSendGate } from "@/lib/email/marketingSendGate";
 
 type EmailContext = {
   bookingId?: string | null;
@@ -53,24 +53,24 @@ export async function safeResendSend(payload: SafeResendPayload): Promise<{
   if (!decision.allowed) return { data: null, error: { message: decision.reason, name: "outbound_blocked" } };
 
   const { context, tags = [], ...sendPayload } = payload;
+  const declaredType = context?.messageType ?? tags.find(tag => tag.name === "message_type")?.value ?? "";
+  if (declaredType === "referral_campaign" || declaredType === "rebook_email" || declaredType === "rebook_reminder_email") {
+    const admin = getSupabaseAdmin();
+    if (!admin) return { data: null, error: { name: "marketing_eligibility", message: "marketing_eligibility_lookup_failed" } };
+    const customerId = context?.customerId ?? null;
+    const recipient = firstRecipient(payload.to);
+    const eligibility = await checkMarketingSendGate(admin, customerId, recipient);
+    if (!eligibility.allowed) return { data: null, error: { name: "marketing_eligibility", message: `marketing_eligibility_${eligibility.reason}` } };
+  }
   const mergedTags = [...tags, ...contextTags(context)].filter((tag, index, all) =>
     all.findIndex((candidate) => candidate.name === tag.name) === index,
   );
   const subject = applyOutboundSubjectPrefix(payload.subject, decision.subjectPrefix);
   const result = await resend.emails.send({ ...sendPayload, subject, tags: mergedTags } as Parameters<typeof resend.emails.send>[0]);
 
+  // Transactional delivery never adds contacts to marketing audiences.
+  // Consent-verified audience reconciliation runs separately from sending.
   const recipientEmail = firstRecipient(payload.to);
-  if (result.data?.id && context?.customerId && recipientEmail) {
-    await syncResendAudienceContact({
-      email: recipientEmail,
-      customerId: context.customerId,
-    }).catch((error) => {
-      console.warn("Resend Audience sync raised an unexpected error", {
-        email: recipientEmail,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
-  }
 
   try {
     const admin = getSupabaseAdmin();

@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => ({
 
   evaluateRebookEligibility: vi.fn(),
 
+  checkMarketingSendGate: vi.fn(),
+
 }));
 
 
@@ -89,6 +91,8 @@ vi.mock("@/lib/booking/lifecycleEmailGuards", async (importOriginal) => {
 });
 
 
+
+vi.mock("@/lib/email/marketingSendGate", () => ({ checkMarketingSendGate: mocks.checkMarketingSendGate }));
 
 import { processLifecycleJob } from "@/lib/booking/processLifecycleJob";
 
@@ -376,6 +380,8 @@ describe("processLifecycleJob enterprise scenarios", () => {
     });
 
     mocks.evaluateRebookEligibility.mockResolvedValue({ eligible: true });
+
+    mocks.checkMarketingSendGate.mockResolvedValue({allowed:true});
 
     mocks.evaluateCustomerFrequencyLimit.mockResolvedValue({ limited: false });
 
@@ -1362,6 +1368,26 @@ describe("processLifecycleJob enterprise scenarios", () => {
 
     expect(mocks.sendReminderEmail).toHaveBeenCalled();
 
+  });
+
+  it("Gate 3: rebooking job denied consent is marked skipped before provider send", async () => {
+    mocks.checkMarketingSendGate.mockResolvedValue({allowed:false,reason:"unsubscribed"});
+    const mock = createMockSupabase({
+      job: {id:"job-synthetic-optout",booking_id:"book-synthetic",job_type:"rebook_offer",
+        customer_email:"synthetic@example.test",status:"pending",attempts:0,sent_at:null,
+        last_error:null,skipped_reason:null,processed_at:null},
+      booking: {id:"book-synthetic",status:"completed",payment_status:"success",
+        booking_snapshot:pastAppointmentSnapshot(),cleaner_id:"c1",
+        completed_at:new Date().toISOString()},
+    });
+    const result = await processLifecycleJob(mock as never, {
+      id:"job-synthetic-optout", booking_id:"book-synthetic",
+      job_type:"rebook_offer",customer_email:"synthetic@example.test",attempts:0,
+    });
+    expect(result).toBe("skipped");
+    expect(mock.getJob().skipped_reason).toBe("marketing_eligibility_unsubscribed");
+    expect(mocks.sendRebookEmail).not.toHaveBeenCalled();
+    expect(mocks.sendRebookReminderEmail).not.toHaveBeenCalled();
   });
 
 });
