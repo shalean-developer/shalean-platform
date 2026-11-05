@@ -13,6 +13,7 @@ export type EquipmentQuoteReceiptPayload = {
   v: 1;
   purpose: "regular-cleaning-equipment-logistics";
   addressHash: string;
+  sessionHash: string;
   equipmentRequired: true;
   distanceKm: number;
   baseFeeZar: number;
@@ -34,7 +35,7 @@ export type EquipmentDeliveryAddress = {
 
 export type EquipmentQuoteAuthorityOutcome =
   | { ok: true; quote: EquipmentQuoteReceiptPayload }
-  | { ok: false; reason: "missing" | "invalid" | "expired" | "address_mismatch" | "fee_mismatch" | "manual_quote_required" };
+  | { ok: false; reason: "missing" | "invalid" | "expired" | "session_mismatch" | "address_mismatch" | "fee_mismatch" | "manual_quote_required" };
 
 export function canonicalEquipmentDeliveryAddress(value: EquipmentDeliveryAddress): string {
   // Case, leading/trailing and repeated whitespace normalization only;
@@ -71,6 +72,7 @@ function validPayload(value: unknown): value is EquipmentQuoteReceiptPayload {
     p.purpose === "regular-cleaning-equipment-logistics" &&
     p.equipmentRequired === true &&
     typeof p.addressHash === "string" && /^[a-f0-9]{64}$/.test(p.addressHash) &&
+    typeof p.sessionHash === "string" && /^[a-f0-9]{64}$/.test(p.sessionHash) &&
     typeof p.pricingConfigRevision === "string" && p.pricingConfigRevision.trim().length > 0 &&
     typeof p.distanceKm === "number" && Number.isFinite(p.distanceKm) && p.distanceKm >= 0 &&
     validMoney(p.baseFeeZar) && validMoney(p.distanceChargeZar) && validMoney(p.logisticsFeeZar) &&
@@ -88,6 +90,7 @@ function validPayload(value: unknown): value is EquipmentQuoteReceiptPayload {
  */
 export function issueEquipmentQuoteReceipt(input: {
   address: EquipmentDeliveryAddress;
+  sessionHash: string;
   distanceKm: number;
   baseFeeZar: number;
   distanceChargeZar: number;
@@ -107,6 +110,7 @@ export function issueEquipmentQuoteReceipt(input: {
     v: 1,
     purpose: "regular-cleaning-equipment-logistics",
     addressHash: equipmentDeliveryAddressHash(input.address),
+    sessionHash: input.sessionHash,
     equipmentRequired: true,
     distanceKm: input.distanceKm,
     baseFeeZar: input.baseFeeZar,
@@ -133,6 +137,7 @@ export function verifyEquipmentQuoteReceipt(input: {
   receipt: string | null | undefined;
   address: EquipmentDeliveryAddress;
   feeZar: number;
+  sessionHash: string | null;
   secret: string;
   nowMs: number;
 }): EquipmentQuoteAuthorityOutcome {
@@ -158,6 +163,9 @@ export function verifyEquipmentQuoteReceipt(input: {
   if (!validPayload(decoded)) return { ok: false, reason: "invalid" };
   if (input.nowMs < decoded.issuedAtMs || input.nowMs >= decoded.expiresAtMs) {
     return { ok: false, reason: "expired" };
+  }
+  if (!input.sessionHash || !/^[a-f0-9]{64}$/.test(input.sessionHash) || input.sessionHash !== decoded.sessionHash) {
+    return { ok: false, reason: "session_mismatch" };
   }
   if (equipmentDeliveryAddressHash(input.address) !== decoded.addressHash) {
     return { ok: false, reason: "address_mismatch" };
