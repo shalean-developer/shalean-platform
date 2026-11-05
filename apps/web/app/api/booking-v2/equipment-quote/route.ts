@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { createHash } from "node:crypto";
 import { issueEquipmentQuoteReceipt } from "@/lib/booking-v2/equipmentQuoteAuthority";
-import { fcoEquipmentReceiptEnforced, fcoEquipmentReceiptSecret } from "@/lib/booking-v2/fcoEquipmentServerGuard";
+import { fcoEquipmentReceiptEnforced, fcoEquipmentReceiptSecret, fcoEquipmentPricingRevision } from "@/lib/booking-v2/fcoEquipmentServerGuard";
 import { z } from "zod";
 import { loadEquipmentPricingConfig } from "@/lib/booking-v2/loadEquipmentPricingConfig";
 import { quoteEquipmentForAddress } from "@/lib/booking-v2/equipmentPricing";
@@ -59,13 +58,7 @@ export async function POST(request: Request) {
       }, { status: 409 });
     }
     try {
-      const revision = createHash("sha256").update(JSON.stringify({
-        is_active: config.is_active, base_fee_zar: config.base_fee_zar,
-        price_per_km_zar: config.price_per_km_zar,
-        max_auto_distance_km: config.max_auto_distance_km,
-        base_address: config.base_address,
-        base_latitude: config.base_latitude, base_longitude: config.base_longitude,
-      })).digest("hex");
+      const revision = fcoEquipmentPricingRevision(config);
       const nowMs = Date.now();
       const receipt = issueEquipmentQuoteReceipt({
         address: {
