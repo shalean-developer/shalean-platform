@@ -42,6 +42,7 @@ There is **no schema migration** in this design. If backend wiring requires pers
 - `useBookingV2Pricing` sends the current address, suburb, city and postcode to quote; the final equipment quote carries the receipt. Home and Schedule may display indicative pricing before the address is collected, but this is never payment-ready.
 - `/api/booking-v2/quote` checks receipt authenticity, expiry, address and amount before signing an equipment-inclusive quote. The fee is reconstructed from the signed payload, not client-supplied components.
 - `/api/booking-v2/confirm` verifies the same receipt against the final submitted address before using the existing pricing snapshot and payment preparation logic.
+- Both routes now compare the receipt's signed policy revision with the current loaded equipment-policy revision. A change rejects the receipt and requires re-quoting rather than recording a fee under a mismatched configuration.
 - The gate applies only to Regular Cleaning with `SHALEAN_APP_ENV=staging|development` **and** explicit `NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW=true`; production remains on the existing journey.
 - Signature verification uses a domain-separated key from the protected `FCO_01_EQUIPMENT_RECEIPT_SECRET` or existing `BOOKING_LOCK_HMAC_SECRET`; no public or insecure fallback.
 - Regression source covers altered addresses/fees, missing receipts, expired receipts, manual quote rejection, existing production flag isolation and both route integration seams.
