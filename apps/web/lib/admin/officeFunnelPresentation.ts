@@ -158,6 +158,11 @@ export function pctLabel(value: number | null | undefined): string {
   return value == null || Number.isNaN(value) ? "—" : `${value.toFixed(1)}%`;
 }
 
+/** Human-readable counts with correct singular/plural wording. */
+export function countLabel(count: number, noun: string): string {
+  return `${count.toLocaleString("en-ZA")} ${noun}${count === 1 ? "" : "s"}`;
+}
+
 export function zarLabel(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";
   return `R ${Math.round(value).toLocaleString("en-ZA")}`;
@@ -203,13 +208,13 @@ export function paymentCompletedSource(data: BookingFunnelApiPayload): PaymentCo
 export function paymentCompletedSourceLabel(source: PaymentCompletedSource): string {
   switch (source) {
     case "bookings":
-      return "Paid bookings (DB)";
+      return "Booking records";
     case "paystack":
-      return "Paystack sessions";
+      return "Payment sessions";
     case "analytics":
-      return "Analytics events";
+      return "Recorded payments";
     case "unified":
-      return "Best available signal";
+      return "Recorded payments";
     default:
       return "No payments recorded";
   }
@@ -295,7 +300,6 @@ export function buildOfficeFunnelKpis(data: BookingFunnelApiPayload): OfficeFunn
   const checkoutPaid = checkoutToPaidConversionPct(data);
   const paystack = data.intelligence?.paystack;
   const time = data.intelligence?.timeToComplete;
-  const revenue = data.intelligence?.revenue;
   const checkout = data.reachedPaymentSessions ?? 0;
   const paid = paymentCompletedCount(data);
 
@@ -303,27 +307,40 @@ export function buildOfficeFunnelKpis(data: BookingFunnelApiPayload): OfficeFunn
     {
       label: "Booking → paid",
       value: overall != null ? `${overall}%` : "—",
-      sub: `${paid} paid · ${funnelVisitorCount(data)} booking sessions`,
+      sub: `${paid} paid · ${countLabel(funnelVisitorCount(data), "booking session")}`,
       tone: "emerald",
     },
     {
       label: "Checkout → paid",
       value: pctLabel(checkoutPaid),
-      sub: `${paid} paid of ${checkout} checkout sessions`,
+      sub: `${paid} paid · ${checkout} at checkout`,
       tone: "blue",
     },
     {
-      label: "Median completion time",
+      label: "Median booking time",
       value: formatFunnelDuration(time?.medianSeconds),
-      sub: `Avg ${formatFunnelDuration(time?.avgSeconds)} · ${time?.completedSessions ?? 0} sessions`,
+      sub: countLabel(time?.completedSessions ?? 0, "completed booking"),
       tone: "violet",
     },
     {
-      label: "Paystack drop-off",
+      label: "Payment drop-off",
       value: pctLabel(paystack?.abandonmentPct),
-      sub: `${paystack?.completed ?? 0}/${paystack?.opened ?? 0} Paystack sessions · ${zarLabel(revenue?.totalZar)} non-fixture booking DB revenue (unreconciled)${(revenue?.excludedFixtureZar ?? 0) > 0 ? ` · ${zarLabel(revenue?.excludedFixtureZar)} test fixtures excluded from ${zarLabel(revenue?.recordedTotalZar)} recorded` : ""}`,
+      sub: `${paystack?.completed ?? 0}/${paystack?.opened ?? 0} payment sessions`,
       tone: "orange",
     },
+  ];
+}
+
+export type OfficeFunnelRevenueMetric = { label: string; value: string };
+
+/** Display existing API totals without implying settlement or Paystack verification. */
+export function buildOfficeFunnelRevenueMetrics(data: BookingFunnelApiPayload): OfficeFunnelRevenueMetric[] | null {
+  const revenue = data.intelligence?.revenue;
+  if (!revenue) return null;
+  return [
+    { label: "Recorded booking revenue", value: zarLabel(revenue.totalZar) },
+    { label: "Excluded non-live records", value: zarLabel(revenue.excludedFixtureZar) },
+    { label: "Total before exclusions", value: zarLabel(revenue.recordedTotalZar) },
   ];
 }
 
@@ -351,8 +368,8 @@ export function buildOfficeFunnelAnomalies(data: BookingFunnelApiPayload): Offic
     title: row.message,
     description:
       row.observed != null
-        ? `${row.metric} · observed ${row.observed}${row.baseline != null ? ` vs ${row.id === "completion_rate_drop" ? "historical comparison" : "configured reference threshold"} ${row.baseline}` : ""}`
-        : row.metric,
+        ? `Current ${Number(row.observed.toFixed(1))}${row.baseline != null ? ` · Reference ${Number(row.baseline.toFixed(1))}` : ""}`
+        : "Requires review",
     category: "Anomaly",
     kind: "anomaly" as const,
   }));
@@ -364,11 +381,21 @@ export function buildOfficeFunnelRecommendations(data: BookingFunnelApiPayload):
 }
 
 export function buildOfficeFunnelSummaryLine(data: BookingFunnelApiPayload): string | null {
-  if (data.narrativeSummary?.trim()) return data.narrativeSummary.trim();
-  if (typeof data.conversionRatePct === "number" && (data.funnelStartSessions ?? 0) > 0) {
-    return `${data.conversionRatePct}% of service sessions reached checkout (${data.reachedPaymentSessions ?? 0}/${data.funnelStartSessions} sessions, last 30 days).`;
-  }
-  return null;
+  const checkout = data.reachedPaymentSessions ?? 0;
+  const paid = paymentCompletedCount(data);
+  const transitions = data.intelligence?.stepConversion ?? [];
+  const biggestDrop = transitions
+    .filter((row) => row.viewed > 0 && row.dropOffPct > 0)
+    .reduce<FunnelStepConversionRow | null>(
+      (largest, row) => !largest || row.dropOffPct > largest.dropOffPct ? row : largest,
+      null,
+    );
+  if (checkout <= 0 && paid <= 0 && !biggestDrop) return null;
+  const conversion = checkout > 0 ? ` (${pctLabel(pct(paid, checkout))})` : "";
+  const summary = `${checkout} reached checkout · ${paid} paid${conversion}.`;
+  return biggestDrop
+    ? `${summary} Biggest drop-off: ${funnelStepLabel(biggestDrop.from)} → ${funnelStepLabel(biggestDrop.to)} (${pctLabel(biggestDrop.dropOffPct)}).`
+    : summary;
 }
 
 export function sliceDailyTrends(data: BookingFunnelApiPayload, days = 14): FunnelDailyTrendRow[] {

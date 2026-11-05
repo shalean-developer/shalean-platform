@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildOfficeFunnelKpis,
+  countLabel,
+  buildOfficeFunnelRevenueMetrics,
   buildOfficeFunnelRecommendations,
   buildOfficeFunnelSteps,
+  buildOfficeFunnelSummaryLine,
+  buildOfficeFunnelAnomalies,
   buildOfficeProductFlowSteps,
   dailyTrendBarHeights,
   dailyTrendMax,
@@ -154,29 +158,115 @@ describe("funnelStepLabel", () => {
 });
 
 describe("buildOfficeFunnelKpis", () => {
-  it("labels the non-fixture subtotal and preserves disclosed recorded revenue without claiming provider verification", () => {
-    const payload = {
+  it("keeps Paystack KPI focused on payment sessions without burying revenue", () => {
+    const cards = buildOfficeFunnelKpis({
       ...SAMPLE,
       intelligence: { ...SAMPLE.intelligence, revenue: {
         paidBookings: 7, totalZar: 3685, recordedTotalZar: 4545, excludedFixtureZar: 860,
       } },
-    };
-    const cards = buildOfficeFunnelKpis(payload);
+    });
     expect(cards).toHaveLength(4);
-    expect(cards[3]?.sub).toContain(`${zarLabel(3685)} non-fixture booking DB revenue (unreconciled)`);
-    expect(cards[3]?.sub).toContain(`${zarLabel(860)} test fixtures excluded from ${zarLabel(4545)} recorded`);
-    expect(cards[0]?.value).toBe("15.5%");
+    expect(cards[3]?.sub).toBe("48/60 payment sessions");
+    expect(cards[3]?.sub).not.toContain("3 685");
+  });
+
+  it("shows the exact non-fixture, excluded and historical figures in a separate revenue model", () => {
+    const metrics = buildOfficeFunnelRevenueMetrics({
+      ...SAMPLE,
+      intelligence: { ...SAMPLE.intelligence, revenue: {
+        paidBookings: 7, totalZar: 3685, recordedTotalZar: 4545, excludedFixtureZar: 860,
+      } },
+    });
+    expect(metrics).toEqual([
+      { label: "Recorded booking revenue", value: zarLabel(3685) },
+      { label: "Excluded non-live records", value: zarLabel(860) },
+      { label: "Total before exclusions", value: zarLabel(4545) },
+    ]);
+  });
+
+  it("does not fabricate revenue when the API has no revenue payload", () => {
+    expect(buildOfficeFunnelRevenueMetrics({ ...SAMPLE, intelligence: { ...SAMPLE.intelligence, revenue: undefined } })).toBeNull();
+    expect(buildOfficeFunnelRevenueMetrics({})).toBeNull();
+  });
+
+  it("shows unavailable amounts as dashes rather than pretending they are zero", () => {
+    expect(buildOfficeFunnelRevenueMetrics({
+      ...SAMPLE,
+      intelligence: { ...SAMPLE.intelligence, revenue: { totalZar: 0 } },
+    })).toEqual([
+      { label: "Recorded booking revenue", value: zarLabel(0) },
+      { label: "Excluded non-live records", value: "—" },
+      { label: "Total before exclusions", value: "—" },
+    ]);
   });
 
   it("builds four KPI cards from intelligence payload", () => {
     const kpis = buildOfficeFunnelKpis(SAMPLE);
     expect(kpis).toHaveLength(4);
     expect(kpis[0]?.label).toBe("Booking → paid");
+    expect(kpis[0]?.sub).toBe("48 paid · 310 booking sessions");
     expect(kpis[0]?.value).toBe("15.5%");
     expect(kpis[1]?.label).toBe("Checkout → paid");
     expect(kpis[1]?.value).toBe("66.7%");
-    expect(kpis[3]?.label).toBe("Paystack drop-off");
+    expect(kpis[3]?.label).toBe("Payment drop-off");
     expect(kpis[3]?.value).toBe("20.0%");
+  });
+});
+
+describe("booking conversion KPI grammar", () => {
+  it("shows a singular booking session while keeping the count unchanged", () => {
+    const kpis = buildOfficeFunnelKpis({
+      ...SAMPLE,
+      sessionsWithFunnelView: 1,
+      funnelStartSessions: 1,
+      completedPaymentSessions: 1,
+    });
+    expect(kpis[0]?.sub).toBe("1 paid · 1 booking session");
+  });
+});
+
+describe("countLabel", () => {
+  it("uses singular labels for one booking or session", () => {
+    expect(countLabel(1, "booking session")).toBe("1 booking session");
+    expect(countLabel(1, "completed booking")).toBe("1 completed booking");
+  });
+
+  it("uses plural labels for zero and multiple counts", () => {
+    expect(countLabel(0, "booking session")).toBe("0 booking sessions");
+    expect(countLabel(2, "booking session")).toBe("2 booking sessions");
+    expect(countLabel(2, "completed booking")).toBe("2 completed bookings");
+  });
+});
+
+describe("production-facing copy", () => {
+  it("keeps a concise summary based on the same checkout and step figures", () => {
+    expect(buildOfficeFunnelSummaryLine(SAMPLE)).toBe(
+      "72 reached checkout · 48 paid (66.7%). Biggest drop-off: Service → Schedule (30.0%).",
+    );
+    expect(buildOfficeFunnelSummaryLine({})).toBeNull();
+  });
+
+  it("shows readable anomaly comparison instead of internal metric keys", () => {
+    const anomalies = buildOfficeFunnelAnomalies(SAMPLE);
+    expect(anomalies[0]?.description).toBe("Current 8 · Reference 14");
+    expect(anomalies[0]?.description).not.toContain("conversion_rate");
+  });
+
+  it("avoids development language in visible revenue and KPI labels", () => {
+    const revenue = buildOfficeFunnelRevenueMetrics({
+      ...SAMPLE,
+      intelligence: {
+        ...SAMPLE.intelligence,
+        revenue: { paidBookings: 7, totalZar: 3685, recordedTotalZar: 4545, excludedFixtureZar: 860 },
+      },
+    });
+    expect(revenue?.map((metric) => metric.label)).toEqual([
+      "Recorded booking revenue",
+      "Excluded non-live records",
+      "Total before exclusions",
+    ]);
+    expect(revenue?.map((metric) => metric.value)).toEqual([zarLabel(3685), zarLabel(860), zarLabel(4545)]);
+    expect(buildOfficeFunnelKpis(SAMPLE)[3]?.label).toBe("Payment drop-off");
   });
 });
 
