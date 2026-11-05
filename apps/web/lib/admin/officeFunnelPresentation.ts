@@ -158,6 +158,11 @@ export function pctLabel(value: number | null | undefined): string {
   return value == null || Number.isNaN(value) ? "—" : `${value.toFixed(1)}%`;
 }
 
+/** Human-readable counts with correct singular/plural wording. */
+export function countLabel(count: number, noun: string): string {
+  return `${count.toLocaleString("en-ZA")} ${noun}${count === 1 ? "" : "s"}`;
+}
+
 export function zarLabel(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";
   return `R ${Math.round(value).toLocaleString("en-ZA")}`;
@@ -314,7 +319,7 @@ export function buildOfficeFunnelKpis(data: BookingFunnelApiPayload): OfficeFunn
     {
       label: "Median booking time",
       value: formatFunnelDuration(time?.medianSeconds),
-      sub: `${time?.completedSessions ?? 0} completed bookings`,
+      sub: countLabel(time?.completedSessions ?? 0, "completed booking"),
       tone: "violet",
     },
     {

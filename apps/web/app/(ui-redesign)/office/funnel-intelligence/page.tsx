@@ -26,6 +26,7 @@ import {
   buildOfficeFunnelAnomalies,
   buildOfficeFunnelInsights,
   buildOfficeFunnelKpis,
+  countLabel,
   buildOfficeFunnelRevenueMetrics,
   buildOfficeFunnelSteps,
   buildOfficeFunnelSummaryLine,
@@ -185,7 +186,7 @@ export default function FunnelIntelligencePage() {
               <p className="text-xs text-slate-500">
                 Booking journey · last 30 days
                 {paidCount > 0 ? (
-                  <span className="ml-1 text-emerald-600">· {paidCount} paid ({paymentSourceLabel})</span>
+                  <span className="ml-1 text-emerald-600">{" "}· {paidCount} paid ({paymentSourceLabel})</span>
                 ) : null}
               </p>
             </div>
@@ -300,7 +301,7 @@ function PageHeader({
           Booking conversions and drop-offs.
           {windowLabel ? (
             <span className="ml-1 text-slate-400">
-              Since {windowLabel} · {funnelViews.toLocaleString("en-ZA")} booking sessions
+              Since {windowLabel} · {countLabel(funnelViews, "booking session")}
             </span>
           ) : null}
         </p>
