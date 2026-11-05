@@ -15,6 +15,8 @@ describe("Gate 3 unscheduled unsubscribe worker safety",()=>{
     vi.clearAllMocks();
     vi.stubEnv("CRON_SECRET","synthetic-cron-secret");
     vi.stubEnv("RESEND_API_KEY","synthetic-resend-key");
+    vi.stubEnv("SHALEAN_APP_ENV","production");
+    vi.stubEnv("RESEND_CONTACT_WRITES_DISABLED","false");
     vi.stubEnv("RESEND_AUDIENCE_SEGMENT_ID","");
     mock.admin.mockReturnValue({name:"synthetic-db"});
     mock.acquire.mockResolvedValue({ok:true,jobName:"cron:reconcile-marketing-optouts",holderId:"synthetic-lock-id"});
@@ -69,6 +71,23 @@ describe("Gate 3 unscheduled unsubscribe worker safety",()=>{
   it("no segment configuration leaves enrollment worker disabled",async()=>{
     const res=await POST(request());
     expect(res.status).toBe(200);
+    expect(mock.enroll).not.toHaveBeenCalled();
+  });
+
+  it("staging blocks provider reconciliation despite configured key and segment",async()=>{
+    vi.stubEnv("SHALEAN_APP_ENV","staging");
+    vi.stubEnv("RESEND_AUDIENCE_SEGMENT_ID","synthetic-segment");
+    const response=await POST(request());
+    expect(response.status).toBe(503);
+    expect(mock.process).not.toHaveBeenCalled();
+    expect(mock.enroll).not.toHaveBeenCalled();
+    expect(mock.acquire).not.toHaveBeenCalled();
+  });
+  it("provider write safety flag disables even production reconciliation by default",async()=>{
+    vi.stubEnv("RESEND_CONTACT_WRITES_DISABLED","true");
+    const response=await POST(request());
+    expect(response.status).toBe(503);
+    expect(mock.process).not.toHaveBeenCalled();
     expect(mock.enroll).not.toHaveBeenCalled();
   });
 
