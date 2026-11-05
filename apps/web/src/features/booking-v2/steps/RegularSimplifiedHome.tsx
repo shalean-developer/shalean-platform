@@ -163,13 +163,11 @@ export function RegularSimplifiedHome() {
         <p className="text-sm font-semibold text-[#00164E]">Home details {ready ? "complete" : "incomplete"}</p>
         <p className="mt-1 text-xs text-slate-600">
           {ready
-            ? "The home information is complete. Schedule progression requires the next engineering validation gate."
+            ? "The home information is complete. You can continue to see available dates."
             : "Complete the required questions and supported suburb before scheduling."}
         </p>
       </div>
-      <p role="status" className="text-xs text-amber-800">
-        FCO-01-C2 staging preview. Continue to Schedule is not enabled until the C3 validation and navigation gate is implemented.
-      </p>
+
     </section>
   );
 }
