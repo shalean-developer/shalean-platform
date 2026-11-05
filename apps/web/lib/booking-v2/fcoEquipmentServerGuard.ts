@@ -52,6 +52,7 @@ export function authorizeFcoEquipmentQuote(input: {
   delivery: EquipmentDeliveryAddress;
   allowProvisionalWithoutAddress: boolean;
   nowMs: number;
+  sessionHash?: string | null;
   expectedPricingConfigRevision?: string;
 }): FcoEquipmentAuthorization {
   if (!fcoEquipmentReceiptEnforced(input.serviceSlug)) {
@@ -79,6 +80,7 @@ export function authorizeFcoEquipmentQuote(input: {
     receipt: input.suppliedQuote?.authorityReceipt,
     address: input.delivery,
     feeZar: input.suppliedQuote?.logistics_fee ?? NaN,
+    sessionHash: input.sessionHash ?? null,
     secret,
     nowMs: input.nowMs,
   });
