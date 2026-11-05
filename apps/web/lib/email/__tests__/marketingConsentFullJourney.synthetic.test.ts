@@ -102,7 +102,7 @@ function fixture(){
     evidenceReference:"synthetic-withdraw",source:"authenticated_preferences",
   });
   const reconcile=()=>reconcilePendingMarketingEnrollments(db,"synthetic-api-key",segmentId);
-  const readyAgain=()=>{tables.marketing_email_enrollment_jobs[0]!.next_attempt_at=old;};
+  const readyAgain=()=>{tables["marketing_email_enrollment_jobs"]![0]!.next_attempt_at=old;};
   return {db,tables,provider,fetchMock,grant,withdraw,reconcile,readyAgain};
 }
 describe("Gate 3 full synthetic consent -> provider failure -> retry -> withdrawal",()=>{
@@ -112,13 +112,13 @@ describe("Gate 3 full synthetic consent -> provider failure -> retry -> withdraw
     const f=fixture();
     expect(await f.grant()).toMatchObject({ok:true,providerSync:"retry_required"});
     expect(f.provider.posts).toBe(0); // consent request itself cannot contact provider
-    expect(f.tables.marketing_email_enrollment_jobs[0]).toMatchObject({status:"pending"});
+    expect(f.tables["marketing_email_enrollment_jobs"]![0]).toMatchObject({status:"pending"});
     expect(await f.reconcile()).toMatchObject({attempted:1,deferred:1,completed:0});
-    expect(f.tables.marketing_email_enrollment_jobs[0]).toMatchObject({status:"pending",attempt_count:1});
+    expect(f.tables["marketing_email_enrollment_jobs"]![0]).toMatchObject({status:"pending",attempt_count:1});
     f.provider.fail=false;f.readyAgain();
     expect(await f.reconcile()).toMatchObject({attempted:1,completed:1});
     expect(f.provider.member).toBe(true);
-    expect(f.tables.marketing_email_enrollment_jobs[0]).toMatchObject({status:"completed",attempt_count:2});
+    expect(f.tables["marketing_email_enrollment_jobs"]![0]).toMatchObject({status:"completed",attempt_count:2});
     expect(f.fetchMock.mock.calls.every(args=>String(args[0]).startsWith("https://api.resend.com/"))).toBe(true);
   });
   it("withdrawal after provider failure prevents enrollment on next retry",async()=>{
@@ -130,6 +130,6 @@ describe("Gate 3 full synthetic consent -> provider failure -> retry -> withdraw
     expect(await f.reconcile()).toMatchObject({attempted:1,blocked:1,completed:0});
     expect(f.provider.posts).toBe(outboundBefore);
     expect(f.provider.member).toBe(false);
-    expect(f.tables.marketing_email_enrollment_jobs[0]?.status).toBe("blocked");
+    expect(f.tables["marketing_email_enrollment_jobs"]![0]?.status).toBe("blocked");
   });
 });
