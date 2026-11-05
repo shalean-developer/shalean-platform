@@ -8,6 +8,7 @@ import {
 } from "@/lib/booking-v2/fcoEquipmentServerGuard";
 
 const secret = "testing-fco-equipment-receipt-key-2026-long";
+const sessionHash = "c".repeat(64);
 const address = { address: "21 Main Road, Unit 4", suburb: "Claremont", city: "Cape Town", postalCode: "7708" };
 const issuedAtMs = 1_800_000_000_000;
 const quote = {
@@ -16,7 +17,7 @@ const quote = {
   manual_quote_required: false, manual_quote_message: "",
 };
 const receipt = issueEquipmentQuoteReceipt({
-  address, distanceKm: 6, baseFeeZar: 450, distanceChargeZar: 150,
+  address, sessionHash, distanceKm: 6, baseFeeZar: 450, distanceChargeZar: 150,
   logisticsFeeZar: 600, pricePerKmZar: 25, baseLocation: "Equipment base",
   pricingConfigRevision: "revision-v1", manualQuoteRequired: false,
   issuedAtMs, expiresAtMs: issuedAtMs + 10 * 60_000, secret,
@@ -39,6 +40,7 @@ const authorize = (
   delivery: address,
   allowProvisionalWithoutAddress: false,
   nowMs: issuedAtMs + 1000,
+  sessionHash,
   expectedPricingConfigRevision: "revision-v1",
   ...overrides,
 });
@@ -63,6 +65,14 @@ describe("FCO equipment receipt server enforcement", () => {
       expect(result.quote.distance_charge).toBe(150);
       expect(result.quote.logistics_fee).toBe(600);
     }
+  });
+
+  it("refuses cross-session reuse at the same address", () => {
+    enable();
+    expect(authorize({ sessionHash: "d".repeat(64) }))
+      .toEqual({ kind: "rejected", code: "EQUIPMENT_RECEIPT_SESSION_MISMATCH" });
+    expect(authorize({ sessionHash: null }).kind).toBe("rejected");
+    expect(authorize().kind).toBe("authorized");
   });
 
   it("rejects receipts signed under a different equipment pricing revision", () => {
