@@ -14,6 +14,8 @@ const base = {
   baseFeeZar: 450,
   distanceChargeZar: 163,
   logisticsFeeZar: 613,
+  pricePerKmZar: 25,
+  baseLocation: "Cape Town equipment base",
   pricingConfigRevision: "pricing-policy-v1",
   manualQuoteRequired: false,
   issuedAtMs: 1_800_000_000_000,
