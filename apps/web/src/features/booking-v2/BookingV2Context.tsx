@@ -156,7 +156,7 @@ function sanitizeStoredForm(
     ...data,
     serviceDetails,
     ...(data.equipmentRequired != null
-      ? { equipmentRequired: coerceYesNoValue(data.equipmentRequired) }
+      ? { equipmentRequired: regularSimplifiedPreviewEnabled(serviceSlug) && data.equipmentRequired === "" ? "" as const : coerceYesNoValue(data.equipmentRequired) }
       : {}),
     ...(serviceSlug === "carpet-cleaning"
       ? {
@@ -1306,10 +1306,17 @@ export function BookingV2Provider({
   );
 
   const goNext = useCallback(async () => {
+    if (currentStep >= 4) return;
+    // The isolated journey's goToStep enforces the gate for both buttons and links.
+    // Do not execute availability/cleaner checks twice.
+    if (simplifiedRegularJourney) {
+      await goToStep((currentStep + 1) as BookingStep);
+      return;
+    }
     const ok = await canGoNext(currentStep);
     if (!ok) return;
-    if (currentStep < 4) await goToStep((currentStep + 1) as BookingStep);
-  }, [canGoNext, currentStep, goToStep]);
+    await goToStep((currentStep + 1) as BookingStep);
+  }, [canGoNext, currentStep, goToStep, simplifiedRegularJourney]);
 
   const goBack = useCallback(async () => {
     if (currentStep > 1) await goToStep((currentStep - 1) as BookingStep);
