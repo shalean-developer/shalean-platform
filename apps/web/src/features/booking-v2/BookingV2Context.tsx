@@ -1342,6 +1342,9 @@ export function BookingV2Provider({
   useEffect(() => {
     if (!simplifiedRegularJourney || currentStep <= 1) return;
     const values = form.getValues();
+    // A persisted pending booking is recovered from the authorized server
+    // payment-summary/session endpoints; never re-confirm from an expired draft.
+    if (currentStep === 4 && values.pendingBookingId?.trim()) return;
 
     if (!regularHomeAnswersComplete(values)) {
       void goToStep(1);
