@@ -55,11 +55,17 @@ export function authorizeFcoEquipmentQuote(input: {
   if (!input.delivery.address.trim() || !input.delivery.suburb.trim()) {
     return { kind: "rejected", code: "EQUIPMENT_ADDRESS_REQUIRED" };
   }
+  let secret: string;
+  try {
+    secret = fcoEquipmentReceiptSecret();
+  } catch {
+    return { kind: "rejected", code: "EQUIPMENT_SECURITY_UNAVAILABLE" };
+  }
   const outcome = verifyEquipmentQuoteReceipt({
     receipt: input.suppliedQuote?.authorityReceipt,
     address: input.delivery,
     feeZar: input.suppliedQuote?.logistics_fee ?? NaN,
-    secret: fcoEquipmentReceiptSecret(),
+    secret,
     nowMs: input.nowMs,
   });
   if (!outcome.ok) return { kind: "rejected", code: "EQUIPMENT_RECEIPT_" + outcome.reason.toUpperCase() };
