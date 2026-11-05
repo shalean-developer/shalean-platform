@@ -17,6 +17,7 @@ import {
   type EquipmentQuoteResult,
 } from "@/lib/booking-v2/equipmentPricing";
 import { loadEquipmentPricingConfig } from "@/lib/booking-v2/loadEquipmentPricingConfig";
+import { authorizeFcoEquipmentQuote } from "@/lib/booking-v2/fcoEquipmentServerGuard";
 import { serviceShowsEquipmentQuestion } from "@/src/features/booking-v2/config/serviceConfig";
 import { resolveCustomerPhoneFromAuthAdmin, trimCustomerPhone } from "@/lib/admin/adminBookingCustomerContact";
 import { bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
@@ -422,10 +423,26 @@ export async function POST(request: Request) {
 
   // Equipment logistics is already part of the signed locked quote. Do not
   // re-price it from today's logistics configuration during confirmation.
-  const serverEquipmentQuote =
-    equipmentRequiredFlag
-      ? ((data.equipmentQuote as EquipmentQuoteResult | null) ?? null)
-      : null;
+  const equipmentAuthority = authorizeFcoEquipmentQuote({
+    serviceSlug: data.serviceSlug,
+    equipmentRequired: data.equipmentRequired,
+    suppliedQuote: (data.equipmentQuote as EquipmentQuoteResult | null) ?? null,
+    delivery: {
+      address: data.address, suburb: data.suburb,
+      city: data.city, postalCode: data.postalCode,
+    },
+    allowProvisionalWithoutAddress: false,
+    nowMs: Date.now(),
+  });
+  if (equipmentAuthority.kind === "rejected" || equipmentAuthority.kind === "provisional") {
+    return NextResponse.json({
+      error: "Equipment delivery quote is missing, expired or does not match this address.",
+      code: equipmentAuthority.kind === "rejected" ? equipmentAuthority.code : "EQUIPMENT_RECEIPT_REQUIRED",
+    }, { status: 409 });
+  }
+  // For the gated journey, this object comes exclusively from authenticated
+  // server receipt fields. Existing production quote behavior remains unchanged.
+  const serverEquipmentQuote = equipmentAuthority.quote;
   const equipmentPricingSnapshot = serverEquipmentQuote
     ? buildEquipmentPricingSnapshot({
         config: await loadEquipmentPricingConfig(),
