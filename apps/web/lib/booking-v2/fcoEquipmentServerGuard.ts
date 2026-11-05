@@ -1,4 +1,6 @@
 import "server-only";
+import { createHash } from "node:crypto";
+import type { EquipmentPricingConfig } from "@/lib/booking-v2/equipmentPricing";
 
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
 import {
@@ -16,6 +18,17 @@ export function fcoEquipmentReceiptEnforced(serviceSlug: string): boolean {
     (process.env.SHALEAN_APP_ENV === "staging" ||
       process.env.SHALEAN_APP_ENV === "development") &&
     process.env.NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW === "true";
+}
+
+/** Stable revision of all inputs that determine the provider's logistics fee. */
+export function fcoEquipmentPricingRevision(config: EquipmentPricingConfig): string {
+  return createHash("sha256").update(JSON.stringify({
+    is_active: config.is_active, base_fee_zar: config.base_fee_zar,
+    price_per_km_zar: config.price_per_km_zar,
+    max_auto_distance_km: config.max_auto_distance_km,
+    base_address: config.base_address,
+    base_latitude: config.base_latitude, base_longitude: config.base_longitude,
+  })).digest("hex");
 }
 
 export function fcoEquipmentReceiptSecret(): string {
@@ -39,6 +52,7 @@ export function authorizeFcoEquipmentQuote(input: {
   delivery: EquipmentDeliveryAddress;
   allowProvisionalWithoutAddress: boolean;
   nowMs: number;
+  expectedPricingConfigRevision?: string;
 }): FcoEquipmentAuthorization {
   if (!fcoEquipmentReceiptEnforced(input.serviceSlug)) {
     return { kind: "not_required", quote: input.suppliedQuote };
@@ -69,5 +83,8 @@ export function authorizeFcoEquipmentQuote(input: {
     nowMs: input.nowMs,
   });
   if (!outcome.ok) return { kind: "rejected", code: "EQUIPMENT_RECEIPT_" + outcome.reason.toUpperCase() };
+  if (!input.expectedPricingConfigRevision || outcome.quote.pricingConfigRevision !== input.expectedPricingConfigRevision) {
+    return { kind: "rejected", code: "EQUIPMENT_PRICING_REVISION_CHANGED" };
+  }
   return { kind: "authorized", quote: receiptToEquipmentQuote(outcome.quote) };
 }
