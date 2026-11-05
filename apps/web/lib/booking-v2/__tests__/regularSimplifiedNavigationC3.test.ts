@@ -27,6 +27,7 @@ describe("FCO-01-C3 guarded Regular Cleaning journey", () => {
     expect(context).toContain("const fullDetails = step1Schema.safeParse(values)");
     expect(context).toContain('if (simplifiedRegularJourney && !form.getValues("pendingBookingId")?.trim())');
     expect(context).toContain("currentStep === 4 && !values.pendingBookingId?.trim()");
+    expect(context).toContain("if (currentStep === 4 && values.pendingBookingId?.trim()) return;");
     expect(context).toContain("regularEquipmentQuoteReady(values)");
     expect(context).toContain("if (firstInvalidStage && !simplifiedRegularJourney)");
     expect(context).toContain("await canGoNext(currentStep)");
