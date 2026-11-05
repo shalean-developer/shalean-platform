@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { issueEquipmentQuoteReceipt } from "@/lib/booking-v2/equipmentQuoteAuthority";
+import { issueFcoEquipmentSession, hashFcoEquipmentSession, setFcoEquipmentSessionCookie } from "@/lib/booking-v2/fcoEquipmentSession";
 import { fcoEquipmentReceiptEnforced, fcoEquipmentReceiptSecret, fcoEquipmentPricingRevision } from "@/lib/booking-v2/fcoEquipmentServerGuard";
 import { z } from "zod";
 import { loadEquipmentPricingConfig } from "@/lib/booking-v2/loadEquipmentPricingConfig";
@@ -60,7 +61,9 @@ export async function POST(request: Request) {
     try {
       const revision = fcoEquipmentPricingRevision(config);
       const nowMs = Date.now();
+      const session = issueFcoEquipmentSession(request);
       const receipt = issueEquipmentQuoteReceipt({
+        sessionHash: hashFcoEquipmentSession(session),
         address: {
           address: parsed.data.address,
           suburb: parsed.data.suburb,
@@ -79,10 +82,12 @@ export async function POST(request: Request) {
         expiresAtMs: nowMs + 10 * 60_000,
         secret: fcoEquipmentReceiptSecret(),
       });
-      return NextResponse.json({
+      const response = NextResponse.json({
         quote: { ...quote, authorityReceipt: receipt },
         config: { manual_quote_message: config.manual_quote_message },
       }, { headers: { "Cache-Control": "no-store" } });
+      setFcoEquipmentSessionCookie(response, session);
+      return response;
     } catch (error) {
       console.error("[equipment-quote] receipt issuance failed", error);
       return NextResponse.json({ error: "Equipment quote security unavailable." }, { status: 503 });
