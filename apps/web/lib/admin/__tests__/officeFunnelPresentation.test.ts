@@ -204,11 +204,24 @@ describe("buildOfficeFunnelKpis", () => {
     const kpis = buildOfficeFunnelKpis(SAMPLE);
     expect(kpis).toHaveLength(4);
     expect(kpis[0]?.label).toBe("Booking → paid");
+    expect(kpis[0]?.sub).toBe("48 paid · 310 booking sessions");
     expect(kpis[0]?.value).toBe("15.5%");
     expect(kpis[1]?.label).toBe("Checkout → paid");
     expect(kpis[1]?.value).toBe("66.7%");
     expect(kpis[3]?.label).toBe("Payment drop-off");
     expect(kpis[3]?.value).toBe("20.0%");
+  });
+});
+
+describe("booking conversion KPI grammar", () => {
+  it("shows a singular booking session while keeping the count unchanged", () => {
+    const kpis = buildOfficeFunnelKpis({
+      ...SAMPLE,
+      sessionsWithFunnelView: 1,
+      funnelStartSessions: 1,
+      completedPaymentSessions: 1,
+    });
+    expect(kpis[0]?.sub).toBe("1 paid · 1 booking session");
   });
 });
 
