@@ -1336,6 +1336,27 @@ export function BookingV2Provider({
     }
   }, [currentStep, form, goToStep]);
 
+  // URL entry and browser history can bypass goToStep. For the isolated
+  // simplified journey, re-check completed prior stages before rendering later
+  // stages. Never initiate a payment or booking in this guard.
+  useEffect(() => {
+    if (!simplifiedRegularJourney || currentStep <= 1) return;
+    const values = form.getValues();
+
+    if (!regularHomeAnswersComplete(values)) {
+      void goToStep(1);
+      return;
+    }
+    if (currentStep >= 3 && !buildStep2Schema(scheduling).safeParse(values).success) {
+      void goToStep(2);
+      return;
+    }
+    if (currentStep === 4 &&
+      (!step1Schema.safeParse(values).success || !regularEquipmentQuoteReady(values))) {
+      void goToStep(3);
+    }
+  }, [currentStep, form, goToStep, scheduling, simplifiedRegularJourney]);
+
   // Browser history can move from Payment to an earlier step without calling
   // goToStep. Apply the same server-side supersede boundary in that case so the
   // pricing hook never stays frozen behind an abandoned pendingBookingId.
