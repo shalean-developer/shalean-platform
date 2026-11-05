@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { validateEmailRecipient } from "@/lib/email/recipientSafety";
+import { isNonProductionDeployment } from "@/lib/env/deploymentEnvironment";
 
 /** Enrollment happens ONLY after a new explicit consent event is recorded.
  * Never invoke from transactional sending, and never lift existing opt-outs.
@@ -9,6 +10,10 @@ export async function syncConsentedMarketingContact(
   admin: SupabaseClient,
   input: { customerId:string; email:string; apiKey?:string; segmentId?:string; fetchFn?:typeof fetch },
 ):Promise<"created"|"already_subscribed"|"blocked"|"retry_required"> {
+  // Enforce provider-write isolation in the primitive, not only its current cron caller.
+  // An accidental future caller cannot change real Resend contacts from staging.
+  if (isNonProductionDeployment() || process.env.RESEND_CONTACT_WRITES_DISABLED !== "false")
+    return "blocked";
   const recipient=validateEmailRecipient(input.email);
   if (!recipient.allowed || !input.customerId || !input.apiKey || !input.segmentId?.trim()) return "retry_required";
   const email=recipient.normalized;
