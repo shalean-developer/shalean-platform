@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { validateEmailRecipient } from "@/lib/email/recipientSafety";
 import { reconcileResendUnsubscribe } from "@/lib/email/reconcileResendUnsubscribe";
+import { isNonProductionDeployment } from "@/lib/env/deploymentEnvironment";
 
 export const MARKETING_POLICY_VERSION = "marketing-email-2026-11-v1";
 type Outcome = { ok: true; providerSync?: "updated" | "not_found" | "retry_required" } | { ok: false; reason: string };
@@ -81,7 +82,12 @@ export async function recordCustomerMarketingDecision(
     // The CRM withdrawal is already durable. Tell the caller reconciliation needs attention.
     return { ok: true, providerSync: "retry_required" };
   }
-  if (!input.apiKey) return { ok: true, providerSync: "retry_required" };
+  // Staging/test environments may share provider credentials with production.
+  // Never issue Resend contact PATCH requests from an interactive staging flow.
+  // The private queue preserves withdrawal for a separately authorised provider sync.
+  if (!input.apiKey || isNonProductionDeployment() ||
+      process.env.RESEND_CONTACT_WRITES_DISABLED !== "false")
+    return { ok: true, providerSync: "retry_required" };
   const providerSync = await reconcileResendUnsubscribe(email, { apiKey: input.apiKey });
   if (providerSync === "updated" || providerSync === "not_found") {
     await admin.from("marketing_email_reconciliation_jobs").update({
