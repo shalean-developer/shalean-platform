@@ -16,9 +16,9 @@ describe("FCO-01-C2 isolated home preview contract", () => {
     expect(shell).toContain("shouldShowBookingShellNavigation");
   });
 
-  it("does not alter step 2, review, or payment components", () => {
+  it("keeps the existing schedule, review fallback, and payment components", () => {
     expect(shell).toContain("2: <Step2Schedule />");
-    expect(shell).toContain("3: <Step3Review />");
+    expect(shell).toContain("3: simplifiedHomePreview ? <RegularSimplifiedDetailsReview /> : <Step3Review />");
     expect(shell).toContain("4: <Step4Payment />");
   });
 
