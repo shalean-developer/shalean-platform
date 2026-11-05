@@ -7,7 +7,8 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { loadCachedBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
 import { SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
-import { authorizeFcoEquipmentQuote } from "@/lib/booking-v2/fcoEquipmentServerGuard";
+import { authorizeFcoEquipmentQuote, fcoEquipmentReceiptEnforced, fcoEquipmentPricingRevision } from "@/lib/booking-v2/fcoEquipmentServerGuard";
+import { loadEquipmentPricingConfig } from "@/lib/booking-v2/loadEquipmentPricingConfig";
 import {
   canonicalBookingCount,
   canonicalCarpetCount,
@@ -109,6 +110,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Live pricing is unavailable." }, { status: 503 });
     }
 
+    const equipmentPricingConfigRevision =
+      fcoEquipmentReceiptEnforced(parsed.data.serviceSlug) && parsed.data.equipmentRequired === "yes"
+        ? fcoEquipmentPricingRevision(await loadEquipmentPricingConfig())
+        : undefined;
     const equipment = authorizeFcoEquipmentQuote({
       serviceSlug: parsed.data.serviceSlug,
       equipmentRequired: parsed.data.equipmentRequired,
@@ -119,6 +124,7 @@ export async function POST(request: Request) {
       },
       allowProvisionalWithoutAddress: true,
       nowMs: Date.now(),
+      expectedPricingConfigRevision: equipmentPricingConfigRevision,
     });
     if (equipment.kind === "rejected") {
       return NextResponse.json({
