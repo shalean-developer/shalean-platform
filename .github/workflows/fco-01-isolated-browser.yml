@@ -8,6 +8,8 @@ on:
       - "apps/web/src/features/booking-v2/**"
       - "apps/web/lib/booking-v2/**"
       - ".github/workflows/fco-01-isolated-browser.yml"
+      - ".github/workflows/prebuilt-plesk-staging.yml"
+      - "apps/web/lib/env/__tests__/releaseSourceTruth.test.ts"
 
 permissions:
   contents: read
