@@ -12,7 +12,25 @@ fi
 export PGCONNECT_TIMEOUT=5
 export PGOPTIONS='-c statement_timeout=20000 -c lock_timeout=15000'
 
+MODE="${1:-replay}"
 UUID="00000000-0000-4000-8000-000000001080"
+DECISION_A=withdrawn
+SOURCE_A=signed_one_click
+EXPLICIT_A=false
+EXPECTED_A=new
+EXPECTED_B=replay_completed
+EXPECTED_COUNT=1
+if [[ "$MODE" == grant-race ]]; then
+  UUID="00000000-0000-4000-8000-000000001081"
+  DECISION_A=granted
+  SOURCE_A=authenticated_preferences
+  EXPLICIT_A=true
+  EXPECTED_A=retry_required
+  EXPECTED_B=superseded
+  EXPECTED_COUNT=0
+elif [[ "$MODE" != replay ]]; then
+  echo "Unknown test case"; exit 1
+fi
 EMAIL="concurrent-1080@example.test"
 TMP="$(mktemp -d)"
 A_PID=""
@@ -42,8 +60,8 @@ BEGIN;
 SELECT set_config('request.jwt.claim.role','service_role',true);
 SELECT outcome
 FROM public.marketing_record_consent_decision_atomic(
-  '$UUID','$EMAIL','withdrawn','signed_one_click',
-  'marketing-email-2026-11-v1','concurrent-token-1080',false
+  '$UUID','$EMAIL','$DECISION_A','$SOURCE_A',
+  'marketing-email-2026-11-v1','concurrent-token-1080',$EXPLICIT_A,0
 );
 \! touch "$TMP/a-ready"
 \! while [ ! -f "$TMP/release-a" ]; do sleep 0.1; done
@@ -71,7 +89,7 @@ SELECT set_config('request.jwt.claim.role','service_role',true);
 SELECT outcome
 FROM public.marketing_record_consent_decision_atomic(
   '$UUID','$EMAIL','withdrawn','signed_one_click',
-  'marketing-email-2026-11-v1','concurrent-token-1080',false
+  'marketing-email-2026-11-v1','concurrent-token-1080',false,0
 );
 COMMIT;
 SQL
@@ -127,13 +145,21 @@ WHERE customer_id='$UUID'
 AND source='signed_one_click';
 ")"
 
-if [[ "$COUNT" != "1" ]]; then
+if [[ "$COUNT" != "$EXPECTED_COUNT" ]]; then
   echo "Duplicate consent evidence detected: $COUNT"
   exit 1
 fi
 
-grep -Eq '^[[:space:]]*new[[:space:]]*$' "$TMP/a.log"
-grep -Eq '^[[:space:]]*replay_completed[[:space:]]*$' "$TMP/b.log"
+grep -Eq "^[[:space:]]*${EXPECTED_A}[[:space:]]*$" "$TMP/a.log"
+grep -Eq "^[[:space:]]*${EXPECTED_B}[[:space:]]*$" "$TMP/b.log"
 
 echo "PASS: concurrent signed unsubscribe serialized"
 echo "PASS: duplicate consent evidence prevented"
+
+if [[ "$MODE" == grant-race ]]; then
+  SNAPSHOT="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT marketing_consent_generation::text || ':' || (marketing_emails_unsubscribed_at IS NULL)::text FROM public.user_profiles WHERE id='$UUID'")"
+  [[ "$SNAPSHOT" == "1:true" ]] || { echo "Stale token changed newer grant: $SNAPSHOT"; exit 1; }
+  echo "PASS: concurrent newer grant rejects previously unused stale token without withdrawal writes"
+else
+  bash "$0" grant-race
+fi

@@ -7,6 +7,7 @@ const input = {
   authenticatedEmail: "synthetic@example.test",
   decision: "withdrawn" as const,
   explicitOptIn: false,
+  tokenGeneration: 0,
   evidenceReference: "sha256-of-synthetic-token",
   source: "signed_one_click" as const,
 };

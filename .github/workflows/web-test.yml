@@ -239,7 +239,9 @@ jobs:
           lib/email/__tests__/marketingSendGate.synthetic.test.ts
           lib/email/__tests__/marketingConsentService.test.ts
           lib/email/__tests__/marketingConsentReplay.atomic.test.ts
+          lib/email/__tests__/marketingUnsubscribeLink.test.ts
           lib/email/__tests__/marketingConsentReplay.atomic.test.ts
+          lib/email/__tests__/marketingUnsubscribeLink.test.ts
           lib/email/__tests__/marketingUnsubscribeToken.test.ts
           lib/email/__tests__/readResendMarketingState.test.ts
           lib/email/__tests__/reconcileResendUnsubscribe.test.ts
@@ -431,5 +433,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_consent_atomic_recovery_native.sql
       - name: Atomic consent permission regression
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_consent_atomic_permissions_native.sql
+      - name: Consent-generation revocation and rollback regression
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_consent_generation_native.sql
       - name: Atomic consent two-session concurrency regression
         run: timeout --signal=TERM --kill-after=5s 45s bash supabase/tests/marketing_consent_atomic_concurrency.sh

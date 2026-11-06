@@ -27,7 +27,7 @@ BEGIN
     'signed_one_click',
     'marketing-email-2026-11-v1',
     'synthetic-token-1076',
-    false
+    false, 0
   );
 
   IF v_outcome IS DISTINCT FROM 'new' THEN
@@ -46,7 +46,7 @@ BEGIN
     'signed_one_click',
     'marketing-email-2026-11-v1',
     'synthetic-token-1076',
-    false
+    false, 0
   );
 
   IF v_outcome IS DISTINCT FROM 'replay_completed' THEN
@@ -75,7 +75,7 @@ BEGIN
     'granted','authenticated_preferences','marketing-email-2026-11-v1','grant-after-token',true);
   SELECT outcome INTO v_outcome FROM public.marketing_record_consent_decision_atomic(
     '00000000-0000-4000-8000-000000001076','replay-1076@example.test',
-    'withdrawn','signed_one_click','marketing-email-2026-11-v1','synthetic-token-1076',false);
+    'withdrawn','signed_one_click','marketing-email-2026-11-v1','synthetic-token-1076',false, 0);
   IF v_outcome IS DISTINCT FROM 'superseded' THEN
     RAISE EXCEPTION 'Used token replay overrode newer grant: %',v_outcome;
   END IF;
@@ -86,7 +86,7 @@ BEGIN
   -- A fresh authenticated withdrawal must requeue, unlike an old-token replay.
   SELECT outcome INTO v_outcome FROM public.marketing_record_consent_decision_atomic(
     '00000000-0000-4000-8000-000000001076','replay-1076@example.test',
-    'withdrawn','authenticated_preferences','marketing-email-2026-11-v1','fresh-authenticated-withdrawal',false);
+    'withdrawn','authenticated_preferences','marketing-email-2026-11-v1','fresh-authenticated-withdrawal',false, 0);
   IF v_outcome IS DISTINCT FROM 'new' OR
       (SELECT status FROM public.marketing_email_reconciliation_jobs
        WHERE customer_id='00000000-0000-4000-8000-000000001076') IS DISTINCT FROM 'pending' THEN

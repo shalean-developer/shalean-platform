@@ -1,4 +1,4 @@
-﻿import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   MARKETING_POLICY_VERSION,

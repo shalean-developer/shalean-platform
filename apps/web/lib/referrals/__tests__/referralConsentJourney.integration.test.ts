@@ -25,6 +25,7 @@ function fakeAdmin() {
   const known = new Set<string>();
   let hasDuplicate = false;
   const admin = { from(table: string) {
+    if(table === "user_profiles") return {select:()=>({eq:()=>({maybeSingle:async()=>({data:{role:"customer",billing_email:to,marketing_consent_generation:3},error:null})})})};
     if (table === "email_campaigns") return { select: () => ({eq:()=>({
       maybeSingle: async()=>({data:{enabled:true,subject_template:"Referral {{first_name}}"},error:null}),
     })})};

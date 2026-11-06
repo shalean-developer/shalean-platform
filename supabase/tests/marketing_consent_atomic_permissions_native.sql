@@ -1,11 +1,11 @@
-﻿-- Issue #1076 native permissions regression.
+-- Issue #1076 native permissions regression.
 -- DISPOSABLE PostgreSQL 17 database ONLY.
 BEGIN;
 
 DO $$
 DECLARE
   v_function regprocedure :=
-    'public.marketing_record_consent_decision_atomic(uuid,text,text,text,text,text,boolean)'::regprocedure;
+    'public.marketing_record_consent_decision_atomic(uuid,text,text,text,text,text,boolean,integer)'::regprocedure;
 BEGIN
   IF has_function_privilege('anon', v_function, 'EXECUTE') THEN
     RAISE EXCEPTION 'anon can execute atomic consent function';
@@ -50,7 +50,7 @@ BEGIN
       'signed_one_click',
       'marketing-email-2026-11-v1',
       'synthetic-permission-test',
-      false
+      false, 0
     );
   EXCEPTION
     WHEN insufficient_privilege THEN

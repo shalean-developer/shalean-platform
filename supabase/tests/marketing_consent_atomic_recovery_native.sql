@@ -1,4 +1,4 @@
-﻿-- Issue #1076: partial withdrawal recovery.
+-- Issue #1076: partial withdrawal recovery.
 -- DISPOSABLE PostgreSQL 17 TEST DATABASE ONLY.
 BEGIN;
 
@@ -41,7 +41,7 @@ BEGIN
     'signed_one_click',
     'marketing-email-2026-11-v1',
     'synthetic-recovery-token',
-    false
+    false, 0
   );
 
   IF v_outcome IS DISTINCT FROM 'retry_required' THEN

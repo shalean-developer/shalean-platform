@@ -4,6 +4,9 @@ import { applyOutboundSubjectPrefix, decideOutboundEmail } from "@/lib/env/outbo
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { checkMarketingSendGate } from "@/lib/email/marketingSendGate";
 
+import { createCustomerMarketingUnsubscribeUrl } from "./marketingUnsubscribeLink";
+import { getPublicAppUrlBase } from "./appUrl";
+
 type EmailContext = {
   bookingId?: string | null;
   customerId?: string | null;
@@ -61,6 +64,15 @@ export async function safeResendSend(payload: SafeResendPayload): Promise<{
     const recipient = firstRecipient(payload.to);
     const eligibility = await checkMarketingSendGate(admin, customerId, recipient);
     if (!eligibility.allowed) return { data: null, error: { name: "marketing_eligibility", message: `marketing_eligibility_${eligibility.reason}` } };
+    // Refresh headers on every submission, including stored-message retries.
+    const url = customerId ? await createCustomerMarketingUnsubscribeUrl(
+      admin, getPublicAppUrlBase(), customerId, recipient, process.env.MARKETING_UNSUBSCRIBE_SECRET,
+    ) : null;
+    if (!url) return { data: null, error: { name: "marketing_eligibility", message: "marketing_unsubscribe_not_configured" } };
+    const headers = Object.fromEntries(Object.entries(sendPayload.headers ?? {})
+      .filter(([key]) => !["list-unsubscribe", "list-unsubscribe-post"].includes(key.toLowerCase())));
+    sendPayload.headers = { ...headers, "List-Unsubscribe": `<${url}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" };
+
   }
   const mergedTags = [...tags, ...contextTags(context)].filter((tag, index, all) =>
     all.findIndex((candidate) => candidate.name === tag.name) === index,
@@ -84,7 +96,7 @@ export async function safeResendSend(payload: SafeResendPayload): Promise<{
         html_body: retryable ? payload.html ?? null : null,
         text_body: retryable ? payload.text ?? null : null,
         reply_to: payload.replyTo ? (Array.isArray(payload.replyTo) ? payload.replyTo : [payload.replyTo]) : [],
-        headers: payload.headers ?? {},
+        headers: sendPayload.headers ?? {},
         tags: mergedTags,
         booking_id: context?.bookingId ?? null,
         customer_id: context?.customerId ?? null,

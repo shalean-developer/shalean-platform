@@ -3,7 +3,7 @@ import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { safeResendSend } from "@/lib/email/safeResendSend";
 import { checkMarketingSendGate } from "@/lib/email/marketingSendGate";
-import { createMarketingUnsubscribeUrl } from "@/lib/email/marketingUnsubscribeToken";
+import { createCustomerMarketingUnsubscribeUrl } from "@/lib/email/marketingUnsubscribeLink";
 import { validateEmailRecipient } from "@/lib/email/recipientSafety";
 import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -66,7 +66,7 @@ export async function sendReferralCampaignEmail(params: {
   const { paused } = await isCustomerOutboundPaused();
   if (paused && !params.isTest) return { sent: false, error: "customer_outbound_paused" };
 
-  const unsubscribeUrl = createMarketingUnsubscribeUrl(getPublicAppUrlBase(), params.userId, process.env.MARKETING_UNSUBSCRIBE_SECRET);
+  const unsubscribeUrl = await createCustomerMarketingUnsubscribeUrl(params.admin, getPublicAppUrlBase(), params.userId, email, process.env.MARKETING_UNSUBSCRIBE_SECRET);
   if (!unsubscribeUrl) return { sent: false, error: "marketing_unsubscribe_not_configured" };
 
   const campaignId = params.campaignId ?? REFERRAL_CAMPAIGN_ID;

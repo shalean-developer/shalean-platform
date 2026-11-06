@@ -1,4 +1,4 @@
-﻿-- Issue #1076: processing lease preservation.
+-- Issue #1076: processing lease preservation.
 -- DISPOSABLE POSTGRESQL TEST DATABASE ONLY.
 BEGIN;
 
@@ -26,7 +26,7 @@ BEGIN
     'signed_one_click',
     'marketing-email-2026-11-v1',
     'synthetic-lease-token',
-    false
+    false, 0
   );
 
   IF v_outcome IS DISTINCT FROM 'new' THEN
@@ -47,7 +47,7 @@ BEGIN
     'signed_one_click',
     'marketing-email-2026-11-v1',
     'synthetic-lease-token',
-    false
+    false, 0
   );
 
   SELECT status, claim_token, lease_expires_at

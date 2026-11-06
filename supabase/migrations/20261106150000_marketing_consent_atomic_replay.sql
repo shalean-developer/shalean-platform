@@ -1,6 +1,25 @@
 -- SOURCE ONLY. Do not apply without owner approval and native PostgreSQL verification.
 -- All customer consent decisions use one customer-row lock and a single transaction.
 -- Requires 20261104210000_marketing_email_consent_ledger.sql.
+-- Generation is revocation state, never affirmative consent evidence.
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS marketing_consent_generation integer NOT NULL DEFAULT 0
+  CHECK (marketing_consent_generation >= 0);
+CREATE OR REPLACE FUNCTION public.marketing_guard_consent_generation()
+RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$
+BEGIN
+  IF NEW.marketing_consent_generation IS DISTINCT FROM OLD.marketing_consent_generation
+     AND current_user NOT IN ('postgres', 'service_role') THEN
+    RAISE EXCEPTION 'marketing consent generation is server managed' USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.marketing_guard_consent_generation() FROM PUBLIC, anon, authenticated;
+DROP TRIGGER IF EXISTS marketing_consent_generation_guard ON public.user_profiles;
+CREATE TRIGGER marketing_consent_generation_guard BEFORE UPDATE ON public.user_profiles
+  FOR EACH ROW EXECUTE FUNCTION public.marketing_guard_consent_generation();
+-- Remove any earlier seven-argument draft overload; it must not bypass revocation.
+DROP FUNCTION IF EXISTS public.marketing_record_consent_decision_atomic(uuid,text,text,text,text,text,boolean);
 CREATE OR REPLACE FUNCTION public.marketing_record_consent_decision_atomic(
   p_customer_id uuid,
   p_email text,
@@ -8,7 +27,8 @@ CREATE OR REPLACE FUNCTION public.marketing_record_consent_decision_atomic(
   p_source text,
   p_policy_version text,
   p_evidence_reference text,
-  p_explicit_opt_in boolean DEFAULT false
+  p_explicit_opt_in boolean DEFAULT false,
+  p_token_generation integer DEFAULT NULL
 )
 RETURNS TABLE (outcome text)
 LANGUAGE plpgsql
@@ -47,6 +67,14 @@ BEGIN
       OR lower(btrim(v_profile.billing_email)) IS DISTINCT FROM p_email THEN
     RAISE EXCEPTION 'customer identity unverified' USING ERRCODE = '42501';
   END IF;
+  IF p_source = 'signed_one_click' THEN
+    IF p_token_generation IS NULL THEN
+      RETURN QUERY SELECT 'legacy_confirmation_required'::text; RETURN;
+    END IF;
+    IF p_token_generation < 0 OR p_token_generation <> v_profile.marketing_consent_generation THEN
+      RETURN QUERY SELECT 'superseded'::text; RETURN;
+    END IF;
+  END IF;
   v_email := p_email;
   v_now := clock_timestamp();
 
@@ -84,6 +112,8 @@ BEGIN
   END IF;
 
   IF p_decision = 'granted' THEN
+    UPDATE public.user_profiles SET marketing_consent_generation = marketing_consent_generation + 1
+      WHERE id = p_customer_id;
     -- Grants do NOT clear the CRM opt-out as part of consent recording. The
     -- existing send gate continues to fail closed until explicit reconciliation.
     INSERT INTO public.marketing_email_enrollment_jobs (
@@ -135,7 +165,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.marketing_record_consent_decision_atomic(uuid,text,text,text,text,text,boolean)
+REVOKE ALL ON FUNCTION public.marketing_record_consent_decision_atomic(uuid,text,text,text,text,text,boolean,integer)
   FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.marketing_record_consent_decision_atomic(uuid,text,text,text,text,text,boolean)
+GRANT EXECUTE ON FUNCTION public.marketing_record_consent_decision_atomic(uuid,text,text,text,text,text,boolean,integer)
   TO service_role;
