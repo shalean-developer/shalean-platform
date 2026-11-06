@@ -11,7 +11,7 @@ import {
   signCustomerRebookToken,
 } from "@/lib/customer/customerRebookLinkToken";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
-import { createMarketingUnsubscribeUrl } from "@/lib/email/marketingUnsubscribeToken";
+import { createCustomerMarketingUnsubscribeUrl } from "@/lib/email/marketingUnsubscribeLink";
 import {
   buildReengagementEmailHtml,
   buildReengagementEmailSubject,
@@ -85,7 +85,7 @@ async function sendLifecycle(
   const from = getDefaultFromAddress();
   const marketing = source === "rebook_email" || source === "rebook_reminder_email";
   const unsubscribeUrl = marketing && customerId
-    ? createMarketingUnsubscribeUrl(getPublicAppUrlBase(), customerId, process.env.MARKETING_UNSUBSCRIBE_SECRET)
+    ? await createCustomerMarketingUnsubscribeUrl(getSupabaseAdmin(), getPublicAppUrlBase(), customerId, to, process.env.MARKETING_UNSUBSCRIBE_SECRET)
     : null;
   if (marketing && !unsubscribeUrl) return { sent: false, error: "marketing_unsubscribe_not_configured" };
   try {

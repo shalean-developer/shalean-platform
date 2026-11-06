@@ -69,7 +69,85 @@ function fixture(){
       return {data:current,error:null};
     }
   }
-  const db={from:(table:string)=>new Query(table)} as unknown as SupabaseClient;
+  const db = {
+  from: (table: string) => new Query(table),
+  rpc: async (name: string, args: Record<string,unknown>) => {
+    if (name !== "marketing_record_consent_decision_atomic")
+      return {data:null,error:{message:"Unexpected RPC"}};
+
+    const id = String(args.p_customer_id);
+    const email = String(args.p_email);
+    const decision = String(args.p_decision);
+    const profile = tables.user_profiles.find(
+      r => r.id === id && r.role === "customer" &&
+           r.billing_email === email
+    );
+
+    if (!profile)
+      return {data:null,error:{code:"42501"}};
+
+    if (decision === "granted" && args.p_explicit_opt_in !== true)
+      return {data:null,error:{code:"22023"}};
+
+    const timestamp = new Date().toISOString(); sequence++;
+
+    tables.marketing_email_consent_events.push({
+      id: `synthetic-event-${sequence}`,
+      customer_id:id,
+      email,
+      purpose:"promotional_email",
+      decision,
+      source:args.p_source,
+      evidence_reference:args.p_evidence_reference,
+      occurred_at:timestamp,
+      created_at:timestamp,
+    });
+
+    if (decision === "granted") {
+      const existing = tables.marketing_email_enrollment_jobs.find(
+        r => r.customer_id === id && r.email === email
+      );
+      if (existing) {
+        if (existing.status !== "processing") {
+          Object.assign(existing,{
+            status:"pending",
+            attempt_count:0,
+            next_attempt_at:timestamp,
+          });
+        }
+      } else {
+        tables.marketing_email_enrollment_jobs.push({
+          id:`synthetic-job-${++sequence}`,
+          customer_id:id,
+          email,
+          status:"pending",
+          attempt_count:0,
+          next_attempt_at:timestamp,
+        });
+      }
+    } else {
+      if (profile.marketing_emails_unsubscribed_at == null)
+        profile.marketing_emails_unsubscribed_at = timestamp;
+
+      const existing = tables.marketing_email_reconciliation_jobs.find(
+        r => r.customer_id === id && r.email === email &&
+             r.action === "unsubscribe"
+      );
+      if (!existing) {
+        tables.marketing_email_reconciliation_jobs.push({
+          id:`synthetic-job-${++sequence}`,
+          customer_id:id,
+          email,
+          action:"unsubscribe",
+          status:"pending",
+          next_attempt_at:timestamp,
+        });
+      }
+    }
+
+    return {data:[{outcome:"new"}],error:null};
+  },
+} as unknown as SupabaseClient;
   const provider={fail:true,contact:false,member:false,posts:0,segmentPosts:0};
   const response=(status:number,data?:unknown)=>({status,ok:status>=200&&status<300,
     json:async()=>data}) as Response;
