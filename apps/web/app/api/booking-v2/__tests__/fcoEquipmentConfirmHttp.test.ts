@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const mocks = vi.hoisted(() => ({
   payload: {} as Record<string, unknown>,
@@ -150,6 +152,16 @@ describe("FCO-01 isolated confirmation HTTP failure boundary", () => {
     expect(result.status).toBe(409);
     expect(result.body.code).toBe("EQUIPMENT_RECEIPT_SESSION_MISMATCH");
     expect(mocks.quoteBuilder).not.toHaveBeenCalled();
+  });
+
+  it("FCO-SR-01: confirms only authorized equipment data reaches location resolution", () => {
+    const source = readFileSync(join(process.cwd(), "app/api/booking-v2/confirm/route.ts"), "utf8");
+    expect(source).toContain("const serverEquipmentQuote = equipmentAuthority.quote");
+    expect(source).toContain("equipmentQuote: serverEquipmentQuote,");
+    expect(source).not.toContain("serverEquipmentQuote ?? (data.equipmentQuote");
+    // No bypass of the legacy No-equipment branch is permitted in either route.
+    const guard = readFileSync(join(process.cwd(), "lib/booking-v2/fcoEquipmentServerGuard.ts"), "utf8");
+    expect(guard).toContain('input.equipmentRequired === "yes" ? input.suppliedQuote : null');
   });
 
   it("retains existing quote-lock prerequisite", async () => {
