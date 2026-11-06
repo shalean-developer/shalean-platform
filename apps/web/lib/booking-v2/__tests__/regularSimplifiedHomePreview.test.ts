@@ -33,7 +33,7 @@ describe("FCO-01-C2 isolated home preview contract", () => {
 
   it("does not present an unresolved logistics charge as a confirmed price", () => {
     expect(home).toContain("This is not a final price.");
-    expect(home).toContain("before your full address is confirmed");
+    expect(home).toContain("after your full address is confirmed");
     expect(home).toContain("You can continue to see available dates.");
   });
 });

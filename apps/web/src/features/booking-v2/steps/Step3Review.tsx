@@ -30,6 +30,7 @@ import {
 import type {
   BookingV2FormData,
 } from "@/src/features/booking-v2/types";
+import { regularSimplifiedPreviewEnabled } from "@/src/features/booking-v2/regularSimplifiedJourneyContract";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import { formatEstimatedCleaningTimeLabel } from "@/lib/booking-v2/formatEstimatedCleaningTime";
 import {
@@ -973,6 +974,14 @@ export function Step3Review() {
   }, []);
 
   function openEdit(panel: EditPanel) {
+    if (regularSimplifiedPreviewEnabled(serviceSlug)) {
+      if (panel === "location") {
+        document.getElementById("address")?.focus();
+      } else {
+        void goToStep(panel === "schedule" || panel === "cleaner" ? 2 : 1);
+      }
+      return;
+    }
     setSnapshot(getValues());
     setEditPanel(panel);
   }

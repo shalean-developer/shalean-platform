@@ -215,6 +215,7 @@ export function BookingV2Provider({
   const router = useRouter();
   const searchParams = useSearchParams();
   const config = SERVICE_CONFIG[serviceSlug];
+  const simplifiedRegularJourney = regularSimplifiedPreviewEnabled(serviceSlug);
 
   const currentStep = bookingStepFromQuery(searchParams.get("step"));
   const requestedQueryServiceSlug = explicitBookServiceSlugFromParam(
@@ -250,13 +251,13 @@ export function BookingV2Provider({
     useState<BookingPricingAvailability>("loading");
   const [detailsSectionOverride, setDetailsSectionOverride] =
     useState<BookingDetailsStage | null>(
-      isProgressiveBookingDetailsService(serviceSlug)
+      !simplifiedRegularJourney && isProgressiveBookingDetailsService(serviceSlug)
         ? requestedDetailsSection ?? "address"
         : null,
     );
   const [scheduleSectionOverride, setScheduleSectionOverride] =
     useState<RegularCleaningScheduleStage | null>(
-      usesProgressiveIndividualSchedule(serviceSlug)
+      !simplifiedRegularJourney && usesProgressiveIndividualSchedule(serviceSlug)
         ? serviceSlug === "carpet-cleaning" || serviceSlug === "airbnb-cleaning"
           ? "date_time"
           : "booking_type"
@@ -290,7 +291,6 @@ export function BookingV2Provider({
   const cleanerMode = liveConfig?.cleanerMode ?? config.cleanerMode;
 
   // Always start from pure defaults so SSR and the first client render match.
-  const simplifiedRegularJourney = regularSimplifiedPreviewEnabled(serviceSlug);
   const defaults = defaultBookingFormData(serviceSlug, cleanerMode);
   // New simplified drafts require an explicit equipment choice. Do not alter
   // production or other services' legacy defaults.
@@ -1282,7 +1282,7 @@ export function BookingV2Provider({
       }
       const params = new URLSearchParams(window.location.search);
       params.set("step", bookingStepQueryValue(step));
-      if (step === 1) {
+      if (step === 1 && !simplifiedRegularJourney) {
         if (detailsSectionOverride) params.set("section", detailsSectionOverride);
       } else {
         params.delete("section");
@@ -1379,10 +1379,10 @@ export function BookingV2Provider({
     if (simplifiedRegularJourney) fresh.equipmentRequired = "";
     form.reset(fresh);
     setDetailsSectionOverride(
-      isProgressiveBookingDetailsService(serviceSlug) ? "address" : null,
+      !simplifiedRegularJourney && isProgressiveBookingDetailsService(serviceSlug) ? "address" : null,
     );
     setScheduleSectionOverride(
-      usesProgressiveIndividualSchedule(serviceSlug)
+      !simplifiedRegularJourney && usesProgressiveIndividualSchedule(serviceSlug)
         ? serviceSlug === "carpet-cleaning" || serviceSlug === "airbnb-cleaning"
           ? "date_time"
           : "booking_type"
@@ -1397,11 +1397,11 @@ export function BookingV2Provider({
       service: serviceSlug,
       step: "details",
     });
-    if (isProgressiveBookingDetailsService(serviceSlug)) {
+    if (!simplifiedRegularJourney && isProgressiveBookingDetailsService(serviceSlug)) {
       params.set("section", "address");
     }
     window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
-  }, [clearBooking, serviceSlug]);
+  }, [clearBooking, serviceSlug, simplifiedRegularJourney]);
 
   useEffect(() => {
     resetCompletedBooking();
@@ -1411,16 +1411,28 @@ export function BookingV2Provider({
 
   const editDetailsSection = useCallback(
     (section: BookingDetailsStage) => {
+      if (simplifiedRegularJourney) {
+        void goToStep(section === "address" ? 3 : 1);
+        return;
+      }
       setDetailsSectionOverride(section);
       const params = new URLSearchParams(window.location.search);
       params.set("step", "details");
       params.set("section", section);
       window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
     },
-    [serviceSlug],
+    [serviceSlug, simplifiedRegularJourney, goToStep],
   );
 
   useEffect(() => {
+    if (simplifiedRegularJourney) {
+      if (searchParams.has("section")) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("section");
+        window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+      }
+      return;
+    }
     if (
       currentStep !== 1 ||
       (serviceSlug !== "regular-cleaning" && serviceSlug !== "deep-cleaning")
@@ -1442,6 +1454,7 @@ export function BookingV2Provider({
     detailsSectionOverride,
     requestedDetailsSection,
     searchParams,
+    simplifiedRegularJourney,
     serviceSlug,
   ]);
 
@@ -1505,6 +1518,7 @@ export function BookingV2Provider({
   useEffect(() => {
     if (
       currentStep !== 1 ||
+      simplifiedRegularJourney ||
       !isProgressiveBookingDetailsService(serviceSlug) ||
       detailsSectionOverride !== null
     ) return;
@@ -1529,6 +1543,7 @@ export function BookingV2Provider({
     detailsSectionOverride,
     form,
     liveConfig,
+    simplifiedRegularJourney,
     serviceSlug,
   ]);
 

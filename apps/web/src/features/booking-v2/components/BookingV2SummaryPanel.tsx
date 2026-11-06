@@ -1,5 +1,6 @@
 "use client";
 
+import { regularSimplifiedPreviewEnabled, regularEquipmentQuoteReady } from "@/src/features/booking-v2/regularSimplifiedJourneyContract";
 import { useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { ChevronDown, ChevronUp, Pencil } from "lucide-react";
@@ -76,10 +77,14 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   } = useBookingV2();
   const values = watch();
 
+  const simplifiedRegularJourney = regularSimplifiedPreviewEnabled(values.serviceSlug);
+  const equipmentPending = simplifiedRegularJourney && values.equipmentRequired === "yes" &&
+    (currentStep < 3 || !regularEquipmentQuoteReady(values));
   const config = SERVICE_CONFIG[values.serviceSlug];
   const pricing = values.pricingSummary;
   const displayTotal = pricing.estimated_total ?? pricing.total ?? 0;
-  const recurringPrepayment = values.bookingType === "recurring" && values.recurringFrequency
+  const recurringPrepayment = values.bookingType === "recurring" && values.recurringFrequency &&
+    (!simplifiedRegularJourney || (currentStep >= 3 && !equipmentPending))
     ? buildRecurringPrepaymentQuote({
         startDate: values.recurringStartDate || values.date,
         frequency: values.recurringFrequency,
@@ -91,15 +96,15 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const hasAddress = values.address.length >= 5;
   const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(values.date);
   const hasCleaner = values.cleanerMode === "team" ? Boolean(values.assignedTeamId?.trim()) : values.cleanerCount > 0;
-  const hasPriceBreakdown = pricing.lineItems.length > 0;
+  const hasPriceBreakdown = pricing.lineItems.length > 0 && !equipmentPending;
   const edit = (step: BookingStep) => () => goToStep(step);
   const editDetail = (section: BookingDetailsStage) => () => {
-    goToStep(1);
+    if (!simplifiedRegularJourney) void goToStep(1);
     editDetailsSection(section);
   };
   const editSchedule = (section: RegularCleaningScheduleStage) => () => {
     goToStep(2);
-    editScheduleSection(section);
+    if (!simplifiedRegularJourney) editScheduleSection(section);
   };
 
   const addressLabel = [values.address, values.suburb, values.city].filter(Boolean).join(", ");
@@ -112,7 +117,9 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
       : isCarpetCleaning
         ? "Shalean chooses specialist"
         : `${values.cleanerCount} cleaner${values.cleanerCount === 1 ? "" : "s"}`;
-  const priceLabel = hasPriceBreakdown
+  const priceLabel = equipmentPending
+    ? "Delivery fee pending"
+    : hasPriceBreakdown
     ? `R${displayTotal.toLocaleString("en-ZA")}`
     : `From R${(liveConfig?.basePrice ?? config.basePrice).toLocaleString("en-ZA")}`;
   const checkoutPriceLabel = recurringPrepayment
@@ -121,8 +128,8 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const isRegularCleaning = values.serviceSlug === "regular-cleaning";
   const isDeepCleaning = values.serviceSlug === "deep-cleaning";
   const isMovingCleaning = values.serviceSlug === "moving-cleaning";
-  const progressiveDetails = isProgressiveBookingDetailsService(values.serviceSlug);
-  const progressiveSchedule = usesProgressiveIndividualSchedule(values.serviceSlug);
+  const progressiveDetails = !simplifiedRegularJourney && isProgressiveBookingDetailsService(values.serviceSlug);
+  const progressiveSchedule = !simplifiedRegularJourney && usesProgressiveIndividualSchedule(values.serviceSlug);
   const bookingDetails = {
     address: values.address,
     suburb: values.suburb,
@@ -233,7 +240,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
 
   const petsLabel = petAnswerLabel(values.serviceDetails.hasPets);
   const equipmentLabel =
-    values.equipmentRequired === "yes" ? "Shalean supplies" : "Customer supplies";
+    values.equipmentRequired === "yes" ? "Shalean supplies" : values.equipmentRequired === "no" ? "Customer supplies" : "";
 
   const finalDetailValues =
     values.serviceSlug === "regular-cleaning"
@@ -266,11 +273,13 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
     scheduleSectionOverride ??
     (isCarpetCleaning || isAirbnbCleaning ? "date_time" : "booking_type");
   const cleanerIsVisible =
+    (!simplifiedRegularJourney || currentStep >= 2) &&
     hasCleaner &&
     !(isDeepCleaning && currentStep === 1) &&
     (!progressiveSchedule || currentStep > 2 || displayedScheduleStage === "cleaner");
   const bookingTypeLabel = values.bookingType === "recurring" ? "Recurring" : "Once-off";
   const scheduleIsVisible =
+    (!simplifiedRegularJourney || currentStep >= 2) &&
     !(isDeepCleaning && currentStep === 1) &&
     (isCarpetCleaning || isAirbnbCleaning
       ? currentStep > 2 || displayedScheduleStage === "cleaner"
@@ -282,6 +291,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
           values.bookingType,
         ));
   const dateIsVisible =
+    (!simplifiedRegularJourney || currentStep >= 2) &&
     hasDate &&
     !(isDeepCleaning && currentStep === 1) &&
     (!progressiveSchedule ||
@@ -302,13 +312,13 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   ].filter(Boolean).join(" · ");
 
   const propertyIsVisible =
-    progressiveDetails &&
+    (simplifiedRegularJourney || progressiveDetails) &&
     Boolean(propertyLabel) &&
-    (currentStep > 1 || detailsStageIndex >= 2);
+    (simplifiedRegularJourney || currentStep > 1 || detailsStageIndex >= 2);
   const roomsAreVisible =
-    progressiveDetails &&
+    (simplifiedRegularJourney || progressiveDetails) &&
     Boolean(roomsLabel) &&
-    (currentStep > 1 ||
+    (simplifiedRegularJourney || currentStep > 1 ||
       (values.serviceSlug === "office-cleaning"
         ? detailsStageIndex >= finalDetailsStageIndex
         : detailsStageIndex > 2));
@@ -316,9 +326,9 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
     .filter(Boolean)
     .join(" · ");
   const finalDetailsVisible =
-    progressiveDetails &&
+    (simplifiedRegularJourney || progressiveDetails) &&
     Boolean(moreDetailsLabel) &&
-    (currentStep > 1 || detailsStageIndex >= finalDetailsStageIndex);
+    (simplifiedRegularJourney || currentStep > 1 || detailsStageIndex >= finalDetailsStageIndex);
   const equipmentIsVisible = isRegularCleaning && currentStep > 1;
   const hasMoreDetails = finalDetailsVisible || equipmentIsVisible;
 
@@ -343,8 +353,8 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
         <div className="space-y-2 p-3">
           <h2 className="hidden text-xl font-bold tracking-tight text-slate-900 lg:block">Booking summary</h2>
 
-          {hasAddress && (!progressiveDetails || currentStep > 1 || detailsStageIndex >= finalDetailsStageIndex) ? (
-            <SummaryRow label="Address" value={addressLabel} onEdit={progressiveDetails ? editDetail("address") : edit(1)} />
+          {hasAddress && (simplifiedRegularJourney ? currentStep >= 3 : !progressiveDetails || currentStep > 1 || detailsStageIndex >= finalDetailsStageIndex) ? (
+            <SummaryRow label="Address" value={addressLabel} onEdit={simplifiedRegularJourney ? edit(3) : progressiveDetails ? editDetail("address") : edit(1)} />
           ) : null}
           <SummaryRow label="Service" value={config.label} onEdit={progressiveDetails ? editDetail(values.serviceSlug === "office-cleaning" ? "rooms" : "property") : edit(1)} />
           {scheduleIsVisible ? (
@@ -461,7 +471,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
                   <span className="font-semibold text-slate-800">
                     {isDeepCleaning ? "Monthly plan" : "First 30 days"} · {recurringPrepayment.visitCount} visit{recurringPrepayment.visitCount === 1 ? "" : "s"}
                   </span>
-                  {` · ${isDeepCleaning ? "Pay this month now" : "Pay all visits now"}`}
+                  {` · ${simplifiedRegularJourney && currentStep < 4 ? "Planned visits" : isDeepCleaning ? "Pay this month now" : "Pay all visits now"}`}
                 </p>
               </div>
           ) : null}
@@ -473,9 +483,11 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
             <span className="text-[11px] font-medium text-primary-foreground/80">{durationLabel}</span>
           </div>
           <div className="flex flex-col items-center justify-center px-2 text-center">
-            <span className="text-2xl font-semibold tabular-nums">{checkoutPriceLabel}</span>
+            <span className="text-lg font-semibold tabular-nums sm:text-2xl">{checkoutPriceLabel}</span>
             <span className="text-[11px] font-medium text-primary-foreground/80">
-              {recurringPrepayment ? "Due today" : "Est. price"}
+              {simplifiedRegularJourney
+                ? equipmentPending ? "Address needed for total" : currentStep === 4 ? "Due today" : recurringPrepayment ? "Estimated plan total" : "Estimated per visit"
+                : recurringPrepayment ? "Due today" : "Est. price"}
             </span>
           </div>
         </div>

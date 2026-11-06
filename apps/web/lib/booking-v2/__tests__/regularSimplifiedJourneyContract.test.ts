@@ -71,7 +71,7 @@ describe("FCO-01-C1 Regular Cleaning opt-in contract", () => {
     expect(homeUi).toContain("Choose a number (0 if none)");
     expect(homeUi).toContain('aria-required={REGULAR_HOME_REQUIRED_QUESTION_KEYS.includes');
     const serviceConfig = readFileSync(join(process.cwd(), "src/features/booking-v2/config/serviceConfig.ts"), "utf8");
-    expect(serviceConfig).toMatch(/key: "extraRooms",[\\s\\S]*?required: false/);
+    expect(serviceConfig).toMatch(/key: "extraRooms",[\s\S]*?required: false/);
   });
 
   it("defers personal details, not supported suburb and equipment choice", () => {

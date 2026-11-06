@@ -8,10 +8,11 @@ const STEPS: BookingStep[] = [1, 2, 3, 4];
 
 type Props = {
   currentStep: BookingStep;
+  labels?: Readonly<Record<BookingStep, string>>;
   onStepClick?: (step: BookingStep) => void;
 };
 
-export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
+export function BookingV2StepIndicator({ currentStep, onStepClick, labels = BOOKING_STEP_LABELS }: Props) {
   const completedProgress = ((currentStep - 1) / (STEPS.length - 1)) * 100;
 
   return (
@@ -43,7 +44,7 @@ export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
                   !isClickable && "cursor-default",
                 )}
                 aria-current={isActive ? "step" : undefined}
-                aria-label={`${BOOKING_STEP_LABELS[step]}${isCompleted ? " completed" : ""}`}
+                aria-label={`${labels[step]}${isCompleted ? " completed" : ""}`}
               >
                 <div
                   className={cn(
@@ -67,7 +68,7 @@ export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
                     !isCompleted && !isActive && "text-muted-foreground",
                   )}
                 >
-                  {BOOKING_STEP_LABELS[step]}
+                  {labels[step]}
                 </span>
               </button>
             </li>

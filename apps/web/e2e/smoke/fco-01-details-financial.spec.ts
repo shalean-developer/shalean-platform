@@ -135,3 +135,54 @@ test("FCO-01 frozen pending payment: missing fresh equipment receipt does not fo
   // this synthetic run; it must never submit a fresh booking or payment POST.
   expect(result.blocked).toEqual([]);
 });
+
+for (const width of [320, 375, 768, 1440]) {
+  test(`FCO-01 unified journey: Home, single Schedule, Your Details, Payment at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await seed(page, sampleDraft("no"));
+    const events = await sandbox(page);
+    await page.route("**/api/booking-v2/available-cleaners?**", (route) => route.fulfill({
+      status: 200, json: { cleaners: [] },
+    }));
+    await page.goto("/book/regular-cleaning?step=details&section=address", { waitUntil: "domcontentloaded" });
+    await expect(page).not.toHaveURL(/section=/);
+    const progress = page.getByRole("navigation", { name: "Booking progress" }).filter({ visible: true });
+    await expect(progress.getByRole("button", { name: "Home", exact: true })).toHaveAttribute("aria-current", "step");
+    await expect(progress.getByRole("button", { name: "Your Details", exact: true })).toBeVisible();
+    await expect(progress.getByRole("button", { name: "Review", exact: true })).toHaveCount(0);
+    await expect(page.getByText("Due today", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: /See dates/ }).click();
+    await expect(page).toHaveURL(/step=schedule/);
+    // Date, recurrence and cleaner preference belong to one Schedule page.
+    await expect(page.getByText("Pick a date", { exact: false }).first()).toBeVisible();
+    const next = page.getByRole("button", { name: /Continue to Your Details/ });
+    await expect(next).toBeEnabled();
+    await next.click();
+    await expect(page).toHaveURL(/step=review/);
+    await expect(page.locator("#address")).toHaveValue(address1);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    // Summary address edits stay in the new Your Details stage.
+    // Expand the mobile summary when needed.
+    const toggle = page.getByRole("button", { name: /^Booking summary/ });
+    if (await toggle.isVisible() && await toggle.getAttribute("aria-expanded") === "false") await toggle.click();
+    await page.getByRole("button", { name: "Edit address", exact: true }).click();
+    await expect(page).toHaveURL(/step=review/);
+    await expect(page).not.toHaveURL(/section=/);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page.getByRole("button", { name: /Proceed to payment/ }).click();
+    await expect(page).toHaveURL(/step=payment/);
+    await expect(progress.getByRole("button", { name: "Payment", exact: true })).toHaveAttribute("aria-current", "step");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    expect(events.blocked).toEqual([]);
+  });
+}
+
+test("FCO-01 saved recurring draft does not show a final payment before address delivery pricing", async ({ page }) => {
+  await seed(page, { ...sampleDraft(), bookingType: "recurring", recurringFrequency: "weekly", recurringStartDate: "2026-12-15" });
+  await sandbox(page);
+  await page.goto("/book/regular-cleaning?step=details&section=pets", { waitUntil: "domcontentloaded" });
+  await expect(page).not.toHaveURL(/section=/);
+  await expect(page.getByText("Delivery fee pending", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Due today", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/Pay all visits now/)).toHaveCount(0);
+});
