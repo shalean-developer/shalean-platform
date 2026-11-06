@@ -5,7 +5,7 @@ import { useFormContext } from "react-hook-form";
 import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
-import { regularHomeAnswersComplete } from "@/src/features/booking-v2/regularSimplifiedJourneyContract";
+import { REGULAR_HOME_REQUIRED_QUESTION_KEYS, regularHomeAnswersComplete } from "@/src/features/booking-v2/regularSimplifiedJourneyContract";
 
 type LocationOption = { id: string; name: string; city_id?: string | null; city?: string | null };
 type LocationResponse = { ok?: boolean; locations?: LocationOption[]; error?: string };
@@ -76,13 +76,15 @@ export function RegularSimplifiedHome() {
         {options.filter((q) => ["propertyType", "bedrooms", "bathrooms", "extraRooms", "hasPets"].includes(q.key))
           .map((question) => (
             <label key={question.key} className="block space-y-1.5 text-sm font-semibold text-slate-800">
-              <span>{question.label}{question.key !== "extraRooms" ? " *" : ""}</span>
+              <span>{question.label}{REGULAR_HOME_REQUIRED_QUESTION_KEYS.includes(question.key as typeof REGULAR_HOME_REQUIRED_QUESTION_KEYS[number]) ? " *" : ""}</span>
               <select
+                required={REGULAR_HOME_REQUIRED_QUESTION_KEYS.includes(question.key as typeof REGULAR_HOME_REQUIRED_QUESTION_KEYS[number])}
+                aria-required={REGULAR_HOME_REQUIRED_QUESTION_KEYS.includes(question.key as typeof REGULAR_HOME_REQUIRED_QUESTION_KEYS[number])}
                 value={String(details[question.key] ?? "")}
                 onChange={(event) => updateDetail(question.key, event.target.value)}
                 className="min-h-11 w-full rounded-lg border border-[#DCE7FF] bg-white px-3 py-2.5 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0051FF]"
               >
-                <option value="">Select an answer</option>
+                <option value="">{question.key === "extraRooms" ? "Choose a number (0 if none)" : "Select an answer"}</option>
                 {(question.options ?? []).map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
