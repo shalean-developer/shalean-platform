@@ -140,6 +140,26 @@ describe("FCO-01 HTTP quote boundaries without real provider/database writes", (
     expect(res.body.code).toBe("EQUIPMENT_MANUAL_QUOTE_REQUIRED");
   });
 
+  it("FCO-SR-01: signs equipment-free prices without stale logistics fee in production and staging", async () => {
+    for (const environment of ["production", "staging"] as const) {
+      vi.stubEnv("SHALEAN_APP_ENV", environment);
+      vi.stubEnv("NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW", environment === "staging" ? "true" : "false");
+      for (const supplied of [
+        { ...expectedQuote },
+        { ...expectedQuote, logistics_fee: 99999, base_fee: 99999 },
+      ]) {
+        mocks.signedCustomerQuote.mockClear();
+        const result = await quote(supplied, { equipmentRequired: "no" });
+        expect(result.status).toBe(200);
+        expect(result.body.quoteLock).toBeTruthy();
+        expect(mocks.signedCustomerQuote).toHaveBeenCalledTimes(1);
+        const values = mocks.signedCustomerQuote.mock.calls[0]?.[0]?.values;
+        expect(values?.equipmentRequired).toBe("no");
+        expect(values?.equipmentQuote).toBeNull();
+      }
+    }
+  });
+
   it("preserves legacy production quote path when the flag is disabled", async () => {
     vi.stubEnv("SHALEAN_APP_ENV", "production");
     const result = await quote({ ...expectedQuote });
