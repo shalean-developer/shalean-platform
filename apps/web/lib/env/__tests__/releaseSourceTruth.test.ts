@@ -94,7 +94,7 @@ describe("MASTER-00A release source truth", () => {
       { NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW: "invalid" },
       { NEXT_PUBLIC_SHALEAN_APP_ENV: "production" },
       { SHALEAN_APP_ENV: "production" },
-    ]) expect(validate(patch)).not.toBe(0);
+    ] as Array<Record<string, string>>) expect(validate(patch)).not.toBe(0);
   });
 
   it("keeps production as the production build source and deploy/production as its artifact branch", () => {
