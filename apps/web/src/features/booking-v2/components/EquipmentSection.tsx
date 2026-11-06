@@ -14,7 +14,7 @@ function addressReady(address: string, suburb: string): boolean {
   return address.trim().length >= 5 && suburb.trim().length >= 2;
 }
 
-export function EquipmentSection() {
+export function EquipmentSection({ quoteOnly = false }: { quoteOnly?: boolean }) {
   const { serviceSlug, liveConfig } = useBookingV2();
   const { watch, setValue, formState: { errors } } = useFormContext<BookingV2FormData>();
 
@@ -121,7 +121,9 @@ export function EquipmentSection() {
         </h3>
       </div>
 
-      <YesNoToggleRow
+      {quoteOnly ? (
+        <p className="text-sm text-slate-600">Shalean supplies equipment. Delivery and collection are priced for this address. Change your equipment choice in Home.</p>
+      ) : <YesNoToggleRow
         label="Need Shalean to bring cleaning equipment?"
         hint="Equipment delivery and collection is charged based on distance from our equipment base. Minimum fee applies."
         required
@@ -130,7 +132,7 @@ export function EquipmentSection() {
           setValue("equipmentRequired", next ? "yes" : "no", { shouldDirty: true, shouldValidate: true })
         }
         error={equipmentError}
-      />
+      />}
 
       {addressBlocked && (
         <p className="text-center text-xs text-amber-600">

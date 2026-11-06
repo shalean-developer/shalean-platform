@@ -45,7 +45,7 @@ describe("FCO-01-C3 guarded Regular Cleaning journey", () => {
 
   it("collects full address and equipment fee before payment", () => {
     expect(details).toContain("<PropertyAddressSection />");
-    expect(details).toContain("<EquipmentSection />");
+    expect(details).toContain("<EquipmentSection quoteOnly />");
     expect(details).toContain("EquipmentSection owns address-scoped quote invalidation");
     const equipment = read("src/features/booking-v2/components/EquipmentSection.tsx");
     expect(equipment).toContain('setValue("equipmentQuote", null');

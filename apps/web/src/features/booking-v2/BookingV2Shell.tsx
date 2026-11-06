@@ -9,7 +9,7 @@ import { BookingV2Header } from "@/src/features/booking-v2/components/BookingV2H
 import { BookingV2SummaryPanel } from "@/src/features/booking-v2/components/BookingV2SummaryPanel";
 import { Step1Details } from "@/src/features/booking-v2/steps/Step1Details";
 import { RegularSimplifiedHome } from "@/src/features/booking-v2/steps/RegularSimplifiedHome";
-import { regularSimplifiedPreviewEnabled } from "@/src/features/booking-v2/regularSimplifiedJourneyContract";
+import { regularSimplifiedPreviewEnabled, regularEquipmentQuoteReady } from "@/src/features/booking-v2/regularSimplifiedJourneyContract";
 import { Step2Schedule } from "@/src/features/booking-v2/steps/Step2Schedule";
 import { Step3Review } from "@/src/features/booking-v2/steps/Step3Review";
 import { RegularSimplifiedDetailsReview } from "@/src/features/booking-v2/steps/RegularSimplifiedDetailsReview";
@@ -108,6 +108,10 @@ function BookingV2Inner() {
   const simplifiedHomePreview = regularSimplifiedPreviewEnabled(serviceSlug);
   const reviewTime = watch("time")?.trim() ?? "";
   const pendingBookingId = watch("pendingBookingId")?.trim() ?? "";
+  const equipmentReady = regularEquipmentQuoteReady({
+    equipmentRequired: watch("equipmentRequired"),
+    equipmentQuote: watch("equipmentQuote"),
+  });
   const quoteRequest = useBookingV2Pricing();
   useBookingV2FunnelTelemetry(currentStep, serviceSlug);
 
@@ -117,6 +121,7 @@ function BookingV2Inner() {
 
   const hasPendingBooking = Boolean(pendingBookingId);
   const paymentEntryAllowed =
+    (!simplifiedHomePreview || currentStep !== 3 || equipmentReady) &&
     canEnterBookingPayment(pricingAvailability, hasPendingBooking) &&
     authoritativeQuoteAllowsPaymentEntry({ requestState: quoteRequest.state, hasPendingBooking });
   const stepContent =

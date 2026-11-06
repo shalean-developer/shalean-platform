@@ -32,7 +32,7 @@ export function RegularSimplifiedDetailsReview() {
         <PropertyAddressSection />
         {equipmentRequired === "yes" && (
           <div className="space-y-2 border-t border-[#DCE7FF] pt-4">
-            <EquipmentSection />
+            <EquipmentSection quoteOnly />
             {!equipmentReady && (
               <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                 Equipment delivery must be priced for your full address before payment.
