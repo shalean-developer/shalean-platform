@@ -56,7 +56,9 @@ export function authorizeFcoEquipmentQuote(input: {
   expectedPricingConfigRevision?: string;
 }): FcoEquipmentAuthorization {
   if (!fcoEquipmentReceiptEnforced(input.serviceSlug)) {
-    return { kind: "not_required", quote: input.suppliedQuote };
+    // Preserve pre-FCO confirmation semantics: an equipment-free booking must
+    // never carry a stale or forged logistics fee into the signed price.
+    return { kind: "not_required", quote: input.equipmentRequired === "yes" ? input.suppliedQuote : null };
   }
   if (input.equipmentRequired === "no") {
     return { kind: "not_required", quote: null };
