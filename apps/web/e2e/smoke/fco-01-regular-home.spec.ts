@@ -132,7 +132,7 @@ for (const width of [375, 1440]) {
 test("FCO-01 incomplete deep link cannot bypass Home validation", async ({ page }) => {
   captureIsolatedBrowserDiagnostics(page);
   const sandbox = await isolateBooking(page);
-  await page.goto("/book/regular-cleaning?step=payment", { waitUntil: "domcontentloaded" });
+  await page.goto("/book/regular-cleaning?step=payment&section=address", { waitUntil: "domcontentloaded" });
   if (!/step=details/.test(page.url())) {
     console.error("[FCO-01 deep-link-page]", (await page.locator("body").innerText().catch(() => "<unavailable>")).slice(0, 1800));
   }

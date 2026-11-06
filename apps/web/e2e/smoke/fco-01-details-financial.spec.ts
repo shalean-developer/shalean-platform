@@ -148,10 +148,16 @@ test("FCO-01 frozen pending payment: missing fresh equipment receipt does not fo
   expect(result.blocked).toEqual([]);
 });
 
-for (const width of [320, 375, 768, 1440]) {
-  test(`FCO-01 unified journey: Home, single Schedule, Your Details, Payment at ${width}px`, async ({ page }) => {
+for (const { width, recurring } of [
+  ...[320, 375, 768, 1440].map((width) => ({ width, recurring: false })),
+  { width: 1440, recurring: true },
+]) {
+  test(`FCO-01 unified journey: Home, single Schedule, Your Details, Payment at ${width}px (${recurring ? "recurring" : "once-off"})`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
-    await seed(page, sampleDraft("no"));
+    await seed(page, recurring ? {
+      ...sampleDraft("no"), bookingType: "recurring", recurringFrequency: "weekly",
+      recurringDays: ["Tuesday"], recurringStartDate: "2026-12-15",
+    } : sampleDraft("no"));
     const events = await sandbox(page);
     await page.route("**/api/booking-v2/available-cleaners?**", (route) => route.fulfill({
       status: 200, json: { cleaners: [] },

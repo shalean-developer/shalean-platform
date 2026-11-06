@@ -1426,8 +1426,10 @@ export function BookingV2Provider({
 
   useEffect(() => {
     if (simplifiedRegularJourney) {
-      if (searchParams.has("section")) {
-        const params = new URLSearchParams(searchParams.toString());
+      // A prior stage guard may already have changed history in this effect flush.
+      // Normalize the current URL so an old section cannot undo that redirect.
+      const params = new URLSearchParams(window.location.search);
+      if (params.has("section")) {
         params.delete("section");
         window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
       }
