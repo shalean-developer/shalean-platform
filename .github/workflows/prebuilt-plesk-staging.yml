@@ -19,6 +19,9 @@ jobs:
     timeout-minutes: 45
     env:
       SHALEAN_APP_ENV: "staging"
+      NEXT_PUBLIC_SHALEAN_APP_ENV: "staging"
+      # FCO-01 stays OFF unless the existing Actions variable is explicitly approved.
+      NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW: "${{ vars.FCO_01_REGULAR_HOME_PREVIEW || 'false' }}"
       SHALEAN_ENFORCE_ENV_SAFETY: "true"
       SHALEAN_EXPECTED_SUPABASE_REF: "uwvnmluiqbczeduzjgse"
       NEXT_TELEMETRY_DISABLED: "1"
@@ -48,6 +51,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$SHALEAN_APP_ENV" = "staging"
+          test "$NEXT_PUBLIC_SHALEAN_APP_ENV" = "staging"
+          case "$NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW" in true|false) ;; *) echo "::error::Invalid FCO-01 feature flag"; exit 1 ;; esac
           test "$NEXT_PUBLIC_SUPABASE_URL" = "https://uwvnmluiqbczeduzjgse.supabase.co"
           test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
           test -n "$NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY"
