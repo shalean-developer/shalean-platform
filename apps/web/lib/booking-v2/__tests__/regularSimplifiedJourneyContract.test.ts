@@ -9,6 +9,7 @@ import {
   REGULAR_DEFERRED_DETAILS_FIELDS,
   regularHomeAnswersComplete,
   regularEquipmentQuoteReady,
+  regularEquipmentDeliveryPending,
 } from "@/src/features/booking-v2/regularSimplifiedJourneyContract";
 
 const home = {
@@ -96,4 +97,13 @@ describe("FCO-01-C1 Regular Cleaning opt-in contract", () => {
     expect(regularEquipmentQuoteReady({ equipmentRequired: "yes",
       equipmentQuote: { ...quote, geocode_error: true } })).toBe(false);
   });
+});
+
+it("keeps frozen payment recovery independent of a missing draft equipment receipt", () => {
+  const draft = { equipmentRequired: "yes", equipmentQuote: null };
+  expect(regularEquipmentDeliveryPending(draft, 1)).toBe(true);
+  expect(regularEquipmentDeliveryPending(draft, 3)).toBe(true);
+  expect(regularEquipmentDeliveryPending(draft, 4)).toBe(true);
+  expect(regularEquipmentDeliveryPending({ ...draft, pendingBookingId: "saved-booking" }, 4)).toBe(false);
+  expect(regularEquipmentDeliveryPending({ ...draft, pendingBookingId: "saved-booking" }, 3)).toBe(true);
 });

@@ -107,3 +107,11 @@ export function regularSimplifiedPreviewEnabled(serviceSlug: ServiceSlug): boole
     enabled: process.env.NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW === "true",
   });
 }
+
+/** A frozen payment uses server-owned pricing, not a draft equipment receipt. */
+export function regularEquipmentDeliveryPending(values: Parameters<typeof regularEquipmentQuoteReady>[0] & {
+  pendingBookingId?: string | null;
+}, step: BookingStep): boolean {
+  if (step === 4 && values.pendingBookingId?.trim()) return false;
+  return values.equipmentRequired === "yes" && (step < 3 || !regularEquipmentQuoteReady(values));
+}

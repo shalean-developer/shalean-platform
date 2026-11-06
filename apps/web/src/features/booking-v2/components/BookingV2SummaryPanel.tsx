@@ -1,6 +1,6 @@
 "use client";
 
-import { regularSimplifiedPreviewEnabled, regularEquipmentQuoteReady } from "@/src/features/booking-v2/regularSimplifiedJourneyContract";
+import { regularSimplifiedPreviewEnabled, regularEquipmentDeliveryPending } from "@/src/features/booking-v2/regularSimplifiedJourneyContract";
 import { useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { ChevronDown, ChevronUp, Pencil } from "lucide-react";
@@ -78,8 +78,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const values = watch();
 
   const simplifiedRegularJourney = regularSimplifiedPreviewEnabled(values.serviceSlug);
-  const equipmentPending = simplifiedRegularJourney && values.equipmentRequired === "yes" &&
-    (currentStep < 3 || !regularEquipmentQuoteReady(values));
+  const equipmentPending = simplifiedRegularJourney && regularEquipmentDeliveryPending(values, currentStep);
   const config = SERVICE_CONFIG[values.serviceSlug];
   const pricing = values.pricingSummary;
   const displayTotal = pricing.estimated_total ?? pricing.total ?? 0;
