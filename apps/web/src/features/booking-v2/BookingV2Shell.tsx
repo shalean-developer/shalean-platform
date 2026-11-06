@@ -8,8 +8,11 @@ import { BookingV2Provider, useBookingV2 } from "@/src/features/booking-v2/Booki
 import { BookingV2Header } from "@/src/features/booking-v2/components/BookingV2Header";
 import { BookingV2SummaryPanel } from "@/src/features/booking-v2/components/BookingV2SummaryPanel";
 import { Step1Details } from "@/src/features/booking-v2/steps/Step1Details";
+import { RegularSimplifiedHome } from "@/src/features/booking-v2/steps/RegularSimplifiedHome";
+import { regularSimplifiedPreviewEnabled } from "@/src/features/booking-v2/regularSimplifiedJourneyContract";
 import { Step2Schedule } from "@/src/features/booking-v2/steps/Step2Schedule";
 import { Step3Review } from "@/src/features/booking-v2/steps/Step3Review";
+import { RegularSimplifiedDetailsReview } from "@/src/features/booking-v2/steps/RegularSimplifiedDetailsReview";
 import { Step4Payment } from "@/src/features/booking-v2/steps/Step4Payment";
 import { PromotionBookingBanner } from "@/components/promotions/PromotionBookingBanner";
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
@@ -101,6 +104,8 @@ function BookingV2Inner() {
     paymentEditResetError,
   } = useBookingV2();
   const { watch } = useFormContext<BookingV2FormData>();
+  // Staging/development-only experiment. Production always keeps the original journey.
+  const simplifiedHomePreview = regularSimplifiedPreviewEnabled(serviceSlug);
   const reviewTime = watch("time")?.trim() ?? "";
   const pendingBookingId = watch("pendingBookingId")?.trim() ?? "";
   const quoteRequest = useBookingV2Pricing();
@@ -118,9 +123,9 @@ function BookingV2Inner() {
     currentStep === 4 && !paymentEntryAllowed
       ? <PricingBlockedNotice availability={pricingAvailability} quoteError={quoteRequest.error} />
       : ({
-          1: <Step1Details />,
+          1: simplifiedHomePreview ? <RegularSimplifiedHome /> : <Step1Details />,
           2: <Step2Schedule />,
-          3: <Step3Review />,
+          3: simplifiedHomePreview ? <RegularSimplifiedDetailsReview /> : <Step3Review />,
           4: <Step4Payment />,
         }[currentStep]);
 
@@ -129,7 +134,7 @@ function BookingV2Inner() {
   /** Steps 2–4 already use their own section cards — avoid duplicate outer card chrome. */
   const useOuterStepCard = currentStep === 1;
   const reviewTimeMissing = currentStep === 3 && !reviewTime;
-  const showShellNavigation = shouldShowBookingShellNavigation(currentStep, serviceSlug);
+  const showShellNavigation = shouldShowBookingShellNavigation(currentStep, serviceSlug) || (simplifiedHomePreview && currentStep === 1);
   const paymentBlockMessage =
     pricingAvailability === "loading"
       ? BOOKING_PRICING_LOADING_MESSAGE
@@ -235,7 +240,7 @@ function BookingV2Inner() {
                   suppressHydrationWarning
                   className="w-full rounded-xl sm:w-auto"
                 >
-                  {currentStep === 3 ? "Proceed to payment →" : "Continue →"}
+                  {currentStep === 3 ? "Proceed to payment →" : simplifiedHomePreview && currentStep === 1 ? "See available dates →" : "Continue →"}
                 </Button>
               )}
             </div>
