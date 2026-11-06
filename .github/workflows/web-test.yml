@@ -238,6 +238,7 @@ jobs:
           lib/email/__tests__/marketingEligibility.test.ts
           lib/email/__tests__/marketingSendGate.synthetic.test.ts
           lib/email/__tests__/marketingConsentService.test.ts
+          lib/email/__tests__/marketingConsentReplay.atomic.test.ts
           lib/email/__tests__/marketingUnsubscribeToken.test.ts
           lib/email/__tests__/readResendMarketingState.test.ts
           lib/email/__tests__/reconcileResendUnsubscribe.test.ts
@@ -391,11 +392,43 @@ jobs:
           psql -v ON_ERROR_STOP=1 <<'SQL'
           create role anon;
           create role authenticated;
-          create table public.user_profiles(id uuid primary key);
+          create role service_role;
+
+          create schema if not exists auth;
+
+          create or replace function auth.role()
+          returns text
+          language sql
+          stable
+          as $auth$
+            select nullif(
+              current_setting('request.jwt.claim.role', true),
+              ''
+            );
+          $auth$;
+
+          create table public.user_profiles(
+            id uuid primary key,
+            role text not null default 'customer',
+            billing_email text not null default 'synthetic@example.test',
+            marketing_emails_unsubscribed_at timestamptz
+          );
           SQL
       - name: Apply consent migration to isolated database only
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261104210000_marketing_email_consent_ledger.sql
+      - name: Apply atomic replay migration to isolated database only
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261106150000_marketing_consent_atomic_replay.sql
       - name: Assert RLS, grants and append-only triggers
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_email_consent_security.sql
       - name: Synthetic consent, replay and rollback regression
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_email_consent_isolated_native.sql
+      - name: Atomic unsubscribe completed-replay regression
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_consent_atomic_replay_native.sql
+      - name: Atomic unsubscribe processing-lease regression
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_consent_atomic_lease_native.sql
+      - name: Atomic unsubscribe partial-recovery regression
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_consent_atomic_recovery_native.sql
+      - name: Atomic consent permission regression
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_consent_atomic_permissions_native.sql
+      - name: Atomic consent two-session concurrency regression
+        run: timeout --signal=TERM --kill-after=5s 45s bash supabase/tests/marketing_consent_atomic_concurrency.sh
