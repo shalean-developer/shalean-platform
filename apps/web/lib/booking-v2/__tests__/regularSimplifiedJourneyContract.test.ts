@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   isRegularSimplifiedJourneyEnabled,
   REGULAR_SIMPLIFIED_STAGE_CONTRACT,
+  REGULAR_HOME_REQUIRED_QUESTION_KEYS,
   REGULAR_HOME_REQUIRED_FIELDS,
   REGULAR_DEFERRED_DETAILS_FIELDS,
   regularHomeAnswersComplete,
@@ -53,6 +56,22 @@ describe("FCO-01-C1 Regular Cleaning opt-in contract", () => {
       ...home, serviceDetails: { ...home.serviceDetails, extraRooms: 0 },
     })).toBe(true);
     expect(regularHomeAnswersComplete({ ...home, serviceAreaLocationId: "" })).toBe(false);
+  });
+
+  it("FCO-SR-03: marks extra rooms required only in the gated Home, with zero explicitly valid", () => {
+    expect(REGULAR_HOME_REQUIRED_QUESTION_KEYS).toContain("extraRooms");
+    expect(regularHomeAnswersComplete({
+      ...home, serviceDetails: { ...home.serviceDetails, extraRooms: "0" },
+    })).toBe(true);
+    expect(regularHomeAnswersComplete({
+      ...home, serviceDetails: { ...home.serviceDetails, extraRooms: "" },
+    })).toBe(false);
+    const homeUi = readFileSync(join(process.cwd(), "src/features/booking-v2/steps/RegularSimplifiedHome.tsx"), "utf8");
+    expect(homeUi).toContain("REGULAR_HOME_REQUIRED_QUESTION_KEYS.includes");
+    expect(homeUi).toContain("Choose a number (0 if none)");
+    expect(homeUi).toContain('aria-required={REGULAR_HOME_REQUIRED_QUESTION_KEYS.includes');
+    const serviceConfig = readFileSync(join(process.cwd(), "src/features/booking-v2/config/serviceConfig.ts"), "utf8");
+    expect(serviceConfig).toMatch(/key: "extraRooms",[\\s\\S]*?required: false/);
   });
 
   it("defers personal details, not supported suburb and equipment choice", () => {
