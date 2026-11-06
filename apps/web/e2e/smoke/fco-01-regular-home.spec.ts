@@ -111,7 +111,11 @@ for (const width of [375, 1440]) {
     await page.getByLabel(/Property type/i).selectOption("house");
     await page.getByLabel(/Number of bedrooms/i).selectOption("2");
     await page.getByLabel(/Number of bathrooms/i).selectOption("1");
-    await page.getByLabel(/Number of extra rooms/i).selectOption("0");
+    // FCO-SR-03: an explicit zero is valid and the UI must disclose the required answer.
+    const extraRooms = page.getByLabel(/Number of extra rooms/i);
+    await expect(extraRooms).toHaveAttribute("aria-required", "true");
+    await expect(extraRooms).toHaveAttribute("required", "");
+    await extraRooms.selectOption("0");
     await page.getByLabel(/Do you have any pets/i).selectOption("no");
     await page.getByRole("radio", { name: "I will provide equipment" }).check();
     await page.getByLabel(/Cleaning suburb/i).selectOption(LOCATION_ID);
