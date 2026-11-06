@@ -98,3 +98,35 @@ describe("Gate 3 customer preference UI — isolated synthetic DOM",()=>{
     expect(button("Subscribe").disabled).toBe(true);
   });
 });
+
+describe("staging journey evidence labels",()=>{
+  it("keeps each completed check's own label across batched React updates",async()=>{
+    Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});
+    mocks.getSession.mockResolvedValue({data:{session:{access_token:"synthetic-token"}},error:null});
+    const snapshot={generation:1,evidenceCount:5,decision:"withdrawn",unsubscribedAt:"2026-11-06T00:00:00Z",reconciliation:[],enrollment:[]};
+    const base=window.location.origin;
+    vi.stubGlobal("fetch",vi.fn(async(input:string|URL,init?:RequestInit)=>{
+      const url=new URL(String(input),base);
+      if(url.pathname==="/api/marketing/unsubscribe"){
+        if(init?.method==="GET")return new Response(url.searchParams.get("token")==="legacy"?"<p>Sign in</p>":"Unsubscribe from marketing emails");
+        return new Response("{}",{status:url.searchParams.get("token")==="legacy"?409:503});
+      }
+      const action=init?.body?JSON.parse(String(init.body)).action:null;
+      return Response.json(action==="issue_links"?{url:base+"/api/marketing/unsubscribe?token=current",unusedUrl:base+"/api/marketing/unsubscribe?token=unused",legacyUrl:base+"/api/marketing/unsubscribe?token=legacy"}:init?.method==="POST"?{ok:true}:snapshot);
+    }));
+    const {MarketingEmailStagingJourney}=await import("@/components/account/MarketingEmailStagingJourney");
+    const container=document.createElement("div");document.body.appendChild(container);const view=createRoot(container);
+    try{
+      await act(async()=>{view.render(React.createElement(MarketingEmailStagingJourney));});
+      await act(async()=>{(container.querySelector('input[type="checkbox"]') as HTMLInputElement).click();});
+      await act(async()=>{container.querySelector("button")!.click();});
+      const labels=[...container.querySelectorAll("ol li")].map(el=>el.textContent);
+      expect(labels).toEqual([
+        "PASSOpening the signed confirmation does not change consent",
+        "PASSAn older v1 link requires account confirmation and cannot withdraw",
+        "FAILThe current signed link records a withdrawal",
+      ]);
+      expect(container.querySelector('[role="alert"]')?.textContent).toContain("It is not marked passed");
+    }finally{await act(async()=>view.unmount());container.remove();vi.unstubAllGlobals();}
+  });
+});

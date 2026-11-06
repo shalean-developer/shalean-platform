@@ -52,8 +52,11 @@ export function MarketingEmailStagingJourney() {
     let withdrawn = false;
     let step = "Prepare signed links";
     const check = (ok: boolean) => {
-      if (!ok) { setChecks(rows => [...rows, { label: step, status: "failed" }]); throw new Error(step); }
-      setChecks(rows => [...rows, { label: step, status: "passed" }]);
+      // React may apply the updater after the next awaited step has started.
+      // Capture this check's label now, rather than reading the mutable step later.
+      const completed: Check = { label: step, status: ok ? "passed" : "failed" };
+      setChecks(rows => [...rows, completed]);
+      if (!ok) throw new Error(completed.label);
     };
     try {
       const initial = await state();
