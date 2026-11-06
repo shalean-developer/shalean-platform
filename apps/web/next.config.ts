@@ -322,6 +322,12 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // Configured headers take precedence over App Router response headers.
+        // Signed unsubscribe URLs must never become same-origin referrers.
+        source: "/api/marketing/unsubscribe",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
+      {
         source: "/(office|login|admin)(.*)",
         headers: [{ key: "X-Frame-Options", value: "DENY" }],
       },
