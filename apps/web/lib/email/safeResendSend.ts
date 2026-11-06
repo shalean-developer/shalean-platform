@@ -56,8 +56,15 @@ export async function safeResendSend(payload: SafeResendPayload): Promise<{
   if (!decision.allowed) return { data: null, error: { message: decision.reason, name: "outbound_blocked" } };
 
   const { context, tags = [], ...sendPayload } = payload;
-  const declaredType = context?.messageType ?? tags.find(tag => tag.name === "message_type")?.value ?? "";
-  if (declaredType === "referral_campaign" || declaredType === "rebook_email" || declaredType === "rebook_reminder_email") {
+  const marketingTypes = new Set(["referral_campaign", "rebook_email", "rebook_reminder_email", "growth_retention_reminder", "growth_win_back"]);
+  const declaredTypes = [context?.messageType, ...tags.filter(tag => tag.name === "message_type").map(tag => tag.value)];
+  if (declaredTypes.some(type => type && marketingTypes.has(type))) {
+    if (Array.isArray(payload.to) && payload.to.length !== 1) {
+      return { data: null, error: { name: "marketing_eligibility", message: "marketing_single_recipient_required" } };
+    }
+    if (context?.messageType && tags.some(tag => tag.name === "message_type" && tag.value !== context.messageType)) {
+      return { data: null, error: { name: "marketing_eligibility", message: "marketing_message_type_conflict" } };
+    }
     const admin = getSupabaseAdmin();
     if (!admin) return { data: null, error: { name: "marketing_eligibility", message: "marketing_eligibility_lookup_failed" } };
     const customerId = context?.customerId ?? null;
@@ -74,7 +81,7 @@ export async function safeResendSend(payload: SafeResendPayload): Promise<{
     sendPayload.headers = { ...headers, "List-Unsubscribe": `<${url}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" };
 
   }
-  const mergedTags = [...tags, ...contextTags(context)].filter((tag, index, all) =>
+  const mergedTags = [...contextTags(context), ...tags].filter((tag, index, all) =>
     all.findIndex((candidate) => candidate.name === tag.name) === index,
   );
   const subject = applyOutboundSubjectPrefix(payload.subject, decision.subjectPrefix);

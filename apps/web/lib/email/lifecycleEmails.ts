@@ -1,4 +1,4 @@
-import { Resend } from "resend";
+import { safeResendSend } from "@/lib/email/safeResendSend";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
 import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
@@ -11,7 +11,6 @@ import {
   signCustomerRebookToken,
 } from "@/lib/customer/customerRebookLinkToken";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
-import { createCustomerMarketingUnsubscribeUrl } from "@/lib/email/marketingUnsubscribeLink";
 import {
   buildReengagementEmailHtml,
   buildReengagementEmailSubject,
@@ -27,12 +26,6 @@ export type SendReviewEmailOptions = {
   promptKind?: "initial" | "reminder" | "manual";
   source?: string;
 };
-
-function getResend(): Resend | null {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) return null;
-  return new Resend(key);
-}
 
 export type LifecycleEmailBookingContext = {
   bookingId: string;
@@ -77,24 +70,11 @@ async function sendLifecycle(
 ): Promise<{ sent: boolean; error?: string }> {
   const { paused } = await isCustomerOutboundPaused();
   if (paused) return { sent: false, error: "customer_outbound_paused" };
-  const resend = getResend();
-  if (!resend) {
-    await reportOperationalIssue("warn", source, "RESEND_API_KEY not set", { bookingId });
-    return { sent: false, error: "Email not configured" };
-  }
   const from = getDefaultFromAddress();
-  const marketing = source === "rebook_email" || source === "rebook_reminder_email";
-  const unsubscribeUrl = marketing && customerId
-    ? await createCustomerMarketingUnsubscribeUrl(getSupabaseAdmin(), getPublicAppUrlBase(), customerId, to, process.env.MARKETING_UNSUBSCRIBE_SECRET)
-    : null;
-  if (marketing && !unsubscribeUrl) return { sent: false, error: "marketing_unsubscribe_not_configured" };
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await safeResendSend({
       from, to, subject, html,
-      ...(unsubscribeUrl ? { headers: {
-        "List-Unsubscribe": `<${unsubscribeUrl}>`,
-        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-      } } : {}),
+      context: { bookingId, customerId, messageType: source },
     });
     if (error) {
       await reportOperationalIssue("error", source, error.message, { bookingId, email: to });

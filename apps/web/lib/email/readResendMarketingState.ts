@@ -10,7 +10,7 @@ export async function readResendMarketingState(
   const unknown = { verified: false, unsubscribed: null, suppressed: null };
   if (!apiKey) return unknown;
   const id = encodeURIComponent(email.toLowerCase().trim());
-  const opts = { headers: { Authorization: `Bearer ${apiKey}` }, cache: "no-store" as const };
+  const opts = { headers: { Authorization: `Bearer ${apiKey}` }, cache: "no-store" as const, signal: AbortSignal.timeout(10000) };
   try {
     const [contact, suppression] = await Promise.all([
       fetchFn(`https://api.resend.com/contacts/${id}`, opts),

@@ -19,6 +19,7 @@ export async function reconcileResendUnsubscribe(
   try {
     const response = await send(`https://api.resend.com/contacts/${encodeURIComponent(normalized)}`, {
       method: "PATCH",
+      signal: AbortSignal.timeout(10000),
       headers: {
         Authorization: `Bearer ${options.apiKey}`,
         "Content-Type": "application/json",

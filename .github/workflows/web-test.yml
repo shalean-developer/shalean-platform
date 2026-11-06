@@ -246,6 +246,9 @@ jobs:
           lib/email/__tests__/readResendMarketingState.test.ts
           lib/email/__tests__/reconcileResendUnsubscribe.test.ts
           lib/email/__tests__/providerPreferenceWebhook.test.ts
+          lib/auth/__tests__/marketingVerifiedCustomer.test.ts
+          app/api/admin/email/health/__tests__/route.test.ts
+          app/api/me/marketing-rehearsal/__tests__/route.test.ts
           app/api/marketing/unsubscribe/__tests__/route.test.ts
           lib/email/__tests__/marketingAndTransactionalSend.integration.test.ts
           lib/email/__tests__/syncConsentedMarketingContact.test.ts
@@ -253,10 +256,13 @@ jobs:
           lib/email/__tests__/reconcilePendingMarketingEnrollments.integration.test.ts
           lib/email/__tests__/marketingConsentFullJourney.synthetic.test.ts
           lib/email/__tests__/MarketingEmailPreferences.ui.test.ts
+          lib/growth/__tests__/growthMarketingSafety.test.ts
+          lib/growth/__tests__/growthRetentionConsent.test.ts
           lib/referrals/__tests__/referralConsentJourney.integration.test.ts
           lib/booking/__tests__/processLifecycleJob.enterprise.test.ts
           app/api/cron/reconcile-marketing-optouts/__tests__/route.test.ts
           app/api/webhooks/resend/__tests__/marketingWebhook.integration.test.ts
+          app/api/webhooks/resend/__tests__/marketingWebhook.signature.test.ts
 
       - name: Blog route governance
         if: steps.filter.outputs.run_suite == 'true'
@@ -421,6 +427,9 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261104210000_marketing_email_consent_ledger.sql
       - name: Apply atomic replay migration to isolated database only
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261106150000_marketing_consent_atomic_replay.sql
+
+      - name: Apply atomic provider withdrawal migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261106220925_marketing_provider_withdrawal_atomic.sql
       - name: Assert RLS, grants and append-only triggers
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_email_consent_security.sql
       - name: Synthetic consent, replay and rollback regression
@@ -435,5 +444,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_consent_atomic_permissions_native.sql
       - name: Consent-generation revocation and rollback regression
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_consent_generation_native.sql
+
+      - name: Verify provider withdrawal atomic replay and recovery
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_provider_withdrawal_native.sql
       - name: Atomic consent two-session concurrency regression
         run: timeout --signal=TERM --kill-after=5s 45s bash supabase/tests/marketing_consent_atomic_concurrency.sh

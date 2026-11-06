@@ -80,6 +80,15 @@ describe("Gate 3 customer preference UI — isolated synthetic DOM",()=>{
     expect(JSON.parse(post?.[1]?.body)).toMatchObject({decision:"granted",explicitOptIn:true});
     expect(host.textContent).toContain("Promotional emails remain subject to delivery preferences and safety checks.");
   });
+  it("distinguishes a fresh consent record from paused promotional delivery after reload",async()=>{
+    await act(async()=>{root.unmount();}); root=createRoot(host);
+    fetchMock.mockResolvedValueOnce({ok:true,json:async()=>({status:"consent_recorded_paused"})});
+    await act(async()=>{root.render(React.createElement(MarketingEmailPreferences));});
+    expect(host.textContent).toContain("Promotional delivery remains paused");
+    const checkbox=host.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+    expect(button("Subscribe").disabled).toBe(true);
+  });
   it("unavailable preference lookup does not offer opt-in",async()=>{
     await act(async()=>{root.unmount();});
     root=createRoot(host);

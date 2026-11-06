@@ -19,20 +19,18 @@ export async function applyProviderPreferenceWithdrawal(
   if (!recipient.allowed || !event.svixId) return { ok: false, reason: "invalid_contact_event" };
   const email = recipient.normalized;
   const { data: profiles, error: findError } = await admin.from("user_profiles")
-    .select("id").eq("billing_email", email).eq("role", "customer").limit(10);
+    .select("id").ilike("billing_email", email.replace(/[\\%_]/g, char => "\\" + char)).eq("role", "customer").limit(11);
   if (findError) return { ok: false, reason: "customer_lookup_failed" };
+  if ((profiles?.length ?? 0) > 10) return { ok: false, reason: "ambiguous_customer_identity" };
   for (const profile of profiles ?? []) {
     const customerId = String(profile.id);
-    const { error: consentError } = await admin.from("marketing_email_consent_events").insert({
-      customer_id: customerId, email, purpose: "promotional_email",
-      decision: "withdrawn", source: "resend_contact_webhook",
-      policy_version: MARKETING_POLICY_VERSION, evidence_reference: event.svixId,
+    const { data, error } = await admin.rpc("marketing_record_provider_withdrawal_atomic", {
+      p_customer_id: customerId, p_email: email,
+      p_evidence_reference: event.svixId, p_policy_version: MARKETING_POLICY_VERSION,
     });
-    if (consentError && consentError.code !== "23505")
-      return { ok: false, reason: "consent_write_failed" };
-    const { error: updateError } = await admin.from("user_profiles")
-      .update({ marketing_emails_unsubscribed_at: new Date().toISOString() }).eq("id", customerId);
-    if (updateError) return { ok: false, reason: "profile_update_failed" };
+    const outcome = Array.isArray(data) && data.length === 1 ? data[0]?.outcome : null;
+    if (error || !["new", "replay_completed", "superseded"].includes(outcome))
+      return { ok: false, reason: "provider_consent_transaction_failed" };
   }
   return { ok: true };
 }

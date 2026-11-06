@@ -1,63 +1,28 @@
-import { test } from "vitest";
-import { strict as assert } from "node:assert";
+import { expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { applyProviderPreferenceWithdrawal } from "../providerPreferenceWebhook";
-
-function db(options: { failFind?: boolean; failConsent?: boolean; failUpdate?: boolean; duplicate?: boolean } = {}) {
-  const writes: Array<{table:string, type:string, payload:Record<string, unknown>}> = [];
-  const client = { from(table: string) {
-    return {
-      select() { return { eq() { return { eq() { return { limit: async() => ({
-        data: [{ id:"customer-a" }], error: options.failFind ? {message:"down"} : null,
-      }) }; } }; } }; },
-      insert(payload: Record<string,unknown>) {
-        writes.push({table,type:"insert",payload});
-        return Promise.resolve({error: options.failConsent ? {code:"42P01"} : options.duplicate ? {code:"23505"} : null});
-      },
-      update(payload:Record<string,unknown>) {
-        writes.push({table,type:"update",payload});
-        return {eq:async()=>({error:options.failUpdate ? {code:"42501"} : null})};
-      },
-    };
-  }} as unknown as SupabaseClient;
-  return {client,writes};
+function db(outcome = "new", error: unknown = null, lookupError: unknown = null) {
+  const rpc = vi.fn(async () => ({ data: [{ outcome }], error }));
+  const forbidden = vi.fn(() => { throw Error("Non-atomic provider evidence/profile write"); });
+  const client = { rpc, from: () => ({ select: () => ({ ilike: () => ({ eq: () => ({ limit: async () => ({ data: [{ id: "synthetic-customer" }], error: lookupError }) }) }) }), insert: forbidden, update: forbidden }) } as unknown as SupabaseClient;
+  return { client, rpc, forbidden };
 }
-const event = {type:"contact.updated", email:"A@EXAMPLE.COM", unsubscribed:true, svixId:"evt-1"};
-test("ignores provider re-subscription events", async() => {
-  const {client,writes}=db();
-  assert.deepEqual(await applyProviderPreferenceWithdrawal(client,{...event,unsubscribed:false}),{ok:true});
-  assert.equal(writes.length,0);
+const event = { type: "contact.updated", email: "A@EXAMPLE.COM", unsubscribed: true, svixId: "synthetic-event-1" };
+it.each(["new", "replay_completed", "superseded"])("provider withdrawal accepts atomic %s without separate writes", async outcome => {
+  const f = db(outcome); expect(await applyProviderPreferenceWithdrawal(f.client, event)).toEqual({ ok: true });
+  expect(f.rpc).toHaveBeenCalledWith("marketing_record_provider_withdrawal_atomic", expect.objectContaining({ p_email: "a@example.com", p_evidence_reference: event.svixId }));
+  expect(f.forbidden).not.toHaveBeenCalled();
 });
-test("signed provider opt-out records ledger and CRM", async() => {
-  const {client,writes}=db();
-  assert.deepEqual(await applyProviderPreferenceWithdrawal(client,event),{ok:true});
-  assert.deepEqual(writes.map(x=>x.table),["marketing_email_consent_events","user_profiles"]);
-  assert.equal(writes[0]?.payload.email,"a@example.com");
-  assert.equal(writes[0]?.payload.decision,"withdrawn");
+it.each([false, null, undefined])("never interprets provider re-subscription/unknown preference as consent (%s)", async unsubscribed => {
+  const f = db(); expect(await applyProviderPreferenceWithdrawal(f.client, { ...event, unsubscribed })).toEqual({ ok: true }); expect(f.rpc).not.toHaveBeenCalled();
 });
-test("idempotent replay continues CRM sync after duplicate consent event", async() => {
-  const {client,writes}=db({duplicate:true});
-  assert.deepEqual(await applyProviderPreferenceWithdrawal(client,event),{ok:true});
-  assert.equal(writes.length,2);
+it("invalid identity fails before any transaction", async () => {
+  const f = db(); expect((await applyProviderPreferenceWithdrawal(f.client, { ...event, email: "bad" })).ok).toBe(false); expect(f.rpc).not.toHaveBeenCalled();
 });
-test("bad email fails closed before writes",async()=>{
-  const {client,writes}=db();
-  const out=await applyProviderPreferenceWithdrawal(client,{...event,email:"bad"});
-  assert.equal(out.ok,false);
-  assert.equal(writes.length,0);
+it("database lookup and transaction failures are not acknowledged as success", async () => {
+  const f = db("new", { code: "42501" }); expect((await applyProviderPreferenceWithdrawal(f.client, event)).ok).toBe(false);
+  const missing = db("new", null, { message: "unavailable" }); expect((await applyProviderPreferenceWithdrawal(missing.client, event)).ok).toBe(false); expect(missing.rpc).not.toHaveBeenCalled();
 });
-test("failed lookup blocks",async()=>{
-  const {client,writes}=db({failFind:true});
-  assert.equal((await applyProviderPreferenceWithdrawal(client,event)).ok,false);
-  assert.equal(writes.length,0);
-});
-test("failed consent insert blocks subsequent CRM write",async()=>{
-  const {client,writes}=db({failConsent:true});
-  assert.equal((await applyProviderPreferenceWithdrawal(client,event)).ok,false);
-  assert.equal(writes.length,1);
-});
-test("failed profile update reports retryable failure",async()=>{
-  const {client}=db({failUpdate:true});
-  const out=await applyProviderPreferenceWithdrawal(client,event);
-  assert.deepEqual(out,{ok:false,reason:"profile_update_failed"});
+it("unexpected transaction output fails closed", async () => {
+  const f = db("unknown"); expect((await applyProviderPreferenceWithdrawal(f.client, event)).ok).toBe(false);
 });
