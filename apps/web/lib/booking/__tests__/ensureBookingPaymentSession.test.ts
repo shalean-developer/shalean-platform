@@ -395,6 +395,40 @@ describe("ensureBookingPaymentSession", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("FCO-01: repeated owner recovery preserves one booking, one reference and canonical payable amount", async () => {
+    const userId = "22222222-2222-4222-8222-222222222222";
+    const { admin, state } = buildAdmin({
+      id: BOOKING_ID, status: "pending_payment", payment_status: null,
+      payment_completed_at: null, paystack_reference: "ref_fco_existing",
+      payment_link: "https://checkout.paystack.com/fco-existing",
+      payment_link_expires_at: new Date(Date.now() + 60 * 60_000).toISOString(),
+      customer_email: "synthetic@example.invalid",
+      customer_id: userId, user_id: userId,
+      total_price: 600, total_paid_zar: 0,
+      price_snapshot: { total: 600 }, booking_snapshot: {},
+      service: "Regular Cleaning", date: "2026-12-15", time: "08:30",
+    });
+    const first = await ensureBookingPaymentSession(admin, {
+      bookingId: BOOKING_ID, access: { kind: "owner", userId },
+    });
+    const second = await ensureBookingPaymentSession(admin, {
+      bookingId: BOOKING_ID, access: { kind: "owner", userId },
+    });
+    for (const response of [first, second]) {
+      expect(response.status).toBe("ready");
+      if (response.status === "ready") {
+        expect(response.bookingId).toBe(BOOKING_ID);
+        expect(response.reused).toBe(true);
+        expect(response.reference).toBe("ref_fco_existing");
+        expect(response.authorizationUrl).toBe("https://checkout.paystack.com/fco-existing");
+        expect(response.amountZar).toBe(600);
+      }
+    }
+    expect(state.row.paystack_reference).toBe("ref_fco_existing");
+    expect(state.row.total_price).toBe(600);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("creates a fresh checkout when payment_link is missing", async () => {
     const { admin, state } = buildAdmin({
       id: BOOKING_ID,

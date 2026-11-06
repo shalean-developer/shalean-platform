@@ -1,0 +1,62 @@
+# FCO-01-C4-BLOCK-01 — Server-authoritative equipment quote design
+
+Status: STAGING/DEVELOPMENT-GATED BACKEND INTEGRATION COMMITTED; CI AND ISOLATED BROWSER ACCEPTANCE PENDING
+Scope: isolated draft PR #1083, no merge, activation, provider requests or database writes.
+Owner boundary: Software Engineering owns implementation, Finance approves pricing authority and edge cases, Marketing Engineering owns conversion requirements.
+
+## Evidence
+
+Current `/api/booking-v2/equipment-quote` accepts street address and suburb, loads equipment policy and calculates distance-based logistics on the server. It returns an unsigned equipment quote.
+
+Current `/api/booking-v2/quote` accepts client-supplied `equipmentQuote`, builds a signed customer total and returns an existing quote lock; `/api/booking-v2/confirm` consumes client `equipmentQuote` when recalculating locked totals. Thus, signature validity of an *overall* amount does not prove the equipment fee originated from an authoritative address-based calculation.
+
+The staging-only simplified journey postpones full address until Your Details, making stale address-dependent fees a release-critical risk.
+
+## Selected architecture: signed server-issued logistics receipt + existing quote lock
+
+1. Customer explicitly chooses equipment at Home; if customer-provided, equipment fee is 0 and no delivery receipt is required.
+2. When Shalean equipment is requested and the customer provides a complete address at Your Details, the existing equipment-quote service computes the distance and logistics fee on the server, using the active configuration. The issuer must use only that computed result.
+3. A server-only receipt signer creates a short-lived HMAC-SHA256 token with domain-separated purpose, exact normalized-address digest, component amounts, distance, pricing-policy revision, issue and expiry times. The token never includes a plaintext address or access code.
+4. Client receives the logistics display breakdown and the opaque receipt. It may display the values but cannot set the authoritative fee.
+5. `POST /api/booking-v2/quote` must verify the receipt against request address, amount and expiry, resolve the server-validated fee from the signed payload, and build the existing *separate* customer quote signature over authoritative inputs. On mismatch, reject the quote rather than signing untrusted equipment data.
+6. `POST /api/booking-v2/confirm` must verify the receipt again using the final submitted address and fee, then preserve existing locked pricing-version checks, quote signature, quote expiry, availability, eligibility, idempotency and pending-payment protections. A changed address, fee or equipment choice must require a fresh logistics receipt and customer quote lock.
+7. A manual-quote-required result, unavailable equipment delivery, geocode failure, unresolved distance or absent receipt blocks automatic payment. Route to an approved manual-quote/contact workflow, not a fabricated R0 fee.
+8. Keep already-issued pending-payment snapshots frozen under existing recovery rules. For an edited pending booking, first perform the approved supersession boundary; request a new receipt and quote lock for the edited scope. Do not mutate existing paid invoices or payment records.
+
+## Secret and migration rules
+
+The primitive added in `apps/web/lib/booking-v2/equipmentQuoteAuthority.ts` takes an explicit secret and **has no production fallback**. An integration may derive a domain-separated key from the existing protected booking HMAC secret after security review, or use an approved dedicated secret; never expose it as a NEXT_PUBLIC variable. No secret rotation or configuration changes are authorized here.
+
+There is **no schema migration** in this design. If backend wiring requires persisted receipt identifiers or price-version binding, approve that separately after migration and rollback review.
+
+## Current isolated code
+
+- `equipmentQuoteAuthority.ts`: testable server-only issuance/verification primitive; not called by routes.
+- `equipmentQuoteAuthority.test.ts`: address change, normalization, tampering, wrong key, missing, expiry and manual-quote cases.
+- C4 UI quote lifecycle fixes: abort stale equipment requests, clear stale quote immediately, ensure no wrapper double reset.
+- C4 deep-link guard: incomplete Home, Schedule, or Your Details sends the user to the earliest required stage.
+
+## Gated backend implementation now committed
+
+- `/api/booking-v2/equipment-quote` signs the server-calculated fee for Regular Cleaning when the non-production FCO flag is enabled; returns the opaque `authorityReceipt` alongside the equipment breakdown. It rejects manual, geocode-failed, or disabled equipment delivery.
+- `useBookingV2Pricing` sends the current address, suburb, city and postcode to quote; the final equipment quote carries the receipt. Home and Schedule may display indicative pricing before the address is collected, but this is never payment-ready.
+- `/api/booking-v2/quote` checks receipt authenticity, expiry, address and amount before signing an equipment-inclusive quote. The fee is reconstructed from the signed payload, not client-supplied components.
+- `/api/booking-v2/confirm` verifies the same receipt against the final submitted address before using the existing pricing snapshot and payment preparation logic.
+- Both routes now compare the receipt's signed policy revision with the current loaded equipment-policy revision. A change rejects the receipt and requires re-quoting rather than recording a fee under a mismatched configuration.
+- The gate applies only to Regular Cleaning with `SHALEAN_APP_ENV=staging|development` **and** explicit `NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW=true`; production remains on the existing journey.
+- Signature verification uses a domain-separated key from the protected `FCO_01_EQUIPMENT_RECEIPT_SECRET` or existing `BOOKING_LOCK_HMAC_SECRET`; no public or insecure fallback.
+- Regression source covers altered addresses/fees, missing receipts, expired receipts, manual quote rejection, existing production flag isolation and both route integration seams.
+
+## Remaining acceptance blockers
+
+1. Complete exact-head CI and confirm new tests execute in `web-test`, not merely source existence.
+2. Run isolated route-level end-to-end tests exercising the HTTP quote and confirm endpoints (mocked storage/providers, no booking creation or Paystack requests).
+3. Run desktop/mobile 320–1440px browser journey with no real mutations.
+4. Independently review replay/session binding, quote-lock-expiry interaction, config revision change behavior, and edits to full address after the receipt is issued.
+5. Validate that staging environment settings agree across client and server; neither flag is authorized for production.
+6. Maintain backward compatibility for existing pending-payment bookings and preserve financial approval of the logistics-fee policy.
+
+## Acceptance decision
+
+**C4-BLOCK-01 remains OPEN pending CI, route integration tests, security review and isolated browser acceptance.**
+The integration is committed but unmerged and not activated. No production release is authorized.

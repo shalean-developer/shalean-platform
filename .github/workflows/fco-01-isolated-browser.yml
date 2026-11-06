@@ -1,0 +1,52 @@
+name: fco-01-isolated-browser
+
+on:
+  pull_request:
+    paths:
+      - "apps/web/e2e/smoke/fco-01-regular-home.spec.ts"
+      - "apps/web/e2e/smoke/fco-01-details-financial.spec.ts"
+      - "apps/web/src/features/booking-v2/**"
+      - "apps/web/lib/booking-v2/**"
+      - ".github/workflows/fco-01-isolated-browser.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  fco-01-home:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: apps/web
+    env:
+      CI: "true"
+      SHALEAN_APP_ENV: staging
+      NEXT_PUBLIC_SHALEAN_APP_ENV: staging
+      NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW: "true"
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      PLAYWRIGHT_BASE_URL: http://localhost:3000
+      # No Plesk / Supabase / Paystack / messaging credentials are supplied.
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Verify checkout is exact head
+        working-directory: .
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install
+        run: |
+          npm ci
+          npm install --no-save --package-lock=false --package-lock-only=false --ignore-scripts @tailwindcss/postcss@4.1.14
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Synthetic FCO Home desktop/mobile smoke (no provider mutations)
+        run: npx playwright test e2e/smoke/fco-01-regular-home.spec.ts e2e/smoke/fco-01-details-financial.spec.ts --project=chromium
