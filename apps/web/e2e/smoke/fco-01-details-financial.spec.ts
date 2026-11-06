@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { SERVICE_CONFIG } from "../../src/features/booking-v2/config/serviceConfig";
 
 const KEY = "shalean:booking-v2:v1";
 const LOCATION_ID = "11111111-1111-4111-8111-111111111111";
@@ -45,7 +46,7 @@ async function sandbox(page: Page) {
     if (path === "/api/booking-v2/quote" && req.method() === "POST") {
       return route.fulfill({ status: 200, json: {
         pricingSummary: { total: 850, estimated_total: 850, quote_signature: "test-lock-only",
-          estimated_duration_minutes: 180, lineItems: [] },
+          estimated_duration_minutes: 180, lineItems: [{ label: "Synthetic cleaning", amountZar: 850 }] },
         quoteLock: { pricingVersionId: LOCATION_ID, quoteSignature: "test-lock-only",
           lockedAt: "2026-11-06T00:00:00.000Z", expiresAt: "2099-12-31T00:00:00.000Z" },
       } });
@@ -66,7 +67,12 @@ async function sandbox(page: Page) {
       return route.abort("blockedbyclient");
     }
     if (path === "/api/booking-v2/services") {
-      return route.fulfill({ status: 200, json: { catalog: {}, scheduling: {
+      return route.fulfill({ status: 200, json: { catalog: { "regular-cleaning": {
+        ...SERVICE_CONFIG["regular-cleaning"], basePrice: 500, showEquipmentQuestion: true,
+        pricePerBedroom: 0, pricePerBathroom: 0, pricePerExtraRoom: 0, serviceFeeZar: 0,
+        durationBaseHours: 3, durationPerBedroomHours: 0, durationPerBathroomHours: 0,
+        durationPerExtraRoomHours: 0, minDurationHours: 1, maxDurationHours: 12,
+      } }, scheduling: {
         leadMinutes: 0, slotStartHour: 8, slotEndHour: 12,
         slotIntervalMinutes: 30, timezone: "Africa/Johannesburg",
       } } });
@@ -85,6 +91,12 @@ async function sandbox(page: Page) {
   });
   return { blocked, equipmentRequests };
 }
+
+test.afterEach(async ({ page }, info) => {
+  if (info.status !== info.expectedStatus) {
+    console.error("[FCO unified failure]", page.url(), (await page.locator("body").innerText()).slice(-12000));
+  }
+});
 
 test("FCO-01 Your Details: address change invalidates previous equipment delivery amount", async ({ page }) => {
   await seed(page, sampleDraft());

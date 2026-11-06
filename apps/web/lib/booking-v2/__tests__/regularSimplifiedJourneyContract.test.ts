@@ -100,7 +100,7 @@ describe("FCO-01-C1 Regular Cleaning opt-in contract", () => {
 });
 
 it("keeps frozen payment recovery independent of a missing draft equipment receipt", () => {
-  const draft = { equipmentRequired: "yes", equipmentQuote: null };
+  const draft = { equipmentRequired: "yes" as const, equipmentQuote: null };
   expect(regularEquipmentDeliveryPending(draft, 1)).toBe(true);
   expect(regularEquipmentDeliveryPending(draft, 3)).toBe(true);
   expect(regularEquipmentDeliveryPending(draft, 4)).toBe(true);
