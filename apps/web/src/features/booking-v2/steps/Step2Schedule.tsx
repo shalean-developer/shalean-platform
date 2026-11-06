@@ -1,5 +1,6 @@
 "use client";
 
+import { regularSimplifiedPreviewEnabled } from "@/src/features/booking-v2/regularSimplifiedJourneyContract";
 import { useEffect, useState } from "react";
 import { useFormContext, Controller } from "react-hook-form";
 import {
@@ -404,7 +405,8 @@ export function Step2Schedule() {
   const extraCleanerSurchargeZar =
     liveConfig?.pricePerExtraCleaner ?? config.pricePerExtraCleaner;
   const skipsBookingTypeStage = isCarpetCleaning || isAirbnbCleaning;
-  const progressiveIndividualSchedule = usesProgressiveIndividualSchedule(serviceSlug);
+  const simplifiedRegularJourney = regularSimplifiedPreviewEnabled(serviceSlug);
+  const progressiveIndividualSchedule = !simplifiedRegularJourney && usesProgressiveIndividualSchedule(serviceSlug);
   const allowsRecurringBookings = serviceAllowsRecurringBookings(serviceSlug);
   const serviceRecurringFrequencies = recurringFrequenciesForService(serviceSlug);
   const recurringFrequencyOptions = RECURRING_FREQUENCIES.filter((option) =>
@@ -1043,6 +1045,18 @@ export function Step2Schedule() {
           >
             Continue to Review →
           </button>
+        </div>
+      ) : null}
+
+      {simplifiedRegularJourney ? (
+        <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-5">
+          <button type="button" onClick={() => void goBack()} className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold">Back to Home</button>
+          <button
+            type="button"
+            onClick={() => void goNext()}
+            disabled={!["booking_type", "date_time", "cleaner"].every((stage) => stageIsReady(stage as RegularCleaningScheduleStage))}
+            className="rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+          >Continue to Your Details →</button>
         </div>
       ) : null}
 

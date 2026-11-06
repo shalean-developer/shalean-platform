@@ -22,9 +22,9 @@ export function isRegularSimplifiedJourneyEnabled(input: {
 
 /** Keep canonical internal four-step URLs, booking engine and payment step. */
 export const REGULAR_SIMPLIFIED_STAGE_CONTRACT = [
-  { step: 1, key: "home", label: "Your home", query: "details" },
+  { step: 1, key: "home", label: "Home", query: "details" },
   { step: 2, key: "schedule", label: "Schedule", query: "schedule" },
-  { step: 3, key: "contact_review", label: "Your details", query: "review" },
+  { step: 3, key: "contact_review", label: "Your Details", query: "review" },
   { step: 4, key: "payment", label: "Payment", query: "payment" },
 ] as const satisfies ReadonlyArray<{
   step: BookingStep;
@@ -106,4 +106,12 @@ export function regularSimplifiedPreviewEnabled(serviceSlug: ServiceSlug): boole
     environment,
     enabled: process.env.NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW === "true",
   });
+}
+
+/** A frozen payment uses server-owned pricing, not a draft equipment receipt. */
+export function regularEquipmentDeliveryPending(values: Parameters<typeof regularEquipmentQuoteReady>[0] & {
+  pendingBookingId?: string | null;
+}, step: BookingStep): boolean {
+  if (step === 4 && values.pendingBookingId?.trim()) return false;
+  return values.equipmentRequired === "yes" && (step < 3 || !regularEquipmentQuoteReady(values));
 }

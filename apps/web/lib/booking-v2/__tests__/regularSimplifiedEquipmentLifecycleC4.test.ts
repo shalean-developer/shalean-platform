@@ -26,7 +26,7 @@ describe("FCO-01 C4 equipment quote and navigation regression", () => {
   });
 
   it("has one owner for quote invalidation, not a second wrapper effect", () => {
-    expect(wrapper).toContain("<EquipmentSection />");
+    expect(wrapper).toContain("<EquipmentSection quoteOnly />");
     expect(wrapper).not.toContain('setValue("equipmentQuote", null');
   });
 

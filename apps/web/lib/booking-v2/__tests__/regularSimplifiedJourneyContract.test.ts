@@ -9,6 +9,7 @@ import {
   REGULAR_DEFERRED_DETAILS_FIELDS,
   regularHomeAnswersComplete,
   regularEquipmentQuoteReady,
+  regularEquipmentDeliveryPending,
 } from "@/src/features/booking-v2/regularSimplifiedJourneyContract";
 
 const home = {
@@ -71,7 +72,7 @@ describe("FCO-01-C1 Regular Cleaning opt-in contract", () => {
     expect(homeUi).toContain("Choose a number (0 if none)");
     expect(homeUi).toContain('aria-required={REGULAR_HOME_REQUIRED_QUESTION_KEYS.includes');
     const serviceConfig = readFileSync(join(process.cwd(), "src/features/booking-v2/config/serviceConfig.ts"), "utf8");
-    expect(serviceConfig).toMatch(/key: "extraRooms",[\\s\\S]*?required: false/);
+    expect(serviceConfig).toMatch(/key: "extraRooms",[\s\S]*?required: false/);
   });
 
   it("defers personal details, not supported suburb and equipment choice", () => {
@@ -96,4 +97,13 @@ describe("FCO-01-C1 Regular Cleaning opt-in contract", () => {
     expect(regularEquipmentQuoteReady({ equipmentRequired: "yes",
       equipmentQuote: { ...quote, geocode_error: true } })).toBe(false);
   });
+});
+
+it("keeps frozen payment recovery independent of a missing draft equipment receipt", () => {
+  const draft = { equipmentRequired: "yes" as const, equipmentQuote: null };
+  expect(regularEquipmentDeliveryPending(draft, 1)).toBe(true);
+  expect(regularEquipmentDeliveryPending(draft, 3)).toBe(true);
+  expect(regularEquipmentDeliveryPending(draft, 4)).toBe(true);
+  expect(regularEquipmentDeliveryPending({ ...draft, pendingBookingId: "saved-booking" }, 4)).toBe(false);
+  expect(regularEquipmentDeliveryPending({ ...draft, pendingBookingId: "saved-booking" }, 3)).toBe(true);
 });
