@@ -239,6 +239,7 @@ jobs:
           lib/email/__tests__/marketingSendGate.synthetic.test.ts
           lib/email/__tests__/marketingConsentService.test.ts
           lib/email/__tests__/marketingConsentReplay.atomic.test.ts
+          lib/email/__tests__/marketingConsentReplay.atomic.test.ts
           lib/email/__tests__/marketingUnsubscribeToken.test.ts
           lib/email/__tests__/readResendMarketingState.test.ts
           lib/email/__tests__/reconcileResendUnsubscribe.test.ts
