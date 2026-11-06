@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useUser } from "@/hooks/useUser";
+import { MarketingEmailTestLink } from "./MarketingEmailStagingJourney";
 
 const POLICY_VERSION = "marketing-email-2026-11-v1";
-type PreferenceStatus = "loading" | "no_consent" | "consent_recorded" | "unsubscribed" | "unavailable";
+type PreferenceStatus = "loading" | "no_consent" | "consent_recorded" | "consent_recorded_paused" | "unsubscribed" | "unavailable";
 
 export function MarketingEmailPreferences() {
   const { user, loading: userLoading } = useUser();
@@ -69,6 +70,7 @@ export function MarketingEmailPreferences() {
       <p className="mt-3 text-sm" role="status">
         {status === "loading" ? "Checking preferences…" :
          status === "consent_recorded" ? "Marketing consent recorded." :
+         status === "consent_recorded_paused" ? "Your consent is recorded. Promotional delivery remains paused while your earlier opt-out is reviewed." :
          status === "unsubscribed" ? "Unsubscribed from marketing emails." :
          status === "no_consent" ? "You have not subscribed to marketing emails." :
          "Preferences are temporarily unavailable."}
@@ -89,6 +91,7 @@ export function MarketingEmailPreferences() {
         </button>
       </div>
       {message && <p role="status" className="mt-3 text-sm">{message}</p>}
+      <MarketingEmailTestLink />
     </section>
   );
 }

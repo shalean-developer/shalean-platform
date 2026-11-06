@@ -67,6 +67,15 @@ describe("synthetic one-click unsubscribe route — no provider traffic", () => 
       decision:"withdrawn",explicitOptIn:false,source:"signed_one_click",
     });
   });
+  it("a browser form receives an accessible HTML success page", async () => {
+    const response = await POST(new Request(baseUrl, { method: "POST", headers: { Accept: "text/html", "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ token: token() }) }));
+    expect(response.status).toBe(200); expect(response.headers.get("content-type")).toContain("text/html");
+    const html = await response.text(); expect(html).toContain("You are unsubscribed"); expect(html).toContain("Booking confirmations"); expect(html).not.toContain("<script");
+  });
+  it("limits streamed bodies without trusting Content-Length", async () => {
+    const response = await POST(new Request(baseUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: "x".repeat(5000) }));
+    expect(response.status).toBe(413); expect(mocks.record).not.toHaveBeenCalled(); expect(mocks.getAdmin).not.toHaveBeenCalled();
+  });
   it("a failed CRM write is not reported as successful", async () => {
     mocks.record.mockResolvedValue({ok:false,reason:"consent_write_failed"});
     const result = await POST(new Request(baseUrl+"?token="+token(),{method:"POST"}));

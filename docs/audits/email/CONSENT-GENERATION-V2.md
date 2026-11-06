@@ -1,3 +1,5 @@
+> Historical source-preparation snapshot. PRs #1074, #1084 and #1086 are merged; staging rollout/evidence and the current end-to-end acceptance sequence are tracked in issue #1076 and [EMAIL-STAGING-END-TO-END.md](EMAIL-STAGING-END-TO-END.md). Older "unmerged/not applied" statements below describe that snapshot, not current release status. Production activation remains separately controlled.
+
 # Issue #1076 — consent generation and unsubscribe token v2
 
 Source preparation only. No deployment, hosted migration, provider activation or customer send is authorized by this document.

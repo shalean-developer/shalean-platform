@@ -1,6 +1,6 @@
 import "server-only";
 
-import { Resend } from "resend";
+import { safeResendSend } from "@/lib/email/safeResendSend";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assignConversionExperimentVariant } from "@/lib/conversion/assignConversionExperiment";
 import { customerRebookLandingUrl } from "@/lib/customer/customerRebookLinkToken";
@@ -14,12 +14,6 @@ import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog"
 import { customerPhoneToE164 } from "@/lib/notifications/customerPhoneNormalize";
 import { sendSmsFallback } from "@/lib/notifications/smsFallback";
 import type { SmsRole } from "@/lib/notifications/smsPolicy";
-
-function getResend(): Resend | null {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) return null;
-  return new Resend(key);
-}
 
 async function loadFirstName(admin: SupabaseClient, userId: string): Promise<string | null> {
   const { data } = await admin.from("user_profiles").select("full_name").eq("id", userId).maybeSingle();
@@ -39,14 +33,9 @@ async function sendGrowthHtml(params: {
   to: string;
   userId: string;
 }): Promise<boolean> {
-  const resend = getResend();
-  if (!resend) {
-    await reportOperationalIssue("warn", params.source, "RESEND_API_KEY not set", { userId: params.userId });
-    return false;
-  }
   const from = getDefaultFromAddress();
   try {
-    const { error } = await resend.emails.send({ from, to: params.to, subject: params.subject, html: params.html });
+    const { error } = await safeResendSend({ from, to: params.to, subject: params.subject, html: params.html, context: { customerId: params.userId, messageType: params.source } });
     if (error) {
       await reportOperationalIssue("error", params.source, error.message, { userId: params.userId });
       return false;

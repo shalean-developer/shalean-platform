@@ -14,6 +14,7 @@ import { recordGrowthActionOutcomeSent } from "@/lib/growth/growthActionOutcomes
 import { discountBudgetOk, hasGrowthCooldown, insertGrowthTouch } from "@/lib/growth/growthTouchCooldown";
 import { loadCustomerGrowthContext, persistCustomerSegmentRow } from "@/lib/growth/loadCustomerGrowthContext";
 import { applySendDelayIfNeeded } from "@/lib/ai-autonomy/optimizeTiming";
+import { checkMarketingSendGate } from "@/lib/email/marketingSendGate";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 
 const MAX_USERS = 120;
@@ -30,7 +31,7 @@ export type RetentionCronSummary = {
 
 /**
  * Retention + win-back automation. Respects growth touch cooldowns (separate from payment-link sends).
- * Policy: **email first**, SMS only if email is missing or the email send failed (no WhatsApp).
+ * Policy: email first; SMS primary only when email is missing. Email denial or ambiguous failure never triggers SMS.
  */
 export async function runCustomerRetentionCronBatch(admin: SupabaseClient): Promise<RetentionCronSummary> {
   const out: RetentionCronSummary = {
@@ -125,6 +126,8 @@ export async function runCustomerRetentionCronBatch(admin: SupabaseClient): Prom
     let deliveredSms = false;
 
     if (hasEmail) {
+      const eligibility = await checkMarketingSendGate(admin, userId, ctx.email!.trim());
+      if (!eligibility.allowed) { out.skippedChannel++; continue; }
       {
         const segKey = String(segment) as "new" | "repeat" | "loyal" | "churned" | "unknown";
         await applySendDelayIfNeeded(
@@ -140,14 +143,8 @@ export async function runCustomerRetentionCronBatch(admin: SupabaseClient): Prom
           ? await sendGrowthWinBackEmail({ to: ctx.email!.trim(), userId, supabaseAdmin: admin })
           : await sendGrowthRetentionReminderEmail({ to: ctx.email!.trim(), userId, supabaseAdmin: admin });
 
-      if (!deliveredEmail && hasPhone) {
-        deliveredSms = await sendGrowthTouchSms({
-          phone: ctx.phone!.trim(),
-          userId,
-          variant: smsVariant,
-          smsRole: "fallback",
-        });
-      }
+      // A false result may mean consent/suppression denial or ambiguous provider
+      // acceptance. Do not turn either into a promotional SMS or duplicate touch.
     } else if (hasPhone && decision.channel === "sms") {
       deliveredSms = await sendGrowthTouchSms({
         phone: ctx.phone!.trim(),

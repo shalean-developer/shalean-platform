@@ -29,7 +29,7 @@ export async function syncConsentedMarketingContact(
     if(profile.data?.role!=="customer" || profile.data.billing_email?.trim().toLowerCase()!==email
        || profile.data.marketing_emails_unsubscribed_at || consent.data?.decision!=="granted"
        || suppressed.data) return "blocked";
-    const api=input.fetchFn ?? fetch;
+    const api = (url: string, init?: RequestInit) => (input.fetchFn ?? fetch)(url, { ...init, signal: AbortSignal.timeout(10000) });
     const headers={Authorization:`Bearer ${input.apiKey}`, "Content-Type":"application/json"};
     const suppression=await api(`https://api.resend.com/suppressions/${encodeURIComponent(email)}`,{headers,cache:"no-store"});
     if(suppression.ok) return "blocked";

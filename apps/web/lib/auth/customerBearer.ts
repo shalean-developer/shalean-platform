@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 
 export type CustomerSession = { userId: string; email: string | undefined };
 
-export async function requireCustomerSession(request: Request): Promise<
+export async function requireCustomerSession(request: Request, options: { requireVerifiedEmail?: boolean } = {}): Promise<
   { ok: true; session: CustomerSession } | { ok: false; response: NextResponse }
 > {
   const authHeader = request.headers.get("authorization");
@@ -30,5 +30,8 @@ export async function requireCustomerSession(request: Request): Promise<
     return { ok: false, response: NextResponse.json({ error: "Invalid or expired session." }, { status: 401 }) };
   }
 
+  if (options.requireVerifiedEmail && (!user.email || !user.email_confirmed_at)) {
+    return { ok: false, response: NextResponse.json({ error: "Confirm your email before updating marketing preferences." }, { status: 403 }) };
+  }
   return { ok: true, session: { userId: user.id, email: user.email ?? undefined } };
 }

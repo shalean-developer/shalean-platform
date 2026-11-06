@@ -148,7 +148,7 @@ function fixture(){
     return {data:[{outcome:"new"}],error:null};
   },
 } as unknown as SupabaseClient;
-  const provider={fail:true,contact:false,member:false,posts:0,segmentPosts:0};
+  const provider={fail:true,failureStatus:503,segmentFail:false,contact:false,member:false,posts:0,segmentPosts:0};
   const response=(status:number,data?:unknown)=>({status,ok:status>=200&&status<300,
     json:async()=>data}) as Response;
   const fetchMock=vi.fn(async(url:string|URL|Request,init?:RequestInit)=>{
@@ -156,7 +156,7 @@ function fixture(){
     if(path.includes("/suppressions/"))return response(404);
     if(path.endsWith("/contacts")&&method==="POST"){
       provider.posts++;
-      if(provider.fail)return response(503);
+      if(provider.fail)return response(provider.failureStatus);
       provider.contact=true;
       return response(201,{id:"synthetic-contact"});
     }
@@ -164,6 +164,7 @@ function fixture(){
       return response(200,{data:provider.member?[{id:segmentId}]:[]});
     if(path.includes("/segments/")&&method==="POST"){
       provider.segmentPosts++;
+      if(provider.segmentFail)return response(429);
       provider.member=true;return response(200,{id:segmentId});
     }
     if(path.includes("/contacts/")&&method==="GET")
@@ -192,8 +193,8 @@ describe("Gate 3 full synthetic consent -> provider failure -> retry -> withdraw
     vi.stubEnv("RESEND_CONTACT_WRITES_DISABLED","false");
   });
   afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
-  it("consent queues first, 503 defers, and a later successful retry reconciles segment membership",async()=>{
-    const f=fixture();
+  it.each([429,503])("consent queues first, provider %s defers, and a later retry reconciles membership",async status=>{
+    const f=fixture();f.provider.failureStatus=status;
     expect(await f.grant()).toMatchObject({ok:true,providerSync:"retry_required"});
     expect(f.provider.posts).toBe(0); // consent request itself cannot contact provider
     expect(f.tables["marketing_email_enrollment_jobs"]![0]).toMatchObject({status:"pending"});
@@ -204,6 +205,22 @@ describe("Gate 3 full synthetic consent -> provider failure -> retry -> withdraw
     expect(f.provider.member).toBe(true);
     expect(f.tables["marketing_email_enrollment_jobs"]![0]).toMatchObject({status:"completed",attempt_count:2});
     expect(f.fetchMock.mock.calls.every(args=>String(args[0]).startsWith("https://api.resend.com/"))).toBe(true);
+  });
+  it("an ambiguous failed create is recovered by read-before-create without duplicate contact writes",async()=>{
+    const f=fixture();await f.grant();expect((await f.reconcile()).deferred).toBe(1);
+    f.provider.contact=true;f.provider.fail=false;f.readyAgain();
+    const writes=f.provider.posts;
+    expect((await f.reconcile()).completed).toBe(1);
+    expect(f.provider.posts).toBe(writes);expect(f.provider.member).toBe(true);
+  });
+  it("segment-write rate limiting is retried without recreating the contact",async()=>{
+    const f=fixture();await f.grant();f.provider.fail=false;f.provider.segmentFail=true;
+    expect((await f.reconcile()).deferred).toBe(1);
+    expect(f.provider.contact).toBe(true);expect(f.provider.member).toBe(false);
+    const creates=f.provider.posts;
+    f.provider.segmentFail=false;f.readyAgain();
+    expect((await f.reconcile()).completed).toBe(1);
+    expect(f.provider.posts).toBe(creates);expect(f.provider.member).toBe(true);
   });
   it("withdrawal after provider failure prevents enrollment on next retry",async()=>{
     const f=fixture();await f.grant();

@@ -3,65 +3,61 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { recordCustomerMarketingDecision } from "@/lib/email/marketingConsentService";
 import { verifyMarketingUnsubscribeToken } from "@/lib/email/marketingUnsubscribeToken";
+import { readBoundedRequest } from "@/lib/email/readBoundedRequest";
+import { unsubscribePage } from "@/lib/email/unsubscribeView";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" };
-const maxRequestBytes = 4096;
-
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const token = url.searchParams.get("token") ?? "";
-  const verified = verifyMarketingUnsubscribeToken(token, process.env.MARKETING_UNSUBSCRIBE_SECRET);
-  if (!verified) {
-    return NextResponse.json({ error: "Invalid or expired unsubscribe link." }, { status: 400, headers });
+function result(request: Request, status: number, body: { error?: string; ok?: boolean; unsubscribed?: boolean; preferencesUrl?: string }) {
+  if (request.headers.get("accept")?.includes("text/html")) {
+    return new Response(unsubscribePage(body.ok ? "You are unsubscribed" : "Update your email preferences",
+      body.ok ? "You will no longer receive Shalean promotional emails." : body.error!),
+    { status, headers: { ...headers, "Content-Type": "text/html; charset=utf-8" } });
   }
-  if (verified.version === 1) return new Response(
-    '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Email preferences</title></head><body><main><h1>Update your email preferences</h1><p>This older link needs account confirmation.</p><a href="/account/profile">Sign in to manage marketing emails</a></main></body></html>',
-    { status: 200, headers: { ...headers, "Content-Type": "text/html; charset=utf-8" } },
-  );
-  // GET never changes preferences; email security crawlers commonly prefetch links.
-  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Unsubscribe from Shalean emails</title></head><body><main><h1>Unsubscribe from marketing emails</h1><p>Confirm that you no longer want Shalean promotional emails. Your booking and account notices will continue.</p><form method="post"><input type="hidden" name="token" value="${token}"><button type="submit">Unsubscribe</button></form></main></body></html>`, {
+  return NextResponse.json(body, { status, headers });
+}
+export async function GET(request: Request) {
+  const token = new URL(request.url).searchParams.get("token") ?? "";
+  const verified = verifyMarketingUnsubscribeToken(token, process.env.MARKETING_UNSUBSCRIBE_SECRET);
+  if (!verified) return result(request, 400, { error: "Invalid or expired unsubscribe link. Sign in to manage your email preferences." });
+  const title = verified.version === 1 ? "Update your email preferences" : "Unsubscribe from marketing emails";
+  const description = verified.version === 1
+    ? "This older link needs account confirmation. Sign in to manage marketing emails."
+    : "Confirm that you no longer want Shalean promotional emails. Opening this page does not change your preferences.";
+  return new Response(unsubscribePage(title, description, verified.version === 2 ? token : undefined), {
     status: 200, headers: { ...headers, "Content-Type": "text/html; charset=utf-8" },
   });
 }
-
 export async function POST(request: Request) {
-  if (Number(request.headers.get("content-length") ?? 0) > maxRequestBytes)
-    return NextResponse.json({ error: "Request too large." }, { status: 413, headers });
-  const url = new URL(request.url);
-  let token = url.searchParams.get("token") ?? "";
+  const raw = await readBoundedRequest(request);
+  if (raw === null) return result(request, 413, { error: "Request too large." });
+  let token = new URL(request.url).searchParams.get("token") ?? "";
   if (!token) {
     const type = request.headers.get("content-type") ?? "";
-    if (type.startsWith("application/x-www-form-urlencoded")) {
-      const form = await request.formData().catch(() => null);
-      token = String(form?.get("token") ?? "");
-    } else if (type.startsWith("application/json")) {
-      const body = await request.json().catch(() => null) as { token?: unknown } | null;
-      token = typeof body?.token === "string" ? body.token : "";
+    if (type.startsWith("application/x-www-form-urlencoded")) token = new URLSearchParams(raw).get("token") ?? "";
+    else if (type.startsWith("application/json")) {
+      try { const body: unknown = JSON.parse(raw); if (body && typeof body === "object" && "token" in body && typeof body.token === "string") token = body.token; }
+      catch { /* Invalid JSON cannot produce a valid signed token. */ }
     }
   }
   const verified = verifyMarketingUnsubscribeToken(token, process.env.MARKETING_UNSUBSCRIBE_SECRET);
-  if (!verified) return NextResponse.json({ error: "Invalid or expired unsubscribe link." }, { status: 400, headers });
-  if (verified.version === 1) return NextResponse.json({ error: "Sign in to manage email preferences.", preferencesUrl: "/account/profile" }, { status: 409, headers });
+  if (!verified) return result(request, 400, { error: "Invalid or expired unsubscribe link." });
+  if (verified.version === 1) return result(request, 409, { error: "Sign in to manage email preferences.", preferencesUrl: "/account/profile" });
   const admin = getSupabaseAdmin();
-  if (!admin) return NextResponse.json({ error: "Temporarily unavailable." }, { status: 503, headers });
-  // The recipient is resolved from verified token identity, never caller-supplied email.
+  if (!admin) return result(request, 503, { error: "Temporarily unavailable." });
   const { data: profile, error } = await admin.from("user_profiles")
     .select("billing_email, role").eq("id", verified.customerId).maybeSingle();
   if (error || profile?.role !== "customer" || !profile.billing_email)
-    return NextResponse.json({ error: "Account verification unavailable." }, { status: 503, headers });
-  const result = await recordCustomerMarketingDecision(admin, {
-    customerId: verified.customerId,
-    authenticatedEmail: profile.billing_email,
-    decision: "withdrawn",
-    explicitOptIn: false,
+    return result(request, 503, { error: "Account verification unavailable." });
+  const decision = await recordCustomerMarketingDecision(admin, {
+    customerId: verified.customerId, authenticatedEmail: profile.billing_email,
+    decision: "withdrawn", explicitOptIn: false,
     evidenceReference: createHash("sha256").update(token).digest("hex"),
-    source: "signed_one_click",
-    tokenGeneration: verified.generation!,
+    source: "signed_one_click", tokenGeneration: verified.generation!,
   });
-  if (!result.ok && ["unsubscribe_token_superseded", "unsubscribe_legacy_confirmation_required"].includes(result.reason))
-    return NextResponse.json({ error: "This link predates a preference change. Sign in to manage email preferences.", preferencesUrl: "/account/profile" }, { status: 409, headers });
-  if (!result.ok) return NextResponse.json({ error: "Preference update unavailable." }, { status: 503, headers });
-  return NextResponse.json({ ok: true, unsubscribed: true }, { status: 200, headers });
+  if (!decision.ok && ["unsubscribe_token_superseded", "unsubscribe_legacy_confirmation_required"].includes(decision.reason))
+    return result(request, 409, { error: "This link predates a preference change. Sign in to manage email preferences.", preferencesUrl: "/account/profile" });
+  if (!decision.ok) return result(request, 503, { error: "Preference update unavailable." });
+  return result(request, 200, { ok: true, unsubscribed: true });
 }

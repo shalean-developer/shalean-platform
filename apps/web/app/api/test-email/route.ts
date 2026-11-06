@@ -1,3 +1,4 @@
+import { safeResendSend } from "@/lib/email/safeResendSend";
 import { NextResponse } from "next/server";
 import {
   describeResendApiKeyMisconfig,
@@ -71,9 +72,10 @@ export async function POST(request: Request) {
   const from = getDefaultFromAddress();
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await safeResendSend({
       from,
       to,
+      context: { messageType: "test_email" },
       subject: "Shalean — test email",
       html: "<p>This is a test email from the booking platform.</p>",
     });

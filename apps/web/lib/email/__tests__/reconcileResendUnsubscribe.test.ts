@@ -70,3 +70,13 @@ test("invalid email never makes a provider request", async () => {
   });
   assert.equal(result, "retry_required");
 });
+
+test("provider requests are bounded and timeout remains retryable", async () => {
+  const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(AbortSignal.abort(new DOMException("Synthetic timeout", "TimeoutError")));
+  try {
+    const result = await reconcileResendUnsubscribe("synthetic@example.test", { apiKey: "synthetic", fetchFn: (async (_url, init) => {
+      assert.equal(init?.signal?.aborted, true); throw init?.signal?.reason;
+    }) as typeof fetch });
+    assert.equal(result, "retry_required"); assert.equal(timeout.mock.calls[0]?.[0], 10000);
+  } finally { timeout.mockRestore(); }
+});

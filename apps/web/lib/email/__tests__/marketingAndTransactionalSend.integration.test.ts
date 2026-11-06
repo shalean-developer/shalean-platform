@@ -127,3 +127,28 @@ describe("Gate 3 integration: send wrapper + synthetic provider, NO external ema
   });
 
 });
+
+describe("all promotional send paths", () => {
+  beforeEach(() => {
+    vi.clearAllMocks(); auditRows.length=0;
+    mock.send.mockResolvedValue({data:{id:"synthetic"},error:null});
+    mock.eligibility.mockResolvedValue({allowed:false,reason:"unsubscribed"});
+    mock.getAdmin.mockReturnValue({});
+  });
+  it.each(["growth_retention_reminder","growth_win_back","rebook_email","rebook_reminder_email"])("blocks opted-out %s before provider submission",async messageType=>{
+    const result=await safeResendSend({...marketing(),tags:[],context:{customerId,messageType}});
+    expect(result.error?.message).toContain("unsubscribed");
+    expect(mock.send).not.toHaveBeenCalled();
+  });
+  it("rejects multiple recipients before checking only one customer's consent",async()=>{
+    mock.eligibility.mockResolvedValue({allowed:true});
+    const result=await safeResendSend({...marketing(),to:[to,"another@example.test"]});
+    expect(result.error?.message).toBe("marketing_single_recipient_required");
+    expect(mock.send).not.toHaveBeenCalled();
+  });
+  it("cannot disguise a marketing tag with transactional context",async()=>{
+    const result=await safeResendSend({...marketing(),context:{customerId,messageType:"booking_confirmation"}});
+    expect(result.error?.message).toBe("marketing_message_type_conflict");
+    expect(mock.send).not.toHaveBeenCalled();
+  });
+});

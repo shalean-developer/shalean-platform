@@ -14,7 +14,7 @@ const POLICY_VERSION = "marketing-email-2026-11-v1";
  * A separate signed one-click unsubscribe path is still required before launch.
  */
 export async function POST(request: Request) {
-  const auth = await requireCustomerSession(request);
+  const auth = await requireCustomerSession(request, { requireVerifiedEmail: true });
   if (!auth.ok) return auth.response;
   const contentType = request.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().startsWith("application/json"))
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
 
 /** Authenticated, no-cache current marketing preference status. */
 export async function GET(request: Request) {
-  const auth = await requireCustomerSession(request);
+  const auth = await requireCustomerSession(request, { requireVerifiedEmail: true });
   if (!auth.ok) return auth.response;
   if (!auth.session.email) return NextResponse.json({ error: "Verified email required." }, { status: 403 });
   const admin = getSupabaseAdmin();
@@ -64,9 +64,11 @@ export async function GET(request: Request) {
   if (profileError || consentError) return NextResponse.json({ error: "Preferences unavailable." }, { status: 503 });
   if (profile?.role !== "customer" || profile.billing_email?.toLowerCase().trim() !== email)
     return NextResponse.json({ error: "Customer identity unverified." }, { status: 403 });
-  const withdrawn = Boolean(profile.marketing_emails_unsubscribed_at) || consent?.decision === "withdrawn";
+  const status = consent?.decision === "granted"
+    ? profile.marketing_emails_unsubscribed_at ? "consent_recorded_paused" : "consent_recorded"
+    : profile.marketing_emails_unsubscribed_at || consent?.decision === "withdrawn" ? "unsubscribed" : "no_consent";
   return NextResponse.json({
-    status: withdrawn ? "unsubscribed" : consent?.decision === "granted" ? "consent_recorded" : "no_consent",
+    status,
     policyVersion: POLICY_VERSION,
   }, { headers: { "Cache-Control": "no-store" } });
 }
