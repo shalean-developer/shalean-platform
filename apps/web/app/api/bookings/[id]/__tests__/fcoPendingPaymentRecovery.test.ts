@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
@@ -50,6 +52,18 @@ beforeEach(() => {
 });
 
 describe("FCO-01 authenticated pending-payment HTTP recovery", () => {
+  it("retains the client retry branch ahead of any new quote or confirm request", () => {
+    const source = readFileSync(join(process.cwd(), "src/features/booking-v2/steps/Step4Payment.tsx"), "utf8");
+    const branch = source.indexOf("if (pendingBookingId) {", source.indexOf("async function handleConfirmAndPay"));
+    const quote = source.indexOf('fetchPaymentPreparation("/api/booking-v2/quote"', branch);
+    const confirm = source.indexOf('fetchPaymentPreparation("/api/booking-v2/confirm"', branch);
+    expect(branch).toBeGreaterThan(0);
+    expect(quote).toBeGreaterThan(branch);
+    expect(confirm).toBeGreaterThan(quote);
+    expect(source.slice(branch, quote)).toContain("/payment-session");
+    expect(source).toContain("pendingSummary?.amountZar ?? null");
+  });
+
   it("retries the original booking twice without creating a second booking or reference", async () => {
     const first = await recover();
     const second = await recover();
