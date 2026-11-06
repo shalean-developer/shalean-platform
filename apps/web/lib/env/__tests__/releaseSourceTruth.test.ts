@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 
 const repositoryRoot = path.resolve(process.cwd(), "../..");
 const PROD_REF = "paqjwfulwywtsyyvdxrq";
-const STAGING_REF = "jhubpsbwmjgydkzztxeu";
+const STAGING_REF = "jhubpsbwmjgydkzztxeu"; // legacy default unchanged outside the canonical Plesk release
+const APPROVED_PLESK_STAGING_REF = "uwvnmluiqbczeduzjgse";
 const RETIRED_PROD_REF = "tchayecuvzssixyxlvfu";
 const RETIRED_STAGING_REF = "gbgnemlpyykyhpqqbgru";
 
@@ -25,7 +26,12 @@ describe("MASTER-00A release source truth", () => {
     const workflow = readRepositoryFile(".github/workflows/prebuilt-plesk-staging.yml");
     expect(workflow).toContain("- main");
     expect(workflow).toContain("refs/heads/deploy/staging");
-    expect(workflow).toContain(STAGING_REF);
+    expect(workflow).toContain(APPROVED_PLESK_STAGING_REF);
+    expect(workflow).not.toContain("https://" + STAGING_REF + ".supabase.co");
+    expect(workflow).toContain('NEXT_PUBLIC_SHALEAN_APP_ENV: "staging"');
+    expect(workflow).toContain("NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW");
+    expect(workflow).toContain("vars.FCO_01_REGULAR_HOME_PREVIEW");
+    expect(workflow).toContain("'false'");
   });
 
   it("keeps production as the production build source and deploy/production as its artifact branch", () => {

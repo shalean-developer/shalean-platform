@@ -29,7 +29,9 @@ describe("pricing-test PR preview safety contract", () => {
 
   it("activates only a staging bundle and fails closed on environment drift", () => {
     expect(activator).toContain('HEALTH_URL="https://pricing-test.shalean.co.za/api/health/environment"');
-    expect(activator).toContain('EXPECTED_REF="jhubpsbwmjgydkzztxeu"');
+    // Canonical staging activator is now tied to the approved current project,
+    // not the retired project still referenced by historical PR-preview builds.
+    expect(activator).toContain('EXPECTED_REF="uwvnmluiqbczeduzjgse"');
     expect(activator).toContain('LIVE="$ROOT/pricing-test-runtime"');
     expect(activator).toContain('d.get("deployment")=="staging"');
     expect(activator).toContain('d.get("paystack") or {}).get("secretMode")=="test"');
