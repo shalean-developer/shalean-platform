@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { issueEquipmentQuoteReceipt } from "@/lib/booking-v2/equipmentQuoteAuthority";
+import { issueFcoEquipmentSession, hashFcoEquipmentSession, setFcoEquipmentSessionCookie } from "@/lib/booking-v2/fcoEquipmentSession";
+import { fcoEquipmentReceiptEnforced, fcoEquipmentReceiptSecret, fcoEquipmentPricingRevision } from "@/lib/booking-v2/fcoEquipmentServerGuard";
 import { z } from "zod";
 import { loadEquipmentPricingConfig } from "@/lib/booking-v2/loadEquipmentPricingConfig";
 import { quoteEquipmentForAddress } from "@/lib/booking-v2/equipmentPricing";
@@ -11,6 +14,7 @@ const bodySchema = z.object({
   city: z.string().optional().default("Cape Town"),
   postalCode: z.string().optional().default(""),
   equipmentRequired: z.boolean().default(true),
+  serviceSlug: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -45,5 +49,49 @@ export async function POST(request: Request) {
     equipmentRequired: parsed.data.equipmentRequired,
   });
 
+  if (fcoEquipmentReceiptEnforced(parsed.data.serviceSlug ?? "") && parsed.data.equipmentRequired) {
+    // An unavailable/manual quotation is not a valid automatic checkout price.
+    if (!quote || quote.manual_quote_required || quote.geocode_error || !config.is_active) {
+      return NextResponse.json({
+        quote: quote ?? null,
+        error: "Equipment delivery requires a manual quotation.",
+        code: "EQUIPMENT_MANUAL_QUOTE_REQUIRED",
+      }, { status: 409 });
+    }
+    try {
+      const revision = fcoEquipmentPricingRevision(config);
+      const nowMs = Date.now();
+      const session = issueFcoEquipmentSession(request);
+      const receipt = issueEquipmentQuoteReceipt({
+        sessionHash: hashFcoEquipmentSession(session),
+        address: {
+          address: parsed.data.address,
+          suburb: parsed.data.suburb,
+          city: parsed.data.city,
+          postalCode: parsed.data.postalCode,
+        },
+        distanceKm: quote.distance_km,
+        baseFeeZar: quote.base_fee,
+        distanceChargeZar: quote.distance_charge,
+        logisticsFeeZar: quote.logistics_fee,
+        pricePerKmZar: quote.price_per_km,
+        baseLocation: quote.base_location,
+        pricingConfigRevision: revision,
+        manualQuoteRequired: false,
+        issuedAtMs: nowMs,
+        expiresAtMs: nowMs + 10 * 60_000,
+        secret: fcoEquipmentReceiptSecret(),
+      });
+      const response = NextResponse.json({
+        quote: { ...quote, authorityReceipt: receipt },
+        config: { manual_quote_message: config.manual_quote_message },
+      }, { headers: { "Cache-Control": "no-store" } });
+      setFcoEquipmentSessionCookie(response, session);
+      return response;
+    } catch (error) {
+      console.error("[equipment-quote] receipt issuance failed", error);
+      return NextResponse.json({ error: "Equipment quote security unavailable." }, { status: 503 });
+    }
+  }
   return NextResponse.json({ quote, config: { manual_quote_message: config.manual_quote_message } });
 }
