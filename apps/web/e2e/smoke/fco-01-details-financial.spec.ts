@@ -117,7 +117,10 @@ test("FCO-01 Your Details: manual/unavailable equipment must not enter payment",
   await page.goto("/book/regular-cleaning?step=review", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "Your details" })).toBeVisible();
   await expect(page.getByText(/Equipment delivery must be priced for your full address/)).toBeVisible();
-  await page.getByRole("button", { name: /Proceed to payment/ }).click();
+  // The safe behavior is a disabled payment CTA, not a clickable CTA that
+  // accepts the action and then redirects. Never force-click a disabled control.
+  const paymentButton = page.getByRole("button", { name: /Proceed to payment/ });
+  await expect(paymentButton).toBeDisabled();
   await expect(page).toHaveURL(/step=review/);
   expect(result.blocked).toEqual([]);
 });
