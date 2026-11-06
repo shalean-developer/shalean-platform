@@ -56,6 +56,28 @@ describe("FCO equipment receipt server enforcement", () => {
     expect(fcoEquipmentReceiptEnforced("deep-cleaning")).toBe(false);
   });
 
+  it("FCO-SR-01: discards stale or forged delivery fees on equipment-free production and staging bookings", () => {
+    for (const environment of ["production", "staging"] as const) {
+      vi.stubEnv("SHALEAN_APP_ENV", environment);
+      vi.stubEnv("NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW", "false");
+      for (const suppliedQuote of [
+        { ...quote, authorityReceipt: receipt },
+        { ...quote, logistics_fee: 99999, base_fee: 99999 },
+      ]) {
+        expect(authorize({ equipmentRequired: "no", suppliedQuote }))
+          .toEqual({ kind: "not_required", quote: null });
+        expect(authorize({ equipmentRequired: "", suppliedQuote }))
+          .toEqual({ kind: "not_required", quote: null });
+      }
+      // Preserve existing equipment-required legacy flow with feature OFF.
+      expect(authorize({ equipmentRequired: "yes", suppliedQuote: quote }))
+        .toEqual({ kind: "not_required", quote });
+    }
+    enable();
+    expect(authorize({ equipmentRequired: "no", suppliedQuote: { ...quote, logistics_fee: 99999 } }))
+      .toEqual({ kind: "not_required", quote: null });
+  });
+
   it("uses only signed values, not altered client price components", () => {
     enable();
     const result = authorize({ suppliedQuote: { ...quote, base_fee: 1, distance_charge: 599, authorityReceipt: receipt } });
