@@ -151,7 +151,7 @@ for (const width of [320, 375, 768, 1440]) {
     await expect(progress.getByRole("button", { name: "Your Details", exact: true })).toBeVisible();
     await expect(progress.getByRole("button", { name: "Review", exact: true })).toHaveCount(0);
     await expect(page.getByText("Due today", { exact: true })).toHaveCount(0);
-    await page.getByRole("button", { name: /See dates/ }).click();
+    await page.getByRole("button", { name: /See available dates/ }).click();
     await expect(page).toHaveURL(/step=schedule/);
     // Date, recurrence and cleaner preference belong to one Schedule page.
     await expect(page.getByText("Pick a date", { exact: false }).first()).toBeVisible();
@@ -182,7 +182,7 @@ test("FCO-01 saved recurring draft does not show a final payment before address 
   await sandbox(page);
   await page.goto("/book/regular-cleaning?step=details&section=pets", { waitUntil: "domcontentloaded" });
   await expect(page).not.toHaveURL(/section=/);
-  await expect(page.getByText("Delivery fee pending", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Delivery fee pending", { exact: true }).filter({ visible: true }).first()).toBeVisible();
   await expect(page.getByText("Due today", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/Pay all visits now/)).toHaveCount(0);
 });
