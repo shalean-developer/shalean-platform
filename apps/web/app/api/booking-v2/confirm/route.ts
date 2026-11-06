@@ -576,7 +576,8 @@ export async function POST(request: Request) {
     suburb: data.suburb,
     serviceAreaLocationId: data.serviceAreaLocationId,
     serviceAreaCityId: data.serviceAreaCityId,
-    equipmentQuote: serverEquipmentQuote ?? (data.equipmentQuote as EquipmentQuoteResult | null),
+    // Use only the authorized equipment quote; never reintroduce stale client data.
+    equipmentQuote: serverEquipmentQuote,
   });
 
   if (!locationCtx) {
