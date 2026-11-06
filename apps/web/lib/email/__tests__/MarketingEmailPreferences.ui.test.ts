@@ -64,6 +64,22 @@ describe("Gate 3 customer preference UI — isolated synthetic DOM",()=>{
     expect(JSON.parse(post?.[1]?.body)).toMatchObject({decision:"withdrawn",explicitOptIn:false});
     expect(host.textContent).toContain("Unsubscribed from marketing emails");
   });
+  it("allows a previously unsubscribed customer to explicitly record fresh consent",async()=>{
+    await act(async()=>{root.unmount();});
+    root=createRoot(host);
+    fetchMock.mockImplementation(async(_url:string,init?:RequestInit)=>({
+      ok:true,json:async()=>init?.method==="POST"?{ok:true}:{status:"unsubscribed"},
+    }));
+    await act(async()=>{root.render(React.createElement(MarketingEmailPreferences));});
+    expect(button("Subscribe").disabled).toBe(true);
+    const checkbox=host.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    await act(async()=>{checkbox.click();});
+    expect(button("Subscribe").disabled).toBe(false);
+    await act(async()=>{button("Subscribe").click();});
+    const post=fetchMock.mock.calls.find(args=>args[1]?.method==="POST");
+    expect(JSON.parse(post?.[1]?.body)).toMatchObject({decision:"granted",explicitOptIn:true});
+    expect(host.textContent).toContain("Promotional emails remain subject to delivery preferences and safety checks.");
+  });
   it("unavailable preference lookup does not offer opt-in",async()=>{
     await act(async()=>{root.unmount();});
     root=createRoot(host);

@@ -108,3 +108,40 @@ describe("generation revocation and legacy confirmation",()=>{
     expect(response.status).toBe(409);expect(await response.json()).not.toHaveProperty('unsubscribed');
   });
 });
+
+import { sendResponse } from "next/dist/server/send-response";
+import config from "@/next.config";
+
+// Next's Node response writer retains an already-configured response header.
+// Exercise that writer rather than only checking the route's Response object.
+async function emittedHeaders(path: string) {
+  const headers = new Map<string, string>();
+  for (const rule of await config.headers!()) {
+    if (!rule.has && (rule.source === "/(.*)" || rule.source === path)) {
+      for (const header of rule.headers) headers.set(header.key.toLowerCase(), header.value);
+    }
+  }
+  const response = {
+    getHeader: (name: string) => headers.get(name.toLowerCase()),
+    appendHeader: (name: string, value: string) => headers.set(name.toLowerCase(), value),
+    originalResponse: { end: () => undefined },
+  };
+  await sendResponse(
+    { method: "HEAD" } as Parameters<typeof sendResponse>[0],
+    response as unknown as Parameters<typeof sendResponse>[1],
+    new Response(null, { headers: { "Referrer-Policy": "no-referrer", "Cache-Control": "no-store" } }),
+  );
+  return headers;
+}
+
+describe("unsubscribe response header precedence", () => {
+  it("keeps signed-link URLs out of referrers after configured headers are applied", async () => {
+    const headers = await emittedHeaders("/api/marketing/unsubscribe");
+    expect(headers.get("referrer-policy")).toBe("no-referrer");
+    expect(headers.get("cache-control")).toBe("no-store");
+  });
+  it("preserves the site's existing default on unrelated routes", async () => {
+    const headers = await emittedHeaders("/api/health");
+    expect(headers.get("referrer-policy")).toBe("strict-origin-when-cross-origin");
+  });
+});
