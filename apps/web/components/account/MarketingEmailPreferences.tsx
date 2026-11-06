@@ -79,7 +79,7 @@ export function MarketingEmailPreferences() {
         <span>I agree to receive occasional promotional emails from Shalean Cleaning Services.</span>
       </label>
       <div className="mt-4 flex flex-wrap gap-3">
-        <button type="button" disabled={busy || !checked || status === "loading" || status === "unavailable" || status === "unsubscribed"}
+        <button type="button" disabled={busy || !checked || status === "loading" || status === "unavailable"}
           onClick={() => void update("granted")} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
           Subscribe
         </button>
