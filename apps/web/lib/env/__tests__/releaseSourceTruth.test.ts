@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
 const repositoryRoot = path.resolve(process.cwd(), "../..");
@@ -58,6 +59,42 @@ describe("MASTER-00A release source truth", () => {
     expect(workflow).not.toContain("git push --force origin HEAD:refs/heads/deploy/staging");
     expect(activator).toContain(`EXPECTED_REF="${approvedRef}"`);
     expect(activator).toContain('d.get("shaleanAppEnv")=="staging"');
+  });
+
+
+  it("rejects missing staging credentials, live payment keys and invalid preview flags before building", () => {
+    const workflow = readRepositoryFile(".github/workflows/prebuilt-plesk-staging.yml");
+    expect(workflow).toContain('NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ vars.PLESK_TEST_SUPABASE_PUBLISHABLE_KEY }}"');
+    expect(workflow).not.toContain("vars.PLESK_STAGING_SUPABASE_PUBLISHABLE_KEY");
+    expect(workflow).not.toMatch(/sb_publishable_[A-Za-z0-9_-]+/);
+    const step = workflow.split("- name: Validate staging public build variables")[1]
+      ?.split("- name: Use Node.js 24")[0];
+    const script = step?.split("run: |\n")[1]?.split("\n")
+      .map((line) => line.replace(/^ {10}/, "")).join("\n");
+    expect(script).toBeTruthy();
+    const baseEnv = {
+      SHALEAN_APP_ENV: "staging", NEXT_PUBLIC_SHALEAN_APP_ENV: "staging",
+      NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW: "false",
+      NEXT_PUBLIC_SUPABASE_URL: `https://${STAGING_REF}.supabase.co`,
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_synthetic",
+      NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "pk_test_synthetic",
+    };
+    const validate = (patch: Record<string, string> = {}) =>
+      spawnSync("bash", ["-c", script!], {
+        env: { ...process.env, ...baseEnv, ...patch }, encoding: "utf8",
+      }).status;
+    expect(validate()).toBe(0);
+    expect(validate({ NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW: "true" })).toBe(0);
+    for (const patch of [
+      { NEXT_PUBLIC_SUPABASE_ANON_KEY: "" },
+      { NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_secret_synthetic" },
+      { NEXT_PUBLIC_SUPABASE_URL: `https://${PROD_REF}.supabase.co` },
+      { NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "" },
+      { NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "pk_live_synthetic" },
+      { NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW: "invalid" },
+      { NEXT_PUBLIC_SHALEAN_APP_ENV: "production" },
+      { SHALEAN_APP_ENV: "production" },
+    ]) expect(validate(patch)).not.toBe(0);
   });
 
   it("keeps production as the production build source and deploy/production as its artifact branch", () => {
