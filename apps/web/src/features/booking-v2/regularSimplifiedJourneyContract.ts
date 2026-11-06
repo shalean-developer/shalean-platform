@@ -36,6 +36,13 @@ export const REGULAR_SIMPLIFIED_STAGE_CONTRACT = [
 export type RegularSimplifiedStageKey =
   (typeof REGULAR_SIMPLIFIED_STAGE_CONTRACT)[number]["key"];
 
+/** FCO-01 Home deliberately requires an explicit zero for extra rooms.
+ * The legacy service question remains optional outside this gated journey.
+ */
+export const REGULAR_HOME_REQUIRED_QUESTION_KEYS = [
+  "propertyType", "bedrooms", "bathrooms", "extraRooms", "hasPets",
+] as const;
+
 export const REGULAR_HOME_REQUIRED_FIELDS = [
   "serviceDetails.propertyType",
   "serviceDetails.bedrooms",
@@ -62,8 +69,7 @@ export const REGULAR_DEFERRED_DETAILS_FIELDS = [
 export function regularHomeAnswersComplete(
   values: Pick<BookingV2FormData, "serviceDetails" | "equipmentRequired" | "suburb" | "serviceAreaLocationId">,
 ): boolean {
-  const detailKeys = ["propertyType", "bedrooms", "bathrooms", "extraRooms", "hasPets"] as const;
-  return detailKeys.every((key) => {
+  return REGULAR_HOME_REQUIRED_QUESTION_KEYS.every((key) => {
     const value = values.serviceDetails[key];
     return value !== null && value !== undefined && String(value).trim() !== "";
   }) &&
