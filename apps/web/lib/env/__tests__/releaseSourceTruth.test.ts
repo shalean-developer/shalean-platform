@@ -45,6 +45,21 @@ describe("MASTER-00A release source truth", () => {
     expect(workflow).not.toContain("@tailwindcss/postcss@4.1.14");
   });
 
+  it("FCO-01 keeps current staging identity, history and default-off browser flag", () => {
+    const workflow = readRepositoryFile(".github/workflows/prebuilt-plesk-staging.yml");
+    const activator = readRepositoryFile("scripts/plesk-activate-prebuilt-pricing-test.sh");
+    const approvedRef = "uwvnmluiqbczeduzjgse";
+    expect(workflow).toContain(`SHALEAN_EXPECTED_SUPABASE_REF: "${approvedRef}"`);
+    expect(workflow).toContain(`https://${approvedRef}.supabase.co`);
+    expect(workflow).toContain('NEXT_PUBLIC_SHALEAN_APP_ENV: "staging"');
+    expect(workflow).toContain("vars.FCO_01_REGULAR_HOME_PREVIEW || 'false'");
+    expect(workflow).toContain("PLESK_STAGING_HISTORY_ANCHOR");
+    expect(workflow).toContain("git push origin HEAD:refs/heads/deploy/staging");
+    expect(workflow).not.toContain("git push --force origin HEAD:refs/heads/deploy/staging");
+    expect(activator).toContain(`EXPECTED_REF="${approvedRef}"`);
+    expect(activator).toContain('d.get("shaleanAppEnv")=="staging"');
+  });
+
   it("keeps production as the production build source and deploy/production as its artifact branch", () => {
     const workflow = readRepositoryFile(".github/workflows/prebuilt-plesk-production.yml");
     expect(workflow).toContain("- production");
