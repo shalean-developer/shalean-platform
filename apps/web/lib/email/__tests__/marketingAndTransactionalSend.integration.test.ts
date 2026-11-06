@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { verifyMarketingUnsubscribeToken } from "../marketingUnsubscribeToken";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mock = vi.hoisted(() => ({
   send: vi.fn(),
@@ -17,6 +18,7 @@ import { safeResendSend } from "../safeResendSend";
 
 const customerId = "00000000-0000-4000-8000-000000000777";
 const to = "synthetic@example.test";
+let generation=3;
 const auditRows: Record<string, unknown>[] = [];
 const marketing = () => ({
   from: "Shalean <notices@shalean.co.za>", to, subject: "Synthetic referral",
@@ -26,11 +28,13 @@ const marketing = () => ({
 });
 describe("Gate 3 integration: send wrapper + synthetic provider, NO external email", () => {
   beforeEach(() => {
-    vi.clearAllMocks(); auditRows.length = 0;
+    vi.clearAllMocks(); auditRows.length = 0; generation=3;
+    vi.stubEnv("MARKETING_UNSUBSCRIBE_SECRET", "synthetic-secret-of-at-least-32-characters");
     mock.send.mockResolvedValue({ data: { id: "synthetic-provider-id" }, error: null });
     mock.eligibility.mockResolvedValue({ allowed: true });
     mock.getAdmin.mockReturnValue({
       from: (name: string) => {
+        if(name === "user_profiles") return {select:()=>({eq:()=>({maybeSingle:async()=>({data:{role:"customer",billing_email:to,marketing_consent_generation:generation},error:null})})})};
         if (name !== "email_outbound_messages") throw Error("unexpected table");
         return { insert: async (row: Record<string, unknown>) => {
           auditRows.push(row); return { error: null };
@@ -38,6 +42,7 @@ describe("Gate 3 integration: send wrapper + synthetic provider, NO external ema
       },
     });
   });
+  afterEach(()=>vi.unstubAllEnvs());
   it("consented referral transmits only to mocked provider and preserves context", async () => {
     const result = await safeResendSend(marketing());
     expect(result.error).toBeNull();
@@ -105,5 +110,20 @@ describe("Gate 3 integration: send wrapper + synthetic provider, NO external ema
       expect(auditRows[0]?.message_type).toBe(messageType);
     },
   );
+
+  it("stored marketing retries refresh unsubscribe headers to the current generation",async()=>{
+    const request={...marketing(),headers:{"list-unsubscribe":"<https://shalean.co.za/old-v1-link>"}};
+    expect((await safeResendSend(request)).error).toBeNull();
+    generation=4;
+    expect((await safeResendSend(request)).error).toBeNull();
+    for(const [index, expected] of [3,4].entries()) {
+      const headers=mock.send.mock.calls[index]![0].headers;
+      expect(headers).not.toHaveProperty("list-unsubscribe");
+      const url=new URL(headers["List-Unsubscribe"].slice(1,-1));
+      expect(verifyMarketingUnsubscribeToken(url.searchParams.get("token")!,process.env.MARKETING_UNSUBSCRIBE_SECRET))
+        .toMatchObject({version:2,generation:expected});
+      expect(auditRows[index]!.headers).toEqual(headers);
+    }
+  });
 
 });

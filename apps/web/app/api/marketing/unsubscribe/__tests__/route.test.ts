@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { createMarketingUnsubscribeToken } from "@/lib/email/marketingUnsubscribeToken";
 
@@ -13,7 +14,7 @@ const uuid = "00000000-0000-4000-8000-000000000777";
 const secret = "synthetic-secret-of-at-least-32-characters";
 const baseUrl = "https://shalean.co.za/api/marketing/unsubscribe";
 function token() {
-  return createMarketingUnsubscribeToken(uuid, secret)!;
+  return createMarketingUnsubscribeToken(uuid, secret, 3)!;
 }
 function admin(profile: { billing_email: string; role: string } | null = {
   billing_email: "synthetic@example.test", role: "customer",
@@ -76,5 +77,34 @@ describe("synthetic one-click unsubscribe route — no provider traffic", () => 
     const result = await POST(new Request(baseUrl+"?token="+token(),{method:"POST"}));
     expect(result.status).toBe(503);
     expect(mocks.record).not.toHaveBeenCalled();
+  });
+});
+
+function legacyToken() {
+  const encoded=Buffer.from(JSON.stringify({uid:uuid,exp:Math.floor(Date.now()/1000)+3600,v:1})).toString("base64url");
+  return encoded+"."+createHmac("sha256",secret).update(encoded).digest("base64url");
+}
+describe("generation revocation and legacy confirmation",()=>{
+  beforeEach(()=>{vi.stubEnv("MARKETING_UNSUBSCRIBE_SECRET",secret);mocks.getAdmin.mockReset();mocks.record.mockReset();});
+  afterEach(()=>vi.unstubAllEnvs());
+  it("v1 GET offers account preferences without a token-bearing form or database access",async()=>{
+    const response=await GET(new Request(baseUrl+"?token="+legacyToken()));
+    const html=await response.text();
+    expect(response.status).toBe(200);expect(html).toContain('/account/profile');expect(html).not.toContain('<form');
+    expect(mocks.getAdmin).not.toHaveBeenCalled();expect(mocks.record).not.toHaveBeenCalled();
+  });
+  it("v1 POST cannot mutate even if its signature and expiry are valid",async()=>{
+    const response=await POST(new Request(baseUrl+"?token="+legacyToken(),{method:"POST"}));
+    expect(response.status).toBe(409);expect(mocks.getAdmin).not.toHaveBeenCalled();expect(mocks.record).not.toHaveBeenCalled();
+  });
+  it("v2 carries the signed generation to the atomic operation",async()=>{
+    mocks.getAdmin.mockReturnValue(admin());mocks.record.mockResolvedValue({ok:true});
+    const response=await POST(new Request(baseUrl+"?token="+token(),{method:"POST"}));
+    expect(response.status).toBe(200);expect(mocks.record.mock.calls[0]![1]).toMatchObject({tokenGeneration:3});
+  });
+  it("superseded links return a conflict, not a successful withdrawal",async()=>{
+    mocks.getAdmin.mockReturnValue(admin());mocks.record.mockResolvedValue({ok:false,reason:"unsubscribe_token_superseded"});
+    const response=await POST(new Request(baseUrl+"?token="+token(),{method:"POST"}));
+    expect(response.status).toBe(409);expect(await response.json()).not.toHaveProperty('unsubscribed');
   });
 });
