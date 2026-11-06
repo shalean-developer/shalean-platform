@@ -30,6 +30,8 @@ export function verifyMarketingUnsubscribeToken(
   const [encoded, mac] = segments;
   if (!encoded || !mac || !/^[A-Za-z0-9_-]+$/.test(encoded) || !/^[A-Za-z0-9_-]+$/.test(mac)) return null;
   const actual = Buffer.from(mac, "base64url");
+  // Reject alternate pad-bit encodings of the same MAC: token hashes are replay keys.
+  if (actual.toString("base64url") !== mac) return null;
   const expected = signature(encoded, secret);
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
   try {

@@ -58,3 +58,14 @@ test("generation tampering fails HMAC verification", () => {
 test("issuance fails closed without a valid database generation", () => {
   for(const gen of [-1,NaN,Infinity,0.5,2147483648]) assert.equal(createMarketingUnsubscribeToken(id,secret,gen),null);
 });
+test("alternate base64url MAC spellings cannot bypass token-hash replay identity",()=>{
+  const token=createMarketingUnsubscribeToken(id,secret,3,1000)!;
+  const [encoded,mac]=token.split('.');
+  const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  const index=alphabet.indexOf(mac!.slice(-1));
+  for(let bits=1;bits<4;bits++) {
+    const alias=mac!.slice(0,-1)+alphabet[index+bits];
+    assert.deepEqual(Buffer.from(alias,'base64url'),Buffer.from(mac!,'base64url'));
+    assert.equal(verifyMarketingUnsubscribeToken(encoded+'.'+alias,secret,1000),null);
+  }
+});
