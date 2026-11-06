@@ -34,6 +34,10 @@ export function useBookingV2Pricing(): { state: BookingV2QuoteRequestState; erro
   const recurringFrequency = useWatch({ control, name: "recurringFrequency" });
   const equipmentRequired = useWatch({ control, name: "equipmentRequired" });
   const equipmentQuote = useWatch({ control, name: "equipmentQuote" });
+  const address = useWatch({ control, name: "address" });
+  const suburb = useWatch({ control, name: "suburb" });
+  const city = useWatch({ control, name: "city" });
+  const postalCode = useWatch({ control, name: "postalCode" });
   const pendingBookingId = useWatch({ control, name: "pendingBookingId" });
   const serviceDetailsSnapshot = JSON.stringify(serviceDetails ?? {});
   const selectedExtrasSnapshot = JSON.stringify(selectedExtras ?? []);
@@ -98,6 +102,10 @@ export function useBookingV2Pricing(): { state: BookingV2QuoteRequestState; erro
           recurringFrequency: recurringFrequency ?? "",
           equipmentRequired: equipmentRequired ?? "",
           equipmentQuote: currentEquipmentQuote,
+          address: address ?? "",
+          suburb: suburb ?? "",
+          city: city ?? "Cape Town",
+          postalCode: postalCode ?? "",
           vipTier,
         });
       void cachedClientRequest(
@@ -163,6 +171,10 @@ export function useBookingV2Pricing(): { state: BookingV2QuoteRequestState; erro
     serviceDetailsSnapshot,
     selectedExtrasSnapshot,
     equipmentQuoteSnapshot,
+    address,
+    suburb,
+    city,
+    postalCode,
   ]);
 
   return { state: quoteRequestState, error: quoteRequestError };

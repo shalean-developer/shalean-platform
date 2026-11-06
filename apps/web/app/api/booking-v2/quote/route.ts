@@ -7,6 +7,9 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { loadCachedBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
 import { SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
+import { authorizeFcoEquipmentQuote, fcoEquipmentReceiptEnforced, fcoEquipmentPricingRevision } from "@/lib/booking-v2/fcoEquipmentServerGuard";
+import { loadEquipmentPricingConfig } from "@/lib/booking-v2/loadEquipmentPricingConfig";
+import { readFcoEquipmentSession, hashFcoEquipmentSession } from "@/lib/booking-v2/fcoEquipmentSession";
 import {
   canonicalBookingCount,
   canonicalCarpetCount,
@@ -26,6 +29,10 @@ const quoteSchema = z.object({
   recurringFrequency: z.enum(["weekly", "fortnightly", "monthly", "custom", ""]).default(""),
   equipmentRequired: z.enum(["yes", "no", ""]).default("no"),
   equipmentQuote: z.record(z.string(), z.unknown()).nullable().default(null),
+  address: z.string().optional().default(""),
+  suburb: z.string().optional().default(""),
+  city: z.string().optional().default("Cape Town"),
+  postalCode: z.string().optional().default(""),
   vipTier: z.string().nullable().default(null),
 }).superRefine((data, ctx) => {
   if (data.serviceSlug === "carpet-cleaning") {
@@ -104,6 +111,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Live pricing is unavailable." }, { status: 503 });
     }
 
+    const equipmentPricingConfigRevision =
+      fcoEquipmentReceiptEnforced(parsed.data.serviceSlug) && parsed.data.equipmentRequired === "yes"
+        ? fcoEquipmentPricingRevision(await loadEquipmentPricingConfig())
+        : undefined;
+    const equipmentSession = fcoEquipmentReceiptEnforced(parsed.data.serviceSlug) ? readFcoEquipmentSession(request) : null;
+    const equipment = authorizeFcoEquipmentQuote({
+      sessionHash: equipmentSession ? hashFcoEquipmentSession(equipmentSession) : null,
+      serviceSlug: parsed.data.serviceSlug,
+      equipmentRequired: parsed.data.equipmentRequired,
+      suppliedQuote: parsed.data.equipmentQuote as EquipmentQuoteResult | null,
+      delivery: {
+        address: parsed.data.address, suburb: parsed.data.suburb,
+        city: parsed.data.city, postalCode: parsed.data.postalCode,
+      },
+      allowProvisionalWithoutAddress: true,
+      nowMs: Date.now(),
+      expectedPricingConfigRevision: equipmentPricingConfigRevision,
+    });
+    if (equipment.kind === "rejected") {
+      return NextResponse.json({
+        error: "Equipment delivery details require a new verified quotation.",
+        code: equipment.code,
+      }, { status: 409 });
+    }
+
     const pricingSummary = buildSignedCustomerPricingFromForm({
       serviceSlug: parsed.data.serviceSlug,
       values: {
@@ -114,7 +146,7 @@ export async function POST(request: Request) {
         bookingType: parsed.data.bookingType,
         recurringFrequency: parsed.data.recurringFrequency,
         equipmentRequired: parsed.data.equipmentRequired,
-        equipmentQuote: parsed.data.equipmentQuote as EquipmentQuoteResult | null,
+        equipmentQuote: equipment.quote,
       },
       liveConfig,
       feesConfig,

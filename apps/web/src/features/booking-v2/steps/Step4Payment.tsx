@@ -36,6 +36,7 @@ import {
   canRefreshBookingQuoteAtPayment,
 } from "@/lib/booking-v2/bookingQuoteReadiness";
 import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
+import { renewFcoEquipmentForCheckout } from "@/lib/booking-v2/renewFcoEquipmentForCheckout";
 import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 
 // ??? Auth Form ?????????????????????????????????????????????????????????????????
@@ -681,6 +682,13 @@ function PaymentSection({
       // an async quote response by one render, so never send `values` as the
       // authoritative confirm payload.
       let confirmValues = getValues();
+      const previousQuotedTotal = confirmValues.pricingSummary?.estimated_total ?? confirmValues.pricingSummary?.total;
+      // Equipment receipts expire sooner than booking locks. Always renew for a
+      // first FCO equipment confirmation; pending payment recovery exits above.
+      const renewedEquipment = await renewFcoEquipmentForCheckout(
+        serviceSlug, confirmValues, fetchPaymentPreparation,
+      );
+      if (renewedEquipment) confirmValues = { ...confirmValues, equipmentQuote: renewedEquipment };
       const currentLock = confirmValues.quoteLock;
       const currentSignature = confirmValues.pricingSummary?.quote_signature;
       const lockExpiresAtMs = currentLock?.expiresAt ? Date.parse(currentLock.expiresAt) : NaN;
@@ -695,7 +703,7 @@ function PaymentSection({
       // If the form does not contain the exact current lock, obtain one now and
       // submit that returned pair directly. This closes the async render race
       // without weakening the server's QUOTE_LOCK_REQUIRED boundary.
-      if (!lockUsable) {
+      if (!lockUsable || renewedEquipment) {
         const quoteRes = await fetchPaymentPreparation("/api/booking-v2/quote", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -709,6 +717,10 @@ function PaymentSection({
             recurringFrequency: confirmValues.recurringFrequency ?? "",
             equipmentRequired: confirmValues.equipmentRequired ?? "no",
             equipmentQuote: confirmValues.equipmentQuote ?? null,
+            address: confirmValues.address ?? "",
+            suburb: confirmValues.suburb ?? "",
+            city: confirmValues.city || "Cape Town",
+            postalCode: confirmValues.postalCode ?? "",
             vipTier,
           }),
         }, BOOKING_CONFIRM_TIMEOUT_MS);
@@ -722,6 +734,9 @@ function PaymentSection({
           setConfirming(false);
           return;
         }
+        if (renewedEquipment) {
+          setValue("equipmentQuote", renewedEquipment, { shouldDirty: false, shouldValidate: false });
+        }
         setValue("pricingSummary", freshQuote.pricingSummary, { shouldDirty: false, shouldValidate: false });
         setValue("quoteLock", freshQuote.quoteLock, { shouldDirty: false, shouldValidate: false });
         confirmValues = {
@@ -729,6 +744,13 @@ function PaymentSection({
           pricingSummary: freshQuote.pricingSummary,
           quoteLock: freshQuote.quoteLock,
         };
+      }
+
+      if (renewedEquipment &&
+          (confirmValues.pricingSummary?.estimated_total ?? confirmValues.pricingSummary?.total) !== previousQuotedTotal) {
+        setError("Your price has been updated. Review the new total and press Pay again to continue.");
+        setConfirming(false);
+        return;
       }
 
       const confirmRes = await fetchPaymentPreparation("/api/booking-v2/confirm", {
