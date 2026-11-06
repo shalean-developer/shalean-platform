@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "apps/web/e2e/smoke/fco-01-regular-home.spec.ts"
+      - "apps/web/e2e/smoke/fco-01-details-financial.spec.ts"
       - "apps/web/src/features/booking-v2/**"
       - "apps/web/lib/booking-v2/**"
       - ".github/workflows/fco-01-isolated-browser.yml"
@@ -48,4 +49,4 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Synthetic FCO Home desktop/mobile smoke (no provider mutations)
-        run: npx playwright test e2e/smoke/fco-01-regular-home.spec.ts --project=chromium
+        run: npx playwright test e2e/smoke/fco-01-regular-home.spec.ts e2e/smoke/fco-01-details-financial.spec.ts --project=chromium
