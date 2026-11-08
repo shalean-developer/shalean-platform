@@ -18,7 +18,7 @@ export function AccountShell({ children }: { children: ReactNode }) {
         {state.status === "timeout" ? <RoleGuardRetryBanner onRetry={retry} /> : null}
         <AccountSidebar />
 
-        <div className="min-h-dvh md:pl-64">
+        <div className="min-h-dvh md:pl-72">
           <AccountHeader />
           <main className="mx-auto w-full max-w-[var(--ui-container-wide)] px-[var(--ui-page-gutter)] py-6 md:py-8">
             {state.status === "checking" ? (
