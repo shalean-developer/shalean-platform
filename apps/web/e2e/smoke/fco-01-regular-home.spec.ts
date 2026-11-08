@@ -92,7 +92,7 @@ async function isolateBooking(page: Page) {
   return { unexpectedMutations, externalApiRequests };
 }
 
-for (const width of [375, 1440]) {
+for (const width of [320, 375, 1440]) {
   test("FCO-01 guarded Home at " + width + "px: explicit equipment, suburb and safe navigation", async ({ page }) => {
     await page.setViewportSize({ width, height: 850 });
     captureIsolatedBrowserDiagnostics(page);
@@ -108,17 +108,45 @@ for (const width of [375, 1440]) {
     await page.getByRole("button", { name: "See available dates" }).click();
     await expect(page).toHaveURL(/step=details/);
 
-    await page.getByLabel(/Property type/i).selectOption("house");
-    await page.getByLabel(/Number of bedrooms/i).selectOption("2");
-    await page.getByLabel(/Number of bathrooms/i).selectOption("1");
-    // FCO-SR-03: an explicit zero is valid and the UI must disclose the required answer.
-    const extraRooms = page.getByLabel(/Number of extra rooms/i);
+    await expect(page.locator('[aria-label="Your home"] select')).toHaveCount(0);
+    const property = page.getByRole("combobox", { name: /Property type/i });
+    await property.press("ArrowDown");
+    await expect(page.getByRole("listbox")).toBeVisible();
+    await page.getByRole("listbox").press("End");
+    await page.getByRole("listbox").press("Enter");
+    await expect(property).toContainText("Townhouse");
+    await expect(property).toBeFocused();
+    await property.press("ArrowDown");
+    await page.getByRole("listbox").press("Escape");
+    await expect(property).toBeFocused();
+    await expect(page.getByRole("listbox")).toHaveCount(0);
+    await property.press("ArrowDown");
+    await page.getByRole("listbox").press("Tab");
+    await expect(page.getByRole("combobox", { name: /Number of bedrooms/i })).toBeFocused();
+
+    async function choose(label: RegExp, option: string) {
+      const trigger = page.getByRole("combobox", { name: label });
+      await trigger.click();
+      const panel = page.getByRole("listbox");
+      await expect(panel).toBeVisible();
+      const bounds = await panel.boundingBox();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width + 1);
+      await panel.getByRole("option", { name: option, exact: true }).click();
+      await expect(trigger).toContainText(option);
+      await expect(trigger).toBeFocused();
+      await expect(panel).toHaveCount(0);
+    }
+    await choose(/Property type/i, "House");
+    await choose(/Number of bedrooms/i, "2 bedrooms");
+    await choose(/Number of bathrooms/i, "1 bathroom");
+    // Explicit zero remains valid; requiredness is exposed on the custom combobox.
+    const extraRooms = page.getByRole("combobox", { name: /Number of extra rooms/i });
     await expect(extraRooms).toHaveAttribute("aria-required", "true");
-    await expect(extraRooms).toHaveAttribute("required", "");
-    await extraRooms.selectOption("0");
-    await page.getByLabel(/Do you have any pets/i).selectOption("no");
+    await choose(/Number of extra rooms/i, "No extra rooms");
+    await choose(/Do you have any pets/i, "No");
     await page.getByRole("radio", { name: "I will provide equipment" }).check();
-    await page.getByLabel(/Cleaning suburb/i).selectOption(LOCATION_ID);
+    await choose(/Cleaning suburb/i, "Claremont");
     await expect(page.getByText("Home details complete")).toBeVisible();
     await page.getByRole("button", { name: "See available dates" }).click();
     await expect(page).toHaveURL(/step=schedule/);
