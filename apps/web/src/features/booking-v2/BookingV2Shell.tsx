@@ -159,7 +159,7 @@ function BookingV2Inner() {
           : "Securing your latest price and estimated cleaning time…";
 
   return (
-    <div className={cn("min-h-dvh bg-muted/35 text-foreground", simplifiedHomePreview && styles.regularJourney)}>
+    <div className={cn("min-h-dvh bg-muted/35 text-foreground", locationEntry && styles.locationPage, simplifiedHomePreview && styles.regularJourney)}>
       <BookingV2Header serviceSlug={serviceSlug} currentStep={currentStep} onStepClick={goToStep} />
 
       {/* Main content — single document scroll; fluid padding for ≤390px */}
