@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Bell,
   CalendarDays,
@@ -17,8 +17,8 @@ import {
   Home,
   LogOut,
   MapPin,
+  Menu,
   Repeat,
-  Settings,
   Sparkles,
   Star,
   UserRound,
@@ -35,6 +35,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogTrigger,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -71,6 +72,7 @@ const NAV: NavSection[] = [
     title: "Billing",
     items: [
       { href: "/account/invoices", label: "Invoices", icon: FileText },
+      { href: "/account/sales-documents", label: "Quotes", icon: FileText },
       { href: "/account/payments", label: "Payments", icon: CreditCard },
     ],
   },
@@ -81,7 +83,6 @@ const NAV: NavSection[] = [
       { href: "/account/reviews", label: "Reviews", icon: Star },
       { href: "/account/referrals", label: "Referrals", icon: Gift },
       { href: "/account/rewards", label: "Rewards & Offers", icon: Sparkles },
-      { href: "/account/profile", label: "Profile", icon: Settings },
       { href: "/account/help", label: "Help", icon: HelpCircle },
     ],
   },
@@ -90,9 +91,8 @@ const NAV: NavSection[] = [
 const MOBILE_NAV: NavItem[] = [
   { href: "/account", label: "Home", icon: Home, exact: true },
   { href: "/account/bookings", label: "Bookings", icon: CalendarDays },
-  { href: "/account/invoices", label: "Billing", icon: FileText },
+  { href: "/account/invoices", label: "Invoices", icon: FileText },
   { href: "/account/book", label: "Book", icon: Sparkles },
-  { href: "/account/profile", label: "Profile", icon: UserRound },
 ];
 
 function isNavActive(pathname: string, href: string, exact?: boolean): boolean {
@@ -120,7 +120,7 @@ function AccountNavLink({ item, pathname }: { item: NavItem; pathname: string })
       href={href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "group flex min-h-10 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+        "group flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
         active
           ? "bg-primary/10 text-primary"
@@ -188,6 +188,27 @@ function LogoutDialog({ children }: { children: ReactNode }) {
   );
 }
 
+function AccountNavigation({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    navRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView?.({ block: "nearest" });
+  }, [pathname]);
+
+  return (
+    <nav ref={navRef} tabIndex={0} aria-label="Account navigation" onClick={(event) => { if ((event.target as HTMLElement).closest("a")) onNavigate?.(); }}
+      className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 [scrollbar-gutter:stable] [scrollbar-width:thin] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring">
+      {NAV.map((section, index) => (
+        <div key={section.title ?? "home"} className={index > 0 ? "mt-3" : undefined}>
+          {section.title ? <p className="mb-1 px-3 text-xs font-semibold text-muted-foreground">{section.title}</p> : null}
+          <div className="space-y-0.5">
+            {section.items.map(item => <AccountNavLink key={item.href} item={item} pathname={pathname} />)}
+          </div>
+        </div>
+      ))}
+    </nav>
+  );
+}
+
 export function AccountSidebar() {
   const pathname = usePathname() ?? "";
   const { user } = useUser();
@@ -196,46 +217,30 @@ export function AccountSidebar() {
   const name = displayName(user?.email, meta?.full_name);
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-border bg-card md:flex">
-      <div className="flex h-16 items-center border-b border-border px-5">
+    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 min-h-0 flex-col overflow-hidden border-r border-border bg-card md:flex">
+      <div className="flex h-16 shrink-0 items-center border-b border-border px-5">
         <Link
           href="/"
           className="flex min-w-0 items-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           aria-label="Shalean home"
         >
-          <ShaleanNavLogo className="h-7 w-auto" intrinsicHeight={64} />
+          <ShaleanNavLogo className="h-8 w-auto" intrinsicHeight={64} />
         </Link>
       </div>
 
-      <nav className="scrollbar-hide flex-1 overflow-y-auto px-3 py-4" aria-label="Account navigation">
-        {NAV.map((section, sectionIndex) => (
-          <div key={section.title ?? "home"} className={sectionIndex > 0 ? "mt-5" : ""}>
-            {section.title ? (
-              <p className="mb-1 px-3 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
-                {section.title}
-              </p>
-            ) : null}
-            <div className="space-y-0.5">
-              {section.items.map((item) => (
-                <AccountNavLink key={item.href} item={item} pathname={pathname} />
-              ))}
-            </div>
-          </div>
-        ))}
+      <div className="shrink-0 px-3 pt-3">
+        <Link href="/account/book" aria-current={isNavActive(pathname, "/account/book") ? "page" : undefined}
+          className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+          <Sparkles aria-hidden="true" className="h-4 w-4" />Book a clean
+        </Link>
+      </div>
+      <AccountNavigation pathname={pathname} />
 
-        <div className="mt-2">
-          <LogoutDialog>
-            <LogOut className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-            Log out
-          </LogoutDialog>
-        </div>
-      </nav>
-
-      <div className="border-t border-border p-3">
+      <div className="shrink-0 border-t border-border p-3">
         <Link
           href="/account/profile"
           aria-current={isNavActive(pathname, "/account/profile") ? "page" : undefined}
-          className="group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className={cn("group flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring", isNavActive(pathname, "/account/profile") && "bg-primary/10 text-primary")}
         >
           <Avatar className="h-9 w-9 shrink-0">
             <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">{initials}</AvatarFallback>
@@ -244,8 +249,9 @@ export function AccountSidebar() {
             <p className="truncate text-sm font-medium text-foreground">{name}</p>
             <p className="text-xs text-muted-foreground group-hover:text-accent-foreground">View profile</p>
           </div>
-          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
         </Link>
+        <LogoutDialog><LogOut aria-hidden="true" className="h-4 w-4 shrink-0" />Sign out</LogoutDialog>
       </div>
     </aside>
   );
@@ -328,6 +334,7 @@ export const AccountTopBar = AccountHeader;
 
 export function AccountMobileNav() {
   const pathname = usePathname() ?? "";
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <nav
@@ -366,6 +373,22 @@ export function AccountMobileNav() {
             </Link>
           );
         })}
+        <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
+          <DialogTrigger asChild>
+            <button type="button" aria-label="Open account navigation" className="flex min-w-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[0.6875rem] font-medium text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
+              <span className="flex h-9 w-9 items-center justify-center"><Menu aria-hidden="true" className="h-5 w-5" /></span>
+              Menu
+            </button>
+          </DialogTrigger>
+          <DialogContent aria-describedby={undefined} className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0">
+            <DialogHeader className="shrink-0 border-b border-border p-4 pr-12 text-left"><DialogTitle>My account</DialogTitle></DialogHeader>
+            <AccountNavigation pathname={pathname} onNavigate={() => setMenuOpen(false)} />
+            <div className="shrink-0 border-t border-border p-3">
+              <Link href="/account/profile" onClick={() => setMenuOpen(false)} className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"><UserRound aria-hidden="true" className="h-4 w-4" />Profile</Link>
+              <LogoutDialog><LogOut aria-hidden="true" className="h-4 w-4" />Sign out</LogoutDialog>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </nav>
   );
