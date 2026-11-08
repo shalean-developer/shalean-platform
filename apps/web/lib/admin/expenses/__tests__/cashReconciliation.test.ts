@@ -1,0 +1,72 @@
+import { describe, expect, it } from 'vitest';
+import { summarizeCashReconciliation, syntheticCashReconciliation, type BankEvidence } from '../cashReconciliation';
+const now = new Date('2026-11-08T10:00:00Z');
+const rows = (): BankEvidence[] => [1,2,3,4].map(n => ({ id: String(n), name: `Bank ${n}`, bankCents: n*10000, bookCents:n*10000, bookReadAt:now.toISOString(),feedAt:now.toISOString(), identityVerified:true, bankBalanceBasis:'current' }));
+const summarize = (r: BankEvidence[]) => summarizeCashReconciliation(r, ['1','2','3','4'], now);
+describe('CF-02 four-account evidence', () => {
+  it.each(['missing','stale','future','invalid'] as const)('keeps independently observed books when bank evidence is %s', kind => {
+    const r=rows();
+    if(kind==='missing') r[0].bankCents=null;
+    if(kind==='stale') r[0].feedAt='2026-11-01';
+    if(kind==='future') r[0].feedAt='2026-11-09';
+    if(kind==='invalid') r[0].bankCents=NaN;
+    const s=summarize(r);
+    expect(s.booksComplete).toBe(true); expect(s.bookCents).toBe(100000);
+    expect(s.bankComplete).toBe(false); expect(s.bankCents).toBeNull();
+    expect(s.differenceCents).toBeNull(); expect(s.safeToSpendCents).toBeNull(); expect(s.runwayDays).toBeNull();
+  });
+  it.each(['missing','stale','future','invalid','identity','duplicate'] as const)('cannot certify book totals with %s book evidence', kind => {
+    const r=rows();
+    if(kind==='missing') r[0].bookReadAt=null;
+    if(kind==='stale') r[0].bookReadAt='2026-11-01';
+    if(kind==='future') r[0].bookReadAt='2026-11-09';
+    if(kind==='invalid') r[0].bookCents=NaN;
+    if(kind==='identity') r[0].identityVerified=false;
+    if(kind==='duplicate') r[1].id='1';
+    const s=summarize(r); expect(s.booksComplete).toBe(false); expect(s.bookCents).toBeNull();
+    expect(s.differenceCents).toBeNull(); expect(s.safeToSpendCents).toBeNull();
+  });
+  it.each(['available', 'unknown', undefined] as const)('does not call %s feed balances an accounting discrepancy', basis => {
+    const r = rows();
+    r[0] = {...r[0], bankCents:7465, bookCents:7915, bankBalanceBasis:basis};
+    r[1] = {...r[1], bankCents:12666, bookCents:579584, bankBalanceBasis:basis};
+    const s = summarize(r);
+    expect(s.complete).toBe(true); expect(s.comparable).toBe(false);
+    expect(s.accounts[0].differenceCents).toBeNull(); expect(s.accounts[1].differenceCents).toBeNull();
+    expect(s.differenceCents).toBeNull(); expect(s.safeToSpendCents).toBeNull();
+    expect(s.bankCents).toBe(90131);
+  });
+  it('compares current statement balances without substituting available funds', () => {
+    const r = rows(); r[0].bankCents = r[0].bookCents = 7915;
+    r[1].bankCents = r[1].bookCents = 579584;
+    expect(summarize(r).differenceCents).toBe(0);
+  });
+  it('aggregates each account once but never certifies ownership from balance equality', () => {
+    const s = summarize(rows()); expect(s.bankCents).toBe(100000); expect(s.differenceCents).toBe(0);
+    expect(s.safeToSpendCents).toBeNull(); expect(s.runwayDays).toBeNull(); expect(s.bokkieObligationCents).toBeNull(); expect(s.customerAdvancesCents).toBeNull();
+  });
+  it('keeps internal transfers neutral', () => {
+    const r = rows(); r[0].bankCents! -= 500; r[1].bankCents! += 500;
+    r[0].bookCents! -= 500; r[1].bookCents! += 500;
+    expect(summarize(r).bankCents).toBe(100000); expect(summarize(r).differenceCents).toBe(0);
+  });
+  it('shows signed differences without netting them into spendable cash', () => {
+    const r = rows(); r[0].bookCents! += 2500; r[1].bookCents! -= 1000;
+    const s = summarize(r); expect(s.differenceCents).toBe(1500); expect(s.accounts[0].differenceCents).toBe(2500); expect(s.safeToSpendCents).toBeNull();
+  });
+  it.each(['missing','duplicate','stale','future','identity','invalid'] as const)('fails closed on %s evidence', kind => {
+    const r = rows();
+    if(kind==='missing') r.pop(); if(kind==='duplicate') r[1].id='1';
+    if(kind==='stale') r[0].feedAt='2026-11-01'; if(kind==='future') r[0].feedAt='2026-11-09';
+    if(kind==='identity') r[0].identityVerified=false; if(kind==='invalid') r[0].bankCents=NaN;
+    expect(summarize(r).bankCents).toBeNull(); expect(summarize(r).safeToSpendCents).toBeNull();
+  });
+  it('preserves negative balances rather than clamping overdrafts to zero', () => {
+    const r=rows(); r[0].bankCents=-500; r[0].bookCents=-500; expect(summarize(r).bankCents).toBe(89500);
+  });
+  it('never adds processor balances or pending settlements to bank cash', () => {
+    const s=syntheticCashReconciliation('equal',now); expect(s.processorLedgerCents).toBe(75000); expect(s.bankCents).toBe(1000000); expect(s.safeToSpendCents).toBeNull();
+  });
+});
+
+

@@ -16,8 +16,8 @@ describe("CF-01 recorded versus projected cash-flow definitions", () => {
 
   it("explicitly separates recorded net from the incomplete forecast in the UI", () => {
     const page = read("app/(ui-redesign)/office/cash-flow/page.tsx");
-    expect(page).toContain("Recorded net · settlements less payouts/approved expenses");
+    expect(page).toContain("Provisional net · settlements less payouts/approved expenses");
     expect(page).toContain("Expected income and expected expenses are a separate, incomplete forecast");
-    expect(page).toContain("Recorded net is not a reconciled all-bank cash movement total.");
+    expect(page).toContain("Provisional net is not a reconciled all-bank cash movement total.");
   });
 });
