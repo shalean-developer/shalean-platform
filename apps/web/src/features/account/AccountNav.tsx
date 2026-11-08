@@ -12,10 +12,8 @@ import {
   Gift,
   HelpCircle,
   Home,
-  LifeBuoy,
   LogOut,
   MapPin,
-  MessageCircle,
   Repeat,
   Settings,
   Sparkles,
@@ -62,14 +60,14 @@ const NAV: NavSection[] = [
   {
     title: "Bookings",
     items: [
-      { href: "/account/bookings", label: "My Bookings", icon: CalendarDays },
-      { href: "/account/recurring", label: "Recurring Plans", icon: Repeat },
+      { href: "/account/bookings", label: "Bookings", icon: CalendarDays },
+      { href: "/account/recurring", label: "Plans", icon: Repeat },
     ],
   },
   {
     title: "Billing",
     items: [
-      { href: "/account/invoices", label: "Monthly billing", icon: FileText },
+      { href: "/account/invoices", label: "Invoices", icon: FileText },
       { href: "/account/payments", label: "Payments", icon: CreditCard },
     ],
   },
@@ -80,8 +78,8 @@ const NAV: NavSection[] = [
       { href: "/account/reviews", label: "Reviews", icon: Star },
       { href: "/account/referrals", label: "Referrals", icon: Gift },
       { href: "/account/rewards", label: "Rewards & Offers", icon: Sparkles },
-      { href: "/account/profile", label: "Profile Settings", icon: Settings },
-      { href: "/account/help", label: "Help & Support", icon: HelpCircle },
+      { href: "/account/profile", label: "Profile", icon: Settings },
+      { href: "/account/help", label: "Help", icon: HelpCircle },
     ],
   },
 ];
@@ -273,28 +271,9 @@ export function AccountHeader() {
       <div className="mx-auto flex min-h-16 w-full max-w-[var(--ui-container-wide)] items-center justify-between gap-4 px-[var(--ui-page-gutter)] py-3">
         <div className="min-w-0">
           <p className="truncate text-base font-semibold text-foreground sm:text-lg">Welcome back, {firstName}</p>
-          <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">Manage your bookings, billing and account.</p>
         </div>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          <Button asChild variant="outline" size="sm" className="hidden rounded-full lg:inline-flex">
-            <Link href="/account/cases">
-              <LifeBuoy className="h-4 w-4" />
-              Support cases
-            </Link>
-          </Button>
-
-          <a
-            href="https://wa.me/27825915525"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden min-h-9 items-center gap-1.5 rounded-full border border-success/25 bg-success/10 px-3 text-xs font-semibold text-success transition-colors hover:bg-success/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:flex"
-            aria-label="Contact Shalean support on WhatsApp at 082 591 5525"
-          >
-            <MessageCircle className="h-3.5 w-3.5" />
-            082 591 5525
-          </a>
-
           <Link
             href="/account/notifications"
             className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -318,11 +297,12 @@ export function AccountHeader() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuItem asChild>
-                <Link href="/account/profile">Profile settings</Link>
+                <Link href="/account/profile">Profile</Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild className="lg:hidden">
+              <DropdownMenuItem asChild>
                 <Link href="/account/cases">Support cases</Link>
               </DropdownMenuItem>
+              <DropdownMenuItem asChild><Link href="/account/help">Help</Link></DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href="/">Back to website</Link>
