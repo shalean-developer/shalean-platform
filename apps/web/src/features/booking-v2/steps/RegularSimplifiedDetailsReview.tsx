@@ -1,5 +1,6 @@
 "use client";
 
+import { HomeSectionHeader } from "@/components/marketing-home/primitives/HomeSectionHeader";
 import { useFormContext } from "react-hook-form";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import { PropertyAddressSection } from "@/src/features/booking-v2/components/PropertyAddressSection";
@@ -21,17 +22,14 @@ export function RegularSimplifiedDetailsReview() {
 
   return (
     <div className="space-y-6">
-      <section className="space-y-3 rounded-lg border border-[#DCE7FF] bg-white p-4 sm:p-5">
-        <div>
-          <h2 className="text-xl font-bold text-[#00164E]">Your details</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Add the visit address and contact number. We will validate the location
-            before your booking is confirmed.
-          </p>
-        </div>
+      <section className="space-y-3 rounded-lg border border-border bg-white p-4 sm:p-5">
+        <HomeSectionHeader
+          title="Your details"
+          description="Confirm your address and contact number, then review your clean."
+        />
         <PropertyAddressSection />
         {equipmentRequired === "yes" && (
-          <div className="space-y-2 border-t border-[#DCE7FF] pt-4">
+          <div className="space-y-2 border-t border-border pt-4">
             <EquipmentSection quoteOnly />
             {!equipmentReady && (
               <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">

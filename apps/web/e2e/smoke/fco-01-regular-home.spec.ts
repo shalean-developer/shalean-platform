@@ -157,6 +157,9 @@ for (const width of [320, 375, 1440]) {
     await expect(page.getByText("Home details complete")).toBeVisible();
     await page.getByRole("button", { name: "See available dates" }).click();
     await expect(page).toHaveURL(/step=schedule/);
+    await expect(page.getByRole("button", { name: /Continue to Your Details/ })).toBeDisabled();
+    await expect(page.locator("#regular-schedule-readiness")).toContainText("Choose a date");
+    await expect(page.getByRole("button", { name: /Continue to Your Details/ })).toHaveAttribute("aria-describedby", "regular-schedule-readiness");
     expect(sandbox.unexpectedMutations).toEqual([]);
     expect(sandbox.externalApiRequests.filter((path) => path.includes("confirm"))).toEqual([]);
     const overflows = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);

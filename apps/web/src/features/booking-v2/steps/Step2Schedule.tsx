@@ -585,6 +585,27 @@ export function Step2Schedule() {
     return cleanerCount > 0;
   }
 
+  const regularScheduleReady = ["booking_type", "date_time", "cleaner"].every(
+    (stage) => stageIsReady(stage as RegularCleaningScheduleStage),
+  );
+  const regularScheduleBlockReason = !bookingType
+    ? "Choose once-off or recurring cleaning."
+    : bookingType === "recurring" && !recurringFrequency
+      ? "Choose how often you need cleaning."
+      : !areaResolved
+        ? "Confirm your suburb in Home to check available times."
+        : !date
+          ? "Choose a date to see available times."
+          : slotsFetchError
+            ? "Available times could not be loaded. Try another date or retry."
+            : slotsLoading || !slotsVerified
+              ? "Checking available times for your clean…"
+              : !availableTimeSlots.length
+                ? "No times are available on this date. Choose another date."
+                : !isSelectedBookingSlotVerified(time, availability, slotsVerified)
+                  ? "Choose an available time to continue."
+                  : "Choose at least one cleaner to continue.";
+
   function moveScheduleStage(direction: "back" | "next") {
     if (!activeScheduleStage) return;
 
@@ -1049,14 +1070,23 @@ export function Step2Schedule() {
       ) : null}
 
       {simplifiedRegularJourney ? (
-        <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-5">
-          <button type="button" onClick={() => void goBack()} className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold">Back to Home</button>
+        <div className="space-y-3 border-t border-border pt-5">
+          {!regularScheduleReady && (
+            <p id="regular-schedule-readiness" role="status" aria-live="polite" className="text-sm text-muted-foreground">
+              {regularScheduleBlockReason}
+            </p>
+          )}
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <button data-booking-action type="button" onClick={() => void goBack()} className="border border-border bg-card px-5 py-3 text-sm font-semibold">Back to Home</button>
           <button
             type="button"
             onClick={() => void goNext()}
-            disabled={!["booking_type", "date_time", "cleaner"].every((stage) => stageIsReady(stage as RegularCleaningScheduleStage))}
-            className="rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            data-booking-action
+            disabled={!regularScheduleReady}
+            aria-describedby={!regularScheduleReady ? "regular-schedule-readiness" : undefined}
+            className="bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-[#0033a1] disabled:opacity-50"
           >Continue to Your Details →</button>
+          </div>
         </div>
       ) : null}
 
