@@ -6,7 +6,7 @@ import type { CashFlowForecast } from "./cashFlowForecast";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sumApprovedExpensesInRange } from "@/lib/admin/expenses/loadExpenses";
 import {
-  bookingCustomerRevenueCents,
+  loadOfficePayoutPeriodReport,
   normalizeOfficePayoutPeriodRange,
 } from "@/lib/admin/payouts/officePayoutPeriodReport";
 import { computeProfitBreakdown } from "@/lib/admin/expenses/profitCalculations";
