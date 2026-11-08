@@ -29,6 +29,7 @@ export async function loadCashReconciliation(scenario = 'differences', now = new
         bankBalanceBasis: 'unknown' as const,
         bankCents: identityVerified ? money(a?.bank_balance) : null,
         bookCents: identityVerified ? money(a?.balance) : null,
+        bookReadAt: identityVerified ? now.toISOString() : null,
         feedAt: a?.is_feeds_active === true ? a.feeds_last_refresh_date ?? null : null };
     } catch { return empty().find(a => a.id === mapping.id)!; }
   }));
@@ -44,4 +45,5 @@ export async function loadCashReconciliation(scenario = 'differences', now = new
   ]);
   return { ...summarizeCashReconciliation(rows, CASH_ACCOUNT_MAPPING.map(a => a.id), now), processorLedgerCents, undepositedLedgerCents };
 }
+
 

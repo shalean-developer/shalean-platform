@@ -11,11 +11,13 @@ export function CashReconciliationPanel({ data, loading, error }: { data?: CashR
     {loading ? <p role="status">Loading source evidence…</p> : error ? <p role="alert">Bank source unavailable. Safe to spend and runway remain unavailable.</p> : <>
       <div className="grid gap-3 sm:grid-cols-3">
         <p>Bank feed total<strong className="block text-lg">{amount(data?.bankCents)}</strong></p>
-        <p>Zoho total<strong className="block text-lg">{amount(data?.bookCents)}</strong></p>
+        <p>Zoho book total<strong className="block text-lg">{amount(data?.bookCents)}</strong></p>
         <p>Difference<strong className="block text-lg">{data?.complete && !data.comparable ? 'Not comparable' : amount(data?.differenceCents)}</strong></p>
       </div>
       {data?.complete && !data.comparable ? <p className="text-sm text-slate-500">Current bank balance needed for comparison.</p> : null}
-      {!data?.complete ? <p className="text-sm text-amber-800">Totals unavailable: missing or stale balances.</p> : null}
+      {!data?.bankComplete ? <p className="text-sm text-amber-800">Bank feed total unavailable: missing or stale balances.</p> : null}
+      {!data?.booksComplete ? <p className="text-sm text-amber-800">Zoho book total unavailable: incomplete or stale book evidence.</p> : null}
+      <p className="text-xs text-slate-500">Book balances are accounting records, not verified bank cash or spendable funds.</p>
     </>}
     <div className="grid gap-3 rounded-lg bg-slate-50 p-3 text-sm sm:grid-cols-2">
       <p>Safe to spend<strong className="block">Unavailable</strong></p>
@@ -28,7 +30,7 @@ export function CashReconciliationPanel({ data, loading, error }: { data?: CashR
         <thead><tr>{['Account', 'Bank feed', 'Balance type', 'Books', 'Difference', 'Status'].map(label => <th key={label} scope="col" className="p-2">{label}</th>)}</tr></thead>
         <tbody>{data?.accounts.map(a => <tr key={a.id} className="border-t">
           <th scope="row" className="p-2 font-medium">{a.name}</th>
-          <td className="whitespace-nowrap p-2 tabular-nums">{amount(a.bankCents)}</td><td className="p-2">{a.bankBalanceBasis === 'current' ? 'Current' : a.bankBalanceBasis === 'available' ? 'Available' : 'Unconfirmed'}</td><td className="whitespace-nowrap p-2 tabular-nums">{amount(a.bookCents)}</td><td className="whitespace-nowrap p-2 tabular-nums">{amount(a.differenceCents)}</td>
+          <td className="whitespace-nowrap p-2 tabular-nums">{amount(a.bankValid ? a.bankCents : null)}</td><td className="p-2">{a.bankBalanceBasis === 'current' ? 'Current' : a.bankBalanceBasis === 'available' ? 'Available' : 'Unconfirmed'}</td><td className="whitespace-nowrap p-2 tabular-nums">{amount(a.bookValid ? a.bookCents : null)}</td><td className="whitespace-nowrap p-2 tabular-nums">{amount(a.differenceCents)}</td>
           <td className="p-2">{!a.identityVerified ? 'Mapping unverified' : !a.fresh ? 'Feed stale or unavailable' : !a.valid ? 'Source balance unavailable' : !a.comparable ? 'Not comparable' : a.differenceCents === null ? 'Source balance unavailable' : a.differenceCents !== 0 ? 'Difference' : 'Equal · unverified'}</td>
         </tr>)}</tbody>
       </table></div>
@@ -45,10 +47,12 @@ export function CashReconciliationPanel({ data, loading, error }: { data?: CashR
       <p>Transfers move cash between accounts; they do not create income or expenses. Clearing and Undeposited Funds are book balances, not verified pending payouts.</p>
       <p>Bank-held cash is not proof of Shalean ownership. Bokkie funds, customer advances, restrictions and obligations must be reconciled before cash can be called spendable. Matching balances alone do not complete statement reconciliation.</p>
       <p>A successful charge or payout marked paid does not prove a matched bank deposit. Settlements already included in bank balances must not be added again.</p>
-      {!loading && !error ? <ul className="space-y-2">{data?.accounts.map(a => <li key={a.id} className="break-all"><strong>{a.name}</strong> · {a.id}<br />Feed: {a.feedAt ?? 'Unavailable'}</li>)}</ul> : null}
-      <p>Source read: {data?.asOf ?? 'Unavailable'}. Read only; no accounting records changed.</p>
+      {!loading && !error ? <ul className="space-y-2">{data?.accounts.map(a => <li key={a.id} className="break-all"><strong>{a.name}</strong> · {a.id}<br />Books read: {a.bookReadAt ?? 'Unavailable'}<br />Feed refreshed: {a.feedAt ?? 'Unavailable'}</li>)}</ul> : null}
+      <p>Book read time records when Zoho was queried; feed refresh is not the bank balance effective time.</p>
+      <p>Source read: {loading || error ? 'Unavailable' : data?.asOf ?? 'Unavailable'}. Read only; no accounting records changed.</p>
     </CashFlowDetails>
   </section>;
 }
+
 
 
