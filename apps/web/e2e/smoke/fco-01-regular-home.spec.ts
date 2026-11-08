@@ -109,19 +109,27 @@ for (const width of [320, 375, 1440]) {
     await expect(page).toHaveURL(/step=details/);
 
     await expect(page.locator('[aria-label="Your home"] select')).toHaveCount(0);
-    const property = page.getByRole("combobox", { name: /Property type/i });
-    await property.press("ArrowDown");
-    await expect(page.getByRole("listbox")).toBeVisible();
-    await page.getByRole("listbox").press("End");
-    await page.getByRole("listbox").press("Enter");
-    await expect(property).toContainText("Townhouse");
-    await expect(property).toBeFocused();
-    await property.press("ArrowDown");
-    await page.getByRole("listbox").press("Escape");
-    await expect(property).toBeFocused();
-    await expect(page.getByRole("listbox")).toHaveCount(0);
-    await property.press("ArrowDown");
-    await page.getByRole("listbox").press("Tab");
+    await expect(page.getByRole("combobox", { name: /Property type/i })).toHaveCount(0);
+    const properties = page.getByRole("radiogroup", { name: "Property type", exact: true });
+    await expect(properties).toHaveAttribute("aria-required", "true");
+    const house = properties.getByRole("radio", { name: "House", exact: true });
+    const apartment = properties.getByRole("radio", { name: "Apartment", exact: true });
+    const townhouse = properties.getByRole("radio", { name: "Townhouse", exact: true });
+    await expect(house).not.toBeChecked();
+    const boxes = await Promise.all([house, apartment, townhouse].map((card) => card.boundingBox()));
+    expect(Math.max(...boxes.map((box) => box!.y)) - Math.min(...boxes.map((box) => box!.y))).toBeLessThanOrEqual(1);
+    expect(boxes[0]!.x + boxes[0]!.width).toBeLessThan(boxes[1]!.x);
+    expect(boxes[1]!.x + boxes[1]!.width).toBeLessThan(boxes[2]!.x);
+    expect(boxes[2]!.x + boxes[2]!.width).toBeLessThanOrEqual(width + 1);
+    await house.focus();
+    await house.press("ArrowRight");
+    await expect(apartment).toBeChecked();
+    await expect(apartment).toBeFocused();
+    await apartment.press("ArrowRight");
+    await expect(townhouse).toBeChecked();
+    await townhouse.press("ArrowRight");
+    await expect(house).toBeChecked();
+    await house.press("Tab");
     await expect(page.getByRole("combobox", { name: /Number of bedrooms/i })).toBeFocused();
 
     async function choose(label: RegExp, option: string) {
@@ -137,7 +145,6 @@ for (const width of [320, 375, 1440]) {
       await expect(trigger).toBeFocused();
       await expect(panel).toHaveCount(0);
     }
-    await choose(/Property type/i, "House");
     await choose(/Number of bedrooms/i, "2 bedrooms");
     await choose(/Number of bathrooms/i, "1 bathroom");
     // Explicit zero remains valid; requiredness is exposed on the custom combobox.
