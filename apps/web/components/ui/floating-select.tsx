@@ -53,6 +53,8 @@ export type FloatingSelectProps = {
   triggerClassName?: string;
   labelClassName?: string;
   "aria-label"?: string;
+  /** Opt in to required combobox semantics for validated form pickers. */
+  "aria-required"?: boolean;
 };
 
 export function FloatingSelect({
@@ -67,6 +69,7 @@ export function FloatingSelect({
   triggerClassName,
   labelClassName,
   "aria-label": ariaLabel,
+  "aria-required": ariaRequired,
 }: FloatingSelectProps) {
   const reactId = useId();
   const triggerId = `${reactId}-trigger`;
@@ -116,12 +119,19 @@ export function FloatingSelect({
   const dismiss = useDismiss(context);
   const { getReferenceProps, getFloatingProps } = useInteractions([click, dismiss]);
 
+  function focusTrigger() {
+    const trigger = refs.domReference.current;
+    if (trigger instanceof HTMLElement) trigger.focus({ preventScroll: true });
+  }
+
   const pick = useCallback(
     (next: string) => {
       onChange(next);
       setOpen(false);
+      const trigger = refs.domReference.current;
+      if (trigger instanceof HTMLElement) trigger.focus({ preventScroll: true });
     },
-    [onChange],
+    [onChange, refs.domReference],
   );
 
   useEffect(() => {
@@ -139,7 +149,11 @@ export function FloatingSelect({
   }, [open, activeIndex]);
 
   const onListKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "ArrowDown") {
+    if (e.key === "Escape" || e.key === "Tab") {
+      if (e.key === "Escape") e.preventDefault();
+      setOpen(false);
+      focusTrigger();
+    } else if (e.key === "ArrowDown") {
       e.preventDefault();
       setActiveIndex((i) => Math.min(options.length - 1, i + 1));
     } else if (e.key === "ArrowUp") {
@@ -183,6 +197,8 @@ export function FloatingSelect({
         type="button"
         id={triggerId}
         disabled={disabled}
+        role={ariaRequired ? "combobox" : undefined}
+        aria-required={ariaRequired}
         aria-label={ariaLabel ?? label}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -232,6 +248,7 @@ export function FloatingSelect({
                   type="button"
                   id={`${listboxId}-opt-${i}`}
                   role="option"
+                  tabIndex={-1}
                   aria-selected={selected}
                   ref={(el) => {
                     itemRefs.current[i] = el;
