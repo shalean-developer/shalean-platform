@@ -21,3 +21,11 @@ it('explains genuine empty charts and labels date inputs',()=>{
   expect(html).toContain('No recorded daily cash-flow entries in this period.');expect(html).toContain('No recorded inflows or provisional outflows in this period.');
   expect(html).toContain('aria-label="From date"');expect(html).toContain('aria-label="To date"');
 });
+
+it('keeps secondary balances and payment rules available in native collapsed disclosures',()=>{
+  const html=renderToStaticMarkup(React.createElement(CashFlowPage));
+  expect(html).toContain('More period balances &amp; obligations');
+  expect(html).toContain('Payment evidence &amp; calculation rules');
+  expect(html).toContain('Expense approval does not verify a bank debit.');
+  expect(html).toContain('<details');expect(html).not.toContain('<details open');
+});

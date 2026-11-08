@@ -15,7 +15,7 @@ try {
     export function useAdminData(endpoint,options){
       const mode=new URLSearchParams(location.search).get('state');
       const period=mode==='previous'?{from:'2026-10-01',to:'2026-10-31'}:{from:options?.params?.from??'2026-11-01',to:options?.params?.to??'2026-11-30'};
-      const data=endpoint.endsWith('cash-reconciliation')?syntheticCashReconciliation(options?.params?.scenario??'differences',new Date()):endpoint.endsWith('cash-survival')?{period,obligations:{cleaner_unpaid_liability_cents:432100,minimum_operating_reserve_cents:500000},receivables:{sent_collectible_cents:432100,draft_monthly_cents:432100}}:{period,summary:{money_received_net_cents:432100,money_paid_cents:432100,cash_in_bank_cents:432100,petty_cash_cents:432100,net_cash_flow_cents:432100},payment_evidence:{verified_transaction_count:0,fees_verified:false},daily_position:[],monthly_position:[]};
+      const data=endpoint.endsWith('cash-reconciliation')?syntheticCashReconciliation(options?.params?.scenario??'differences',new Date()):endpoint.endsWith('cash-survival')?{period,obligations:{cleaner_unpaid_liability_cents:432100,minimum_operating_reserve_cents:500000},receivables:{sent_collectible_cents:432100,draft_monthly_cents:432100}}:{period,summary:{money_received_net_cents:432100,money_paid_cents:432100,cash_in_bank_cents:432100,petty_cash_cents:432100,net_cash_flow_cents:432100},payment_evidence:{verified_transaction_count:0,fees_verified:false},forecast:{income_cents:0,expenses_cents:0,earlier_income_cents:0,earlier_expenses_cents:0,undated_income_cents:0,undated_expenses_cents:0,issues:[],items:[]},daily_position:[],monthly_position:[]};
       return {data,loading:mode==='loading',error:mode==='error'?'Synthetic offline test':null,refetch:()=>{}};
     }`;
   await build({stdin:{contents:`import React from 'react';import {createRoot} from 'react-dom/client';import Page from '@/app/(ui-redesign)/office/cash-flow/page';createRoot(document.getElementById('root')).render(<Page/>);`,loader:'tsx',resolveDir:root},
@@ -40,6 +40,17 @@ try {
     await page.setViewportSize({width,height:900});await page.goto(origin);await page.getByRole('table').waitFor();
     assert.equal(await page.evaluate(()=>innerWidth),width);
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`page overflows at ${width}`);
+    const rules=page.locator('summary').filter({hasText:'Balance rules & source details'});
+    assert.equal(await page.getByText('Transfers move cash between accounts;', {exact:false}).isVisible(),false);
+    await rules.press('Enter');await page.getByText('Transfers move cash between accounts;', {exact:false}).waitFor();
+    await rules.press('Enter');
+    const extra=page.locator('summary').filter({hasText:'More period balances & obligations'});
+    assert.equal(await page.getByRole('region',{name:'Local obligations and receivables',exact:true}).isVisible(),false);
+    await extra.click();await page.getByRole('region',{name:'Local obligations and receivables',exact:true}).waitFor();
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`expanded page overflows at ${width}`);
+    await extra.click();
+    await page.locator('summary').filter({hasText:'Forecast rules & excluded amounts'}).click();await page.getByText('Forecast scope:',{exact:false}).waitFor();
+    await page.locator('summary').filter({hasText:'Forecast rules & excluded amounts'}).click();
     const select=page.getByRole('combobox',{name:'Synthetic test scenario'});
     await select.selectOption('equal');await page.getByRole('row').filter({hasText:'Synthetic Income Account'}).getByRole('cell',{name:'R 0,00',exact:true}).waitFor();
     assert.match(await page.getByRole('region',{name:'Bank reconciliation and protected cash',exact:true}).innerText(),/Safe to spend\s+Unavailable/);
@@ -53,6 +64,7 @@ try {
   }
   for(const state of ['loading','error','previous']) {
     await page.goto(`${origin}/?state=${state}`);await page.getByRole('heading',{name:'Cash flow',exact:true}).waitFor();
+    await page.locator('summary').filter({hasText:'More period balances & obligations'}).click();
     assert.ok(!(await page.locator('body').innerText()).includes('4\u00a0321'),`retained figures exposed during ${state}`);
     console.log(`CF02_BROWSER_PASS state=${state} retained_values=hidden`);
   }
