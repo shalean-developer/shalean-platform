@@ -12,6 +12,7 @@ export default function OfficeMarketingEmailPage() {
       <EmailDeliveryReadiness />
       <nav className="mt-4 flex flex-wrap gap-3 text-sm font-semibold" aria-label="Email marketing workflow">
         {process.env.NEXT_PUBLIC_SHALEAN_APP_ENV === "staging" && <Link className="rounded-lg border px-4 py-3" href="/office/marketing/email/test">Owner staging tests</Link>}
+        {process.env.NEXT_PUBLIC_SHALEAN_APP_ENV === "staging" && <Link className="rounded-lg border px-4 py-3" href="/office/marketing/email/preferences">Test customer preferences</Link>}
         <Link className="rounded-lg border px-4 py-3" href="/office/marketing/campaigns">Campaigns</Link>
         <Link className="rounded-lg border px-4 py-3" href="/office/lifecycle-emails">Lifecycle emails</Link>
         <Link className="rounded-lg border px-4 py-3" href="/office/email-operations">Delivery operations</Link>
