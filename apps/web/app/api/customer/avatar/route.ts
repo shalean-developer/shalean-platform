@@ -36,7 +36,25 @@ export async function POST(request: Request) {
   if (ctx.response) return ctx.response;
   if (Number(request.headers.get("content-length")) > CUSTOMER_AVATAR_MAX_BYTES + 65536) return failure("Use a photo smaller than 2 MB.", 413);
   let form: FormData;
-  try { form = await request.formData(); } catch { return failure("Choose a photo to upload.", 400); }
+  try {
+    const reader = request.body?.getReader();
+    if (!reader) return failure("Choose a photo to upload.", 400);
+    const chunks: ArrayBuffer[] = [];
+    let length = 0;
+    for (;;) {
+      const part = await reader.read();
+      if (part.done) break;
+      length += part.value.byteLength;
+      if (length > CUSTOMER_AVATAR_MAX_BYTES + 65536) {
+        await reader.cancel();
+        return failure("Use a photo smaller than 2 MB.", 413);
+      }
+      chunks.push(new Uint8Array(part.value).buffer);
+    }
+    form = await new Response(new Blob(chunks), {
+      headers: { "Content-Type": request.headers.get("content-type") ?? "" },
+    }).formData();
+  } catch { return failure("Choose a photo to upload.", 400); }
   const file = form.get("file");
   if (!(file instanceof Blob) || !file.size) return failure("Choose a photo to upload.", 400);
   if (file.size > CUSTOMER_AVATAR_MAX_BYTES) return failure("Use a photo smaller than 2 MB.", 413);

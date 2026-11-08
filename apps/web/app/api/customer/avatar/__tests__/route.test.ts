@@ -59,6 +59,14 @@ describe("private customer avatar API", () => {
     expect((await POST(await photoRequest())).status).toBe(503);
     expect(upload).not.toHaveBeenCalled();
   });
+  it("caps the actual request body even when content-length is absent", async () => {
+    const request = new Request("http://localhost/api/customer/avatar", {
+      method: "POST", headers: { "content-type": "multipart/form-data; boundary=test" },
+      body: new Uint8Array(2 * 1024 * 1024 + 65537),
+    });
+    expect((await POST(request)).status).toBe(413);
+    expect(upload).not.toHaveBeenCalled();
+  });
   it("normalizes the photo and changes only the verified user's photo metadata", async () => {
     expect((await POST(await photoRequest())).status).toBe(200);
     const [path, image, options] = upload.mock.calls[0];
