@@ -1,9 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { summarizeCashReconciliation, syntheticCashReconciliation, type BankEvidence } from '../cashReconciliation';
 const now = new Date('2026-11-08T10:00:00Z');
-const rows = (): BankEvidence[] => [1,2,3,4].map(n => ({ id: String(n), name: `Bank ${n}`, bankCents: n*10000, bookCents:n*10000, feedAt:now.toISOString(), identityVerified:true }));
+const rows = (): BankEvidence[] => [1,2,3,4].map(n => ({ id: String(n), name: `Bank ${n}`, bankCents: n*10000, bookCents:n*10000, feedAt:now.toISOString(), identityVerified:true, bankBalanceBasis:'current' }));
 const summarize = (r: BankEvidence[]) => summarizeCashReconciliation(r, ['1','2','3','4'], now);
 describe('CF-02 four-account evidence', () => {
+  it.each(['available', 'unknown', undefined] as const)('does not call %s feed balances an accounting discrepancy', basis => {
+    const r = rows();
+    r[0] = {...r[0], bankCents:7465, bookCents:7915, bankBalanceBasis:basis};
+    r[1] = {...r[1], bankCents:12666, bookCents:579584, bankBalanceBasis:basis};
+    const s = summarize(r);
+    expect(s.complete).toBe(true); expect(s.comparable).toBe(false);
+    expect(s.accounts[0].differenceCents).toBeNull(); expect(s.accounts[1].differenceCents).toBeNull();
+    expect(s.differenceCents).toBeNull(); expect(s.safeToSpendCents).toBeNull();
+    expect(s.bankCents).toBe(90131);
+  });
+  it('compares current statement balances without substituting available funds', () => {
+    const r = rows(); r[0].bankCents = r[0].bookCents = 7915;
+    r[1].bankCents = r[1].bookCents = 579584;
+    expect(summarize(r).differenceCents).toBe(0);
+  });
   it('aggregates each account once but never certifies ownership from balance equality', () => {
     const s = summarize(rows()); expect(s.bankCents).toBe(100000); expect(s.differenceCents).toBe(0);
     expect(s.safeToSpendCents).toBeNull(); expect(s.runwayDays).toBeNull(); expect(s.bokkieObligationCents).toBeNull(); expect(s.customerAdvancesCents).toBeNull();
@@ -31,3 +46,4 @@ describe('CF-02 four-account evidence', () => {
     const s=syntheticCashReconciliation('equal',now); expect(s.processorLedgerCents).toBe(75000); expect(s.bankCents).toBe(1000000); expect(s.safeToSpendCents).toBeNull();
   });
 });
+

@@ -3,6 +3,20 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
 import { CashReconciliationPanel } from '@/components/admin/finance/CashReconciliationPanel';
 import { syntheticCashReconciliation } from '../cashReconciliation';
+import { summarizeCashReconciliation } from '../cashReconciliation';
+it('labels available or unknown feeds without rendering an accounting difference',()=>{
+  const now = new Date('2026-11-08T10:00:00Z');
+  for (const basis of ['available','unknown'] as const) {
+    const rows = [1,2,3,4].map(n=>({id:String(n),name:`Bank ${n}`,bankCents:12666,bookCents:579584,bankBalanceBasis:basis,identityVerified:true,feedAt:now.toISOString()}));
+    const data = summarizeCashReconciliation(rows,rows.map(r=>r.id),now);
+    const html = renderToStaticMarkup(React.createElement(CashReconciliationPanel,{data,loading:false}));
+    expect(html).toContain('Not comparable');
+    expect(html).toContain('Current bank balance needed for comparison.');
+    expect(html).toContain(basis==='available'?'Available':'Unconfirmed');
+    expect(html).not.toContain('5 669'); expect(html).not.toContain('5,669');
+    expect(html).toContain('Safe to spend<strong class="block">Unavailable');
+  }
+});
 it('renders fictional differences and obligations without presenting a spending recommendation',()=>{
   const data=syntheticCashReconciliation('differences',new Date('2026-11-08T10:00:00Z'));
   const html=renderToStaticMarkup(React.createElement(CashReconciliationPanel, {data, loading:false}));
@@ -34,3 +48,4 @@ it.each(['equal','stale','missing'])('preserves unavailable spending and source 
   if(scenario!=='equal') expect(html).toContain('Totals unavailable: missing or stale balances.');
   else expect(html).toContain('Equal · unverified');
 });
+

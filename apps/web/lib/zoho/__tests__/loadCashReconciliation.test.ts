@@ -25,8 +25,9 @@ it('reads exact mapped account details using GET only; failures cannot become ze
     if(!a) throw Error('missing');
     return {bankaccount:{account_id:a.id,account_name:a.name,account_type:'bank',currency_code:'ZAR',is_active:true,is_feeds_active:true,feeds_last_refresh_date:now.toISOString(),bank_balance:100,balance:105}};
   });
-  const s=await loadCashReconciliation('differences',now);expect(s.bankCents).toBe(40000);expect(s.differenceCents).toBe(2000);
+  const s=await loadCashReconciliation('differences',now);expect(s.bankCents).toBe(40000);expect(s.differenceCents).toBeNull();expect(s.comparable).toBe(false);expect(s.accounts.every(a=>a.bankBalanceBasis==='unknown')).toBe(true);
   expect(s.processorLedgerCents).toBeNull();expect(s.safeToSpendCents).toBeNull();
   expect(get).toHaveBeenCalledTimes(6);
   get.mockRejectedValue(Error('offline'));expect((await loadCashReconciliation()).bankCents).toBeNull();
 });
+
