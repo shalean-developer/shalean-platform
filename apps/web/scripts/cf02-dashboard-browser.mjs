@@ -11,11 +11,11 @@ import assert from 'node:assert/strict';
 const root=process.cwd(), temp=await mkdtemp(path.join(tmpdir(),'cf02-browser-'));
 let browser,server;
 try {
-  const fixture=`import { syntheticCashReconciliation } from '@/lib/admin/expenses/cashReconciliation';
+  const fixture=`import { syntheticCashReconciliation } from '@/lib/admin/expenses/cashReconciliation'; import { syntheticProviderEvidence } from '@/lib/payments/cashProviderEvidence';
     export function useAdminData(endpoint,options){
       const mode=new URLSearchParams(location.search).get('state');
       const period=mode==='previous'?{from:'2026-10-01',to:'2026-10-31'}:{from:options?.params?.from??'2026-11-01',to:options?.params?.to??'2026-11-30'};
-      const data=endpoint.endsWith('cash-reconciliation')?syntheticCashReconciliation(options?.params?.scenario??'differences',new Date()):endpoint.endsWith('cash-survival')?{period,obligations:{cleaner_unpaid_liability_cents:432100,minimum_operating_reserve_cents:500000},receivables:{sent_collectible_cents:432100,draft_monthly_cents:432100}}:{period,summary:{money_received_net_cents:432100,money_paid_cents:432100,cash_in_bank_cents:432100,petty_cash_cents:432100,net_cash_flow_cents:432100},payment_evidence:{verified_transaction_count:0,fees_verified:false},forecast:{income_cents:0,expenses_cents:0,earlier_income_cents:0,earlier_expenses_cents:0,undated_income_cents:0,undated_expenses_cents:0,issues:[],items:[]},daily_position:[],monthly_position:[]};
+      const data=endpoint.endsWith('cash-provider-evidence')?(options?.enabled===false?null:syntheticProviderEvidence(period.from,period.to,new Date())):endpoint.endsWith('cash-reconciliation')?syntheticCashReconciliation(options?.params?.scenario??'differences',new Date()):endpoint.endsWith('cash-survival')?{period,obligations:{cleaner_unpaid_liability_cents:432100,minimum_operating_reserve_cents:500000},receivables:{sent_collectible_cents:432100,draft_monthly_cents:432100}}:{period,summary:{money_received_net_cents:432100,money_paid_cents:432100,cash_in_bank_cents:432100,petty_cash_cents:432100,net_cash_flow_cents:432100},payment_evidence:{verified_transaction_count:0,fees_verified:false},forecast:{income_cents:0,expenses_cents:0,earlier_income_cents:0,earlier_expenses_cents:0,undated_income_cents:0,undated_expenses_cents:0,issues:[],items:[]},daily_position:[],monthly_position:[]};
       return {data,loading:mode==='loading',error:mode==='error'?'Synthetic offline test':null,refetch:()=>{}};
     }`;
   await build({stdin:{contents:`import React from 'react';import {createRoot} from 'react-dom/client';import Page from '@/app/(ui-redesign)/office/cash-flow/page';createRoot(document.getElementById('root')).render(<Page/>);`,loader:'tsx',resolveDir:root},
