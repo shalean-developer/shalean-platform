@@ -33,13 +33,14 @@ it('rejects an unexpected Paystack account identity',async()=>{
   expect((await loadCashProviderEvidence('2026-11-01','2026-11-30')).payouts.available).toBe(false);
 });
 
-it.each(['matched','manually_added'])('requires an imported bank link and never treats %s bookkeeping alone as cleared cash',async status=>{
+it.each([['matched','123'],['matched','PAYSTACK-PAYOUT-123'],['matched','unrelated-123'],['manually_added','PAYSTACK-PAYOUT-123']])('requires an imported link for %s with explicit reference %s',async(status,reference)=>{
   const {loadCashProviderEvidence,fetch}=await setup();
   fetch.mockImplementation(async(input:string)=>new Response(JSON.stringify({status:true,data:new URL(input).pathname==='/transaction'?[]:[{id:123,integration:1019240,domain:'live',currency:'ZAR',status:'success',settlement_date:'2026-11-01',effective_amount:9700}],meta:{total:new URL(input).pathname==='/transaction'?0:1,pageCount:1}})));
-  get.mockImplementation(async(path:string)=>path.startsWith('/banktransactions?')?{banktransactions:[{transaction_id:'book-link',reference_number:'123',status}],page_context:{has_more_page:false}}:{banktransaction:{transaction_id:'book-link',currency_code:'ZAR',to_account_id:'253016000000097002',reference_number:'123',imported_transactions:[{imported_transaction_id:'bank-line',status:'matched',account_id:'253016000000097002',date:'2026-11-01',amount:97}]}});
+  get.mockImplementation(async(path:string)=>path.startsWith('/banktransactions?')?{banktransactions:[{transaction_id:'book-link',reference_number:reference,status}],page_context:{has_more_page:false}}:{banktransaction:{transaction_id:'book-link',currency_code:'ZAR',to_account_id:'253016000000097002',reference_number:reference,imported_transactions:[{imported_transaction_id:'bank-line',status:'matched',account_id:'253016000000097002',date:'2026-11-01',amount:97}]}});
   const s=await loadCashProviderEvidence('2026-11-01','2026-11-30');
-  expect(s.payouts.paidCents).toBe(9700);expect(s.bank.matchedCents).toBe(status==='matched'?9700:0);
-  expect(get).toHaveBeenCalledTimes(status==='matched'?2:1);
+  const eligible=status==='matched' && reference!=='unrelated-123';
+  expect(s.payouts.paidCents).toBe(9700);expect(s.bank.matchedCents).toBe(eligible?9700:0);
+  expect(get).toHaveBeenCalledTimes(eligible?2:1);
 });
 
 it('follows provider pagination metadata even when a page is shorter than requested',async()=>{
