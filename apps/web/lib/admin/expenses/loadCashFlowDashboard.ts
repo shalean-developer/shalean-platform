@@ -207,6 +207,7 @@ export async function loadProfitSnapshot(admin: SupabaseClient, days = 30) {
   const prevFrom = prevFromD.toISOString().slice(0, 10);
 
   const [curReport, prevReport, curExp, prevExp] = await Promise.all([
+    loadOfficePayoutPeriodReport(admin, from, to),
     loadOfficePayoutPeriodReport(admin, prevFrom, prevTo),
     sumApprovedExpensesInRange(admin, from, to),
     sumApprovedExpensesInRange(admin, prevFrom, prevTo),
