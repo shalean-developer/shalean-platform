@@ -387,8 +387,18 @@ test("Regular property cards require confirmation and retain screen-level funnel
     await page.getByRole("radio", { name: "Apartment", exact: true }).press("End");
     await expect(page.getByRole("radio", { name: "Townhouse", exact: true })).toHaveAttribute("aria-checked", "true");
     await expect(page).toHaveURL(/section=property/);
-    const tops = await page.getByRole("radio").evaluateAll(es => es.map(e=>e.getBoundingClientRect().top));
-    expect(Math.max(...tops)-Math.min(...tops)).toBeLessThan(2);
+    const cards = await page.getByRole("radio").evaluateAll(es => es.map(e => {
+      const rect = e.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top };
+    }));
+    expect(Math.max(...cards.map(c => c.top)) - Math.min(...cards.map(c => c.top))).toBeLessThan(2);
+    const group = await page.getByRole("radiogroup", { name: "Property type", exact: true }).boundingBox();
+    expect(group).not.toBeNull();
+    for (let i = 0; i < cards.length; i++) {
+      expect(cards[i].left).toBeGreaterThanOrEqual(group!.x - 1);
+      expect(cards[i].right).toBeLessThanOrEqual(group!.x + group!.width + 1);
+      if (i > 0) expect(cards[i].left - cards[i - 1].right).toBeGreaterThanOrEqual(10);
+    }
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
     await next.click();
     await expect(page).toHaveURL(/section=rooms/);
