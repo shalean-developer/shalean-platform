@@ -25,7 +25,8 @@ case "$META_SHA" in *[!0-9a-f]*|'') fail "invalid artifact sha" ;; esac
 SHORT="${META_SHA:0:8}"
 CANDIDATE="$ROOT/pricing-test-runtime.next-$SHORT"
 
-rm -rf "$CANDIDATE"
+[ ! -e "$CANDIDATE" ] || fail "candidate already exists; preserved"
+[ ! -e "$ROOT/pricing-test-runtime.failed-$SHORT" ] || fail "failed release already exists; preserved"
 mkdir -p "$CANDIDATE"
 tar -xzf "$BUNDLE" -C "$CANDIDATE"
 
@@ -48,6 +49,7 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 ROLLBACK=""
 if [ -d "$LIVE" ]; then
   ROLLBACK="$BACKUPS/rollback-$STAMP"
+  [ ! -e "$ROLLBACK" ] || fail "rollback destination already exists; preserved"
   mv "$LIVE" "$ROLLBACK"
 fi
 mv "$CANDIDATE" "$LIVE"
@@ -66,7 +68,6 @@ done
 
 if [ "$ok" != true ]; then
   FAILED="$ROOT/pricing-test-runtime.failed-$SHORT"
-  rm -rf "$FAILED"
   mv "$LIVE" "$FAILED"
   if [ -n "$ROLLBACK" ] && [ -d "$ROLLBACK" ]; then
     mv "$ROLLBACK" "$LIVE"
@@ -78,23 +79,7 @@ if [ "$ok" != true ]; then
   exit 1
 fi
 
-python3 - "$BACKUPS" "$ROLLBACK" <<'PY'
-import os,shutil,sys
-root,current=sys.argv[1:3]
-items=[]
-if os.path.isdir(root):
-    for name in os.listdir(root):
-        path=os.path.join(root,name)
-        if name.startswith("rollback-") and os.path.isdir(path):
-            items.append((os.path.getmtime(path),path))
-items.sort(reverse=True)
-keep={current} if current else set()
-for _,path in items[:1]:
-    keep.add(path)
-for _,path in items:
-    if path not in keep:
-        shutil.rmtree(path)
-PY
+# Rollbacks are retained. Any retention cleanup requires a separate explicit decision.
 
 {
   echo "PLESK_PR_PREVIEW_DEPLOY=PASS"
