@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const repositoryRoot = path.resolve(process.cwd(), "../..");
 const PROD_REF = "paqjwfulwywtsyyvdxrq";
-const STAGING_REF = "jhubpsbwmjgydkzztxeu";
+const STAGING_REF = "uwvnmluiqbczeduzjgse";
 const RETIRED_PROD_REF = "tchayecuvzssixyxlvfu";
 const RETIRED_STAGING_REF = "gbgnemlpyykyhpqqbgru";
 

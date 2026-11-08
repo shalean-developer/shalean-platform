@@ -5,19 +5,30 @@ import { describe, expect, it } from "vitest";
 const root = join(process.cwd(), "..", "..");
 const workflow = readFileSync(join(root, ".github/workflows/pr-preview-pricing-test.yml"), "utf8");
 const activator = readFileSync(join(root, "scripts/plesk-activate-prebuilt-pricing-test.sh"), "utf8");
+const environmentHealth = readFileSync(join(process.cwd(), "app/api/health/environment/route.ts"), "utf8");
 
 describe("pricing-test PR preview safety contract", () => {
   it("builds PR previews only with staging public configuration", () => {
     expect(workflow).toContain('SHALEAN_APP_ENV: "staging"');
-    expect(workflow).toContain("https://jhubpsbwmjgydkzztxeu.supabase.co");
-    expect(workflow).toContain('SHALEAN_EXPECTED_SUPABASE_REF: "jhubpsbwmjgydkzztxeu"');
+    expect(workflow).toContain("https://uwvnmluiqbczeduzjgse.supabase.co");
+    expect(workflow).toContain('SHALEAN_EXPECTED_SUPABASE_REF: "uwvnmluiqbczeduzjgse"');
     expect(workflow).toContain("PLESK_TEST_SUPABASE_PUBLISHABLE_KEY");
-    expect(workflow).toContain("sb_publishable_");
+    expect(workflow).toContain('NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ vars.PLESK_TEST_SUPABASE_PUBLISHABLE_KEY }}"');
+    expect(workflow).toContain('test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY"');
     expect(workflow).toContain("PLESK_TEST_PAYSTACK_PUBLIC_KEY");
-    expect(workflow).toContain("pk_test_preview_disabled");
+    expect(workflow).toContain('NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "${{ vars.PLESK_TEST_PAYSTACK_PUBLIC_KEY }}"');
+    expect(workflow).not.toContain("pk_test_preview_disabled");
     expect(workflow).toContain("pk_test_");
     expect(workflow).not.toContain("paqjwfulwywtsyyvdxrq");
     expect(workflow).not.toContain("PROD_PAYSTACK");
+    expect(workflow).not.toContain("sb_publishable_IlDDZwioRpJRr2F6-B8WFA_uBrbZnkT");
+  });
+
+  it("reports the shared client write guard without exposing Zoho organisation IDs", () => {
+    expect(environmentHealth).toContain("isZohoBooksWriteBlocked(process.env.SHALEAN_APP_ENV)");
+    expect(environmentHealth).toContain("writesBlocked:");
+    expect(environmentHealth).not.toContain("943440851");
+    expect(environmentHealth).not.toContain("927500285");
   });
 
   it("publishes only the isolated preview artifact branch", () => {
@@ -25,15 +36,19 @@ describe("pricing-test PR preview safety contract", () => {
     expect(workflow).not.toContain("git push --force origin HEAD:refs/heads/deploy/staging");
     expect(workflow).not.toContain("refs/heads/deploy/production");
     expect(workflow).toContain("github.event.pull_request.head.sha");
+    expect(workflow).toContain("fetch-depth: 1");
+    expect(workflow).not.toContain("fetch-depth: 0");
   });
 
   it("activates only a staging bundle and fails closed on environment drift", () => {
     expect(activator).toContain('HEALTH_URL="https://pricing-test.shalean.co.za/api/health/environment"');
-    expect(activator).toContain('EXPECTED_REF="jhubpsbwmjgydkzztxeu"');
+    expect(activator).toContain('EXPECTED_REF="uwvnmluiqbczeduzjgse"');
     expect(activator).toContain('LIVE="$ROOT/pricing-test-runtime"');
     expect(activator).toContain('d.get("deployment")=="staging"');
     expect(activator).toContain('d.get("paystack") or {}).get("secretMode")=="test"');
     expect(activator).toContain('d.get("messaging") or {}).get("outboundDisabled") is True');
+    expect(activator).toContain('d.get("shaleanAppEnv")=="staging"');
+    expect(activator).toContain('(d.get("zoho") or {}).get("writesBlocked") is True');
     expect(activator).not.toContain('HEALTH_URL="https://shalean.co.za/api/health/environment"');
     expect(activator).not.toContain("paqjwfulwywtsyyvdxrq");
   });

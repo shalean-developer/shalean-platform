@@ -132,6 +132,7 @@ export async function applySalesDocumentPayment(
       amountZar: paidIn / 100,
       paymentDate: todayYmdJhb(),
       reference: ref,
+      paymentSource: "paystack",
       customerEmail: row.customer_email,
       customerName: row.customer_name,
     });
