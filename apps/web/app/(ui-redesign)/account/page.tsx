@@ -7,6 +7,7 @@ import { customerPaymentRowDisplay } from "@/lib/dashboard/customerPaymentDispla
 import { formatZarFromCents } from "@/lib/dashboard/formatZar";
 import type { DashboardBooking } from "@/lib/dashboard/types";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 function formatTimeRange(time: string, durationHours: number | null, scheduleConfirmed = true): string {
   if (!scheduleConfirmed || !time?.trim() || !/^\d{1,2}:\d{2}$/.test(time.trim())) {
@@ -82,14 +83,19 @@ export default function AccountHomePage() {
         <div><h2 id="payment-heading" className="font-semibold text-[#00164e]">{summary?.hasOverdueInvoice ? "Overdue invoice" : "Payment due"}</h2>{payableInvoice && (!summary?.hasOverdueInvoice || summary?.isOverdue) ? <p className="mt-1 text-sm">{formatZarFromCents(balance)} outstanding</p> : null}</div>
         <Button asChild variant="outline"><Link href="/account/invoices">View invoices</Link></Button>
       </section> : null}
-      <section aria-labelledby="next-clean-heading" className="rounded-xl border border-blue-100 bg-white px-5 shadow-sm sm:px-6">
-        <h2 id="next-clean-heading" className="border-b border-blue-100 py-4 text-lg font-semibold text-[#00164e]">Next clean</h2>
-        {nextBooking ? <BookingSummary booking={nextBooking} next /> : <div className="flex items-center gap-3 py-7"><CalendarDays className="h-6 w-6 shrink-0 text-primary" aria-hidden /><p className="text-sm text-muted-foreground">No upcoming bookings.</p></div>}
-      </section>
-      <section aria-labelledby="recent-bookings-heading" className="rounded-xl border border-blue-100 bg-white px-5 shadow-sm sm:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-100 py-4"><h2 id="recent-bookings-heading" className="text-lg font-semibold text-[#00164e]">Recent bookings</h2><Link href="/account/bookings" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">View all</Link></div>
-        {recent.length ? <ul className="divide-y divide-blue-100">{recent.map((booking) => <li key={booking.id}><BookingSummary booking={booking} /></li>)}</ul> : <p className="py-7 text-sm text-muted-foreground">No recent bookings.</p>}
-      </section>
+      <Tabs defaultValue="upcoming" className="rounded-xl border border-blue-100 bg-white px-5 shadow-sm sm:px-6">
+        <TabsList aria-label="Bookings" className="mt-4 grid w-full grid-cols-2 border-blue-100 bg-blue-50">
+          <TabsTrigger value="upcoming" className="text-[#00164e] data-[state=active]:bg-primary data-[state=active]:text-white">Upcoming</TabsTrigger>
+          <TabsTrigger value="history" className="text-[#00164e] data-[state=active]:bg-primary data-[state=active]:text-white">History</TabsTrigger>
+        </TabsList>
+        <TabsContent value="upcoming" className="mt-4 border-t border-blue-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
+          {nextBooking ? <BookingSummary booking={nextBooking} next /> : <div className="flex items-center gap-3 py-7"><CalendarDays className="h-6 w-6 shrink-0 text-primary" aria-hidden /><p className="text-sm text-muted-foreground">No upcoming bookings.</p></div>}
+        </TabsContent>
+        <TabsContent value="history" className="mt-4 border-t border-blue-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
+          <div className="flex justify-end pt-2"><Link href="/account/bookings" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">View all</Link></div>
+          {recent.length ? <ul className="divide-y divide-blue-100">{recent.map((booking) => <li key={booking.id}><BookingSummary booking={booking} /></li>)}</ul> : <p className="py-7 text-sm text-muted-foreground">No booking history.</p>}
+        </TabsContent>
+      </Tabs>
     </>}
   </div>;
 }
