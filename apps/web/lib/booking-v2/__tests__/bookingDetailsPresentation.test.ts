@@ -78,16 +78,11 @@ describe("booking details presentation", () => {
     expect(source).toContain('{showExtras && extras.length > 0 && (');
   });
 
-  it("places contact phone beside suburb and street address on the full-width row", () => {
-    const customAddressGrid = addressSource.slice(
-      addressSource.indexOf('<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">'),
-    );
-    expect(customAddressGrid.indexOf('htmlFor="contactPhone"')).toBeLessThan(
-      customAddressGrid.indexOf('htmlFor="suburb"'),
-    );
-    expect(customAddressGrid).toContain(
-      '<div className="min-w-0 sm:col-span-2">\n              <FieldLabel htmlFor="address" required>',
-    );
+  it("puts location first for Regular while preserving other services' field order", () => {
+    expect(addressSource).toContain("<>{customStreetField}{customSuburbField}{customPhoneField}</>");
+    expect(addressSource).toContain("<>{customPhoneField}{customSuburbField}{customStreetField}</>");
+    expect(source).toContain('serviceSlug === "regular-cleaning" && activeDetailsStage === "address"');
+    expect(addressSource).toContain('autoComplete="street-address"');
   });
 
   it("uses an accessible bounded stepper for exact custom room counts", () => {

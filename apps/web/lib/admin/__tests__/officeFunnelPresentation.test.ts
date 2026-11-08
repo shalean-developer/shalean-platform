@@ -166,7 +166,7 @@ describe("buildOfficeFunnelKpis", () => {
       } },
     });
     expect(cards).toHaveLength(4);
-    expect(cards[3]?.sub).toBe("48/60 payment sessions");
+    expect(cards[3]?.sub).toBe("48/60 Paystack sessions");
     expect(cards[3]?.sub).not.toContain("3 685");
   });
 
@@ -208,7 +208,7 @@ describe("buildOfficeFunnelKpis", () => {
     expect(kpis[0]?.value).toBe("15.5%");
     expect(kpis[1]?.label).toBe("Checkout → paid");
     expect(kpis[1]?.value).toBe("66.7%");
-    expect(kpis[3]?.label).toBe("Payment drop-off");
+    expect(kpis[3]?.label).toBe("Paystack drop-off");
     expect(kpis[3]?.value).toBe("20.0%");
   });
 });
@@ -266,7 +266,7 @@ describe("production-facing copy", () => {
       "Total before exclusions",
     ]);
     expect(revenue?.map((metric) => metric.value)).toEqual([zarLabel(3685), zarLabel(860), zarLabel(4545)]);
-    expect(buildOfficeFunnelKpis(SAMPLE)[3]?.label).toBe("Payment drop-off");
+    expect(buildOfficeFunnelKpis(SAMPLE)[3]?.label).toBe("Paystack drop-off");
   });
 });
 
