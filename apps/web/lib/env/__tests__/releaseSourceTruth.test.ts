@@ -53,7 +53,8 @@ describe("MASTER-00A release source truth", () => {
     expect(workflow).toContain(`SHALEAN_EXPECTED_SUPABASE_REF: "${approvedRef}"`);
     expect(workflow).toContain(`https://${approvedRef}.supabase.co`);
     expect(workflow).toContain('NEXT_PUBLIC_SHALEAN_APP_ENV: "staging"');
-    expect(workflow).toContain("vars.FCO_01_REGULAR_HOME_PREVIEW || 'false'");
+    expect(workflow).toContain('NEXT_PUBLIC_FCO_01_REGULAR_HOME_PREVIEW: "false"');
+    expect(workflow).not.toContain("vars.FCO_01_REGULAR_HOME_PREVIEW");
     expect(workflow).toContain("PLESK_STAGING_HISTORY_ANCHOR");
     expect(workflow).toContain("git push origin HEAD:refs/heads/deploy/staging");
     expect(workflow).not.toContain("git push --force origin HEAD:refs/heads/deploy/staging");

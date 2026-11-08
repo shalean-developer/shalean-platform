@@ -207,6 +207,12 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
   test("regular cleaning preserves recurring, availability, cleaner, pricing, persistence and navigation behavior", async ({ page }) => {
     await seedDraft(page, "regular-cleaning", "individual_cleaners");
     const forbiddenMutations = await installNonMutatingApiSandbox(page);
+    const funnelEvents: Array<{step:string;event_type:string;metadata:Record<string,unknown>}> = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname === "/api/analytics/booking-event") {
+        funnelEvents.push(request.postDataJSON());
+      }
+    });
 
     const response = await page.goto("/book/regular-cleaning?step=schedule", { waitUntil: "domcontentloaded" });
     expect(response?.status()).toBeLessThan(400);
@@ -273,6 +279,11 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
     await page.getByRole("button", { name: "← Back", exact: true }).click();
     await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=details/);
 
+    await expect.poll(() => funnelEvents.filter((e) => e.step === "datetime" && e.event_type === "view")
+      .map((e) => e.metadata.section)).toEqual(expect.arrayContaining(["booking_type", "date_time", "cleaner"]));
+    expect(funnelEvents.some((e) => e.step === "datetime" && e.event_type === "back" &&
+      e.metadata.from_section === "cleaner" && e.metadata.to_section === "date_time")).toBe(true);
+    expect(funnelEvents.every((e) => !("href" in e.metadata))).toBe(true);
     expect(forbiddenMutations, "Step 2 smoke must never submit a booking or payment mutation").toEqual([]);
   });
 

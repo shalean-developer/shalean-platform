@@ -1,3 +1,4 @@
+import { sanitizeBookingNavigationMetadata } from "@/lib/analytics/liveBookingFunnel";
 import { NextResponse } from "next/server";
 import { BOOKING_EVENTS_ROW_TYPES_SET, BOOKING_EVENTS_STEPS_SET } from "@/lib/analytics/bookingEventsRegistry";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid event_type." }, { status: 400 });
   }
 
-  const metadata = clampMetadata(body.metadata);
+  const metadata = sanitizeBookingNavigationMetadata(clampMetadata(body.metadata));
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
