@@ -24,6 +24,9 @@ export async function loadCashReconciliation(scenario = 'differences', now = new
       const identityVerified = a?.account_id === mapping.id && a.account_name === mapping.name && a.account_type === 'bank' &&
         a.currency_code === 'ZAR' && a.is_active === true;
       return { id: mapping.id, name: mapping.name, identityVerified,
+        // Zoho bank_balance has no verified current/available basis in this contract.
+        // Never infer a ledger discrepancy from it or substitute book balance.
+        bankBalanceBasis: 'unknown' as const,
         bankCents: identityVerified ? money(a?.bank_balance) : null,
         bookCents: identityVerified ? money(a?.balance) : null,
         feedAt: a?.is_feeds_active === true ? a.feeds_last_refresh_date ?? null : null };
@@ -41,3 +44,4 @@ export async function loadCashReconciliation(scenario = 'differences', now = new
   ]);
   return { ...summarizeCashReconciliation(rows, CASH_ACCOUNT_MAPPING.map(a => a.id), now), processorLedgerCents, undepositedLedgerCents };
 }
+

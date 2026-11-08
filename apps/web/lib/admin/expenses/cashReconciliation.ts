@@ -7,6 +7,8 @@ export const CASH_ACCOUNT_MAPPING = [
 ] as const;
 export type BankEvidence = {
   id: string; name: string; bankCents: number | null; bookCents: number | null;
+  // Only a verified current/posted balance is comparable to the ledger.
+  bankBalanceBasis?: 'current' | 'available' | 'unknown';
   feedAt: string | null; identityVerified: boolean;
 };
 export type CashReconciliation = ReturnType<typeof summarizeCashReconciliation>;
@@ -16,8 +18,9 @@ export function summarizeCashReconciliation(rows: BankEvidence[], expectedIds: r
     const fresh = Number.isFinite(time) && time <= now.getTime() && now.getTime() - time <= 48 * 3600000;
     const validMoney = (v: number | null): v is number => v !== null && Number.isSafeInteger(v);
     const valid = row.identityVerified && fresh && validMoney(row.bankCents) && validMoney(row.bookCents);
-    const differenceCents = validMoney(row.bankCents) && validMoney(row.bookCents) ? row.bookCents - row.bankCents : null;
-    return { ...row, fresh, valid, differenceCents };
+    const comparable = valid && row.bankBalanceBasis === 'current';
+    const differenceCents = comparable && validMoney(row.bankCents) && validMoney(row.bookCents) ? row.bookCents - row.bankCents : null;
+    return { ...row, fresh, valid, comparable, differenceCents };
   });
   const ids = accounts.map(a => a.id);
   const complete = expectedIds.length === 4 && new Set(expectedIds).size === 4 && ids.length === 4 && new Set(ids).size === 4 &&
@@ -28,9 +31,10 @@ export function summarizeCashReconciliation(rows: BankEvidence[], expectedIds: r
   };
   const bankCents = sum('bankCents');
   const bookCents = sum('bookCents');
+  const comparable = complete && accounts.every(a => a.comparable);
   return {
-    asOf: now.toISOString(), synthetic, accounts, complete, bankCents, bookCents,
-    differenceCents: bankCents !== null && bookCents !== null ? bookCents - bankCents : null,
+    asOf: now.toISOString(), synthetic, accounts, complete, comparable, bankCents, bookCents,
+    differenceCents: comparable && bankCents !== null && bookCents !== null ? bookCents - bankCents : null,
     // No verified transaction-level ownership/advance evidence is currently integrated.
     // Neither a recent local save nor matching bank/book balances may override this gate.
     safeToSpendCents: null, runwayDays: null, bokkieObligationCents: null, customerAdvancesCents: null,
@@ -41,10 +45,11 @@ export function summarizeCashReconciliation(rows: BankEvidence[], expectedIds: r
 export function syntheticCashReconciliation(scenario: string, now: Date) {
   const rows: BankEvidence[] = ['Income Account', 'Expense Account', 'Shalean Account', 'Bokkie Account'].map((name, i) => ({
     id: `synthetic-${i}`, name: `Synthetic ${name}`, bankCents: (i + 1) * 100000,
-    bookCents: (i + 1) * 100000, feedAt: now.toISOString(), identityVerified: true,
+    bookCents: (i + 1) * 100000, feedAt: now.toISOString(), identityVerified: true, bankBalanceBasis: 'current',
   }));
   if (scenario === 'differences') { rows[0].bookCents! += 2500; rows[1].bookCents! += 10000; }
   if (scenario === 'stale') rows[0].feedAt = new Date(now.getTime() - 49 * 3600000).toISOString();
   if (scenario === 'missing') rows[1].bankCents = null;
   return { ...summarizeCashReconciliation(rows, rows.map(r => r.id), now, true), processorLedgerCents: 75000, undepositedLedgerCents: scenario === 'differences' ? -1500 : 0 };
 }
+
