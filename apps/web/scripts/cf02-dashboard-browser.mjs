@@ -27,7 +27,8 @@ try {
       b.onResolve({filter:/^@\//},args=>({path:path.resolve(root,args.path.slice(2))+(/\.[a-z]+$/.test(args.path)?'':(['components','app'].some(x=>args.path.includes('/'+x+'/'))?'.tsx':'.ts'))}));
     }}]});
   const css=await postcss([tailwind({base:root})]).process('@import "tailwindcss";',{from:path.join(root,'cf02-browser.css')});
-  await writeFile(path.join(temp,'app.css'),css.css);
+  const scopedCss=await readFile(path.join(temp,'app.css'),'utf8');
+  await writeFile(path.join(temp,'app.css'),css.css+'\n'+scopedCss);
   server=createServer(async(req,res)=>{const url=new URL(req.url,'http://localhost');const file=url.pathname==='/app.js'?'app.js':url.pathname==='/app.css'?'app.css':null;
     if(file){res.setHeader('Content-Type',file.endsWith('js')?'text/javascript':'text/css');res.end(await readFile(path.join(temp,file)));}
     else {res.setHeader('Content-Type','text/html');res.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"><div id="root"></div><script src="/app.js"></script>');}
@@ -39,6 +40,9 @@ try {
   for(const width of [390,768,1280]) {
     await page.setViewportSize({width,height:900});await page.goto(origin);await page.getByRole('heading',{name:'Bank balances',exact:true}).waitFor();
     assert.equal(await page.evaluate(()=>innerWidth),width);
+    assert.equal(await page.getByRole('heading',{name:'Cash flow',exact:true}).evaluate(el=>getComputedStyle(el).color),'rgb(0, 22, 78)');
+    assert.equal(await page.getByRole('button',{name:'Refresh',exact:true}).evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(0, 81, 255)');
+    assert.equal(await page.getByRole('region',{name:'Bank reconciliation and protected cash',exact:true}).evaluate(el=>getComputedStyle(el).borderColor),'rgb(220, 231, 255)');
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`page overflows at ${width}`);
     assert.equal(await page.getByRole('table').isVisible(),false);
     const rules=page.locator('summary').filter({hasText:'View account details'});
