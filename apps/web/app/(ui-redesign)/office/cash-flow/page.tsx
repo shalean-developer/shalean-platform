@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import styles from "./cash-flow.module.css";
 import {
   Bar,
   BarChart,
@@ -74,7 +75,7 @@ export default function CashFlowPage() {
   };
 
   return (
-    <div className="mx-auto min-w-0 max-w-7xl space-y-5 p-4 md:p-6">
+    <div className={`${styles.cashFlow} mx-auto min-w-0 max-w-7xl space-y-5 p-4 md:p-6`}>
       <header className="space-y-5 border-b border-slate-200 pb-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div><h1 className="text-3xl font-bold tracking-tight text-slate-950">Cash flow</h1></div>
