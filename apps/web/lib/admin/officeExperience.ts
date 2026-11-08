@@ -65,6 +65,7 @@ export const OFFICE_ACCESS_POLICIES: OfficeAccessPolicy[] = [
   { path: "/office/reviews", anyOf: ["customer.view", "marketing.view"], audience: ["owner", "manager", "customer-care", "marketing"] },
   { path: "/office/review-funnel", anyOf: ["customer.view", "marketing.view"], audience: ["owner", "manager", "customer-care", "marketing"] },
 
+  { path: "/office/marketing/email/preferences", anyOf: ["system.settings"], audience: ["owner"] },
   { path: "/office/marketing/email/test", anyOf: ["system.settings"], audience: ["owner"] },
   { path: "/office/marketing", anyOf: ["marketing.view", "content.draft", "content.publish"], audience: ["owner", "manager", "marketing"] },
   { path: "/office/promotions", anyOf: ["marketing.view", "content.publish"], audience: ["owner", "manager", "marketing"] },
