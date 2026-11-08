@@ -570,6 +570,18 @@ export function PropertyAddressSection({ locationLayout = false }: { locationLay
     }
   }, [locationLoading, locationError, suburbValue]);
 
+  const savedAddressSwitch = (
+    user && hasSavedAddresses ? (
+            <button
+              type="button"
+              onClick={() => switchToSaved()}
+              className={cn("text-sm font-medium text-blue-600 hover:underline", locationLayout && addressStyles.modeSwitch)}
+            >
+              Use a saved address from my account
+            </button>
+          ) : null
+  );
+
   const customPhoneField = (
     <div className="min-w-0">
               <FieldLabel htmlFor="contactPhone" required>
@@ -793,15 +805,7 @@ export function PropertyAddressSection({ locationLayout = false }: { locationLay
         </div>
       ) : (
         <div className={cn("space-y-4", locationLayout && addressStyles.custom)}>
-          {user && hasSavedAddresses ? (
-            <button
-              type="button"
-              onClick={() => switchToSaved()}
-              className={cn("text-sm font-medium text-blue-600 hover:underline", locationLayout && addressStyles.modeSwitch)}
-            >
-              Use a saved address from my account
-            </button>
-          ) : null}
+          {!locationLayout ? savedAddressSwitch : null}
 
           {showBookForSomeoneHint ? (
             <p className="rounded-xl border border-violet-100 bg-violet-50/70 px-3 py-2 text-xs text-violet-900">
@@ -816,6 +820,7 @@ export function PropertyAddressSection({ locationLayout = false }: { locationLay
               <>{customPhoneField}{customSuburbField}{customStreetField}</>
             )}
           </div>
+          {locationLayout ? savedAddressSwitch : null}
         </div>
       )}
     </section>
