@@ -237,6 +237,7 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: >-
           npm run test --
+          lib/email/__tests__/resumeConsentedMarketingDelivery.test.ts
           lib/email/__tests__/marketingEligibility.test.ts
           lib/email/__tests__/marketingSendGate.synthetic.test.ts
           lib/email/__tests__/marketingConsentService.test.ts
@@ -441,6 +442,10 @@ jobs:
 
       - name: Apply atomic provider withdrawal migration
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261106220925_marketing_provider_withdrawal_atomic.sql
+      - name: Apply consent delivery resume transaction
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261108141635_marketing_resume_consented_delivery.sql
+      - name: Verify consent delivery resume and safe failures
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_resume_consented_delivery_native.sql
       - name: Assert RLS, grants and append-only triggers
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_email_consent_security.sql
       - name: Synthetic consent, replay and rollback regression
@@ -460,3 +465,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/marketing_provider_withdrawal_native.sql
       - name: Atomic consent two-session concurrency regression
         run: timeout --signal=TERM --kill-after=5s 45s bash supabase/tests/marketing_consent_atomic_concurrency.sh
+      - name: Verify delivery resume two-session races
+        run: timeout --signal=TERM --kill-after=5s 45s bash supabase/tests/marketing_resume_concurrency.sh
