@@ -31,6 +31,17 @@ export function BookingV2Header({ serviceSlug, currentStep, onStepClick }: Props
           <HeaderLoginButton avatarOnly />
         </div>
 
+        {labels ? (
+          <div className="space-y-3 sm:hidden">
+            <div className="flex items-center justify-between gap-3">
+              <Link href="/" aria-label="Shalean home" className="shrink-0">
+                <ShaleanNavLogo className="h-7 w-auto max-w-[140px]" />
+              </Link>
+              <HeaderLoginButton avatarOnly />
+            </div>
+            <BookingV2StepIndicator currentStep={currentStep} onStepClick={onStepClick} labels={labels} />
+          </div>
+        ) : (
         <div className="flex min-w-0 items-start sm:hidden">
           <div className="min-w-0 flex-1 pt-1">
             <BookingV2StepIndicator currentStep={currentStep} onStepClick={onStepClick} labels={labels} />
@@ -39,6 +50,7 @@ export function BookingV2Header({ serviceSlug, currentStep, onStepClick }: Props
             <HeaderLoginButton avatarOnly />
           </div>
         </div>
+        )}
       </div>
     </header>
   );

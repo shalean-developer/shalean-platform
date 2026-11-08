@@ -150,8 +150,22 @@ test("FCO-01 frozen pending payment: missing fresh equipment receipt does not fo
   expect(result.blocked).toEqual([]);
 });
 
+async function assertJourneyLayout(page: Page, width: number) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  const logo = page.getByRole("link", { name: "Shalean home", exact: true }).filter({ visible: true });
+  await expect(logo).toHaveCount(1);
+  // The summary must stay inside its own desktop column rather than floating
+  // across the form at intermediate screen widths.
+  if (width >= 1024) {
+    const summary = await page.getByRole("complementary").boundingBox();
+    const form = await page.locator("[data-booking-stage]").boundingBox();
+    expect(summary!.x).toBeGreaterThanOrEqual(form!.x + form!.width);
+    expect(summary!.x + summary!.width).toBeLessThanOrEqual(width + 1);
+  }
+}
+
 for (const { width, recurring } of [
-  ...[320, 375, 768, 1440].map((width) => ({ width, recurring: false })),
+  ...[320, 375, 768, 1024, 1440].map((width) => ({ width, recurring: false })),
   { width: 1440, recurring: true },
 ]) {
   test(`FCO-01 unified journey: Home, single Schedule, Your Details, Payment at ${width}px (${recurring ? "recurring" : "once-off"})`, async ({ page }) => {
@@ -171,14 +185,25 @@ for (const { width, recurring } of [
     await expect(progress.getByRole("button", { name: "Your Details", exact: true })).toBeVisible();
     await expect(progress.getByRole("button", { name: "Review", exact: true })).toHaveCount(0);
     await expect(page.getByText("Due today", { exact: true })).toHaveCount(0);
+    await assertJourneyLayout(page, width);
+    if (process.env.FCO_CAPTURE_SCREENSHOTS === "true" && !recurring) {
+      await page.screenshot({ path: `test-results/regular-home-${width}.png`, fullPage: true });
+    }
     await page.getByRole("button", { name: /See available dates/ }).click();
     await expect(page).toHaveURL(/step=schedule/);
     // Date, recurrence and cleaner preference belong to one Schedule page.
     await expect(page.getByText("Pick a date", { exact: false }).first()).toBeVisible();
     const next = page.getByRole("button", { name: /Continue to Your Details/ });
     await expect(next).toBeEnabled();
+    await assertJourneyLayout(page, width);
+    const back = await page.getByRole("button", { name: "Back to Home", exact: true }).boundingBox();
+    const forward = await next.boundingBox();
+    expect(back!.height).toBeGreaterThanOrEqual(44);
+    expect(forward!.height).toBeGreaterThanOrEqual(44);
+    if (width < 640) expect(back!.y).toBeGreaterThanOrEqual(forward!.y + forward!.height);
     await next.click();
     await expect(page).toHaveURL(/step=review/);
+    await assertJourneyLayout(page, width);
     await expect(page.locator("#address")).toHaveValue(address1);
     await expect(page.getByRole("dialog")).toHaveCount(0);
     // Summary address edits stay in the new Your Details stage.
@@ -192,6 +217,10 @@ for (const { width, recurring } of [
     await page.getByRole("button", { name: /Proceed to payment/ }).click();
     await expect(page).toHaveURL(/step=payment/);
     await expect(progress.getByRole("button", { name: "Payment", exact: true })).toHaveAttribute("aria-current", "step");
+    await assertJourneyLayout(page, width);
+    if (process.env.FCO_CAPTURE_SCREENSHOTS === "true" && !recurring) {
+      await page.screenshot({ path: `test-results/regular-payment-${width}.png`, fullPage: true });
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     expect(events.blocked).toEqual([]);
   });
