@@ -11,7 +11,7 @@ export async function resumeConsentedMarketingDelivery(
   try {
     const { data: profile, error } = await admin.from("user_profiles")
       .select("marketing_consent_generation").eq("id", input.customerId).maybeSingle();
-    if (error || !Number.isSafeInteger(profile?.marketing_consent_generation)
+    if (error || !profile || !Number.isSafeInteger(profile.marketing_consent_generation)
         || profile.marketing_consent_generation < 1) return false;
     const provider = await readResendMarketingState(input.email, input.apiKey);
     if (!provider.verified || provider.unsubscribed !== false || provider.suppressed !== false)
