@@ -56,14 +56,14 @@ export function sanitizeBookingNavigationMetadata(raw: Record<string, unknown>):
 
 export type LiveBookingSectionRow = {
   step: string; section: string; label: string;
-  viewedSessions: number; exitSessions: number; errorSessions: number;
+  viewedSessions: number; continuedSessions: number; backSessions: number; exitSessions: number; errorSessions: number;
 };
 
 export function buildLiveBookingSectionDiagnostics(rows: readonly {
   session_id: string; analytics_session_id?: string | null; step: string; event_type: string;
   metadata?: Record<string, unknown> | null;
 }[]): LiveBookingSectionRow[] {
-  const buckets = new Map<string, { row: LiveBookingSectionRow; views: Set<string>; exits: Set<string>; errors: Set<string> }>();
+  const buckets = new Map<string, { row: LiveBookingSectionRow; views: Set<string>; continues: Set<string>; backs: Set<string>; exits: Set<string>; errors: Set<string> }>();
   for (const event of rows) {
     const metadata = event.metadata ?? {};
     if (metadata.service !== "regular-cleaning" || metadata.flow !== "booking_v2") continue;
@@ -75,17 +75,36 @@ export function buildLiveBookingSectionDiagnostics(rows: readonly {
     const key = event.step + ":" + screen.key;
     let bucket = buckets.get(key);
     if (!bucket) {
-      bucket = { row: { step: event.step, section: screen.key, label: screen.label, viewedSessions: 0, exitSessions: 0, errorSessions: 0 },
-        views: new Set(), exits: new Set(), errors: new Set() };
+      bucket = { row: { step: event.step, section: screen.key, label: screen.label, viewedSessions: 0, continuedSessions: 0, backSessions: 0, exitSessions: 0, errorSessions: 0 },
+        views: new Set(), continues: new Set(), backs: new Set(), exits: new Set(), errors: new Set() };
       buckets.set(key, bucket);
     }
     if (event.event_type === "view") bucket.views.add(id);
+    if ((event.event_type === "next" || event.event_type === "back") &&
+        metadata.from_step === wizardStep && metadata.from_section === screen.key) {
+      const toStep = metadata.to_step;
+      if (toStep === 1 || toStep === 2 || toStep === 3 || toStep === 4) {
+        const toSection = liveRegularSection(toStep, metadata.to_section);
+        if (toStep > 2 || toSection) {
+          const navigation = bookingFunnelNavigation(
+            { step: wizardStep as 1 | 2, section: screen.key },
+            { step: toStep, section: toSection },
+          );
+          if (navigation?.event === event.event_type) {
+            (event.event_type === "next" ? bucket.continues : bucket.backs).add(id);
+          }
+        }
+      }
+    }
     if (event.event_type === "exit") bucket.exits.add(id);
     if (event.event_type === "error") bucket.errors.add(id);
   }
   return [1, 2].flatMap((step) => (SECTIONS[step] ?? []).flatMap((screen) => {
     const bucket = buckets.get((step === 1 ? "quote" : "datetime") + ":" + screen.key);
     if (!bucket) return [];
-    return [{ ...bucket.row, viewedSessions: bucket.views.size, exitSessions: bucket.exits.size, errorSessions: bucket.errors.size }];
+    return [{ ...bucket.row, viewedSessions: bucket.views.size,
+      continuedSessions: [...bucket.continues].filter((id) => bucket.views.has(id)).length,
+      backSessions: [...bucket.backs].filter((id) => bucket.views.has(id)).length,
+      exitSessions: bucket.exits.size, errorSessions: bucket.errors.size }];
   }));
 }
