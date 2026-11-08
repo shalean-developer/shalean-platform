@@ -16,10 +16,10 @@ export function AccountShell({ children }: { children: ReactNode }) {
     <DashboardToastProvider>
       <div className="min-h-dvh bg-muted/40 pb-[4.75rem] text-foreground md:pb-0">
         {state.status === "timeout" ? <RoleGuardRetryBanner onRetry={retry} /> : null}
-        <AccountSidebar />
-
-        <div className="min-h-dvh md:pl-72">
-          <AccountHeader />
+        <AccountHeader />
+        <div className="flex items-start">
+          <AccountSidebar />
+          <div className="min-w-0 flex-1">
           <main className="mx-auto w-full max-w-[var(--ui-container-wide)] px-[var(--ui-page-gutter)] py-6 md:py-8">
             {state.status === "checking" ? (
               <div className="animate-pulse space-y-5" aria-hidden>
@@ -31,6 +31,7 @@ export function AccountShell({ children }: { children: ReactNode }) {
               children
             )}
           </main>
+          </div>
         </div>
 
         <AccountMobileNav />
