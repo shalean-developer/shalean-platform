@@ -371,7 +371,10 @@ test("Regular property cards require confirmation and retain screen-level funnel
   }));
   const events: Array<{event_type:string;metadata:Record<string,unknown>}> = [];
   page.on("request", request => {
-    if (new URL(request.url()).pathname === "/api/analytics/booking-event") events.push(request.postDataJSON());
+    if (request.method() === "POST" && new URL(request.url()).pathname === "/api/analytics/booking-event") {
+      const event = request.postDataJSON();
+      if (event) events.push(event);
+    }
   });
   for (const viewport of [{width:1440,height:1000},{width:390,height:844}]) {
     await page.setViewportSize(viewport);
