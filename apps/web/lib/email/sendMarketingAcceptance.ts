@@ -5,6 +5,7 @@ import { marketingAcceptanceRecipients, marketingAcceptanceSendEnabled } from ".
 import { checkMarketingSendGate } from "./marketingSendGate";
 import { createMarketingUnsubscribeUrl, validGeneration } from "./marketingUnsubscribeToken";
 import { getDefaultFromAddress, getResend } from "./resendFrom";
+import { assertNotSeedEmail, isSeedEmail } from "@/lib/seed/devSeedGuard";
 
 export const ACCEPTANCE_SUBJECT = "[SHALEAN STAGING — TEST] Email preferences delivery test";
 const ORIGIN = "https://pricing-test.shalean.co.za";
@@ -24,6 +25,10 @@ export function acceptanceMessageId(customerId: string, generation: number): str
 export async function sendMarketingAcceptance(admin: SupabaseClient, email: string): Promise<Result> {
   if (!marketingAcceptanceSendEnabled() || !marketingAcceptanceRecipients().includes(email))
     return { status: 403, outcome: "blocked", error: "Restricted test delivery is not enabled." };
+  try { assertNotSeedEmail(email, "Owner inbox acceptance"); }
+  catch { return { status: 403, outcome: "blocked", error: "Seed addresses cannot receive delivery tests." }; }
+  // Staging bundles run with NODE_ENV=production, where the common guard is a no-op.
+  if (isSeedEmail(email)) return { status: 403, outcome: "blocked", error: "Seed addresses cannot receive delivery tests." };
   const { data: profile, error } = await admin.from("user_profiles")
     .select("id,role,billing_email,marketing_consent_generation")
     .eq("billing_email", email).maybeSingle();

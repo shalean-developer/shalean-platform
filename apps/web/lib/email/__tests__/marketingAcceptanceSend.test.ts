@@ -49,6 +49,15 @@ it.each([
   expect((await run()).status).toBe(403); expect(m.send).not.toHaveBeenCalled(); expect(rows.size).toBe(0);
 });
 it("never accepts another recipient", async () => { expect((await sendMarketingAcceptance(m.admin(), "outside@example.test")).status).toBe(403); expect(m.send).not.toHaveBeenCalled(); });
+it.each(["test", "production"])("blocks allowlisted seed addresses before reservation in NODE_ENV=%s", async nodeEnv => {
+  vi.stubEnv("NODE_ENV", nodeEnv);
+  const seed = "customer.one@example.com";
+  vi.stubEnv("MARKETING_ACCEPTANCE_EMAIL_ALLOWLIST", `${seed},${other}`);
+  m.identity.mockResolvedValue({ data: { user: { email: seed, email_confirmed_at: "2026-11-08" } }, error: null });
+  expect((await sendMarketingAcceptance(m.admin(), seed)).status).toBe(403);
+  expect(rows.size).toBe(0); expect(m.identity).not.toHaveBeenCalled();
+  expect(m.gate).not.toHaveBeenCalled(); expect(m.send).not.toHaveBeenCalled();
+});
 it.each(["unsubscribed", "suppressed", "no_affirmative_consent", "unverified_preferences", "eligibility_lookup_failed"])("preserves marketing denial: %s", async reason => {
   m.gate.mockResolvedValue({ allowed: false, reason }); expect((await run()).status).toBe(409); expect(rows.size).toBe(0); expect(m.send).not.toHaveBeenCalled();
 });
