@@ -141,8 +141,10 @@ function BookingV2Inner() {
           4: <Step4Payment />,
         }[currentStep]);
 
-  // Keep the booking summary available throughout the full four-step journey.
-  const showSidebarSummary = true;
+  // A focused location card; the summary returns on the next Details screen.
+  const locationEntry = !simplifiedHomePreview && serviceSlug === "regular-cleaning" &&
+    currentStep === 1 && (detailsSectionOverride ?? "address") === "address";
+  const showSidebarSummary = !locationEntry;
   /** Steps 2–4 already use their own section cards — avoid duplicate outer card chrome. */
   const useOuterStepCard = currentStep === 1;
   const reviewTimeMissing = currentStep === 3 && !reviewTime;
@@ -212,7 +214,7 @@ function BookingV2Inner() {
               data-booking-stage={simplifiedHomePreview ? currentStep : undefined}
               className={
                 useOuterStepCard
-                  ? `rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 text-card-foreground shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8 ${styles.step1}`
+                  ? `rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 text-card-foreground shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8 ${styles.step1} ${locationEntry ? styles.locationEntry : ""}`
                   : `min-w-0 ${currentStep === 2 ? styles.step2 : currentStep === 3 ? styles.step3 : currentStep === 4 ? styles.step4 : ""}`
               }
             >
