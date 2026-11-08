@@ -3,7 +3,7 @@ import type { CashReconciliation } from '@/lib/admin/expenses/cashReconciliation
 import { formatForecastZar } from './CashFlowForecastBreakdown';
 const amount = (value: number | null | undefined) => value == null ? 'Unavailable' : formatForecastZar(value);
 export function CashReconciliationPanel({ data, loading, error }: { data?: CashReconciliation | null; loading: boolean; error?: string | null }) {
-  return <section aria-label="Bank reconciliation and protected cash" className="space-y-4 rounded-xl border border-amber-200 bg-white p-5">
+  return <section aria-label="Bank reconciliation and protected cash" className="min-w-0 space-y-4 rounded-xl border border-amber-200 bg-white p-5">
     <h2 className="text-lg font-semibold">Bank reconciliation and protected cash</h2>
     <p className="text-sm text-slate-600">Current balances are a point-in-time snapshot, independent of the chart date range. Transfers between these accounts move cash; they do not create income or expenses.</p>
     {data?.synthetic ? <p role="status" className="rounded-lg bg-amber-50 p-3 font-medium">Synthetic staging demonstration — every amount in this section is fictional. No live bank or Zoho balances are imported.</p> : null}
@@ -14,7 +14,7 @@ export function CashReconciliationPanel({ data, loading, error }: { data?: CashR
         <tbody>{data?.accounts.map(a => <tr key={a.id} className="border-t">
           <th scope="row" className="p-2 font-medium">{a.name}<span className="block text-xs font-normal text-slate-500">{a.id}</span></th>
           <td className="p-2">{amount(a.bankCents)}</td><td className="p-2">{amount(a.bookCents)}</td><td className="p-2">{amount(a.differenceCents)}</td>
-          <td className="p-2">{!a.identityVerified ? 'Mapping unverified' : !a.fresh ? 'Feed stale or unavailable' : a.differenceCents !== 0 ? 'Unresolved difference' : 'Balances agree; statement reconciliation unverified'}<span className="block text-xs text-slate-500">Feed: {a.feedAt ?? 'Unavailable'}</span></td>
+          <td className="p-2">{!a.identityVerified ? 'Mapping unverified' : !a.fresh ? 'Feed stale or unavailable' : a.differenceCents === null ? 'Source balance unavailable' : a.differenceCents !== 0 ? 'Unresolved difference' : 'Balances agree; statement reconciliation unverified'}<span className="block text-xs text-slate-500">Feed: {a.feedAt ?? 'Unavailable'}</span></td>
         </tr>)}</tbody>
       </table></div>
       <div className="grid gap-3 sm:grid-cols-3">

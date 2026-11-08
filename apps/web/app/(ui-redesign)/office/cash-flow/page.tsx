@@ -39,9 +39,10 @@ export default function CashFlowPage() {
   const [scenario, setScenario] = useState("differences");
   const evidenceParams = useMemo(() => ({ scenario }), [scenario]);
   const params = useMemo(() => ({ from, to }), [from, to]);
+  const periodValid = /^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to) && from <= to;
 
   const { data, loading, error, refetch } = useAdminData<CashFlowDashboardPayload>("/api/admin/cash-flow", {
-    params,
+    params, enabled: periodValid,
   });
   const {
     data: reconciliation,
@@ -50,19 +51,20 @@ export default function CashFlowPage() {
     refetch: refetchReconciliation,
   } = useAdminData<CashReconciliation>("/api/admin/cash-reconciliation", { params: evidenceParams });
 
-  const { data: obligations, loading: obligationsLoading, error: obligationsError, refetch: refetchObligations } = useAdminData<CashSurvivalDashboardPayload>("/api/admin/cash-survival", { params });
-  const obligationAmount = (value?: number) => obligationsLoading || obligationsError || value == null ? "Unavailable" : formatZar(value);
+  const { data: obligations, loading: obligationsLoading, error: obligationsError, refetch: refetchObligations } = useAdminData<CashSurvivalDashboardPayload>("/api/admin/cash-survival", { params, enabled: periodValid });
+  const obligationsCurrent = periodValid && !obligationsLoading && !obligationsError && obligations?.period.from === from && obligations?.period.to === to;
+  const obligationAmount = (value?: number) => !obligationsCurrent || value == null ? "Unavailable" : formatZar(value);
 
   const s = data?.summary;
-  const forecastCurrent = !loading && !error && data?.period.from === from && data?.period.to === to;
-  const dailyChart = (data?.daily_position ?? []).map((d) => ({
+  const forecastCurrent = periodValid && !loading && !error && data?.period.from === from && data?.period.to === to;
+  const dailyChart = (forecastCurrent ? data?.daily_position ?? [] : []).map((d) => ({
     date: d.date.slice(5),
     In: d.cash_in_cents / 100,
     Out: d.cash_out_cents / 100,
     Net: d.net_cents / 100,
   }));
 
-  const monthlyChart = (data?.monthly_position ?? []).map((m) => ({
+  const monthlyChart = (forecastCurrent ? data?.monthly_position ?? [] : []).map((m) => ({
     month: m.month,
     In: m.cash_in_cents / 100,
     Out: m.cash_out_cents / 100,
@@ -75,15 +77,14 @@ export default function CashFlowPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="min-w-0 space-y-6 p-4 md:p-6">
       <OfficeZohoPageHeader
         title="Cash flow"
         subtitle="Money in, money out, and cash position"
-        live
         actions={
           <>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-md border border-slate-200 px-3 py-2 text-sm" />
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-md border border-slate-200 px-3 py-2 text-sm" />
+            <input aria-label="From date" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-md border border-slate-200 px-3 py-2 text-sm" />
+            <input aria-label="To date" type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-md border border-slate-200 px-3 py-2 text-sm" />
             <OfficeZohoSecondaryButton onClick={refreshAll}>
               <RefreshCw className="h-4 w-4" /> Refresh
             </OfficeZohoSecondaryButton>
@@ -94,13 +95,14 @@ export default function CashFlowPage() {
         }
       />
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {!periodValid ? <p role="alert" className="text-sm text-red-600">Choose a valid date range with the start on or before the end.</p> : error ? <p role="alert" className="text-sm text-red-600">Period data unavailable. {error}</p> : null}
 
       {reconciliation?.synthetic ? <label className="block text-sm font-medium">Synthetic test scenario
         <select aria-label="Synthetic test scenario" value={scenario} onChange={e => setScenario(e.target.value)} className="ml-3 rounded-md border p-2">
           <option value="differences">Unresolved differences</option><option value="equal">Balances agree</option><option value="stale">Stale feed</option><option value="missing">Missing bank balance</option>
         </select>
       </label> : null}
+      {reconciliation?.synthetic ? <p className="text-sm text-slate-600">The fictional account demonstration and the local staging ledger below are separate datasets. Their totals are not expected to match.</p> : null}
       <CashReconciliationPanel data={reconciliation} loading={reconciliationLoading} error={reconciliationError} />
 
       <section aria-label="Local obligations and receivables" className="rounded-xl border bg-white p-5 text-sm">
@@ -117,15 +119,15 @@ export default function CashFlowPage() {
         <FinanceKpiCard icon={ArrowUpRight} label="Recorded Paystack receipts · gross" value={!forecastCurrent ? "Unavailable" : data?.payment_evidence.verified_transaction_count ? formatZar(s?.money_received_cents ?? 0) : "Unverified"} loading={loading} status="positive" />
         <FinanceKpiCard icon={ArrowUpRight} label="Paystack settled to bank" value={!forecastCurrent ? "Unavailable" : formatZar(s?.money_received_net_cents ?? 0)} loading={loading} status="positive" />
         <FinanceKpiCard icon={ArrowDownLeft} label="Paystack fees · reported" value={!forecastCurrent ? "Unavailable" : data?.payment_evidence.fees_verified ? formatZar(s?.gateway_processing_fees_cents ?? 0) : "Unverified"} loading={loading} status="warning" />
-        <FinanceKpiCard icon={ArrowDownLeft} label="Paid cleaner batches + approved expenses" value={formatZar(s?.money_paid_cents ?? 0)} loading={loading} status="negative" />
-        <FinanceKpiCard icon={Banknote} label="Local bank ledger · unverified" value={formatZar(s?.cash_in_bank_cents ?? 0)} loading={loading} />
-        <FinanceKpiCard icon={PiggyBank} label="Petty cash" value={formatZar(s?.petty_cash_cents ?? 0)} loading={loading} />
+        <FinanceKpiCard icon={ArrowDownLeft} label="Paid cleaner batches + approved expenses" value={!forecastCurrent ? "Unavailable" : formatZar(s?.money_paid_cents ?? 0)} loading={loading} status="negative" />
+        <FinanceKpiCard icon={Banknote} label="Local bank ledger · unverified" value={!forecastCurrent ? "Unavailable" : formatZar(s?.cash_in_bank_cents ?? 0)} loading={loading} />
+        <FinanceKpiCard icon={PiggyBank} label="Petty cash" value={!forecastCurrent ? "Unavailable" : formatZar(s?.petty_cash_cents ?? 0)} loading={loading} />
         <FinanceKpiCard icon={TrendingUp} label="Expected income · selected period" value={!forecastCurrent ? "Unavailable" : formatForecastZar(s?.expected_income_cents ?? 0)} loading={loading} status="positive" />
         <FinanceKpiCard icon={Wallet} label="Expected expenses · selected period" value={!forecastCurrent ? "Unavailable" : formatForecastZar(s?.expected_expenses_cents ?? 0)} loading={loading} status="warning" />
         <FinanceKpiCard
           icon={TrendingUp}
           label="Provisional net · settlements less payouts/approved expenses"
-          value={formatZar(s?.net_cash_flow_cents ?? 0)}
+          value={!forecastCurrent ? "Unavailable" : formatZar(s?.net_cash_flow_cents ?? 0)}
           loading={loading}
           status={(s?.net_cash_flow_cents ?? 0) >= 0 ? "positive" : "negative"}
         />
@@ -155,7 +157,7 @@ export default function CashFlowPage() {
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="mb-4 text-sm font-semibold text-slate-800">Recorded inflows vs provisional outflows (monthly)</h2>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            {!forecastCurrent ? <p role="status" className="text-sm text-slate-600">{loading && periodValid ? "Loading selected-period data…" : "Selected-period data unavailable."}</p> : monthlyChart.length === 0 ? <p className="text-sm text-slate-600">No recorded inflows or provisional outflows in this period.</p> : <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyChart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
@@ -165,14 +167,14 @@ export default function CashFlowPage() {
                 <Bar dataKey="In" fill="#10b981" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Out" fill="#ef4444" radius={[4, 4, 0, 0]} />
               </BarChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer>}
           </div>
         </section>
 
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="mb-4 text-sm font-semibold text-slate-800">Daily provisional net cash flow</h2>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            {!forecastCurrent ? <p role="status" className="text-sm text-slate-600">{loading && periodValid ? "Loading selected-period data…" : "Selected-period data unavailable."}</p> : dailyChart.length === 0 ? <p className="text-sm text-slate-600">No recorded daily cash-flow entries in this period.</p> : <ResponsiveContainer width="100%" height="100%">
               <LineChart data={dailyChart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
@@ -180,7 +182,7 @@ export default function CashFlowPage() {
                 <Tooltip formatter={(v: number) => `R ${v.toLocaleString("en-ZA")}`} />
                 <Line type="monotone" dataKey="Net" stroke="#408df7" strokeWidth={2} dot={false} />
               </LineChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer>}
           </div>
         </section>
       </div>
