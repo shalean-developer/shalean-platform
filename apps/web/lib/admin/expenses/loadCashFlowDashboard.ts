@@ -185,7 +185,7 @@ export async function loadCashFlowDashboard(
       expected_income_cents: forecast.income_cents,
       expected_expenses_cents: forecast.expenses_cents,
       net_cash_flow_cents: netCashFlow,
-      cash_runway_days: cashRunwayDays,
+      cash_runway_days: null, // Unverified bank ownership and obligations cannot establish runway.
     },
     payment_evidence: gatewayMetrics,
     forecast,

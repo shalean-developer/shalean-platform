@@ -1,0 +1,104 @@
+.cashFlow {
+  /* The homepage's brand colours and canonical elevation, scoped to Cash flow. */
+  --cash-brand: #0051ff;
+  --cash-navy: #00164e;
+  --cash-border: #dce7ff;
+  color: var(--cash-navy);
+  background: #f5f7fb;
+  border-radius: var(--ui-radius-lg, 12px);
+  font-family: inherit;
+}
+
+.cashFlow h1 {
+  color: var(--cash-navy);
+  font-size: clamp(2rem, 3vw, 2.5rem);
+  font-weight: 500;
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+}
+
+.cashFlow h2 {
+  color: var(--cash-navy);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+
+.cashFlow > header,
+.cashFlow > section,
+.cashFlow details,
+.cashFlow :global(.shadow-sm) {
+  border: 1px solid var(--cash-border);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--ui-shadow-sm, 0 1px 2px rgb(0 0 0 / 0.06));
+}
+
+.cashFlow > header,
+.cashFlow > section {
+  padding: 1rem;
+}
+
+.cashFlow summary {
+  color: var(--cash-navy);
+  border-radius: inherit;
+}
+
+.cashFlow summary:hover {
+  background: #eef3ff;
+}
+
+.cashFlow summary:focus-visible,
+.cashFlow input:focus-visible,
+.cashFlow select:focus-visible,
+.cashFlow a:focus-visible,
+.cashFlow button:focus-visible {
+  outline: 2px solid var(--cash-brand);
+  outline-offset: 3px;
+}
+
+.cashFlow a,
+.cashFlow summary > span {
+  color: var(--cash-brand);
+}
+
+.cashFlow input,
+.cashFlow select {
+  color: var(--cash-navy);
+  border-color: var(--cash-border);
+  border-radius: 6px;
+}
+
+.cashFlow button {
+  justify-content: center;
+  color: #fff;
+  background: var(--cash-brand);
+  border-radius: 6px;
+}
+
+.cashFlow button:hover {
+  background: #0033a1;
+}
+
+.cashFlow :global(.bg-blue-50) {
+  background: #eef3ff;
+}
+
+.cashFlow :global(.bg-slate-50) {
+  background: #f5f7fb;
+}
+
+.cashFlow p > strong {
+  color: var(--cash-navy);
+}
+
+@media (max-width: 639px) {
+  .cashFlow > header label {
+    flex-basis: 100%;
+  }
+  .cashFlow > header input {
+    font-size: 16px;
+  }
+  .cashFlow > header button {
+    width: 100%;
+  }
+}
