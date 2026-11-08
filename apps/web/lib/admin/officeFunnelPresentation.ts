@@ -1,3 +1,4 @@
+import type { LiveBookingSectionRow } from "@/lib/analytics/liveBookingFunnel";
 export type BookingFunnelInsight = {
   id: string;
   severity: "info" | "warning" | "critical" | string;
@@ -74,6 +75,7 @@ export type BookingFunnelApiPayload = {
   viewsByStep?: Array<{ step: string; views: number }>;
   topExitSteps?: Array<{ step: string; count: number }>;
   errorsByStep?: FunnelErrorRow[];
+  sectionDiagnostics?: LiveBookingSectionRow[];
   intelligence?: {
     stepConversion?: FunnelStepConversionRow[];
     timeToComplete?: {
@@ -323,9 +325,9 @@ export function buildOfficeFunnelKpis(data: BookingFunnelApiPayload): OfficeFunn
       tone: "violet",
     },
     {
-      label: "Payment drop-off",
+      label: "Paystack drop-off",
       value: pctLabel(paystack?.abandonmentPct),
-      sub: `${paystack?.completed ?? 0}/${paystack?.opened ?? 0} payment sessions`,
+      sub: `${paystack?.completed ?? 0}/${paystack?.opened ?? 0} Paystack sessions`,
       tone: "orange",
     },
   ];

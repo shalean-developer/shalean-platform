@@ -103,3 +103,20 @@ describe("booking funnel API source reliability", () => {
     expect(body.viewsByStep).toEqual(["entry", "quote", "datetime", "details", "payment"].map((step) => ({ step, views: 0 })));
   });
 });
+
+it("exposes screen diagnostics without inflating coarse-stage session counts", async () => {
+  const created_at = new Date().toISOString();
+  const metadata={service:"regular-cleaning",flow:"booking_v2",section:"address"};
+  readPagedRows.mockResolvedValueOnce({data:[
+    {session_id:"a",analytics_session_id:"a",step:"quote",event_type:"view",created_at,metadata},
+    {session_id:"a",analytics_session_id:"a",step:"quote",event_type:"view",created_at,metadata:{...metadata,section:"rooms"}},
+    {session_id:"a",analytics_session_id:"a",step:"quote",event_type:"exit",created_at,metadata:{...metadata,section:"rooms"}},
+  ],error:null}).mockResolvedValueOnce({data:[],error:null}).mockResolvedValueOnce({data:[],error:null});
+  const response=await GET(request());
+  const body=await response.json();
+  expect(body.viewsByStep.find((r:{step:string})=>r.step==="quote").views).toBe(1);
+  expect(body.sectionDiagnostics).toMatchObject([
+    {section:"address",viewedSessions:1,exitSessions:0},
+    {section:"rooms",viewedSessions:1,exitSessions:1},
+  ]);
+});

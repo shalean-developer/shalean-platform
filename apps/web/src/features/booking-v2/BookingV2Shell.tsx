@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
+import { liveRegularSection } from "@/lib/analytics/liveBookingFunnel";
 import { useFormContext } from "react-hook-form";
 import styles from "./BookingV2Shell.module.css";
 import { Button } from "@/components/ui/button";
@@ -100,6 +101,8 @@ function BookingV2Inner() {
     goBack,
     serviceSlug,
     pricingAvailability,
+    detailsSectionOverride,
+    scheduleSectionOverride,
     paymentEditResetting,
     paymentEditResetError,
   } = useBookingV2();
@@ -113,7 +116,11 @@ function BookingV2Inner() {
     equipmentQuote: watch("equipmentQuote"),
   });
   const quoteRequest = useBookingV2Pricing();
-  useBookingV2FunnelTelemetry(currentStep, serviceSlug);
+  useBookingV2FunnelTelemetry(currentStep, serviceSlug,
+    serviceSlug === "regular-cleaning" && !simplifiedHomePreview
+      ? liveRegularSection(currentStep, currentStep === 1 ? detailsSectionOverride : scheduleSectionOverride)
+      : undefined,
+  );
 
   if (!mounted) {
     return <BookingV2LoadingShell />;
