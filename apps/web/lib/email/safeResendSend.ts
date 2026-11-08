@@ -47,6 +47,8 @@ export async function safeResendSend(payload: SafeResendPayload): Promise<{
   data: { id: string } | null;
   error: { message: string; name?: string } | null;
 }> {
+  if (payload.context?.messageType === "marketing_acceptance_test" || payload.tags?.some(tag => tag.name === "message_type" && tag.value === "marketing_acceptance_test"))
+    return { data: null, error: { name: "acceptance_test_blocked", message: "Acceptance tests require the dedicated Owner action and cannot use normal delivery or retries." } };
   const recipientSafety = validateEmailRecipients(payload.to);
   if (!recipientSafety.allowed) return { data: null, error: { message: recipientSafety.reason, name: "recipient_blocked" } };
 

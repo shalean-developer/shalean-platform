@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { marketingAcceptanceHost, marketingAcceptanceRecipients } from "@/lib/email/marketingAcceptanceConfig";
+import { marketingAcceptanceHost, marketingAcceptanceRecipients, marketingAcceptanceSendEnabled } from "@/lib/email/marketingAcceptanceConfig";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const json = (body: object, status = 200) => NextResponse.json(body, { status, headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
@@ -29,5 +29,5 @@ export async function GET(request: Request) {
     if (eventError) return json({ error: "Setup status unavailable" }, 503);
     recipients.push({ email, status: event?.decision !== "granted" ? "consent_required" : profile.marketing_emails_unsubscribed_at ? "delivery_paused" : "consent_recorded" });
   }
-  return json({ recipients, sendingEnabled: false, webhookConfigured: Boolean(process.env.RESEND_STAGING_WEBHOOK_SECRET), providerWritesEnabled: false });
+  return json({ recipients, sendingEnabled: false, testSendEnabled: marketingAcceptanceSendEnabled(), webhookConfigured: Boolean(process.env.RESEND_STAGING_WEBHOOK_SECRET), providerWritesEnabled: false });
 }

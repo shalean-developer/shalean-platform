@@ -30,7 +30,7 @@ function uuidOrNull(value: string | undefined): string | null {
   return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value) ? value : null;
 }
 
-export async function handleResendWebhook(request: Request, options: { secret?: string; accept?: (admin: NonNullable<ReturnType<typeof getAdmin>>, event: ResendWebhookEvent) => Promise<NextResponse | null> } = {}) {
+export async function handleResendWebhook(request: Request, options: { secret?: string; disableRetries?: boolean; accept?: (admin: NonNullable<ReturnType<typeof getAdmin>>, event: ResendWebhookEvent) => Promise<NextResponse | null> } = {}) {
   const secret = options.secret ?? process.env.RESEND_WEBHOOK_SECRET;
   const apiKey = process.env.RESEND_API_KEY;
   const admin = getAdmin();
@@ -96,6 +96,8 @@ export async function handleResendWebhook(request: Request, options: { secret?: 
     if (terminalSuccess) Object.assign(update, { retry_status: "recovered", next_retry_at: null, retry_locked_at: null, retry_lock_token: null, failure_reason: null });
     if (temporaryFailure) Object.assign(update, { retry_status: "queued", next_retry_at: new Date(Date.now() + 5 * 60_000).toISOString(), failure_reason: JSON.stringify(event.data ?? {}) });
     if (permanentFailure) Object.assign(update, { retry_status: "blocked", next_retry_at: null, failure_reason: JSON.stringify(event.data ?? {}) });
+    // Dedicated staging acceptance messages are operator-controlled, never jobs.
+    if (options.disableRetries) Object.assign(update, { retry_status: "blocked", next_retry_at: null, retry_locked_at: null, retry_lock_token: null });
     // Provider events can arrive late. Do not allow a delayed/sent event to
     // regress an already terminal delivery state. The filter is atomic in SQL.
     let updateQuery = admin.from("email_outbound_messages")
