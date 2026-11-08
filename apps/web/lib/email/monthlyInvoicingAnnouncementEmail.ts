@@ -54,8 +54,8 @@ export function buildMonthlyInvoicingAnnouncementHtml(params: MonthlyInvoicingAn
   const effective = escapeHtml(MONTHLY_INVOICING_ANNOUNCEMENT_EFFECTIVE_LABEL);
 
   return `
-<div style="font-family: system-ui, -apple-system, Segoe UI, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px 20px; color: #1f2937; line-height: 1.55;">
-  <h2 style="margin: 0 0 4px; font-size: 22px; font-weight: 700;">Shalean<span style="color:#2563eb;">.</span></h2>
+<div style="font-family: system-ui, -apple-system, Segoe UI, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px 20px; color: #00164e; line-height: 1.55;">
+  <h2 style="margin: 0 0 4px; font-size: 22px; font-weight: 700;">Shalean<span style="color:#0051ff;">.</span></h2>
   <p style="margin: 0 0 20px; font-size: 13px; color: #6b7280;">Cleaning Services</p>
 
   <p style="margin: 0 0 16px;">Hi ${hi},</p>
@@ -99,8 +99,8 @@ export function buildMonthlyInvoicingAnnouncementHtml(params: MonthlyInvoicingAn
 
   <p style="margin: 0 0 20px;">
     Questions? Reply to this email or contact us at
-    <a href="mailto:${supportEmail}" style="color:#2563eb;">${supportEmail}</a>
-    or <a href="${escapeHtml(emailSafeGoUrl("call"))}" style="color:#2563eb;">${supportPhone}</a>.
+    <a href="mailto:${supportEmail}" style="color:#0051ff;">${supportEmail}</a>
+    or <a href="${escapeHtml(emailSafeGoUrl("call"))}" style="color:#0051ff;">${supportPhone}</a>.
   </p>
 
   <p style="margin: 0;">Thank you for your continued trust in Shalean.</p>

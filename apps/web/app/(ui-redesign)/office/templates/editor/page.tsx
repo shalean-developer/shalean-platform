@@ -1,5 +1,6 @@
 "use client";
 
+import { EmailWorkspace } from "@/components/email/EmailWorkspace";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -185,7 +186,7 @@ export default function OfficeTemplatesEditorPage() {
   const uniqueKeys = [...new Set(templates.map((t) => t.key))];
 
   return (
-    <div className="space-y-6 pb-10">
+    <EmailWorkspace title="Template editor" description="Edit copy and preview your customer messages.">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Link
@@ -195,7 +196,7 @@ export default function OfficeTemplatesEditorPage() {
             <ArrowLeft className="h-4 w-4" />
             Back to templates
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900">Template editor</h1>
+          <h2 className="text-base font-semibold text-slate-900">Editing guidance</h2>
           <p className="mt-0.5 max-w-2xl text-sm text-slate-500">
             Edit notification copy in Supabase. Active{" "}
             <code className="rounded bg-slate-100 px-1 text-xs">booking_confirmed</code> email is used at send-time when
@@ -388,6 +389,6 @@ export default function OfficeTemplatesEditorPage() {
           ) : null}
         </CardContent>
       </Card>
-    </div>
+    </EmailWorkspace>
   );
 }

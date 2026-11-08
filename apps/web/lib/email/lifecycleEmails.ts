@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { wrapBrandedEmailContent } from "./emailBrandShell";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
 import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
@@ -56,12 +57,7 @@ function escapeAttr(s: string): string {
 }
 
 function brandShell(inner: string): string {
-  return `
-<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
-  <h2 style="margin-bottom: 8px;">Shalean<span style="color:#2563eb;">.</span></h2>
-  ${inner}
-  <p style="margin-top: 20px; font-size: 12px; color: #9ca3af;">Shalean Cleaning Services</p>
-</div>`;
+  return wrapBrandedEmailContent(inner);
 }
 
 async function sendLifecycle(
@@ -114,13 +110,13 @@ function buildReminderHtml(ctx: LifecycleEmailBookingContext): string {
     <p><strong>Where:</strong> ${escapeHtml(ctx.location || "—")}</p>
   </div>
   <p style="margin: 16px 0;">
-    <a href="${escapeAttr(accountUrl)}" style="display:inline-block; background:#2563eb; color:#fff; text-decoration:none; padding:12px 20px; border-radius:10px; font-weight:600;">View your booking</a>
+    <a href="${escapeAttr(accountUrl)}" style="display:inline-block; background:#0051ff; color:#fff; text-decoration:none; padding:12px 20px; border-radius:6px; font-weight:600;">View your booking</a>
   </p>
   <p style="font-size: 14px; color: #374151;">
-    <a href="${escapeAttr(bookUrl)}" style="color:#2563eb; font-weight:600;">Book again in 10 seconds →</a>
+    <a href="${escapeAttr(bookUrl)}" style="color:#0051ff; font-weight:600;">Book again in 10 seconds →</a>
   </p>
   <p style="font-size: 13px; color: #6b7280;">
-    After your clean: <a href="${escapeAttr(reviewUrl)}" style="color:#2563eb;">Leave a review</a>
+    After your clean: <a href="${escapeAttr(reviewUrl)}" style="color:#0051ff;">Leave a review</a>
   </p>`;
 
   return brandShell(inner);
@@ -171,12 +167,12 @@ function buildReviewHtml(ctx: LifecycleEmailBookingContext): string {
     <p><strong>Date:</strong> ${escapeHtml(ctx.dateLabel)}</p>
   </div>
   <p style="margin: 16px 0;">
-    <a href="${escapeAttr(reviewUrl)}" style="display:inline-block; background:#059669; color:#fff; text-decoration:none; padding:12px 20px; border-radius:10px; font-weight:600;">Leave a review</a>
-    <a href="${escapeAttr(bookUrl)}" style="display:inline-block; margin-left:10px; background:#2563eb; color:#fff; text-decoration:none; padding:12px 20px; border-radius:10px; font-weight:600;">Book again</a>
+    <a href="${escapeAttr(reviewUrl)}" style="display:inline-block; background:#059669; color:#fff; text-decoration:none; padding:12px 20px; border-radius:6px; font-weight:600;">Leave a review</a>
+    <a href="${escapeAttr(bookUrl)}" style="display:inline-block; margin-left:10px; background:#0051ff; color:#fff; text-decoration:none; padding:12px 20px; border-radius:6px; font-weight:600;">Book again</a>
   </p>
   <p style="font-size: 14px;">
-    <a href="${escapeAttr(accountUrl)}" style="color:#2563eb;">View your booking →</a>
-    ${externalReview ? ` &nbsp;|&nbsp; <a href="${escapeAttr(externalReview)}" style="color:#2563eb;">Google review</a>` : ""}
+    <a href="${escapeAttr(accountUrl)}" style="color:#0051ff;">View your booking →</a>
+    ${externalReview ? ` &nbsp;|&nbsp; <a href="${escapeAttr(externalReview)}" style="color:#0051ff;">Google review</a>` : ""}
   </p>`;
 
   return brandShell(inner);

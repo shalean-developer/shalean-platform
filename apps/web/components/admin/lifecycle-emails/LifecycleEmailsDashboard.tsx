@@ -1,5 +1,7 @@
 "use client";
 
+import { EmailWorkspace } from "@/components/email/EmailWorkspace";
+import emailStyles from "@/components/email/email-ui.module.css";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { emitAdminToast } from "@/lib/admin/toastBus";
@@ -324,15 +326,9 @@ export function LifecycleEmailsDashboard({ routePrefix = "/office" }: Props) {
   const maxChart = Math.max(1, ...dailyChart.map(([, v]) => v));
 
   return (
-    <div className="space-y-6 pb-8">
+    <EmailWorkspace title="Lifecycle emails" description="Scheduled reminders, review requests and rebooking emails.">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Lifecycle emails</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500">
-            Scheduled reminder, review, and rebook emails via Resend. Monitor queue health, pause sends, or dry-run
-            without affecting cron scheduling.
-          </p>
-        </div>
+
         <div className="flex flex-wrap gap-3 text-sm">
           <Link href={`${routePrefix}/notifications`} className="font-medium text-blue-600 hover:underline">
             Notifications
@@ -685,7 +681,7 @@ export function LifecycleEmailsDashboard({ routePrefix = "/office" }: Props) {
       </Card>
 
       <Dialog open={confirmAction != null} onOpenChange={(open) => !open && setConfirmAction(null)}>
-        <DialogContent>
+        <DialogContent className={`${emailStyles.theme} ${emailStyles.dialog}`}>
           <DialogHeader>
             <DialogTitle>Confirm action</DialogTitle>
             <DialogDescription>
@@ -713,6 +709,6 @@ export function LifecycleEmailsDashboard({ routePrefix = "/office" }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </EmailWorkspace>
   );
 }
