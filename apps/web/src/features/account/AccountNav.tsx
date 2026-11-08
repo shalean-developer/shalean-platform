@@ -6,7 +6,6 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Bell,
   CalendarDays,
-  ChevronDown,
   ExternalLink,
   MessageSquare,
   CreditCard,
@@ -86,9 +85,6 @@ function initialsFromUser(email: string | undefined, fullName: string | undefine
   return name.slice(0, 2).toUpperCase() || "?";
 }
 
-function displayName(email: string | undefined, fullName: string | undefined): string {
-  return fullName?.trim() || email?.split("@")[0] || "Account";
-}
 
 function AccountNavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   const { href, label, icon: Icon, exact } = item;
@@ -187,12 +183,7 @@ export function AccountSidebar() {
   const pathname = usePathname() ?? "";
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 min-h-0 flex-col overflow-hidden border-r border-border bg-card md:flex">
-      <div className="flex h-16 shrink-0 items-center border-b border-border px-7">
-        <Link href="/" aria-label="Shalean home" className="rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-          <ShaleanNavLogo className="h-9 w-auto" intrinsicHeight={64} />
-        </Link>
-      </div>
+    <aside className="sticky top-[76px] z-30 hidden h-[calc(100dvh-76px)] w-72 min-h-0 shrink-0 flex-col overflow-hidden border-r border-border bg-card md:flex">
       <AccountNavigation pathname={pathname} />
       <div className="shrink-0 border-t border-border px-5 py-2">
         <LogoutDialog><LogOut aria-hidden="true" className="h-6 w-6 shrink-0" />Sign out</LogoutDialog>
@@ -206,8 +197,6 @@ export function AccountHeader() {
   const { user } = useUser();
   const meta = user?.user_metadata as { full_name?: string } | undefined;
   const initials = initialsFromUser(user?.email, meta?.full_name);
-  const name = displayName(user?.email, meta?.full_name);
-  const firstName = name.split(" ")[0] ?? "there";
 
   async function handleLogout() {
     try {
@@ -220,38 +209,30 @@ export function AccountHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
-      <div className="mx-auto flex min-h-16 w-full max-w-[var(--ui-container-wide)] items-center justify-between gap-4 px-[var(--ui-page-gutter)] py-3">
-        <div className="min-w-0">
-          <p className="truncate text-base font-semibold text-foreground sm:text-lg">My account</p>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          <Link
-            href="/account/notifications"
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            aria-label="Notifications"
-          >
-            <Bell className="h-4 w-4" />
-          </Link>
-
+    <header className="sticky top-0 z-40 h-[76px] border-b border-border bg-card">
+      <div className="flex h-full w-full items-center justify-between gap-4 px-5 sm:px-8">
+        <Link href="/account" aria-label="Shalean customer home" className="flex min-h-11 items-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+          <ShaleanNavLogo className="h-9 w-auto sm:h-10" intrinsicHeight={64} />
+        </Link>
+        <div className="flex shrink-0 items-center">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="group flex min-h-11 items-center gap-2 rounded-full border border-border bg-background p-0.5 pr-2.5 transition-colors hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                className="flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 aria-label="Account menu"
               >
-                <Avatar className="h-8 w-8">
+                <Avatar className="h-10 w-10 border border-border shadow-sm">
                   <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">{initials}</AvatarFallback>
                 </Avatar>
-                <span className="hidden max-w-[7rem] truncate text-sm font-medium text-foreground md:inline">{firstName}</span>
-                <ChevronDown aria-hidden="true" className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={8} collisionPadding={16} className="w-56 max-w-[calc(100vw-2rem)] p-1 [&_[role=menuitem]]:min-h-11 [&_[role=menuitem]]:gap-3 [&_[role=menuitem]]:rounded-lg [&_[role=menuitem]]:px-3">
               <DropdownMenuItem asChild>
                 <Link href="/account/profile"><UserRound aria-hidden="true" className="h-4 w-4 shrink-0" />Profile</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/account/notifications"><Bell aria-hidden="true" className="h-4 w-4 shrink-0" />Notifications</Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/account/cases"><MessageSquare aria-hidden="true" className="h-4 w-4 shrink-0" />My support requests</Link>
