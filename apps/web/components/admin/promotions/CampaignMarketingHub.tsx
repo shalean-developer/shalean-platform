@@ -59,6 +59,7 @@ import {
   MarketingSectionSkeleton,
 } from "@/components/admin/promotions/MarketingEmptyState";
 import { MarketingSubNav } from "@/components/admin/promotions/MarketingSubNav";
+import emailStyles from "@/components/email/email-ui.module.css";
 
 function socialCardPropsFromPayload(
   payload: Record<string, unknown>,
@@ -276,7 +277,7 @@ const VIEW_META: Record<HubView, { title: string; blurb: string }> = {
   },
 };
 
-export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView }) {
+export function CampaignMarketingHub({ view = "campaigns", embedded = false }: { view?: HubView; embedded?: boolean }) {
   const meta = VIEW_META[view];
   const [tab, setTab] = useState(
     view === "analytics" ? "analytics" : view === "templates" ? "templates" : "promotions",
@@ -780,10 +781,10 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
   const selected = promotions.find((p) => p.id === selectedId) ?? null;
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className={view === "email" || embedded ? `space-y-6 ${emailStyles.content}` : "space-y-6 p-4 md:p-6"}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{meta.title}</h1>
+          {view === "email" || embedded ? <h2 className="text-lg font-semibold text-slate-900">{view === "email" ? "Email drafts" : meta.title}</h2> : <h1 className="text-2xl font-bold text-slate-900">{meta.title}</h1>}
           <p className="mt-1 text-sm text-slate-500">{meta.blurb}</p>
           <div className="mt-3">
             <MarketingSubNav active={view} />

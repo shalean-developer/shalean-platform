@@ -1,3 +1,4 @@
+import { EmailWorkspace } from "@/components/email/EmailWorkspace";
 import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -78,12 +79,8 @@ export default async function EmailTimelinePage({ searchParams }: { searchParams
     grouped.set(key, list);
   }
 
-  return <main className="space-y-6 p-4 sm:p-6 lg:p-8">
-    <header>
-      <Link href="/office/email-operations" className="text-sm font-medium text-blue-600 hover:underline">← Email operations</Link>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Email Timeline</h1>
-      <p className="mt-2 text-sm text-slate-600">Inspect the full Resend lifecycle for a booking, customer or recipient.</p>
-    </header>
+  return <EmailWorkspace title="Email timeline" description="Follow delivery events for a booking, customer or recipient."><main className="space-y-6">
+
 
     <form method="get" className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-3">
       <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Booking ID<input name="booking_id" defaultValue={bookingId} placeholder="Booking UUID" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /></label>
@@ -119,5 +116,5 @@ export default async function EmailTimelinePage({ searchParams }: { searchParams
       })}
       {(bookingId || customerId || recipient) && !events.length ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">No contextual email events were found. New messages must include standard context tags before they can appear by booking or customer.</div> : null}
     </section>
-  </main>;
+  </main></EmailWorkspace>;
 }
