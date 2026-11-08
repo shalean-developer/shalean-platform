@@ -40,6 +40,12 @@ try {
   for(const width of [390,768,1280]) {
     await page.setViewportSize({width,height:900});await page.goto(origin);await page.getByRole('heading',{name:'Bank balances',exact:true}).waitFor();
     assert.equal(await page.evaluate(()=>innerWidth),width);
+    if(width===390) {
+      const fromBox=await page.getByLabel('From date').boundingBox();
+      const toBox=await page.getByLabel('To date').boundingBox();
+      assert.ok(fromBox.width>=240 && toBox.width>=240,'mobile dates need room for the complete value and picker');
+      assert.ok(toBox.y>=fromBox.y+fromBox.height,'mobile date fields must stack');
+    }
     assert.equal(await page.getByRole('heading',{name:'Cash flow',exact:true}).evaluate(el=>getComputedStyle(el).color),'rgb(0, 22, 78)');
     assert.equal(await page.getByRole('button',{name:'Refresh',exact:true}).evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(0, 81, 255)');
     assert.equal(await page.getByRole('region',{name:'Bank reconciliation and protected cash',exact:true}).evaluate(el=>getComputedStyle(el).borderColor),'rgb(220, 231, 255)');
