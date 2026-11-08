@@ -86,14 +86,14 @@ export default function AccountHomePage() {
       <Tabs defaultValue="upcoming" className="rounded-xl border border-blue-100 bg-white px-5 shadow-sm sm:px-6">
         <TabsList aria-label="Bookings" className="mt-4 grid w-full grid-cols-2 border-blue-100 bg-blue-50">
           <TabsTrigger value="upcoming" className="text-[#00164e] data-[state=active]:bg-primary data-[state=active]:text-white">Upcoming</TabsTrigger>
-          <TabsTrigger value="history" className="text-[#00164e] data-[state=active]:bg-primary data-[state=active]:text-white">History</TabsTrigger>
+          <TabsTrigger value="recent" className="text-[#00164e] data-[state=active]:bg-primary data-[state=active]:text-white">Recent</TabsTrigger>
         </TabsList>
         <TabsContent value="upcoming" className="mt-4 border-t border-blue-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
           {nextBooking ? <BookingSummary booking={nextBooking} next /> : <div className="flex items-center gap-3 py-7"><CalendarDays className="h-6 w-6 shrink-0 text-primary" aria-hidden /><p className="text-sm text-muted-foreground">No upcoming bookings.</p></div>}
         </TabsContent>
-        <TabsContent value="history" className="mt-4 border-t border-blue-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
+        <TabsContent value="recent" className="mt-4 border-t border-blue-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
           <div className="flex justify-end pt-2"><Link href="/account/bookings" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">View all</Link></div>
-          {recent.length ? <ul className="divide-y divide-blue-100">{recent.map((booking) => <li key={booking.id}><BookingSummary booking={booking} /></li>)}</ul> : <p className="py-7 text-sm text-muted-foreground">No booking history.</p>}
+          {recent.length ? <ul className="divide-y divide-blue-100">{recent.map((booking) => <li key={booking.id}><BookingSummary booking={booking} /></li>)}</ul> : <p className="py-7 text-sm text-muted-foreground">No recent bookings.</p>}
         </TabsContent>
       </Tabs>
     </>}
