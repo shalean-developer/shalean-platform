@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { ArrowLeft, Mail, Send, CheckCheck, Eye, MousePointerClick, ShieldBan, TriangleAlert, MessageSquareWarning, RotateCcw } from "lucide-react";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
+import styles from "./email-operations.module.css";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,8 +34,14 @@ function formatDate(value: string | null): string {
   return new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Johannesburg" }).format(date);
 }
 function pct(value: number): string { return `${Math.round(value * 10) / 10}%`; }
-function metricCard(label: string, value: string | number, description: string) {
-  return <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm font-medium text-slate-500">{label}</p><p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{typeof value === "number" ? value.toLocaleString("en-ZA") : value}</p><p className="mt-1 text-xs text-slate-500">{description}</p></div>;
+const METRIC_ICONS = { Sent: Send, Delivered: CheckCheck, Opened: Eye, Clicked: MousePointerClick, Suppressed: ShieldBan, Bounced: RotateCcw, Failed: TriangleAlert, Complaints: MessageSquareWarning };
+function metricCard(label: keyof typeof METRIC_ICONS, value: string | number, description: string, tone = "neutral") {
+  const Icon = METRIC_ICONS[label];
+  return <article className={`${styles.metric} ${styles[tone] ?? ""}`} aria-label={label}>
+    <div className={styles.metricTop}><p>{label}</p><span className={styles.metricIcon}><Icon size={17} aria-hidden="true" /></span></div>
+    <strong className={styles.metricValue}>{typeof value === "number" ? value.toLocaleString("en-ZA") : value}</strong>
+    <p className={styles.metricDescription}>{description}</p>
+  </article>;
 }
 
 export default async function EmailOperationsPage({ searchParams }: { searchParams: SearchParams }) {
@@ -42,7 +51,7 @@ export default async function EmailOperationsPage({ searchParams }: { searchPara
   const eventFilter = FILTER_EVENTS.includes(one(params.event)) ? one(params.event) : "all";
   const query = one(params.q).trim().toLowerCase();
   const admin = getSupabaseAdmin();
-  if (!admin) return <main className="p-6"><div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900">Email operations data is unavailable because the Supabase service connection is not configured.</div></main>;
+  if (!admin) return <main className={styles.page}><div className={styles.notice} role="alert">Email data is unavailable. Please try again later.</div></main>;
 
   const sinceIso = new Date(Date.now() - days * 86400000).toISOString();
   const [eventsResult, suppressionsResult] = await Promise.all([
@@ -79,26 +88,72 @@ export default async function EmailOperationsPage({ searchParams }: { searchPara
   const trend = [...daily.entries()];
   const maxTrend = Math.max(1, ...trend.flatMap(([, r]) => [r.sent, r.delivered, r.opened, r.bounced]));
 
-  return <main className="space-y-6 p-4 sm:p-6 lg:p-8">
-    <header><p className="text-sm font-medium text-blue-600">Operations</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">Email Management</h1><p className="mt-2 max-w-3xl text-sm text-slate-600">Resend delivery analytics, trends, filters and local suppression records. Times are shown in South Africa time.</p></header>
-    {error ? <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">Some email data could not be loaded: {error}</div> : null}
+  return <main className={styles.page}>
+    <header className={styles.hero}>
+      <div className={styles.heroTop}><Link href="/office/marketing/email" className={styles.back}><ArrowLeft size={15} aria-hidden="true" />Email campaigns</Link><Link href="/office" className={styles.brandPlate} aria-label="Shalean office dashboard"><ShaleanNavLogo className={styles.logo} intrinsicHeight={40} /></Link></div>
+      <div className={styles.heroContent}>
+        <div><p className={styles.eyebrow}><Mail size={16} aria-hidden="true" /> Shalean Office</p><h1>Email Management</h1><p className={styles.subtitle}>Delivery, engagement and blocked addresses.</p></div>
+        <span className={styles.timezone}>South Africa time</span>
+      </div>
+    </header>
+    {error ? <div className={styles.notice} role="alert">Some email data could not be loaded: {error}</div> : null}
 
-    <form className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[160px_220px_1fr_auto]" method="get">
-      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Date range<select name="days" defaultValue={String(days)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select></label>
-      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Event type<select name="event" defaultValue={eventFilter} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900">{FILTER_EVENTS.map((value) => <option key={value} value={value}>{value === "all" ? "All events" : EVENT_LABELS[value]}</option>)}</select></label>
-      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Search<input name="q" defaultValue={one(params.q)} placeholder="Recipient, subject or Resend ID" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900" /></label>
-      <div className="flex items-end gap-2"><button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Apply</button><Link href="/office/email-operations" className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Reset</Link></div>
+    <form className={styles.filters} method="get">
+      <label>Date range<select name="days" defaultValue={String(days)}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select></label>
+      <label>Event type<select name="event" defaultValue={eventFilter}>{FILTER_EVENTS.map(value => <option key={value} value={value}>{value === "all" ? "All events" : EVENT_LABELS[value]}</option>)}</select></label>
+      <label className={styles.search}>Search<input name="q" defaultValue={one(params.q)} placeholder="Recipient, subject or Resend ID" /></label>
+      <div className={styles.filterActions}><button type="submit" className={styles.primaryButton}>Apply</button><Link href="/office/email-operations" className={styles.secondaryButton}><RotateCcw size={14} aria-hidden="true" />Reset</Link></div>
     </form>
 
-    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-      {metricCard("Sent", sent, `Recorded in the last ${days} days`)}{metricCard("Delivered", delivered, `${pct(deliveryRate)} delivery rate`)}{metricCard("Opened", opened, `${pct(openRate)} open rate`)}{metricCard("Clicked", clicked, `${pct(clickRate)} click-through rate`)}{metricCard("Suppressed", suppressions.length, "Blocked locally")}
-      {metricCard("Bounced", bounced, "Rejected by recipient servers")}{metricCard("Failed", failed, "Provider or delivery failures")}{metricCard("Complaints", complained, "Spam complaints")}
+    <section className={styles.metrics} aria-label="Email overview">
+      {metricCard("Sent", sent, `Last ${days} days`)}
+      {metricCard("Delivered", delivered, `${pct(deliveryRate)} delivery rate`, "success")}
+      {metricCard("Opened", opened, `${pct(openRate)} open rate`)}
+      {metricCard("Clicked", clicked, `${pct(clickRate)} click-through rate`)}
+      {metricCard("Suppressed", suppressions.length, "Blocked locally")}
+      {metricCard("Bounced", bounced, "Rejected by recipient", bounced ? "alert" : "neutral")}
+      {metricCard("Failed", failed, "Delivery failures", failed ? "alert" : "neutral")}
+      {metricCard("Complaints", complained, "Spam reports", complained ? "alert" : "neutral")}
     </section>
 
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div><h2 className="font-semibold text-slate-950">Daily email trend</h2><p className="mt-1 text-xs text-slate-500">Sent, delivered, opened and bounced events by day.</p></div><div className="mt-5 overflow-x-auto"><div className="flex min-w-[720px] items-end gap-2" style={{ height: 220 }}>{trend.map(([date, row]) => <div key={date} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1"><div className="flex h-44 w-full items-end justify-center gap-0.5"><div title={`Sent ${row.sent}`} className="w-1/4 rounded-t bg-blue-500" style={{ height: `${Math.max(row.sent ? 4 : 0, (row.sent / maxTrend) * 100)}%` }} /><div title={`Delivered ${row.delivered}`} className="w-1/4 rounded-t bg-emerald-500" style={{ height: `${Math.max(row.delivered ? 4 : 0, (row.delivered / maxTrend) * 100)}%` }} /><div title={`Opened ${row.opened}`} className="w-1/4 rounded-t bg-violet-500" style={{ height: `${Math.max(row.opened ? 4 : 0, (row.opened / maxTrend) * 100)}%` }} /><div title={`Bounced ${row.bounced}`} className="w-1/4 rounded-t bg-rose-500" style={{ height: `${Math.max(row.bounced ? 4 : 0, (row.bounced / maxTrend) * 100)}%` }} /></div><span className="text-[10px] text-slate-500">{date.slice(5)}</span></div>)}</div></div><div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-600"><span>● Sent</span><span>● Delivered</span><span>● Opened</span><span>● Bounced</span></div></section>
+    <section className={styles.card} aria-labelledby="delivery-trend-title">
+      <div className={styles.sectionHeader}><div><h2 id="delivery-trend-title">Delivery trend</h2><p>Daily activity · last {days} days</p></div>
+        <ul className={styles.legend} aria-label="Chart legend"><li className={styles.sent}>Sent</li><li className={styles.delivered}>Delivered</li><li className={styles.opened}>Opened</li><li className={styles.bounced}>Bounced</li></ul>
+      </div>
+      <div className={styles.chartScroll} tabIndex={0} role="region" aria-label="Daily email chart; scroll horizontally to view all days">
+        <div className={styles.chart} style={{ minWidth: Math.max(600, days * 25) }}>
+          {trend.map(([date, row]) => <div key={date} className={styles.day}>
+            <div className={styles.bars}>
+              <div title={`Sent ${row.sent}`} className={`${styles.bar} ${styles.sent}`} style={{ height: `${Math.max(row.sent ? 4 : 0, (row.sent / maxTrend) * 100)}%` }} />
+              <div title={`Delivered ${row.delivered}`} className={`${styles.bar} ${styles.delivered}`} style={{ height: `${Math.max(row.delivered ? 4 : 0, (row.delivered / maxTrend) * 100)}%` }} />
+              <div title={`Opened ${row.opened}`} className={`${styles.bar} ${styles.opened}`} style={{ height: `${Math.max(row.opened ? 4 : 0, (row.opened / maxTrend) * 100)}%` }} />
+              <div title={`Bounced ${row.bounced}`} className={`${styles.bar} ${styles.bounced}`} style={{ height: `${Math.max(row.bounced ? 4 : 0, (row.bounced / maxTrend) * 100)}%` }} />
+            </div><span>{date.slice(5)}</span>
+          </div>)}
+        </div>
+      </div>
+    </section>
 
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-200 px-5 py-4"><h2 className="font-semibold text-slate-950">Delivery events</h2><p className="mt-1 text-xs text-slate-500">Showing {filteredEvents.length} matching events.</p></div><div className="overflow-x-auto"><table className="min-w-full divide-y divide-slate-200 text-sm"><thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Status</th><th className="px-5 py-3">Recipient</th><th className="px-5 py-3">Subject</th><th className="px-5 py-3">Resend ID</th><th className="px-5 py-3">Time</th></tr></thead><tbody className="divide-y divide-slate-100">{filteredEvents.length ? filteredEvents.map((event) => <tr key={event.id} className="align-top"><td className="whitespace-nowrap px-5 py-3 font-medium text-slate-800">{EVENT_LABELS[event.event_type] ?? event.event_type}</td><td className="px-5 py-3 text-slate-700">{event.recipient_email ?? "—"}</td><td className="max-w-md px-5 py-3 text-slate-700">{event.subject ?? "—"}</td><td className="max-w-xs truncate px-5 py-3 font-mono text-xs text-slate-500">{event.resend_email_id ?? "—"}</td><td className="whitespace-nowrap px-5 py-3 text-slate-500">{formatDate(event.event_created_at ?? event.received_at)}</td></tr>) : <tr><td colSpan={5} className="px-5 py-10 text-center text-slate-500">No events match the current filters.</td></tr>}</tbody></table></div></section>
+    <section className={styles.card} aria-labelledby="delivery-events-title">
+      <div className={styles.sectionHeader}><h2 id="delivery-events-title">Delivery events</h2><span className={styles.count}>{filteredEvents.length} results</span></div>
+      <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="Delivery events table">
+        <table className={styles.table}><thead><tr><th scope="col">Status</th><th scope="col">Recipient</th><th scope="col">Subject</th><th scope="col">Resend ID</th><th scope="col">Time (SAST)</th></tr></thead><tbody>
+          {filteredEvents.length ? filteredEvents.map(event => <tr key={event.id}>
+            <td><span className={`${styles.badge} ${event.event_type === "email.delivered" ? styles.badgeSuccess : ["email.bounced", "email.failed", "email.complained", "email.suppressed"].includes(event.event_type) ? styles.badgeAlert : styles.badgeInfo}`}>{EVENT_LABELS[event.event_type] ?? event.event_type}</span></td>
+            <td className={styles.recipient}>{event.recipient_email ?? "—"}</td><td className={styles.subject}>{event.subject ?? "—"}</td>
+            <td className={styles.messageId}>{event.resend_email_id ?? "—"}</td><td className={styles.date}>{formatDate(event.event_created_at ?? event.received_at)}</td>
+          </tr>) : <tr><td colSpan={5} className={styles.empty}>No events match your filters.</td></tr>}
+        </tbody></table>
+      </div>
+    </section>
 
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-200 px-5 py-4"><h2 className="font-semibold text-slate-950">Suppression list</h2><p className="mt-1 text-xs text-slate-500">Latest locally blocked recipient addresses.</p></div><div className="overflow-x-auto"><table className="min-w-full divide-y divide-slate-200 text-sm"><thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Email</th><th className="px-5 py-3">Reason</th><th className="px-5 py-3">Source</th><th className="px-5 py-3">Suppressed</th></tr></thead><tbody className="divide-y divide-slate-100">{suppressions.length ? suppressions.slice(0,100).map((row) => <tr key={row.email}><td className="px-5 py-3 font-medium text-slate-800">{row.email}</td><td className="px-5 py-3 capitalize text-slate-700">{row.reason}</td><td className="px-5 py-3 text-slate-500">{row.source_event_type ?? "Manual"}</td><td className="whitespace-nowrap px-5 py-3 text-slate-500">{formatDate(row.suppressed_at)}</td></tr>) : <tr><td colSpan={4} className="px-5 py-10 text-center text-slate-500">No suppressed addresses have been recorded.</td></tr>}</tbody></table></div></section>
+    <section className={styles.card} aria-labelledby="suppression-title">
+      <div className={styles.sectionHeader}><div><h2 id="suppression-title">Suppression list</h2><p>Blocked email addresses</p></div><span className={styles.count}>{suppressions.length} blocked</span></div>
+      <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="Suppression list table">
+        <table className={styles.table}><thead><tr><th scope="col">Email</th><th scope="col">Reason</th><th scope="col">Source</th><th scope="col">Suppressed (SAST)</th></tr></thead><tbody>
+          {suppressions.length ? suppressions.slice(0,100).map(row => <tr key={row.email}><td className={styles.recipient}>{row.email}</td><td>{row.reason}</td><td>{row.source_event_type ?? "Manual"}</td><td className={styles.date}>{formatDate(row.suppressed_at)}</td></tr>) : <tr><td colSpan={4} className={styles.empty}><ShieldBan size={21} aria-hidden="true" /><p>No blocked addresses.</p></td></tr>}
+        </tbody></table>
+      </div>
+    </section>
   </main>;
 }
