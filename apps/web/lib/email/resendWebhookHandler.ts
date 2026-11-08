@@ -1,3 +1,4 @@
+import "server-only";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
@@ -79,9 +80,15 @@ export async function handleResendWebhook(request: Request, options: { secret?: 
     });
     if (!applied.ok) return NextResponse.json({ error: applied.reason }, { status: 500 });
   }
-  if (duplicate) return NextResponse.json({ ok: true, duplicate: true });
 
-  if (resendEmailId) {
+  let statusAlreadyApplied = false;
+  if (duplicate && resendEmailId) {
+    const { data: current, error } = await admin.from("email_outbound_messages")
+      .select("delivery_status").eq("resend_email_id", resendEmailId).maybeSingle();
+    if (error) return NextResponse.json({ error: "Delivery recovery unavailable" }, { status: 500 });
+    statusAlreadyApplied = current?.delivery_status === event.type.replace("email.", "");
+  }
+  if (resendEmailId && !statusAlreadyApplied) {
     const terminalSuccess = event.type === "email.delivered";
     const temporaryFailure = event.type === "email.failed" || event.type === "email.delivery_delayed";
     const permanentFailure = event.type === "email.bounced" || event.type === "email.complained" || event.type === "email.suppressed";
@@ -113,5 +120,5 @@ export async function handleResendWebhook(request: Request, options: { secret?: 
     }, { onConflict: "email" });
     if (suppressionError) return NextResponse.json({ error: "Failed to update suppression" }, { status: 500 });
   }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, ...(duplicate ? { duplicate: true } : {}) });
 }
