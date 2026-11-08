@@ -33,6 +33,8 @@ export function shouldUseHorizontalOptionCards(question: FormQuestion): boolean 
 type ServiceQuestionOptionCardsProps = {
   question: FormQuestion;
   compact?: boolean;
+  /** Keep property choices side by side, including narrow booking layouts. */
+  propertyLayout?: "horizontal";
   onValueChange?: (value: string) => void;
 };
 
@@ -188,6 +190,7 @@ function PetsDropdownField({
 export function ServiceQuestionOptionCards({
   question,
   compact,
+  propertyLayout,
   onValueChange,
 }: ServiceQuestionOptionCardsProps) {
   const {
@@ -230,8 +233,13 @@ export function ServiceQuestionOptionCards({
           control={control}
           rules={{ required: question.required ? `${question.label} is required` : false }}
           render={({ field }) => (
-            <div className="mx-auto mt-6 grid w-full max-w-5xl gap-5 sm:grid-cols-3 sm:gap-6">
-              {options.map((opt) => {
+            <div
+              role={propertyLayout === "horizontal" ? "radiogroup" : undefined}
+              aria-label={propertyLayout === "horizontal" ? question.label : undefined}
+              aria-required={propertyLayout === "horizontal" ? question.required : undefined}
+              className={cn("mx-auto mt-6 grid w-full max-w-5xl", propertyLayout === "horizontal" ? "grid-cols-3 gap-2 sm:gap-6" : "gap-5 sm:grid-cols-3 sm:gap-6")}
+            >
+              {options.map((opt, index) => {
                 const selected = String(field.value ?? "") === opt.value;
                 const presentation = PROPERTY_TYPE_PRESENTATION[opt.value];
                 const Icon = presentation?.icon ?? Home;
@@ -242,25 +250,38 @@ export function ServiceQuestionOptionCards({
                     type="button"
                     role="radio"
                     aria-checked={selected}
+                    aria-label={propertyLayout === "horizontal" ? opt.label : undefined}
+                    aria-description={propertyLayout === "horizontal" ? presentation?.description : undefined}
+                    tabIndex={propertyLayout === "horizontal" ? (selected || (!field.value && index === 0) ? 0 : -1) : undefined}
+                    onKeyDown={propertyLayout === "horizontal" ? (event) => {
+                      const direction = ["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : ["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 0;
+                      if (!direction && event.key !== "Home" && event.key !== "End") return;
+                      event.preventDefault();
+                      const next = event.key === "Home" ? 0 : event.key === "End" ? options.length - 1 : (index + direction + options.length) % options.length;
+                      field.onChange(options[next].value);
+                      onValueChange?.(options[next].value);
+                      event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
+                    } : undefined}
                     onClick={() => {
                       field.onChange(opt.value);
                       onValueChange?.(opt.value);
                     }}
                     suppressHydrationWarning
                     className={cn(
-                      "relative min-h-36 overflow-hidden rounded-xl border bg-white p-4 text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:aspect-[2/1] sm:min-h-0 sm:p-2",
+                      "relative overflow-hidden rounded-xl border bg-white text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600",
+                      propertyLayout === "horizontal" ? "min-h-32 min-w-0 p-2 sm:aspect-[2/1] sm:min-h-0" : "min-h-36 p-4 sm:aspect-[2/1] sm:min-h-0 sm:p-2",
                       selected
                         ? "border-blue-600 bg-blue-50/60 ring-2 ring-blue-600/15"
                         : "border-slate-200 text-slate-800",
                     )}
                   >
-                    <span className="flex items-center gap-3 sm:gap-2">
+                    <span className={cn("flex gap-3 sm:gap-2", propertyLayout === "horizontal" ? "flex-col items-start gap-2 sm:flex-row sm:items-center" : "items-center")}>
                       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700 sm:h-8 sm:w-8">
                         <Icon className="h-5 w-5" aria-hidden />
                       </span>
-                      <span className="whitespace-nowrap text-base font-bold leading-6 text-slate-900">{opt.label}</span>
+                      <span className={cn("font-bold text-slate-900", propertyLayout === "horizontal" ? "min-w-0 break-words text-xs leading-4 sm:text-base sm:leading-6" : "whitespace-nowrap text-base leading-6")}>{opt.label}</span>
                     </span>
-                    <span className="mt-2 line-clamp-2 text-sm leading-5 text-slate-600 sm:mt-1 sm:text-[13px] sm:leading-4">
+                    <span className={cn("mt-2 text-slate-600 sm:mt-1 sm:text-[13px] sm:leading-4", propertyLayout === "horizontal" ? "block text-[11px] leading-4" : "line-clamp-2 text-sm leading-5")}>
                       {presentation?.description ?? "Select this property type."}
                     </span>
                   </button>

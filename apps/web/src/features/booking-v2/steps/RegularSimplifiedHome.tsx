@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useFormContext } from "react-hook-form";
+import { ServiceQuestionOptionCards } from "@/src/features/booking-v2/components/ServiceQuestionOptionCards";
 import { FloatingSelect } from "@/components/ui/floating-select";
 import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
@@ -75,7 +76,13 @@ export function RegularSimplifiedHome() {
 
       <div className="space-y-4">
         {options.filter((q) => ["propertyType", "bedrooms", "bathrooms", "extraRooms", "hasPets"].includes(q.key))
-          .map((question) => (
+          .map((question) => question.key === "propertyType" ? (
+            <ServiceQuestionOptionCards
+              key={question.key}
+              question={{ ...question, required: true }}
+              propertyLayout="horizontal"
+            />
+          ) : (
             <FloatingSelect
               key={question.key}
               label={`${question.label}${REGULAR_HOME_REQUIRED_QUESTION_KEYS.includes(question.key as typeof REGULAR_HOME_REQUIRED_QUESTION_KEYS[number]) ? " *" : ""}`}
