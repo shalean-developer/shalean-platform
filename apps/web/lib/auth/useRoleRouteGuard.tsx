@@ -6,6 +6,7 @@ import { fetchUserRoleClient } from "@/lib/auth/resolvePostAuthDestination";
 import type { AppUserRole } from "@/lib/auth/userRole";
 import { readCachedUserRole } from "@/lib/auth/userRole";
 import { getSupabaseAccessToken, getSupabaseBrowser } from "@/lib/supabase/browser";
+import { roleGuardDestination } from "@/lib/auth/roleGuardDestination";
 import { scheduleAppRouterReplace } from "@/lib/navigation/scheduleAppRouterNavigation";
 
 export type RoleRouteGuardState =
@@ -203,7 +204,10 @@ export function useRoleRouteGuard({
       return;
     }
     if (state.status === "wrong_role") {
-      scheduleAppRouterReplace(router, state.actualRoute);
+      scheduleAppRouterReplace(router, roleGuardDestination({
+        requiredRole, actualRole: state.actualRole, actualRoute: state.actualRoute, pathname,
+        appEnv: process.env.NEXT_PUBLIC_SHALEAN_APP_ENV, hostname: window.location.hostname,
+      }));
     }
   }, [state, pathname, router, requiredRole, allowLocalhostDevBypass]);
 

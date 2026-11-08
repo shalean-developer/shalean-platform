@@ -8,19 +8,20 @@ import { MarketingEmailTestLink } from "./MarketingEmailStagingJourney";
 const POLICY_VERSION = "marketing-email-2026-11-v1";
 type PreferenceStatus = "loading" | "no_consent" | "consent_recorded" | "consent_recorded_paused" | "unsubscribed" | "unavailable";
 
-export function MarketingEmailPreferences() {
+export function MarketingEmailPreferences({ mode = "customer" }: { mode?: "customer" | "office" }) {
+  const office = mode === "office";
   const { user, loading: userLoading } = useUser();
   const [status, setStatus] = useState<PreferenceStatus>("loading");
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
-  async function request(method: "GET" | "POST", body?: object) {
+  async function request(method: "GET" | "POST", body?: object): Promise<{ status?: PreferenceStatus }> {
     const sb = getSupabaseClient();
     if (!sb) throw new Error("Account connection unavailable.");
     const { data, error } = await sb.auth.getSession();
     if (error || !data.session?.access_token) throw new Error("Please sign in again.");
-    const response = await fetch("/api/me/marketing-preferences", {
+    const response = await fetch(office ? "/api/admin/email/rehearsal" : "/api/me/marketing-preferences", {
       method,
       headers: {
         Authorization: `Bearer ${data.session.access_token}`,
@@ -30,7 +31,11 @@ export function MarketingEmailPreferences() {
       cache: "no-store",
     });
     if (!response.ok) throw new Error("Could not update your email preferences.");
-    return await response.json() as { status?: PreferenceStatus };
+    const result = await response.json() as { status?: PreferenceStatus; decision?: string; unsubscribedAt?: string | null };
+    if (office && method === "GET") return { status: result.decision === "granted"
+      ? result.unsubscribedAt ? "consent_recorded_paused" : "consent_recorded"
+      : result.unsubscribedAt || result.decision === "withdrawn" ? "unsubscribed" : "no_consent" };
+    return result;
   }
 
   useEffect(() => {
@@ -41,19 +46,20 @@ export function MarketingEmailPreferences() {
       if (!cancelled) setStatus(result.status ?? "unavailable");
     }).catch(() => { if (!cancelled) setStatus("unavailable"); });
     return () => { cancelled = true; };
-  }, [user, userLoading]);
+  }, [user, userLoading, office]);
 
   async function update(decision: "granted" | "withdrawn") {
     setBusy(true); setMessage("");
     try {
-      await request("POST", {
+      await request("POST", office ? { action: decision === "granted" ? "record_grant" : "record_withdrawal" } : {
         decision,
         policyVersion: POLICY_VERSION,
         explicitOptIn: decision === "granted" && checked,
       });
       setChecked(false);
-      setStatus(decision === "granted" ? "consent_recorded" : "unsubscribed");
-      setMessage(decision === "granted"
+      const current = await request("GET");
+      setStatus(current.status ?? "unavailable");
+      setMessage(office ? "Synthetic customer preferences updated. No email was sent; your own preferences are unchanged." : decision === "granted"
         ? "Your marketing consent has been recorded. Promotional emails remain subject to delivery preferences and safety checks."
         : "You have unsubscribed from marketing emails. Essential booking and account notices are unaffected.");
     } catch (error) {
@@ -67,6 +73,7 @@ export function MarketingEmailPreferences() {
         Get occasional Shalean cleaning offers, seasonal tips and referral promotions by email.
         You can unsubscribe at any time. Booking confirmations, payment receipts and security notices continue separately.
       </p>
+      {office && <p className="mt-3 text-sm font-medium">Delivery is disabled. Only the synthetic test account can be changed here.</p>}
       <p className="mt-3 text-sm" role="status">
         {status === "loading" ? "Checking preferences…" :
          status === "consent_recorded" ? "Marketing consent recorded." :
@@ -78,20 +85,20 @@ export function MarketingEmailPreferences() {
       <label className="mt-3 flex items-start gap-2 text-sm">
         <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)}
           disabled={busy || status === "loading" || status === "unavailable"} className="mt-1" />
-        <span>I agree to receive occasional promotional emails from Shalean Cleaning Services.</span>
+        <span>{office ? "I authorize consent changes for the reserved synthetic staging customer only." : "I agree to receive occasional promotional emails from Shalean Cleaning Services."}</span>
       </label>
       <div className="mt-4 flex flex-wrap gap-3">
         <button type="button" disabled={busy || !checked || status === "loading" || status === "unavailable"}
           onClick={() => void update("granted")} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
-          Subscribe
+          {office ? "Record test consent" : "Subscribe"}
         </button>
-        <button type="button" disabled={busy || status === "loading" || status === "unavailable"}
+        <button type="button" disabled={busy || (office && !checked) || status === "loading" || status === "unavailable"}
           onClick={() => void update("withdrawn")} className="rounded-lg border border-border px-4 py-2 text-sm font-medium disabled:opacity-50">
-          Unsubscribe
+          {office ? "Withdraw test consent" : "Unsubscribe"}
         </button>
       </div>
       {message && <p role="status" className="mt-3 text-sm">{message}</p>}
-      <MarketingEmailTestLink />
+      {!office && <MarketingEmailTestLink />}
     </section>
   );
 }

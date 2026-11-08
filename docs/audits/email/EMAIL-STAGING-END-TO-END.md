@@ -50,3 +50,6 @@ Retain the ledger, generations and grants on rollback. Do not restore the seven-
 ## Evidence and acceptance
 
 Exact commits, native CI logs, hosted checks, safety read-backs and remaining limitations belong in canonical GitHub issue #1076. The new candidate is prepared until those tests actually execute. Staging test readiness is separate from owner acceptance and production release. The owner performs final customer-experience/policy acceptance after the test handoff.
+
+## Manage preferences from an Owner session
+The unsubscribe page’s existing `/account/profile` link preserves the customer profile for customers. On the exact staging host, a server-resolved admin role is handed to `/office/marketing/email/preferences`, where the existing Owner permission and Office MFA apply. The page and fixture API fail closed outside the safe staging environment. Explicit authorization is required for each synthetic preference change, and persisted status is reloaded after saving (including delivery paused after re-consent). No operator personal consent is modified; no provider writes or emails are enabled. Other account pages, cleaners and production role redirects are unchanged.
