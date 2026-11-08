@@ -15,6 +15,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          filter: blob:none
           # Build/crawl the exact PR head (not the ephemeral merge ref).
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
@@ -105,7 +106,7 @@ jobs:
 
       - name: Production-candidate Funnel Intelligence regressions
         if: steps.filter.outputs.run_suite == 'true'
-        run: npm run test -- lib/admin/__tests__/officeFunnelPresentation.test.ts lib/analytics/__tests__/funnelRevenueFixture.test.ts lib/analytics/__tests__/readPagedRows.test.ts app/api/admin/booking-funnel/__tests__/route.test.ts
+        run: npm run test -- lib/admin/__tests__/officeFunnelPresentation.test.ts lib/analytics/__tests__/funnelRevenueFixture.test.ts lib/analytics/__tests__/readPagedRows.test.ts app/api/admin/booking-funnel/__tests__/route.test.ts lib/analytics/__tests__/liveBookingFunnel.test.ts app/api/admin/booking-funnel/__tests__/liveScreens.test.ts
 
       - name: Paired-ledger isolated PostgreSQL regression
         if: steps.filter.outputs.run_suite == 'true'

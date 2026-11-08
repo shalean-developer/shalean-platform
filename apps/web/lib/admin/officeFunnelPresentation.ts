@@ -1,3 +1,4 @@
+import type { LiveBookingSectionRow } from "@/lib/analytics/liveBookingFunnel";
 export type BookingFunnelInsight = {
   id: string;
   severity: "info" | "warning" | "critical" | string;
@@ -74,6 +75,7 @@ export type BookingFunnelApiPayload = {
   viewsByStep?: Array<{ step: string; views: number }>;
   topExitSteps?: Array<{ step: string; count: number }>;
   errorsByStep?: FunnelErrorRow[];
+  sectionDiagnostics?: LiveBookingSectionRow[];
   intelligence?: {
     stepConversion?: FunnelStepConversionRow[];
     timeToComplete?: {
@@ -187,10 +189,10 @@ export function paymentCompletedCount(data: BookingFunnelApiPayload): number {
     return data.completedPaymentSessions;
   }
 
+  // Never substitute uncorrelated DB booking counts for session conversion.
   const analytics = data.analyticsCompletedSessions ?? data.intelligence?.timeToComplete?.completedSessions ?? 0;
   const paystack = data.intelligence?.paystack?.completed ?? 0;
-  const bookings = data.paidBookingsCount ?? data.intelligence?.revenue?.paidBookings ?? 0;
-  return Math.max(analytics, paystack, bookings);
+  return Math.max(analytics, paystack);
 }
 
 export function paymentCompletedSource(data: BookingFunnelApiPayload): PaymentCompletedSource {
@@ -199,8 +201,7 @@ export function paymentCompletedSource(data: BookingFunnelApiPayload): PaymentCo
   if (typeof data.completedPaymentSessions === "number" && data.completedPaymentSessions > 0) return "unified";
   const analytics = data.analyticsCompletedSessions ?? data.intelligence?.timeToComplete?.completedSessions ?? 0;
   const paystack = data.intelligence?.paystack?.completed ?? 0;
-  const bookings = data.paidBookingsCount ?? data.intelligence?.revenue?.paidBookings ?? 0;
-  if (bookings >= count && bookings > 0) return "bookings";
+  // Paid booking rows have no guaranteed one-to-one correlation with browser sessions.
   if (paystack >= count && paystack > 0) return "paystack";
   if (analytics >= count && analytics > 0) return "analytics";
   return "unified";
@@ -244,7 +245,7 @@ export function checkoutToPaidConversionPct(data: BookingFunnelApiPayload): numb
 export function buildOfficeFunnelSteps(data: BookingFunnelApiPayload): OfficeFunnelStep[] {
   const views = new Map((data.viewsByStep ?? []).map((row) => [row.step, row.views]));
   const booking = Math.max(views.get("entry") ?? 0, funnelVisitorCount(data));
-  const service = Math.max(views.get("quote") ?? 0, data.funnelStartSessions ?? 0);
+  const service = views.get("quote") ?? 0;
   const schedule = views.get("datetime") ?? 0;
   const details = views.get("details") ?? 0;
   const checkout = Math.max(views.get("payment") ?? 0, data.reachedPaymentSessions ?? 0);
@@ -324,9 +325,9 @@ export function buildOfficeFunnelKpis(data: BookingFunnelApiPayload): OfficeFunn
       tone: "violet",
     },
     {
-      label: "Payment drop-off",
+      label: "Paystack drop-off",
       value: pctLabel(paystack?.abandonmentPct),
-      sub: `${paystack?.completed ?? 0}/${paystack?.opened ?? 0} payment sessions`,
+      sub: `${paystack?.completed ?? 0}/${paystack?.opened ?? 0} Paystack sessions`,
       tone: "orange",
     },
   ];

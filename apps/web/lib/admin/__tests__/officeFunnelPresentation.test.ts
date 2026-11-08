@@ -101,7 +101,7 @@ describe("buildOfficeFunnelSteps", () => {
 });
 
 describe("paymentCompletedCount", () => {
-  it("prefers unified count and falls back to paid bookings when analytics is zero", () => {
+  it("prefers unified count and never treats uncorrelated booking rows as completed browser sessions", () => {
     expect(paymentCompletedCount(SAMPLE)).toBe(48);
     expect(
       paymentCompletedCount({
@@ -114,7 +114,15 @@ describe("paymentCompletedCount", () => {
           revenue: { paidBookings: 38 },
         },
       }),
-    ).toBe(38);
+    ).toBe(0);
+  });
+});
+
+describe("service view consistency", () => {
+  it("keeps the main Service count aligned with observed Product Flow views", () => {
+    const example = { ...SAMPLE, funnelStartSessions: 184 };
+    expect(buildOfficeFunnelSteps(example)[1]?.value).toBe(180);
+    expect(buildOfficeProductFlowSteps(example)[1]?.views).toBe(180);
   });
 });
 
@@ -158,7 +166,7 @@ describe("buildOfficeFunnelKpis", () => {
       } },
     });
     expect(cards).toHaveLength(4);
-    expect(cards[3]?.sub).toBe("48/60 payment sessions");
+    expect(cards[3]?.sub).toBe("48/60 Paystack sessions");
     expect(cards[3]?.sub).not.toContain("3 685");
   });
 
@@ -200,13 +208,13 @@ describe("buildOfficeFunnelKpis", () => {
     expect(kpis[0]?.value).toBe("15.5%");
     expect(kpis[1]?.label).toBe("Checkout → paid");
     expect(kpis[1]?.value).toBe("66.7%");
-    expect(kpis[3]?.label).toBe("Payment drop-off");
+    expect(kpis[3]?.label).toBe("Paystack drop-off");
     expect(kpis[3]?.value).toBe("20.0%");
   });
 });
 
 describe("booking conversion KPI grammar", () => {
-  it("uses a singular booking session for a single visit", () => {
+  it("shows a singular booking session while keeping the count unchanged", () => {
     const kpis = buildOfficeFunnelKpis({
       ...SAMPLE,
       sessionsWithFunnelView: 1,
@@ -222,6 +230,7 @@ describe("countLabel", () => {
     expect(countLabel(1, "booking session")).toBe("1 booking session");
     expect(countLabel(1, "completed booking")).toBe("1 completed booking");
   });
+
   it("uses plural labels for zero and multiple counts", () => {
     expect(countLabel(0, "booking session")).toBe("0 booking sessions");
     expect(countLabel(2, "booking session")).toBe("2 booking sessions");
@@ -239,7 +248,7 @@ describe("production-facing copy", () => {
 
   it("shows readable anomaly comparison instead of internal metric keys", () => {
     const anomalies = buildOfficeFunnelAnomalies(SAMPLE);
-    expect(anomalies[0]?.description).toBe("Current 8 · Usual 14");
+    expect(anomalies[0]?.description).toBe("Current 8 · Reference 14");
     expect(anomalies[0]?.description).not.toContain("conversion_rate");
   });
 
@@ -257,7 +266,7 @@ describe("production-facing copy", () => {
       "Total before exclusions",
     ]);
     expect(revenue?.map((metric) => metric.value)).toEqual([zarLabel(3685), zarLabel(860), zarLabel(4545)]);
-    expect(buildOfficeFunnelKpis(SAMPLE)[3]?.label).toBe("Payment drop-off");
+    expect(buildOfficeFunnelKpis(SAMPLE)[3]?.label).toBe("Paystack drop-off");
   });
 });
 

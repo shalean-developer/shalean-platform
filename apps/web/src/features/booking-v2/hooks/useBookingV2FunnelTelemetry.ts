@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { bookingFunnelNavigation, type FunnelPosition } from "@/lib/analytics/liveBookingFunnel";
 import { useFormContext } from "react-hook-form";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import {
@@ -53,12 +54,12 @@ function bookingAnalyticsState(
  * Booking-v2 funnel telemetry — feeds `booking_events` (view/next/back/exit/error) and semantic
  * `user_events` (service_selected, date_selected, …) for Funnel Intelligence dashboards.
  */
-export function useBookingV2FunnelTelemetry(currentStep: BookingStep, serviceSlug: ServiceSlug): void {
+export function useBookingV2FunnelTelemetry(currentStep: BookingStep, serviceSlug: ServiceSlug, section?: string): void {
   const form = useFormContext<BookingV2FormData>();
   const pageViewTracked = useRef(false);
   const stepTracked = useRef<Set<number>>(new Set());
-  const funnelViewTracked = useRef<Set<number>>(new Set());
-  const prevStepRef = useRef<BookingStep | null>(null);
+  const funnelViewTracked = useRef<Set<string>>(new Set());
+  const prevStepRef = useRef<FunnelPosition | null>(null);
   const dateTracked = useRef(false);
   const timeTracked = useRef(false);
   const cleanerTracked = useRef(false);
@@ -108,8 +109,9 @@ export function useBookingV2FunnelTelemetry(currentStep: BookingStep, serviceSlu
       ga4CheckoutTracked.current = true;
     }
 
-    if (funnelViewTracked.current.has(currentStep)) return;
-    funnelViewTracked.current.add(currentStep);
+    const positionKey = currentStep + ":" + (section ?? "");
+    if (funnelViewTracked.current.has(positionKey)) return;
+    funnelViewTracked.current.add(positionKey);
 
     try {
       const funnelStep = bookingV2StepToFunnelStep(currentStep);
@@ -117,6 +119,7 @@ export function useBookingV2FunnelTelemetry(currentStep: BookingStep, serviceSlu
         service: serviceSlug,
         flow: "booking_v2",
         step: currentStep,
+        ...(section ? { section } : {}),
       });
 
       if (stepTracked.current.has(currentStep)) return;
@@ -131,30 +134,20 @@ export function useBookingV2FunnelTelemetry(currentStep: BookingStep, serviceSlu
     } catch {
       // storage-dependent telemetry must not suppress GA4 above
     }
-  }, [currentStep, serviceSlug, form]);
+  }, [currentStep, serviceSlug, form, section]);
 
-  // Navigation direction (next / back)
+  // Attribute navigation to the screen being left, including internal live-flow screens.
   useEffect(() => {
-    const prev = prevStepRef.current;
-    prevStepRef.current = currentStep;
-    if (prev == null || prev === currentStep) return;
-
-    if (currentStep > prev) {
-      trackBookingFunnelEvent(bookingV2StepToFunnelStep(prev), BOOKING_FUNNEL_ROW.NEXT, {
-        service: serviceSlug,
-        flow: "booking_v2",
-        from_step: prev,
-        to_step: currentStep,
-      });
-    } else {
-      trackBookingFunnelEvent(bookingV2StepToFunnelStep(currentStep), BOOKING_FUNNEL_ROW.BACK, {
-        service: serviceSlug,
-        flow: "booking_v2",
-        from_step: prev,
-        to_step: currentStep,
-      });
-    }
-  }, [currentStep, serviceSlug]);
+    const previous = prevStepRef.current;
+    const current = { step: currentStep, section };
+    prevStepRef.current = current;
+    if (!previous) return;
+    const navigation = bookingFunnelNavigation(previous, current);
+    if (!navigation) return;
+    trackBookingFunnelEvent(bookingV2StepToFunnelStep(navigation.step), navigation.event, {
+      service: serviceSlug, flow: "booking_v2", ...navigation.metadata,
+    });
+  }, [currentStep, serviceSlug, section]);
 
   // Field-level semantic events (date, time, cleaner, extras)
   useEffect(() => {
@@ -224,10 +217,11 @@ export function useBookingV2FunnelTelemetry(currentStep: BookingStep, serviceSlu
         flow: "booking_v2",
         step: currentStep,
         reason: "page_unload",
+        ...(section ? { section } : {}),
       });
     }
 
     window.addEventListener("pagehide", onExit);
     return () => window.removeEventListener("pagehide", onExit);
-  }, [currentStep, serviceSlug]);
+  }, [currentStep, serviceSlug, section]);
 }
