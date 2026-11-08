@@ -40,17 +40,17 @@ try {
     await page.setViewportSize({width,height:900});await page.goto(origin);await page.getByRole('table').waitFor();
     assert.equal(await page.evaluate(()=>innerWidth),width);
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`page overflows at ${width}`);
-    const rules=page.getByText('Balance rules & source details',{exact:true});
+    const rules=page.locator('summary').filter({hasText:'Balance rules & source details'});
     assert.equal(await page.getByText('Transfers move cash between accounts;', {exact:false}).isVisible(),false);
     await rules.press('Enter');await page.getByText('Transfers move cash between accounts;', {exact:false}).waitFor();
     await rules.press('Enter');
-    const extra=page.getByText('More period balances & obligations',{exact:true});
+    const extra=page.locator('summary').filter({hasText:'More period balances & obligations'});
     assert.equal(await page.getByRole('region',{name:'Local obligations and receivables',exact:true}).isVisible(),false);
     await extra.click();await page.getByRole('region',{name:'Local obligations and receivables',exact:true}).waitFor();
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`expanded page overflows at ${width}`);
     await extra.click();
-    await page.getByText('Forecast rules & excluded amounts',{exact:true}).click();await page.getByText('Forecast scope:',{exact:false}).waitFor();
-    await page.getByText('Forecast rules & excluded amounts',{exact:true}).click();
+    await page.locator('summary').filter({hasText:'Forecast rules & excluded amounts'}).click();await page.getByText('Forecast scope:',{exact:false}).waitFor();
+    await page.locator('summary').filter({hasText:'Forecast rules & excluded amounts'}).click();
     const select=page.getByRole('combobox',{name:'Synthetic test scenario'});
     await select.selectOption('equal');await page.getByRole('row').filter({hasText:'Synthetic Income Account'}).getByRole('cell',{name:'R 0,00',exact:true}).waitFor();
     assert.match(await page.getByRole('region',{name:'Bank reconciliation and protected cash',exact:true}).innerText(),/Safe to spend\s+Unavailable/);
@@ -64,7 +64,7 @@ try {
   }
   for(const state of ['loading','error','previous']) {
     await page.goto(`${origin}/?state=${state}`);await page.getByRole('heading',{name:'Cash flow',exact:true}).waitFor();
-    await page.getByText('More period balances & obligations',{exact:true}).click();
+    await page.locator('summary').filter({hasText:'More period balances & obligations'}).click();
     assert.ok(!(await page.locator('body').innerText()).includes('4\u00a0321'),`retained figures exposed during ${state}`);
     console.log(`CF02_BROWSER_PASS state=${state} retained_values=hidden`);
   }
