@@ -535,10 +535,13 @@
   }
 }
 
+/* Homepage How it works surface + card and hero CTA design language. */
+.locationPage { background: #eef3ff; }
+
 /* Focus the Regular address screen on the selected cleaning location. */
 .locationEntry.locationEntry {
-  border: 1px solid var(--border);
-  border-radius: var(--ui-radius-xl);
+  border: 1px solid #dce7ff;
+  border-radius: var(--ui-radius-md);
   background: var(--card);
   padding: clamp(1.25rem, 4vw, 2rem);
   box-shadow: var(--ui-shadow-sm);
@@ -546,6 +549,8 @@
 
 .locationEntry input:not([type="checkbox"]):not([type="radio"]) {
   min-height: 3.25rem;
-  border-radius: 1.5rem;
+  border-radius: var(--ui-radius-md);
   box-shadow: none;
 }
+
+.locationEntry label { color: #00164e; }
