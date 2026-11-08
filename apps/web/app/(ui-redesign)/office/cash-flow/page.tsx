@@ -14,45 +14,44 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Banknote, PiggyBank, RefreshCw, ShieldCheck, TrendingUp, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Banknote, PiggyBank, RefreshCw, TrendingUp, Wallet } from "lucide-react";
 import {
   OfficeZohoPageHeader,
   OfficeZohoSecondaryButton,
 } from "@/components/admin/office/OfficeZohoChrome";
 import { FinanceKpiCard } from "@/components/admin/finance/FinanceKpiCard";
 import { CashFlowForecastBreakdown, formatForecastZar } from "@/components/admin/finance/CashFlowForecastBreakdown";
-import { CashAccountBalanceEditor } from "@/components/admin/finance/CashAccountBalanceEditor";
+import { CashReconciliationPanel } from "@/components/admin/finance/CashReconciliationPanel";
+import type { CashReconciliation } from "@/lib/admin/expenses/cashReconciliation";
 import { useAdminData } from "@/hooks/useAdminData";
-import type { CashFlowDashboardPayload } from "@/lib/admin/expenses/loadCashFlowDashboard";
 import type { CashSurvivalDashboardPayload } from "@/lib/admin/expenses/loadCashSurvivalDashboard";
+import type { CashFlowDashboardPayload } from "@/lib/admin/expenses/loadCashFlowDashboard";
 import { defaultOfficePayoutPeriodRange } from "@/lib/admin/payouts/officePayoutPeriodReport";
 
 function formatZar(cents: number): string {
   return formatForecastZar(cents);
 }
 
-function survivalTone(status: CashSurvivalDashboardPayload["status"]): string {
-  if (status === "red") return "border-red-200 bg-red-50 text-red-900";
-  if (status === "amber") return "border-amber-200 bg-amber-50 text-amber-900";
-  if (status === "green") return "border-emerald-200 bg-emerald-50 text-emerald-900";
-  return "border-slate-200 bg-slate-50 text-slate-800";
-}
-
 export default function CashFlowPage() {
   const defaults = defaultOfficePayoutPeriodRange();
   const [from, setFrom] = useState(defaults.from);
   const [to, setTo] = useState(defaults.to);
+  const [scenario, setScenario] = useState("differences");
+  const evidenceParams = useMemo(() => ({ scenario }), [scenario]);
   const params = useMemo(() => ({ from, to }), [from, to]);
 
   const { data, loading, error, refetch } = useAdminData<CashFlowDashboardPayload>("/api/admin/cash-flow", {
     params,
   });
   const {
-    data: survival,
-    loading: survivalLoading,
-    error: survivalError,
-    refetch: refetchSurvival,
-  } = useAdminData<CashSurvivalDashboardPayload>("/api/admin/cash-survival", { params });
+    data: reconciliation,
+    loading: reconciliationLoading,
+    error: reconciliationError,
+    refetch: refetchReconciliation,
+  } = useAdminData<CashReconciliation>("/api/admin/cash-reconciliation", { params: evidenceParams });
+
+  const { data: obligations, loading: obligationsLoading, error: obligationsError, refetch: refetchObligations } = useAdminData<CashSurvivalDashboardPayload>("/api/admin/cash-survival", { params });
+  const obligationAmount = (value?: number) => obligationsLoading || obligationsError || value == null ? "Unavailable" : formatZar(value);
 
   const s = data?.summary;
   const forecastCurrent = !loading && !error && data?.period.from === from && data?.period.to === to;
@@ -71,7 +70,8 @@ export default function CashFlowPage() {
 
   const refreshAll = () => {
     refetch();
-    refetchSurvival();
+    refetchReconciliation();
+    refetchObligations();
   };
 
   return (
@@ -95,66 +95,30 @@ export default function CashFlowPage() {
       />
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      {survivalError ? <p className="text-sm text-red-600">{survivalError}</p> : null}
 
-      <section className={`rounded-xl border p-5 ${survivalTone(survival?.status ?? "unknown")}`}>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              {survival?.status === "green" ? <ShieldCheck className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
-              <h2 className="text-base font-semibold">Cash Survival / Safe-to-Spend</h2>
-            </div>
-            <p className="mt-1 text-sm opacity-80">
-              {survivalLoading
-                ? "Calculating protected cash and obligations…"
-                : survival?.data_quality.note ?? "Bank balance is current enough for a safe-to-spend decision."}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs font-semibold uppercase tracking-wide opacity-70">Status</p>
-            <p className="text-xl font-bold uppercase">{survival?.status ?? "unknown"}</p>
-          </div>
-        </div>
+      {reconciliation?.synthetic ? <label className="block text-sm font-medium">Synthetic test scenario
+        <select aria-label="Synthetic test scenario" value={scenario} onChange={e => setScenario(e.target.value)} className="ml-3 rounded-md border p-2">
+          <option value="differences">Unresolved differences</option><option value="equal">Balances agree</option><option value="stale">Stale feed</option><option value="missing">Missing bank balance</option>
+        </select>
+      </label> : null}
+      <CashReconciliationPanel data={reconciliation} loading={reconciliationLoading} error={reconciliationError} />
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-lg bg-white/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide opacity-70">Confirmed liquid cash</p>
-            <p className="mt-1 text-xl font-bold">{formatZar(survival?.cash.confirmed_liquid_cash_cents ?? 0)}</p>
-          </div>
-          <div className="rounded-lg bg-white/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide opacity-70">Cleaner liability protected</p>
-            <p className="mt-1 text-xl font-bold">{formatZar(survival?.obligations.cleaner_unpaid_liability_cents ?? 0)}</p>
-          </div>
-          <div className="rounded-lg bg-white/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide opacity-70">Verified Paystack in transit</p>
-            <p className="mt-1 text-xl font-bold">{formatZar(survival?.cash.paystack_in_transit_verified_cents ?? 0)}</p>
-          </div>
-          <div className="rounded-lg bg-white/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide opacity-70">Safe to spend</p>
-            <p className="mt-1 text-xl font-bold">
-              {survival?.decision.safe_to_spend_cents == null ? "Refresh bank balance" : formatZar(survival.decision.safe_to_spend_cents)}
-            </p>
-          </div>
+      <section aria-label="Local obligations and receivables" className="rounded-xl border bg-white p-5 text-sm">
+        <h2 className="font-semibold">Local obligations and receivables · provisional</h2>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <p>Unpaid cleaner earnings<strong className="block">{obligationAmount(obligations?.obligations.cleaner_unpaid_liability_cents)}</strong></p>
+          <p>Minimum operating reserve<strong className="block">{obligationAmount(obligations?.obligations.minimum_operating_reserve_cents)}</strong></p>
+          <p>Collectible monthly invoices<strong className="block">{obligationAmount(obligations?.receivables.sent_collectible_cents)}</strong></p>
+          <p>Draft monthly forecast<strong className="block">{obligationAmount(obligations?.receivables.draft_monthly_cents)}</strong></p>
         </div>
-
-        <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-          <p><span className="font-semibold">Collectible invoices:</span> {formatZar(survival?.receivables.sent_collectible_cents ?? 0)}</p>
-          <p><span className="font-semibold">Overdue:</span> {formatZar(survival?.receivables.overdue_cents ?? 0)}</p>
-          <p><span className="font-semibold">Draft monthly forecast:</span> {formatZar(survival?.receivables.draft_monthly_cents ?? 0)}</p>
-          <p><span className="font-semibold">Funding gap:</span> {formatZar(survival?.decision.funding_gap_cents ?? 0)}</p>
-        </div>
-        <p className="mt-3 text-xs opacity-70">
-          Draft invoices, unverified Paystack rows and pending settlements are not counted as spendable cash. Minimum protected reserve: {formatZar(survival?.obligations.minimum_operating_reserve_cents ?? 0)}.
-        </p>
-        {survival ? <CashAccountBalanceEditor accounts={survival.accounts} onSaved={refreshAll} /> : null}
+        <p className="mt-3 text-slate-600">These local period totals are not reconciled to all Zoho obligations. They do not establish free cash; customer advances and Bokkie funds remain separately unresolved.</p>
       </section>
-
       <div className="flex flex-wrap gap-3">
         <FinanceKpiCard icon={ArrowUpRight} label="Recorded Paystack receipts · gross" value={!forecastCurrent ? "Unavailable" : data?.payment_evidence.verified_transaction_count ? formatZar(s?.money_received_cents ?? 0) : "Unverified"} loading={loading} status="positive" />
         <FinanceKpiCard icon={ArrowUpRight} label="Paystack settled to bank" value={!forecastCurrent ? "Unavailable" : formatZar(s?.money_received_net_cents ?? 0)} loading={loading} status="positive" />
         <FinanceKpiCard icon={ArrowDownLeft} label="Paystack fees · reported" value={!forecastCurrent ? "Unavailable" : data?.payment_evidence.fees_verified ? formatZar(s?.gateway_processing_fees_cents ?? 0) : "Unverified"} loading={loading} status="warning" />
         <FinanceKpiCard icon={ArrowDownLeft} label="Paid cleaner batches + approved expenses" value={formatZar(s?.money_paid_cents ?? 0)} loading={loading} status="negative" />
-        <FinanceKpiCard icon={Banknote} label="Cash in bank" value={formatZar(s?.cash_in_bank_cents ?? 0)} loading={loading} />
+        <FinanceKpiCard icon={Banknote} label="Local bank ledger · unverified" value={formatZar(s?.cash_in_bank_cents ?? 0)} loading={loading} />
         <FinanceKpiCard icon={PiggyBank} label="Petty cash" value={formatZar(s?.petty_cash_cents ?? 0)} loading={loading} />
         <FinanceKpiCard icon={TrendingUp} label="Expected income · selected period" value={!forecastCurrent ? "Unavailable" : formatForecastZar(s?.expected_income_cents ?? 0)} loading={loading} status="positive" />
         <FinanceKpiCard icon={Wallet} label="Expected expenses · selected period" value={!forecastCurrent ? "Unavailable" : formatForecastZar(s?.expected_expenses_cents ?? 0)} loading={loading} status="warning" />
@@ -167,8 +131,8 @@ export default function CashFlowPage() {
         />
         <FinanceKpiCard
           icon={Banknote}
-          label="Cash runway"
-          value={s?.cash_runway_days != null ? `${s.cash_runway_days} days` : "—"}
+          label="Cash runway · reconciliation required"
+          value="Unavailable"
           loading={loading}
         />
       </div>

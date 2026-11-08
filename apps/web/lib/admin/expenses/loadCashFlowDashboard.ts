@@ -7,7 +7,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { sumApprovedExpensesInRange } from "@/lib/admin/expenses/loadExpenses";
 import {
   bookingCustomerRevenueCents,
-  loadOfficePayoutPeriodReport,
   normalizeOfficePayoutPeriodRange,
 } from "@/lib/admin/payouts/officePayoutPeriodReport";
 import { computeProfitBreakdown } from "@/lib/admin/expenses/profitCalculations";
@@ -70,8 +69,7 @@ export async function loadCashFlowDashboard(
   toRaw?: string | null,
 ): Promise<CashFlowDashboardPayload> {
   const { from, to } = normalizeOfficePayoutPeriodRange(fromRaw, toRaw);
-  const [report, recordedExpenses, gatewayMetrics, settlementSummary] = await Promise.all([
-    loadOfficePayoutPeriodReport(admin, from, to),
+  const [recordedExpenses, gatewayMetrics, settlementSummary] = await Promise.all([
     loadRecordedExpenseCash(admin, from, to),
     loadCashFlowPaymentEvidence(admin, from, to),
     loadSettlementCashSummary(admin, { from, to }),
@@ -107,9 +105,6 @@ export async function loadCashFlowDashboard(
   // Net cash flow is actual settled bank inflow less actual/approved outflow. Pending
   // Paystack settlements are shown separately and are not treated as cash received.
   const netCashFlow = moneyReceivedNet - moneyPaid;
-  const avgDailyBurn = moneyPaid / Math.max(1, report.totals.visit_count || 30);
-  const cashRunwayDays =
-    avgDailyBurn > 0 ? Math.round((cashInBank + pettyCash) / avgDailyBurn) : null;
 
   const dailyMap = new Map<string, { in: number; out: number }>();
 
@@ -172,7 +167,8 @@ export async function loadCashFlowDashboard(
       expected_income_cents: forecast.income_cents,
       expected_expenses_cents: forecast.expenses_cents,
       net_cash_flow_cents: netCashFlow,
-      cash_runway_days: cashRunwayDays,
+      // CF-02: visit count is not elapsed days; unreconciled cash is not a runway basis.
+      cash_runway_days: null,
     },
     payment_evidence: gatewayMetrics,
     forecast,
@@ -211,7 +207,6 @@ export async function loadProfitSnapshot(admin: SupabaseClient, days = 30) {
   const prevFrom = prevFromD.toISOString().slice(0, 10);
 
   const [curReport, prevReport, curExp, prevExp] = await Promise.all([
-    loadOfficePayoutPeriodReport(admin, from, to),
     loadOfficePayoutPeriodReport(admin, prevFrom, prevTo),
     sumApprovedExpensesInRange(admin, from, to),
     sumApprovedExpensesInRange(admin, prevFrom, prevTo),
