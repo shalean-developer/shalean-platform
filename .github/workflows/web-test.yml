@@ -254,6 +254,9 @@ jobs:
           lib/email/__tests__/marketingOfficeJourney.ui.test.ts
           lib/email/__tests__/marketingPreferences.ui.test.ts
           lib/email/__tests__/marketingAcceptanceSetup.test.ts
+          lib/email/__tests__/marketingAcceptanceSend.test.ts
+          lib/email/__tests__/marketingAcceptanceSend.ui.test.ts
+          lib/email/__tests__/marketingAcceptanceRetry.test.ts
           app/api/webhooks/resend/staging/__tests__/route.test.ts
           app/api/marketing/unsubscribe/__tests__/route.test.ts
           lib/email/__tests__/marketingAndTransactionalSend.integration.test.ts

@@ -14,3 +14,13 @@ export function marketingAcceptanceHost(request: Request) {
   const host = request.headers.get("host")?.split(":")[0]?.toLowerCase() ?? new URL(request.url).hostname;
   return host === "pricing-test.shalean.co.za";
 }
+
+/** Separate bounded capability. Never turn on the shared outbound/contact switches. */
+export function marketingAcceptanceSendEnabled(env: EnvLike = process.env): boolean {
+  return marketingAcceptanceRecipients(env).length === 2
+    && env.MARKETING_ACCEPTANCE_SEND_ENABLED === "true"
+    && env.OUTBOUND_MESSAGING_DISABLED === "true"
+    && env.RESEND_CONTACT_WRITES_DISABLED === "true"
+    && Boolean(env.RESEND_STAGING_WEBHOOK_SECRET)
+    && Boolean(env.MARKETING_UNSUBSCRIBE_SECRET && env.MARKETING_UNSUBSCRIBE_SECRET.length >= 32);
+}

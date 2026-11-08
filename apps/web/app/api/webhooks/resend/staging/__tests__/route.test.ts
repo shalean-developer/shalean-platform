@@ -38,3 +38,8 @@ it("a completed duplicate does not reset an active delayed-message retry claim",
  m.insert.mockResolvedValue({error:{code:"23505"}});m.lookup.mockResolvedValue({data:{id:"local",delivery_status:"delivery_delayed"},error:null});
  const result=await POST(signed(event([email],"stage-message","email.delivery_delayed")));expect(result.status).toBe(200);expect(m.update).not.toHaveBeenCalled();
 });
+
+it.each(["email.delivery_delayed","email.failed","email.delivered"])("never queues a dedicated staging test after %s",async(type)=>{
+ expect((await POST(signed(event([email],"stage-message",type)))).status).toBe(200);
+ expect(m.update).toHaveBeenCalledWith(expect.objectContaining({retry_status:"blocked",next_retry_at:null}));
+});

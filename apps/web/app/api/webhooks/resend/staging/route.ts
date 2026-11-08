@@ -15,6 +15,7 @@ export async function POST(request: Request) {
   if (payload === null) return json({error:"Request too large"},413);
   return handleResendWebhook(new Request(request.url,{method:"POST",headers:request.headers,body:payload}),{
     secret,
+    disableRetries: true,
     accept: async (admin,event) => {
       const tags = event.data?.tags;
       const marked = Array.isArray(tags) ? tags.some(tag => tag.name === "shalean_environment" && tag.value === "staging") : tags?.shalean_environment === "staging";
