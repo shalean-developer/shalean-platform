@@ -185,6 +185,7 @@ jobs:
         run: >-
           npm run test --
           lib/marketing/__tests__/marketingAreaLinks.test.ts
+          lib/email/__tests__/EmailDraftPreview.ui.test.ts
           lib/meta/__tests__/dataDeletion.test.ts
           lib/meta/__tests__/complianceRoutes.contract.test.ts
           lib/seo/__tests__/locationsShortSlugProxyRedirect.test.ts

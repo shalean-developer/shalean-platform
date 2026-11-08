@@ -1,17 +1,13 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft, Mail } from "lucide-react";
-import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import styles from "./email-ui.module.css";
 
-export function EmailHeader({ title, description, backHref = "/office/marketing/email", backLabel = "Email campaigns" }: {
+export function EmailHeader({ title, description, backHref, backLabel = "Email campaigns" }: {
   title: string; description: string; backHref?: string; backLabel?: string;
 }) {
   return <header className={styles.hero}>
-    <div className={styles.heroTop}>
-      <Link className={styles.back} href={backHref}><ArrowLeft size={15} aria-hidden="true" />{backLabel}</Link>
-      <Link className={styles.brand} href="/" aria-label="Shalean home"><ShaleanNavLogo className={styles.logo} /></Link>
-    </div>
+    {backHref && <Link className={styles.back} href={backHref}><ArrowLeft size={15} aria-hidden="true" />{backLabel}</Link>}
     <p className={styles.eyebrow}><Mail size={14} aria-hidden="true" /> Shalean email</p>
     <h1>{title}</h1><p className={styles.description}>{description}</p>
   </header>;
