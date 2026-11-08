@@ -323,3 +323,38 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
     expect(forbiddenMutations, "Team-mode smoke must never submit a booking or payment mutation").toEqual([]);
   });
 });
+
+
+test("Regular location card validates and continues without submitting booking data", async ({ page }) => {
+  await seedDraft(page, "regular-cleaning", "individual_cleaners");
+  const forbiddenMutations = await installNonMutatingApiSandbox(page);
+  await page.route("**/api/booking/service-locations**", (route) => route.fulfill({
+    status: 200, json: { ok: true, locations: [{ id: LOCATION_ID, city_id: CITY_ID, name: "Claremont", city: "Cape Town" }] },
+  }));
+  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/book/regular-cleaning?service=regular-cleaning&step=details&section=address");
+    await expect(page.getByRole("heading", { name: "Where do you need cleaning?" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Booking summary", exact: true })).toHaveCount(0);
+    const street = page.getByLabel("Street address", { exact: false });
+    const setLocation = page.getByRole("button", { name: "Set location →", exact: true });
+    await street.fill("");
+    await expect(setLocation).toBeDisabled();
+    await street.fill("1 Playwright Test Street");
+    await expect(setLocation).toBeEnabled();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+    await page.screenshot({ path: `test-results/regular-location-${viewport.width}.png`, fullPage: true });
+    await setLocation.click();
+    await expect(page).toHaveURL(/section=property/);
+    await expect(page.getByRole("radio", { name: /House/ })).toBeVisible();
+    if (viewport.width >= 1024) {
+      await expect(page.getByRole("heading", { name: "Booking summary", exact: true })).toBeVisible();
+    } else {
+      await expect(page.getByRole("button", { name: /^Booking summary/ })).toBeVisible();
+    }
+    await page.getByRole("button", { name: "← Back", exact: true }).click();
+    await expect(page).toHaveURL(/section=address/);
+    await expect(street).toHaveValue("1 Playwright Test Street");
+  }
+  expect(forbiddenMutations).toEqual([]);
+});

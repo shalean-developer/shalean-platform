@@ -365,7 +365,7 @@ test.describe("RD-P05G — Booking V2 closure audit", () => {
           "step",
         );
         await expect(page.getByRole("button", { name: /Back/, exact: false })).toBeVisible();
-        await expect(page.getByRole("button", { name: "Continue →", exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: service.slug === "regular-cleaning" ? "Set location →" : "Continue →", exact: true })).toBeVisible();
         await expectNoHorizontalOverflow(page);
       }
 
