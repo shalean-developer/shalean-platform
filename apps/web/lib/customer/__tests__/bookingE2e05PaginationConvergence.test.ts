@@ -27,11 +27,14 @@ describe("BOOKING-E2E-05 customer pagination convergence", () => {
     for (const file of [
       "app/(ui-redesign)/account/payments/page.tsx",
       "app/(ui-redesign)/account/invoices/page.tsx",
-      "app/(ui-redesign)/account/profile/page.tsx",
     ]) {
       expect(read(file)).not.toContain('mode: "complete"');
       expect(read(file)).toContain("useCustomerBookingAggregates");
     }
+    // Profile is an editor, so it must not fetch booking history or aggregates.
+    const profile = read("app/(ui-redesign)/account/profile/page.tsx");
+    expect(profile).not.toContain("useBookings");
+    expect(profile).not.toContain("useCustomerBookingAggregates");
   });
 
   it("lets recent booking history use the bounded default", () => {
