@@ -78,6 +78,7 @@ export default function AccountProfilePage() {
   const { data: referralData } = useReferralSummary();
 
   const avatarPhoto = useCustomerAvatar(user);
+  const hasPhoto = Boolean(avatarPhoto || user?.user_metadata?.customer_avatar_path);
   const photoInput = useRef<HTMLInputElement>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
 
@@ -253,9 +254,9 @@ export default function AccountProfilePage() {
               <input ref={photoInput} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" aria-label="Choose profile photo" disabled={photoBusy}
                 onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void savePhoto(file); }} />
               <Button type="button" variant="secondary" size="sm" disabled={photoBusy} onClick={() => photoInput.current?.click()}>
-                {photoBusy ? "Updating…" : avatarPhoto ? "Change photo" : "Upload photo"}
+                {photoBusy ? "Updating…" : hasPhoto ? "Change photo" : "Upload photo"}
               </Button>
-              {avatarPhoto ? <Button type="button" variant="secondary" size="sm" disabled={photoBusy} onClick={() => void savePhoto()}>Remove photo</Button> : null}
+              {hasPhoto ? <Button type="button" variant="secondary" size="sm" disabled={photoBusy} onClick={() => void savePhoto()}>Remove photo</Button> : null}
               <p className="text-xs text-primary-foreground/80">JPG, PNG or WebP · Max 2 MB</p>
             </div>
             <div className="min-w-0 flex-1">
