@@ -42,7 +42,6 @@
 .entry button[id="suburb"] {
   min-height: 3.25rem;
   border-radius: var(--ui-radius-md);
-  border-color: #dce7ff;
   box-shadow: none;
 }
 
