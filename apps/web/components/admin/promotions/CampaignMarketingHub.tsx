@@ -59,6 +59,7 @@ import {
   MarketingSectionSkeleton,
 } from "@/components/admin/promotions/MarketingEmptyState";
 import { MarketingSubNav } from "@/components/admin/promotions/MarketingSubNav";
+import { EmailDraftPreview } from "@/components/email/EmailDraftPreview";
 import emailStyles from "@/components/email/email-ui.module.css";
 
 function socialCardPropsFromPayload(
@@ -257,7 +258,7 @@ const VIEW_META: Record<HubView, { title: string; blurb: string }> = {
   },
   email: {
     title: "Email Campaigns",
-    blurb: "Generated HTML email drafts ready to paste into your ESP or templates.",
+    blurb: "Review your email drafts and copy the HTML when ready.",
   },
   landing: {
     title: "Landing Pages",
@@ -786,9 +787,9 @@ export function CampaignMarketingHub({ view = "campaigns", embedded = false }: {
         <div>
           {view === "email" || embedded ? <h2 className="text-lg font-semibold text-slate-900">{view === "email" ? "Email drafts" : meta.title}</h2> : <h1 className="text-2xl font-bold text-slate-900">{meta.title}</h1>}
           <p className="mt-1 text-sm text-slate-500">{meta.blurb}</p>
-          <div className="mt-3">
+          {!embedded && view !== "email" && <div className="mt-3">
             <MarketingSubNav active={view} />
-          </div>
+          </div>}
           {formDirty ? (
             <p role="status" className="mt-2 text-xs text-amber-800">
               You have unsaved campaign changes. Save or cancel before leaving this page.
@@ -833,6 +834,7 @@ export function CampaignMarketingHub({ view = "campaigns", embedded = false }: {
 
       {view === "social" || view === "email" || view === "landing" ? (
         <ContentList
+          emailView={view === "email"}
           content={allContent}
           assets={allAssets}
           facebookConfigured={facebookPublishable}
@@ -1601,6 +1603,7 @@ const CHANNEL_TO_ASSET: Partial<Record<CampaignContentChannel, string>> = {
 };
 
 function ContentList({
+  emailView = false,
   content,
   assets,
   facebookConfigured,
@@ -1615,6 +1618,7 @@ function ContentList({
   emptyStateKey,
   onAssetUpdated,
 }: {
+  emailView?: boolean;
   content: ContentRow[];
   assets: AssetRow[];
   facebookConfigured: boolean;
@@ -1638,6 +1642,7 @@ function ContentList({
   }
   return (
     <div className="space-y-3">
+      {!emailView && <>
       {!facebookConfigured ? (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           Facebook one-click publish needs <code className="font-mono text-xs">FACEBOOK_PAGE_ID</code>{" "}
@@ -1696,7 +1701,8 @@ function ContentList({
           )}
         </p>
       ) : null}
-      <div className="grid gap-4 lg:grid-cols-2">
+      </>}
+      <div className={emailView ? "grid gap-4" : "grid gap-4 lg:grid-cols-2"}>
         {content.map((c) => (
           <SocialContentCard
             key={c.id}
@@ -2223,6 +2229,8 @@ function SocialContentCard({
             </p>
           ) : null}
         </div>
+      ) : content.channel === "email" ? (
+        <EmailDraftPreview html={content.html_body} text={caption} />
       ) : (
         <>
           <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs text-slate-700">
@@ -2280,8 +2288,8 @@ function SocialContentCard({
       />
 
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" onClick={() => void copy()} aria-label="Copy caption text">
-          <Copy className="mr-1.5 h-3.5 w-3.5" aria-hidden /> Copy text
+        <Button size="sm" variant="outline" onClick={() => void copy()} aria-label={content.channel === "email" ? "Copy email HTML" : "Copy caption text"}>
+          <Copy className="mr-1.5 h-3.5 w-3.5" aria-hidden /> {content.channel === "email" ? "Copy HTML" : "Copy text"}
         </Button>
         {showImage ? (
           <>
