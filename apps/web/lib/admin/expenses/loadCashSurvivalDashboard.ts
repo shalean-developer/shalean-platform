@@ -176,19 +176,10 @@ export async function loadCashSurvivalDashboard(
   const fundingGap = Math.max(0, -postProtection);
 
   const bankBalanceFresh = staleBankAccountCount === 0 && latestBankUpdatedAt != null;
-  const safeToSpend = bankBalanceFresh ? Math.max(0, postProtection) : null;
+  // CF-02: local freshness cannot certify bank matching, Bokkie ownership or customer advances.
+  const safeToSpend = null;
 
-  const periodDays = Math.max(1, Math.floor((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86_400_000) + 1);
-  const paidOutCents = cents(report.totals.paid_cents);
-  const avgDailyProtectedOutflow = (paidOutCents + recurringDue) / periodDays;
-  const runwayDays = avgDailyProtectedOutflow > 0 ? Math.max(0, Math.floor(confirmedLiquidCash / avgDailyProtectedOutflow)) : null;
-
-  let status: CashSurvivalStatus = "unknown";
-  if (bankBalanceFresh) {
-    if (fundingGap > 0 || (runwayDays != null && runwayDays < 7)) status = "red";
-    else if (runwayDays != null && runwayDays < 14) status = "amber";
-    else status = "green";
-  }
+  const status: CashSurvivalStatus = "unknown";
 
   return {
     period: { from, to },
@@ -199,7 +190,7 @@ export async function loadCashSurvivalDashboard(
       bank_balance_fresh: bankBalanceFresh,
       bank_balance_last_updated_at: latestBankUpdatedAt,
       stale_bank_account_count: staleBankAccountCount,
-      note: bankBalanceFresh ? null : "Bank balance is stale or missing. Refresh the finance account balance before relying on safe-to-spend.",
+      note: "Four-account bank reconciliation, Bokkie obligations and customer advances must be verified before safe-to-spend or runway is available.",
     },
     cash: {
       bank_cents: bankCents,
@@ -226,7 +217,7 @@ export async function loadCashSurvivalDashboard(
       safe_to_spend_cents: safeToSpend,
       cash_after_protected_obligations_cents: postProtection,
       funding_gap_cents: fundingGap,
-      runway_days: runwayDays,
+      runway_days: null,
     },
   };
 }
