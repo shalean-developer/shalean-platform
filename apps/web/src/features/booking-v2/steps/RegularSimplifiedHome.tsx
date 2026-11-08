@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useFormContext } from "react-hook-form";
+import { FloatingSelect } from "@/components/ui/floating-select";
 import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
@@ -75,21 +76,19 @@ export function RegularSimplifiedHome() {
       <div className="space-y-4">
         {options.filter((q) => ["propertyType", "bedrooms", "bathrooms", "extraRooms", "hasPets"].includes(q.key))
           .map((question) => (
-            <label key={question.key} className="block space-y-1.5 text-sm font-semibold text-slate-800">
-              <span>{question.label}{REGULAR_HOME_REQUIRED_QUESTION_KEYS.includes(question.key as typeof REGULAR_HOME_REQUIRED_QUESTION_KEYS[number]) ? " *" : ""}</span>
-              <select
-                required={REGULAR_HOME_REQUIRED_QUESTION_KEYS.includes(question.key as typeof REGULAR_HOME_REQUIRED_QUESTION_KEYS[number])}
-                aria-required={REGULAR_HOME_REQUIRED_QUESTION_KEYS.includes(question.key as typeof REGULAR_HOME_REQUIRED_QUESTION_KEYS[number])}
-                value={String(details[question.key] ?? "")}
-                onChange={(event) => updateDetail(question.key, event.target.value)}
-                className="min-h-11 w-full rounded-lg border border-[#DCE7FF] bg-white px-3 py-2.5 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0051FF]"
-              >
-                <option value="">{question.key === "extraRooms" ? "Choose a number (0 if none)" : "Select an answer"}</option>
-                {(question.options ?? []).map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
+            <FloatingSelect
+              key={question.key}
+              label={`${question.label}${REGULAR_HOME_REQUIRED_QUESTION_KEYS.includes(question.key as typeof REGULAR_HOME_REQUIRED_QUESTION_KEYS[number]) ? " *" : ""}`}
+              name={`serviceDetails.${question.key}`}
+              aria-required={REGULAR_HOME_REQUIRED_QUESTION_KEYS.includes(question.key as typeof REGULAR_HOME_REQUIRED_QUESTION_KEYS[number])}
+              value={String(details[question.key] ?? "")}
+              onChange={(value) => updateDetail(question.key, value)}
+              options={[
+                { value: "", label: question.key === "extraRooms" ? "Choose a number (0 if none)" : "Select an answer" },
+                ...(question.options ?? []),
+              ]}
+              labelClassName="text-sm font-semibold text-slate-800"
+            />
           ))}
       </div>
 
@@ -141,25 +140,28 @@ export function RegularSimplifiedHome() {
         </fieldset>
       )}
 
-      <label className="block space-y-1.5 text-sm font-semibold text-slate-800">
-        <span>Cleaning suburb *</span>
-        <select
+      <div className="space-y-1.5">
+        <FloatingSelect
+          label="Cleaning suburb *"
+          name="serviceAreaLocationId"
+          aria-required
           value={locations.some((location) => location.id === locationId) ? locationId : ""}
           disabled={loadingLocations || Boolean(locationError)}
-          onChange={(event) => {
-            const location = locations.find((item) => item.id === event.target.value);
+          onChange={(value) => {
+            const location = locations.find((item) => item.id === value);
             setValue("suburb", location?.name ?? "", { shouldDirty: true, shouldValidate: true });
             setValue("serviceAreaLocationId", location?.id ?? "", { shouldDirty: true, shouldValidate: true });
             setValue("serviceAreaCityId", location?.city_id ?? "", { shouldDirty: true });
             if (location?.city) setValue("city", location.city, { shouldDirty: true });
           }}
-          className="min-h-11 w-full rounded-lg border border-[#DCE7FF] bg-white px-3 py-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0051FF]"
-        >
-          <option value="">{loadingLocations ? "Loading suburbs…" : "Select a supported suburb"}</option>
-          {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
-        </select>
-        {locationError && <span role="alert" className="block text-xs text-red-700">{locationError}</span>}
-      </label>
+          options={[
+            { value: "", label: loadingLocations ? "Loading suburbs…" : "Select a supported suburb" },
+            ...locations.map((location) => ({ value: location.id, label: location.name })),
+          ]}
+          labelClassName="text-sm font-semibold text-slate-800"
+        />
+        {locationError && <p role="alert" className="text-xs text-red-700">{locationError}</p>}
+      </div>
 
       <div className="rounded-lg border border-[#DCE7FF] bg-[#F5F7FB] p-4">
         <p className="text-sm font-semibold text-[#00164E]">Home details {ready ? "complete" : "incomplete"}</p>

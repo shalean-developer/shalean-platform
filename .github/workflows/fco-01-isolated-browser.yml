@@ -6,6 +6,7 @@ on:
       - "apps/web/e2e/smoke/fco-01-regular-home.spec.ts"
       - "apps/web/e2e/smoke/fco-01-details-financial.spec.ts"
       - "apps/web/src/features/booking-v2/**"
+      - "apps/web/components/ui/floating-select.tsx"
       - "apps/web/lib/booking-v2/**"
       - ".github/workflows/fco-01-isolated-browser.yml"
       - ".github/workflows/prebuilt-plesk-staging.yml"
