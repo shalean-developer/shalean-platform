@@ -6,13 +6,15 @@ import type { CashFlowForecast } from "./cashFlowForecast";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sumApprovedExpensesInRange } from "@/lib/admin/expenses/loadExpenses";
 import {
-  bookingCustomerRevenueCents,
   loadOfficePayoutPeriodReport,
   normalizeOfficePayoutPeriodRange,
 } from "@/lib/admin/payouts/officePayoutPeriodReport";
 import { computeProfitBreakdown } from "@/lib/admin/expenses/profitCalculations";
 import { loadCashFlowPaymentEvidence } from "@/lib/payments/loadCashFlowPaymentEvidence";
 import { loadSettlementCashSummary } from "@/lib/payments/loadSettlementCashSummary";
+import { loadRecordedSettlementsByDate } from "@/lib/payments/loadRecordedSettlementsByDate";
+import { loadRecordedCleanerPayoutCash } from "@/lib/payments/loadRecordedCleanerPayoutCash";
+import { loadRecordedExpenseCash } from "@/lib/payments/loadRecordedExpenseCash";
 
 export type CashFlowDashboardPayload = {
   period: { from: string; to: string };
@@ -67,9 +69,8 @@ export async function loadCashFlowDashboard(
   toRaw?: string | null,
 ): Promise<CashFlowDashboardPayload> {
   const { from, to } = normalizeOfficePayoutPeriodRange(fromRaw, toRaw);
-  const [report, approvedExpenses, gatewayMetrics, settlementSummary] = await Promise.all([
-    loadOfficePayoutPeriodReport(admin, from, to),
-    sumApprovedExpensesInRange(admin, from, to),
+  const [recordedExpenses, gatewayMetrics, settlementSummary] = await Promise.all([
+    loadRecordedExpenseCash(admin, from, to),
     loadCashFlowPaymentEvidence(admin, from, to),
     loadSettlementCashSummary(admin, { from, to }),
   ]);
@@ -88,59 +89,40 @@ export async function loadCashFlowDashboard(
   }
 
   const moneyReceived = gatewayMetrics.gross_cents;
-  const moneyReceivedNet = settlementSummary.settled_to_bank_cents;
-  const moneyPaid = (report.totals.paid_cents ?? 0) + approvedExpenses;
-
-  const { data: settledPaymentTxRows } = await admin
-    .from("payment_transactions")
-    .select("settlement_date, net_settlement_cents, amount_cents")
-    .eq("gateway", "paystack")
-    .eq("settlement_status", "settled")
-    .gte("settlement_date", from)
-    .lte("settlement_date", to);
+  // Bank-settlement totals use the settlement-date range (not the customer paid_at range).
+  // Share the exact same selected rows with the daily/weekly/monthly charts.
+  const recordedSettlements = await loadRecordedSettlementsByDate(admin, from, to);
+  const moneyReceivedNet = recordedSettlements.settled_to_bank_cents;
+  // Paid booking allocations are earned by service date, not money leaving the bank.
+  // One paid batch is counted once on its actual payment date.
+  const paidCleanerCash = await loadRecordedCleanerPayoutCash(admin, from, to);
+  // Paystack-linked fee expenses are retained in the expense ledger but not
+  // deducted again from bank inflows already net of Paystack processing fees.
+  const moneyPaid = paidCleanerCash.paid_cents + recordedExpenses.cash_out_cents;
 
   const forecast = await loadCashFlowForecast(admin, from, to);
 
   // Net cash flow is actual settled bank inflow less actual/approved outflow. Pending
   // Paystack settlements are shown separately and are not treated as cash received.
   const netCashFlow = moneyReceivedNet - moneyPaid;
-  const avgDailyBurn = moneyPaid / Math.max(1, report.totals.visit_count || 30);
-  const cashRunwayDays =
-    avgDailyBurn > 0 ? Math.round((cashInBank + pettyCash) / avgDailyBurn) : null;
-
-  const { data: expenseRows } = await admin
-    .from("expenses")
-    .select("expense_date, amount_cents")
-    .eq("status", "approved")
-    .gte("expense_date", from)
-    .lte("expense_date", to);
-
-  const { data: payoutRows } = await admin
-    .from("cleaner_payouts")
-    .select("paid_at, total_amount_cents")
-    .eq("status", "paid")
-    .gte("paid_at", `${from}T00:00:00`)
-    .lte("paid_at", `${to}T23:59:59`);
 
   const dailyMap = new Map<string, { in: number; out: number }>();
 
-  for (const tx of settledPaymentTxRows ?? []) {
-    const d = tx.settlement_date ?? from;
-    const row = dailyMap.get(d) ?? { in: 0, out: 0 };
-    row.in += tx.net_settlement_cents ?? tx.amount_cents ?? 0;
-    dailyMap.set(d, row);
+  for (const tx of recordedSettlements.by_date) {
+    const row = dailyMap.get(tx.date) ?? { in: 0, out: 0 };
+    row.in += tx.cash_in_cents;
+    dailyMap.set(tx.date, row);
   }
 
-  for (const e of expenseRows ?? []) {
-    const row = dailyMap.get(e.expense_date) ?? { in: 0, out: 0 };
-    row.out += e.amount_cents ?? 0;
-    dailyMap.set(e.expense_date, row);
+  for (const e of recordedExpenses.by_date) {
+    const row = dailyMap.get(e.date) ?? { in: 0, out: 0 };
+    row.out += e.cash_out_cents;
+    dailyMap.set(e.date, row);
   }
-  for (const p of payoutRows ?? []) {
-    const d = p.paid_at?.slice(0, 10) ?? from;
-    const row = dailyMap.get(d) ?? { in: 0, out: 0 };
-    row.out += p.total_amount_cents ?? 0;
-    dailyMap.set(d, row);
+  for (const p of paidCleanerCash.by_date) {
+    const row = dailyMap.get(p.date) ?? { in: 0, out: 0 };
+    row.out += p.cash_out_cents;
+    dailyMap.set(p.date, row);
   }
 
   const sortedDays = [...dailyMap.entries()].sort(([a], [b]) => a.localeCompare(b));
@@ -185,7 +167,8 @@ export async function loadCashFlowDashboard(
       expected_income_cents: forecast.income_cents,
       expected_expenses_cents: forecast.expenses_cents,
       net_cash_flow_cents: netCashFlow,
-      cash_runway_days: null, // Unverified bank ownership and obligations cannot establish runway.
+      // CF-02: visit count is not elapsed days; unreconciled cash is not a runway basis.
+      cash_runway_days: null,
     },
     payment_evidence: gatewayMetrics,
     forecast,

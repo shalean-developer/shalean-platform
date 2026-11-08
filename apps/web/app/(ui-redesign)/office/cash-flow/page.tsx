@@ -19,6 +19,8 @@ import { ArrowDownLeft, ArrowUpRight, Banknote, PiggyBank, RefreshCw, TrendingUp
 import { CashFlowDetails } from "@/components/admin/finance/CashFlowDetails";
 import { FinanceKpiCard } from "@/components/admin/finance/FinanceKpiCard";
 import { CashFlowForecastBreakdown, formatForecastZar } from "@/components/admin/finance/CashFlowForecastBreakdown";
+import { CashProviderEvidenceDetails } from "@/components/admin/finance/CashProviderEvidenceDetails";
+import type { CashProviderEvidence } from "@/lib/payments/cashProviderEvidence";
 import { CashReconciliationPanel } from "@/components/admin/finance/CashReconciliationPanel";
 import type { CashReconciliation } from "@/lib/admin/expenses/cashReconciliation";
 import { useAdminData } from "@/hooks/useAdminData";
@@ -53,6 +55,9 @@ export default function CashFlowPage() {
   const obligationsCurrent = periodValid && !obligationsLoading && !obligationsError && obligations?.period.from === from && obligations?.period.to === to;
   const obligationAmount = (value?: number) => !obligationsCurrent || value == null ? "Unavailable" : formatZar(value);
 
+  const { data: provider, loading: providerLoading, error: providerError, refetch: refetchProvider } = useAdminData<CashProviderEvidence>("/api/admin/cash-provider-evidence", { params, enabled: periodValid });
+  const providerCurrent = periodValid && !providerLoading && !providerError && provider?.period?.from === from && provider?.period?.to === to && provider.receipts != null && provider.payouts != null && provider.bank != null;
+  const providerAmount = (value?: number | null, available = false) => !providerCurrent || !available || value == null ? "Unavailable" : formatZar(value);
   const s = data?.summary;
   const forecastCurrent = periodValid && !loading && !error && data?.period.from === from && data?.period.to === to;
   const dailyChart = (forecastCurrent ? data?.daily_position ?? [] : []).map((d) => ({
@@ -72,6 +77,7 @@ export default function CashFlowPage() {
     refetch();
     refetchReconciliation();
     refetchObligations();
+    refetchProvider();
   };
 
   return (
@@ -95,17 +101,19 @@ export default function CashFlowPage() {
           <option value="differences">Unresolved differences</option><option value="equal">Balances agree</option><option value="stale">Stale feed</option><option value="missing">Missing bank balance</option>
         </select>
       </label><p>Demo bank balances and the staging ledger use separate datasets.</p></CashFlowDetails> : null}
-      <CashReconciliationPanel data={reconciliation} loading={reconciliationLoading} error={reconciliationError} />
+      <CashReconciliationPanel data={reconciliation} loading={reconciliationLoading} error={reconciliationError} provider={providerCurrent ? provider : null} />
 
       <section aria-label="Selected-period cash flow" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold tracking-tight text-slate-900">Selected period</h2><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800">Provisional</span></div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <FinanceKpiCard icon={ArrowUpRight} label="Paystack receipts · gross" value={!forecastCurrent ? "Unavailable" : data?.payment_evidence.verified_transaction_count ? formatZar(s?.money_received_cents ?? 0) : "Unverified"} loading={loading} status="positive" />
-        <FinanceKpiCard icon={ArrowUpRight} label="Paystack bank deposits" value={!forecastCurrent ? "Unavailable" : formatZar(s?.money_received_net_cents ?? 0)} loading={loading} status="positive" />
-        <FinanceKpiCard icon={ArrowDownLeft} label="Paystack fees" value={!forecastCurrent ? "Unavailable" : data?.payment_evidence.fees_verified ? formatZar(s?.gateway_processing_fees_cents ?? 0) : "Unverified"} loading={loading} status="warning" />
+        <FinanceKpiCard icon={ArrowUpRight} label="Paystack receipts · gross" value={providerAmount(provider?.receipts?.grossCents, provider?.receipts?.available)} loading={providerLoading} status="positive" />
+        <FinanceKpiCard icon={ArrowUpRight} label="Paystack payouts · provider" value={providerAmount(provider?.payouts?.paidCents, provider?.payouts?.available)} loading={providerLoading} status="positive" />
+        <FinanceKpiCard icon={ArrowDownLeft} label="Paystack fees" value={providerAmount(provider?.receipts?.feeCents, provider?.receipts?.available)} loading={providerLoading} status="warning" />
         <FinanceKpiCard icon={ArrowDownLeft} label="Payouts + approved expenses" value={!forecastCurrent ? "Unavailable" : formatZar(s?.money_paid_cents ?? 0)} loading={loading} status="negative" />
       </div>
-      <p className="text-xs text-slate-500">Approved expenses may not yet be paid.</p>
+      {providerCurrent && provider?.synthetic ? <p role="status" className="text-sm text-blue-900">Demo Paystack evidence — not real money.</p> : null}
+      <p className="text-xs text-slate-500">Provider payouts require bank matching. Approved expenses may not yet be paid.</p>
+      <CashProviderEvidenceDetails data={providerCurrent ? provider : null} />
       <CashFlowDetails title="Balances & obligations">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <FinanceKpiCard icon={Banknote} label="Local bank ledger · unverified" value={!forecastCurrent ? "Unavailable" : formatZar(s?.cash_in_bank_cents ?? 0)} loading={loading} />
@@ -138,6 +146,7 @@ export default function CashFlowPage() {
         {forecastCurrent && data?.payment_evidence ? <section aria-label="Payment evidence" className="space-y-2">
           <p>Paystack receipts and reported fees use payment dates in South African time for {from} to {to}. Booking values, service dates, EFT and cash are excluded.</p>
           <p>Recorded transactions: {data.payment_evidence.transaction_count} · Unverified payments: {data.payment_evidence.unverified_payment_count} · Missing provider fees: {data.payment_evidence.unverified_fee_count}</p>
+          <p>Recorded ledger gross: {formatZar(s?.money_received_cents ?? 0)} · recorded fees: {data.payment_evidence.fees_verified ? formatZar(s?.gateway_processing_fees_cents ?? 0) : 'Unverified'} · recorded settlements: {formatZar(s?.money_received_net_cents ?? 0)}. These local subtotals remain separate from the provider observation.</p>
           {!data.payment_evidence.fees_verified ? <p className="font-medium text-amber-800">Fees are unverified, not zero.</p> : null}
           <p>Recorded subtotals may be incomplete. Settled-to-bank cash is separate from gross receipts and is never inferred by subtracting fees.</p>
           <Link href="/office/payment-reconciliation" className="inline-block font-medium text-blue-600 hover:underline">Review payment reconciliation →</Link>
@@ -184,4 +193,5 @@ export default function CashFlowPage() {
     </div>
   );
 }
+
 
