@@ -6,7 +6,6 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Bell,
   CalendarDays,
-  ChevronRight,
   ChevronDown,
   ExternalLink,
   MessageSquare,
@@ -52,40 +51,20 @@ type NavItem = {
   exact?: boolean;
 };
 
-type NavSection = {
-  title?: string;
-  items: NavItem[];
-};
-
-const NAV: NavSection[] = [
-  {
-    items: [{ href: "/account", label: "Home", icon: Home, exact: true }],
-  },
-  {
-    title: "Bookings",
-    items: [
-      { href: "/account/bookings", label: "Bookings", icon: CalendarDays },
-      { href: "/account/recurring", label: "Plans", icon: Repeat },
-    ],
-  },
-  {
-    title: "Billing",
-    items: [
-      { href: "/account/invoices", label: "Invoices", icon: FileText },
-      { href: "/account/sales-documents", label: "Quotes", icon: FileText },
-      { href: "/account/payments", label: "Payments", icon: CreditCard },
-    ],
-  },
-  {
-    title: "Account",
-    items: [
-      { href: "/account/addresses", label: "Properties", icon: MapPin },
-      { href: "/account/reviews", label: "Reviews", icon: Star },
-      { href: "/account/referrals", label: "Referrals", icon: Gift },
-      { href: "/account/rewards", label: "Rewards & Offers", icon: Sparkles },
-      { href: "/account/help", label: "Help", icon: HelpCircle },
-    ],
-  },
+const NAV: NavItem[] = [
+  { href: "/account", label: "Home", icon: Home, exact: true },
+  { href: "/account/profile", label: "Profile", icon: UserRound },
+  { href: "/account/bookings", label: "Bookings", icon: CalendarDays },
+  { href: "/account/recurring", label: "Plans", icon: Repeat },
+  { href: "/account/addresses", label: "Properties", icon: MapPin },
+  { href: "/account/payments", label: "Payments", icon: CreditCard },
+  { href: "/account/invoices", label: "Invoices", icon: FileText },
+  { href: "/account/sales-documents", label: "Quotes", icon: FileText },
+  { href: "/account/reviews", label: "Reviews", icon: Star },
+  { href: "/account/rewards", label: "Rewards & Offers", icon: Sparkles },
+  { href: "/account/referrals", label: "Refer & earn", icon: Gift },
+  { href: "/account/book", label: "Book a clean", icon: Sparkles },
+  { href: "/account/help", label: "Help", icon: HelpCircle },
 ];
 
 const MOBILE_NAV: NavItem[] = [
@@ -120,19 +99,19 @@ function AccountNavLink({ item, pathname }: { item: NavItem; pathname: string })
       href={href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "group flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
+        "group flex min-h-11 items-center gap-3.5 rounded-full px-4 py-2 text-[0.9375rem] font-normal transition-colors",
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
         active
           ? "bg-primary/10 text-primary"
-          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+          : "text-foreground hover:bg-accent hover:text-accent-foreground",
       )}
     >
       <Icon
         className={cn(
-          "h-4 w-4 shrink-0 transition-colors",
-          active ? "text-primary" : "text-muted-foreground group-hover:text-accent-foreground",
+          "h-6 w-6 shrink-0 transition-colors",
+          active ? "text-primary" : "text-foreground group-hover:text-accent-foreground",
         )}
-        strokeWidth={1.75}
+        strokeWidth={1.5}
       />
       <span className="min-w-0 truncate">{label}</span>
     </Link>
@@ -197,61 +176,26 @@ function AccountNavigation({ pathname, onNavigate }: { pathname: string; onNavig
   return (
     <nav ref={navRef} tabIndex={0} aria-label="Account navigation" onClick={(event) => { if ((event.target as HTMLElement).closest("a")) onNavigate?.(); }}
       className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 [scrollbar-gutter:stable] [scrollbar-width:thin] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring">
-      {NAV.map((section, index) => (
-        <div key={section.title ?? "home"} className={index > 0 ? "mt-3" : undefined}>
-          {section.title ? <p className="mb-1 px-3 text-xs font-semibold text-muted-foreground">{section.title}</p> : null}
-          <div className="space-y-0.5">
-            {section.items.map(item => <AccountNavLink key={item.href} item={item} pathname={pathname} />)}
-          </div>
-        </div>
-      ))}
+      <div className="space-y-2">
+        {NAV.map(item => <AccountNavLink key={item.href} item={item} pathname={pathname} />)}
+      </div>
     </nav>
   );
 }
 
 export function AccountSidebar() {
   const pathname = usePathname() ?? "";
-  const { user } = useUser();
-  const meta = user?.user_metadata as { full_name?: string } | undefined;
-  const initials = initialsFromUser(user?.email, meta?.full_name);
-  const name = displayName(user?.email, meta?.full_name);
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 min-h-0 flex-col overflow-hidden border-r border-border bg-card md:flex">
-      <div className="flex h-16 shrink-0 items-center border-b border-border px-5">
-        <Link
-          href="/"
-          className="flex min-w-0 items-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          aria-label="Shalean home"
-        >
-          <ShaleanNavLogo className="h-8 w-auto" intrinsicHeight={64} />
-        </Link>
-      </div>
-
-      <div className="shrink-0 px-3 pt-3">
-        <Link href="/account/book" aria-current={isNavActive(pathname, "/account/book") ? "page" : undefined}
-          className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-          <Sparkles aria-hidden="true" className="h-4 w-4" />Book a clean
+    <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 min-h-0 flex-col overflow-hidden border-r border-border bg-card md:flex">
+      <div className="flex h-16 shrink-0 items-center border-b border-border px-7">
+        <Link href="/" aria-label="Shalean home" className="rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+          <ShaleanNavLogo className="h-9 w-auto" intrinsicHeight={64} />
         </Link>
       </div>
       <AccountNavigation pathname={pathname} />
-
-      <div className="shrink-0 border-t border-border p-3">
-        <Link
-          href="/account/profile"
-          aria-current={isNavActive(pathname, "/account/profile") ? "page" : undefined}
-          className={cn("group flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring", isNavActive(pathname, "/account/profile") && "bg-primary/10 text-primary")}
-        >
-          <Avatar className="h-9 w-9 shrink-0">
-            <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">{initials}</AvatarFallback>
-          </Avatar>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-foreground">{name}</p>
-            <p className="text-xs text-muted-foreground group-hover:text-accent-foreground">View profile</p>
-          </div>
-          <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
-        </Link>
-        <LogoutDialog><LogOut aria-hidden="true" className="h-4 w-4 shrink-0" />Sign out</LogoutDialog>
+      <div className="shrink-0 border-t border-border px-5 py-2">
+        <LogoutDialog><LogOut aria-hidden="true" className="h-6 w-6 shrink-0" />Sign out</LogoutDialog>
       </div>
     </aside>
   );
@@ -384,7 +328,6 @@ export function AccountMobileNav() {
             <DialogHeader className="shrink-0 border-b border-border p-4 pr-12 text-left"><DialogTitle>My account</DialogTitle></DialogHeader>
             <AccountNavigation pathname={pathname} onNavigate={() => setMenuOpen(false)} />
             <div className="shrink-0 border-t border-border p-3">
-              <Link href="/account/profile" onClick={() => setMenuOpen(false)} className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"><UserRound aria-hidden="true" className="h-4 w-4" />Profile</Link>
               <LogoutDialog><LogOut aria-hidden="true" className="h-4 w-4" />Sign out</LogoutDialog>
             </div>
           </DialogContent>
