@@ -3,6 +3,7 @@ import { ArrowLeft, Mail, Send, CheckCheck, Eye, MousePointerClick, ShieldBan, T
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import styles from "./email-operations.module.css";
+import { EmailNavigation } from "@/components/email/EmailWorkspace";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -96,6 +97,7 @@ export default async function EmailOperationsPage({ searchParams }: { searchPara
         <span className={styles.timezone}>South Africa time</span>
       </div>
     </header>
+    <EmailNavigation />
     {error ? <div className={styles.notice} role="alert">Some email data could not be loaded: {error}</div> : null}
 
     <form className={styles.filters} method="get">

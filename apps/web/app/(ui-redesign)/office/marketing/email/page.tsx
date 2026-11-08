@@ -4,12 +4,14 @@ import Link from "next/link";
 import { OwnerInboxReadiness } from "@/components/admin/email/OwnerInboxReadiness";
 import { EmailDeliveryReadiness } from "@/components/admin/email/EmailDeliveryReadiness";
 import { CampaignMarketingHub } from "@/components/admin/promotions/CampaignMarketingHub";
+import { EmailWorkspace } from "@/components/email/EmailWorkspace";
+import styles from "@/components/email/email-ui.module.css";
 
 export default function OfficeMarketingEmailPage() {
-  return <>
-    <section className="mx-4 mt-4 rounded-2xl border bg-card p-5 sm:mx-6" aria-labelledby="email-journey-title">
+  return <EmailWorkspace title="Email campaigns" description="Prepare drafts, check consent and follow delivery.">
+    <section className={styles.panel} aria-labelledby="email-journey-title">
       <h2 id="email-journey-title" className="font-semibold">Email marketing workflow</h2>
-      <p className="mt-2 text-sm text-muted-foreground">Create a campaign, review its email draft, confirm customer consent and suppression status, then follow delivery events and reconciliation. A saved draft does not mean an email was sent.</p>
+      <p className="mt-2 text-sm text-muted-foreground">Review a campaign draft and customer eligibility before sending. Saving a draft does not send it.</p>
       <EmailDeliveryReadiness />
       <nav className="mt-4 flex flex-wrap gap-3 text-sm font-semibold" aria-label="Email marketing workflow">
         <Link className="rounded-lg border px-4 py-3" href="/office/marketing/campaigns">Campaigns</Link>
@@ -26,5 +28,5 @@ export default function OfficeMarketingEmailPage() {
       </>}
     </section>
     <CampaignMarketingHub view="email" />
-  </>;
+  </EmailWorkspace>;
 }

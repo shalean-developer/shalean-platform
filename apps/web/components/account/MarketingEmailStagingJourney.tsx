@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { EmailWorkspace } from "@/components/email/EmailWorkspace";
 
 type State = { generation: number; evidenceCount: number; decision: string; unsubscribedAt: string | null; reconciliation: unknown[]; enrollment: unknown[] };
 type Links = { url: string; unusedUrl: string; legacyUrl: string };
@@ -125,15 +126,16 @@ export function MarketingEmailStagingJourney({ mode = "customer" }: { mode?: "cu
       setBusy(false);
     }
   }
-  return <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-8">
-    <div><p className="text-sm font-semibold text-amber-800">STAGING · SYNTHETIC ACCOUNT ONLY · NO EMAILS SENT</p><h1 className="mt-2 text-2xl font-bold">Test your email marketing journey</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">This check opens signed links, records a test withdrawal, verifies replay and recovery, records fresh test consent, and rejects old links. It finishes with the test account unsubscribed.</p></div>
+  return <EmailWorkspace title="Email journey checks" description="Verify consent, unsubscribe links and recovery with the synthetic staging account."
+    navigation={mode === "office"} backHref={mode === "office" ? "/office/marketing/email" : "/account/profile"} backLabel={mode === "office" ? "Email campaigns" : "Your preferences"}>
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p className="font-semibold">STAGING · SYNTHETIC ACCOUNT ONLY · NO EMAILS SENT</p><p className="mt-2">These checks finish with the synthetic account unsubscribed.</p></div>
     {mode === "office" && <p className="text-sm">These checks use the reserved synthetic customer. Your own email preferences are not changed.</p>}
-    <section className="rounded-2xl border bg-card p-5"><h2 className="font-semibold">Delivery safety</h2><p className="mt-2 text-sm">Outbound messaging and Resend contact writes stay disabled. Worker and webhook provider fault/retry tests run against isolated synthetic fixtures; this page never sends a message or contacts Resend.</p></section>
+    <section className="rounded-2xl border bg-card p-5"><h2 className="font-semibold">Delivery safety</h2><p className="mt-2 text-sm">These synthetic checks do not send messages or change provider contacts. Worker and webhook fault/retry tests use isolated fixtures.</p></section>
     {current && <section className="rounded-2xl border bg-card p-5"><h2 className="font-semibold">Synthetic account state</h2><dl className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><dt>Consent</dt><dd className="font-semibold">{current.decision}</dd></div><div><dt>Link generation</dt><dd className="font-semibold">{current.generation}</dd></div><div><dt>Evidence events</dt><dd className="font-semibold">{current.evidenceCount}</dd></div><div><dt>Provider delivery</dt><dd className="font-semibold">Disabled</dd></div></dl></section>}
     <section className="rounded-2xl border bg-card p-5"><label className="flex items-start gap-3 text-sm"><input className="mt-1" type="checkbox" checked={approved} disabled={busy} onChange={event => setApproved(event.target.checked)} /><span>I authorize consent and reconciliation-fixture changes for this synthetic staging account only.</span></label><button className="mt-4 min-h-12 rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground disabled:opacity-50" disabled={!approved || busy || !current} onClick={() => void run()}>{busy ? "Checking the journey…" : "Run no-send end-to-end checks"}</button></section>
     {error && <p role="alert" className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900">{error}</p>}
     {checks.length > 0 && <section className="rounded-2xl border bg-card p-5" aria-live="polite"><h2 className="font-semibold">Executed checks</h2><ol className="mt-3 space-y-3 text-sm">{checks.map((row, index) => <li key={index} className="flex gap-3"><span className={row.status === "passed" ? "font-semibold text-green-700" : "font-semibold text-red-700"}>{row.status === "passed" ? "PASS" : "FAIL"}</span><span>{row.label}</span></li>)}</ol></section>}
     {links && <p className="text-sm"><a className="font-semibold text-primary underline" href={links.url} target="_blank" rel="noopener noreferrer">Open the current unsubscribe confirmation</a></p>}
     <Link className="inline-block text-sm font-semibold text-primary underline" href={mode === "office" ? "/office/marketing/email" : "/account/profile"}>{mode === "office" ? "Back to email marketing" : "Back to email preferences"}</Link>
-  </div>;
+  </EmailWorkspace>;
 }

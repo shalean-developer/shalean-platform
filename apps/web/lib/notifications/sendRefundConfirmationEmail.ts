@@ -1,3 +1,4 @@
+import { wrapBrandedEmailContent } from "@/lib/email/emailBrandShell";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -114,7 +115,7 @@ export async function sendRefundConfirmationEmail(
     from: getDefaultFromAddress(),
     to: recipient.email,
     subject: "Your Shalean refund has been processed",
-    html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:0 auto;padding:20px;color:#1f2937"><h2>Shalean<span style="color:#2563eb">.</span></h2><h1 style="font-size:22px">Refund processed</h1><p>We have processed your refund of <strong>${escapeHtml(amount)}</strong>.</p><p>Please allow your bank or card provider's normal processing time for the funds to appear.</p><p style="font-size:12px;color:#6b7280">Refund reference: ${escapeHtml(refundReference)}</p><p style="font-size:12px;color:#9ca3af">Shalean Cleaning Services</p></div>`,
+    html: wrapBrandedEmailContent(`<h1 style="font-size:22px">Refund processed</h1><p>We have processed your refund of <strong>${escapeHtml(amount)}</strong>.</p><p>Please allow your bank or card provider's normal processing time for the funds to appear.</p><p style="font-size:12px;color:#62708a">Refund reference: ${escapeHtml(refundReference)}</p>`),
     context: {
       bookingId: recipient.bookingId,
       customerId: recipient.customerId,

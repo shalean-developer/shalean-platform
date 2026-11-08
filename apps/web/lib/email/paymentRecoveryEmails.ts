@@ -1,3 +1,4 @@
+import { wrapBrandedEmailContent } from "./emailBrandShell";
 import { Resend } from "resend";
 import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
@@ -40,12 +41,7 @@ function escapeAttr(s: string): string {
 }
 
 function brandShell(inner: string): string {
-  return `
-<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
-  <h2 style="margin-bottom: 8px;">Shalean<span style="color:#2563eb;">.</span></h2>
-  ${inner}
-  <p style="margin-top: 20px; font-size: 12px; color: #9ca3af;">Shalean Cleaning Services</p>
-</div>`;
+  return wrapBrandedEmailContent(inner);
 }
 
 function greetingName(ctx: PaymentRecoveryEmailContext): string {
@@ -74,7 +70,7 @@ function bookingDetailsBlock(ctx: PaymentRecoveryEmailContext): string {
 function payButton(ctx: PaymentRecoveryEmailContext): string {
   return `
   <p style="margin: 16px 0;">
-    <a href="${escapeAttr(ctx.paymentUrl)}" style="display:inline-block; background:#2563eb; color:#fff; text-decoration:none; padding:12px 20px; border-radius:10px; font-weight:600;">Complete payment</a>
+    <a href="${escapeAttr(ctx.paymentUrl)}" style="display:inline-block; background:#0051ff; color:#fff; text-decoration:none; padding:12px 20px; border-radius:6px; font-weight:600;">Complete payment</a>
   </p>`;
 }
 
@@ -194,7 +190,7 @@ function buildExpiredHtml(ctx: PaymentRecoveryEmailContext): string {
   ${bookingDetailsBlock(ctx)}
   <p style="color:#374151; margin-bottom: 12px;">You can start a new booking anytime — it only takes a minute.</p>
   <p style="margin: 16px 0;">
-    <a href="${escapeAttr(bookUrl)}" style="display:inline-block; background:#2563eb; color:#fff; text-decoration:none; padding:12px 20px; border-radius:10px; font-weight:600;">Book again</a>
+    <a href="${escapeAttr(bookUrl)}" style="display:inline-block; background:#0051ff; color:#fff; text-decoration:none; padding:12px 20px; border-radius:6px; font-weight:600;">Book again</a>
   </p>`;
   return brandShell(inner);
 }

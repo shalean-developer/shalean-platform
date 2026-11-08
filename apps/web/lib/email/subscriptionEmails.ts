@@ -2,6 +2,7 @@ import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { customerAccountBookingsUrl } from "@/lib/customer/customerAccountPaths";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { wrapBrandedEmailContent } from "./emailBrandShell";
 
 export type SubscriptionEmailSendResult = { sent: boolean; error?: string };
 
@@ -42,7 +43,7 @@ export async function sendSubscriptionPrechargeReminderEmail(params: {
   return send(
     params.to,
     "Your cleaning is scheduled for tomorrow",
-    `<p>Your ${params.serviceLabel} subscription will be charged tomorrow (${params.dateYmd}).</p><p><a href="${url}">Manage subscription</a></p>`,
+    wrapBrandedEmailContent(`<p>Your ${params.serviceLabel} subscription will be charged tomorrow (${params.dateYmd}).</p><p><a href="${url}">Manage subscription</a></p>`),
     "subscription/precharge_reminder",
   );
 }
@@ -57,7 +58,7 @@ export async function sendRecurringVisitPrechargeReminderEmail(params: {
   return send(
     params.to,
     "Payment for your upcoming cleaning",
-    `<p>Your saved card will be charged for your ${params.serviceLabel} visit on <strong>${params.visitDateYmd}</strong> (Africa/Johannesburg).</p><p>If you need to make changes, open your bookings.</p><p><a href="${url}">View bookings</a></p>`,
+    wrapBrandedEmailContent(`<p>Your saved card will be charged for your ${params.serviceLabel} visit on <strong>${params.visitDateYmd}</strong> (Africa/Johannesburg).</p><p>If you need to make changes, open your bookings.</p><p><a href="${url}">View bookings</a></p>`),
     "subscription/recurring_precharge_reminder",
   );
 }
@@ -71,7 +72,7 @@ export async function sendSubscriptionChargeSuccessEmail(params: {
   return send(
     params.to,
     "Payment successful — your cleaning is scheduled",
-    `<p>Payment successful for your ${params.serviceLabel} subscription.</p><p>Your cleaning is scheduled for ${params.dateYmd}.</p><p><a href="${url}">View bookings</a></p>`,
+    wrapBrandedEmailContent(`<p>Payment successful for your ${params.serviceLabel} subscription.</p><p>Your cleaning is scheduled for ${params.dateYmd}.</p><p><a href="${url}">View bookings</a></p>`),
     "subscription/charge_success",
   );
 }
@@ -84,7 +85,7 @@ export async function sendSubscriptionChargeFailedEmail(params: {
   return send(
     params.to,
     "Payment failed, please update your card",
-    `<p>We couldn't charge your ${params.serviceLabel} subscription.</p><p>Please update your card/payment method and retry.</p><p><a href="${url}">Manage subscription</a></p>`,
+    wrapBrandedEmailContent(`<p>We couldn't charge your ${params.serviceLabel} subscription.</p><p>Please update your card/payment method and retry.</p><p><a href="${url}">Manage subscription</a></p>`),
     "subscription/charge_failed",
   );
 }

@@ -28,7 +28,7 @@ type ShaleanSocialLinkId = (typeof SHALEAN_SOCIAL_LINKS)[number]["id"];
 function emailLogoHeader(): string {
   const appUrl = getPublicAppUrlBase();
   const logoUrl = getShaleanEmailLogoUrl();
-  return `<a href="${appUrl}" style="display:inline-block;text-decoration:none;margin:0 0 16px;">
+  return `<a href="${appUrl}" style="display:inline-block;text-decoration:none;margin:0;">
   <img
     src="${logoUrl}"
     alt="Shalean Cleaning Services"
@@ -70,13 +70,13 @@ function emailSocialFooter(): string {
   const iconCells = SHALEAN_SOCIAL_LINKS.map(socialIconCell).join("");
   const textLinks = SHALEAN_SOCIAL_LINKS.map(
     (link, index) =>
-      `${index > 0 ? '<span style="color:#d1d5db;padding:0 6px;">·</span>' : ""}<a href="${socialHrefForEmail(link.id)}" target="_blank" rel="noopener noreferrer" style="color:#6b7280;text-decoration:underline;">${link.label}</a>`,
+      `${index > 0 ? '<span style="color:#d1d5db;padding:0 6px;">·</span>' : ""}<a href="${socialHrefForEmail(link.id)}" target="_blank" rel="noopener noreferrer" style="color:#62708a;text-decoration:underline;">${link.label}</a>`,
   ).join("");
 
   return `<table role="presentation" border="0" cellpadding="0" cellspacing="0" align="center" style="margin:16px auto 8px;">
   <tr>
     <td style="text-align:center;padding-bottom:8px;">
-      <p style="margin:0;font-size:12px;color:#6b7280;font-weight:600;">Follow us</p>
+      <p style="margin:0;font-size:12px;color:#62708a;font-weight:600;">Follow us</p>
     </td>
   </tr>
   <tr>
@@ -99,22 +99,22 @@ export function wrapBrandedEmailContent(innerHtml: string): string {
   const callUrl = emailSafeGoUrl("call");
   const whatsappUrl = emailSafeGoUrl("whatsapp");
   return `
-<div style="font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937; line-height: 1.5; background-color: #ffffff;">
-  ${emailLogoHeader()}
+<div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #00164e; line-height: 1.6; background-color: #ffffff; border: 1px solid #dfe7f4; border-radius: 12px;">
+  <div style="background:#00164e;padding:20px;border-radius:8px;margin-bottom:24px;"><div style="display:inline-block;background:#ffffff;padding:10px 14px;border-radius:6px;">${emailLogoHeader()}</div></div>
   <div style="margin-top: 4px;">
     ${inner}
   </div>
-  <p style="margin-top: 24px; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 16px;">
-    Need help? Reply to this email, call <a href="${callUrl}" style="color:#2563eb;text-decoration:none;">${CUSTOMER_SUPPORT_TELEPHONE_DISPLAY}</a>,
-    or WhatsApp <a href="${whatsappUrl}" style="color:#2563eb;text-decoration:none;">${CUSTOMER_SUPPORT_WHATSAPP_DISPLAY}</a>.<br/>
+  <p style="margin-top: 24px; font-size: 12px; color: #62708a; border-top: 1px solid #dfe7f4; padding-top: 16px;">
+    Need help? Reply to this email, call <a href="${callUrl}" style="color:#0051ff;text-decoration:none;">${CUSTOMER_SUPPORT_TELEPHONE_DISPLAY}</a>,
+    or WhatsApp <a href="${whatsappUrl}" style="color:#0051ff;text-decoration:none;">${CUSTOMER_SUPPORT_WHATSAPP_DISPLAY}</a>.<br/>
     If you didn&apos;t make this booking, contact us immediately.
   </p>
   ${emailSocialFooter()}
-  <p style="margin: 8px 0 0; font-size: 12px; color: #9ca3af; text-align: center;">Shalean Cleaning Services</p>
+  <p style="margin: 8px 0 0; font-size: 12px; color: #62708a; text-align: center;">Shalean Cleaning Services</p>
 </div>`.trim();
 }
 
 /** Primary CTA button for template bodies (href must already be safe for HTML attribute context). */
 export function styledEmailButton(href: string, label: string): string {
-  return `<a href="${href}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;">${label}</a>`;
+  return `<a href="${href}" style="display:inline-block;background:#0051ff;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;font-weight:600;">${label}</a>`;
 }
