@@ -1,0 +1,34 @@
+name: CF-02 isolated dashboard browser
+on:
+  pull_request:
+    paths:
+      - 'apps/web/app/(ui-redesign)/office/cash-flow/**'
+      - 'apps/web/components/admin/finance/CashReconciliationPanel.tsx'
+      - 'apps/web/lib/admin/expenses/cashReconciliation.ts'
+      - 'apps/web/scripts/cf02-dashboard-browser.mjs'
+      - '.github/workflows/cf02-dashboard-browser.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SHALEAN_APP_ENV: development
+      OUTBOUND_MESSAGING_DISABLED: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+        working-directory: apps/web
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - run: node scripts/cf02-dashboard-browser.mjs
+        working-directory: apps/web
