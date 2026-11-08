@@ -75,22 +75,8 @@ if [ "$ok" != true ]; then
   exit 1
 fi
 
-python3 - "$BACKUPS" "$ROLLBACK" <<'PY'
-import os,shutil,sys
-root,current=sys.argv[1:3]
-items=[]
-for name in os.listdir(root):
-    path=os.path.join(root,name)
-    if name.startswith("rollback-") and os.path.isdir(path):
-        items.append((os.path.getmtime(path),path))
-items.sort(reverse=True)
-keep={current}
-for _,path in items[:1]:
-    keep.add(path)
-for _,path in items:
-    if path not in keep:
-        shutil.rmtree(path)
-PY
+# Preserve all rollback directories; retention cleanup is a separate owner-approved task.
+
 
 {
   echo "PLESK_PREBUILT_DEPLOY=PASS"
