@@ -77,7 +77,7 @@ export default function CashFlowPage() {
     <div className="mx-auto min-w-0 max-w-7xl space-y-5 p-4 md:p-6">
       <header className="space-y-5 border-b border-slate-200 pb-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><p className="mb-1 text-xs font-semibold uppercase tracking-widest text-blue-600">Finance overview</p><h1 className="text-3xl font-bold tracking-tight text-slate-950">Cash flow</h1><p className="mt-1 text-sm text-slate-500">Your cash position, at a glance.</p></div>
+          <div><h1 className="text-3xl font-bold tracking-tight text-slate-950">Cash flow</h1></div>
           <Link href="/office/financial-dashboard" className="text-sm font-medium text-blue-600 hover:underline">Executive dashboard →</Link>
         </div>
         <div className="flex flex-wrap items-end gap-3">
@@ -89,24 +89,23 @@ export default function CashFlowPage() {
 
       {!periodValid ? <p role="alert" className="text-sm text-red-600">Choose a valid date range with the start on or before the end.</p> : error ? <p role="alert" className="text-sm text-red-600">Period data unavailable. {error}</p> : null}
 
-      {reconciliation?.synthetic ? <label className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">Demo scenario
+      {reconciliation?.synthetic ? <CashFlowDetails title="Demo settings"><label className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">Demo scenario
         <select aria-label="Synthetic test scenario" value={scenario} onChange={e => setScenario(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
           <option value="differences">Unresolved differences</option><option value="equal">Balances agree</option><option value="stale">Stale feed</option><option value="missing">Missing bank balance</option>
         </select>
-      </label> : null}
-      {reconciliation?.synthetic ? <p className="text-xs text-slate-500">Demo bank balances and the staging ledger use separate datasets.</p> : null}
+      </label><p>Demo bank balances and the staging ledger use separate datasets.</p></CashFlowDetails> : null}
       <CashReconciliationPanel data={reconciliation} loading={reconciliationLoading} error={reconciliationError} />
 
       <section aria-label="Selected-period cash flow" className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold tracking-tight text-slate-900">Selected period</h2><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800">Provisional · recorded activity</span></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold tracking-tight text-slate-900">Selected period</h2><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800">Provisional</span></div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <FinanceKpiCard icon={ArrowUpRight} label="Recorded Paystack receipts · gross" value={!forecastCurrent ? "Unavailable" : data?.payment_evidence.verified_transaction_count ? formatZar(s?.money_received_cents ?? 0) : "Unverified"} loading={loading} status="positive" />
-        <FinanceKpiCard icon={ArrowUpRight} label="Paystack settled to bank" value={!forecastCurrent ? "Unavailable" : formatZar(s?.money_received_net_cents ?? 0)} loading={loading} status="positive" />
-        <FinanceKpiCard icon={ArrowDownLeft} label="Paystack fees · reported" value={!forecastCurrent ? "Unavailable" : data?.payment_evidence.fees_verified ? formatZar(s?.gateway_processing_fees_cents ?? 0) : "Unverified"} loading={loading} status="warning" />
-        <FinanceKpiCard icon={ArrowDownLeft} label="Paid cleaner batches + approved expenses" value={!forecastCurrent ? "Unavailable" : formatZar(s?.money_paid_cents ?? 0)} loading={loading} status="negative" />
+        <FinanceKpiCard icon={ArrowUpRight} label="Paystack receipts · gross" value={!forecastCurrent ? "Unavailable" : data?.payment_evidence.verified_transaction_count ? formatZar(s?.money_received_cents ?? 0) : "Unverified"} loading={loading} status="positive" />
+        <FinanceKpiCard icon={ArrowUpRight} label="Paystack bank deposits" value={!forecastCurrent ? "Unavailable" : formatZar(s?.money_received_net_cents ?? 0)} loading={loading} status="positive" />
+        <FinanceKpiCard icon={ArrowDownLeft} label="Paystack fees" value={!forecastCurrent ? "Unavailable" : data?.payment_evidence.fees_verified ? formatZar(s?.gateway_processing_fees_cents ?? 0) : "Unverified"} loading={loading} status="warning" />
+        <FinanceKpiCard icon={ArrowDownLeft} label="Payouts + approved expenses" value={!forecastCurrent ? "Unavailable" : formatZar(s?.money_paid_cents ?? 0)} loading={loading} status="negative" />
       </div>
-      <p className="text-xs text-slate-500">Recorded Paystack activity and provisional outflows. Expense approval does not verify a bank debit.</p>
-      <CashFlowDetails title="More period balances & obligations">
+      <p className="text-xs text-slate-500">Approved expenses may not yet be paid.</p>
+      <CashFlowDetails title="Balances & obligations">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <FinanceKpiCard icon={Banknote} label="Local bank ledger · unverified" value={!forecastCurrent ? "Unavailable" : formatZar(s?.cash_in_bank_cents ?? 0)} loading={loading} />
         <FinanceKpiCard icon={PiggyBank} label="Petty cash" value={!forecastCurrent ? "Unavailable" : formatZar(s?.petty_cash_cents ?? 0)} loading={loading} />
@@ -133,7 +132,7 @@ export default function CashFlowPage() {
       </CashFlowDetails>
       </section>
 
-      <CashFlowDetails title="Payment evidence & calculation rules">
+      <CashFlowDetails title="How totals are calculated">
         <p className="text-xs text-slate-600" role="note">Provisional net uses recorded Paystack settlements less cleaner batches marked paid and locally approved expenses. Approved expenses are included by expense date; approval and a selected payment method do not verify a matched bank debit. Bank-verified expense cash outflow is not available from this source. Expected income and expected expenses are a separate, incomplete forecast; they are not used in this provisional-net figure. Provisional net is not a reconciled all-bank cash movement total.</p>
         {forecastCurrent && data?.payment_evidence ? <section aria-label="Payment evidence" className="space-y-2">
           <p>Paystack receipts and reported fees use payment dates in South African time for {from} to {to}. Booking values, service dates, EFT and cash are excluded.</p>
@@ -146,11 +145,12 @@ export default function CashFlowPage() {
 
       {forecastCurrent && data?.forecast ? <CashFlowForecastBreakdown forecast={data.forecast} from={data.period.from} to={data.period.to} /> : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <CashFlowDetails title="Activity charts">
+      <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
           <h2 aria-label="Recorded inflows vs provisional outflows (monthly)" className="mb-4 text-sm font-semibold text-slate-800">Monthly recorded activity</h2>
           <div className={forecastCurrent && monthlyChart.length > 0 ? "h-64" : "flex min-h-24 items-center justify-center rounded-lg bg-slate-50 p-4 text-center"}>
-            {!forecastCurrent ? <p role="status" className="text-sm text-slate-600">{loading && periodValid ? "Loading selected-period data…" : "Selected-period data unavailable."}</p> : monthlyChart.length === 0 ? <p className="text-sm text-slate-600">No recorded inflows or provisional outflows in this period.</p> : <ResponsiveContainer width="100%" height="100%">
+            {!forecastCurrent ? <p role="status" className="text-sm text-slate-600">{loading && periodValid ? "Loading selected-period data…" : "Selected-period data unavailable."}</p> : monthlyChart.length === 0 ? <p className="text-sm text-slate-600">No recorded activity.</p> : <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyChart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
@@ -167,7 +167,7 @@ export default function CashFlowPage() {
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
           <h2 aria-label="Daily provisional net cash flow" className="mb-4 text-sm font-semibold text-slate-800">Daily provisional net</h2>
           <div className={forecastCurrent && dailyChart.length > 0 ? "h-64" : "flex min-h-24 items-center justify-center rounded-lg bg-slate-50 p-4 text-center"}>
-            {!forecastCurrent ? <p role="status" className="text-sm text-slate-600">{loading && periodValid ? "Loading selected-period data…" : "Selected-period data unavailable."}</p> : dailyChart.length === 0 ? <p className="text-sm text-slate-600">No recorded daily cash-flow entries in this period.</p> : <ResponsiveContainer width="100%" height="100%">
+            {!forecastCurrent ? <p role="status" className="text-sm text-slate-600">{loading && periodValid ? "Loading selected-period data…" : "Selected-period data unavailable."}</p> : dailyChart.length === 0 ? <p className="text-sm text-slate-600">No recorded activity.</p> : <ResponsiveContainer width="100%" height="100%">
               <LineChart data={dailyChart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
@@ -179,6 +179,8 @@ export default function CashFlowPage() {
           </div>
         </section>
       </div>
+      </CashFlowDetails>
     </div>
   );
 }
+
