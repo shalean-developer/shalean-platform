@@ -1,9 +1,10 @@
 'use client';
 import { CashFlowDetails } from './CashFlowDetails';
 import type { CashReconciliation } from '@/lib/admin/expenses/cashReconciliation';
+import type { CashProviderEvidence } from '@/lib/payments/cashProviderEvidence';
 import { formatForecastZar } from './CashFlowForecastBreakdown';
 const amount = (value: number | null | undefined) => value == null ? 'Unavailable' : formatForecastZar(value);
-export function CashReconciliationPanel({ data, loading, error }: { data?: CashReconciliation | null; loading: boolean; error?: string | null }) {
+export function CashReconciliationPanel({ data, loading, error, provider }: { data?: CashReconciliation | null; loading: boolean; error?: string | null; provider?: CashProviderEvidence | null }) {
   return <section aria-label="Bank reconciliation and protected cash" className="min-w-0 space-y-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6">
     <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold tracking-tight text-slate-900">Bank balances</h2><span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">Reconciliation required</span></div>
     <p className="text-sm text-slate-500">Bank feed and book balances</p>
@@ -38,7 +39,7 @@ export function CashReconciliationPanel({ data, loading, error }: { data?: CashR
       <div className="grid gap-3 text-sm sm:grid-cols-2">
         <p>Paystack Clearing · books<strong className="block">{loading || error ? 'Unavailable' : amount(data?.processorLedgerCents)}</strong></p>
         <p>Undeposited Funds · books<strong className="block">{loading || error ? 'Unavailable' : amount(data?.undepositedLedgerCents)}</strong></p>
-        <p>Pending Paystack payouts<strong className="block">Not connected</strong></p>
+        <p>Pending Paystack payouts · provider<strong className="block">{!provider?.payouts.available ? 'Unavailable' : amount(provider.payouts.pendingCents)}</strong></p>
         <p>Funds held for Bokkie<strong className="block">Reconciliation required</strong></p>
         <p>Customer advances<strong className="block">Reconciliation required</strong></p>
       </div>
