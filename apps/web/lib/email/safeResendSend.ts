@@ -1,6 +1,7 @@
 import { getResend } from "@/lib/email/resendFrom";
 import { validateEmailRecipients } from "@/lib/email/recipientSafety";
 import { applyOutboundSubjectPrefix, decideOutboundEmail } from "@/lib/env/outboundMessagingSafety";
+import { resolveDeploymentEnvironment } from "@/lib/env/deploymentEnvironment";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { checkMarketingSendGate } from "@/lib/email/marketingSendGate";
 
@@ -81,7 +82,7 @@ export async function safeResendSend(payload: SafeResendPayload): Promise<{
     sendPayload.headers = { ...headers, "List-Unsubscribe": `<${url}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" };
 
   }
-  const mergedTags = [...contextTags(context), ...tags].filter((tag, index, all) =>
+  const mergedTags = [...(resolveDeploymentEnvironment() === "staging" ? [{ name: "shalean_environment", value: "staging" }] : []), ...contextTags(context), ...tags].filter((tag, index, all) =>
     all.findIndex((candidate) => candidate.name === tag.name) === index,
   );
   const subject = applyOutboundSubjectPrefix(payload.subject, decision.subjectPrefix);

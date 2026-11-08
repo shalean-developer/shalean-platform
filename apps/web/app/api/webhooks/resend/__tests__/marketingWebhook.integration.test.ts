@@ -15,6 +15,7 @@ function fakeAdmin(opts:{duplicate?:boolean;eventFail?:boolean;suppressionFail?:
   const filters:{table:string,column:string,operator:string,value:string}[]=[];
   const admin={from(table:string){
     return {
+      select:()=>({eq:()=>({maybeSingle:async()=>({data:{delivery_status:"delivered"},error:null})})}),
       insert:async(row:Record<string,unknown>)=>{
         writes.push({table,kind:"insert",payload:row});
         return {error:opts.eventFail?{code:"P0001"}:opts.duplicate?{code:"23505"}:null};
@@ -70,7 +71,7 @@ describe("Gate 3 signed Resend webhook integration — synthetic, no provider ne
       delivery_status:"delivered",retry_status:"recovered",
     }});
   });
-  it("duplicate event is acknowledged without replaying email status update",async()=>{
+  it("duplicate already-applied event preserves its completed delivery status",async()=>{
     const db=fakeAdmin({duplicate:true});mocks.getClient.mockReturnValue(db.admin);
     const response=await POST(signedRequest());
     expect(await response.json()).toMatchObject({ok:true,duplicate:true});
