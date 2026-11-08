@@ -1,0 +1,20 @@
+name: Staging activation backup preservation
+on:
+  pull_request:
+    paths:
+      - scripts/plesk-activate-prebuilt-pricing-test.sh
+      - scripts/tests/plesk-activation-preservation.test.mjs
+      - .github/workflows/staging-activation-safety.yml
+permissions:
+  contents: read
+jobs:
+  preserve-backups:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test isolated activation success, rollback and collision preservation
+        run: node --test scripts/tests/plesk-activation-preservation.test.mjs
