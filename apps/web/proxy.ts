@@ -1,3 +1,4 @@
+import { marketingStagingEnabled } from "@/lib/email/marketingStagingFixture";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { remapAdminPathToOffice } from "@/lib/admin/remapAdminPathToOffice";
@@ -61,6 +62,15 @@ export async function proxy(request: NextRequest) {
 async function runProxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const host = request.headers.get("host")?.split(":")[0]?.toLowerCase() ?? "";
+
+  // Owner handoff links must reach Office before customer-login routing runs.
+  if ((pathname === "/account/email-test" || pathname === "/account/email-test/")
+    && host === "pricing-test.shalean.co.za" && marketingStagingEnabled()) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/office/marketing/email/test";
+    url.search = "";
+    return NextResponse.redirect(url, 307);
+  }
 
   /** Apex .com / www — force canonical .co.za when this app receives the request. */
   if (host === "shalean.com" || host === "www.shalean.com") {
