@@ -2,141 +2,102 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import {
-  BookOpen,
-  CalendarDays,
-  CheckCircle2,
-  Gift,
-  KeyRound,
-  Mail,
-  MapPin,
-  MessageCircle,
-  Phone,
-  Shield,
-  Star,
-  User,
-} from "lucide-react";
+import { Camera, Check, Eye, EyeOff, KeyRound } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import {
-  billingEmailFromLoginEmail,
-  mapPreferredContactToNotificationChannel,
-  normalizeCustomerProfileContactFields,
-} from "@/lib/customer/customerProfileContactFields";
-import { normalizeSouthAfricaPhone } from "@/lib/utils/phone";
 import { useUser } from "@/hooks/useUser";
 import { useCustomerAvatar } from "@/hooks/useCustomerAvatar";
 import { CUSTOMER_AVATAR_MAX_BYTES } from "@/lib/customer/customerAvatar";
-import { useCustomerBookingAggregates } from "@/hooks/useCustomerBookingAggregates";
-import { useAddresses } from "@/hooks/useAddresses";
-import { useReviews } from "@/hooks/useReviews";
-import { useReferralSummary } from "@/hooks/useReferralSummary";
-import { HelpCard } from "@/components/account/HelpCard";
+import { billingEmailFromLoginEmail } from "@/lib/customer/customerProfileContactFields";
+import { profileDetailsPatch, validateProfileDetails, type ProfileDetails, type ProfileErrors } from "@/lib/customer/customerProfileForm";
 import { MarketingEmailPreferences } from "@/components/account/MarketingEmailPreferences";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
-import { PasswordInput } from "@/components/ui/password-input";
 import { useDashboardToast } from "@/components/dashboard/dashboard-toast-context";
 
-function initialsFromName(name: string | undefined, email: string | undefined): string {
-  const n = (name?.trim() || email?.split("@")[0] || "?").trim();
-  const parts = n.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
-  return n.slice(0, 2).toUpperCase() || "?";
-}
-
-function ProfileStat({
-  icon,
-  value,
-  label,
-}: {
-  icon: React.ReactNode;
-  value: string | number;
-  label: string;
-}) {
-  return (
-    <Card className="min-w-0">
-      <CardContent className="p-4 text-center">
-        <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          {icon}
-        </div>
-        <p className="mt-2 text-xl font-bold text-foreground">{value}</p>
-        <p className="text-xs text-muted-foreground">{label}</p>
-      </CardContent>
-    </Card>
-  );
-}
+const emptyDetails: ProfileDetails = { name: "", phone: "", whatsapp: "", dateOfBirth: "", preferredContact: "email" };
+const panel = "rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6";
+const control = "bg-muted/40 shadow-none";
 
 export default function AccountProfilePage() {
   const toast = useDashboardToast();
   const { user, loading: userLoading } = useUser();
-  const { aggregates: bookingAggregates, loading: bookLoading } = useCustomerBookingAggregates();
-  const { addresses } = useAddresses();
-  const { reviews } = useReviews();
-  const { data: referralData } = useReferralSummary();
-
+  const userId = user?.id;
+  const userRef = useRef(user);
+  useEffect(() => { userRef.current = user; }, [user]);
   const avatarPhoto = useCustomerAvatar(user);
   const hasPhoto = Boolean(avatarPhoto || user?.user_metadata?.customer_avatar_path);
   const photoInput = useRef<HTMLInputElement>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
-
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [whatsapp, setWhatsapp] = useState("");
-  const [preferredContact, setPreferredContact] = useState<"whatsapp" | "email" | "phone">("whatsapp");
-  const [pwNew, setPwNew] = useState("");
+  const [photoMessage, setPhotoMessage] = useState("");
+  const [photoError, setPhotoError] = useState(false);
+  const [details, setDetails] = useState<ProfileDetails>(emptyDetails);
+  const [savedDetails, setSavedDetails] = useState<ProfileDetails>(emptyDetails);
+  const [errors, setErrors] = useState<ProfileErrors>({});
   const [busy, setBusy] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
-  const [dateOfBirth, setDateOfBirth] = useState("");
-
-  const userId = user?.id;
-  const loginEmail = user?.email;
-  const meta = user?.user_metadata as { full_name?: string; phone?: string; whatsapp?: string; preferred_contact?: string } | undefined;
-  const initials = initialsFromName(meta?.full_name, user?.email);
-
-  const completedBookings = bookingAggregates?.completedBookingsCount ?? 0;
-  const primaryAddress = addresses.find((a) => a.is_default) ?? addresses[0];
-  const avgRating = reviews.length > 0 ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1) : null;
+  const [loadedUserId, setLoadedUserId] = useState<string>();
+  const [loadError, setLoadError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [saveError, setSaveError] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [passwordError, setPasswordError] = useState(false);
+  const dirty = JSON.stringify(details) !== JSON.stringify(savedDetails);
+  const today = new Date().toLocaleDateString("en-CA");
+  const initials = (savedDetails.name || user?.user_metadata?.full_name || user?.email || "?")
+    .trim().split(/\s+/).map((part: string) => part[0]).filter(Boolean);
+  const initialsText = initials.length > 1 ? `${initials[0]}${initials[initials.length - 1]}`.toUpperCase() : (initials[0] || "?").toUpperCase();
 
   useEffect(() => {
-    if (userLoading || !userId) {
-      if (!userLoading && !userId) setProfileLoading(false);
-      return;
-    }
-    const sb = getSupabaseClient();
-    if (!sb) { setProfileLoading(false); return; }
+    if (!userId) return;
     let cancelled = false;
+    const viewer = userRef.current;
     void (async () => {
-      setEmail(loginEmail ?? "");
-      setPhone(meta?.phone ?? "");
-      setWhatsapp(meta?.whatsapp ?? meta?.phone ?? "");
-      setPreferredContact((meta?.preferred_contact as typeof preferredContact | undefined) ?? "whatsapp");
-      const { data: profile } = await sb
-        .from("user_profiles")
-        .select("full_name, phone, date_of_birth")
-        .eq("id", userId)
-        .maybeSingle();
-      if (!cancelled) {
-        setName((profile?.full_name as string | undefined)?.trim() || meta?.full_name?.trim() || "");
-        if (profile?.phone) setPhone(String(profile.phone));
-        if (profile?.date_of_birth) {
-          setDateOfBirth(String(profile.date_of_birth).slice(0, 10));
-        }
-        setProfileLoading(false);
-      }
+      try {
+        const sb = getSupabaseClient();
+        if (!sb) throw new Error("Account connection unavailable.");
+        const { data: profile, error } = await sb.from("user_profiles")
+          .select("full_name, phone, phone_e164, date_of_birth, preferred_notification_channel")
+          .eq("id", userId).maybeSingle();
+        if (error || !profile) throw new Error("Your details could not be loaded. Please try again.");
+        const meta = viewer?.user_metadata ?? {};
+        const phone = profile.phone_e164 ?? profile.phone ?? meta.phone ?? "";
+        const preferred = profile.preferred_notification_channel;
+        const contact = preferred === "sms" ? "phone" : preferred === "whatsapp" || preferred === "email" ? preferred
+          : ["whatsapp", "email", "phone"].includes(meta.preferred_contact) ? meta.preferred_contact : "email";
+        const loaded: ProfileDetails = {
+          name: profile.full_name?.trim() || meta.full_name || "",
+          phone,
+          whatsapp: typeof meta.whatsapp === "string" ? meta.whatsapp : phone,
+          dateOfBirth: profile.date_of_birth?.slice(0, 10) || "",
+          preferredContact: contact,
+        };
+        if (!cancelled) { setDetails(loaded); setSavedDetails(loaded); setErrors({}); setSaveMessage(""); }
+      } catch (error) {
+        if (!cancelled) setLoadError(error instanceof Error ? error.message : "Your details could not be loaded.");
+      } finally { if (!cancelled) { setProfileLoading(false); setLoadedUserId(userId); } }
     })();
     return () => { cancelled = true; };
-  }, [userId, loginEmail, userLoading, meta?.full_name, meta?.phone, meta?.preferred_contact, meta?.whatsapp]);
+  }, [userId, retry]); // Auth/photo refreshes must not overwrite unsaved contact edits.
+
+  function change<K extends keyof ProfileDetails>(key: K, value: ProfileDetails[K]) {
+    setDetails(previous => ({ ...previous, [key]: value }));
+    setErrors(previous => ({ ...previous, [key]: undefined }));
+    setSaveMessage("");
+  }
 
   async function savePhoto(file?: File) {
     const sb = getSupabaseClient();
     if (!sb || !user || photoBusy) return;
+    setPhotoMessage(""); setPhotoError(false);
     if (file && (file.size > CUSTOMER_AVATAR_MAX_BYTES || !["image/jpeg", "image/png", "image/webp"].includes(file.type))) {
-      toast("Choose a JPG, PNG or WebP photo smaller than 2 MB.", "error");
-      return;
+      setPhotoError(true); setPhotoMessage("Choose a JPG, PNG or WebP photo up to 2 MB."); return;
     }
     setPhotoBusy(true);
     try {
@@ -151,382 +112,180 @@ export default function AccountProfilePage() {
       if (!response.ok) throw new Error(result.error || "Your photo could not be saved.");
       const refreshed = await sb.auth.refreshSession();
       if (refreshed.error) throw new Error("Photo saved. Reload the page to update your profile picture.");
-      toast(file ? "Profile photo updated." : "Profile photo removed.", "success");
+      const message = file ? "Profile photo updated." : "Profile photo removed.";
+      setPhotoMessage(message); toast(message, "success");
     } catch (error) {
-      toast(error instanceof Error ? error.message : "Your photo could not be saved.", "error");
+      setPhotoError(true); setPhotoMessage(error instanceof Error ? error.message : "Your photo could not be saved.");
     } finally { setPhotoBusy(false); }
   }
 
-  async function onSave(e: FormEvent) {
-    e.preventDefault();
-    if (!user) return;
-    const sb = getSupabaseClient();
-    if (!sb) { toast("Supabase is not configured.", "error"); return; }
-    setBusy(true);
-    const now = new Date().toISOString();
-    const { error: uErr } = await sb.auth.updateUser({
-      data: {
-        full_name: name.trim(),
-        phone: phone.trim() || undefined,
-        whatsapp: whatsapp.trim() || undefined,
-        preferred_contact: preferredContact,
-      },
-    });
-    if (uErr) { toast(uErr.message, "error"); setBusy(false); return; }
-    const phoneE164 = phone.trim() ? normalizeSouthAfricaPhone(phone.trim()) : null;
-    const contact = normalizeCustomerProfileContactFields({
-      fullName: name.trim(),
-      billingEmail: billingEmailFromLoginEmail(user.email ?? email.trim()),
-      phone: phoneE164 ?? (phone.trim() || null),
-      preferredNotificationChannel: mapPreferredContactToNotificationChannel(preferredContact),
-    });
-    const { data: existing } = await sb.from("user_profiles").select("id").eq("id", user.id).maybeSingle();
-    const profilePatch = {
-      updated_at: now,
-      ...(contact.full_name ? { full_name: contact.full_name } : {}),
-      ...(contact.billing_email ? { billing_email: contact.billing_email } : {}),
-      ...(contact.phone ? { phone: contact.phone } : {}),
-      ...(contact.phone_e164 ? { phone_e164: contact.phone_e164 } : {}),
-      ...(contact.preferred_notification_channel
-        ? { preferred_notification_channel: contact.preferred_notification_channel }
-        : {}),
-      date_of_birth: dateOfBirth.trim() || null,
-    };
-    const pErr = existing
-      ? (await sb.from("user_profiles").update(profilePatch).eq("id", user.id)).error
-      : (
-          await sb.from("user_profiles").insert({
-            id: user.id,
-            tier: "regular",
-            role: "customer",
-            booking_count: 0,
-            total_spent_cents: 0,
-            ...profilePatch,
-          })
-        ).error;
-    if (pErr) { toast(pErr.message, "error"); setBusy(false); return; }
-    if (pwNew.trim()) {
-      if (pwNew.trim().length < 6) { toast("New password must be at least 6 characters.", "error"); setBusy(false); return; }
-      const { error: pwErr } = await sb.auth.updateUser({ password: pwNew.trim() });
-      if (pwErr) { toast(pwErr.message, "error"); setBusy(false); return; }
-      setPwNew("");
+  async function onSave(event: FormEvent) {
+    event.preventDefault();
+    if (!user || busy || !dirty || loadError) return;
+    const invalid = validateProfileDetails(details, today);
+    setErrors(invalid);
+    if (Object.keys(invalid).length) {
+      document.getElementById(`profile-${Object.keys(invalid)[0]}`)?.focus();
+      return;
     }
-    setBusy(false);
-    toast("Profile saved successfully.", "success");
+    setBusy(true); setSaveMessage(""); setSaveError(false);
+    try {
+      const sb = getSupabaseClient();
+      if (!sb) throw new Error("Account connection unavailable. Please try again.");
+      const patch = profileDetailsPatch(details);
+      const billingEmail = billingEmailFromLoginEmail(user.email);
+      const { data, error } = await sb.from("user_profiles").update({
+        ...patch, ...(billingEmail ? { billing_email: billingEmail } : {}), updated_at: new Date().toISOString(),
+      }).eq("id", user.id).select("id").single();
+      if (error || !data) throw new Error("Your details could not be saved. Please try again.");
+      // Explicit nulls clear database numbers; explicit empty metadata clears legacy fallbacks.
+      const { error: metadataError } = await sb.auth.updateUser({ data: {
+        full_name: patch.full_name, phone: patch.phone || "",
+        whatsapp: details.whatsapp.trim() ? profileDetailsPatch({ ...details, phone: details.whatsapp }).phone : "",
+        preferred_contact: details.preferredContact,
+      } });
+      if (metadataError) throw new Error("Your account details were saved, but contact syncing failed. Select Save changes to retry.");
+      const saved = { ...details, name: patch.full_name, phone: patch.phone || "", whatsapp: details.whatsapp.trim() ? profileDetailsPatch({ ...details, phone: details.whatsapp }).phone || "" : "" };
+      setDetails(saved); setSavedDetails(saved); setSaveMessage("Your details have been saved.");
+      toast("Your details have been saved.", "success");
+    } catch (error) {
+      setSaveError(true); setSaveMessage(error instanceof Error ? error.message : "Your details could not be saved. Please try again.");
+    } finally { setBusy(false); }
   }
 
-  if (userLoading || profileLoading) {
-    return (
-      <div className="space-y-6" aria-hidden>
-        <div className="h-8 w-40 animate-pulse rounded-lg bg-muted" />
-        <div className="h-40 animate-pulse rounded-2xl border border-border bg-card" />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="h-28 animate-pulse rounded-2xl border border-border bg-card" />
-          ))}
-        </div>
-        <div className="h-72 animate-pulse rounded-2xl border border-border bg-card" />
-      </div>
-    );
+  async function updatePassword(event: FormEvent) {
+    event.preventDefault();
+    if (passwordBusy) return;
+    setPasswordMessage(""); setPasswordError(false);
+    if (password.length < 6 || password !== confirmation) {
+      setPasswordError(true); setPasswordMessage(password.length < 6 ? "Use at least 6 characters." : "The passwords do not match."); return;
+    }
+    setPasswordBusy(true);
+    try {
+      const sb = getSupabaseClient();
+      if (!sb) throw new Error("Account connection unavailable.");
+      const { error } = await sb.auth.updateUser({ password });
+      if (error) throw new Error(error.message);
+      setPassword(""); setConfirmation(""); setPasswordOpen(false);
+      setPasswordMessage("Your password has been updated.");
+    } catch (error) {
+      setPasswordError(true); setPasswordMessage(error instanceof Error ? error.message : "Your password could not be updated.");
+    } finally { setPasswordBusy(false); }
   }
 
+  if (userLoading || (user && (profileLoading || loadedUserId !== userId))) return (
+    <div role="status" aria-label="Loading profile" className="mx-auto max-w-5xl space-y-5">
+      <span className="sr-only">Loading your profile…</span>
+      <div className="h-9 w-48 animate-pulse rounded-lg bg-muted" />
+      <div className="h-80 animate-pulse rounded-2xl bg-muted" />
+    </div>
+  );
   if (!user) return null;
-
-  const displayName = name || email?.split("@")[0] || "Account";
+  if (loadError) return (
+    <div className={`${panel} mx-auto max-w-5xl space-y-4`}>
+      <h1 className="text-2xl font-bold text-[#00205b]">My profile</h1>
+      <p role="alert">{loadError}</p>
+      <Button onClick={() => { setProfileLoading(true); setLoadError(""); setRetry(value => value + 1); }}>Try again</Button>
+    </div>
+  );
 
   return (
-    <div className="space-y-8 pb-8">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Profile</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Your account details, contact info, and security settings.</p>
+    <div className="mx-auto max-w-5xl space-y-6 pb-4">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-[#00205b] sm:text-3xl">My profile</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Manage your details and preferences.</p>
+        </div>
+        <Link href="/account/help" className="text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4">Need help?</Link>
       </header>
 
-      <Card className="overflow-hidden border-primary/20 bg-primary text-primary-foreground">
-        <CardContent className="p-6">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-            <div className="flex shrink-0 flex-col items-center gap-2">
-            <Avatar className="h-20 w-20 shrink-0 border-4 border-primary-foreground/30 shadow-[var(--ui-shadow-sm)]">
-              {avatarPhoto ? <AvatarImage src={avatarPhoto} alt="" className="object-cover" referrerPolicy="no-referrer" /> : null}
-              <AvatarFallback className="bg-primary-foreground/15 text-2xl font-bold text-primary-foreground">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-              <input ref={photoInput} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" aria-label="Choose profile photo" disabled={photoBusy}
-                onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void savePhoto(file); }} />
-              <Button type="button" variant="secondary" size="sm" disabled={photoBusy} onClick={() => photoInput.current?.click()}>
-                {photoBusy ? "Updating…" : hasPhoto ? "Change photo" : "Upload photo"}
-              </Button>
-              {hasPhoto ? <Button type="button" variant="secondary" size="sm" disabled={photoBusy} onClick={() => void savePhoto()}>Remove photo</Button> : null}
-              <p className="text-xs text-primary-foreground/80">JPG, PNG or WebP · Max 2 MB</p>
+      <section className={panel} aria-labelledby="details-title">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <h2 id="details-title" className="text-lg font-semibold text-[#00205b]">My details</h2>
+          <Button variant="outline" type="button" aria-expanded={passwordOpen} aria-controls="profile-password" onClick={() => { setPasswordOpen(!passwordOpen); setPassword(""); setConfirmation(""); setPasswordMessage(""); }} disabled={passwordBusy}>
+            <KeyRound className="h-4 w-4" aria-hidden />{passwordOpen ? "Close password form" : "Update password"}
+          </Button>
+        </div>
+        <form onSubmit={event => void onSave(event)} noValidate>
+          <fieldset disabled={busy} className="grid min-w-0 gap-x-6 gap-y-5 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label htmlFor="profile-name" className="text-sm font-medium">Full name</label>
+              <Input id="profile-name" value={details.name} onChange={e => change("name", e.target.value)} autoComplete="name" required maxLength={120} className={control} aria-invalid={!!errors.name} aria-describedby={errors.name ? "profile-name-error" : undefined} />
+              {errors.name && <p id="profile-name-error" className="text-sm text-destructive" role="alert">{errors.name}</p>}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="break-words text-2xl font-bold">{displayName}</p>
-              <p className="mt-0.5 break-all text-sm text-primary-foreground/80">{email}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground/15 px-3 py-1 text-xs font-semibold">
-                  <CalendarDays className="h-3.5 w-3.5" aria-hidden />
-                  {bookLoading ? "—" : `${bookingAggregates?.totalBookingsCount ?? 0} booking${(bookingAggregates?.totalBookingsCount ?? 0) !== 1 ? "s" : ""}`}
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground/15 px-3 py-1 text-xs font-semibold">
-                  <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-                  {bookLoading ? "—" : `${completedBookings} completed`}
-                </span>
-                {avgRating ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground/15 px-3 py-1 text-xs font-semibold">
-                    <Star className="h-3.5 w-3.5" aria-hidden />
-                    {avgRating} avg rating
-                  </span>
-                ) : null}
+            <div className="space-y-2">
+              <label htmlFor="profile-email" className="text-sm font-medium">Email address</label>
+              <Input id="profile-email" type="email" value={user.email || ""} readOnly className={`${control} text-muted-foreground`} aria-describedby="profile-email-help" />
+              <p id="profile-email-help" className="text-xs text-muted-foreground">Contact support to change your sign-in email.</p>
+            </div>
+            {(["phone", "whatsapp"] as const).map(field => (
+              <div key={field} className="space-y-2">
+                <label htmlFor={`profile-${field}`} className="text-sm font-medium">{field === "phone" ? "Phone number" : "WhatsApp number"}</label>
+                <Input id={`profile-${field}`} type="tel" inputMode="tel" autoComplete={field === "phone" ? "tel" : "off"} value={details[field]} onChange={e => change(field, e.target.value)} placeholder="082 123 4567" className={control} aria-invalid={!!errors[field]} aria-describedby={errors[field] ? `profile-${field}-error` : undefined} />
+                {errors[field] && <p id={`profile-${field}-error`} className="text-sm text-destructive" role="alert">{errors[field]}</p>}
               </div>
+            ))}
+            <div className="space-y-2">
+              <label htmlFor="profile-dateOfBirth" className="text-sm font-medium">Date of birth <span className="font-normal text-muted-foreground">(optional)</span></label>
+              <Input id="profile-dateOfBirth" type="date" value={details.dateOfBirth} onChange={e => change("dateOfBirth", e.target.value)} min="1900-01-01" max={today} autoComplete="bday" className={control} aria-invalid={!!errors.dateOfBirth} aria-describedby={errors.dateOfBirth ? "profile-dateOfBirth-error" : "profile-birthday-help"} />
+              <p id="profile-birthday-help" className="text-xs text-muted-foreground">For your birthday Cleaning Credit.</p>
+              {errors.dateOfBirth && <p id="profile-dateOfBirth-error" role="alert" className="text-sm text-destructive">{errors.dateOfBirth}</p>}
             </div>
+            <fieldset className="min-w-0 space-y-2">
+              <legend className="mb-2 text-sm font-medium">Preferred contact method</legend>
+              <div className="flex flex-wrap gap-2">
+                {(["whatsapp", "email", "phone"] as const).map(option => (
+                  <label key={option} className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-3 text-sm has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary ${details.preferredContact === option ? "border-primary bg-primary/5 text-primary" : "border-border"}`}>
+                    <input type="radio" name="preferred-contact" value={option} checked={details.preferredContact === option} onChange={() => change("preferredContact", option)} className="accent-primary" />
+                    {option === "whatsapp" ? "WhatsApp" : option === "email" ? "Email" : "Phone"}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          </fieldset>
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
+            <p className={`text-sm ${saveError ? "text-destructive" : "text-muted-foreground"}`} role={saveError ? "alert" : "status"}>
+              {saveMessage || (dirty ? "You have unsaved changes." : "Your details are up to date.")}
+            </p>
+            <Button type="submit" disabled={busy || !dirty} className="w-full sm:w-auto sm:px-6">{!busy && !dirty && <Check className="h-4 w-4" aria-hidden />}{busy ? "Saving…" : "Save changes"}</Button>
           </div>
-        </CardContent>
-      </Card>
-
-      <section aria-label="Account overview" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <ProfileStat
-          icon={<CalendarDays className="h-5 w-5" strokeWidth={1.75} aria-hidden />}
-          value={bookLoading ? "—" : bookingAggregates?.totalBookingsCount ?? 0}
-          label="Total bookings"
-        />
-        <ProfileStat
-          icon={<CheckCircle2 className="h-5 w-5" strokeWidth={1.75} aria-hidden />}
-          value={bookLoading ? "—" : completedBookings}
-          label="Completed"
-        />
-        <ProfileStat
-          icon={<Star className="h-5 w-5" strokeWidth={1.75} aria-hidden />}
-          value={reviews.length > 0 ? avgRating ?? "—" : "—"}
-          label="Avg. rating"
-        />
-        <ProfileStat
-          icon={<MapPin className="h-5 w-5" strokeWidth={1.75} aria-hidden />}
-          value={addresses.length}
-          label="Properties"
-        />
+        </form>
+        {passwordOpen && <form id="profile-password" onSubmit={event => void updatePassword(event)} className="mt-6 space-y-4 border-t border-border pt-5">
+          <h3 className="font-semibold text-[#00205b]">Update password</h3>
+          <fieldset disabled={passwordBusy} className="grid min-w-0 gap-4 sm:grid-cols-2">
+            <div className="space-y-2"><label htmlFor="profile-password-new" className="text-sm font-medium">New password</label>
+              <Input id="profile-password-new" type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" required minLength={6} aria-describedby="profile-password-help" className={control} />
+            </div>
+            <div className="space-y-2"><label htmlFor="profile-password-confirm" className="text-sm font-medium">Confirm new password</label>
+              <Input id="profile-password-confirm" type={showPassword ? "text" : "password"} value={confirmation} onChange={e => setConfirmation(e.target.value)} autoComplete="new-password" required minLength={6} className={control} />
+            </div>
+          </fieldset>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p id="profile-password-help" className="text-xs text-muted-foreground">Use at least 6 characters.</p>
+            <Button type="button" variant="ghost" aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}{showPassword ? "Hide passwords" : "Show passwords"}</Button>
+          </div>
+          <Button type="submit" disabled={passwordBusy}>{passwordBusy ? "Updating…" : "Save password"}</Button>
+        </form>}
+        {passwordMessage && <p className={`mt-3 text-sm ${passwordError ? "text-destructive" : "text-foreground"}`} role={passwordError ? "alert" : "status"}>{passwordMessage}</p>}
       </section>
 
-      {primaryAddress ? (
-        <Card>
-          <CardHeader className="border-b border-border pb-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <BookOpen className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-              </div>
-              <CardTitle className="text-base">Primary property</CardTitle>
+      <section className={panel} aria-labelledby="photo-title">
+        <h2 id="photo-title" className="text-lg font-semibold text-[#00205b]">Profile photo</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Choose the photo shown on your Shalean account.</p>
+        <div className="mt-5 flex flex-col gap-4 min-[400px]:flex-row min-[400px]:items-center">
+          <Avatar className="h-16 w-16 shrink-0 border border-border"><AvatarImage src={avatarPhoto} alt="Your profile photo" className="object-cover" referrerPolicy="no-referrer" /><AvatarFallback className="bg-primary/10 text-xl font-semibold text-primary">{initialsText}</AvatarFallback></Avatar>
+          <div className="min-w-0 space-y-2">
+            <input ref={photoInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" aria-label="Choose profile photo" disabled={photoBusy} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void savePhoto(file); }} />
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" disabled={photoBusy} onClick={() => photoInput.current?.click()}><Camera className="h-4 w-4" aria-hidden />{photoBusy ? "Updating…" : hasPhoto ? "Change photo" : "Upload photo"}</Button>
+              {hasPhoto && <Button variant="outline" type="button" disabled={photoBusy} onClick={() => void savePhoto()}>Remove photo</Button>}
             </div>
-          </CardHeader>
-          <CardContent className="pt-5">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <MapPin className="h-5 w-5" strokeWidth={1.75} aria-hidden />
-              </div>
-              <div className="min-w-0">
-                <p className="break-words font-medium text-foreground">{primaryAddress.label || "Home"}</p>
-                <p className="break-words text-sm text-muted-foreground">{primaryAddress.line1}</p>
-                <p className="break-words text-sm text-muted-foreground">
-                  {primaryAddress.suburb}, {primaryAddress.city} {primaryAddress.postal_code}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <form onSubmit={(e) => void onSave(e)} className="space-y-6">
-        <Card>
-          <CardHeader className="border-b border-border pb-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <User className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-              </div>
-              <CardTitle className="text-base">Personal information</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-5">
-            <FormField label="Full name" htmlFor="profile-name">
-              <Input
-                id="profile-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoComplete="name"
-                placeholder="Your full name"
-              />
-            </FormField>
-
-            <FormField
-              label="Email address"
-              htmlFor="profile-email"
-              helperText="Email address cannot be changed here. Contact support for help."
-            >
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                <Input
-                  id="profile-email"
-                  type="email"
-                  value={email}
-                  disabled
-                  readOnly
-                  className="bg-muted/50 pl-9 text-muted-foreground"
-                />
-              </div>
-            </FormField>
-
-            <FormField
-              label="Date of birth"
-              htmlFor="profile-dob"
-              helperText="Used for your birthday Cleaning Credit (optional)."
-            >
-              <Input
-                id="profile-dob"
-                type="date"
-                value={dateOfBirth}
-                onChange={(e) => setDateOfBirth(e.target.value)}
-              />
-            </FormField>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField label="Phone number" htmlFor="profile-phone">
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                  <Input
-                    id="profile-phone"
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    autoComplete="tel"
-                    placeholder="+27 82 000 0000"
-                    className="pl-9"
-                  />
-                </div>
-              </FormField>
-              <FormField label="WhatsApp number" htmlFor="profile-whatsapp">
-                <div className="relative">
-                  <MessageCircle className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" aria-hidden />
-                  <Input
-                    id="profile-whatsapp"
-                    type="tel"
-                    value={whatsapp}
-                    onChange={(e) => setWhatsapp(e.target.value)}
-                    placeholder="+27 82 000 0000"
-                    className="pl-9"
-                  />
-                </div>
-              </FormField>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="border-b border-border pb-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <MessageCircle className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-              </div>
-              <CardTitle className="text-base">Preferred contact method</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-5">
-            <div className="flex flex-wrap gap-3" role="group" aria-label="Preferred contact method">
-              {(["whatsapp", "email", "phone"] as const).map((opt) => (
-                <Button
-                  key={opt}
-                  type="button"
-                  variant={preferredContact === opt ? "default" : "outline"}
-                  className="rounded-xl"
-                  aria-pressed={preferredContact === opt}
-                  onClick={() => setPreferredContact(opt)}
-                >
-                  {opt === "whatsapp" ? (
-                    <MessageCircle className="h-4 w-4" aria-hidden />
-                  ) : opt === "email" ? (
-                    <Mail className="h-4 w-4" aria-hidden />
-                  ) : (
-                    <Phone className="h-4 w-4" aria-hidden />
-                  )}
-                  {opt === "whatsapp" ? "WhatsApp" : opt === "email" ? "Email" : "Phone call"}
-                </Button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="border-b border-border pb-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Gift className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-              </div>
-              <CardTitle className="text-base">Referrals &amp; rewards</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-5">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {[
-                { label: "Total referrals", value: referralData?.totalReferrals ?? 0 },
-                { label: "Successful", value: referralData?.successfulReferrals ?? 0 },
-                { label: "Available credit", value: `R ${(referralData?.creditBalance ?? 0).toLocaleString("en-ZA")}` },
-                { label: "Credit used", value: `R ${(referralData?.creditUsed ?? 0).toLocaleString("en-ZA")}` },
-              ].map((s) => (
-                <div key={s.label} className="min-w-0 rounded-xl border border-border bg-muted/40 px-3 py-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{s.label}</p>
-                  <p className="mt-0.5 break-words text-lg font-bold text-foreground">{s.value}</p>
-                </div>
-              ))}
-            </div>
-            <p className="mt-4 text-sm text-muted-foreground">
-              Invite friends and earn Cleaning Credit on future bookings.{" "}
-              <Link
-                href="/account/referrals"
-                className="font-semibold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              >
-                View referrals →
-              </Link>
-              {" · "}
-              <Link
-                href="/refer"
-                className="font-semibold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              >
-                Refer a friend
-              </Link>
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="border-b border-border pb-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
-                <Shield className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-              </div>
-              <CardTitle className="text-base">Password &amp; security</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-5">
-            <p className="text-xs text-muted-foreground">Leave blank to keep your current password.</p>
-            <FormField label="New password" htmlFor="pw-new" helperText="Minimum 6 characters.">
-              <div className="relative">
-                <KeyRound className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                <PasswordInput
-                  id="pw-new"
-                  value={pwNew}
-                  onChange={(e) => setPwNew(e.target.value)}
-                  autoComplete="new-password"
-                  className="pl-9"
-                />
-              </div>
-            </FormField>
-          </CardContent>
-        </Card>
-
-        <Button type="submit" size="lg" className="w-full rounded-xl sm:w-auto sm:px-8" disabled={busy}>
-          {busy ? "Saving…" : "Save changes"}
-        </Button>
-      </form>
-
+            <p className="text-xs text-muted-foreground">JPG, PNG or WebP · Max 2 MB. Photos save automatically.</p>
+          </div>
+        </div>
+        {photoMessage && <p className={`mt-3 text-sm ${photoError ? "text-destructive" : "text-foreground"}`} role={photoError ? "alert" : "status"}>{photoMessage}</p>}
+      </section>
       <MarketingEmailPreferences />
-
-      <HelpCard />
     </div>
   );
 }
