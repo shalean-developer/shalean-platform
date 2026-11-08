@@ -108,8 +108,8 @@ export async function sendCustomerBookingPaymentProcessingEmail(input: {
     buildLegacy: () => ({
       subject: "We're finalising your booking",
       html: `
-<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
-  <h2>Shalean<span style="color:#2563eb;">.</span></h2>
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #00164e;">
+  <h2>Shalean<span style="color:#0051ff;">.</span></h2>
   <p style="color:#374151;">Hi ${escapeHtml(greet)},</p>
   <p>We&apos;ve received your payment and are finalising your booking. You&apos;ll receive a confirmation email shortly.</p>
   <p style="font-size:12px;color:#6b7280;">Reference: <span style="font-family:monospace;">${escapeHtml(input.paymentReference)}</span></p>
@@ -247,13 +247,13 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
   </div>
 
   <a href="${escapeAttr(accountBookingsUrl)}"
-     style="display:block; text-align:center; background:#2563eb; color:#ffffff; padding:14px; border-radius:10px; text-decoration:none; font-weight:600; margin-bottom:4px;">
+     style="display:block; text-align:center; background:#0051ff; color:#ffffff; padding:14px; border-radius:10px; text-decoration:none; font-weight:600; margin-bottom:4px;">
      View your booking
   </a>
 
   <p style="margin-top:20px; font-size:14px; color:#374151;">
     Want the same cleaner next time?<br/>
-    <a href="${escapeAttr(bookAgainUrl)}" style="color:#2563eb; font-weight:500; text-decoration:none;">
+    <a href="${escapeAttr(bookAgainUrl)}" style="color:#0051ff; font-weight:500; text-decoration:none;">
       Book again in 10 seconds →
     </a>
   </p>
@@ -588,8 +588,8 @@ export async function sendPaymentLinkEmail(input: PaymentLinkEmailInput): Promis
   const buildControlLegacy = () => ({
     subject: `Complete payment — ${input.serviceLabel}`,
     html: `
-<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
-  <h2>Shalean<span style="color:#2563eb;">.</span></h2>
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #00164e;">
+  <h2>Shalean<span style="color:#0051ff;">.</span></h2>
   <h1 style="font-size: 22px; margin: 0 0 12px;">Complete your booking payment</h1>
   <p style="color:#374151;">Hi ${escapeHtml(greet)},</p>
   <p style="color:#374151;">Your cleaning visit is reserved. Pay securely below to confirm.</p>
@@ -604,7 +604,7 @@ export async function sendPaymentLinkEmail(input: PaymentLinkEmailInput): Promis
     </p>
   </div>
   <p style="margin: 24px 0;">
-    <a href="${trustPayPageHref}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;">Pay now</a>
+    <a href="${trustPayPageHref}" style="display:inline-block;background:#0051ff;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;">Pay now</a>
   </p>
   <p style="font-size:12px;color:#6b7280;">If the button does not work, copy this link into your browser:<br/>
   <span style="word-break:break-all;font-family:monospace;color:#111827;">${escapeHtml(trustPayPageHref)}</span></p>
@@ -637,18 +637,18 @@ export async function sendPaymentLinkEmail(input: PaymentLinkEmailInput): Promis
 
   const html = shortCopy
     ? `
-<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
-  <h2>Shalean<span style="color:#2563eb;">.</span></h2>
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #00164e;">
+  <h2>Shalean<span style="color:#0051ff;">.</span></h2>
   <p style="color:#374151;">Hi ${escapeHtml(greet)},</p>
   <p style="font-size:18px;font-weight:600;margin:16px 0 8px;">Confirm your clean — pay now</p>
   <p style="margin: 20px 0;">
-    <a href="${trustPayPageHref}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:700;">Pay securely</a>
+    <a href="${trustPayPageHref}" style="display:inline-block;background:#0051ff;color:#fff;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:700;">Pay securely</a>
   </p>
   <p style="font-size:12px;color:#6b7280;">Ref <span style="font-family:monospace;">${escapeHtml(input.paystackReference)}</span> · ${escapeHtml(input.serviceLabel)} · ${escapeHtml(input.dateLabel)}</p>
 </div>`
     : `
-<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
-  <h2>Shalean<span style="color:#2563eb;">.</span></h2>
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #00164e;">
+  <h2>Shalean<span style="color:#0051ff;">.</span></h2>
   <h1 style="font-size: 22px; margin: 0 0 12px;">Complete your booking payment</h1>
   <p style="color:#374151;">Hi ${escapeHtml(greet)},</p>
   <p style="color:#374151;">Your cleaning visit is reserved. Pay securely below to confirm.</p>
@@ -663,7 +663,7 @@ export async function sendPaymentLinkEmail(input: PaymentLinkEmailInput): Promis
     </p>
   </div>
   <p style="margin: 24px 0;">
-    <a href="${trustPayPageHref}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;">Pay now</a>
+    <a href="${trustPayPageHref}" style="display:inline-block;background:#0051ff;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;">Pay now</a>
   </p>
   <p style="font-size:12px;color:#6b7280;">If the button does not work, copy this link into your browser:<br/>
   <span style="word-break:break-all;font-family:monospace;color:#111827;">${escapeHtml(trustPayPageHref)}</span></p>
@@ -796,8 +796,8 @@ export async function sendCustomerBookingAssignedEmail(payload: BookingEmailPayl
     buildLegacy: () => ({
       subject: `Cleaner assigned — ${payload.serviceLabel}`,
       html: `
-<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
-  <h2>Shalean<span style="color:#2563eb;">.</span></h2>
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #00164e;">
+  <h2>Shalean<span style="color:#0051ff;">.</span></h2>
   <h1 style="font-size: 20px;">Cleaner assigned</h1>
   <p style="color:#6b7280;">A cleaner is now scheduled for your visit.</p>
   <div style="border:1px solid #e5e7eb; border-radius:12px; padding:16px;">
@@ -840,8 +840,8 @@ export async function sendCustomerJobCompletedEmail(payload: BookingEmailPayload
     buildLegacy: () => ({
       subject: `Cleaning complete — ${payload.serviceLabel}`,
       html: `
-<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
-  <h2>Shalean<span style="color:#2563eb;">.</span></h2>
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #00164e;">
+  <h2>Shalean<span style="color:#0051ff;">.</span></h2>
   <h1 style="font-size: 20px;">Cleaning complete</h1>
   <p>Your <strong>${escapeHtml(payload.serviceLabel)}</strong> on <strong>${escapeHtml(payload.dateLabel)}</strong> is marked complete.</p>
   <p style="font-size:12px;color:#6b7280;">
@@ -849,7 +849,7 @@ export async function sendCustomerJobCompletedEmail(payload: BookingEmailPayload
     Payment ref: <span style="font-family:monospace;">${escapeHtml(payload.paymentReference)}</span>
   </p>
   ${googleBlock}
-  <p style="margin-top:16px;"><a href="${escapeAttr(reviewUrl)}" style="color:#2563eb;font-weight:600;">Rate this visit in Shalean</a> <span style="color:#6b7280;font-weight:400;">(optional feedback)</span></p>
+  <p style="margin-top:16px;"><a href="${escapeAttr(reviewUrl)}" style="color:#0051ff;font-weight:600;">Rate this visit in Shalean</a> <span style="color:#6b7280;font-weight:400;">(optional feedback)</span></p>
 </div>`,
     }),
   });
@@ -873,11 +873,11 @@ export async function sendAbandonedCheckoutReminderEmail(params: {
     ? `<p style="margin-top:14px;"><a href="${escapeAttr(params.whatsappUrl.trim())}" style="color:#047857;font-weight:600;text-decoration:none;">Continue over WhatsApp</a></p>`
     : "";
   const html = `
-<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
-  <h2>Shalean<span style="color:#2563eb;">.</span></h2>
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #00164e;">
+  <h2>Shalean<span style="color:#0051ff;">.</span></h2>
   <p>Hi ${escapeHtml(name)},</p>
   <p>Your <strong>${escapeHtml(params.serviceLabel)}</strong> booking is still waiting for payment. Complete checkout in one step — your slot is held briefly.</p>
-  <p><a href="${escapeAttr(params.checkoutUrl)}" style="display:inline-block;margin-top:12px;padding:12px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:10px;font-weight:600;">Continue to payment</a></p>
+  <p><a href="${escapeAttr(params.checkoutUrl)}" style="display:inline-block;margin-top:12px;padding:12px 20px;background:#0051ff;color:#fff;text-decoration:none;border-radius:10px;font-weight:600;">Continue to payment</a></p>
   ${whatsappBlock}
   <p style="font-size:12px;color:#6b7280;">If you already paid, you can ignore this email.</p>
 </div>`;
@@ -927,13 +927,13 @@ export async function sendSavedQuoteRecoveryEmail(params: {
     buildLegacy: () => ({
       subject: `Your Shalean quote is saved — ${params.serviceLabel}`,
       html: `
-<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
-  <h2>Shalean<span style="color:#2563eb;">.</span></h2>
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #00164e;">
+  <h2>Shalean<span style="color:#0051ff;">.</span></h2>
   <p>Hi ${escapeHtml(name)},</p>
   <h1 style="font-size:22px;margin:0 0 12px;">Your cleaning quote is saved</h1>
   <p style="color:#374151;">Pick up where you left off whenever you're ready.</p>
   ${quoteLine}
-  <p style="margin:24px 0 10px;"><a href="${escapeAttr(params.continueUrl)}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;">Continue your booking</a></p>
+  <p style="margin:24px 0 10px;"><a href="${escapeAttr(params.continueUrl)}" style="display:inline-block;background:#0051ff;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;">Continue your booking</a></p>
   ${whatsappBlock}
   <p style="font-size:12px;color:#6b7280;">No payment has been taken. Prices and available times can change until you confirm.</p>
 </div>`,
@@ -970,8 +970,8 @@ export async function sendCustomerBookingCancelledEmail(params: {
     buildLegacy: () => ({
       subject: `Booking cancelled — ${params.serviceLabel}`,
       html: `
-<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
-  <h2>Shalean<span style="color:#2563eb;">.</span></h2>
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #00164e;">
+  <h2>Shalean<span style="color:#0051ff;">.</span></h2>
   <h1 style="font-size: 22px; margin: 0 0 12px;">Your booking has been cancelled</h1>
   <p style="color:#6b7280; margin-bottom: 16px;">Hi ${escapeHtml(name)}, this confirms your booking cancellation.</p>
   <div style="border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:16px;">
@@ -981,11 +981,11 @@ export async function sendCustomerBookingCancelledEmail(params: {
   </div>
   <p style="color:#374151; margin-bottom: 12px;">If you did not request this cancellation, contact us right away.</p>
   <p style="font-size: 14px; color: #374151;">
-    <strong>Phone:</strong> <a href="${escapeAttr(emailSafeGoUrl("call"))}" style="color:#2563eb;">087 153 5250</a><br/>
-    <strong>WhatsApp:</strong> <a href="${escapeAttr(emailSafeGoUrl("whatsapp"))}" style="color:#2563eb;">082 591 5525</a>
+    <strong>Phone:</strong> <a href="${escapeAttr(emailSafeGoUrl("call"))}" style="color:#0051ff;">087 153 5250</a><br/>
+    <strong>WhatsApp:</strong> <a href="${escapeAttr(emailSafeGoUrl("whatsapp"))}" style="color:#0051ff;">082 591 5525</a>
   </p>
   <p style="margin: 16px 0;">
-    <a href="${escapeAttr(bookUrl)}" style="display:inline-block; background:#2563eb; color:#fff; text-decoration:none; padding:12px 20px; border-radius:10px; font-weight:600;">Book again</a>
+    <a href="${escapeAttr(bookUrl)}" style="display:inline-block; background:#0051ff; color:#fff; text-decoration:none; padding:12px 20px; border-radius:10px; font-weight:600;">Book again</a>
   </p>
   <p style="font-size:12px;color:#6b7280;">Booking ID: <span style="font-family:monospace;">${escapeHtml(params.bookingId)}</span></p>
 </div>`,
@@ -1057,8 +1057,8 @@ export async function sendCustomerRescheduledEmail(params: {
     buildLegacy: () => ({
       subject: `Updated schedule — ${params.serviceLabel}`,
       html: `
-<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
-  <h2>Shalean<span style="color:#2563eb;">.</span></h2>
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #00164e;">
+  <h2>Shalean<span style="color:#0051ff;">.</span></h2>
   <h1 style="font-size: 20px;">Booking rescheduled</h1>
   <p>Your <strong>${escapeHtml(params.serviceLabel)}</strong> time was updated.</p>
   <div style="border:1px solid #e5e7eb; border-radius:12px; padding:16px;">
@@ -1094,8 +1094,8 @@ export async function sendCustomerTwoHourReminderEmail(params: {
     buildLegacy: () => ({
       subject: `Reminder: ${params.serviceLabel} soon`,
       html: `
-<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
-  <h2>Shalean<span style="color:#2563eb;">.</span></h2>
+<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #00164e;">
+  <h2>Shalean<span style="color:#0051ff;">.</span></h2>
   <h1 style="font-size: 20px;">Reminder: cleaning soon</h1>
   <p>Your <strong>${escapeHtml(params.serviceLabel)}</strong> is coming up.</p>
   <div style="border:1px solid #e5e7eb; border-radius:12px; padding:16px;">
@@ -1103,7 +1103,7 @@ export async function sendCustomerTwoHourReminderEmail(params: {
     <p><strong>Where:</strong> ${escapeHtml(params.location || "—")}</p>
     <p style="font-size:12px;color:#6b7280;">Booking ID: <span style="font-family:monospace;">${escapeHtml(params.bookingId)}</span></p>
   </div>
-  <p><a href="${escapeAttr(dashUrl)}" style="color:#2563eb;font-weight:600;">Open dashboard</a></p>
+  <p><a href="${escapeAttr(dashUrl)}" style="color:#0051ff;font-weight:600;">Open dashboard</a></p>
 </div>`,
     }),
   });

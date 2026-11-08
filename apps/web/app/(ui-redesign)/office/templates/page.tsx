@@ -1,5 +1,6 @@
 "use client";
 
+import { EmailWorkspace } from "@/components/email/EmailWorkspace";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
@@ -225,10 +226,10 @@ export default function TemplatesPage() {
   }, [channel, data?.templates, search]);
 
   return (
-    <div className="space-y-5">
+    <EmailWorkspace title="Message templates" description="Review and maintain your customer email and notification templates.">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Message Templates</h1>
+          <h2 className="text-base font-semibold text-slate-900">Template library</h2>
           <p className="mt-0.5 text-sm text-slate-500">
             Live templates from Supabase with 30-day delivery stats from notification logs.
           </p>
@@ -393,6 +394,6 @@ export default function TemplatesPage() {
           onSaved={() => void refetch()}
         />
       ) : null}
-    </div>
+    </EmailWorkspace>
   );
 }

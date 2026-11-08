@@ -40,7 +40,7 @@ export function buildReengagementEmailHtml(params: ReengagementEmailParams): str
     ${styledEmailButton(params.rebookUrl, "Book My Next Cleaning")}
   </p>
   <p style="margin:0 0 28px;text-align:center;font-size:14px;line-height:1.5;color:#64748b;">
-    Or <a href="${escapeHtml(params.bookUrl)}" style="color:#2563eb;text-decoration:underline;font-weight:500;">explore our other cleaning services</a>.
+    Or <a href="${escapeHtml(params.bookUrl)}" style="color:#0051ff;text-decoration:underline;font-weight:500;">explore our other cleaning services</a>.
   </p>
   <div style="margin-top:32px;padding-top:24px;border-top:1px solid #e2e8f0;text-align:center;">
     <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#64748b;">

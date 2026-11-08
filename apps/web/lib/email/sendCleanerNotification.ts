@@ -5,6 +5,7 @@ import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
 import { safeResendSend } from "@/lib/email/safeResendSend";
 import { isCleanerEmailOutboundAllowed } from "@/lib/notifications/communicationPolicy";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { wrapBrandedEmailContent } from "./emailBrandShell";
 
 function getResend() {
   const key = process.env.RESEND_API_KEY;
@@ -91,7 +92,7 @@ export async function sendCleanerNewJobEmail(params: {
           ? `New Shalean job: ~R${zar.toLocaleString("en-ZA")} (est.) — ${params.dateLabel}`
           : `New Shalean job: Earn R${zar.toLocaleString("en-ZA")} — ${params.dateLabel}`
         : `New Shalean job — ${params.dateLabel}`,
-    html,
+    html: wrapBrandedEmailContent(html),
   });
 
   if (error) {
@@ -143,7 +144,7 @@ export async function sendCleanerBookingCancelledEmail(params: {
     from: getDefaultFromAddress(),
     to: [to],
     subject: `Cancelled — do not attend (${params.dateLabel})`,
-    html,
+    html: wrapBrandedEmailContent(html),
   });
 
   if (error) {

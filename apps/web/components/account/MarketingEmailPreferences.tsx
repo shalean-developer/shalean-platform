@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useUser } from "@/hooks/useUser";
 import { MarketingEmailTestLink } from "./MarketingEmailStagingJourney";
+import styles from "@/components/email/email-ui.module.css";
 
 const POLICY_VERSION = "marketing-email-2026-11-v1";
 type PreferenceStatus = "loading" | "no_consent" | "consent_recorded" | "consent_recorded_paused" | "unsubscribed" | "unavailable";
@@ -67,7 +68,7 @@ export function MarketingEmailPreferences({ mode = "customer" }: { mode?: "custo
     } finally { setBusy(false); }
   }
   return (
-    <section aria-labelledby="marketing-email-title" className="rounded-2xl border border-border bg-card p-5">
+    <section aria-labelledby="marketing-email-title" className={`${styles.theme} ${styles.panel}`}>
       <h2 id="marketing-email-title" className="text-base font-semibold">Marketing email preferences</h2>
       <p className="mt-2 text-sm text-muted-foreground">
         Get occasional Shalean cleaning offers, seasonal tips and referral promotions by email.
@@ -89,11 +90,11 @@ export function MarketingEmailPreferences({ mode = "customer" }: { mode?: "custo
       </label>
       <div className="mt-4 flex flex-wrap gap-3">
         <button type="button" disabled={busy || !checked || status === "loading" || status === "unavailable"}
-          onClick={() => void update("granted")} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
+          onClick={() => void update("granted")} className={`${styles.primary} disabled:opacity-50`}>
           {office ? "Record test consent" : "Subscribe"}
         </button>
         <button type="button" disabled={busy || (office && !checked) || status === "loading" || status === "unavailable"}
-          onClick={() => void update("withdrawn")} className="rounded-lg border border-border px-4 py-2 text-sm font-medium disabled:opacity-50">
+          onClick={() => void update("withdrawn")} className={`${styles.secondary} disabled:opacity-50`}>
           {office ? "Withdraw test consent" : "Unsubscribe"}
         </button>
       </div>
