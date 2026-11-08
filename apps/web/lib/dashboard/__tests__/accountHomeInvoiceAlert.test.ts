@@ -9,9 +9,10 @@ vi.mock("@/hooks/useDashboardSummary", () => ({ useDashboardSummary: () => ({ su
 
 function renderInvoice(status: string, hasOverdueInvoice: boolean, isOverdue: boolean) {
   state.summary = {
+    ym: "2026-11", bookingsThisMonthCount: 0, hoursBookedThisMonth: 0, completedThisMonthCount: 0, totalSpentThisMonthCents: 0, perVisitInvoices: [], hasAnyInvoices: true, daysOverdue: hasOverdueInvoice ? 3 : 0,
     recentBookings: [], nextBooking: null, hasOverdueInvoice, isOverdue,
-    invoiceThisMonth: { id: "current", status, balance_cents: 123456, total_amount_cents: 123456, amount_paid_cents: 0 },
-  } as DashboardSummaryPayload;
+    invoiceThisMonth: { id: "current", status, balance_cents: 123456, total_amount_cents: 123456, amount_paid_cents: 0, customer_id: "customer", month: "2026-11", total_bookings: 1, due_date: "2026-11-10", sent_at: null, finalized_at: null, is_overdue: isOverdue, is_closed: false, currency_code: "ZAR", created_at: "2026-11-01", updated_at: "2026-11-01" },
+  };
   return renderToStaticMarkup(React.createElement(AccountHomePage));
 }
 
