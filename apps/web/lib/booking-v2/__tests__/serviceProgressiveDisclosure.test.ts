@@ -10,6 +10,7 @@ import {
   bookingDetailsStage,
   bookingDetailsStageFromSearchParam,
   bookingDetailsStageReady,
+  bookingDetailsStageAutoAdvances,
   usesProgressiveIndividualSchedule,
 } from "@/src/features/booking-v2/steps/serviceProgressiveDisclosure";
 import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
@@ -290,4 +291,12 @@ describe("six-service progressive booking details", () => {
     expect(usesProgressiveIndividualSchedule("deep-cleaning")).toBe(false);
     expect(usesProgressiveIndividualSchedule("moving-cleaning")).toBe(false);
   });
+  it("keeps Regular property selection on screen until explicit Continue", () => {
+    expect(bookingDetailsAutoAdvanceTarget("regular-cleaning", "property", {propertyType:"house"})).toBeNull();
+    expect(bookingDetailsStageAutoAdvances("regular-cleaning", "property")).toBe(false);
+    expect(bookingDetailsQuestionVisibleAtStage("regular-cleaning", {key:"propertyType"}, "property")).toBe(true);
+    expect(adjacentBookingDetailsStage("regular-cleaning", "property", "next")).toBe("rooms");
+    expect(bookingDetailsStageAutoAdvances("deep-cleaning", "property")).toBe(true);
+  });
+
 });

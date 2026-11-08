@@ -25,7 +25,7 @@ describe("live booking funnel diagnostics", () => {
       {...row,session_id:"old",analytics_session_id:null,metadata:{service:"regular-cleaning",flow:"booking_v2"}},
       {...row,metadata:{...row.metadata,service:"deep-cleaning"}},
       {...row,metadata:{...row.metadata,section:"private-value"}}]);
-    expect(result).toEqual([{step:"quote",section:"rooms",label:"Rooms",viewedSessions:1,exitSessions:1,errorSessions:0}]);
+    expect(result).toEqual([{step:"quote",section:"rooms",label:"Rooms",viewedSessions:1,continuedSessions:0,backSessions:0,exitSessions:1,errorSessions:0}]);
     expect(buildLiveBookingSectionDiagnostics([{...row,metadata:null}])).toEqual([]);
   });
   it("drops full URLs and query/hash data while retaining public route and useful metadata", () => {
@@ -34,4 +34,18 @@ describe("live booking funnel diagnostics", () => {
     expect(result).toEqual({pathname:"/book/regular-cleaning",section:"address",reason:"validation",fields:["contactPhone"]});
     expect(sanitizeBookingNavigationMetadata({pathname:"/account/private-id",href:"private"})).toEqual({});
   });
+  it("counts verified continuation/back once per viewed correlated session without inflating views", () => {
+    const base = {session_id:"tab",analytics_session_id:"session",step:"quote",event_type:"view",
+      metadata:{service:"regular-cleaning",flow:"booking_v2",section:"property"}};
+    const next = {...base,event_type:"next",metadata:{...base.metadata,from_step:1,from_section:"property",to_step:1,to_section:"rooms"}};
+    const back = {...next,event_type:"back",metadata:{...next.metadata,to_section:"address"}};
+    const rows = buildLiveBookingSectionDiagnostics([next,base,next,back,back,
+      {...next,analytics_session_id:"no-view"},
+      {...next,metadata:{...next.metadata,to_section:"address"}},
+      {...next,metadata:{...next.metadata,to_section:"unknown"}},
+      {...next,metadata:{...next.metadata,from_section:"rooms"}}]);
+    expect(rows).toEqual([{step:"quote",section:"property",label:"Property",viewedSessions:1,
+      continuedSessions:1,backSessions:1,exitSessions:0,errorSessions:0}]);
+  });
+
 });

@@ -242,17 +242,19 @@ export default function FunnelIntelligencePage() {
 
       <section aria-label="Regular Cleaning screen diagnostics" className="rounded-lg border border-[#DCE7FF] bg-white p-5 shadow-[var(--ui-shadow-sm)]">
         <h3 className="text-sm font-bold text-[#00164E]">Regular Cleaning screens</h3>
-        <p className="mt-1 text-xs text-slate-500">Distinct sessions per screen · exits are recorded page leaves, not confirmed abandonment.</p>
+        <p className="mt-1 text-xs text-slate-500">Distinct sessions · Continued and Went back count viewed sessions with recorded navigation. Page leaves are not confirmed abandonment.</p>
         {!data?.sectionDiagnostics?.length ? (
           <p className="mt-3 text-sm text-slate-500">Screen-level tracking starts with the updated live flow. Earlier sessions cannot be split by screen.</p>
         ) : (
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead><tr className="border-b text-xs text-slate-500"><th className="py-2">Stage / screen</th><th className="py-2 text-right">Viewed</th><th className="py-2 text-right">Page leaves</th></tr></thead>
+              <thead><tr className="border-b text-xs text-slate-500"><th className="py-2">Stage / screen</th><th className="py-2 text-right">Viewed</th><th className="px-3 py-2 text-right">Continued</th><th className="px-3 py-2 text-right">Went back</th><th className="py-2 text-right">Page leaves</th></tr></thead>
               <tbody>{data.sectionDiagnostics.map((row) => (
                 <tr key={row.step + ":" + row.section} className="border-b last:border-0">
                   <th scope="row" className="py-2 font-medium">{funnelStepLabel(row.step)} · {row.label}</th>
                   <td className="py-2 text-right tabular-nums">{row.viewedSessions}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{row.continuedSessions ?? "—"}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{row.backSessions ?? "—"}</td>
                   <td className="py-2 text-right tabular-nums">{row.exitSessions}</td>
                 </tr>
               ))}</tbody>

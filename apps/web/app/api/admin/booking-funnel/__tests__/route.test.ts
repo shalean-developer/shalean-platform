@@ -109,6 +109,8 @@ it("exposes screen diagnostics without inflating coarse-stage session counts", a
   const metadata={service:"regular-cleaning",flow:"booking_v2",section:"address"};
   readPagedRows.mockResolvedValueOnce({data:[
     {session_id:"a",analytics_session_id:"a",step:"quote",event_type:"view",created_at,metadata},
+    {session_id:"a",analytics_session_id:"a",step:"quote",event_type:"view",created_at,metadata:{...metadata,section:"property"}},
+    {session_id:"a",analytics_session_id:"a",step:"quote",event_type:"next",created_at,metadata:{...metadata,section:"property",from_section:"property",from_step:1,to_step:1,to_section:"rooms"}},
     {session_id:"a",analytics_session_id:"a",step:"quote",event_type:"view",created_at,metadata:{...metadata,section:"rooms"}},
     {session_id:"a",analytics_session_id:"a",step:"quote",event_type:"exit",created_at,metadata:{...metadata,section:"rooms"}},
   ],error:null}).mockResolvedValueOnce({data:[],error:null}).mockResolvedValueOnce({data:[],error:null});
@@ -117,6 +119,7 @@ it("exposes screen diagnostics without inflating coarse-stage session counts", a
   expect(body.viewsByStep.find((r:{step:string})=>r.step==="quote").views).toBe(1);
   expect(body.sectionDiagnostics).toMatchObject([
     {section:"address",viewedSessions:1,exitSessions:0},
-    {section:"rooms",viewedSessions:1,exitSessions:1},
+    {section:"property",viewedSessions:1,continuedSessions:1,backSessions:0,exitSessions:0},
+    {section:"rooms",viewedSessions:1,continuedSessions:0,exitSessions:1},
   ]);
 });

@@ -144,6 +144,8 @@ function BookingV2Inner() {
   // A focused location card; the summary returns on the next Details screen.
   const locationEntry = !simplifiedHomePreview && serviceSlug === "regular-cleaning" &&
     currentStep === 1 && (detailsSectionOverride ?? "address") === "address";
+  const propertyEntry = !simplifiedHomePreview && serviceSlug === "regular-cleaning" &&
+    currentStep === 1 && detailsSectionOverride === "property";
   const showSidebarSummary = !locationEntry;
   /** Steps 2–4 already use their own section cards — avoid duplicate outer card chrome. */
   const useOuterStepCard = currentStep === 1;
@@ -159,7 +161,7 @@ function BookingV2Inner() {
           : "Securing your latest price and estimated cleaning time…";
 
   return (
-    <div className={cn("min-h-dvh bg-muted/35 text-foreground", locationEntry && styles.locationPage, simplifiedHomePreview && styles.regularJourney)}>
+    <div className={cn("min-h-dvh bg-muted/35 text-foreground", (locationEntry || propertyEntry) && styles.locationPage, simplifiedHomePreview && styles.regularJourney)}>
       <BookingV2Header serviceSlug={serviceSlug} currentStep={currentStep} onStepClick={goToStep} />
 
       {/* Main content — single document scroll; fluid padding for ≤390px */}
@@ -214,7 +216,7 @@ function BookingV2Inner() {
               data-booking-stage={simplifiedHomePreview ? currentStep : undefined}
               className={
                 useOuterStepCard
-                  ? `rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 text-card-foreground shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8 ${styles.step1} ${locationEntry ? styles.locationEntry : ""}`
+                  ? `rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 text-card-foreground shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8 ${styles.step1} ${locationEntry ? styles.locationEntry : ""} ${propertyEntry ? styles.propertyStep : ""}`
                   : `min-w-0 ${currentStep === 2 ? styles.step2 : currentStep === 3 ? styles.step3 : currentStep === 4 ? styles.step4 : ""}`
               }
             >

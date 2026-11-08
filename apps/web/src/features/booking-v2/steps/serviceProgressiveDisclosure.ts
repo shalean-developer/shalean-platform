@@ -279,6 +279,7 @@ export function bookingDetailsAutoAdvanceTarget(
   details: Details,
 ): BookingDetailsStage | null {
   if (stage === "property") {
+    if (serviceSlug === "regular-cleaning") return null;
     if (!has(details, "propertyType")) return null;
     return serviceSlug === "moving-cleaning" ? "move" : "rooms";
   }
@@ -299,7 +300,7 @@ export function bookingDetailsStageAutoAdvances(
   stage: BookingDetailsStage,
 ): boolean {
   return (
-    stage === "property" ||
+    (stage === "property" && serviceSlug !== "regular-cleaning") ||
     (serviceSlug === "moving-cleaning" && stage === "move")
   );
 }

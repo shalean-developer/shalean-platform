@@ -166,8 +166,10 @@ type AnyForm = ReturnType<typeof useFormContext<any>>;
 function ServiceQuestion({
   question,
   onValueChange,
+  propertyLayout,
 }: {
   question: FormQuestion;
+  propertyLayout?: "horizontal";
   onValueChange?: (key: string, value: string) => void;
 }) {
   const { register, control, formState: { errors } } = useFormContext() as AnyForm;
@@ -238,6 +240,7 @@ function ServiceQuestion({
     return (
       <ServiceQuestionOptionCards
         question={question}
+        propertyLayout={propertyLayout}
         onValueChange={(value) => onValueChange?.(question.key, value)}
       />
     );
@@ -624,6 +627,7 @@ export function Step1Details() {
             <ServiceQuestion
               key={group.question.key}
               question={group.question}
+              propertyLayout={isRegularCleaning && activeDetailsStage === "property" ? "horizontal" : undefined}
               onValueChange={handleProgressiveAnswer}
             />
           );
@@ -736,7 +740,7 @@ export function Step1Details() {
       )}
 
       {isProgressiveDetails ? (
-        <div className={cn("flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between", locationLayout && addressStyles.actions)}>
+        <div className={cn("flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between", (locationLayout || (isRegularCleaning && activeDetailsStage === "property")) && addressStyles.actions)}>
           <button
             type="button"
             onClick={() => moveProgressiveStage("back")}

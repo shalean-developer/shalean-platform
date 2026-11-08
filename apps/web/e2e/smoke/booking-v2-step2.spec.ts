@@ -358,3 +358,45 @@ test("Regular location card validates and continues without submitting booking d
   }
   expect(forbiddenMutations).toEqual([]);
 });
+
+test("Regular property cards require confirmation and retain screen-level funnel navigation", async ({ page }) => {
+  const draft = baseDraft("regular-cleaning", "individual_cleaners");
+  draft.serviceDetails = { ...(draft.serviceDetails as Record<string, unknown>), propertyType: "" };
+  await page.addInitScript(({ key, value }) => {
+    localStorage.setItem(key, JSON.stringify(value));
+  }, { key: STORAGE_KEY, value: draft });
+  const forbiddenMutations = await installNonMutatingApiSandbox(page);
+  await page.route("**/api/booking/service-locations**", (route) => route.fulfill({
+    status: 200, json: { ok: true, locations: [{ id: LOCATION_ID, city_id: CITY_ID, name: "Claremont", city: "Cape Town" }] },
+  }));
+  const events: Array<{event_type:string;metadata:Record<string,unknown>}> = [];
+  page.on("request", request => {
+    if (new URL(request.url()).pathname === "/api/analytics/booking-event") events.push(request.postDataJSON());
+  });
+  for (const viewport of [{width:1440,height:1000},{width:390,height:844}]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/book/regular-cleaning?service=regular-cleaning&step=details&section=property");
+    const next = page.getByRole("button", { name: "Continue →", exact: true });
+    await expect(next).toBeDisabled();
+    await page.getByRole("radio", { name: "Apartment", exact: true }).click();
+    await expect(page).toHaveURL(/section=property/);
+    await expect(page.getByRole("radio", { name: "Apartment", exact: true })).toHaveAttribute("aria-checked", "true");
+    await page.getByRole("radio", { name: "Apartment", exact: true }).press("End");
+    await expect(page.getByRole("radio", { name: "Townhouse", exact: true })).toHaveAttribute("aria-checked", "true");
+    await expect(page).toHaveURL(/section=property/);
+    const tops = await page.getByRole("radio").evaluateAll(es => es.map(e=>e.getBoundingClientRect().top));
+    expect(Math.max(...tops)-Math.min(...tops)).toBeLessThan(2);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+    await next.click();
+    await expect(page).toHaveURL(/section=rooms/);
+    await page.getByRole("button", {name:"← Back",exact:true}).click();
+    await expect(page).toHaveURL(/section=property/);
+    await expect(page.getByRole("radio", {name:"Townhouse",exact:true})).toHaveAttribute("aria-checked","true");
+    await expect(next).toBeEnabled();
+  }
+  await expect.poll(()=>events.some(e=>e.event_type==="view"&&e.metadata.section==="property")).toBe(true);
+  await expect.poll(()=>events.some(e=>e.event_type==="next"&&e.metadata.section==="property"&&e.metadata.to_section==="rooms")).toBe(true);
+  await expect.poll(()=>events.some(e=>e.event_type==="back"&&e.metadata.section==="rooms"&&e.metadata.to_section==="property")).toBe(true);
+  expect(events.every(e=>!("href" in e.metadata))).toBe(true);
+  expect(forbiddenMutations).toEqual([]);
+});
