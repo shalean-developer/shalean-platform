@@ -27,3 +27,8 @@ it.each([
  m.identity.mockImplementation(async(id:string)=>({data:{user:{email:id,email_confirmed_at:"2026-11-08"}},error:null}));
  const result=await GET(new Request(base));expect(result.status).toBe(200);expect((await result.json()).recipients.every((r:{status:string})=>r.status===status)).toBe(true);
 });
+
+it("accepts the canonical external Host when Plesk uses an internal HTTP request URL",()=>{
+ expect(marketingAcceptanceHost(new Request("http://127.0.0.1:3000/api/admin/email/acceptance",{headers:{host:"pricing-test.shalean.co.za"}}))).toBe(true);
+ expect(marketingAcceptanceHost(new Request("http://127.0.0.1:3000/api/admin/email/acceptance",{headers:{host:"other.example.test","x-forwarded-host":"pricing-test.shalean.co.za"}}))).toBe(false);
+});

@@ -8,7 +8,9 @@ export function marketingAcceptanceRecipients(env: EnvLike = process.env): strin
   return list;
 }
 export function marketingAcceptanceHost(request: Request) {
-  const url = new URL(request.url);
-  const host = request.headers.get("host")?.split(":")[0]?.toLowerCase() ?? url.hostname;
-  return url.protocol === "https:" && url.hostname === "pricing-test.shalean.co.za" && host === url.hostname;
+  // Next may construct request.url from its internal listener behind Plesk.
+  // Match the actual routing Host, as the existing staging fixture routes do;
+  // never use caller-supplied x-forwarded-host as an authorization signal.
+  const host = request.headers.get("host")?.split(":")[0]?.toLowerCase() ?? new URL(request.url).hostname;
+  return host === "pricing-test.shalean.co.za";
 }
