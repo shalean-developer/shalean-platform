@@ -12,15 +12,15 @@
 }
 
 .heading h3 {
-  color: var(--foreground, #0f172a);
+  color: #00164e;
   font-size: clamp(1.4rem, 3vw, 1.75rem);
-  font-weight: 650;
-  letter-spacing: -0.025em;
+  font-weight: 600;
+  letter-spacing: -0.035em;
 }
 
 .heading p {
   margin-top: 0.5rem;
-  color: #64748b;
+  color: var(--muted-foreground);
   font-size: 0.875rem;
 }
 
@@ -41,7 +41,8 @@
 .entry button[aria-haspopup="listbox"],
 .entry button[id="suburb"] {
   min-height: 3.25rem;
-  border-radius: 1.5rem;
+  border-radius: var(--ui-radius-md);
+  border-color: #dce7ff;
   box-shadow: none;
 }
 
@@ -61,10 +62,21 @@
 
 .actions button {
   min-height: 3rem;
-  border-radius: 1.5rem;
+  border-radius: var(--ui-radius-md);
 }
 
-.actions button:last-child { flex: 1; }
+/* Match the homepage hero CTA, retaining the existing disabled gate. */
+.actions button:last-child {
+  flex: 1;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.actions button:last-child:hover:not(:disabled) { background: #0033a1; }
+.actions button:last-child:disabled { background: #cbd5e1; }
+.actions button:first-child { color: #00164e; }
 
 @media (min-width: 480px) {
   .actions { flex-direction: row; }
