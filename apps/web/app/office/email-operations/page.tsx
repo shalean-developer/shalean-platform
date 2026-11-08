@@ -140,7 +140,7 @@ export default async function EmailOperationsPage({ searchParams }: { searchPara
         <table className={styles.table}><thead><tr><th scope="col">Status</th><th scope="col">Recipient</th><th scope="col">Subject</th><th scope="col">Resend ID</th><th scope="col">Time (SAST)</th></tr></thead><tbody>
           {filteredEvents.length ? filteredEvents.map(event => <tr key={event.id}>
             <td><span className={`${styles.badge} ${event.event_type === "email.delivered" ? styles.badgeSuccess : ["email.bounced", "email.failed", "email.complained", "email.suppressed"].includes(event.event_type) ? styles.badgeAlert : styles.badgeInfo}`}>{EVENT_LABELS[event.event_type] ?? event.event_type}</span></td>
-            <td className={styles.recipient}>{event.recipient_email ?? "—"}</td><td className={styles.subject}>{event.subject ?? "—"}</td>
+            <td className={styles.recipient}>{event.recipient_email ?? "—"}</td><td className={styles.subject} title={event.subject ?? undefined}>{event.subject?.replace(/^\[SHALEAN STAGING — TEST\]\s*/, "") || "—"}</td>
             <td className={styles.messageId}>{event.resend_email_id ?? "—"}</td><td className={styles.date}>{formatDate(event.event_created_at ?? event.received_at)}</td>
           </tr>) : <tr><td colSpan={5} className={styles.empty}>No events match your filters.</td></tr>}
         </tbody></table>
