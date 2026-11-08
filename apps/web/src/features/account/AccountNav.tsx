@@ -22,7 +22,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +41,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { reportSignOutFailure, signOut } from "@/lib/auth/authClient";
 import { useUser } from "@/hooks/useUser";
+import { useCustomerAvatar } from "@/hooks/useCustomerAvatar";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -197,6 +198,7 @@ export function AccountHeader() {
   const { user } = useUser();
   const meta = user?.user_metadata as { full_name?: string } | undefined;
   const initials = initialsFromUser(user?.email, meta?.full_name);
+  const avatarPhoto = useCustomerAvatar(user);
 
   async function handleLogout() {
     try {
@@ -223,6 +225,7 @@ export function AccountHeader() {
                 aria-label="Account menu"
               >
                 <Avatar className="h-10 w-10 border border-border shadow-sm">
+                  {avatarPhoto ? <AvatarImage src={avatarPhoto} alt="" className="object-cover" referrerPolicy="no-referrer" /> : null}
                   <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">{initials}</AvatarFallback>
                 </Avatar>
               </button>

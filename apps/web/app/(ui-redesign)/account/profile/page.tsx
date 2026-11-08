@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   BookOpen,
   CalendarDays,
@@ -24,13 +24,15 @@ import {
 } from "@/lib/customer/customerProfileContactFields";
 import { normalizeSouthAfricaPhone } from "@/lib/utils/phone";
 import { useUser } from "@/hooks/useUser";
+import { useCustomerAvatar } from "@/hooks/useCustomerAvatar";
+import { CUSTOMER_AVATAR_MAX_BYTES } from "@/lib/customer/customerAvatar";
 import { useCustomerBookingAggregates } from "@/hooks/useCustomerBookingAggregates";
 import { useAddresses } from "@/hooks/useAddresses";
 import { useReviews } from "@/hooks/useReviews";
 import { useReferralSummary } from "@/hooks/useReferralSummary";
 import { HelpCard } from "@/components/account/HelpCard";
 import { MarketingEmailPreferences } from "@/components/account/MarketingEmailPreferences";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form-field";
@@ -75,6 +77,10 @@ export default function AccountProfilePage() {
   const { reviews } = useReviews();
   const { data: referralData } = useReferralSummary();
 
+  const avatarPhoto = useCustomerAvatar(user);
+  const photoInput = useRef<HTMLInputElement>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -85,6 +91,8 @@ export default function AccountProfilePage() {
   const [profileLoading, setProfileLoading] = useState(true);
   const [dateOfBirth, setDateOfBirth] = useState("");
 
+  const userId = user?.id;
+  const loginEmail = user?.email;
   const meta = user?.user_metadata as { full_name?: string; phone?: string; whatsapp?: string; preferred_contact?: string } | undefined;
   const initials = initialsFromName(meta?.full_name, user?.email);
 
@@ -93,22 +101,22 @@ export default function AccountProfilePage() {
   const avgRating = reviews.length > 0 ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1) : null;
 
   useEffect(() => {
-    if (userLoading || !user) {
-      if (!userLoading && !user) setProfileLoading(false);
+    if (userLoading || !userId) {
+      if (!userLoading && !userId) setProfileLoading(false);
       return;
     }
     const sb = getSupabaseClient();
     if (!sb) { setProfileLoading(false); return; }
     let cancelled = false;
     void (async () => {
-      setEmail(user.email ?? "");
+      setEmail(loginEmail ?? "");
       setPhone(meta?.phone ?? "");
       setWhatsapp(meta?.whatsapp ?? meta?.phone ?? "");
       setPreferredContact((meta?.preferred_contact as typeof preferredContact | undefined) ?? "whatsapp");
       const { data: profile } = await sb
         .from("user_profiles")
         .select("full_name, phone, date_of_birth")
-        .eq("id", user.id)
+        .eq("id", userId)
         .maybeSingle();
       if (!cancelled) {
         setName((profile?.full_name as string | undefined)?.trim() || meta?.full_name?.trim() || "");
@@ -120,7 +128,33 @@ export default function AccountProfilePage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [user, userLoading, meta?.full_name, meta?.phone, meta?.preferred_contact, meta?.whatsapp]);
+  }, [userId, loginEmail, userLoading, meta?.full_name, meta?.phone, meta?.preferred_contact, meta?.whatsapp]);
+
+  async function savePhoto(file?: File) {
+    const sb = getSupabaseClient();
+    if (!sb || !user || photoBusy) return;
+    if (file && (file.size > CUSTOMER_AVATAR_MAX_BYTES || !["image/jpeg", "image/png", "image/webp"].includes(file.type))) {
+      toast("Choose a JPG, PNG or WebP photo smaller than 2 MB.", "error");
+      return;
+    }
+    setPhotoBusy(true);
+    try {
+      const { data } = await sb.auth.getSession();
+      if (!data.session) throw new Error("Please sign in again.");
+      const body = file ? new FormData() : undefined;
+      if (file) body!.append("file", file);
+      const response = await fetch("/api/customer/avatar", {
+        method: file ? "POST" : "DELETE", headers: { Authorization: `Bearer ${data.session.access_token}` }, body,
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Your photo could not be saved.");
+      const refreshed = await sb.auth.refreshSession();
+      if (refreshed.error) throw new Error("Photo saved. Reload the page to update your profile picture.");
+      toast(file ? "Profile photo updated." : "Profile photo removed.", "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Your photo could not be saved.", "error");
+    } finally { setPhotoBusy(false); }
+  }
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
@@ -209,11 +243,21 @@ export default function AccountProfilePage() {
       <Card className="overflow-hidden border-primary/20 bg-primary text-primary-foreground">
         <CardContent className="p-6">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+            <div className="flex shrink-0 flex-col items-center gap-2">
             <Avatar className="h-20 w-20 shrink-0 border-4 border-primary-foreground/30 shadow-[var(--ui-shadow-sm)]">
+              {avatarPhoto ? <AvatarImage src={avatarPhoto} alt="" className="object-cover" referrerPolicy="no-referrer" /> : null}
               <AvatarFallback className="bg-primary-foreground/15 text-2xl font-bold text-primary-foreground">
                 {initials}
               </AvatarFallback>
             </Avatar>
+              <input ref={photoInput} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" aria-label="Choose profile photo" disabled={photoBusy}
+                onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void savePhoto(file); }} />
+              <Button type="button" variant="secondary" size="sm" disabled={photoBusy} onClick={() => photoInput.current?.click()}>
+                {photoBusy ? "Updating…" : avatarPhoto ? "Change photo" : "Upload photo"}
+              </Button>
+              {avatarPhoto ? <Button type="button" variant="secondary" size="sm" disabled={photoBusy} onClick={() => void savePhoto()}>Remove photo</Button> : null}
+              <p className="text-xs text-primary-foreground/80">JPG, PNG or WebP · Max 2 MB</p>
+            </div>
             <div className="min-w-0 flex-1">
               <p className="break-words text-2xl font-bold">{displayName}</p>
               <p className="mt-0.5 break-all text-sm text-primary-foreground/80">{email}</p>
