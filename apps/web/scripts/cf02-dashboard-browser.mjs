@@ -11,11 +11,11 @@ import assert from 'node:assert/strict';
 const root=process.cwd(), temp=await mkdtemp(path.join(tmpdir(),'cf02-browser-'));
 let browser,server;
 try {
-  const fixture=`import { syntheticCashReconciliation } from '@/lib/admin/expenses/cashReconciliation'; import { syntheticProviderEvidence } from '@/lib/payments/cashProviderEvidence';
+  const fixture=`import { syntheticProtectedCashEvidence } from '@/lib/admin/expenses/protectedCashEvidence'; import { syntheticCashReconciliation } from '@/lib/admin/expenses/cashReconciliation'; import { syntheticProviderEvidence } from '@/lib/payments/cashProviderEvidence';
     export function useAdminData(endpoint,options){
       const mode=new URLSearchParams(location.search).get('state');
       const period=mode==='previous'?{from:'2026-10-01',to:'2026-10-31'}:{from:options?.params?.from??'2026-11-01',to:options?.params?.to??'2026-11-30'};
-      const data=endpoint.endsWith('cash-provider-evidence')?(options?.enabled===false?null:syntheticProviderEvidence(period.from,period.to,new Date())):endpoint.endsWith('cash-reconciliation')?syntheticCashReconciliation(options?.params?.scenario??'differences',new Date()):endpoint.endsWith('cash-survival')?{period,obligations:{cleaner_unpaid_liability_cents:432100,minimum_operating_reserve_cents:500000},receivables:{sent_collectible_cents:432100,draft_monthly_cents:432100}}:{period,summary:{money_received_net_cents:432100,money_paid_cents:432100,cash_in_bank_cents:432100,petty_cash_cents:432100,net_cash_flow_cents:432100},payment_evidence:{verified_transaction_count:0,fees_verified:false},forecast:{income_cents:0,expenses_cents:0,earlier_income_cents:0,earlier_expenses_cents:0,undated_income_cents:0,undated_expenses_cents:0,issues:[],items:[]},daily_position:[],monthly_position:[]};
+      const data=endpoint.endsWith('cash-protected-evidence')?syntheticProtectedCashEvidence():endpoint.endsWith('cash-provider-evidence')?(options?.enabled===false?null:syntheticProviderEvidence(period.from,period.to,new Date())):endpoint.endsWith('cash-reconciliation')?syntheticCashReconciliation(options?.params?.scenario??'differences',new Date()):endpoint.endsWith('cash-survival')?{period,obligations:{cleaner_unpaid_liability_cents:432100,minimum_operating_reserve_cents:500000},receivables:{sent_collectible_cents:432100,draft_monthly_cents:432100}}:{period,summary:{money_received_net_cents:432100,money_paid_cents:432100,cash_in_bank_cents:432100,petty_cash_cents:432100,net_cash_flow_cents:432100},payment_evidence:{verified_transaction_count:0,fees_verified:false},forecast:{income_cents:0,expenses_cents:0,earlier_income_cents:0,earlier_expenses_cents:0,undated_income_cents:0,undated_expenses_cents:0,issues:[],items:[]},daily_position:[],monthly_position:[]};
       return {data,loading:mode==='loading',error:mode==='error'?'Synthetic offline test':null,refetch:()=>{}};
     }`;
   await build({stdin:{contents:`import React from 'react';import {createRoot} from 'react-dom/client';import Page from '@/app/(ui-redesign)/office/cash-flow/page';createRoot(document.getElementById('root')).render(<Page/>);`,loader:'tsx',resolveDir:root},
@@ -60,6 +60,12 @@ try {
     await extra.click();await page.getByRole('region',{name:'Local obligations and receivables',exact:true}).waitFor();
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`expanded page overflows at ${width}`);
     await extra.click();
+    const protectedDetails=page.locator('summary').filter({hasText:'Protected obligations · source evidence'});
+    await protectedDetails.click();
+    await page.getByText('Account: 253016000000482529', {exact:false}).waitFor();
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`protected sources overflow at ${width}`);
+    assert.match(await page.locator('body').innerText(),/Protected total: Unavailable/);
+    await protectedDetails.click();
     await page.locator('summary').filter({hasText:'View forecast details'}).click();await page.getByText('Forecast scope:',{exact:false}).waitFor();
     await page.locator('summary').filter({hasText:'View forecast details'}).click();
     await page.locator('summary').filter({hasText:'Demo settings'}).click();
@@ -72,6 +78,7 @@ try {
     assert.equal(await page.getByText('Zoho book total unavailable:',{exact:false}).count(),0);
     await select.selectOption('missing');await page.getByRole('cell',{name:/Source balance unavailable/}).waitFor();
     assert.match(await page.getByRole('region',{name:'Bank reconciliation and protected cash',exact:true}).innerText(),/Zoho book total\s+R 10\s000,00/);
+    assert.match(await page.getByRole('region',{name:'Bank reconciliation and protected cash',exact:true}).innerText(),/Funds held for Bokkie · Zoho books\s+R 100,00/);
     await select.selectOption('differences');await page.getByRole('cell',{name:'R 25,00',exact:true}).waitFor();
     await page.getByLabel('From date').fill('2026-11-30');await page.getByLabel('To date').fill('2026-11-01');
     await page.getByRole('alert').filter({hasText:'Choose a valid date range'}).waitFor();
