@@ -567,6 +567,10 @@
   border-color: #dce7ff;
   background: white;
   min-height: 10rem;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: auto;
   padding: 1rem 0.75rem;
   box-shadow: var(--ui-shadow-sm);
   transform: none;
