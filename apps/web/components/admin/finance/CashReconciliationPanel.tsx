@@ -29,7 +29,7 @@ export function CashReconciliationPanel({ data, loading, error }: { data?: CashR
         <tbody>{data?.accounts.map(a => <tr key={a.id} className="border-t">
           <th scope="row" className="p-2 font-medium">{a.name}</th>
           <td className="whitespace-nowrap p-2 tabular-nums">{amount(a.bankCents)}</td><td className="p-2">{a.bankBalanceBasis === 'current' ? 'Current' : a.bankBalanceBasis === 'available' ? 'Available' : 'Unconfirmed'}</td><td className="whitespace-nowrap p-2 tabular-nums">{amount(a.bookCents)}</td><td className="whitespace-nowrap p-2 tabular-nums">{amount(a.differenceCents)}</td>
-          <td className="p-2">{!a.identityVerified ? 'Mapping unverified' : !a.fresh ? 'Feed stale or unavailable' : !a.comparable ? 'Not comparable' : a.differenceCents === null ? 'Source balance unavailable' : a.differenceCents !== 0 ? 'Difference' : 'Equal · unverified'}</td>
+          <td className="p-2">{!a.identityVerified ? 'Mapping unverified' : !a.fresh ? 'Feed stale or unavailable' : !a.valid ? 'Source balance unavailable' : !a.comparable ? 'Not comparable' : a.differenceCents === null ? 'Source balance unavailable' : a.differenceCents !== 0 ? 'Difference' : 'Equal · unverified'}</td>
         </tr>)}</tbody>
       </table></div>
 </> : null}
