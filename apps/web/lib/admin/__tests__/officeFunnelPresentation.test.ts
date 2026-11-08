@@ -248,7 +248,7 @@ describe("production-facing copy", () => {
 
   it("shows readable anomaly comparison instead of internal metric keys", () => {
     const anomalies = buildOfficeFunnelAnomalies(SAMPLE);
-    expect(anomalies[0]?.description).toBe("Current 8 · Reference 14");
+    expect(anomalies[0]?.description).toBe("Current 8 · Usual 14");
     expect(anomalies[0]?.description).not.toContain("conversion_rate");
   });
 
