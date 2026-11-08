@@ -7,7 +7,7 @@ import { createMarketingUnsubscribeUrl, validGeneration } from "./marketingUnsub
 import { getDefaultFromAddress, getResend } from "./resendFrom";
 import { assertNotSeedEmail, isSeedEmail } from "@/lib/seed/devSeedGuard";
 
-export const ACCEPTANCE_SUBJECT = "[SHALEAN STAGING — TEST] Email preferences delivery test";
+export const ACCEPTANCE_SUBJECT = "Your Shalean email preferences";
 const ORIGIN = "https://pricing-test.shalean.co.za";
 type Result = { status: number; outcome: string; error?: string };
 
