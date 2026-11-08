@@ -45,6 +45,14 @@ test -f "$CANDIDATE/server.next.js" || fail "server.next.js missing"
 test -d "$CANDIDATE/.next" || fail ".next missing"
 test -d "$CANDIDATE/public" || fail "public missing"
 
+# Plesk keeps its generated write-only secret loader outside the Git artifact.
+# Preserve it locally; never include runtime secrets in the deployment bundle.
+if [ -e "$LIVE/.plesk-secrets.cjs" ] || [ -L "$LIVE/.plesk-secrets.cjs" ]; then
+  [ -f "$LIVE/.plesk-secrets.cjs" ] && [ ! -L "$LIVE/.plesk-secrets.cjs" ] || fail "secret loader must be a regular private file"
+  cp "$LIVE/.plesk-secrets.cjs" "$CANDIDATE/.plesk-secrets.cjs"
+  chmod 600 "$CANDIDATE/.plesk-secrets.cjs"
+fi
+
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 ROLLBACK=""
 if [ -d "$LIVE" ]; then
