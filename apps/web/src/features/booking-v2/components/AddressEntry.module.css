@@ -1,0 +1,72 @@
+.entry {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.entry > *,
+.custom > * { margin-block: 0; }
+
+.heading {
+  text-align: center;
+}
+
+.heading h3 {
+  color: var(--foreground, #0f172a);
+  font-size: clamp(1.4rem, 3vw, 1.75rem);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.heading p {
+  margin-top: 0.5rem;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.custom {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+
+.entry input,
+.entry button[aria-haspopup="listbox"],
+.entry button[id="suburb"] {
+  min-height: 3.25rem;
+  border-radius: 1.5rem;
+  box-shadow: none;
+}
+
+.modeSwitch {
+  order: 2;
+  align-self: center;
+  min-height: 2.75rem;
+  text-align: center;
+  text-underline-offset: 4px;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.75rem;
+  padding-top: 0.25rem;
+}
+
+.actions button {
+  min-height: 3rem;
+  border-radius: 1.5rem;
+}
+
+.actions button:last-child { flex: 1; }
+
+@media (min-width: 480px) {
+  .actions { flex-direction: row; }
+}

@@ -17,6 +17,8 @@ import {
 import { useBookingV2LocationResolve } from "@/lib/booking-v2/useBookingV2LocationResolve";
 import { UnsupportedSuburbModal } from "@/src/features/booking-v2/components/UnsupportedSuburbModal";
 
+import addressStyles from "./AddressEntry.module.css";
+
 const contactPhoneRules = {
   required: "Enter a contact phone number",
   validate: (value: string) => isValidContactPhone(value) || CONTACT_PHONE_VALIDATION_MESSAGE,
@@ -286,7 +288,7 @@ function SavedPropertySelect({
   );
 }
 
-export function PropertyAddressSection() {
+export function PropertyAddressSection({ locationLayout = false }: { locationLayout?: boolean }) {
   const { user, loading: userLoading } = useUser();
   const { addresses, loading: addressesLoading } = useAddresses();
   const {
@@ -568,16 +570,142 @@ export function PropertyAddressSection() {
     }
   }, [locationLoading, locationError, suburbValue]);
 
+  const customPhoneField = (
+    <div className="min-w-0">
+              <FieldLabel htmlFor="contactPhone" required>
+                Contact phone
+              </FieldLabel>
+              <div className="relative">
+                <Phone
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                  aria-hidden
+                />
+                <input
+                  id="contactPhone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="+27 82 123 4567 or 0821234567"
+                  {...register("contactPhone", contactPhoneRules)}
+                  className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+              <FieldError message={errors.contactPhone?.message} />
+            </div>
+  );
+
+  const customSuburbField = (
+    <div className="min-w-0">
+              <FieldLabel htmlFor="suburb" required>
+                Suburb
+              </FieldLabel>
+              <Controller
+                name="suburb"
+                control={control}
+                rules={{ required: "Suburb is required" }}
+                render={({ field }) => (
+                  <SearchableSelect
+                    id="suburb"
+                    options={locationOptions}
+                    selectedId={getValues("serviceAreaLocationId") ?? ""}
+                    value={field.value ?? ""}
+                    onChange={(location) => {
+                      field.onChange(location.name);
+                      setValue("serviceAreaLocationId", location.id, { shouldDirty: true });
+                      setValue("serviceAreaCityId", location.city_id ?? "", { shouldDirty: true });
+                      if (location.city) {
+                        setValue("city", location.city, { shouldDirty: true });
+                      }
+                    }}
+                    placeholder={locationsLoading ? "Loading suburbs…" : "Select suburb…"}
+                    error={errors.suburb?.message}
+                    disabled={locationsLoading}
+                  />
+                )}
+              />
+              {locationsError ? (
+                <div className="mt-1 flex items-center gap-2 text-xs text-amber-700" role="status">
+                  <span>{locationsError}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLocationsLoading(true);
+                      setLocationsError(null);
+                      setLocationLoadAttempt((attempt) => attempt + 1);
+                    }}
+                    className="font-semibold text-blue-600 hover:underline"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : null}
+              {!locationsLoading && !locationsError && locationOptions.length === 0 ? (
+                <p className="mt-1 text-xs font-medium text-amber-700" role="status">
+                  No booking suburbs are configured yet. Please contact us for assistance.
+                </p>
+              ) : null}
+              {!locationsLoading && !locationsError && locationOptions.length > 0 ? (
+                <>
+                  <FieldError message={errors.suburb?.message} />
+                  {!locationLoading ? (
+                    <FieldError message={errors.serviceAreaLocationId?.message} />
+                  ) : null}
+                </>
+              ) : null}
+              {!locationsLoading && !locationsError && locationLoading && suburbValue?.trim() ? (
+                <p className="mt-1 text-xs text-slate-500" role="status">
+                  Checking service area…
+                </p>
+              ) : null}
+              {!locationsLoading && !locationsError && !locationLoading && locationError && suburbValue?.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => setUnsupportedOpen(true)}
+                  className="mt-2 text-left text-xs font-semibold text-red-700 underline-offset-2 hover:underline"
+                >
+                  This suburb isn&apos;t covered yet — view options
+                </button>
+              ) : null}
+            </div>
+  );
+
+  const customStreetField = (
+    <div className="min-w-0 sm:col-span-2">
+              <FieldLabel htmlFor="address" required>
+                Street address
+              </FieldLabel>
+              <input
+                id="address"
+                type="text"
+                autoComplete="street-address"
+                placeholder={locationLayout ? "House number and street, including unit if needed" : "e.g. 12 Ocean View Drive"}
+                {...register("address", {
+                  required: "Street address is required",
+                  minLength: { value: 5, message: "Enter a full street address" },
+                })}
+                className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+              <FieldError message={errors.address?.message} />
+            </div>
+  );
+
   return (
-    <section className="space-y-4">
+    <section className={cn("space-y-4", locationLayout && addressStyles.entry)} aria-label="Property address">
       <UnsupportedSuburbModal
         open={unsupportedOpen}
         message={locationError || "We do not currently service this suburb."}
         onClose={() => setUnsupportedOpen(false)}
       />
-      <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
-        Property address
-      </h3>
+      {locationLayout ? (
+        <div className={addressStyles.heading}>
+          <h3>Where do you need cleaning?</h3>
+          <p>Choose a saved address or enter a new location.</p>
+        </div>
+      ) : (
+        <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
+          Property address
+        </h3>
+      )}
 
       {userLoading || addressesLoading ? (
         <div className="h-24 animate-pulse rounded-xl bg-slate-100" />
@@ -664,12 +792,12 @@ export function PropertyAddressSection() {
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className={cn("space-y-4", locationLayout && addressStyles.custom)}>
           {user && hasSavedAddresses ? (
             <button
               type="button"
               onClick={() => switchToSaved()}
-              className="text-sm font-medium text-blue-600 hover:underline"
+              className={cn("text-sm font-medium text-blue-600 hover:underline", locationLayout && addressStyles.modeSwitch)}
             >
               Use a saved address from my account
             </button>
@@ -681,116 +809,12 @@ export function PropertyAddressSection() {
             </p>
           ) : null}
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-            <div className="min-w-0">
-              <FieldLabel htmlFor="contactPhone" required>
-                Contact phone
-              </FieldLabel>
-              <div className="relative">
-                <Phone
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                  aria-hidden
-                />
-                <input
-                  id="contactPhone"
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  placeholder="+27 82 123 4567 or 0821234567"
-                  {...register("contactPhone", contactPhoneRules)}
-                  className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                />
-              </div>
-              <FieldError message={errors.contactPhone?.message} />
-            </div>
-            <div className="min-w-0">
-              <FieldLabel htmlFor="suburb" required>
-                Suburb
-              </FieldLabel>
-              <Controller
-                name="suburb"
-                control={control}
-                rules={{ required: "Suburb is required" }}
-                render={({ field }) => (
-                  <SearchableSelect
-                    id="suburb"
-                    options={locationOptions}
-                    selectedId={getValues("serviceAreaLocationId") ?? ""}
-                    value={field.value ?? ""}
-                    onChange={(location) => {
-                      field.onChange(location.name);
-                      setValue("serviceAreaLocationId", location.id, { shouldDirty: true });
-                      setValue("serviceAreaCityId", location.city_id ?? "", { shouldDirty: true });
-                      if (location.city) {
-                        setValue("city", location.city, { shouldDirty: true });
-                      }
-                    }}
-                    placeholder={locationsLoading ? "Loading suburbs…" : "Select suburb…"}
-                    error={errors.suburb?.message}
-                    disabled={locationsLoading}
-                  />
-                )}
-              />
-              {locationsError ? (
-                <div className="mt-1 flex items-center gap-2 text-xs text-amber-700" role="status">
-                  <span>{locationsError}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLocationsLoading(true);
-                      setLocationsError(null);
-                      setLocationLoadAttempt((attempt) => attempt + 1);
-                    }}
-                    className="font-semibold text-blue-600 hover:underline"
-                  >
-                    Try again
-                  </button>
-                </div>
-              ) : null}
-              {!locationsLoading && !locationsError && locationOptions.length === 0 ? (
-                <p className="mt-1 text-xs font-medium text-amber-700" role="status">
-                  No booking suburbs are configured yet. Please contact us for assistance.
-                </p>
-              ) : null}
-              {!locationsLoading && !locationsError && locationOptions.length > 0 ? (
-                <>
-                  <FieldError message={errors.suburb?.message} />
-                  {!locationLoading ? (
-                    <FieldError message={errors.serviceAreaLocationId?.message} />
-                  ) : null}
-                </>
-              ) : null}
-              {!locationsLoading && !locationsError && locationLoading && suburbValue?.trim() ? (
-                <p className="mt-1 text-xs text-slate-500" role="status">
-                  Checking service area…
-                </p>
-              ) : null}
-              {!locationsLoading && !locationsError && !locationLoading && locationError && suburbValue?.trim() ? (
-                <button
-                  type="button"
-                  onClick={() => setUnsupportedOpen(true)}
-                  className="mt-2 text-left text-xs font-semibold text-red-700 underline-offset-2 hover:underline"
-                >
-                  This suburb isn&apos;t covered yet — view options
-                </button>
-              ) : null}
-            </div>
-            <div className="min-w-0 sm:col-span-2">
-              <FieldLabel htmlFor="address" required>
-                Street address
-              </FieldLabel>
-              <input
-                id="address"
-                type="text"
-                placeholder="e.g. 12 Ocean View Drive"
-                {...register("address", {
-                  required: "Street address is required",
-                  minLength: { value: 5, message: "Enter a full street address" },
-                })}
-                className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
-              <FieldError message={errors.address?.message} />
-            </div>
+          <div className={cn("grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4", locationLayout && addressStyles.fields)}>
+            {locationLayout ? (
+              <>{customStreetField}{customSuburbField}{customPhoneField}</>
+            ) : (
+              <>{customPhoneField}{customSuburbField}{customStreetField}</>
+            )}
           </div>
         </div>
       )}

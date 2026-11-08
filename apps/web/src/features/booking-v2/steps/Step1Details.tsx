@@ -11,6 +11,7 @@ import {
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import { PropertyAddressSection } from "@/src/features/booking-v2/components/PropertyAddressSection";
+import addressStyles from "../components/AddressEntry.module.css";
 import { EquipmentSection } from "@/src/features/booking-v2/components/EquipmentSection";
 import {
   ServiceQuestionOptionCards,
@@ -567,6 +568,8 @@ export function Step1Details() {
     if (target) editDetailsSection(target);
   }
 
+  const locationLayout = serviceSlug === "regular-cleaning" && activeDetailsStage === "address";
+
   const autoAdvanceStage =
     activeDetailsStage != null &&
     bookingDetailsStageAutoAdvances(serviceSlug, activeDetailsStage);
@@ -627,10 +630,10 @@ export function Step1Details() {
         })}
       </section>
 
-      <hr className={cn("border-slate-200", !showAddress && "hidden")} />
+      <hr className={cn("border-slate-200", (!showAddress || locationLayout) && "hidden")} />
 
       <div className={cn(!showAddress && "hidden")}>
-        <PropertyAddressSection />
+        <PropertyAddressSection locationLayout={locationLayout} />
       </div>
 
       <div className={cn(!showEquipmentQuestion && "hidden")}>
@@ -733,7 +736,7 @@ export function Step1Details() {
       )}
 
       {isProgressiveDetails ? (
-        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className={cn("flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between", locationLayout && addressStyles.actions)}>
           <button
             type="button"
             onClick={() => moveProgressiveStage("back")}
@@ -750,7 +753,7 @@ export function Step1Details() {
             >
               {bookingDetailsShowsExtras(serviceSlug, activeDetailsStage)
                 ? "Continue to Schedule →"
-                : "Continue →"}
+                : locationLayout ? "Set location →" : "Continue →"}
             </button>
           ) : null}
         </div>
