@@ -1,9 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { summarizeCashReconciliation, syntheticCashReconciliation, type BankEvidence } from '../cashReconciliation';
 const now = new Date('2026-11-08T10:00:00Z');
-const rows = (): BankEvidence[] => [1,2,3,4].map(n => ({ id: String(n), name: `Bank ${n}`, bankCents: n*10000, bookCents:n*10000, feedAt:now.toISOString(), identityVerified:true, bankBalanceBasis:'current' }));
+const rows = (): BankEvidence[] => [1,2,3,4].map(n => ({ id: String(n), name: `Bank ${n}`, bankCents: n*10000, bookCents:n*10000, bookReadAt:now.toISOString(),feedAt:now.toISOString(), identityVerified:true, bankBalanceBasis:'current' }));
 const summarize = (r: BankEvidence[]) => summarizeCashReconciliation(r, ['1','2','3','4'], now);
 describe('CF-02 four-account evidence', () => {
+  it.each(['missing','stale','future','invalid'] as const)('keeps independently observed books when bank evidence is %s', kind => {
+    const r=rows();
+    if(kind==='missing') r[0].bankCents=null;
+    if(kind==='stale') r[0].feedAt='2026-11-01';
+    if(kind==='future') r[0].feedAt='2026-11-09';
+    if(kind==='invalid') r[0].bankCents=NaN;
+    const s=summarize(r);
+    expect(s.booksComplete).toBe(true); expect(s.bookCents).toBe(100000);
+    expect(s.bankComplete).toBe(false); expect(s.bankCents).toBeNull();
+    expect(s.differenceCents).toBeNull(); expect(s.safeToSpendCents).toBeNull(); expect(s.runwayDays).toBeNull();
+  });
+  it.each(['missing','stale','future','invalid','identity','duplicate'] as const)('cannot certify book totals with %s book evidence', kind => {
+    const r=rows();
+    if(kind==='missing') r[0].bookReadAt=null;
+    if(kind==='stale') r[0].bookReadAt='2026-11-01';
+    if(kind==='future') r[0].bookReadAt='2026-11-09';
+    if(kind==='invalid') r[0].bookCents=NaN;
+    if(kind==='identity') r[0].identityVerified=false;
+    if(kind==='duplicate') r[1].id='1';
+    const s=summarize(r); expect(s.booksComplete).toBe(false); expect(s.bookCents).toBeNull();
+    expect(s.differenceCents).toBeNull(); expect(s.safeToSpendCents).toBeNull();
+  });
   it.each(['available', 'unknown', undefined] as const)('does not call %s feed balances an accounting discrepancy', basis => {
     const r = rows();
     r[0] = {...r[0], bankCents:7465, bookCents:7915, bankBalanceBasis:basis};
@@ -46,4 +68,5 @@ describe('CF-02 four-account evidence', () => {
     const s=syntheticCashReconciliation('equal',now); expect(s.processorLedgerCents).toBe(75000); expect(s.bankCents).toBe(1000000); expect(s.safeToSpendCents).toBeNull();
   });
 });
+
 

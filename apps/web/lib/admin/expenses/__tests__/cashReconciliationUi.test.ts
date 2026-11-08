@@ -7,7 +7,7 @@ import { summarizeCashReconciliation } from '../cashReconciliation';
 it('labels available or unknown feeds without rendering an accounting difference',()=>{
   const now = new Date('2026-11-08T10:00:00Z');
   for (const basis of ['available','unknown'] as const) {
-    const rows = [1,2,3,4].map(n=>({id:String(n),name:`Bank ${n}`,bankCents:12666,bookCents:579584,bankBalanceBasis:basis,identityVerified:true,feedAt:now.toISOString()}));
+    const rows = [1,2,3,4].map(n=>({id:String(n),name:`Bank ${n}`,bankCents:12666,bookCents:579584,bankBalanceBasis:basis,identityVerified:true,bookReadAt:now.toISOString(),feedAt:now.toISOString()}));
     const data = summarizeCashReconciliation(rows,rows.map(r=>r.id),now);
     const html = renderToStaticMarkup(React.createElement(CashReconciliationPanel,{data,loading:false}));
     expect(html).toContain('Not comparable');
@@ -45,7 +45,18 @@ it('keeps account rows and obligations collapsed, with the spending warning visi
 it.each(['equal','stale','missing'])('preserves unavailable spending and source guards for %s',scenario=>{
   const html=renderToStaticMarkup(React.createElement(CashReconciliationPanel, {data:syntheticCashReconciliation(scenario,new Date()),loading:false}));
   expect(html).toContain('Safe to spend<strong class="block">Unavailable');
-  if(scenario!=='equal') expect(html).toContain('Totals unavailable: missing or stale balances.');
+  if(scenario!=='equal') expect(html).toContain('Bank feed total unavailable: missing or stale balances.');
   else expect(html).toContain('Equal · unverified');
 });
+
+it.each(['stale','missing'])('renders independent book totals and observation times with %s bank evidence',scenario=>{
+  const data=syntheticCashReconciliation(scenario,new Date('2026-11-08T10:00:00Z'));
+  const html=renderToStaticMarkup(React.createElement(CashReconciliationPanel,{data,loading:false}));
+  expect(data.bookCents).toBe(1000000);expect(data.bankCents).toBeNull();
+  expect(html).toContain('Zoho book total');
+  expect(html).not.toContain('Zoho book total unavailable');
+  expect(html).toContain('Books read:');expect(html).toContain('Feed refreshed:');
+  expect(html).toContain('Book balances are accounting records, not verified bank cash or spendable funds.');
+});
+
 

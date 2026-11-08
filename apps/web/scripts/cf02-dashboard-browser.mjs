@@ -62,7 +62,10 @@ try {
     await select.selectOption('equal');await page.getByRole('row').filter({hasText:'Synthetic Income Account'}).getByRole('cell',{name:'R 0,00',exact:true}).waitFor();
     assert.match(await page.getByRole('region',{name:'Bank reconciliation and protected cash',exact:true}).innerText(),/Safe to spend\s+Unavailable/);
     await select.selectOption('stale');await page.getByRole('cell',{name:/Feed stale or unavailable/}).waitFor();
+    assert.match(await page.getByRole('region',{name:'Bank reconciliation and protected cash',exact:true}).innerText(),/Zoho book total\s+R 10\s000,00/);
+    assert.equal(await page.getByText('Zoho book total unavailable:',{exact:false}).count(),0);
     await select.selectOption('missing');await page.getByRole('cell',{name:/Source balance unavailable/}).waitFor();
+    assert.match(await page.getByRole('region',{name:'Bank reconciliation and protected cash',exact:true}).innerText(),/Zoho book total\s+R 10\s000,00/);
     await select.selectOption('differences');await page.getByRole('cell',{name:'R 25,00',exact:true}).waitFor();
     await page.getByLabel('From date').fill('2026-11-30');await page.getByLabel('To date').fill('2026-11-01');
     await page.getByRole('alert').filter({hasText:'Choose a valid date range'}).waitFor();
@@ -79,4 +82,5 @@ try {
   }
   assert.deepEqual(errors,[]);console.log('CF02_BROWSER_ALL_PASS no_external_requests no_runtime_errors');
 } finally {await browser?.close();await new Promise(r=>server?server.close(r):r());await rm(temp,{recursive:true,force:true});}
+
 

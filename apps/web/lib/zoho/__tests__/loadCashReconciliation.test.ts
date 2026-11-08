@@ -31,3 +31,19 @@ it('reads exact mapped account details using GET only; failures cannot become ze
   get.mockRejectedValue(Error('offline'));expect((await loadCashReconciliation()).bankCents).toBeNull();
 });
 
+it('reads all four book balances without requiring an active bank feed',async()=>{
+  vi.stubEnv('SHALEAN_APP_ENV','production');vi.stubEnv('ZOHO_ORGANIZATION_ID','927500285');
+  const now=new Date('2026-11-08T10:00:00Z');
+  get.mockImplementation(async(path:string)=>{
+    const a=CASH_ACCOUNT_MAPPING.find(a=>path===`/bankaccounts/${a.id}`);
+    if(!a) throw Error('missing');
+    return {bankaccount:{account_id:a.id,account_name:a.name,account_type:'bank',currency_code:'ZAR',is_active:true,is_feeds_active:false,balance:105}};
+  });
+  const s=await loadCashReconciliation('differences',now);
+  expect(s.booksComplete).toBe(true);expect(s.bookCents).toBe(42000);
+  expect(s.accounts.every(a=>a.bookReadAt===now.toISOString())).toBe(true);
+  expect(s.accounts.every(a=>a.feedAt===null)).toBe(true);
+  expect(s.bankCents).toBeNull();expect(s.differenceCents).toBeNull();expect(s.safeToSpendCents).toBeNull();
+});
+
+
