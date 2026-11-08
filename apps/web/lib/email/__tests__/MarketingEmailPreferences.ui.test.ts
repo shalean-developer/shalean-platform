@@ -25,10 +25,11 @@ describe("Gate 3 customer preference UI — isolated synthetic DOM",()=>{
     Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});
     mocks.user.mockReturnValue({user:{id:"synthetic-user"},loading:false});
     mocks.getSession.mockResolvedValue({data:{session:{access_token:"synthetic-token"}},error:null});
-    fetchMock=vi.fn(async(_url:string,init?:RequestInit)=>({
-      ok:true,
-      json:async()=>init?.method==="POST"?{ok:true}:{status:"no_consent"},
-    }));
+    let persistedStatus = "no_consent";
+    fetchMock=vi.fn(async(_url:string,init?:RequestInit)=>{
+      if(init?.method === "POST") persistedStatus = JSON.parse(String(init.body)).decision === "granted" ? "consent_recorded" : "unsubscribed";
+      return {ok:true,json:async()=>init?.method === "POST" ? {ok:true} : {status:persistedStatus}};
+    });
     vi.stubGlobal("fetch",fetchMock);
     host=document.createElement("div");document.body.appendChild(host);
     root=createRoot(host);
