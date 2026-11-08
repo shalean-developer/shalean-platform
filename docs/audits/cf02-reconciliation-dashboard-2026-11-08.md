@@ -21,3 +21,13 @@ Four unique account identities; missing/duplicate/invalid balances; stale/future
 Use current main lineage through the existing prebuilt staging workflow, deploy/staging and existing Plesk activation. No deployment infrastructure changes. Verify hosted release SHA, isolated Supabase, TEST Paystack, Zoho writes blocked and messaging disabled. Verify all four synthetic scenarios on desktop/mobile; preserve previous runtime rollback. Roll back this source change via revert and the same release path if needed. Do not merge either old production-based PR #1054/#1055.
 
 CF-02 remains OPEN. No financial reconciliation, provider payout completion, production acceptance or closure is implied by synthetic testing.
+
+## Dashboard verification completion
+
+Owner directed finishing the current dashboard stage before source/settlement integration. Remaining display defects: several cards/charts could retain previous-period figures or default to zero after an API error; local obligations lacked selected-period matching; empty charts gave no explanation; date inputs lacked accessible names; missing source balance was labelled as a numerical difference.
+
+The focused completion patch blocks all affected period figures/charts unless the response dates match the valid selected range, adds invalid-range and empty-state messages, labels dates, removes the misleading live-data dot and clarifies that the fictional bank demonstration differs from the isolated staging ledger. Missing source balances are labelled unavailable. Existing financial formulas, providers and balances are unchanged.
+
+New regressions cover previous-period/loading/error display and 401/403 source denial before provider access. A test-only CI workflow builds the actual page with synthetic hook/period/Link replacements, real components and Tailwind styles. Its local-only Playwright server rejects all non-localhost requests, uses no credentials, and checks four scenarios, invalid dates, unavailable values and document overflow at 390/768/1280 pixels. This is isolated page responsiveness evidence, not a claim of a real mobile account session. Deployment continues through the established staging workflow only; the browser workflow does not deploy.
+
+User acceptance remains pending; CF-02 stays OPEN. Do not begin source/settlement integration or release to production on the strength of these synthetic tests.
