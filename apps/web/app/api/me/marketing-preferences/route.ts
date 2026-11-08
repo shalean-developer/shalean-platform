@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireCustomerSession } from "@/lib/auth/customerBearer";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { recordCustomerMarketingDecision } from "@/lib/email/marketingConsentService";
+import { resumeConsentedMarketingDelivery } from "@/lib/email/resumeConsentedMarketingDelivery";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,20 +31,26 @@ export async function POST(request: Request) {
   if (!email) return NextResponse.json({ error: "Verified account email required." }, { status: 403 });
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Temporarily unavailable." }, { status: 503 });
+  const evidenceReference = randomUUID();
   const result = await recordCustomerMarketingDecision(admin, {
     customerId: auth.session.userId,
     authenticatedEmail: email,
     decision: obj.decision,
     explicitOptIn: obj.explicitOptIn === true,
-    evidenceReference: randomUUID(),
+    evidenceReference,
     source: "authenticated_preferences",
     apiKey: process.env.RESEND_API_KEY,
   });
   if (!result.ok) return NextResponse.json({ error: result.reason }, { status: 409 });
+  const deliveryResumed = obj.decision === "granted" && await resumeConsentedMarketingDelivery(admin, {
+    customerId: auth.session.userId, email: email.toLowerCase().trim(), evidenceReference,
+    apiKey: process.env.RESEND_API_KEY,
+  });
   return NextResponse.json({
     ok: true,
     decision: obj.decision,
     providerSync: result.providerSync ?? "not_requested",
+    deliveryResumed,
   }, { headers: { "Cache-Control": "no-store" } });
 }
 
