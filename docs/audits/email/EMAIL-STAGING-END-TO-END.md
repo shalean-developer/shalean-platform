@@ -20,13 +20,15 @@ Campaign/draft review → verified customer consent → consent ledger and enrol
 ## Owner staging test
 
 1. Open `/office/marketing/email` with an authorized Office account. Review the campaign/delivery links and the paused-delivery notice. MFA remains required; there is no test bypass.
-2. In the existing synthetic customer account, open `/account/email-test`, or use the staging-test link in profile preferences.
+2. As the verified Office Owner, open `/office/marketing/email/test` (the old `/account/email-test` handoff link redirects here). The existing `system.settings` permission and Office email verification are required. The separate synthetic customer entry remains `/account/email-rehearsal`, linked from that test customer's profile.
 3. Check the explicit authorization for synthetic fixture changes, then choose **Run no-send end-to-end checks**.
 4. The page executes and reports each result only after real HTTP/state checks: signed GET no mutation; legacy GET/POST non-mutation; current withdrawal; repeat replay; completed queue preservation; active processing claim/lease preservation; partial profile recovery; generation advance on fresh grant; used and previously unused old-link rejection; fresh-link withdrawal; tampered signature rejection.
 5. The synthetic account must finish withdrawn. A failed test is not a PASS; failed cleanup is visibly reported. No messages are submitted and no provider contact is written.
 6. Optionally open the current confirmation link to review its accessible browser page. A form submission returns a customer-friendly success/error page; one-click/API callers retain JSON/status compatibility.
 
-The page and API require the staging environment, exact staging database, disabled outbound messaging and disabled provider writes. They require a server-verified confirmed email and the pinned synthetic customer UUID/email. Caller-selected identities, unknown operations, another request origin and every production configuration fail closed. The fixture API cannot replace an unrelated processing claim. Consent evidence remains append-only and generation never resets.
+The Office route runs only against the pinned synthetic customer; grants and cleanup never call the Office user's personal preferences API. A server-owned actor reference is included in synthetic consent evidence. The customer endpoint still requires the exact fixture identity.
+
+The pages and APIs require the staging environment, exact staging database, disabled outbound messaging and disabled provider writes. Customer access requires a server-verified confirmed email and the pinned synthetic customer identity. Office access requires existing Owner authority, `system.settings`, and normal Office email verification; every operation still targets the same pinned synthetic UUID/email. Caller-selected identities, unknown operations, another request origin and every production configuration fail closed. The fixture API cannot replace an unrelated processing claim. Consent evidence remains append-only and generation never resets.
 
 Synthetic fixture: `6b891181-1822-44ee-b713-24b213db540a`, `marketing-acceptance-20261105@example.test`. This is an existing reserved-domain test account, not a customer or a new credential. No signing key is exposed; signed test links stay within staging and must not be pasted into public issue evidence.
 

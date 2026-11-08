@@ -332,6 +332,10 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
       },
       {
+        source: "/api/admin/email/rehearsal",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
+      {
         source: "/(office|login|admin)(.*)",
         headers: [{ key: "X-Frame-Options", value: "DENY" }],
       },

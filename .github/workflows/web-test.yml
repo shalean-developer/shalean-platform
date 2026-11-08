@@ -249,6 +249,9 @@ jobs:
           lib/auth/__tests__/marketingVerifiedCustomer.test.ts
           app/api/admin/email/health/__tests__/route.test.ts
           app/api/me/marketing-rehearsal/__tests__/route.test.ts
+          app/api/admin/email/rehearsal/__tests__/route.test.ts
+          lib/email/__tests__/marketingTestEntry.test.ts
+          lib/email/__tests__/marketingOfficeJourney.ui.test.ts
           app/api/marketing/unsubscribe/__tests__/route.test.ts
           lib/email/__tests__/marketingAndTransactionalSend.integration.test.ts
           lib/email/__tests__/syncConsentedMarketingContact.test.ts
