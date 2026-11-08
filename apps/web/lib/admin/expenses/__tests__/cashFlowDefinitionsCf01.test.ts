@@ -20,7 +20,7 @@ describe("CF-01 recorded versus projected cash-flow definitions", () => {
 
   it("explicitly separates recorded net from the incomplete forecast in the UI", () => {
     const page = read("app/(ui-redesign)/office/cash-flow/page.tsx");
-    expect(page).toContain("Paid cleaner batches + approved expenses");
+    expect(page).toContain("Payouts + approved expenses");
     expect(page).toContain("Provisional net · settlements less payouts/approved expenses");
     expect(page).toContain("approval and a selected payment method do not verify a matched bank debit");
     expect(page).toContain("Bank-verified expense cash outflow is not available from this source.");
@@ -30,3 +30,4 @@ describe("CF-01 recorded versus projected cash-flow definitions", () => {
     expect(page).toContain("Recorded inflows vs provisional outflows (monthly)");
   });
 });
+

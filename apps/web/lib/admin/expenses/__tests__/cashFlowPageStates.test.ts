@@ -18,14 +18,32 @@ it.each(['error','loading','previousPeriod'])('never displays retained previous 
 });
 it('explains genuine empty charts and labels date inputs',()=>{
   const html=renderToStaticMarkup(React.createElement(CashFlowPage));
-  expect(html).toContain('No recorded daily cash-flow entries in this period.');expect(html).toContain('No recorded inflows or provisional outflows in this period.');
+  expect(html).toContain('No recorded activity.');expect(html).toContain('No recorded activity.');
   expect(html).toContain('aria-label="From date"');expect(html).toContain('aria-label="To date"');
 });
 
 it('keeps secondary balances and payment rules available in native collapsed disclosures',()=>{
   const html=renderToStaticMarkup(React.createElement(CashFlowPage));
-  expect(html).toContain('More period balances &amp; obligations');
-  expect(html).toContain('Payment evidence &amp; calculation rules');
-  expect(html).toContain('Expense approval does not verify a bank debit.');
+  expect(html).toContain('Balances &amp; obligations');
+  expect(html).toContain('How totals are calculated');
+  expect(html).toContain('Approved expenses may not yet be paid.');
   expect(html).toContain('<details');expect(html).not.toContain('<details open');
+});
+
+
+it('keeps charts and long explanations out of the default overview',()=>{
+  const html=renderToStaticMarkup(React.createElement(CashFlowPage));
+  const visible=html.replace(/<details[\s\S]*?<\/details>/g,'');
+  expect(html).toContain('Activity charts');expect(visible).not.toContain('No recorded activity.');
+  expect(visible).toContain('Payouts + approved expenses');
+  expect(visible).not.toContain('Payment evidence');expect(visible).not.toContain('Provisional net uses');
+});
+
+it('shows forecast totals while keeping exclusions and source records collapsed',async()=>{
+  const {CashFlowForecastBreakdown}=await import('@/components/admin/finance/CashFlowForecastBreakdown');
+  const html=renderToStaticMarkup(React.createElement(CashFlowForecastBreakdown,{from:'2026-11-01',to:'2026-11-30',forecast:{income_cents:123400,expenses_cents:567800,earlier_income_cents:0,earlier_expenses_cents:0,undated_income_cents:0,undated_expenses_cents:0,issues:['Source needs review'],items:[]}}));
+  const visible=html.replace(/<details[\s\S]*<\/details>/g,'');
+  expect(visible).toContain('Expected in');expect(visible).toContain('Expected out');
+  expect(visible).toContain('Partial estimate');expect(visible).toContain('Source needs review');
+  expect(visible).not.toContain('Earlier unpaid');expect(html).not.toContain('<details open');
 });

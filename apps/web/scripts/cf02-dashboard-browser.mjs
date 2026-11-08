@@ -37,20 +37,23 @@ try {
   const page=await browser.newPage();await page.route('**/*',route=>route.request().url().startsWith(origin)?route.continue():route.abort());
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   for(const width of [390,768,1280]) {
-    await page.setViewportSize({width,height:900});await page.goto(origin);await page.getByRole('table').waitFor();
+    await page.setViewportSize({width,height:900});await page.goto(origin);await page.getByRole('heading',{name:'Bank balances',exact:true}).waitFor();
     assert.equal(await page.evaluate(()=>innerWidth),width);
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`page overflows at ${width}`);
-    const rules=page.locator('summary').filter({hasText:'Balance rules & source details'});
+    assert.equal(await page.getByRole('table').isVisible(),false);
+    const rules=page.locator('summary').filter({hasText:'View account details'});
     assert.equal(await page.getByText('Transfers move cash between accounts;', {exact:false}).isVisible(),false);
     await rules.press('Enter');await page.getByText('Transfers move cash between accounts;', {exact:false}).waitFor();
     await rules.press('Enter');
-    const extra=page.locator('summary').filter({hasText:'More period balances & obligations'});
+    const extra=page.locator('summary').filter({hasText:'Balances & obligations'});
     assert.equal(await page.getByRole('region',{name:'Local obligations and receivables',exact:true}).isVisible(),false);
     await extra.click();await page.getByRole('region',{name:'Local obligations and receivables',exact:true}).waitFor();
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`expanded page overflows at ${width}`);
     await extra.click();
-    await page.locator('summary').filter({hasText:'Forecast rules & excluded amounts'}).click();await page.getByText('Forecast scope:',{exact:false}).waitFor();
-    await page.locator('summary').filter({hasText:'Forecast rules & excluded amounts'}).click();
+    await page.locator('summary').filter({hasText:'View forecast details'}).click();await page.getByText('Forecast scope:',{exact:false}).waitFor();
+    await page.locator('summary').filter({hasText:'View forecast details'}).click();
+    await page.locator('summary').filter({hasText:'Demo settings'}).click();
+    await rules.click();
     const select=page.getByRole('combobox',{name:'Synthetic test scenario'});
     await select.selectOption('equal');await page.getByRole('row').filter({hasText:'Synthetic Income Account'}).getByRole('cell',{name:'R 0,00',exact:true}).waitFor();
     assert.match(await page.getByRole('region',{name:'Bank reconciliation and protected cash',exact:true}).innerText(),/Safe to spend\s+Unavailable/);
@@ -59,14 +62,17 @@ try {
     await select.selectOption('differences');await page.getByRole('cell',{name:'R 25,00',exact:true}).waitFor();
     await page.getByLabel('From date').fill('2026-11-30');await page.getByLabel('To date').fill('2026-11-01');
     await page.getByRole('alert').filter({hasText:'Choose a valid date range'}).waitFor();
+    assert.equal(await page.getByRole('region',{name:'Local obligations and receivables',exact:true}).isVisible(),false);
+    await page.locator('summary').filter({hasText:'Activity charts'}).click();
     assert.equal(await page.getByText('Selected-period data unavailable.',{exact:true}).count(),2);
     console.log(`CF02_BROWSER_PASS viewport=${width} scenarios=4 invalid_dates=blocked`);
   }
   for(const state of ['loading','error','previous']) {
     await page.goto(`${origin}/?state=${state}`);await page.getByRole('heading',{name:'Cash flow',exact:true}).waitFor();
-    await page.locator('summary').filter({hasText:'More period balances & obligations'}).click();
+    await page.locator('summary').filter({hasText:'Balances & obligations'}).click();
     assert.ok(!(await page.locator('body').innerText()).includes('4\u00a0321'),`retained figures exposed during ${state}`);
     console.log(`CF02_BROWSER_PASS state=${state} retained_values=hidden`);
   }
   assert.deepEqual(errors,[]);console.log('CF02_BROWSER_ALL_PASS no_external_requests no_runtime_errors');
 } finally {await browser?.close();await new Promise(r=>server?server.close(r):r());await rm(temp,{recursive:true,force:true});}
+
