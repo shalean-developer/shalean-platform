@@ -43,6 +43,18 @@ describe("Gate 3 integration: send wrapper + synthetic provider, NO external ema
     });
   });
   afterEach(()=>vi.unstubAllEnvs());
+  it("adds an authoritative staging marker to provider payload and recovery ledger", async () => {
+    vi.stubEnv("SHALEAN_APP_ENV", "staging");
+    const payload = marketing(); payload.tags.push({name:"shalean_environment",value:"production"});
+    await safeResendSend(payload);
+    const tags = mock.send.mock.calls[0][0].tags;
+    expect(tags.filter((t:{name:string})=>t.name==="shalean_environment")).toEqual([{name:"shalean_environment",value:"staging"}]);
+    expect(auditRows[0]?.tags).toEqual(tags);
+  });
+  it("does not add a staging marker in production", async () => {
+    vi.stubEnv("SHALEAN_APP_ENV", "production"); await safeResendSend(marketing());
+    expect(mock.send.mock.calls[0][0].tags.some((t:{name:string})=>t.name==="shalean_environment")).toBe(false);
+  });
   it("consented referral transmits only to mocked provider and preserves context", async () => {
     const result = await safeResendSend(marketing());
     expect(result.error).toBeNull();
