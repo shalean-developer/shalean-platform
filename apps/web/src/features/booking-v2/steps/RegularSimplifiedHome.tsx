@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { ServiceQuestionOptionCards } from "@/src/features/booking-v2/components/ServiceQuestionOptionCards";
+import { HomeSectionHeader } from "@/components/marketing-home/primitives/HomeSectionHeader";
 import { FloatingSelect } from "@/components/ui/floating-select";
 import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
@@ -69,12 +70,12 @@ export function RegularSimplifiedHome() {
 
   return (
     <section className="space-y-6" aria-label="Your home">
-      <header>
-        <h2 className="text-xl font-bold text-[#00164E]">Tell us about your home</h2>
-        <p className="mt-1 text-sm text-slate-600">Choose the cleaning scope and suburb before selecting an available time.</p>
-      </header>
+      <HomeSectionHeader
+        title="Tell us about your home"
+        description="Choose your home details and suburb, then see available dates."
+      />
 
-      <div className="space-y-4">
+      <div className="space-y-4 rounded-lg border border-border bg-card p-4 shadow-sm sm:p-5">
         {options.filter((q) => ["propertyType", "bedrooms", "bathrooms", "extraRooms", "hasPets"].includes(q.key))
           .map((question) => question.key === "propertyType" ? (
             <ServiceQuestionOptionCards
@@ -99,8 +100,8 @@ export function RegularSimplifiedHome() {
           ))}
       </div>
 
-      <fieldset className="space-y-2 rounded-lg border border-[#DCE7FF] p-4">
-        <legend className="px-1 text-sm font-semibold text-[#00164E]">Who will provide cleaning equipment?</legend>
+      <fieldset className="space-y-2 rounded-lg border border-border p-4">
+        <legend className="px-1 text-sm font-semibold text-foreground">Who will provide cleaning equipment?</legend>
         <p className="text-xs text-slate-600">Shalean equipment delivery has a distance-based fee. Your final fee is confirmed after you enter the street address.</p>
         {([
           { value: "no", label: "I will provide equipment" },
@@ -112,24 +113,24 @@ export function RegularSimplifiedHome() {
               name="regular-home-equipment-choice"
               checked={equipmentRequired === choice.value}
               onChange={() => updateEquipment(choice.value)}
-              className="accent-[#0051FF]"
+              className="accent-primary"
             />
             <span>{choice.label}</span>
           </label>
         ))}
         {equipmentRequired === "yes" && (
-          <p role="status" className="rounded-lg bg-[#EEF3FF] px-3 py-2 text-xs text-[#0033A1]">
+          <p role="status" className="rounded-lg bg-primary/5 px-3 py-2 text-xs text-foreground">
             Equipment logistics will be quoted after your full address is confirmed. This is not a final price.
           </p>
         )}
       </fieldset>
 
       {extras.length > 0 && (
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-semibold text-[#00164E]">Optional extras</legend>
+        <fieldset className="space-y-2 rounded-lg border border-border bg-card p-4 shadow-sm sm:p-5">
+          <legend className="text-sm font-semibold text-foreground">Optional extras</legend>
           <div className="grid gap-2 sm:grid-cols-2">
             {extras.map((extra) => (
-              <label key={extra.id} className="flex min-h-11 items-start gap-3 rounded-lg border border-[#DCE7FF] p-3 text-sm">
+              <label key={extra.id} className="flex min-h-11 items-start gap-3 rounded-lg border border-border p-3 text-sm">
                 <input
                   type="checkbox"
                   checked={selectedExtras.includes(extra.id)}
@@ -138,7 +139,7 @@ export function RegularSimplifiedHome() {
                       ? [...selectedExtras, extra.id]
                       : selectedExtras.filter((id) => id !== extra.id),
                     { shouldDirty: true, shouldValidate: true })}
-                  className="mt-1 accent-[#0051FF]"
+                  className="mt-1 accent-primary"
                 />
                 <span><strong>{extra.label}</strong><span className="block text-xs text-slate-600">+R{extra.priceZar} · {extra.description}</span></span>
               </label>
@@ -170,8 +171,8 @@ export function RegularSimplifiedHome() {
         {locationError && <p role="alert" className="text-xs text-red-700">{locationError}</p>}
       </div>
 
-      <div className="rounded-lg border border-[#DCE7FF] bg-[#F5F7FB] p-4">
-        <p className="text-sm font-semibold text-[#00164E]">Home details {ready ? "complete" : "incomplete"}</p>
+      <div className="rounded-lg border border-border bg-muted/35 p-4">
+        <p className="text-sm font-semibold text-foreground">Home details {ready ? "complete" : "incomplete"}</p>
         <p className="mt-1 text-xs text-slate-600">
           {ready
             ? "The home information is complete. You can continue to see available dates."

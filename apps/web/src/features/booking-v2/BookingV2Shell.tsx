@@ -150,14 +150,16 @@ function BookingV2Inner() {
           : "Securing your latest price and estimated cleaning time…";
 
   return (
-    <div className="min-h-dvh bg-muted/35 text-foreground">
+    <div className={cn("min-h-dvh bg-muted/35 text-foreground", simplifiedHomePreview && styles.regularJourney)}>
       <BookingV2Header serviceSlug={serviceSlug} currentStep={currentStep} onStepClick={goToStep} />
 
       {/* Main content — single document scroll; fluid padding for ≤390px */}
       <div className="mx-auto w-full max-w-[1280px] px-[var(--ui-page-gutter)] py-4 sm:py-8 lg:py-12">
         <div
           className={
-            showSidebarSummary
+            simplifiedHomePreview
+              ? styles.journeyGrid
+              : showSidebarSummary
               ? "grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] lg:items-start lg:gap-12 xl:gap-48"
               : "mx-auto max-w-[var(--ui-container-sm)]"
           }
@@ -165,8 +167,10 @@ function BookingV2Inner() {
           <div
             className={cn(
               "min-w-0 w-full justify-self-center",
-              showSidebarSummary ? "lg:translate-x-6 xl:translate-x-20" : "mx-auto",
-              currentStep === 2
+              simplifiedHomePreview ? styles.journeyMain : showSidebarSummary ? "lg:translate-x-6 xl:translate-x-20" : "mx-auto",
+              simplifiedHomePreview
+                ? "max-w-none"
+                : currentStep === 2
                 ? "max-w-[720px]"
                 : currentStep === 3 || currentStep === 4
                   ? "max-w-[760px]"
@@ -198,6 +202,7 @@ function BookingV2Inner() {
 
             <div
               data-review-time-missing={reviewTimeMissing ? "true" : undefined}
+              data-booking-stage={simplifiedHomePreview ? currentStep : undefined}
               className={
                 useOuterStepCard
                   ? `rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 text-card-foreground shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8 ${styles.step1}`
@@ -224,6 +229,7 @@ function BookingV2Inner() {
               )}
             >
               <Button
+                data-booking-action
                 variant="outline"
                 size="lg"
                 onClick={goBack}
@@ -239,6 +245,7 @@ function BookingV2Inner() {
 
               {currentStep < 4 && (
                 <Button
+                  data-booking-action
                   size="lg"
                   onClick={goNext}
                   disabled={paymentEditResetting || (currentStep === 3 && !paymentEntryAllowed)}
@@ -252,10 +259,10 @@ function BookingV2Inner() {
           </div>
 
           {showSidebarSummary && (
-            <aside className="hidden w-full max-w-[360px] self-start justify-self-start lg:block">
+            <aside className={cn("hidden w-full max-w-[360px] self-start justify-self-start lg:block", simplifiedHomePreview && styles.journeySummary)}>
               <div
-                className="fixed z-20 w-[360px] max-w-[calc(100vw-var(--ui-page-gutter))] overflow-y-auto overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                style={{
+                className={simplifiedHomePreview ? styles.journeySummaryInner : "fixed z-20 w-[360px] max-w-[calc(100vw-var(--ui-page-gutter))] overflow-y-auto overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}
+                style={simplifiedHomePreview ? undefined : {
                   top: "calc(7.5rem + env(safe-area-inset-top))",
                   maxHeight: "calc(100dvh - 8.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
                 }}

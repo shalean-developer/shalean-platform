@@ -468,3 +468,69 @@
     padding: var(--ui-space-5);
   }
 }
+
+/* The approved Regular journey shares the public site's tokens. Keep legacy
+   layouts unchanged until their own journey is approved. */
+.regularJourney {
+  color: var(--foreground);
+  background: var(--background);
+}
+
+.journeyGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--ui-space-6);
+  align-items: start;
+}
+
+.journeyMain {
+  min-width: 0;
+  width: 100%;
+  transform: none;
+}
+
+.journeySummaryInner {
+  width: 100%;
+}
+
+.regularJourney h2 {
+  color: var(--foreground);
+  font-size: var(--ui-text-section-title);
+  line-height: var(--ui-leading-tight);
+  letter-spacing: -0.025em;
+  font-weight: 600;
+}
+
+.regularJourney h3 {
+  color: var(--foreground);
+  font-size: var(--ui-text-card-title);
+  line-height: var(--ui-leading-tight);
+  font-weight: 600;
+}
+
+.regularJourney :global([data-booking-action]) {
+  min-height: 3rem;
+  border-radius: var(--ui-radius-sm);
+}
+
+/* Schedule and review reuse the production components inside the new stages. */
+.regularJourney .step2 > :global(.space-y-8) > section,
+.regularJourney .step3 > :global(.space-y-6) > section {
+  padding: var(--ui-space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--card);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+@media (min-width: 1024px) {
+  .journeyGrid {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+    gap: var(--ui-space-8);
+  }
+
+  .journeySummary {
+    position: sticky;
+    top: calc(6rem + env(safe-area-inset-top));
+  }
+}
