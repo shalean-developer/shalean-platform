@@ -347,7 +347,11 @@ test("Regular location card validates and continues without submitting booking d
     await setLocation.click();
     await expect(page).toHaveURL(/section=property/);
     await expect(page.getByRole("radio", { name: /House/ })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Booking summary", exact: true })).toBeVisible();
+    if (viewport.width >= 1024) {
+      await expect(page.getByRole("heading", { name: "Booking summary", exact: true })).toBeVisible();
+    } else {
+      await expect(page.getByRole("button", { name: /^Booking summary/ })).toBeVisible();
+    }
     await page.getByRole("button", { name: "← Back", exact: true }).click();
     await expect(page).toHaveURL(/section=address/);
     await expect(street).toHaveValue("1 Playwright Test Street");
