@@ -1,5 +1,7 @@
 import "server-only";
 
+import { zohoPaystackClearingAccountId } from "@/lib/zoho/zohoWebsiteReceiptAccount";
+
 import { normalizeBillingEmail } from "@/lib/zoho/shaleanBillingContactEmail";
 import { zohoBooksClient } from "@/lib/zoho/zohoBooksClient";
 import { formatZohoOrderReference, type ZohoOrderKind } from "@/lib/zoho/zohoOrderReference";
@@ -680,6 +682,8 @@ export async function getZohoEstimatePdf(
 // ─── Payments ─────────────────────────────────────────────────────────────────
 
 export type MarkInvoicePaidParams = {
+  /** Explicitly verified Paystack charges must clear through Paystack, never the FNB default. */
+  paymentSource?: "paystack";
   zohoInvoiceId: string;
   /** Amount in ZAR (not cents) */
   amountZar: number;
@@ -720,6 +724,7 @@ export async function markZohoInvoicePaid(
     const res = await zohoBooksClient.post<ZohoPaymentCreateResponse>("/customerpayments", {
       customer_id: contactId,
       payment_mode: "bank_transfer",
+      ...(params.paymentSource === "paystack" ? { account_id: zohoPaystackClearingAccountId() } : {}),
       amount: params.amountZar,
       date: params.paymentDate,
       invoices: [
@@ -793,6 +798,8 @@ export type CreateZohoExpenseParams = {
   accountId: string;
   date: string;
   amountZar: number;
+  /** Payment/source account; distinct from the expense category accountId. */
+  paidThroughAccountId?: string;
   vendorId?: string;
   description?: string;
   referenceNumber?: string;
@@ -807,6 +814,7 @@ export async function createZohoExpense(
       account_id: params.accountId,
       date: params.date,
       amount: params.amountZar,
+      ...(params.paidThroughAccountId ? { paid_through_account_id: params.paidThroughAccountId } : {}),
       ...(params.vendorId ? { vendor_id: params.vendorId } : {}),
       ...(params.description ? { description: params.description } : {}),
       ...(params.referenceNumber ? { reference_number: formatZohoReference(params.referenceNumber) } : {}),
@@ -879,3 +887,4 @@ export function todayYmdJhb(): string {
   const get = (type: "year" | "month" | "day") => parts.find((p) => p.type === type)?.value ?? "";
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
+
