@@ -183,6 +183,46 @@ describe("syncPaidBookingSideEffects Zoho verification", () => {
     if (!missingActual.ok) expect(missingActual.error).toBe("zoho_invoice_customer_missing");
   });
 
+  it.each([
+    ["verified Paystack callback", "card", "paystack", true],
+    ["unverified card-labelled booking", "card", undefined, false],
+    ["direct bank EFT", "eft", undefined, false],
+  ] as const)("routes %s without inferring payment gateway from booking method", async (_label, method, source, isPaystack) => {
+    const admin = makeAdmin({
+      customer_id: "u1",
+      customer_email: "c@example.com",
+      customer_name: "C",
+      total_paid_zar: 450,
+      payment_method: method,
+      zoho_invoice_id: null,
+      is_monthly_billing_booking: false,
+      sales_document_id: null,
+    });
+    resolveZohoCustomerContactForBookingMock.mockResolvedValue({
+      ok: true,
+      contact: { email: "c@example.com", name: "C", phone: null },
+    });
+    createZohoInvoiceMock.mockResolvedValue({ ok: true, zohoInvoiceId: "z1", invoiceNumber: "INV-1" });
+    markZohoInvoicePaidMock.mockResolvedValue({ ok: true, paymentId: "p1" });
+    getZohoInvoiceMock.mockResolvedValue(paidMatchingInvoice());
+
+    await syncPaidBookingSideEffects(admin, {
+      bookingId: "b1",
+      reference: "provider_ref",
+      amountCents: 45000,
+      ...(source ? { paymentSource: source } : {}),
+    });
+
+    expect(markZohoInvoicePaidMock).toHaveBeenCalledTimes(1);
+    expect(markZohoInvoicePaidMock).toHaveBeenCalledWith(
+      expect.objectContaining(
+        isPaystack ? { paymentSource: "paystack" } : { reference: "provider_ref" },
+      ),
+    );
+    const args = markZohoInvoicePaidMock.mock.calls[0]?.[0] as { paymentSource?: string };
+    expect(args.paymentSource === "paystack").toBe(isPaystack);
+  });
+
   it("returns failed on allocation failure (does not invent zero balance)", async () => {
     const admin = makeAdmin({
       customer_id: "u1",
@@ -573,3 +613,4 @@ describe("syncPaidBookingSideEffects Zoho verification", () => {
     });
   });
 });
+

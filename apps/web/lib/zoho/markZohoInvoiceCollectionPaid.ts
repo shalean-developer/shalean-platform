@@ -2,6 +2,7 @@ import "server-only";
 
 import { zohoBooksClient } from "@/lib/zoho/zohoBooksClient";
 import { getZohoInvoice } from "@/lib/zoho/zohoBooksService";
+import { zohoPaystackClearingAccountId } from "@/lib/zoho/zohoWebsiteReceiptAccount";
 
 export type ZohoCollectionPaymentItem = {
   zohoInvoiceId: string;
@@ -40,6 +41,8 @@ export async function markZohoInvoiceCollectionPaid(params: {
     const amount = invoices.reduce((sum, x) => sum + x.amountZar, 0);
     const res = await zohoBooksClient.post<{ payment: { payment_id: string } }>("/customerpayments", {
       customer_id: first.customerId,
+      // This caller is exclusively a verified Paystack statement settlement.
+      account_id: zohoPaystackClearingAccountId(),
       payment_mode: "bank_transfer",
       amount,
       date: params.paymentDate,
@@ -55,3 +58,4 @@ export async function markZohoInvoiceCollectionPaid(params: {
     return { ok: false, error: String(err instanceof Error ? err.message : err) };
   }
 }
+

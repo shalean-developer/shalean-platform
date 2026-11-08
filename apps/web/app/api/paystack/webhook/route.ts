@@ -471,6 +471,7 @@ export async function POST(request: Request) {
         bookingId: persistedHead.bookingId,
         reference,
         amountCents: amount,
+        paymentSource: "paystack",
       });
       const settlementPersisted = await recordPaystackBookingPayment(supabase, {
         reference,
@@ -584,7 +585,7 @@ export async function POST(request: Request) {
       settlement_at: new Date().toISOString(),
     });
     if (supabase) {
-      void syncPaidBookingSideEffects(supabase, { bookingId: result.bookingId, reference, amountCents: amount });
+      void syncPaidBookingSideEffects(supabase, { bookingId: result.bookingId, reference, amountCents: amount, paymentSource: "paystack" });
       const settlementPersisted = await recordPaystackBookingPayment(supabase, {
         reference,
         amountCents: amount,
@@ -637,3 +638,4 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ received: true });
 }
+

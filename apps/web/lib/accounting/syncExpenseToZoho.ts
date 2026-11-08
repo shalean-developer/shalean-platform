@@ -11,6 +11,7 @@ import {
   resolveZohoAccountNameForCategory,
 } from "@/lib/accounting/zohoIntegrationSettings";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { zohoPaystackClearingAccountId } from "@/lib/zoho/zohoWebsiteReceiptAccount";
 
 type ExpenseRow = {
   id: string;
@@ -25,7 +26,7 @@ type ExpenseRow = {
   vendor_id: string | null;
   expense_categories: { name: string } | null;
   expense_vendors: { name: string; external_accounting_id: string | null } | null;
-  payment_transactions: { gateway_reference: string } | null;
+  payment_transactions: { gateway_reference: string; gateway: string } | null;
 };
 
 let _zohoAccountCache: Map<string, string> | null = null;
@@ -69,7 +70,7 @@ export async function syncExpenseToZoho(
   const { data: expense, error: expenseError } = await admin
     .from("expenses")
     .select(
-      "id, expense_date, amount_cents, description, notes, booking_id, payment_transaction_id, external_accounting_id, sync_status, vendor_id, expense_categories ( name ), expense_vendors ( name, external_accounting_id ), payment_transactions!expenses_payment_transaction_id_fkey ( gateway_reference )",
+      "id, expense_date, amount_cents, description, notes, booking_id, payment_transaction_id, external_accounting_id, sync_status, vendor_id, expense_categories ( name ), expense_vendors ( name, external_accounting_id ), payment_transactions!expenses_payment_transaction_id_fkey ( gateway_reference, gateway )",
     )
     .eq("id", expenseId)
     .maybeSingle();
@@ -116,6 +117,10 @@ export async function syncExpenseToZoho(
     accountId,
     date: row.expense_date,
     amountZar: row.amount_cents / 100,
+    // Gateway-backed processing fees reduce Paystack Clearing, never Undeposited Funds.
+    ...(categoryName === "Paystack Fees" && row.payment_transactions?.gateway === "paystack"
+      ? { paidThroughAccountId: zohoPaystackClearingAccountId() }
+      : {}),
     vendorId: vendorZohoId ?? undefined,
     description,
     referenceNumber: paystackRef ?? undefined,
@@ -144,3 +149,4 @@ export async function syncExpenseToZoho(
 
   return { ok: true, zohoExpenseId: res.expenseId };
 }
+

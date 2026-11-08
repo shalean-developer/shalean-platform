@@ -41,7 +41,7 @@ async function processPaymentTransactionSync(
   const { data: pt } = await admin
     .from("payment_transactions")
     .select(
-      "id, gateway_reference, amount_cents, paid_at, entity_type, entity_id, external_accounting_id, sync_status",
+      "id, gateway, gateway_reference, amount_cents, paid_at, entity_type, entity_id, external_accounting_id, sync_status",
     )
     .eq("id", entityId)
     .maybeSingle();
@@ -181,6 +181,7 @@ async function processPaymentTransactionSync(
     amountZar: pt.amount_cents / 100,
     paymentDate: paidDate,
     reference: pt.gateway_reference,
+    ...(pt.gateway === "paystack" ? { paymentSource: "paystack" as const } : {}),
     contactId: zohoInvoice.customerId ?? undefined,
     customerEmail,
     customerName,
@@ -366,3 +367,4 @@ export async function retryAccountingSync(
 }
 
 export { computeNextRetryAt };
+
