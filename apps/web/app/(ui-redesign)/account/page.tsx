@@ -79,7 +79,7 @@ export default function AccountHomePage() {
     </div>
     {loading ? <div className="animate-pulse space-y-5" role="status" aria-label="Loading account"><div className="h-40 rounded-xl border border-border bg-card" /><div className="h-56 rounded-xl border border-border bg-card" /><span className="sr-only">Loading account</span></div> : error ? <div role="alert" className="rounded-xl border border-destructive/20 bg-destructive/10 p-5 text-sm"><p>{error}</p><Button variant="outline" className="mt-3" onClick={() => void refetch()}>Retry</Button></div> : <>
       {payableInvoice || summary?.hasOverdueInvoice ? <section aria-labelledby="payment-heading" className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 p-5">
-        <div><h2 id="payment-heading" className="font-semibold text-[#00164e]">{summary?.hasOverdueInvoice ? "Overdue invoice" : "Payment due"}</h2>{payableInvoice ? <p className="mt-1 text-sm">{formatZarFromCents(balance)} outstanding</p> : null}</div>
+        <div><h2 id="payment-heading" className="font-semibold text-[#00164e]">{summary?.hasOverdueInvoice ? "Overdue invoice" : "Payment due"}</h2>{payableInvoice && (!summary?.hasOverdueInvoice || summary?.isOverdue) ? <p className="mt-1 text-sm">{formatZarFromCents(balance)} outstanding</p> : null}</div>
         <Button asChild variant="outline"><Link href="/account/invoices">View invoices</Link></Button>
       </section> : null}
       <section aria-labelledby="next-clean-heading" className="rounded-xl border border-blue-100 bg-white px-5 shadow-sm sm:px-6">
