@@ -1,5 +1,6 @@
 "use client";
 
+import { sanitizeBookingNavigationMetadata } from "@/lib/analytics/liveBookingFunnel";
 import type { BookingFlowStep } from "@/lib/booking/bookingFlow";
 import {
   bookingExperimentLabel,
@@ -200,7 +201,7 @@ export function trackBookingFunnelEvent(
     analytics_session_id: session_id,
     step,
     event_type: eventType,
-    metadata: {
+    metadata: sanitizeBookingNavigationMetadata({
       ...metadata,
       analytics_session_id: session_id,
       experiment_id: "booking_ab",
@@ -208,8 +209,7 @@ export function trackBookingFunnelEvent(
       booking_ab_variants: experimentAssignments,
       booking_ab_variant_key: bookingExperimentLabel(experimentAssignments),
       pathname: window.location.pathname,
-      href: window.location.href,
-    },
+    }),
   };
 
   if (!shouldSendClientEvent(`booking-funnel:${step}:${eventType}`, payload)) return;

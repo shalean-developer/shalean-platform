@@ -1,3 +1,4 @@
+import { buildLiveBookingSectionDiagnostics } from "@/lib/analytics/liveBookingFunnel";
 import { readPagedRows } from "@/lib/analytics/readPagedRows";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
@@ -897,6 +898,7 @@ export async function GET(request: Request) {
     viewsByStep,
     topExitSteps,
     errorsByStep,
+    sectionDiagnostics: buildLiveBookingSectionDiagnostics(rows),
     insights,
     anomalies,
     narrativeSummary,
