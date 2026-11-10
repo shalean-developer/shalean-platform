@@ -26,6 +26,18 @@ const APP_ENV = (process.env.EXPO_PUBLIC_APP_ENV || "development").trim();
 const VERSION = "0.1.0";
 const IS_PREVIEW = APP_ENV === "preview";
 const ANDROID_PACKAGE = IS_PREVIEW ? "za.co.shalean.cleaner.preview" : "za.co.shalean.mobile";
+const PREVIEW_PROJECT_ID = process.env.EXPO_PUBLIC_PREVIEW_EAS_PROJECT_ID?.trim() || "";
+const PREVIEW_OWNER = process.env.EXPO_PUBLIC_PREVIEW_EAS_OWNER?.trim() || "";
+// The original Expo account is not currently accessible. Preview must be
+// deliberately linked to a separately owned EAS project, never silently
+// repointed from the existing production project.
+if (process.env.EAS_BUILD_PROFILE === "preview") {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(PREVIEW_PROJECT_ID) || !PREVIEW_OWNER) {
+    throw new Error("Preview build requires EXPO_PUBLIC_PREVIEW_EAS_PROJECT_ID and EXPO_PUBLIC_PREVIEW_EAS_OWNER.");
+  }
+}
+const ACTIVE_PROJECT_ID = IS_PREVIEW && PREVIEW_PROJECT_ID ? PREVIEW_PROJECT_ID : EAS_PROJECT_ID;
+const ACTIVE_OWNER = IS_PREVIEW && PREVIEW_OWNER ? PREVIEW_OWNER : EAS_OWNER;
 
 /** Prefer env; empty in CI until secrets are set (preview/prod builds must set secrets). */
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL?.trim() || "";
@@ -54,7 +66,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ...config,
     name: "Shalean Cleaner",
     slug: EAS_SLUG,
-    owner: EAS_OWNER,
+    owner: ACTIVE_OWNER,
     version: VERSION,
     orientation: "portrait",
     icon: "./assets/images/icon.png",
@@ -66,7 +78,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       policy: "appVersion",
     },
     updates: {
-      url: `https://u.expo.dev/${EAS_PROJECT_ID}`,
+      url: `https://u.expo.dev/${ACTIVE_PROJECT_ID}`,
       fallbackToCacheTimeout: 0,
     },
     ios: {
@@ -151,7 +163,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       appEnv: APP_ENV,
       apiBaseUrl: API_BASE_URL || undefined,
       eas: {
-        projectId: EAS_PROJECT_ID,
+        projectId: ACTIVE_PROJECT_ID,
       },
       router: {},
     },
