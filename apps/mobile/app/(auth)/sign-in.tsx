@@ -32,7 +32,7 @@ export default function SignInScreen() {
             Shalean Cleaner
           </Text>
           <Text className="mt-2 text-center text-base text-ink-muted">
-            Sign in to see today's jobs and manage your workday.
+            Sign in to see today&apos;s jobs and manage your workday.
           </Text>
         </View>
         <SignInForm onSuccess={() => router.replace("/(cleaner)/(tabs)")} />
