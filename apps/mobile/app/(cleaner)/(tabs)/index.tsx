@@ -201,7 +201,7 @@ export default function TodayScreen() {
             {activeCount > 0 ? (
               <SectionCard className="mb-3">
                 <View className="mb-2 flex-row items-center justify-between">
-                  <Text className="text-sm font-semibold text-ink">Today's progress</Text>
+                  <Text className="text-sm font-semibold text-ink">Today&apos;s progress</Text>
                   <Text className="text-sm text-ink-muted">{progressPct}%</Text>
                 </View>
                 <ProgressBar value={progressPct} accessibilityLabel={`Today progress ${progressPct} percent`} />
