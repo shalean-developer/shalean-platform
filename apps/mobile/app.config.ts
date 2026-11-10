@@ -24,6 +24,8 @@ const EAS_SLUG = "shalean-cleaning-services";
 
 const APP_ENV = (process.env.EXPO_PUBLIC_APP_ENV || "development").trim();
 const VERSION = "0.1.0";
+const IS_PREVIEW = APP_ENV === "preview";
+const ANDROID_PACKAGE = IS_PREVIEW ? "za.co.shalean.cleaner.preview" : "za.co.shalean.mobile";
 
 /** Prefer env; empty in CI until secrets are set (preview/prod builds must set secrets). */
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL?.trim() || "";
@@ -79,7 +81,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       },
     },
     android: {
-      package: "za.co.shalean.mobile",
+      package: ANDROID_PACKAGE,
       versionCode: 1,
       adaptiveIcon: {
         foregroundImage: "./assets/images/adaptive-icon.png",
