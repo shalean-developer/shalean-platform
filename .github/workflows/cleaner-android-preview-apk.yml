@@ -1,0 +1,47 @@
+name: cleaner-android-preview-apk
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - name: Check Expo access
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN repository secret is required for a signed EAS APK build."
+            exit 1
+          fi
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify app
+        run: |
+          npm run typecheck
+          npm run lint
+      - name: Start and wait for signed preview APK
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: npx --yes eas-cli build --platform android --profile preview --non-interactive --wait
+      - name: Print build artifact location
+        if: success()
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          npx --yes eas-cli build:list --platform android --limit 1 --json --non-interactive > /tmp/shalean-eas-build.json
+          node -e 'const b=require("/tmp/shalean-eas-build.json")[0]; if(!b || b.status!=="FINISHED" || !b.artifacts?.buildUrl) process.exit(1); console.log("Verified EAS APK artifact: "+b.artifacts.buildUrl)'
