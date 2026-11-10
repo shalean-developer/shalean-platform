@@ -1,5 +1,19 @@
 # Shalean Cleaner — Release & EAS documentation
 
+## Separate Samsung test APK — November 2026
+
+The existing installed Shalean Cleaner is version 0.1.0 and must not be replaced until the original Android signing certificate is verified.
+
+- Preview package: `za.co.shalean.cleaner.preview`; production package remains `za.co.shalean.mobile`.
+- Existing configured Expo owner/project remain unchanged for production.
+- Preview requires `EXPO_PUBLIC_PREVIEW_EAS_OWNER` and `EXPO_PUBLIC_PREVIEW_EAS_PROJECT_ID` pointing to the tester-controlled Expo project. The project displayed by the owner is owner `shaleancleaning`, ID `12cb55b1-12f6-464e-86df-4a0220ac2cf9`; verify project ownership and access before configuring.
+- Preview also requires HTTPS `EXPO_PUBLIC_API_BASE_URL` pointing to staging, plus matching Supabase URL and anon key in the Expo preview environment. The build rejects a missing API URL or the live Shalean domain.
+- GitHub Actions manual build requires an authorized `EXPO_TOKEN` repository secret and signing setup in the selected Expo project. Never paste this token into issues, PRs, screenshots, or chat.
+- Preview package identity is independent; installing it will not update the original package or prove production signing compatibility.
+- Do not launch real messages, payments, or customer operations during testing.
+- Before sharing an APK, verify a finished EAS build, correct project ID, Android package, staging API, signing, and downloadable artifact.
+
+
 Internal beta release engineering for `apps/mobile`.  
 **Do not commit secrets.** Use EAS Secrets and a local gitignored `.env`.
 
