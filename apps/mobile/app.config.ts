@@ -28,6 +28,25 @@ const VERSION = "0.1.0";
 /** Prefer env; empty in CI until secrets are set (preview/prod builds must set secrets). */
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL?.trim() || "";
 
+// Prevent an internal test APK from silently connecting to live customer data.
+// EAS exposes EAS_BUILD_PROFILE during remote builds.
+if (process.env.EAS_BUILD_PROFILE === "preview") {
+  if (!API_BASE_URL) {
+    throw new Error("Preview APK requires EXPO_PUBLIC_API_BASE_URL (staging API).");
+  }
+  let host: string;
+  try {
+    const url = new URL(API_BASE_URL);
+    if (url.protocol !== "https:") throw new Error("HTTPS required");
+    host = url.hostname.toLowerCase();
+  } catch {
+    throw new Error("Preview APK requires a valid HTTPS EXPO_PUBLIC_API_BASE_URL.");
+  }
+  if (host === "shalean.co.za" || host === "www.shalean.co.za") {
+    throw new Error("Preview APK cannot use the live Shalean API; configure staging.");
+  }
+}
+
 export default ({ config }: ConfigContext): ExpoConfig => {
   return {
     ...config,
