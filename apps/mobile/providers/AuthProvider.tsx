@@ -149,6 +149,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (profileResult.kind !== "ok") {
         await clearSessionTokens();
         resetMobileApiClient();
+        queryClient.clear();
+        await clearPersistedCleanerQueries();
+        await offlineActionQueue.clear();
+        setProfile(null);
+        setStatus("signedOut");
         if (profileResult.kind === "transient") {
           return { ok: false as const, error: friendlyErrorMessage(profileResult.error, "Could not verify cleaner profile.") };
         }
