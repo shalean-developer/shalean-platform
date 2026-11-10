@@ -1,6 +1,17 @@
 name: cleaner-mobile-checks
 
 on:
+  push:
+    branches:
+      - feature/cleaner-mobile-e2e-20261110
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/api-client/**'
+      - 'packages/mobile-ui/**'
+      - 'packages/types/**'
+      - 'packages/utils/**'
+      - 'packages/validation/**'
+      - '.github/workflows/cleaner-mobile-checks.yml'
   pull_request:
     paths:
       - 'apps/mobile/**'
