@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { CleanerLifecycleAction } from "@/services/types/cleanerJobs";
 import { diagnosticLog } from "@/lib/diagnostics/logger";
-import { persistQueuedPhotoUri } from "@/lib/photos/persistQueuedPhoto";
+import { deletePersistedQueuedPhoto, persistQueuedPhotoUri } from "@/lib/photos/persistQueuedPhoto";
 
 const QUEUE_KEY = "shalean.offline.action_queue.v1";
 export const QUEUE_MAX_ATTEMPTS = 8;
@@ -208,7 +208,13 @@ export const offlineActionQueue = {
   },
 
   async clear(): Promise<void> {
+    const items = await readAll();
+    // Clear the queue first so no previous account action can be replayed.
     await writeAll([]);
+    await Promise.allSettled(
+      items.filter((item): item is PhotoQueueItem => item.type === "photo")
+        .map((item) => deletePersistedQueuedPhoto(item.uri)),
+    );
   },
 
   /**
