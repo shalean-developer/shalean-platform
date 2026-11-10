@@ -59,9 +59,8 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
     diagnosticLog.info("Manual sync requested");
     await flushQueue();
     await queryClient.invalidateQueries({ queryKey: ["cleaner"] });
-    const at = new Date().toISOString();
-    markSynced(new Date(at));
-    setLastSyncAt(at);
+    // A manual refresh is not proof that queued writes were delivered.
+    // Only flushQueue records a successful queue synchronization.
   }, [flushQueue, queryClient, status]);
 
   useEffect(() => {
