@@ -8,6 +8,7 @@ import { ListRow } from "@/components/ui/ListRow";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { API_UPSTREAM_URL, APP_ENV, APP_VERSION } from "@/constants/config";
 import { useAuth } from "@/providers/AuthProvider";
+import { offlineActionQueue } from "@/lib/offline/actionQueue";
 import { useConnectivity } from "@/providers/ConnectivityProvider";
 import { colors } from "@/theme";
 
@@ -17,19 +18,33 @@ export default function CleanerSettingsScreen() {
   const router = useRouter();
   const showApiUrl = __DEV__ || APP_ENV === "development" || APP_ENV === "preview";
 
-  const onSignOut = () => {
+  const completeSignOut = async () => {
+    try {
+      await signOut();
+      router.replace("/(auth)/sign-in");
+    } catch {
+      Alert.alert("Sign out failed", "Please try again. Your session has not been confirmed closed.");
+    }
+  };
+
+  const onSignOut = async () => {
+    const queued = await offlineActionQueue.list();
+    const unsent = queued.filter((item) => item.status !== "dead").length;
+    if (unsent > 0) {
+      Alert.alert(
+        "Unsynced work",
+        `${unsent} job action(s) or photo(s) have not synced. Signing out will discard them from this device.`,
+        [
+          { text: "Stay signed in", style: "cancel" },
+          { text: "Sync now", onPress: () => void syncNow() },
+          { text: "Discard and sign out", style: "destructive", onPress: () => void completeSignOut() },
+        ],
+      );
+      return;
+    }
     Alert.alert("Sign out", "End your session on this device?", [
       { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign out",
-        style: "destructive",
-        onPress: () => {
-          void (async () => {
-            await signOut();
-            router.replace("/(auth)/sign-in");
-          })();
-        },
-      },
+      { text: "Sign out", style: "destructive", onPress: () => void completeSignOut() },
     ]);
   };
 
