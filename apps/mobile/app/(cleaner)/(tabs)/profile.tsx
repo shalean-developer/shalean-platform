@@ -11,6 +11,7 @@ import { useCleanerJobsCard } from "@/hooks/useCleanerJobs";
 import { useCleanerProfile } from "@/hooks/useCleanerProfile";
 import { buildEngagementStats, deriveAchievements } from "@/lib/engagement/achievements";
 import { useAuth } from "@/providers/AuthProvider";
+import { colors } from "@/theme";
 import { useMemo } from "react";
 
 /**
@@ -19,7 +20,6 @@ import { useMemo } from "react";
 export default function ProfileTabScreen() {
   const router = useRouter();
   const { profile: authProfile } = useAuth();
-  const { isOnline } = useConnectivity();
   const { data, isLoading, isError, error, refetch, isRefetching } = useCleanerProfile();
   const { data: jobs } = useCleanerJobsCard();
   const cleaner = data?.cleaner ?? authProfile?.cleaner;
@@ -30,9 +30,8 @@ export default function ProfileTabScreen() {
         jobs,
         jobsCompleted: cleaner?.jobs_completed,
         rating: cleaner?.rating,
-        referralsCount: referrals?.referralsCount,
       }),
-    [jobs, cleaner?.jobs_completed, cleaner?.rating, referrals?.referralsCount],
+    [jobs, cleaner?.jobs_completed, cleaner?.rating],
   );
   const unlocked = useMemo(
     () => deriveAchievements(stats).filter((a) => a.unlocked).length,
