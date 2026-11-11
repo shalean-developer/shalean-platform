@@ -1,13 +1,13 @@
 import { useCallback, useMemo, useState } from "react";
-import { Alert, FlatList, Pressable, RefreshControl, Text, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 import { johannesburgCalendarYmd } from "@shalean/utils";
+import { Ionicons } from "@expo/vector-icons";
 import { OfflineBanner } from "@/components/OfflineBanner";
-import { AvailabilityToggle } from "@/components/ui/AvailabilityToggle";
-import { EmptyState, ErrorState } from "@/components/ui/StateViews";
+import { ErrorState } from "@/components/ui/StateViews";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { DashboardSkeleton } from "@/components/ui/Skeleton";
 import { JobListCard } from "@/features/jobs/JobListCard";
-import { useCleanerRoster, useSetAvailability } from "@/hooks/useCleanerDashboard";
+import { useCleanerRoster } from "@/hooks/useCleanerDashboard";
 import { jobsForDate, useScheduleJobs } from "@/hooks/useCleanerJobs";
 import { useCleanerProfile } from "@/hooks/useCleanerProfile";
 import { friendlyErrorMessage } from "@/lib/errors/apiErrorMessage";
@@ -15,7 +15,6 @@ import { buildScheduleDays, dayAvailabilityLabel } from "@/lib/jobs/scheduleDays
 import { formatFriendlyYmd } from "@/lib/jobs/jobDisplay";
 import { useAuth } from "@/providers/AuthProvider";
 import { useConnectivity } from "@/providers/ConnectivityProvider";
-import { useToast } from "@/providers/ToastProvider";
 import type { CleanerJobWire } from "@/services/types/cleanerJobs";
 import { colors } from "@/theme";
 
@@ -23,20 +22,16 @@ import { colors } from "@/theme";
  * Schedule — week strip + day jobs + roster availability hint.
  */
 export default function ScheduleScreen() {
-  const { profile: authProfile, refreshProfile } = useAuth();
-  const { syncNow, isOnline } = useConnectivity();
-  const { showToast } = useToast();
-  const { data: profileData, refetch: refetchProfile } = useCleanerProfile();
+  const { refreshProfile } = useAuth();
+  const { syncNow } = useConnectivity();
+  const { refetch: refetchProfile } = useCleanerProfile();
   const { data: allJobs, isLoading, isError, error, refetch, isRefetching, isFetching } =
     useScheduleJobs(13);
   const { data: roster, refetch: refetchRoster } = useCleanerRoster();
-  const availabilityMutation = useSetAvailability();
 
   const days = useMemo(() => buildScheduleDays(7), []);
   const [selectedYmd, setSelectedYmd] = useState(() => johannesburgCalendarYmd());
 
-  const cleaner = profileData?.cleaner ?? authProfile?.cleaner;
-  const isAvailable = cleaner?.is_available !== false;
   const dayJobs = useMemo(() => jobsForDate(allJobs, selectedYmd), [allJobs, selectedYmd]);
   const availLabel = dayAvailabilityLabel(roster?.availability ?? [], selectedYmd);
   const jobCounts = useMemo(() => {
@@ -54,15 +49,6 @@ export default function ScheduleScreen() {
     await Promise.all([refetch(), refetchRoster(), refetchProfile(), refreshProfile()]);
   }, [refetch, refetchRoster, refetchProfile, refreshProfile, syncNow]);
 
-  const onAvailabilityChange = (next: boolean) => {
-    availabilityMutation.mutate(next, {
-      onSuccess: () => {
-        showToast(next ? "You're available for jobs" : "You're marked unavailable", "success");
-        void refreshProfile();
-      },
-      onError: (err) => Alert.alert("Could not update availability", friendlyErrorMessage(err)),
-    });
-  };
 
   if (isLoading && !allJobs) {
     return (
@@ -92,28 +78,16 @@ export default function ScheduleScreen() {
       <FlatList
         data={dayJobs}
         keyExtractor={(item) => item.id}
-        contentContainerClassName="grow px-4 pb-10 pt-2"
+        contentContainerClassName="px-4 pb-8 pt-1"
         refreshControl={
           <RefreshControl refreshing={isRefetching || isFetching} onRefresh={() => void onRefresh()} />
         }
         ListHeaderComponent={
           <View className="mb-3">
-            <Text className="text-title text-ink" accessibilityRole="header">
-              Schedule
-            </Text>
-            <Text className="mt-1 text-sm text-ink-muted">
+            <Text className="mb-1 text-base font-semibold text-ink" accessibilityRole="header">
               {formatFriendlyYmd(selectedYmd)}
-              {availLabel ? ` · ${availLabel}` : ""}
             </Text>
-
-            <View className="mt-3">
-              <AvailabilityToggle
-                value={isAvailable}
-                onChange={onAvailabilityChange}
-                loading={availabilityMutation.isPending}
-                disabled={!isOnline && !availabilityMutation.isPending}
-              />
-            </View>
+            {availLabel ? <Text className="text-sm text-ink-muted">{availLabel}</Text> : null}
 
             <View className="mt-3 flex-row gap-2">
               {days.map((day) => {
@@ -157,19 +131,21 @@ export default function ScheduleScreen() {
               </SectionCard>
             ) : null}
 
-            <Text className="mb-2 mt-4 text-label font-semibold uppercase tracking-wide text-ink-muted">
-              {dayJobs.length === 0
-                ? "No jobs this day"
-                : `${dayJobs.length} job${dayJobs.length === 1 ? "" : "s"}`}
-            </Text>
+            {dayJobs.length > 0 ? (
+              <Text className="mb-2 mt-4 text-sm font-semibold text-ink-muted">
+                {dayJobs.length} job{dayJobs.length === 1 ? "" : "s"}
+              </Text>
+            ) : null}
           </View>
         }
         ListEmptyComponent={
-          <EmptyState
-            title="Nothing scheduled"
-            message="No jobs on this day yet. Pull to refresh, or check another day on the strip."
-            icon="calendar-outline"
-          />
+          <View className="mt-3 items-center rounded-2xl border border-border bg-surface-card px-5 py-8">
+            <Ionicons name="calendar-outline" size={30} color={colors.brand[600]} />
+            <Text className="mt-3 text-base font-semibold text-ink">Nothing scheduled</Text>
+            <Text className="mt-1 text-center text-sm text-ink-muted">
+              Select another day to check upcoming jobs.
+            </Text>
+          </View>
         }
         renderItem={({ item }: { item: CleanerJobWire }) => <JobListCard job={item} />}
         initialNumToRender={8}
