@@ -7,7 +7,7 @@ import { formatCleanerJobEarningsLabel, johannesburgCalendarYmd } from "@shalean
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { AvailabilityToggle } from "@/components/ui/AvailabilityToggle";
 import { Avatar } from "@/components/ui/Avatar";
-import { EmptyState, ErrorState } from "@/components/ui/StateViews";
+import { ErrorState } from "@/components/ui/StateViews";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { DashboardSkeleton } from "@/components/ui/Skeleton";
@@ -136,13 +136,13 @@ export default function TodayScreen() {
       <FlatList
         data={remainingJobs}
         keyExtractor={(item) => item.id}
-        contentContainerClassName="grow px-4 pb-10 pt-2"
+        contentContainerClassName="px-4 pb-8 pt-1"
         refreshControl={
           <RefreshControl refreshing={isRefetching || isFetching} onRefresh={() => void onRefresh()} />
         }
         ListHeaderComponent={
           <View className="mb-2">
-            <View className="mb-4 flex-row items-center gap-3">
+            <View className="mb-3 flex-row items-center gap-3">
               <Avatar name={fullName} size="sm" />
               <View className="flex-1">
                 <Text className="text-sm text-ink-muted">
@@ -153,6 +153,15 @@ export default function TodayScreen() {
                   Today · {formatFriendlyYmd(today)}
                 </Text>
               </View>
+              <Pressable
+                onPress={() => void onRefresh()}
+                accessibilityRole="button"
+                accessibilityLabel="Sync jobs"
+                hitSlop={8}
+                className="min-h-touch min-w-touch items-center justify-center rounded-full active:opacity-70"
+              >
+                <Ionicons name="sync-outline" size={21} color={colors.brand[600]} />
+              </Pressable>
             <Link href={"/(cleaner)/notifications" as Href} asChild>
               <Pressable
                 accessibilityRole="button"
@@ -212,20 +221,6 @@ export default function TodayScreen() {
               </SectionCard>
             ) : null}
 
-            <View className="mb-3 flex-row gap-2">
-              <QuickChip
-                icon="calendar-outline"
-                label="Schedule"
-                onPress={() => router.push("/(cleaner)/(tabs)/schedule" as Href)}
-              />
-              <QuickChip
-                icon="wallet-outline"
-                label="Earnings"
-                onPress={() => router.push("/(cleaner)/(tabs)/earnings" as Href)}
-              />
-              <QuickChip icon="sync-outline" label="Sync" onPress={() => void onRefresh()} />
-            </View>
-
             {nextJob ? <NextJobHero job={nextJob} /> : null}
 
             {remainingJobs.length > 0 ? (
@@ -237,11 +232,13 @@ export default function TodayScreen() {
         }
         ListEmptyComponent={
           nextJob ? null : (
-            <EmptyState
-              title="No jobs today"
-              message="When you are assigned jobs for today, they will show up here. Check Schedule for upcoming work, or pull down to refresh."
-              icon="briefcase-outline"
-            />
+            <View className="items-center rounded-2xl border border-border bg-surface-card px-5 py-8">
+              <Ionicons name="briefcase-outline" size={30} color={colors.brand[600]} />
+              <Text className="mt-3 text-base font-semibold text-ink">No jobs today</Text>
+              <Text className="mt-1 text-center text-sm text-ink-muted">
+                New assignments will appear here.
+              </Text>
+            </View>
           )
         }
         renderItem={({ item }: { item: CleanerJobWire }) => <JobListCard job={item} />}
@@ -283,28 +280,6 @@ function StatChip({
   return (
     <Pressable onPress={onPress} className="flex-1 active:opacity-80" accessibilityRole="button">
       {body}
-    </Pressable>
-  );
-}
-
-function QuickChip({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      className="min-h-touch flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border border-border bg-surface-card px-2 active:opacity-80"
-    >
-      <Ionicons name={icon} size={16} color={colors.brand[600]} />
-      <Text className="text-sm font-semibold text-ink">{label}</Text>
     </Pressable>
   );
 }
