@@ -101,18 +101,17 @@ export default function EarningsScreen() {
         }
         ListHeaderComponent={
           <View className="mb-3">
-            <Text className="text-sm font-semibold text-ink-muted" accessibilityRole="header">Earnings overview</Text>
             <View className="flex-row gap-2">
-              <MoneyTile label="Today's earnings" cents={todayCents} highlight />
-              <MoneyTile label="This week" cents={weekCents} />
-              <MoneyTile label="This month" cents={monthCents} />
+              <MoneyTile label="Today" cents={todayCents} highlight />
+              <MoneyTile label="Week" cents={weekCents} />
+              <MoneyTile label="Month" cents={monthCents} />
             </View>
 
-            <SectionHeading label="Payout status" />
+            <SectionHeading label="Payouts" />
             <SectionCard>
-              <PayoutSummaryRow label="Pending approval" cents={pendingCents} tone="warning" />
+              <PayoutSummaryRow label="Pending" cents={pendingCents} tone="warning" />
               <Divider />
-              <PayoutSummaryRow label="Eligible for payout" cents={eligibleCents} tone="info" />
+              <PayoutSummaryRow label="Eligible" cents={eligibleCents} tone="info" />
               <Divider />
               <PayoutSummaryRow label="Paid this month" cents={paidThisMonthCents} tone="success" />
             </SectionCard>
@@ -121,33 +120,37 @@ export default function EarningsScreen() {
               <SectionCard className="mt-3">
                 <Text className="text-sm font-semibold text-status-warning-fg">Bank details needed</Text>
                 <Text className="mt-1 text-sm text-ink-muted">
-                  Add bank details in the cleaner portal to receive payouts.
+                  Add bank details in the cleaner portal.
                 </Text>
               </SectionCard>
             ) : null}
 
-            <SectionHeading label="Recent earnings" />
             {recentEarnings.length > 0 ? (
-              <SectionCard className="overflow-hidden p-0">
-                {recentEarnings.map((row, index) => (
-                  <View key={row.booking_id}>
-                    <RecentEarningsRow
-                      row={row}
-                      onPress={() => router.push(`/(cleaner)/job/${row.booking_id}`)}
-                    />
-                    {index < recentEarnings.length - 1 ? <Divider /> : null}
-                  </View>
-                ))}
-              </SectionCard>
-            ) : (
-              <EmptyCard title="No earnings yet" message="Completed jobs will appear here." />
-            )}
+              <>
+                <SectionHeading label="Recent" />
+                <SectionCard className="overflow-hidden p-0">
+                  {recentEarnings.map((row, index) => (
+                    <View key={row.booking_id}>
+                      <RecentEarningsRow
+                        row={row}
+                        onPress={() => router.push(`/(cleaner)/job/${row.booking_id}`)}
+                      />
+                      {index < recentEarnings.length - 1 ? <Divider /> : null}
+                    </View>
+                  ))}
+                </SectionCard>
+              </>
+            ) : null}
+            {paymentHistory.length > 0 ? <SectionHeading label="Payments" /> : null}
 
-            <SectionHeading label="Payment history" />
           </View>
         }
         ListEmptyComponent={
-          <EmptyCard title="No payments yet" message="Paid jobs will appear here." />
+          rows.length === 0 ? (
+            <View className="items-center py-8">
+              <Text className="text-sm text-ink-muted">No earnings or payments yet</Text>
+            </View>
+          ) : null
         }
         renderItem={({ item }) => (
           <PaymentHistoryRow
@@ -157,10 +160,10 @@ export default function EarningsScreen() {
         )}
         ListFooterComponent={
           <View>
-            <SectionHeading label="All time" />
+            <SectionHeading label="Total" />
             <View className="flex-row gap-2">
-              <MoneyTile label="Lifetime earnings" cents={lifetimeCents} />
-              <MetricTile label="Jobs recorded" value={completedBookings.toLocaleString("en-ZA")} />
+              <MoneyTile label="Lifetime" cents={lifetimeCents} />
+              <MetricTile label="Jobs" value={completedBookings.toLocaleString("en-ZA")} />
             </View>
           </View>
         }
@@ -256,11 +259,3 @@ function PaymentHistoryRow({ row, onPress }: { row: CleanerEarningsRowWire; onPr
   );
 }
 
-function EmptyCard({ title, message }: { title: string; message: string }) {
-  return (
-    <View className="rounded-2xl border border-border bg-surface-card px-4 py-4">
-      <Text className="font-semibold text-ink">{title}</Text>
-      <Text className="mt-1 text-sm text-ink-muted">{message}</Text>
-    </View>
-  );
-}
