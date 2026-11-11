@@ -38,6 +38,8 @@ if (process.env.EAS_BUILD_PROFILE === "preview") {
 }
 const ACTIVE_PROJECT_ID = IS_PREVIEW && PREVIEW_PROJECT_ID ? PREVIEW_PROJECT_ID : EAS_PROJECT_ID;
 const ACTIVE_OWNER = IS_PREVIEW && PREVIEW_OWNER ? PREVIEW_OWNER : EAS_OWNER;
+// The new preview Expo project has its own slug. Do not change production identity.
+const ACTIVE_SLUG = IS_PREVIEW && PREVIEW_PROJECT_ID ? "shaleancleaning" : EAS_SLUG;
 
 /** Prefer env; empty in CI until secrets are set (preview/prod builds must set secrets). */
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL?.trim() || "";
@@ -65,7 +67,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   return {
     ...config,
     name: "Shalean Cleaner",
-    slug: EAS_SLUG,
+    slug: ACTIVE_SLUG,
     owner: ACTIVE_OWNER,
     version: VERSION,
     orientation: "portrait",
