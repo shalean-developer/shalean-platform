@@ -1,4 +1,9 @@
 import { Alert, Text, View } from "react-native";
+import { AvailabilityToggle } from "@/components/ui/AvailabilityToggle";
+import { useSetAvailability } from "@/hooks/useCleanerDashboard";
+import { useCleanerProfile } from "@/hooks/useCleanerProfile";
+import { useToast } from "@/providers/ToastProvider";
+import { friendlyErrorMessage } from "@/lib/errors/apiErrorMessage";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +21,19 @@ export default function CleanerSettingsScreen() {
   const { signOut, profile } = useAuth();
   const { syncNow, pendingQueueCount, isOnline } = useConnectivity();
   const router = useRouter();
+  const { data: cleanerProfile, refetch: refetchCleanerProfile } = useCleanerProfile();
+  const availabilityMutation = useSetAvailability();
+  const { showToast } = useToast();
+  const isAvailable = (cleanerProfile?.cleaner ?? profile?.cleaner)?.is_available !== false;
+  const onAvailabilityChange = (next: boolean) => {
+    availabilityMutation.mutate(next, {
+      onSuccess: () => {
+        showToast(next ? "You're available for jobs" : "You're marked unavailable", "success");
+        void refetchCleanerProfile();
+      },
+      onError: (err) => Alert.alert("Could not update availability", friendlyErrorMessage(err)),
+    });
+  };
   const showApiUrl = __DEV__ || APP_ENV === "development" || APP_ENV === "preview";
 
   const completeSignOut = async () => {
@@ -75,6 +93,13 @@ export default function CleanerSettingsScreen() {
             {showApiUrl && API_UPSTREAM_URL ? ` · ${API_UPSTREAM_URL}` : ""}
           </Text>
         </SectionCard>
+
+        <AvailabilityToggle
+          value={isAvailable}
+          onChange={onAvailabilityChange}
+          loading={availabilityMutation.isPending}
+          disabled={!isOnline && !availabilityMutation.isPending}
+        />
 
         <AppButton
           label="Sync now"
