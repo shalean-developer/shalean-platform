@@ -1,21 +1,17 @@
-import { Alert, RefreshControl, ScrollView, Text, View } from "react-native";
+import { RefreshControl, ScrollView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import type { Href } from "expo-router";
 import { OfflineBanner } from "@/components/OfflineBanner";
-import { AvailabilityToggle } from "@/components/ui/AvailabilityToggle";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/StateViews";
 import { ListRow } from "@/components/ui/ListRow";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { useSetAvailability } from "@/hooks/useCleanerDashboard";
 import { useCleanerReferrals } from "@/hooks/useCleanerEngagement";
 import { useCleanerJobsCard } from "@/hooks/useCleanerJobs";
 import { useCleanerProfile } from "@/hooks/useCleanerProfile";
 import { buildEngagementStats, deriveAchievements } from "@/lib/engagement/achievements";
-import { friendlyErrorMessage } from "@/lib/errors/apiErrorMessage";
 import { useAuth } from "@/providers/AuthProvider";
 import { useConnectivity } from "@/providers/ConnectivityProvider";
-import { useToast } from "@/providers/ToastProvider";
 import { colors } from "@/theme";
 import { useMemo } from "react";
 
@@ -24,13 +20,11 @@ import { useMemo } from "react";
  */
 export default function ProfileTabScreen() {
   const router = useRouter();
-  const { profile: authProfile, refreshProfile } = useAuth();
+  const { profile: authProfile } = useAuth();
   const { isOnline } = useConnectivity();
-  const { showToast } = useToast();
   const { data, isLoading, isError, error, refetch, isRefetching } = useCleanerProfile();
   const { data: jobs } = useCleanerJobsCard();
   const { data: referrals } = useCleanerReferrals();
-  const availabilityMutation = useSetAvailability();
   const cleaner = data?.cleaner ?? authProfile?.cleaner;
   const completionPct = data?.completion_pct ?? authProfile?.completion_pct;
 
@@ -78,58 +72,31 @@ export default function ProfileTabScreen() {
   const fullName = cleaner.full_name ?? "Cleaner";
   const phone = cleaner.phone_number || cleaner.phone || "No phone on file";
   const statusLabel = formatStatus(cleaner.status);
-  const isAvailable = cleaner.is_available !== false;
 
-  const onAvailabilityChange = (next: boolean) => {
-    availabilityMutation.mutate(next, {
-      onSuccess: () => {
-        showToast(next ? "You're available for jobs" : "You're marked unavailable", "success");
-        void refreshProfile();
-        void refetch();
-      },
-      onError: (err) => {
-        Alert.alert("Could not update availability", friendlyErrorMessage(err));
-      },
-    });
-  };
 
   return (
     <View className="flex-1 bg-surface">
       <OfflineBanner />
       <ScrollView
         className="flex-1"
-        contentContainerClassName="gap-3 px-4 py-4 pb-10"
+        contentContainerClassName="gap-3 px-4 pt-2 pb-8"
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} />}
       >
-        <SectionCard elevated className="items-center py-6">
-          <Avatar name={fullName} size="lg" />
-          <Text className="mt-3 text-title text-ink" accessibilityRole="header">
-            {fullName}
-          </Text>
-          <View className="mt-2 rounded-md bg-brand-50 px-2.5 py-1">
-            <Text className="text-xs font-semibold uppercase text-brand-600">{statusLabel}</Text>
-          </View>
-          <View className="mt-3 flex-row items-center gap-2">
-            <View
-              className="h-2 w-2 rounded-full"
-              style={{
-                backgroundColor: isOnline ? colors.status.success.fg : colors.ink.subtle,
-              }}
-              accessibilityElementsHidden
-            />
-            <Text className="text-sm text-ink-muted">
-              {isOnline ? "Online" : "Offline"}
-              {stats.streakDays > 0 ? ` · ${stats.streakDays}-day streak` : ""}
-            </Text>
+        <SectionCard className="py-4">
+          <View className="flex-row items-center gap-3">
+            <Avatar name={fullName} size="lg" />
+            <View className="flex-1">
+              <Text className="text-lg font-bold text-ink" accessibilityRole="header" numberOfLines={2}>
+                {fullName}
+              </Text>
+              <View className="mt-1 flex-row flex-wrap items-center gap-2">
+                <Text className="text-xs font-semibold text-brand-600">{statusLabel}</Text>
+                <View className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: isOnline ? colors.status.success.fg : colors.ink.subtle }} />
+                <Text className="text-xs text-ink-muted">{isOnline ? "Online" : "Offline"}</Text>
+              </View>
+            </View>
           </View>
         </SectionCard>
-
-        <AvailabilityToggle
-          value={isAvailable}
-          onChange={onAvailabilityChange}
-          loading={availabilityMutation.isPending}
-          disabled={!isOnline && !availabilityMutation.isPending}
-        />
 
         <View className="flex-row gap-2">
           <StatTile
@@ -179,7 +146,7 @@ export default function ProfileTabScreen() {
           <View className="mx-4 border-t border-border">
             <ListRow
               label="Refer cleaners"
-              value={referrals?.referralCode ?? "Earn rewards"}
+              value={referrals?.referralCode ? "View code" : "Invite cleaners"}
               icon="people-outline"
               onPress={() => router.push("/(cleaner)/referral" as Href)}
             />
