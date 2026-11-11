@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
-import { johannesburgCalendarYmd } from "@shalean/utils";
+import { johannesburgCalendarYmd, johannesburgCalendarYmdAddDays } from "@shalean/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { ErrorState } from "@/components/ui/StateViews";
@@ -12,7 +12,6 @@ import { jobsForDate, useScheduleJobs } from "@/hooks/useCleanerJobs";
 import { useCleanerProfile } from "@/hooks/useCleanerProfile";
 import { friendlyErrorMessage } from "@/lib/errors/apiErrorMessage";
 import { buildScheduleDays, dayAvailabilityLabel } from "@/lib/jobs/scheduleDays";
-import { formatFriendlyYmd } from "@/lib/jobs/jobDisplay";
 import { useAuth } from "@/providers/AuthProvider";
 import { useConnectivity } from "@/providers/ConnectivityProvider";
 import type { CleanerJobWire } from "@/services/types/cleanerJobs";
@@ -29,7 +28,8 @@ export default function ScheduleScreen() {
     useScheduleJobs(13);
   const { data: roster, refetch: refetchRoster } = useCleanerRoster();
 
-  const days = useMemo(() => buildScheduleDays(7), []);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const days = useMemo(() => buildScheduleDays(14).slice(weekOffset * 7, weekOffset * 7 + 7), [weekOffset]);
   const [selectedYmd, setSelectedYmd] = useState(() => johannesburgCalendarYmd());
 
   const dayJobs = useMemo(() => jobsForDate(allJobs, selectedYmd), [allJobs, selectedYmd]);
@@ -84,12 +84,40 @@ export default function ScheduleScreen() {
         }
         ListHeaderComponent={
           <View className="mb-3">
-            <Text className="mb-1 text-base font-semibold text-ink" accessibilityRole="header">
-              {formatFriendlyYmd(selectedYmd)}
-            </Text>
-            {availLabel ? <Text className="text-sm text-ink-muted">{availLabel}</Text> : null}
+            <View className="mb-2 flex-row items-center justify-between">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Previous week"
+                accessibilityState={{ disabled: weekOffset === 0 }}
+                disabled={weekOffset === 0}
+                onPress={() => {
+                  setWeekOffset(0);
+                  setSelectedYmd(johannesburgCalendarYmd());
+                }}
+                className="min-h-touch min-w-touch items-center justify-center"
+              >
+                <Ionicons name="chevron-back" size={22} color={weekOffset === 0 ? colors.ink.subtle : colors.brand[600]} />
+              </Pressable>
+              <Text className="text-sm font-semibold text-ink-muted">
+                {weekOffset === 0 ? "This week" : "Next week"}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Next week"
+                accessibilityState={{ disabled: weekOffset === 1 }}
+                disabled={weekOffset === 1}
+                onPress={() => {
+                  setWeekOffset(1);
+                  setSelectedYmd(johannesburgCalendarYmdAddDays(johannesburgCalendarYmd(), 7));
+                }}
+                className="min-h-touch min-w-touch items-center justify-center"
+              >
+                <Ionicons name="chevron-forward" size={22} color={weekOffset === 1 ? colors.ink.subtle : colors.brand[600]} />
+              </Pressable>
+            </View>
+            {availLabel ? <Text className="mb-2 text-sm text-ink-muted">{availLabel}</Text> : null}
 
-            <View className="mt-3 flex-row gap-2">
+            <View className="flex-row gap-2">
               {days.map((day) => {
                 const selected = day.ymd === selectedYmd;
                 const count = jobCounts.get(day.ymd) ?? 0;
@@ -139,7 +167,7 @@ export default function ScheduleScreen() {
           </View>
         }
         ListEmptyComponent={
-          <View className="mt-3 items-center rounded-2xl border border-border bg-surface-card px-5 py-8">
+          <View className="mt-6 min-h-[210px] items-center justify-center px-5 py-8">
             <Ionicons name="calendar-outline" size={30} color={colors.brand[600]} />
             <Text className="mt-3 text-base font-semibold text-ink">Nothing scheduled</Text>
             <Text className="mt-1 text-center text-sm text-ink-muted">
