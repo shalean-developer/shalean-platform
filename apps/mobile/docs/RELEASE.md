@@ -204,3 +204,12 @@ not manually dispatch or rerun workflows. A skipped CI check is not a pass; use
 local evidence and keep the PR draft until native and device acceptance pass.
 Local preview also omits the EAS project ID and disables push-device registration;
 remote push delivery requires a separately configured EAS preview build.
+If Gradle reports `JAVA_COMPILER` missing, the selected Java installation is a
+runtime rather than a full JDK. Set `JAVA_HOME` to a full JDK 17 installation;
+the local build script checks for `bin/javac` before generation or compilation.
+Local preview limits Metro and Gradle to one worker and Gradle's heap to 1536 MiB
+to reduce peak memory during release bundling. Other build modes keep their
+existing settings. A disappearing daemon is not proof of a source error; retain
+the build log and check memory/toolchain diagnostics before changing dependencies.
+The local-only Gradle init script also caps Ninja C++ compile/link jobs through
+CMake job pools. Gradle's `--max-workers` alone does not bound Ninja concurrency.

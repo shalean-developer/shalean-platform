@@ -17,6 +17,8 @@ const monorepoRoot = path.resolve(projectRoot, "../..");
 const packagesRoot = path.resolve(monorepoRoot, "packages");
 
 const config = getDefaultConfig(projectRoot);
+// Keep standalone local APK builds within a laptop/container memory budget.
+if (process.env.SHALEAN_LOCAL_PREVIEW === "1") config.maxWorkers = 1;
 
 config.watchFolders = [packagesRoot];
 config.resolver.nodeModulesPaths = [

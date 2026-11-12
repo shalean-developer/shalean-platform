@@ -1,0 +1,12 @@
+// Local staging builds only: bound Ninja as well as Gradle/Metro concurrency.
+gradle.beforeProject { project ->
+    ['com.android.application', 'com.android.library'].each { pluginId ->
+        project.plugins.withId(pluginId) {
+            project.extensions.getByName('android').defaultConfig.externalNativeBuild.cmake.arguments(
+                '-DCMAKE_JOB_POOLS=shalean_compile=1;shalean_link=1',
+                '-DCMAKE_JOB_POOL_COMPILE=shalean_compile',
+                '-DCMAKE_JOB_POOL_LINK=shalean_link'
+            )
+        }
+    }
+}
