@@ -176,3 +176,31 @@ After build completes, open the EAS build page → **Install** / download APK �
 ## 10. Collecting feedback
 
 Use the Phase 6 workflow: bug description + Diagnostics export + optional screenshot → support owner same business day for blockers.
+
+## Local Android build — $0 GitHub Actions budget
+
+Use `npm ci` from `apps/mobile` on a machine with Node, JDK 17+, and the
+Android SDK. Do not copy partial `node_modules` trees between machines: a clean
+install supplies the compiled `expo-modules-autolinking/build` entry point.
+
+Configure the approved staging values in a gitignored `.env`:
+`EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_SUPABASE_URL`,
+`EXPO_PUBLIC_SUPABASE_ANON_KEY`, and `EXPO_PUBLIC_BUILD_NUMBER` (a positive,
+increasing Android version code). Set `ANDROID_HOME` to the installed SDK.
+Run `npm run android:preview:local` from `apps/mobile`.
+
+The script runs typecheck/lint, generates Android, and assembles a standalone
+release APK locally. It forces the preview package, validates the staging API,
+and disables OTA updates for this local binary. It requires no Expo project
+access, EAS build, token, or GitHub Actions run. Never use privileged Supabase keys.
+The output is `android/app/build/outputs/apk/release/app-release.apk`.
+The generated project uses local test signing; preserve that key securely for
+future updates, and compare its certificate to the installed preview before
+attempting an update. This does not establish production signing compatibility.
+
+When updating this PR under the zero Actions budget, include `[skip ci]` in
+**every commit message** to suppress automatic push/pull_request workflows. Do
+not manually dispatch or rerun workflows. A skipped CI check is not a pass; use
+local evidence and keep the PR draft until native and device acceptance pass.
+Local preview also omits the EAS project ID and disables push-device registration;
+remote push delivery requires a separately configured EAS preview build.

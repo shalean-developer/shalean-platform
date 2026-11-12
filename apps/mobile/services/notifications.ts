@@ -35,6 +35,9 @@ export async function getStoredPushToken(): Promise<string | null> {
 
 /** Request permission, persist token locally, and register with `/api/cleaner/devices`. */
 export async function registerForPushNotifications(): Promise<PushRegistrationResult> {
+  if (Constants.expoConfig?.extra?.localPreview === true) {
+    return { ok: false, reason: "unavailable", message: "Push registration is disabled in the local staging APK." };
+  }
   if (Platform.OS === "web") {
     return { ok: false, reason: "web", message: "Push notifications are not available on web." };
   }
