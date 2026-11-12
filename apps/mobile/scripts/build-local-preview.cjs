@@ -39,4 +39,4 @@ run(process.platform === 'win32' ? 'gradlew.bat' : './gradlew', [
 const apk = path.join(root, 'android/app/build/outputs/apk/release/app-release.apk');
 if (!fs.existsSync(apk)) fail('Gradle did not produce the expected APK.');
 console.log(`Staging test APK: ${apk}`);
-console.log('Uses local test signing. Verify the certificate before updating an installed preview.');
+console.log('Uses local test signing and a separate staging package. Future staging updates must use the same signing key.');

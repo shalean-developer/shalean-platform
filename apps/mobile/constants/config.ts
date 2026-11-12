@@ -9,6 +9,7 @@ import { Platform } from "react-native";
 const extra = (Constants.expoConfig?.extra ?? {}) as {
   apiBaseUrl?: string;
   appEnv?: string;
+  localPreview?: boolean;
 };
 
 const configuredApiBaseUrl =
@@ -39,7 +40,7 @@ export const SUPABASE_URL =
 export const SUPABASE_ANON_KEY =
   (typeof process !== "undefined" && process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim()) || "";
 
-export const APP_SCHEME = "shalean";
+export const APP_SCHEME = extra.localPreview === true ? "shalean-cleaner-staging" : "shalean";
 
 export const APP_ENV =
   (typeof process !== "undefined" && process.env.EXPO_PUBLIC_APP_ENV?.trim()) ||

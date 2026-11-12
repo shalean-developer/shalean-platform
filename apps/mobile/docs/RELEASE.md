@@ -213,3 +213,16 @@ existing settings. A disappearing daemon is not proof of a source error; retain
 the build log and check memory/toolchain diagnostics before changing dependencies.
 The local-only Gradle init script also caps Ninja C++ compile/link jobs through
 CMake job pools. Gradle's `--max-workers` alone does not bound Ninja concurrency.
+
+## Separate local staging identity — Build 5
+
+Build 4 was rejected by the owner's phone with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`:
+the installed `za.co.shalean.cleaner.preview` certificate differs from local test signing.
+Do not uninstall it or disable signature verification to install a local build.
+
+Local preview builds now use `za.co.shalean.cleaner.staging`, display name
+**Shalean Cleaner Staging**, and scheme `shalean-cleaner-staging`. They install
+alongside the EAS preview, with independent local storage and sign-in. The EAS
+preview and production identities retain their existing package names and schemes.
+Build 5 uses version code 5. Push registration and OTA remain disabled locally.
+An update of the original preview requires its original signing key instead.

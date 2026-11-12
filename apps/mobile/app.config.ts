@@ -33,7 +33,10 @@ const BUILD_NUMBER = Number(process.env.EXPO_PUBLIC_BUILD_NUMBER || "1");
 if (!Number.isSafeInteger(BUILD_NUMBER) || BUILD_NUMBER < 1 || BUILD_NUMBER > 2100000000) {
   throw new Error("EXPO_PUBLIC_BUILD_NUMBER must be a positive Android version code.");
 }
-const ANDROID_PACKAGE = IS_PREVIEW ? "za.co.shalean.cleaner.preview" : "za.co.shalean.mobile";
+// Local test signing is independent of the installed EAS preview's certificate.
+const ANDROID_PACKAGE = IS_LOCAL_PREVIEW ? "za.co.shalean.cleaner.staging"
+  : IS_PREVIEW ? "za.co.shalean.cleaner.preview" : "za.co.shalean.mobile";
+const APP_SCHEME = IS_LOCAL_PREVIEW ? "shalean-cleaner-staging" : "shalean";
 const PREVIEW_PROJECT_ID = process.env.EXPO_PUBLIC_PREVIEW_EAS_PROJECT_ID?.trim() || "";
 const PREVIEW_OWNER = process.env.EXPO_PUBLIC_PREVIEW_EAS_OWNER?.trim() || "";
 // The original Expo account is not currently accessible. Preview must be
@@ -75,13 +78,13 @@ if (IS_PREVIEW || process.env.EAS_BUILD_PROFILE === "preview") {
 export default ({ config }: ConfigContext): ExpoConfig => {
   return {
     ...config,
-    name: "Shalean Cleaner",
+    name: IS_LOCAL_PREVIEW ? "Shalean Cleaner Staging" : "Shalean Cleaner",
     slug: ACTIVE_SLUG,
     owner: ACTIVE_OWNER,
     version: VERSION,
     orientation: "portrait",
     icon: "./assets/images/icon.png",
-    scheme: "shalean",
+    scheme: APP_SCHEME,
     // Product screens are light-only; force light to avoid mismatched nav chrome.
     userInterfaceStyle: "light",
     newArchEnabled: true,
@@ -126,7 +129,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           autoVerify: false,
           data: [
             {
-              scheme: "shalean",
+              scheme: APP_SCHEME,
             },
           ],
           category: ["BROWSABLE", "DEFAULT"],
