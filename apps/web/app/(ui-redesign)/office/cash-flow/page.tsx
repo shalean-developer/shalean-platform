@@ -20,6 +20,8 @@ import { CashFlowDetails } from "@/components/admin/finance/CashFlowDetails";
 import { FinanceKpiCard } from "@/components/admin/finance/FinanceKpiCard";
 import { CashFlowForecastBreakdown, formatForecastZar } from "@/components/admin/finance/CashFlowForecastBreakdown";
 import { CashProviderEvidenceDetails } from "@/components/admin/finance/CashProviderEvidenceDetails";
+import { ProtectedCashEvidenceDetails } from "@/components/admin/finance/ProtectedCashEvidenceDetails";
+import type { ProtectedCashEvidence } from "@/lib/admin/expenses/protectedCashEvidence";
 import type { CashProviderEvidence } from "@/lib/payments/cashProviderEvidence";
 import { CashReconciliationPanel } from "@/components/admin/finance/CashReconciliationPanel";
 import type { CashReconciliation } from "@/lib/admin/expenses/cashReconciliation";
@@ -58,6 +60,8 @@ export default function CashFlowPage() {
   const { data: provider, loading: providerLoading, error: providerError, refetch: refetchProvider } = useAdminData<CashProviderEvidence>("/api/admin/cash-provider-evidence", { params, enabled: periodValid });
   const providerCurrent = periodValid && !providerLoading && !providerError && provider?.period?.from === from && provider?.period?.to === to && provider.receipts != null && provider.payouts != null && provider.bank != null;
   const providerAmount = (value?: number | null, available = false) => !providerCurrent || !available || value == null ? "Unavailable" : formatZar(value);
+  const { data: protectedEvidence, loading: protectedLoading, error: protectedError, refetch: refetchProtected } = useAdminData<ProtectedCashEvidence>("/api/admin/cash-protected-evidence");
+  const protectedCurrent = !protectedLoading && !protectedError && Array.isArray(protectedEvidence?.accounts);
   const s = data?.summary;
   const forecastCurrent = periodValid && !loading && !error && data?.period.from === from && data?.period.to === to;
   const dailyChart = (forecastCurrent ? data?.daily_position ?? [] : []).map((d) => ({
@@ -78,6 +82,7 @@ export default function CashFlowPage() {
     refetchReconciliation();
     refetchObligations();
     refetchProvider();
+    refetchProtected();
   };
 
   return (
@@ -101,7 +106,7 @@ export default function CashFlowPage() {
           <option value="differences">Unresolved differences</option><option value="equal">Balances agree</option><option value="stale">Stale feed</option><option value="missing">Missing bank balance</option>
         </select>
       </label><p>Demo bank balances and the staging ledger use separate datasets.</p></CashFlowDetails> : null}
-      <CashReconciliationPanel data={reconciliation} loading={reconciliationLoading} error={reconciliationError} provider={providerCurrent ? provider : null} />
+      <CashReconciliationPanel data={reconciliation} loading={reconciliationLoading} error={reconciliationError} provider={providerCurrent ? provider : null} protectedEvidence={protectedCurrent ? protectedEvidence : null} />
 
       <section aria-label="Selected-period cash flow" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold tracking-tight text-slate-900">Selected period</h2><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800">Provisional</span></div>
@@ -114,6 +119,7 @@ export default function CashFlowPage() {
       {providerCurrent && provider?.synthetic ? <p role="status" className="text-sm text-blue-900">Demo Paystack evidence — not real money.</p> : null}
       <p className="text-xs text-slate-500">Provider payouts require bank matching. Approved expenses may not yet be paid.</p>
       <CashProviderEvidenceDetails data={providerCurrent ? provider : null} />
+      <ProtectedCashEvidenceDetails data={protectedCurrent ? protectedEvidence : null} />
       <CashFlowDetails title="Balances & obligations">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <FinanceKpiCard icon={Banknote} label="Local bank ledger · unverified" value={!forecastCurrent ? "Unavailable" : formatZar(s?.cash_in_bank_cents ?? 0)} loading={loading} />
@@ -131,7 +137,7 @@ export default function CashFlowPage() {
       <section aria-label="Local obligations and receivables" className="space-y-3 text-sm">
         <h2 className="font-semibold">Local obligations · provisional</h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <p>Unpaid cleaner earnings<strong className="block">{obligationAmount(obligations?.obligations.cleaner_unpaid_liability_cents)}</strong></p>
+          <p>Unpaid cleaner earnings · selected period only<strong className="block">{obligationAmount(obligations?.obligations.cleaner_unpaid_liability_cents)}</strong></p>
           <p>Minimum operating reserve<strong className="block">{obligationAmount(obligations?.obligations.minimum_operating_reserve_cents)}</strong></p>
           <p>Collectible monthly invoices<strong className="block">{obligationAmount(obligations?.receivables.sent_collectible_cents)}</strong></p>
           <p>Draft monthly forecast<strong className="block">{obligationAmount(obligations?.receivables.draft_monthly_cents)}</strong></p>
