@@ -10,6 +10,8 @@ export type ValidatePreferredCleanersForSlotParams = {
   selectedCleanerIds: readonly string[];
   /** Cap selections (booking v2 `cleanerCount`). */
   maxSelect?: number;
+  /** Current booking when editing an existing roster. */
+  excludeBookingId?: string;
   date: string;
   timeHm: string;
   durationMinutes: number;
@@ -44,6 +46,7 @@ export async function validatePreferredCleanersForSlot(
       locationExpandedIds: [params.locationId],
       serviceType: params.serviceType,
       cleanerIds: [cleanerId],
+      excludeBookingId: params.excludeBookingId,
       enforcePublicDailyWorkloadLimit: true,
       limit: 1,
     });

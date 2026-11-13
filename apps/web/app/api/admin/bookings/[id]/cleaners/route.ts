@@ -173,13 +173,13 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
     const currentIds = new Set((currentRoster ?? []).map(row => String(row.cleaner_id)));
     if (booking.cleaner_id) currentIds.add(String(booking.cleaner_id));
     const eligible = await validatePreferredCleanersForSlot({
-      admin, selectedCleanerIds: rpcRows.map(row => row.cleaner_id).filter(id => !currentIds.has(id)), maxSelect: staffing.count,
+      admin, excludeBookingId: bookingId, selectedCleanerIds: rpcRows.map(row => row.cleaner_id).filter(id => !currentIds.has(id)), maxSelect: staffing.count,
       date: String(booking.date), timeHm: String(booking.time).slice(0, 5), durationMinutes,
       locationId: String(booking.location_id), serviceType: String(booking.service_slug ?? booking.service),
     });
     if (!eligible.ok) return NextResponse.json({ error: eligible.error }, { status: 409 });
   }
-  const { error: rpcErr } = await admin.rpc(staffing.needsRoster ? "assign_requested_cleaner_roster_atomic" : "replace_booking_cleaners_admin_atomic", {
+  const { error: rpcErr } = await admin.rpc(staffing.needsRoster && st !== "in_progress" ? "assign_requested_cleaner_roster_atomic" : "replace_booking_cleaners_admin_atomic", {
     p_booking_id: bookingId,
     p_rows: rpcRows,
   });
@@ -199,7 +199,7 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
     );
   }
 
-  if (staffing.needsRoster) {
+  if (staffing.needsRoster && st !== "in_progress") {
     for (const row of rpcRows) {
       await syncCleanerBusyFromBookings(admin, row.cleaner_id);
       void notifyCleanerAssignedBooking(admin, bookingId, row.cleaner_id);
