@@ -22,6 +22,7 @@ create table public.booking_cleaners (
 create table public.dispatch_offers (id uuid default gen_random_uuid(),booking_id uuid,status text,responded_at timestamptz);
 \ir ../../supabase/migrations/20261007210000_audit_02a01_roster_header_convergence.sql
 \ir ../../supabase/migrations/20261113102100_regular_multi_cleaner_roster_assignment.sql
+\ir ../../supabase/migrations/20261113110800_regular_roster_active_job_conflict_safety.sql
 -- The earlier migration contains additional functions unused by these fixtures.
 grant select,update on public.bookings,public.dispatch_offers to service_role;
 grant select on public.booking_cleaners to service_role;
@@ -74,8 +75,14 @@ select public.test_expect_error('10000000-0000-4000-8000-000000000003',public.te
 select 'PASS: full requested roster, immutable preference, cleaner visibility, payment preservation, role restrictions and failure rollback';
 
 -- Active-job emergency member edits preserve lifecycle through the existing roster writer.
-update public.bookings set status='in_progress',cleaner_line_earnings_finalized_at=null where id='10000000-0000-4000-8000-000000000003';
-select public.replace_booking_cleaners_admin_atomic('10000000-0000-4000-8000-000000000003',public.test_roster(3));
+update public.bookings set status='in_progress',cleaner_line_earnings_finalized_at=null,assigned_at='2026-11-01T08:00:00Z',accepted_at='2026-11-01T08:01:00Z' where id='10000000-0000-4000-8000-000000000003';
+select public.assign_requested_cleaner_roster_atomic('10000000-0000-4000-8000-000000000003',public.test_roster(3));
 do $$ begin
  if (select status from public.bookings where id='10000000-0000-4000-8000-000000000003')<>'in_progress' then raise exception 'active lifecycle reset'; end if;
+ if (select accepted_at from public.bookings where id='10000000-0000-4000-8000-000000000003')<>timestamptz '2026-11-01T08:01:00Z' then raise exception 'active acceptance reset'; end if;
 end $$;
+
+-- A non-lead member of another active roster is still occupied.
+insert into public.bookings(id,cleaner_count,status,time) values ('10000000-0000-4000-8000-000000000006',2,'assigned','13:00');
+insert into public.booking_cleaners(booking_id,cleaner_id,role) values ('10000000-0000-4000-8000-000000000006','00000000-0000-4000-8000-000000000004','member');
+select public.test_expect_error('10000000-0000-4000-8000-000000000003',jsonb_set(public.test_roster(3),'{2,cleaner_id}','"00000000-0000-4000-8000-000000000004"'),'cleaner_slot_conflict');
