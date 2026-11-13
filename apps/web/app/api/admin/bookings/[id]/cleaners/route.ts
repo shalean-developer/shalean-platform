@@ -179,7 +179,7 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
     });
     if (!eligible.ok) return NextResponse.json({ error: eligible.error }, { status: 409 });
   }
-  const { error: rpcErr } = await admin.rpc(staffing.needsRoster && st !== "in_progress" ? "assign_requested_cleaner_roster_atomic" : "replace_booking_cleaners_admin_atomic", {
+  const { error: rpcErr } = await admin.rpc(staffing.needsRoster ? "assign_requested_cleaner_roster_atomic" : "replace_booking_cleaners_admin_atomic", {
     p_booking_id: bookingId,
     p_rows: rpcRows,
   });
