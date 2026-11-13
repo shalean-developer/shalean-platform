@@ -23,7 +23,7 @@ export const SERVICE_DECISION_COPY: Record<CapeTownSeoServiceSlug, { heading: st
     "intro": "Move-out cleaning suits empty or nearly empty homes. Match the selected work to the agent's or landlord's checklist before the inspection.",
     "checklist": [
       "Confirm when furniture and belongings will be removed and how the team will obtain access.",
-      "Select appliance or cupboard interiors when required rather than assuming they are part of every visit.",
+      "Confirm the oven, fridge and cupboard work in your agreed move-out scope, and identify any carpet cleaning or exterior windows needed separately.",
       "Allow time to review the agreed cleaning. A cleaning service does not repair damage or determine a deposit refund."
     ]
   },
