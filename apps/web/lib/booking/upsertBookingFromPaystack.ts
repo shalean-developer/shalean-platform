@@ -1,3 +1,4 @@
+import { customerCleanerRequest } from "@/lib/booking/customerCleanerRequest";
 import { completeHistoricalPaymentEffects } from "@/lib/booking/historicalPaymentEffects";
 import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import { preservePaymentCustomerIdentity, paymentFinalizationReplayEquivalent } from "@/lib/booking/paymentCustomerIdentityGuard";
@@ -1001,6 +1002,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     parking_instructions?: string | null;
     gate_code?: string | null;
     cleaner_mode?: string | null;
+    fulfillment_mode?: string | null;
     cleaner_count?: number | null;
     assigned_team_id?: string | null;
     booking_type?: string | null;
@@ -1561,7 +1563,9 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
 
     if (!historicalCapture) {
       /** Customer-picked cleaner: dispatch offer first; assignment finalizes on accept (see `acceptDispatchOffer`). */
-      const dispatchOfferCleanerId = recurringDirectAssignCleanerId
+      const staffingRequest = customerCleanerRequest(pendingExisting ?? {});
+      const opsReserve = pendingExisting?.fulfillment_mode === "ops_assignment" || staffingRequest.needsRoster;
+      const dispatchOfferCleanerId = recurringDirectAssignCleanerId || opsReserve
         ? null
         : checkoutPaidDispatchOfferCleanerId({
         checkoutResolution,
@@ -1636,7 +1640,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         )
           .trim()
           .toLowerCase();
-        const skipAutoDispatchForOpsReserve = fulfillmentMode === "ops_assignment";
+        const skipAutoDispatchForOpsReserve = fulfillmentMode === "ops_assignment" || staffingRequest.needsRoster;
         /** Smart dispatch unless explicitly disabled (`AUTO_DISPATCH_CLEANERS=false`). */
         const autoDispatch =
           process.env.AUTO_DISPATCH_CLEANERS !== "false" &&

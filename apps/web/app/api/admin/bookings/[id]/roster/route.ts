@@ -1,3 +1,8 @@
+import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
+import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
+import { customerCleanerRequest } from "@/lib/booking/customerCleanerRequest";
+import { validatePreferredCleanersForSlot } from "@/lib/booking/validatePreferredCleanersForSlot";
+import { effectiveJobDurationMinutes } from "@/lib/admin/adminAssignEligibility";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
@@ -122,7 +127,7 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, status, service, service_slug, team_id, booking_snapshot, cleaner_line_earnings_finalized_at")
+    .select("id, status, service, service_slug, team_id, cleaner_id, cleaner_mode, cleaner_count, is_team_job, date, time, location_id, duration_minutes, estimated_duration_minutes, duration_hours, pricing_summary, booking_snapshot, cleaner_line_earnings_finalized_at")
     .eq("id", bookingId)
     .maybeSingle();
   if (bErr) return NextResponse.json({ error: bErr.message }, { status: 500 });
@@ -183,7 +188,27 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
   // recurring continuity does not treat the edited roster as generated.
   const rpcRows = built.rows.map((row) => ({ ...row, source: "admin_roster_edit" }));
 
-  const { error: rpcErr } = await admin.rpc("replace_booking_cleaners_admin_atomic", {
+  const staffing = customerCleanerRequest(booking);
+  if (staffing.needsRoster) {
+    if (rpcRows.length !== staffing.count) {
+      return NextResponse.json({ error: `This customer requested ${staffing.count} cleaners. Select the complete roster before saving.` }, { status: 409 });
+    }
+    const durationMinutes = effectiveJobDurationMinutes(booking);
+    if (!durationMinutes || !booking.location_id) {
+      return NextResponse.json({ error: "Booking needs a valid duration and service area before staffing." }, { status: 409 });
+    }
+    const { data: currentRoster, error: currentRosterError } = await admin.from("booking_cleaners").select("cleaner_id").eq("booking_id",bookingId);
+    if (currentRosterError) return NextResponse.json({ error:"Could not load current staffing." }, {status:500});
+    const currentIds = new Set((currentRoster ?? []).map(row => String(row.cleaner_id)));
+    if (booking.cleaner_id) currentIds.add(String(booking.cleaner_id));
+    const eligible = await validatePreferredCleanersForSlot({
+      admin, selectedCleanerIds: rpcRows.map(row => row.cleaner_id).filter(id => !currentIds.has(id)), maxSelect: staffing.count,
+      date: String(booking.date), timeHm: String(booking.time).slice(0, 5), durationMinutes,
+      locationId: String(booking.location_id), serviceType: String(booking.service_slug ?? booking.service),
+    });
+    if (!eligible.ok) return NextResponse.json({ error: eligible.error }, { status: 409 });
+  }
+  const { error: rpcErr } = await admin.rpc(staffing.needsRoster ? "assign_requested_cleaner_roster_atomic" : "replace_booking_cleaners_admin_atomic", {
     p_booking_id: bookingId,
     p_rows: rpcRows,
   });
@@ -249,6 +274,13 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
       },
       { status: 500 },
     );
+  }
+
+  if (staffing.needsRoster) {
+    for (const row of rpcRows) {
+      await syncCleanerBusyFromBookings(admin, row.cleaner_id);
+      void notifyCleanerAssignedBooking(admin, bookingId, row.cleaner_id);
+    }
   }
 
   const leadId = rpcRows.find((r) => r.role === "lead")?.cleaner_id ?? "";

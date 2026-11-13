@@ -1,5 +1,7 @@
 "use client";
 
+import { customerCleanerRequest } from "@/lib/booking/customerCleanerRequest";
+
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -85,6 +87,10 @@ type BookingRow = {
   status: string | null;
   completed_at?: string | null;
   cleaner_id: string | null;
+  cleaner_count?: number | null;
+  selected_cleaner_id?: string | null;
+  booking_snapshot?: unknown;
+  preferred_cleaners?: Array<{ id: string; full_name: string | null }>;
   team_id: string | null;
   payment_status: string | null;
   payment_completed_at?: string | null;
@@ -1188,6 +1194,8 @@ export default function BookingsPage() {
                           >
                             {assignment.label}
                           </span>
+                          <span className="text-[11px] text-slate-500">{customerCleanerRequest(b).count} cleaner(s) requested</span>
+                          {b.preferred_cleaners?.length ? <span className="text-[11px] text-slate-500">Preferred: {b.preferred_cleaners.map((c) => c.full_name ?? "Cleaner").join(", ")}</span> : null}
                           {teamAssignable ? (
                             <button
                               type="button"

@@ -1,3 +1,4 @@
+import { customerCleanerRequest } from "@/lib/booking/customerCleanerRequest";
 import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
@@ -235,11 +236,12 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const cleanerId = typeof booking.cleaner_id === "string" ? booking.cleaner_id : null;
   const userId = typeof booking.user_id === "string" ? booking.user_id : null;
 
-  const selectedRaw =
-    typeof (booking as { selected_cleaner_id?: unknown }).selected_cleaner_id === "string"
-      ? String((booking as { selected_cleaner_id: string }).selected_cleaner_id).trim()
-      : "";
-  const selectedCleanerId = /^[0-9a-f-]{36}$/i.test(selectedRaw) ? selectedRaw : null;
+  const requestedCleaners = customerCleanerRequest(booking as Record<string, unknown>);
+  const selectedCleanerId = requestedCleaners.preferredIds[0] ?? null;
+  const { data: preferredCleaners, error: preferenceError } = requestedCleaners.preferredIds.length
+    ? await admin.from("cleaners").select("id, full_name").in("id", requestedCleaners.preferredIds)
+    : { data: [], error: null };
+  if (preferenceError) return NextResponse.json({ error: "Could not load cleaner preferences." }, { status: 500 });
   /** Join row for checkout pick (`selected_cleaner_id`) whenever set — list card labels selection separately from assignment. */
   const fetchSelectedCleanerRow = selectedCleanerId != null;
 
@@ -453,6 +455,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     cleaner_earnings: cleaner_earnings ?? [],
     cleaner: cleaner ?? null,
     selected_cleaner: selected_cleaner ?? null,
+    requested_cleaner_count: requestedCleaners.count,
+    preferred_cleaners: preferredCleaners ?? [],
     userProfile: userProfile ?? null,
     customer_contact_phone,
     customer_contact_name,
