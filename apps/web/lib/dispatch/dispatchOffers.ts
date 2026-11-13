@@ -1,3 +1,4 @@
+import { customerCleanerRequest } from "@/lib/booking/customerCleanerRequest";
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
@@ -534,7 +535,7 @@ export async function acceptDispatchOffer(params: {
   const { data: bookingBefore } = await params.supabase
     .from("bookings")
     .select(
-      "date, time, location_id, city_id, assignment_type, selected_cleaner_id",
+      "date, time, location_id, city_id, assignment_type, selected_cleaner_id, cleaner_count, booking_snapshot",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -547,6 +548,9 @@ export async function acceptDispatchOffer(params: {
     assignment_type?: string | null;
     selected_cleaner_id?: string | null;
   } | null;
+  if (customerCleanerRequest((bookingBefore ?? {}) as Record<string, unknown>).needsRoster) {
+    return { ok: false, failure: "booking_taken", error: "This booking needs a complete multi-cleaner roster. Operations will confirm the assignment." };
+  }
   const assignMeta = await marketplaceBookingPatchOnAssign(params.supabase, {
     date: bsMeta?.date ?? null,
     time: bsMeta?.time ?? null,

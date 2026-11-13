@@ -704,6 +704,9 @@ function CleanerEditPanel() {
             </div>
           ) : null}
 
+          {cleanerCount > 1 ? (
+            <p className="rounded-xl bg-blue-50 p-3 text-sm text-blue-900">Our team will confirm all {cleanerCount} cleaners together. Any names you choose are saved as preferences.</p>
+          ) : null}
           <CleanerPreferenceSection
             serviceSlug={serviceSlug}
             date={date}

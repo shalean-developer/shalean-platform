@@ -1,0 +1,40 @@
+name: Regular cleaner roster regression
+on:
+  pull_request:
+    paths:
+      - 'apps/web/**'
+      - 'supabase/migrations/**'
+      - 'scripts/tests/regular-cleaner-roster.sql'
+      - '.github/workflows/regular-cleaner-roster.yml'
+permissions:
+  contents: read
+jobs:
+  native-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: isolated-test-only
+          POSTGRES_DB: roster_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          filter: blob:none
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Run isolated PostgreSQL roster contracts
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGDATABASE: roster_test
+          PGUSER: postgres
+          PGPASSWORD: isolated-test-only
+        run: psql -v ON_ERROR_STOP=1 -f scripts/tests/regular-cleaner-roster.sql

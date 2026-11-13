@@ -1,5 +1,7 @@
 "use client";
 
+import { customerCleanerRequest } from "@/lib/booking/customerCleanerRequest";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
@@ -135,6 +137,7 @@ type BookingDetails = {
   cleaner_id: string | null;
   /** Customer checkout pick; assignment finalizes in `cleaner_id` after accept. */
   selected_cleaner_id?: string | null;
+  cleaner_count?: number | null;
   /** Dispatch / offer attempt trace (not the checkout column). */
   attempted_cleaner_id?: string | null;
   assignment_type?: string | null;
@@ -867,6 +870,7 @@ export default function BookingDetailsView({
   const [cleaner, setCleaner] = useState<Cleaner | null>(null);
   /** From GET `selected_cleaner` — customer pick when not same row as assigned `cleaner`. */
   const [selectedCleaner, setSelectedCleaner] = useState<Cleaner | null>(null);
+  const [preferredCleaners, setPreferredCleaners] = useState<Array<{ id: string; full_name: string | null }>>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [customerContactPhone, setCustomerContactPhone] = useState<string | null>(null);
   const [customerContactName, setCustomerContactName] = useState<string | null>(null);
@@ -1089,6 +1093,7 @@ export default function BookingDetailsView({
             dashboardLifecycle?: DashboardLifecycleAlignmentWire | null;
             cleaner?: Cleaner | null;
             selected_cleaner?: Cleaner | null;
+            preferred_cleaners?: Array<{ id: string; full_name: string | null }>;
             userProfile?: UserProfile | null;
             dispatch_offers?: DispatchOfferAdminRow[];
             cleaner_issue_reports?: CleanerIssueReportRow[];
@@ -1128,6 +1133,7 @@ export default function BookingDetailsView({
         setLedgerCleanerEarnings(ce.filter((r) => r.id));
         setCleaner(json.cleaner ?? null);
         setSelectedCleaner(json.selected_cleaner ?? null);
+        setPreferredCleaners(json.preferred_cleaners ?? []);
         setUserProfile(json.userProfile ?? null);
         setCustomerContactPhone(
           typeof json.customer_contact_phone === "string" && json.customer_contact_phone.trim()
@@ -1928,7 +1934,8 @@ export default function BookingDetailsView({
     assignment_type: fullBooking.assignment_type ?? null,
     fallback_reason: fullBooking.fallback_reason ?? null,
   });
-  const selectedCleanerIdRaw = String(fullBooking.selected_cleaner_id ?? "").trim();
+  const cleanerRequest = customerCleanerRequest(fullBooking);
+  const selectedCleanerIdRaw = cleanerRequest.preferredIds[0] ?? "";
   const hasSelectedCleanerUuid = /^[0-9a-f-]{36}$/i.test(selectedCleanerIdRaw);
   const dispatchAttemptCleanerId = adminBookingDispatchAttemptId(fullBooking);
 
@@ -3684,6 +3691,23 @@ export default function BookingDetailsView({
             ) : null}
           </DetailCard>
           ) : null}
+          <DetailCard title="Customer cleaner request">
+            <DetailRow label="Cleaners requested" value={String(cleanerRequest.count)} />
+            <DetailRow label="Preferred cleaners" value={cleanerRequest.preferredIds.length
+              ? cleanerRequest.preferredIds.map(id => preferredCleaners.find(c => c.id === id)?.full_name ?? `ID ${id.slice(0, 8)}`).join(", ")
+              : "No named preference"} />
+            <p className="mt-2 text-xs text-zinc-500">Preferences are requests; the confirmed roster below determines who receives the job.</p>
+            {cleanerRequest.needsRoster && !supportsTeamAssignment ? (
+              <>
+                <p className="mt-3 text-sm font-semibold">Assigned: {bookingCleaners.length}/{cleanerRequest.count}{bookingCleaners.length < cleanerRequest.count ? " — staffing incomplete" : ""}</p>
+                <button type="button" disabled={jobRosterLocked} onClick={() => setEmergencyRosterOpen(true)}
+                  className="mt-3 rounded-md bg-zinc-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                  Assign {cleanerRequest.count} cleaners
+                </button>
+                {bookingCleaners.map(c => <p key={c.cleaner_id} className="mt-2 text-sm">{c.cleaner_name ?? c.cleaner_id} · {c.role}</p>)}
+              </>
+            ) : null}
+          </DetailCard>
           {supportsTeamAssignment ? (
             <DetailCard title="Team assignment">
               {fullBooking.team_id && teamSummary ? (

@@ -1,3 +1,4 @@
+import { customerCleanerRequest } from "@/lib/booking/customerCleanerRequest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assignCleanerToBooking, type AssignCleanerOptions } from "@/lib/dispatch/assignCleaner";
 import { assignTeamToBooking } from "@/lib/dispatch/assignTeamToBooking";
@@ -29,10 +30,14 @@ export async function assignBooking(
 
   const { data: booking, error: bErr } = await supabase
     .from("bookings")
-    .select("id, status, cleaner_id, date, time, service, location, booking_snapshot")
+    .select("id, status, cleaner_id, date, time, service, location, cleaner_count, cleaner_mode, is_team_job, team_id, booking_snapshot")
     .eq("id", bookingId)
     .maybeSingle();
   if (bErr || !booking) return { ok: false, error: "db_error", message: bErr?.message ?? "Booking not found" };
+
+  if (customerCleanerRequest(booking).needsRoster) {
+    return { ok: false, error: "no_candidate", message: "This booking requires a complete multi-cleaner roster. Assign all requested cleaners in Admin → Edit job roster." };
+  }
 
   const b = booking as {
     id: string;
