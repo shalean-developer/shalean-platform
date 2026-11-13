@@ -417,7 +417,7 @@ export async function getEligibleCleaners(
   if (params.enforcePublicDailyWorkloadLimit === true && filtered.length > 0) {
     const requestedDurationMinutes = Math.max(30, Math.round(params.durationMinutes));
     const report = buildDailyCleanerWorkloadShadowReport([
-      ...((bookRows ?? []) as Array<{
+      ...((bookRows ?? []).filter(row => row.id !== params.excludeBookingId) as Array<{
         id?: string | null;
         cleaner_id?: string | null;
         payout_owner_cleaner_id?: string | null;

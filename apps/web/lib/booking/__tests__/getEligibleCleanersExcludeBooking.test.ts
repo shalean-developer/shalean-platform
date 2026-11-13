@@ -1,13 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
+
+vi.mock("server-only", () => ({}));
+import { validatePreferredCleanersForSlot } from "@/lib/booking/validatePreferredCleanersForSlot";
 
 const CLEANER_ID = "aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const BOOKING_ID = "bbbbbbb1-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const LOC_ID = "ccccccc1-cccc-4ccc-8ccc-cccccccccccc";
 const DATE = "2026-06-20";
 
-function buildAdminMock(): SupabaseClient {
+function buildAdminMock(durationMinutes = 120): SupabaseClient {
   return {
     from(table: string) {
       if (table === "cleaners") {
@@ -84,7 +87,7 @@ function buildAdminMock(): SupabaseClient {
                       status: "pending",
                       date: DATE,
                       time: "10:00",
-                      duration_minutes: 120,
+                      duration_minutes: durationMinutes,
                     },
                   ],
                   error: null,
@@ -128,3 +131,9 @@ describe("getEligibleCleaners excludeBookingId", () => {
     expect(withExclude[0]?.id).toBe(CLEANER_ID);
   });
 });
+
+ it("allows an existing six-hour booking preference without counting its own hours twice", async () => {
+   process.env.USE_STRICT_AVAILABILITY = "false";
+   const result = await validatePreferredCleanersForSlot({admin:buildAdminMock(360),selectedCleanerIds:[CLEANER_ID],maxSelect:2,excludeBookingId:BOOKING_ID,date:DATE,timeHm:"10:00",durationMinutes:360,locationId:LOC_ID,serviceType:"standard"});
+   expect(result).toEqual({ok:true,ids:[CLEANER_ID]});
+ });
