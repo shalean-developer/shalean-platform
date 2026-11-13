@@ -606,6 +606,9 @@ export async function POST(request: Request) {
   let fulfillmentCustomerMessage = "";
 
   if (data.cleanerMode === "individual_cleaners") {
+    if (new Set(data.selectedCleanerIds ?? []).size > data.cleanerCount) {
+      return NextResponse.json({ error: "More preferred cleaners than requested places." }, { status: 400 });
+    }
     const assessment = await assessBookingV2SlotFulfillment(supabase, {
       serviceSlug: data.serviceSlug,
       date: data.date,
@@ -663,9 +666,19 @@ export async function POST(request: Request) {
       preferredCleanerIds = preferredValidation.ids;
       preferredExtras = preferredCleanerInsertExtras(preferredCleanerIds);
     } else {
-      // ops_assignment: drop preferred cleaners that are not slot-eligible; reserve without preference.
-      preferredCleanerIds = [];
-      preferredExtras = preferredCleanerInsertExtras([]);
+      // Preserve requested names as preferences, never as an assignment or a slot guarantee.
+      const requested = [...new Set(data.selectedCleanerIds ?? [])];
+      if (requested.length > data.cleanerCount) {
+        return NextResponse.json({ error: "More preferred cleaners than requested places." }, { status: 400 });
+      }
+      if (requested.length) {
+        const { data: profiles, error: profileError } = await supabase.from("cleaners").select("id").in("id", requested);
+        if (profileError || profiles?.length !== requested.length) {
+          return NextResponse.json({ error: "Please choose valid cleaner profiles." }, { status: 400 });
+        }
+      }
+      preferredCleanerIds = requested;
+      preferredExtras = preferredCleanerInsertExtras(preferredCleanerIds);
       void logBookingDemandEvent(supabase, {
         eventType: "ops_reserve_started",
         suburb: data.suburb,
@@ -862,6 +875,12 @@ export async function POST(request: Request) {
   };
 
   const canonicalConfirmedAt = new Date().toISOString();
+  if (data.cleanerMode === "individual_cleaners" && data.cleanerCount > 1) {
+    fulfillmentMode = "ops_assignment";
+    fulfillmentReason = "multi_cleaner_roster_required";
+    fulfillmentCustomerMessage = "Your requested cleaners and quantity are saved. Our team will confirm the complete roster.";
+  }
+
   const buildHistorySnapshot = (payableZar: number) =>
     buildBookingV2HistorySnapshot({
       data,

@@ -98,6 +98,16 @@ vi.mock("@/lib/payments/settleFullyCoveredBooking", () => ({
   }),
 }));
 
+// These HTTP tests cover identity, staffing and persistence. Quote authority has its own regression suite.
+vi.mock("@/lib/booking/pricingVersionDb", () => ({ fetchPricingRatesSnapshotByVersionId: async () => ({ services: { standard: {}, deep: {}, moving: {} } }) }));
+vi.mock("@/lib/pricing/pricingRatesSnapshot", () => ({ pricingSnapshotServiceKeyForBookingV2Slug: () => "standard" }));
+vi.mock("@/lib/booking-v2/liveServiceConfigFromPricingSnapshot", () => ({ liveServiceConfigFromPricingSnapshot: () => ({ label: "Regular Cleaning", basePrice: 399, extras: [] }) }));
+vi.mock("@/lib/booking-v2/buildSignedCustomerPricingFromForm", () => ({ buildSignedCustomerPricingFromForm: () => ({
+ total:574, estimated_total:574, base_service_price:544, service_fee:30, subtotal:544,
+ selected_extras:[], estimated_duration_minutes:210, estimated_duration_hours:3.5,
+ quote_signature:"test-signature", lineItems:[], extras_total:0, discount_amount:0,
+}) }));
+vi.mock("@/lib/booking/quote/validateBookingV2Quote", () => ({ assertV2ConfirmQuoteIntegrity: () => ({ ok:true }) }));
 const basePayload = {
   serviceSlug: "regular-cleaning" as const,
   serviceDetails: { bedrooms: "2", bathrooms: "1", extraRooms: "0", propertyType: "house" },
@@ -127,7 +137,8 @@ const basePayload = {
   assignedTeamId: "",
   cleanerCount: 1,
   selectedCleanerIds: [],
-  pricingSummary: { total: 574, estimated_total: 574 },
+  pricingSummary: { total: 574, estimated_total: 574, quote_signature:"test-signature" },
+  quoteLock: {pricingVersionId:"00000000-0000-4000-8000-000000000100",quoteSignature:"test-signature",lockedAt:"2026-11-13T00:00:00.000Z",expiresAt:"2099-01-01T00:00:00.000Z"},
 };
 
 function mockAdminForConfirm() {
@@ -160,6 +171,9 @@ function mockAdminForConfirm() {
           }),
         }),
       };
+    }
+    if (table === "cleaners") {
+      return { select: () => ({ in: (_key: string, ids: string[]) => Promise.resolve({ data: ids.map(id => ({id})),error:null }) }) };
     }
     if (table === "teams") {
       return {
@@ -310,7 +324,7 @@ describe("POST /api/booking-v2/confirm", () => {
       }),
     );
 
-    expect(res.status).toBe(200);
+    expect(res.status, JSON.stringify(await res.clone().json())).toBe(200);
     const row = admin.insert.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(row.customer_email).toBe("test.user@example.com");
   });
@@ -385,7 +399,7 @@ describe("POST /api/booking-v2/confirm", () => {
       }),
     );
 
-    expect(res.status).toBe(200);
+    expect(res.status, JSON.stringify(await res.clone().json())).toBe(200);
     const row = admin.insert.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(row.fulfillment_mode).toBe("ops_assignment");
     expect(row.dispatch_status).toBe("unassigned");
@@ -448,12 +462,12 @@ describe("POST /api/booking-v2/confirm", () => {
           recurringStartDate: basePayload.date,
           cleanerMode: "team",
           assignedTeamId: teamId,
-          pricingSummary: { total: 2140, estimated_total: 2140 },
+          pricingSummary: { total: 2140, estimated_total: 2140, quote_signature:"test-signature" },
         }),
       }),
     );
 
-    expect(res.status).toBe(200);
+    expect(res.status, JSON.stringify(await res.clone().json())).toBe(200);
     const row = admin.insert.mock.calls[0]?.[0] as Record<string, unknown>;
     // The initial row is deliberately non-team-shaped. The approved RPC then
     // assigns the team and materializes booking_cleaners in one DB transaction.
@@ -486,7 +500,7 @@ describe("POST /api/booking-v2/confirm", () => {
       }),
     );
 
-    expect(res.status).toBe(200);
+    expect(res.status, JSON.stringify(await res.clone().json())).toBe(200);
     const json = (await res.json()) as { success?: boolean; bookingId?: string; payAmountZar?: number };
     expect(json.success).toBe(true);
     expect(admin.insert).toHaveBeenCalled();
@@ -506,4 +520,17 @@ describe("POST /api/booking-v2/confirm", () => {
     expect(Number(row.total_price)).toBeGreaterThan(0);
     expect(json.payAmountZar).toBe(row.total_price);
   });
+  it.each([1, 2, 3])("preserves named preferences and %i places on operations bookings", async count => {
+    const admin=mockAdminForConfirm();
+    vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
+    vi.mocked(assessBookingV2SlotFulfillment).mockResolvedValue({mode:"ops_assignment",reason:"known_area_pending_ops_assignment",instantCount:0,opsCount:1,requiresPayment:true,customerMessage:"Operations will confirm"});
+    const ids=["00000000-0000-4000-8000-000000000021","00000000-0000-4000-8000-000000000022","00000000-0000-4000-8000-000000000023"].slice(0,count);
+    const response=await POST(new Request("http://localhost/api/booking-v2/confirm",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer test"},body:JSON.stringify({...basePayload,cleanerCount:count,selectedCleanerIds:ids})}));
+    expect(response.status, JSON.stringify(await response.clone().json())).toBe(200);
+    const row=admin.insert.mock.calls[0]?.[0] as Record<string,unknown>;
+    expect(row.cleaner_count).toBe(count);
+    expect(row.booking_snapshot).toMatchObject({cleanerCount:count,selectedCleanerIds:ids});
+    expect(row.cleaner_id).not.toBeTruthy();
+  });
+
 });

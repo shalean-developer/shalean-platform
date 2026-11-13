@@ -101,6 +101,10 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/booking-v2/__tests__/zod4SchemaCompatibility.test.ts lib/admin/expenses/__tests__/cashAccountBalanceEditor.test.ts app/api/admin/finance-accounts/zoho-sync/__tests__/route.test.ts lib/admin/expenses/__tests__/budgetCashClassification.test.ts
 
+      - name: Regular booking staffing and preference regressions
+        if: steps.filter.outputs.run_suite == 'true'
+        run: npx vitest run lib/booking/__tests__/getEligibleCleanersExcludeBooking.test.ts lib/booking/__tests__/customerCleanerRequest.test.ts lib/dispatch/__tests__/multiCleanerOperations.test.ts app/api/booking-v2/confirm/__tests__/route.test.ts
+
       - name: Critical tests (payments + referrals)
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test:critical
