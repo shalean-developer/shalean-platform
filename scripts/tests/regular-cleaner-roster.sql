@@ -72,3 +72,10 @@ select public.test_expect_error('10000000-0000-4000-8000-000000000003',public.te
 update public.bookings set is_team_job=false,cleaner_line_earnings_finalized_at=now() where id='10000000-0000-4000-8000-000000000003';
 select public.test_expect_error('10000000-0000-4000-8000-000000000003',public.test_roster(3),'booking_payout_locked');
 select 'PASS: full requested roster, immutable preference, cleaner visibility, payment preservation, role restrictions and failure rollback';
+
+-- Active-job emergency member edits preserve lifecycle through the existing roster writer.
+update public.bookings set status='in_progress',cleaner_line_earnings_finalized_at=null where id='10000000-0000-4000-8000-000000000003';
+select public.replace_booking_cleaners_admin_atomic('10000000-0000-4000-8000-000000000003',public.test_roster(3));
+do $$ begin
+ if (select status from public.bookings where id='10000000-0000-4000-8000-000000000003')<>'in_progress' then raise exception 'active lifecycle reset'; end if;
+end $$;
