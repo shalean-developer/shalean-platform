@@ -1,9 +1,12 @@
+import { customerCleanerRequest } from "@/lib/booking/customerCleanerRequest";
 /**
  * Pure helpers for admin list/detail: separate customer checkout pick, dispatch attempt trace, and assignment.
  */
 
 export type AdminBookingAssignmentLabelInput = {
   selected_cleaner_id?: string | null;
+  cleaner_count?: number | null;
+  booking_snapshot?: unknown;
   attempted_cleaner_id?: string | null;
   cleaner_id?: string | null;
 };
@@ -16,7 +19,7 @@ export function normalizeAssignmentUuid(raw: string | null | undefined): string 
 
 /** Customer preference from `bookings.selected_cleaner_id` (checkout). */
 export function adminBookingSelectedAtCheckoutId(row: AdminBookingAssignmentLabelInput): string | null {
-  return normalizeAssignmentUuid(row.selected_cleaner_id ?? null);
+  return customerCleanerRequest(row).preferredIds[0] ?? null;
 }
 
 /**

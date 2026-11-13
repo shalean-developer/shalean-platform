@@ -1,3 +1,4 @@
+import { customerCleanerRequest } from "@/lib/booking/customerCleanerRequest";
 import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import "server-only";
 
@@ -1017,6 +1018,14 @@ export async function runCleanerBookingLifecycleAction(params: {
       httpStatus: 200,
     });
     return { status: 200, json: { ok: true, status: normalizedSt } };
+  }
+
+  if (action === "start" && customerCleanerRequest(bRow).needsRoster) {
+    const required = customerCleanerRequest(bRow).count;
+    const { count, error } = await admin.from("booking_cleaners").select("id", {count:"exact",head:true}).eq("booking_id",bookingId);
+    if (error || (count ?? 0) < required) {
+      return {status:409,json:{error:"Operations must confirm the full requested cleaner roster before this job can start.",code:"STAFFING_INCOMPLETE"}};
+    }
   }
 
   if (action === "start") {

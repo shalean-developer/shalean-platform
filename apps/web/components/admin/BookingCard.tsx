@@ -1,5 +1,7 @@
 "use client";
 
+import { customerCleanerRequest } from "@/lib/booking/customerCleanerRequest";
+
 import { useMemo } from "react";
 import type { AdminBookingsListRow } from "@/lib/admin/adminBookingsListRow";
 import { adminBookingsListRowToOperationalRecord } from "@/lib/admin/adminBookingOperationalRecord";
@@ -24,7 +26,6 @@ import {
 import { assignmentSourceLabel } from "@/lib/admin/assignmentDisplay";
 import {
   adminBookingDispatchAttemptId,
-  adminBookingSelectedAtCheckoutId,
 } from "@/lib/admin/adminBookingAssignmentLabels";
 import { metricAttemptBucket } from "@/lib/dispatch/dispatchMetricContext";
 import {
@@ -133,7 +134,7 @@ export function BookingCard({
   const rosterTip = rosterTooltipNames(roster);
   const missingLead = roster.length > 0 && !lead;
   const shortTeam = Boolean(r.is_team_job) && roster.length >= 1 && roster.length < 2;
-  const checkoutSelectedId = adminBookingSelectedAtCheckoutId(r);
+  const cleanerRequest = customerCleanerRequest(r);
   const dispatchAttemptId = adminBookingDispatchAttemptId(r);
   const teamServiceBooking = isTeamService({
     service: r.service,
@@ -350,10 +351,14 @@ export function BookingCard({
               </div>
             ) : null}
 
-            {checkoutSelectedId ? (
-              <p className="text-[10px] leading-snug text-zinc-600 dark:text-zinc-400" title={checkoutSelectedId}>
+            <p className="text-xs text-zinc-600">Cleaners requested: {cleanerRequest.count}{cleanerRequest.needsRoster ? ` · Assigned: ${roster.length}/${cleanerRequest.count}` : ""}</p>
+            {cleanerRequest.needsRoster && roster.length < cleanerRequest.count ? (
+              <p className="text-xs font-semibold text-amber-700">Staffing incomplete — assign the full job roster</p>
+            ) : null}
+            {cleanerRequest.preferredIds.length ? (
+              <p className="text-[10px] leading-snug text-zinc-600 dark:text-zinc-400" title={cleanerRequest.preferredIds.join(", ")}>
                 <span className="font-medium text-zinc-700 dark:text-zinc-300">Selected at checkout:</span>{" "}
-                {cleanerDisplayName(checkoutSelectedId, sortedCleaners) ?? `ID ${checkoutSelectedId.slice(0, 8)}…`}
+                {cleanerRequest.preferredIds.map(id => cleanerDisplayName(id, sortedCleaners) ?? `ID ${id.slice(0, 8)}…`).join(", ")}
               </p>
             ) : null}
             {dispatchAttemptId ? (

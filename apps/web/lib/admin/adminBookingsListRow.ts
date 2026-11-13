@@ -48,6 +48,8 @@ export type AdminBookingsListRow = {
   user_id?: string | null;
   cleaner_id: string | null;
   selected_cleaner_id?: string | null;
+  cleaner_count?: number | null;
+  booking_snapshot?: unknown;
   assignment_type?: string | null;
   fallback_reason?: string | null;
   attempted_cleaner_id?: string | null;

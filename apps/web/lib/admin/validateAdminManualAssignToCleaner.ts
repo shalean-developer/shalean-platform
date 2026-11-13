@@ -1,3 +1,4 @@
+import { customerCleanerRequest } from "@/lib/booking/customerCleanerRequest";
 import { isCurrentPayoutVisitDate } from "@/lib/payout/payoutProcessingCutoff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { effectiveJobDurationMinutes } from "@/lib/admin/adminAssignEligibility";
@@ -96,7 +97,7 @@ export async function validateAdminManualAssignToCleaner(
   const { data: booking, error: bErr } = await admin
     .from("bookings")
     .select(
-      "id, date, time, status, cleaner_id, city_id, dispatch_status, duration_minutes, estimated_duration_minutes, duration_hours, pricing_summary, booking_snapshot, price_snapshot, rooms, bathrooms, extras, location_id, service_slug, service, cleaner_response_status, accepted_at",
+      "id, date, time, status, cleaner_id, city_id, dispatch_status, duration_minutes, estimated_duration_minutes, duration_hours, pricing_summary, booking_snapshot, price_snapshot, rooms, bathrooms, extras, location_id, service_slug, service, cleaner_response_status, accepted_at, cleaner_count, cleaner_mode, is_team_job, team_id",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -105,6 +106,9 @@ export async function validateAdminManualAssignToCleaner(
     return { ok: false, httpStatus: 404, error: "Booking not found." };
   }
 
+  if (customerCleanerRequest(booking).needsRoster) {
+    return { ok: false, httpStatus: 409, error: "Assign the complete requested roster using Assign cleaners in booking details. A single-cleaner action cannot fill this booking." };
+  }
   const b = booking as BookingRow;
   if (!isCurrentPayoutVisitDate(String(b.date ?? "").trim())) {
     return {ok:false,httpStatus:409,error:"historical_payout_item_deferred"};
