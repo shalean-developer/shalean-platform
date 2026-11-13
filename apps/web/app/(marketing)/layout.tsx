@@ -1,5 +1,4 @@
-import { PromotionAnnouncementBar } from "@/components/promotions/PromotionAnnouncementBar";
-import { PromotionPopup } from "@/components/promotions/PromotionPopup";
+import { MarketingPromotions } from "@/components/promotions/MarketingPromotions";
 
 export default function MarketingLayout({
   children,
@@ -9,8 +8,7 @@ export default function MarketingLayout({
   return (
     <>
       <div className="pb-[var(--promo-announcement-offset,0px)]">{children}</div>
-      <PromotionAnnouncementBar />
-      <PromotionPopup />
+      <MarketingPromotions />
     </>
   );
 }

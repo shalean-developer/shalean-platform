@@ -25,6 +25,13 @@ export function ServicePageCommercialIntentSection({ slug }: { slug: CapeTownSeo
             {slug === "window-cleaning-cape-town" ? "request a quote" : "book online"}
           </Link>. Check the selected work and total before confirming.
         </p>
+        {slug === "move-out-cleaning-cape-town" ? (
+          <p className="mt-4 text-base leading-relaxed text-zinc-600">
+            Need help agreeing the handover scope?{" "}
+            <Link href="/quote" className={linkClass}>Request a personalised quote</Link>.{" "}
+            Share your property size, condition, access arrangements and handover deadline. No payment is required to request a quote.
+          </p>
+        ) : null}
         <p className="mt-4 text-sm text-zinc-600"><Link href="/reviews" className={linkClass}>Read customer reviews</Link>.</p>
       </div>
     </section>
