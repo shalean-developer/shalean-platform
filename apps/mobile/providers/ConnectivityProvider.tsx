@@ -19,6 +19,7 @@ import {
 import { offlineActionQueue } from "@/lib/offline/actionQueue";
 import { flushOfflineActionQueue } from "@/lib/offline/flushQueue";
 import { cleanerQueryKeys } from "@/hooks/useCleanerProfile";
+import { useAuth } from "@/providers/AuthProvider";
 
 type ConnectivityContextValue = {
   isOnline: boolean;
@@ -32,6 +33,7 @@ const ConnectivityContext = createContext<ConnectivityContextValue | null>(null)
 
 export function ConnectivityProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const { status } = useAuth();
   const [isOnline, setIsOnline] = useState(true);
   const [pendingQueueCount, setPendingQueueCount] = useState(0);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
@@ -42,7 +44,7 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
 
   const flushQueue = useCallback(async () => {
     const online = await fetchIsOnline();
-    if (!online) return;
+    if (!online || status !== "signedIn") return;
     const result = await flushOfflineActionQueue(queryClient);
     await refreshQueueCount();
     if (result.processed > 0) {
@@ -50,16 +52,16 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
       markSynced(new Date(at));
       setLastSyncAt(at);
     }
-  }, [queryClient, refreshQueueCount]);
+  }, [queryClient, refreshQueueCount, status]);
 
   const syncNow = useCallback(async () => {
+    if (status !== "signedIn") return;
     diagnosticLog.info("Manual sync requested");
     await flushQueue();
     await queryClient.invalidateQueries({ queryKey: ["cleaner"] });
-    const at = new Date().toISOString();
-    markSynced(new Date(at));
-    setLastSyncAt(at);
-  }, [flushQueue, queryClient]);
+    // A manual refresh is not proof that queued writes were delivered.
+    // Only flushQueue records a successful queue synchronization.
+  }, [flushQueue, queryClient, status]);
 
   useEffect(() => {
     void hydrateDiagnosticLogs();
@@ -71,7 +73,7 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
     const unsubNet = NetInfo.addEventListener((state) => {
       const online = isConnectedState(state);
       setIsOnline(online);
-      if (online) {
+      if (online && status === "signedIn") {
         void flushQueue();
         void queryClient.invalidateQueries({ queryKey: cleanerQueryKeys.jobsCard });
         void queryClient.invalidateQueries({ queryKey: cleanerQueryKeys.dashboard });
@@ -88,7 +90,7 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
       unsubNet();
       unsubQueue();
     };
-  }, [flushQueue, queryClient, refreshQueueCount]);
+  }, [flushQueue, queryClient, refreshQueueCount, status]);
 
   const value = useMemo(
     () => ({ isOnline, pendingQueueCount, lastSyncAt, flushQueue, syncNow }),

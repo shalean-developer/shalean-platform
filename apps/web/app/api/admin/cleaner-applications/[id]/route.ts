@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
@@ -61,7 +62,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   const digits = String(app.phone ?? "").replace(/\D/g, "");
   const fallbackEmail = `cleaner+${digits || Date.now()}@shalean.local`;
-  const tempPassword = `Clean${Math.floor(100000 + Math.random() * 900000)}`;
+  // A high-entropy bootstrap secret, never sent in WhatsApp or returned to the client.
+  // A separate verified activation mechanism is required before first login.
+  const tempPassword = randomBytes(32).toString("base64url");
   let createdCleaner: { id: string; phone_number: string | null; phone: string | null };
   try {
     const created = await createCleaner({

@@ -8,7 +8,8 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ME_CACHE_CONTROL = "private, max-age=15, stale-while-revalidate=30";
+// Cleaner identity and authorization must be revalidated on every request.
+const ME_CACHE_CONTROL = "private, no-store";
 const MANAGEMENT_CONTROLLED_STATUSES = new Set(["unavailable", "day_off", "sick", "leave", "training", "suspended", "inactive"]);
 
 export async function GET(request: Request) {

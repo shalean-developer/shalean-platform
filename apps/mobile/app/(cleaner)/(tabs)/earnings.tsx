@@ -3,7 +3,7 @@ import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { formatCleanerJobEarningsLabel } from "@shalean/utils";
 import { OfflineBanner } from "@/components/OfflineBanner";
-import { EmptyState, ErrorState } from "@/components/ui/StateViews";
+import { ErrorState } from "@/components/ui/StateViews";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { DashboardSkeleton } from "@/components/ui/Skeleton";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -95,27 +95,23 @@ export default function EarningsScreen() {
       <FlatList
         data={paymentHistory}
         keyExtractor={(item) => `${item.booking_id}:${item.payout_run_id ?? item.payout_paid_at ?? "paid"}`}
-        contentContainerClassName="grow px-4 pb-10 pt-2"
+        contentContainerClassName="px-4 pb-8 pt-1"
         refreshControl={
           <RefreshControl refreshing={isRefetching || isFetching} onRefresh={() => void onRefresh()} />
         }
         ListHeaderComponent={
           <View className="mb-3">
-            <Text className="text-title text-ink" accessibilityRole="header">Earnings</Text>
-            <Text className="mt-1 text-sm text-ink-muted">Your income overview.</Text>
-
-            <SectionHeading label="Earnings summary" />
             <View className="flex-row gap-2">
-              <MoneyTile label="Today's earnings" cents={todayCents} highlight />
-              <MoneyTile label="This week" cents={weekCents} />
-              <MoneyTile label="This month" cents={monthCents} />
+              <MoneyTile label="Today" cents={todayCents} highlight />
+              <MoneyTile label="Week" cents={weekCents} />
+              <MoneyTile label="Month" cents={monthCents} />
             </View>
 
-            <SectionHeading label="Payout summary" />
+            <SectionHeading label="Payouts" />
             <SectionCard>
-              <PayoutSummaryRow label="Pending approval" cents={pendingCents} tone="warning" />
+              <PayoutSummaryRow label="Pending" cents={pendingCents} tone="warning" />
               <Divider />
-              <PayoutSummaryRow label="Eligible for payout" cents={eligibleCents} tone="info" />
+              <PayoutSummaryRow label="Eligible" cents={eligibleCents} tone="info" />
               <Divider />
               <PayoutSummaryRow label="Paid this month" cents={paidThisMonthCents} tone="success" />
             </SectionCard>
@@ -124,37 +120,37 @@ export default function EarningsScreen() {
               <SectionCard className="mt-3">
                 <Text className="text-sm font-semibold text-status-warning-fg">Bank details needed</Text>
                 <Text className="mt-1 text-sm text-ink-muted">
-                  Add payout details in the cleaner portal so we can pay you.
+                  Add bank details in the cleaner portal.
                 </Text>
               </SectionCard>
             ) : null}
 
-            <SectionHeading label="Recent earnings" />
             {recentEarnings.length > 0 ? (
-              <SectionCard className="overflow-hidden p-0">
-                {recentEarnings.map((row, index) => (
-                  <View key={row.booking_id}>
-                    <RecentEarningsRow
-                      row={row}
-                      onPress={() => router.push(`/(cleaner)/job/${row.booking_id}`)}
-                    />
-                    {index < recentEarnings.length - 1 ? <Divider /> : null}
-                  </View>
-                ))}
-              </SectionCard>
-            ) : (
-              <EmptyCard title="No recent earnings" message="Completed jobs will appear here." />
-            )}
+              <>
+                <SectionHeading label="Recent" />
+                <SectionCard className="overflow-hidden p-0">
+                  {recentEarnings.map((row, index) => (
+                    <View key={row.booking_id}>
+                      <RecentEarningsRow
+                        row={row}
+                        onPress={() => router.push(`/(cleaner)/job/${row.booking_id}`)}
+                      />
+                      {index < recentEarnings.length - 1 ? <Divider /> : null}
+                    </View>
+                  ))}
+                </SectionCard>
+              </>
+            ) : null}
+            {paymentHistory.length > 0 ? <SectionHeading label="Payments" /> : null}
 
-            <SectionHeading label="Payment history" />
           </View>
         }
         ListEmptyComponent={
-          <EmptyState
-            title="No payment history"
-            message="Completed payout batches will appear here."
-            icon="wallet-outline"
-          />
+          rows.length === 0 ? (
+            <View className="items-center py-8">
+              <Text className="text-sm text-ink-muted">No earnings or payments yet</Text>
+            </View>
+          ) : null
         }
         renderItem={({ item }) => (
           <PaymentHistoryRow
@@ -164,10 +160,10 @@ export default function EarningsScreen() {
         )}
         ListFooterComponent={
           <View>
-            <SectionHeading label="Performance summary" />
+            <SectionHeading label="Total" />
             <View className="flex-row gap-2">
-              <MoneyTile label="Total lifetime earnings" cents={lifetimeCents} />
-              <MetricTile label="Bookings completed" value={completedBookings.toLocaleString("en-ZA")} />
+              <MoneyTile label="Lifetime" cents={lifetimeCents} />
+              <MetricTile label="Jobs" value={completedBookings.toLocaleString("en-ZA")} />
             </View>
           </View>
         }
@@ -181,7 +177,7 @@ export default function EarningsScreen() {
 
 function SectionHeading({ label }: { label: string }) {
   return (
-    <Text className="mb-2 mt-5 text-label font-semibold uppercase tracking-wide text-ink-muted">
+    <Text className="mb-2 mt-4 text-sm font-semibold text-ink-muted">
       {label}
     </Text>
   );
@@ -193,7 +189,7 @@ function Divider() {
 
 function MoneyTile({ label, cents, highlight }: { label: string; cents: number; highlight?: boolean }) {
   return (
-    <View className={`flex-1 rounded-2xl border px-3 py-4 ${highlight ? "border-earnings-border bg-earnings-bg" : "border-border bg-surface-card"}`}>
+    <View className={`flex-1 rounded-2xl border px-3 py-3 ${highlight ? "border-earnings-border bg-earnings-bg" : "border-border bg-surface-card"}`}>
       <Text className="text-caption text-ink-muted" numberOfLines={2}>{label}</Text>
       <Text className={`mt-1 text-base font-bold ${highlight ? "text-earnings-fg" : "text-ink"}`} numberOfLines={1}>
         {formatCleanerJobEarningsLabel(cents)}
@@ -204,7 +200,7 @@ function MoneyTile({ label, cents, highlight }: { label: string; cents: number; 
 
 function MetricTile({ label, value }: { label: string; value: string }) {
   return (
-    <View className="flex-1 rounded-2xl border border-border bg-surface-card px-3 py-4">
+    <View className="flex-1 rounded-2xl border border-border bg-surface-card px-3 py-3">
       <Text className="text-caption text-ink-muted" numberOfLines={2}>{label}</Text>
       <Text className="mt-1 text-base font-bold text-ink" numberOfLines={1}>{value}</Text>
     </View>
@@ -263,11 +259,3 @@ function PaymentHistoryRow({ row, onPress }: { row: CleanerEarningsRowWire; onPr
   );
 }
 
-function EmptyCard({ title, message }: { title: string; message: string }) {
-  return (
-    <View className="rounded-2xl border border-dashed border-border bg-surface-card px-4 py-6 text-center">
-      <Text className="font-semibold text-ink">{title}</Text>
-      <Text className="mt-1 text-sm text-ink-muted">{message}</Text>
-    </View>
-  );
-}

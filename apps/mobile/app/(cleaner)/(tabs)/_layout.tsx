@@ -42,6 +42,7 @@ export default function CleanerTabsLayout() {
         name="index"
         options={{
           title: "Today",
+          headerShown: false,
           tabBarLabel: "Today",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="today-outline" size={size} color={color} />

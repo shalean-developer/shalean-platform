@@ -216,5 +216,5 @@ export async function POST(request: Request) {
       phone_number: cleaner.phone_number,
       status: cleaner.status,
     },
-  });
+  }, { headers: { "Cache-Control": "no-store", "Pragma": "no-cache" } });
 }

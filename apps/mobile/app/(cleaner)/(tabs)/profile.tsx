@@ -1,21 +1,16 @@
-import { Alert, RefreshControl, ScrollView, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import type { Href } from "expo-router";
 import { OfflineBanner } from "@/components/OfflineBanner";
-import { AvailabilityToggle } from "@/components/ui/AvailabilityToggle";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/StateViews";
 import { ListRow } from "@/components/ui/ListRow";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { useSetAvailability } from "@/hooks/useCleanerDashboard";
-import { useCleanerReferrals } from "@/hooks/useCleanerEngagement";
 import { useCleanerJobsCard } from "@/hooks/useCleanerJobs";
 import { useCleanerProfile } from "@/hooks/useCleanerProfile";
 import { buildEngagementStats, deriveAchievements } from "@/lib/engagement/achievements";
-import { friendlyErrorMessage } from "@/lib/errors/apiErrorMessage";
 import { useAuth } from "@/providers/AuthProvider";
-import { useConnectivity } from "@/providers/ConnectivityProvider";
-import { useToast } from "@/providers/ToastProvider";
 import { colors } from "@/theme";
 import { useMemo } from "react";
 
@@ -24,15 +19,10 @@ import { useMemo } from "react";
  */
 export default function ProfileTabScreen() {
   const router = useRouter();
-  const { profile: authProfile, refreshProfile } = useAuth();
-  const { isOnline } = useConnectivity();
-  const { showToast } = useToast();
+  const { profile: authProfile } = useAuth();
   const { data, isLoading, isError, error, refetch, isRefetching } = useCleanerProfile();
   const { data: jobs } = useCleanerJobsCard();
-  const { data: referrals } = useCleanerReferrals();
-  const availabilityMutation = useSetAvailability();
   const cleaner = data?.cleaner ?? authProfile?.cleaner;
-  const completionPct = data?.completion_pct ?? authProfile?.completion_pct;
 
   const stats = useMemo(
     () =>
@@ -40,9 +30,8 @@ export default function ProfileTabScreen() {
         jobs,
         jobsCompleted: cleaner?.jobs_completed,
         rating: cleaner?.rating,
-        referralsCount: referrals?.referralsCount,
       }),
-    [jobs, cleaner?.jobs_completed, cleaner?.rating, referrals?.referralsCount],
+    [jobs, cleaner?.jobs_completed, cleaner?.rating],
   );
   const unlocked = useMemo(
     () => deriveAchievements(stats).filter((a) => a.unlocked).length,
@@ -76,68 +65,39 @@ export default function ProfileTabScreen() {
   }
 
   const fullName = cleaner.full_name ?? "Cleaner";
-  const phone = cleaner.phone_number || cleaner.phone || "No phone on file";
   const statusLabel = formatStatus(cleaner.status);
-  const isAvailable = cleaner.is_available !== false;
 
-  const onAvailabilityChange = (next: boolean) => {
-    availabilityMutation.mutate(next, {
-      onSuccess: () => {
-        showToast(next ? "You're available for jobs" : "You're marked unavailable", "success");
-        void refreshProfile();
-        void refetch();
-      },
-      onError: (err) => {
-        Alert.alert("Could not update availability", friendlyErrorMessage(err));
-      },
-    });
-  };
 
   return (
     <View className="flex-1 bg-surface">
       <OfflineBanner />
       <ScrollView
         className="flex-1"
-        contentContainerClassName="gap-3 px-4 py-4 pb-10"
+        contentContainerClassName="gap-3 px-4 pt-2 pb-8"
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} />}
       >
-        <SectionCard elevated className="items-center py-6">
-          <Avatar name={fullName} size="lg" />
-          <Text className="mt-3 text-title text-ink" accessibilityRole="header">
-            {fullName}
-          </Text>
-          <View className="mt-2 rounded-md bg-brand-50 px-2.5 py-1">
-            <Text className="text-xs font-semibold uppercase text-brand-600">{statusLabel}</Text>
-          </View>
-          <View className="mt-3 flex-row items-center gap-2">
-            <View
-              className="h-2 w-2 rounded-full"
-              style={{
-                backgroundColor: isOnline ? colors.status.success.fg : colors.ink.subtle,
-              }}
-              accessibilityElementsHidden
-            />
-            <Text className="text-sm text-ink-muted">
-              {isOnline ? "Online" : "Offline"}
-              {stats.streakDays > 0 ? ` · ${stats.streakDays}-day streak` : ""}
-            </Text>
-          </View>
+        <SectionCard className="py-3">
+          <Pressable accessibilityRole="button" accessibilityLabel="Contact details" onPress={() => router.push("/(cleaner)/contact" as Href)} className="flex-row items-center gap-3">
+            <Avatar name={fullName} size="lg" />
+            <View className="flex-1">
+              <Text className="text-lg font-bold text-ink" accessibilityRole="header" numberOfLines={2}>
+                {fullName}
+              </Text>
+              <View className="mt-1 flex-row flex-wrap items-center gap-2">
+                <Text className="text-xs font-semibold text-brand-600">{statusLabel}</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.ink.muted} />
+          </Pressable>
         </SectionCard>
-
-        <AvailabilityToggle
-          value={isAvailable}
-          onChange={onAvailabilityChange}
-          loading={availabilityMutation.isPending}
-          disabled={!isOnline && !availabilityMutation.isPending}
-        />
 
         <View className="flex-row gap-2">
           <StatTile
             label="Rating"
-            value={typeof cleaner.rating === "number" ? cleaner.rating.toFixed(1) : "—"}
+            value={typeof cleaner.rating === "number" && cleaner.rating > 0 && (cleaner.jobs_completed ?? 0) > 0 ? cleaner.rating.toFixed(1) : "—"}
           />
           <StatTile
-            label="Jobs done"
+            label="Jobs"
             value={typeof cleaner.jobs_completed === "number" ? String(cleaner.jobs_completed) : "—"}
           />
           <StatTile
@@ -146,40 +106,22 @@ export default function ProfileTabScreen() {
           />
         </View>
 
-        {typeof completionPct === "number" ? (
-          <Text className="text-center text-caption text-ink-muted">
-            Profile {Math.round(completionPct)}% complete
-          </Text>
-        ) : null}
-
-        <SectionCard flush className="overflow-hidden p-0">
-          <ListRow label="Phone" value={phone} icon="call-outline" showChevron={false} />
-          {cleaner.email ? (
-            <View className="mx-4 border-t border-border">
-              <ListRow label="Email" value={cleaner.email} icon="mail-outline" showChevron={false} />
-            </View>
-          ) : null}
-        </SectionCard>
-
         <SectionCard flush className="overflow-hidden p-0">
           <ListRow
             label="Performance"
-            value={stats.streakDays > 0 ? `${stats.streakDays}d streak` : undefined}
             icon="stats-chart-outline"
             onPress={() => router.push("/(cleaner)/performance" as Href)}
           />
           <View className="mx-4 border-t border-border">
             <ListRow
               label="Achievements"
-              value={`${unlocked} unlocked`}
               icon="trophy-outline"
               onPress={() => router.push("/(cleaner)/achievements" as Href)}
             />
           </View>
           <View className="mx-4 border-t border-border">
             <ListRow
-              label="Refer cleaners"
-              value={referrals?.referralCode ?? "Earn rewards"}
+              label="Referrals"
               icon="people-outline"
               onPress={() => router.push("/(cleaner)/referral" as Href)}
             />
@@ -194,6 +136,8 @@ export default function ProfileTabScreen() {
         </SectionCard>
 
         <SectionCard flush className="overflow-hidden p-0">
+          <ListRow label="Contact" icon="call-outline" onPress={() => router.push("/(cleaner)/contact" as Href)} />
+          <View className="mx-4 border-t border-border" />
           <ListRow
             label="Notifications"
             icon="notifications-outline"

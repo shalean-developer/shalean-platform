@@ -18,6 +18,8 @@ import {
 import { diagnosticLog } from "@/lib/diagnostics/logger";
 import { friendlyErrorMessage } from "@/lib/errors/apiErrorMessage";
 import { CleanerApi } from "@/services/cleanerApi";
+import { clearPersistedCleanerQueries } from "@/providers/QueryProvider";
+import { offlineActionQueue } from "@/lib/offline/actionQueue";
 import type { CleanerMeResponse } from "@/services/types/cleanerJobs";
 
 export type AuthStatus = "loading" | "signedOut" | "signedIn";
@@ -71,6 +73,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const restore = useCallback(async () => {
     const token = (await getAccessToken())?.trim();
     if (!token) {
+      queryClient.clear();
+      await clearPersistedCleanerQueries();
+      await offlineActionQueue.clear();
       setProfile(null);
       setStatus("signedOut");
       return;
@@ -99,6 +104,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       await clearSessionTokens();
       resetMobileApiClient();
+      queryClient.clear();
+      await clearPersistedCleanerQueries();
+      await offlineActionQueue.clear();
       setProfile(null);
       setStatus("signedOut");
       diagnosticLog.warn("Session restore failed; signed out", { reason: result.kind });
@@ -110,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         error: friendlyErrorMessage(e),
       });
     }
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
     void restore();
@@ -127,6 +135,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { ok: false as const, error: "Login succeeded but the session was incomplete." };
       }
 
+      // Do not expose a previous cleaner's cached jobs after an account switch.
+      queryClient.clear();
+      await clearPersistedCleanerQueries();
+      await offlineActionQueue.clear();
       await setSessionTokens({
         access_token: session.access_token,
         refresh_token: session.refresh_token,
@@ -137,6 +149,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (profileResult.kind !== "ok") {
         await clearSessionTokens();
         resetMobileApiClient();
+        queryClient.clear();
+        await clearPersistedCleanerQueries();
+        await offlineActionQueue.clear();
+        setProfile(null);
+        setStatus("signedOut");
         if (profileResult.kind === "transient") {
           return { ok: false as const, error: friendlyErrorMessage(profileResult.error, "Could not verify cleaner profile.") };
         }
@@ -145,7 +162,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setProfile(profileResult.data);
       setStatus("signedIn");
-      await queryClient.invalidateQueries();
       diagnosticLog.info("Signed in", { cleanerId: profileResult.data.cleaner?.id });
       return { ok: true as const };
     },
@@ -156,6 +172,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await clearSessionTokens();
     resetMobileApiClient();
     queryClient.clear();
+    await clearPersistedCleanerQueries();
+    await offlineActionQueue.clear();
     setProfile(null);
     setStatus("signedOut");
     diagnosticLog.info("Signed out");

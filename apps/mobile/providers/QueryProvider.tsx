@@ -14,6 +14,11 @@ const persister = createAsyncStoragePersister({
   throttleTime: 2_000,
 });
 
+/** Remove sensitive offline job data when the authenticated cleaner changes. */
+export async function clearPersistedCleanerQueries(): Promise<void> {
+  await persister.removeClient();
+}
+
 function createClient() {
   return new QueryClient({
     defaultOptions: {
